@@ -1,0 +1,850 @@
+// =============================================================
+// ENGGANYO — Prisma Database Schema
+// PostgreSQL · Prisma ORM
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================
+// ENUMS
+// =============================================================
+
+enum UserRole {
+  USER
+  CREATOR
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DEACTIVATED
+}
+
+enum TransactionType {
+  // Earning
+  EARN_TASK_COMPLETION
+  EARN_REFERRAL_BONUS
+  EARN_DAILY_REWARD
+  EARN_ACHIEVEMENT
+  EARN_MISSION_COMPLETE
+  EARN_ADMIN_GRANT
+  // Spending
+  SPEND_CAMPAIGN_CREATE
+  SPEND_CAMPAIGN_BOOST
+  SPEND_PREMIUM_FEATURE
+  SPEND_ADMIN_DEDUCT
+  // Neutral
+  REFUND_CAMPAIGN_CANCEL
+  REFUND_COMPLETION_REJECT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+  REJECTED
+  EXPIRED
+}
+
+enum TaskType {
+  YOUTUBE_LIKE
+  YOUTUBE_SUBSCRIBE
+  YOUTUBE_COMMENT
+  YOUTUBE_WATCH
+  TIKTOK_FOLLOW
+  TIKTOK_LIKE
+  TIKTOK_COMMENT
+  INSTAGRAM_FOLLOW
+  INSTAGRAM_LIKE
+  INSTAGRAM_COMMENT
+  FACEBOOK_PAGE_LIKE
+  FACEBOOK_POST_LIKE
+  FACEBOOK_SHARE
+  TWITTER_FOLLOW
+  TWITTER_LIKE
+  TWITTER_RETWEET
+  TWITTER_REPLY
+  TWITCH_FOLLOW
+  SPOTIFY_FOLLOW
+  SPOTIFY_STREAM
+}
+
+enum CompletionStatus {
+  ASSIGNED     // Task assigned to user, not yet started
+  IN_PROGRESS  // User has started the task
+  SUBMITTED    // User submitted proof
+  VERIFIED     // System/admin verified
+  REJECTED     // Proof rejected
+  DISPUTED     // User disputed rejection
+  EXPIRED      // Task expired without submission
+  CANCELLED    // Campaign cancelled before completion
+}
+
+enum SocialPlatform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  FACEBOOK
+  TWITTER
+  TWITCH
+  SPOTIFY
+}
+
+enum NotificationType {
+  TASK_AVAILABLE
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  TASK_REJECTED
+  CAMPAIGN_ACTIVE
+  CAMPAIGN_COMPLETED
+  CAMPAIGN_PAUSED
+  CAMPAIGN_REJECTED
+  CREDIT_EARNED
+  CREDIT_SPENT
+  ACHIEVEMENT_UNLOCKED
+  LEVEL_UP
+  STREAK_REMINDER
+  STREAK_BROKEN
+  REFERRAL_JOINED
+  REFERRAL_QUALIFIED
+  DAILY_MISSION_AVAILABLE
+  DAILY_REWARD_AVAILABLE
+  REPORT_RESOLVED
+  SYSTEM_ANNOUNCEMENT
+  SECURITY_ALERT
+  ACCOUNT_WARNING
+}
+
+enum ReportReason {
+  FAKE_COMPLETION
+  SPAM_CAMPAIGN
+  INAPPROPRIATE_CONTENT
+  MULTI_ACCOUNTING
+  BOT_ACTIVITY
+  HARASSMENT
+  MISLEADING_TASK
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum AchievementCategory {
+  ENGAGEMENT    // task completion related
+  CREATOR       // campaign related
+  COMMUNITY     // referral / social related
+  DEDICATION    // streak / login related
+  FINANCIAL     // credits related
+  MILESTONE     // level/rank related
+}
+
+enum MissionType {
+  COMPLETE_N_TASKS
+  CREATE_CAMPAIGN
+  EARN_N_CREDITS
+  LOGIN_STREAK
+  REFER_USER
+  CONNECT_SOCIAL
+  VISIT_DISCOVER
+}
+
+enum TrustLevel {
+  NEW       // 0-20  — new account, limited access
+  LOW       // 21-40 — some concerns
+  MEDIUM    // 41-60 — average user
+  HIGH      // 61-80 — trusted user
+  VERIFIED  // 81-100 — fully trusted creator
+}
+
+// =============================================================
+// CORE USER MODELS
+// =============================================================
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  username     String     @unique
+  passwordHash String     @map("password_hash")
+  role         UserRole   @default(USER)
+  status       UserStatus @default(PENDING_VERIFICATION)
+
+  // Basic profile
+  displayName String? @map("display_name")
+  avatarUrl   String? @map("avatar_url")
+  bio         String? @db.Text
+
+  // Gamification stats (denormalized for performance)
+  xp            Int   @default(0)
+  level         Int   @default(1)
+  reputationScore Float @default(0) @map("reputation_score")
+
+  // Wallet balance (denormalized from wallet for quick reads)
+  creditBalance Int @default(0) @map("credit_balance")
+
+  // Streaks & activity
+  currentStreak     Int       @default(0) @map("current_streak")
+  longestStreak     Int       @default(0) @map("longest_streak")
+  lastActiveAt      DateTime? @map("last_active_at")
+  lastDailyRewardAt DateTime? @map("last_daily_reward_at")
+
+  // Referral
+  referralCode String  @unique @map("referral_code")
+  referredById String? @map("referred_by_id")
+
+  // Timestamps
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at") // soft delete
+
+  // ─── Relations ─────────────────────────────────────────────
+  referredBy   User?  @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals    User[] @relation("UserReferrals")
+
+  profile              UserProfile?
+  wallet               Wallet?
+  sessions             UserSession[]
+  emailVerifications   EmailVerification[]
+  passwordResets       PasswordReset[]
+  socialAccounts       SocialAccount[]
+  campaigns            Campaign[]
+  completions          TaskCompletion[]
+  notifications        Notification[]
+  reportsSubmitted     Report[]              @relation("ReportSubmitter")
+  reportsReceived      Report[]              @relation("ReportTarget")
+  userAchievements     UserAchievement[]
+  missionProgress      UserMissionProgress[]
+  trustScore           TrustScore?
+  abuseFlags           AbuseFlag[]
+  ipRecords            IpRecord[]
+  auditLogs            AuditLog[]
+  referralsGiven       Referral[]            @relation("ReferralReferrer")
+  referralReceived     Referral?             @relation("ReferralReferee")
+
+  @@index([email])
+  @@index([username])
+  @@index([referralCode])
+  @@index([status])
+  @@index([role])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model UserProfile {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Extended info
+  websiteUrl String? @map("website_url")
+  location   String?
+  timezone   String?
+  niche      String[] // creator niche tags (e.g. "gaming", "music", "tech")
+  languages  String[] // spoken languages
+
+  // Social proof metrics (updated periodically)
+  totalFollowers  Int   @default(0) @map("total_followers")
+  totalTasksDone  Int   @default(0) @map("total_tasks_done")
+  totalCampaigns  Int   @default(0) @map("total_campaigns")
+  completionRate  Float @default(0) @map("completion_rate")
+
+  isPublic Boolean @default(true) @map("is_public")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
+}
+
+model UserSession {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  refreshToken String   @unique @map("refresh_token")
+  deviceInfo   Json?    @map("device_info")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  isRevoked    Boolean  @default(false) @map("is_revoked")
+  expiresAt    DateTime @map("expires_at")
+  lastUsedAt   DateTime @default(now()) @map("last_used_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([refreshToken])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+model EmailVerification {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email     String
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([token])
+  @@index([email])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  email     String
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([token])
+  @@map("password_resets")
+}
+
+// =============================================================
+// SOCIAL ACCOUNTS
+// =============================================================
+
+model SocialAccount {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform         SocialPlatform
+  platformUserId   String  @map("platform_user_id")
+  platformUsername String? @map("platform_username")
+  profileUrl       String? @map("profile_url")
+  avatarUrl        String? @map("avatar_url")
+
+  // Encrypted OAuth tokens
+  accessToken  String? @map("access_token")
+  refreshToken String? @map("refresh_token")
+  tokenExpiresAt DateTime? @map("token_expires_at")
+
+  followerCount Int?     @map("follower_count")
+  isVerified    Boolean  @default(false) @map("is_verified")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@index([platform, platformUserId])
+  @@map("social_accounts")
+}
+
+// =============================================================
+// CREDIT ECONOMY
+// =============================================================
+
+model Wallet {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  balance        Int @default(0)         // current balance (integer credits)
+  lifetimeEarned Int @default(0) @map("lifetime_earned")
+  lifetimeSpent  Int @default(0) @map("lifetime_spent")
+
+  // Optimistic locking to prevent race conditions
+  version Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id       String @id @default(cuid())
+  walletId String @map("wallet_id")
+  wallet   Wallet @relation(fields: [walletId], references: [id])
+
+  type          TransactionType
+  status        TransactionStatus @default(COMPLETED)
+
+  // All amounts in integer credits; positive = credit, negative = debit
+  amount        Int
+  balanceBefore Int @map("balance_before")
+  balanceAfter  Int @map("balance_after")
+
+  description String? @db.Text
+
+  // Polymorphic reference to source entity
+  referenceId   String? @map("reference_id")
+  referenceType String? @map("reference_type") // 'campaign' | 'completion' | 'referral' | 'achievement'
+
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([walletId])
+  @@index([type])
+  @@index([status])
+  @@index([referenceId, referenceType])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+// =============================================================
+// CAMPAIGNS & TASKS
+// =============================================================
+
+model Campaign {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  title       String
+  description String? @db.Text
+  taskType    TaskType @map("task_type")
+  targetUrl   String   @map("target_url")
+
+  // Slots & economics
+  totalSlots     Int @map("total_slots")     // total completions needed
+  completedSlots Int @default(0) @map("completed_slots")
+  pendingSlots   Int @default(0) @map("pending_slots")   // assigned but not verified
+  creditPerTask  Int @map("credit_per_task") // credits paid to completer per task
+  totalCost      Int @map("total_cost")      // totalSlots * creditPerTask (pre-paid)
+
+  status          CampaignStatus @default(DRAFT)
+  rejectionReason String?        @map("rejection_reason")
+
+  // Targeting filters
+  targetCountries String[] @map("target_countries")
+  targetLanguages String[] @map("target_languages")
+  minTrustScore   Float    @default(0) @map("min_trust_score")
+
+  // Verification settings
+  verificationMethod String?  @map("verification_method") // 'screenshot' | 'oauth' | 'delayed'
+  cooldownHours      Int      @default(24) @map("cooldown_hours") // prevent same user recycle
+  requiresProof      Boolean  @default(true) @map("requires_proof")
+  proofInstructions  String?  @map("proof_instructions") @db.Text
+
+  // Scheduling
+  startsAt   DateTime? @map("starts_at")
+  expiresAt  DateTime? @map("expires_at")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+  cancelledAt DateTime? @map("cancelled_at")
+
+  completions TaskCompletion[]
+  reports     Report[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([taskType])
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@map("campaigns")
+}
+
+model TaskCompletion {
+  id         String   @id @default(cuid())
+  campaignId String   @map("campaign_id")
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+
+  status       CompletionStatus @default(ASSIGNED)
+  creditsEarned Int             @default(0) @map("credits_earned")
+
+  // Proof submission
+  proofUrl        String? @map("proof_url")
+  proofScreenshot String? @map("proof_screenshot")
+  proofData       Json?   @map("proof_data") // flexible proof metadata
+
+  // Verification tracking
+  verifiedAt      DateTime? @map("verified_at")
+  verifiedBy      String?   @map("verified_by") // userId or 'system'
+  rejectionReason String?   @map("rejection_reason")
+
+  // Anti-abuse fingerprinting
+  ipAddress         String? @map("ip_address")
+  deviceFingerprint String? @map("device_fingerprint")
+  completionSeconds Int?    @map("completion_seconds") // time from assign to submit
+
+  // Timing
+  assignedAt   DateTime  @default(now()) @map("assigned_at")
+  startedAt    DateTime? @map("started_at")
+  submittedAt  DateTime? @map("submitted_at")
+  expiresAt    DateTime? @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([campaignId, userId]) // One completion per user per campaign
+  @@index([campaignId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("task_completions")
+}
+
+// =============================================================
+// REFERRAL SYSTEM
+// =============================================================
+
+model Referral {
+  id         String @id @default(cuid())
+  referrerId String @map("referrer_id")
+  referrer   User   @relation("ReferralReferrer", fields: [referrerId], references: [id])
+  refereeId  String @unique @map("referee_id") // one referral per user
+  referee    User   @relation("ReferralReferee", fields: [refereeId], references: [id])
+
+  // A referral "qualifies" when the referee meets conditions
+  // (e.g. verified email + completed 1 task)
+  isQualified     Boolean   @default(false) @map("is_qualified")
+  qualifiedAt     DateTime? @map("qualified_at")
+  creditsAwarded  Int       @default(0) @map("credits_awarded")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([referrerId])
+  @@map("referrals")
+}
+
+// =============================================================
+// GAMIFICATION
+// =============================================================
+
+model Achievement {
+  id          String              @id @default(cuid())
+  name        String              @unique
+  slug        String              @unique
+  description String
+  category    AchievementCategory
+  icon        String?
+  badgeColor  String?             @map("badge_color") // hex color
+
+  requirement Int // numeric threshold to unlock
+  creditReward Int @default(0) @map("credit_reward")
+  xpReward    Int @default(0) @map("xp_reward")
+
+  isActive Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String      @map("achievement_id")
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+
+  earnedAt DateTime @default(now()) @map("earned_at")
+  notified Boolean  @default(false) // has notification been sent
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@map("user_achievements")
+}
+
+model DailyMission {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  description String
+  type        MissionType
+  icon        String?
+
+  requirement  Int // e.g. complete 3 tasks
+  creditReward Int @default(0) @map("credit_reward")
+  xpReward    Int @default(0) @map("xp_reward")
+
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userProgress UserMissionProgress[]
+
+  @@map("daily_missions")
+}
+
+model UserMissionProgress {
+  id        String       @id @default(cuid())
+  userId    String       @map("user_id")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missionId String       @map("mission_id")
+  mission   DailyMission @relation(fields: [missionId], references: [id])
+
+  progress    Int       @default(0)
+  isCompleted Boolean   @default(false) @map("is_completed")
+  completedAt DateTime? @map("completed_at")
+  date        DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date // resets daily
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, missionId, date])
+  @@index([userId, date])
+  @@map("user_mission_progress")
+}
+
+model XpEvent {
+  id          String @id @default(cuid())
+  userId      String @map("user_id")
+  amount      Int
+  source      String // 'task_completion' | 'campaign_create' | 'achievement' | 'daily_login'
+  referenceId String? @map("reference_id")
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("xp_events")
+}
+
+// =============================================================
+// ANTI-ABUSE SYSTEMS
+// =============================================================
+
+model TrustScore {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  score      Float      @default(50.0) // 0.0 – 100.0
+  level      TrustLevel @default(NEW)
+
+  // Contributing factor scores
+  completionRate  Float @default(0) @map("completion_rate")  // % of tasks successfully verified
+  accountAgeDays  Int   @default(0) @map("account_age_days")
+  reportCount     Int   @default(0) @map("report_count")     // times reported by others
+  abuseFlagCount  Int   @default(0) @map("abuse_flag_count")
+  verifiedSocials Int   @default(0) @map("verified_socials") // # connected platforms
+  referralQuality Float @default(0) @map("referral_quality") // avg trust of referred users
+
+  lastCalculatedAt DateTime @default(now()) @map("last_calculated_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("trust_scores")
+}
+
+model AbuseFlag {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  flagType    String // 'multi_account' | 'vpn_detected' | 'suspicious_timing' | 'fake_proof' | 'bot_pattern'
+  severity    String // 'low' | 'medium' | 'high' | 'critical'
+  description String? @db.Text
+  metadata    Json?
+
+  isResolved Boolean   @default(false) @map("is_resolved")
+  resolvedBy String?   @map("resolved_by")
+  resolvedAt DateTime? @map("resolved_at")
+  resolution String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([flagType])
+  @@index([severity])
+  @@index([isResolved])
+  @@index([createdAt])
+  @@map("abuse_flags")
+}
+
+model IpRecord {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  ipAddress String  @map("ip_address")
+  country   String?
+  region    String?
+  city      String?
+  isp       String?
+
+  // Risk signals
+  isVpn   Boolean @default(false) @map("is_vpn")
+  isProxy Boolean @default(false) @map("is_proxy")
+  isTor   Boolean @default(false) @map("is_tor")
+  isHosting Boolean @default(false) @map("is_hosting")
+
+  action    String // 'login' | 'register' | 'task_start' | 'task_submit'
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([action])
+  @@index([createdAt])
+  @@map("ip_records")
+}
+
+model DeviceFingerprint {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  fingerprint    String  // hashed device fingerprint
+  userAgent      String? @map("user_agent")
+  screenResolution String? @map("screen_resolution")
+  timezone       String?
+  language       String?
+  platform       String?
+
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+  seenCount   Int      @default(1) @map("seen_count")
+
+  @@unique([userId, fingerprint])
+  @@index([userId])
+  @@index([fingerprint])
+  @@map("device_fingerprints")
+}
+
+// =============================================================
+// NOTIFICATIONS
+// =============================================================
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type  NotificationType
+  title String
+  body  String
+  data  Json?   // contextual payload (e.g. { campaignId: '...' })
+
+  isRead  Boolean   @default(false) @map("is_read")
+  readAt  DateTime? @map("read_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// =============================================================
+// REPORTS & MODERATION
+// =============================================================
+
+model Report {
+  id            String @id @default(cuid())
+  submittedById String @map("submitted_by_id")
+  submittedBy   User   @relation("ReportSubmitter", fields: [submittedById], references: [id])
+
+  // Target can be a user, a campaign, or both
+  targetUserId String?   @map("target_user_id")
+  targetUser   User?     @relation("ReportTarget", fields: [targetUserId], references: [id])
+  campaignId   String?   @map("campaign_id")
+  campaign     Campaign? @relation(fields: [campaignId], references: [id])
+
+  reason      ReportReason
+  description String       @db.Text
+  evidence    Json?        // screenshots, URLs, etc.
+
+  status     ReportStatus @default(OPEN)
+  adminNotes String?      @map("admin_notes") @db.Text
+  resolvedBy String?      @map("resolved_by")
+  resolvedAt DateTime?    @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([submittedById])
+  @@index([targetUserId])
+  @@index([createdAt])
+  @@map("reports")
+}
+
+// =============================================================
+// AUDIT LOGS
+// =============================================================
+
+model AuditLog {
+  id     String  @id @default(cuid())
+  userId String? @map("user_id")     // actor (null = system)
+  user   User?   @relation(fields: [userId], references: [id])
+
+  action     String  // 'user.ban' | 'campaign.approve' | 'credit.adjust' | etc.
+  entityType String? @map("entity_type") // 'User' | 'Campaign' | 'Wallet'
+  entityId   String? @map("entity_id")
+
+  oldValue  Json? @map("old_value")
+  newValue  Json? @map("new_value")
+
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+  metadata  Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================
+// PLATFORM CONFIGURATION
+// =============================================================
+
+model PlatformConfig {
+  id  String @id @default(cuid())
+  key String @unique
+
+  value       Json
+  description String?
+  isPublic    Boolean @default(false) @map("is_public") // safe to expose to frontend
+
+  updatedBy String?   @map("updated_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("platform_configs")
+}

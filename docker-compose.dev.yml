@@ -1,0 +1,71 @@
+version: '3.9'
+
+# Development override — only runs infrastructure services
+# Usage: docker-compose -f docker-compose.dev.yml up -d
+# Then run: npm run dev (from root)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: engganyo_postgres_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: engganyo_db
+      POSTGRES_USER: engganyo
+      POSTGRES_PASSWORD: engganyo_dev_pass
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U engganyo -d engganyo_db']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: engganyo_redis_dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata_dev:/data
+
+  # Redis GUI for development
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: engganyo_redis_ui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - '8081:8081'
+    depends_on:
+      - redis
+
+  # Postgres GUI for development
+  adminer:
+    image: adminer:latest
+    container_name: engganyo_adminer
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    depends_on:
+      - postgres
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: engganyo_mailhog
+    restart: unless-stopped
+    ports:
+      - '1025:1025'   # SMTP
+      - '8025:8025'   # Web UI
+
+volumes:
+  pgdata_dev:
+    name: engganyo_pgdata_dev
+  redisdata_dev:
+    name: engganyo_redisdata_dev
