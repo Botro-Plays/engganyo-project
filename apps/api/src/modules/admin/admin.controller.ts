@@ -122,6 +122,27 @@ export class AdminController {
     return this.adminService.updatePlatformTask(admin.sub, id, dto);
   }
 
+  // ─── Proof Submissions ───────────────────────────────────
+
+  @Get('submissions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List proof submissions awaiting manual review' })
+  listPendingSubmissions(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.adminService.listPendingSubmissions(Number(page), Number(limit));
+  }
+
+  @Patch('submissions/:id/review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Approve or reject a proof submission' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  reviewSubmission(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: { action: 'approve' | 'reject'; reason?: string },
+  ) {
+    return this.adminService.reviewSubmission(admin.sub, id, dto);
+  }
+
   // ─── Campaigns ────────────────────────────────────────────
 
   @Get('campaigns/pending')

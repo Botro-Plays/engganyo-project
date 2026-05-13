@@ -460,6 +460,7 @@ model Campaign {
   cooldownHours      Int      @default(24) @map("cooldown_hours") // prevent same user recycle
   requiresProof      Boolean  @default(true) @map("requires_proof")
   proofInstructions  String?  @map("proof_instructions") @db.Text
+  autoVerify         Boolean  @default(true) @map("auto_verify") // true = instant payout; false = admin must review proof
 
   // Scheduling
   startsAt   DateTime? @map("starts_at")

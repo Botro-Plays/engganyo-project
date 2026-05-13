@@ -31,6 +31,7 @@ const CAMPAIGN_SELECT = {
   cooldownHours: true,
   requiresProof: true,
   proofInstructions: true,
+  autoVerify: true,
   startsAt: true,
   expiresAt: true,
   createdAt: true,
@@ -74,6 +75,7 @@ export class CampaignsService {
         cooldownHours: dto.cooldownHours ?? 24,
         requiresProof: dto.requiresProof ?? true,
         proofInstructions: dto.proofInstructions,
+        autoVerify: dto.autoVerify ?? true,
         // Auto-activate for Phase 5 (admin review added in Phase 8)
         status: CampaignStatus.ACTIVE,
       },

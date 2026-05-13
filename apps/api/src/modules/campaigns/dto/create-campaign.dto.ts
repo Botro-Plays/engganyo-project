@@ -70,4 +70,12 @@ export class CreateCampaignDto {
   @IsString()
   @MaxLength(500)
   proofInstructions?: string;
+
+  @ApiPropertyOptional({
+    default: true,
+    description: 'true = credits paid instantly on submit; false = admin reviews proof before payout',
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoVerify?: boolean;
 }

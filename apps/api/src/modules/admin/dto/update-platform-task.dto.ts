@@ -44,4 +44,11 @@ export class UpdatePlatformTaskDto {
   @IsOptional()
   @IsBoolean()
   requiresProof?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'true = instant payout; false = admin reviews proof before paying credits',
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoVerify?: boolean;
 }

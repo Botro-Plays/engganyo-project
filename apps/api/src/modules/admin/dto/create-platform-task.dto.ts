@@ -41,8 +41,15 @@ export class CreatePlatformTaskDto {
   @MaxLength(500)
   proofInstructions?: string;
 
-  @ApiPropertyOptional({ default: true })
+  @ApiProperty({ default: true })
+  @IsBoolean()
+  requiresProof!: boolean;
+
+  @ApiPropertyOptional({
+    default: true,
+    description: 'true = instant payout; false = admin reviews proof before paying credits',
+  })
   @IsOptional()
   @IsBoolean()
-  requiresProof?: boolean;
+  autoVerify?: boolean;
 }

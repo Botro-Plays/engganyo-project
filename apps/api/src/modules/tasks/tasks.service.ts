@@ -33,6 +33,7 @@ const COMPLETION_SELECT = {
       creditPerTask: true,
       requiresProof: true,
       proofInstructions: true,
+      autoVerify: true,
       user: { select: { username: true, displayName: true } },
     },
   },
@@ -141,6 +142,7 @@ export class TasksService {
             id: true,
             creditPerTask: true,
             requiresProof: true,
+            autoVerify: true,
             completedSlots: true,
             pendingSlots: true,
             totalSlots: true,
@@ -169,68 +171,65 @@ export class TasksService {
 
     const now = new Date();
 
-    // Phase 5: Auto-verify immediately
-    await this.prisma.withTransaction(async (tx) => {
-      await tx.taskCompletion.update({
+    if (completion.campaign.autoVerify) {
+      // ── Auto-verify: credits paid immediately ──────────────
+      await this.prisma.withTransaction(async (tx) => {
+        await tx.taskCompletion.update({
+          where: { id: completion.id },
+          data: {
+            status: CompletionStatus.VERIFIED,
+            proofUrl: dto.proofUrl,
+            submittedAt: now,
+            verifiedAt: now,
+            verifiedBy: 'system',
+            creditsEarned: completion.campaign.creditPerTask,
+          },
+        });
+
+        const newCompleted = completion.campaign.completedSlots + 1;
+        const isFull = newCompleted >= completion.campaign.totalSlots;
+
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: {
+            completedSlots: { increment: 1 },
+            pendingSlots: { decrement: 1 },
+            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+          },
+        });
+
+        await tx.userProfile.updateMany({
+          where: { userId },
+          data: { totalTasksDone: { increment: 1 } },
+        });
+      });
+
+      await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+        type: TransactionType.EARN_TASK_COMPLETION,
+        description: `Task verified`,
+        referenceId: campaignId,
+        referenceType: 'campaign',
+      });
+
+      await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+      await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
+      await this.gamificationService.checkAchievements(userId);
+      void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
+
+      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+    } else {
+      // ── Manual review: hold proof, await admin approval ────
+      await this.prisma.taskCompletion.update({
         where: { id: completion.id },
         data: {
-          status: CompletionStatus.VERIFIED,
+          status: CompletionStatus.SUBMITTED,
           proofUrl: dto.proofUrl,
           submittedAt: now,
-          verifiedAt: now,
-          verifiedBy: 'system',
-          creditsEarned: completion.campaign.creditPerTask,
-          completionSeconds: Math.floor(
-            (now.getTime() - new Date(now).getTime()) / 1000,
-          ),
         },
       });
 
-      const newCompleted = completion.campaign.completedSlots + 1;
-      const newPending = Math.max(0, completion.campaign.pendingSlots - 1);
-      const isFull = newCompleted >= completion.campaign.totalSlots;
-
-      await tx.campaign.update({
-        where: { id: campaignId },
-        data: {
-          completedSlots: { increment: 1 },
-          pendingSlots: { decrement: 1 },
-          ...(isFull && {
-            status: CampaignStatus.COMPLETED,
-            completedAt: now,
-          }),
-        },
-      });
-
-      // Update user profile stats
-      await tx.userProfile.updateMany({
-        where: { userId },
-        data: {
-          totalTasksDone: { increment: 1 },
-        },
-      });
-    });
-
-    // Pay out credits (outside transaction to avoid lock contention)
-    await this.walletService.credit(userId, completion.campaign.creditPerTask, {
-      type: TransactionType.EARN_TASK_COMPLETION,
-      description: `Task verified`,
-      referenceId: campaignId,
-      referenceType: 'campaign',
-    });
-
-    // Award XP + update missions + check achievements
-    await this.gamificationService.awardXp(
-      userId,
-      XP_REWARDS.TASK_COMPLETION,
-      'task_completion',
-      campaignId,
-    );
-    await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
-    await this.gamificationService.checkAchievements(userId);
-    void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
-
-    return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+      return { creditsEarned: 0, status: 'SUBMITTED', message: 'Proof submitted and awaiting admin review.' };
+    }
   }
 
   // ─── Get my tasks ──────────────────────────────────────────

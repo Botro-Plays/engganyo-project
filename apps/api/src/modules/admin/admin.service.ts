@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { CampaignStatus, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -122,6 +122,7 @@ export class AdminService {
         totalCost: dto.totalSlots * dto.creditPerTask,
         status: CampaignStatus.ACTIVE,
         requiresProof: dto.requiresProof ?? true,
+        autoVerify: dto.autoVerify ?? true,
         proofInstructions: dto.proofInstructions,
         targetCountries: [],
         targetLanguages: [],
@@ -192,6 +193,7 @@ export class AdminService {
         totalCost: updatedSlots * updatedCredits,
         ...(dto.proofInstructions !== undefined && { proofInstructions: dto.proofInstructions }),
         ...(dto.requiresProof !== undefined && { requiresProof: dto.requiresProof }),
+        ...(dto.autoVerify !== undefined && { autoVerify: dto.autoVerify }),
       },
     });
 
@@ -233,6 +235,147 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  // ─── Proof Submissions (manual review) ───────────────────
+
+  async listPendingSubmissions(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const where = {
+      status: CompletionStatus.SUBMITTED,
+      campaign: { autoVerify: false },
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.taskCompletion.findMany({
+        where,
+        select: {
+          id: true,
+          proofUrl: true,
+          submittedAt: true,
+          creditsEarned: true,
+          campaign: {
+            select: {
+              id: true,
+              title: true,
+              taskType: true,
+              creditPerTask: true,
+            },
+          },
+          user: { select: { id: true, username: true } },
+        },
+        orderBy: { submittedAt: 'asc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.taskCompletion.count({ where }),
+    ]);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async reviewSubmission(
+    adminId: string,
+    completionId: string,
+    dto: { action: 'approve' | 'reject'; reason?: string },
+  ) {
+    const completion = await this.prisma.taskCompletion.findUnique({
+      where: { id: completionId },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        campaign: {
+          select: {
+            id: true,
+            creditPerTask: true,
+            completedSlots: true,
+            totalSlots: true,
+          },
+        },
+      },
+    });
+    if (!completion) throw new NotFoundException('Submission not found');
+    if (completion.status !== CompletionStatus.SUBMITTED) {
+      throw new BadRequestException(`Submission is already ${completion.status.toLowerCase()}`);
+    }
+
+    const now = new Date();
+
+    if (dto.action === 'approve') {
+      await this.prisma.withTransaction(async (tx) => {
+        await tx.taskCompletion.update({
+          where: { id: completionId },
+          data: {
+            status: CompletionStatus.VERIFIED,
+            verifiedAt: now,
+            verifiedBy: adminId,
+            creditsEarned: completion.campaign.creditPerTask,
+          },
+        });
+
+        const newCompleted = completion.campaign.completedSlots + 1;
+        const isFull = newCompleted >= completion.campaign.totalSlots;
+
+        await tx.campaign.update({
+          where: { id: completion.campaign.id },
+          data: {
+            completedSlots: { increment: 1 },
+            pendingSlots: { decrement: 1 },
+            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+          },
+        });
+
+        await tx.userProfile.updateMany({
+          where: { userId: completion.userId },
+          data: { totalTasksDone: { increment: 1 } },
+        });
+      });
+
+      await this.walletService.credit(completion.userId, completion.campaign.creditPerTask, {
+        type: TransactionType.EARN_TASK_COMPLETION,
+        description: 'Task proof approved',
+        referenceId: completion.campaign.id,
+        referenceType: 'campaign',
+      });
+
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'submission.approved',
+          entityType: 'TaskCompletion',
+          entityId: completionId,
+          newValue: { creditsPaid: completion.campaign.creditPerTask },
+        },
+      });
+
+      return { status: 'VERIFIED', creditsPaid: completion.campaign.creditPerTask };
+    } else {
+      await this.prisma.taskCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: CompletionStatus.REJECTED,
+          verifiedAt: now,
+          verifiedBy: adminId,
+          rejectionReason: dto.reason ?? 'Proof did not meet requirements',
+        },
+      });
+
+      await this.prisma.campaign.update({
+        where: { id: completion.campaign.id },
+        data: { pendingSlots: { decrement: 1 } },
+      });
+
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'submission.rejected',
+          entityType: 'TaskCompletion',
+          entityId: completionId,
+          newValue: { reason: dto.reason },
+        },
+      });
+
+      return { status: 'REJECTED' };
+    }
   }
 
   // ─── Campaigns ────────────────────────────────────────────
