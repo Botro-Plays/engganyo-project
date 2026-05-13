@@ -22,11 +22,11 @@ import { AuthGuard } from '@/components/auth-guard';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard/tasks', icon: ListTodo, label: 'Tasks' },
-  { href: '/dashboard/campaigns', icon: Megaphone, label: 'Campaigns' },
-  { href: '/dashboard/wallet', icon: Wallet, label: 'Wallet' },
-  { href: '/dashboard/discover', icon: Compass, label: 'Discover' },
-  { href: '/dashboard/leaderboard', icon: Trophy, label: 'Leaderboard' },
+  { href: '/tasks', icon: ListTodo, label: 'Tasks' },
+  { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { href: '/wallet', icon: Wallet, label: 'Wallet' },
+  { href: '/discover', icon: Compass, label: 'Discover' },
+  { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
 ];
 
 const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'];
@@ -93,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           )}
           <Link
-            href="/dashboard/settings"
+            href="/settings"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
           >
             <Settings className="w-4 h-4" />
@@ -120,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
 
             {user && (
-              <Link href="/dashboard/profile" className="flex items-center gap-2 group">
+              <Link href="/profile" className="flex items-center gap-2 group">
                 <div className="w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold">
                   {(user.displayName ?? user.username).charAt(0).toUpperCase()}
                 </div>
