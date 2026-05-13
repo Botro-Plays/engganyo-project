@@ -7,8 +7,10 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, ExternalLink, X, CheckCircle2, Clock,
-  ChevronLeft, ChevronRight, Send,
+  ChevronLeft, ChevronRight, Send, Flag,
 } from 'lucide-react';
+
+import { ReportModal } from '@/components/report-modal';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatRelativeTime } from '@/lib/utils';
@@ -108,6 +110,7 @@ export default function TasksPage() {
   const [submitting, setSubmitting] = useState<MyTask | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<{ userId: string; label: string } | null>(null);
 
   // ─── Browse tasks ──────────────────────────────────────────
   const { data: browseData, isLoading: browseLoading } = useQuery({
@@ -238,17 +241,26 @@ export default function TasksPage() {
                         <span>{available} slots left</span>
                         <span>by @{task.user.username}</span>
                       </div>
-                      <button
-                        onClick={() => assignMutation.mutate(task.id)}
-                        disabled={assignMutation.isPending || available <= 0}
-                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {assignMutation.isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          'Accept task'
-                        )}
-                      </button>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => assignMutation.mutate(task.id)}
+                          disabled={assignMutation.isPending || available <= 0}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {assignMutation.isPending ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            'Accept task'
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setReporting({ userId: task.user.username, label: task.title })}
+                          className="px-2 py-2 rounded-lg bg-red-500/5 border border-red-500/10 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                          title="Report this campaign"
+                        >
+                          <Flag className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -359,6 +371,15 @@ export default function TasksPage() {
             </>
           )}
         </>
+      )}
+
+      {/* ── Report modal ── */}
+      {reporting && (
+        <ReportModal
+          targetUserId={reporting.userId}
+          targetLabel={reporting.label}
+          onClose={() => setReporting(null)}
+        />
       )}
 
       {/* ── Submit proof modal ── */}

@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 
-/**
- * AntiAbuseModule — Phase 7
- * Handles: trust scoring, abuse flags, IP analysis, device fingerprinting, rate limiting
- */
+import { AntiAbuseController } from './anti-abuse.controller';
+import { AntiAbuseService } from './anti-abuse.service';
+
 @Module({
   imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  controllers: [AntiAbuseController],
+  providers: [AntiAbuseService],
+  exports: [AntiAbuseService],
 })
 export class AntiAbuseModule {}

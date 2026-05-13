@@ -1,6 +1,6 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-13 (Phase 6 complete)
+> Last updated: 2026-05-13 (Phase 7 complete)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 
 ---
@@ -157,26 +157,28 @@
 
 ---
 
-## Phase 7 — Anti-Abuse Systems ⏳
+## Phase 7 — Anti-Abuse Systems ✅
 
 > Trust scores, fake completion detection, IP analysis, flagging
 
-**API (`/api/v1/reports`)**
-- [ ] `POST /reports` — submit a report (fake completion, spam, etc.)
-- [ ] `GET  /reports/my` — reports submitted by current user
+**API (`/api/v1/reports`, `/api/v1/trust`)**
+- [x] `POST /reports` — submit a report (fake completion, spam, etc.)
+- [x] `GET  /reports/my` — reports submitted by current user
+- [x] `GET  /trust/me` — get own trust score (lazy recalculation if stale)
 
 **Service internals**
-- [ ] Trust score calculator (account age, completion rate, reports, verified socials, referral quality)
-- [ ] Rate limiting per task type (cooldown enforcement)
-- [ ] IP record tracking + multi-account detection heuristics
-- [ ] Abuse flag system (auto-flag on suspicious patterns)
-- [ ] Automated suspension escalation (too many flags → suspended)
-- [ ] VPN/proxy detection (optional, via external API)
+- [x] Trust score calculation: 5-factor weighted formula (completion rate, account age, verified socials, abuse flags, reports)
+- [x] Trust levels: NEW / LOW / MEDIUM / HIGH / VERIFIED (mapped from score 0–100)
+- [x] IP record tracking + multi-account detection heuristics (same IP, 2+ users in 24h)
+- [x] Abuse flag system — auto-flag on FAKE_COMPLETION, MULTI_ACCOUNTING, BOT_ACTIVITY reports
+- [x] Auto-suspension escalation: 3+ critical flags OR 6+ high flags → user auto-suspended + AuditLog entry
+- [x] Trust score recalculated asynchronously after every task completion
 
 **Frontend**
-- [ ] Report button on task completion / campaigns
-- [ ] Trust score badge on public profiles
-- [ ] Restricted access UI for suspended/banned accounts
+- [x] Report modal — reusable component (reason dropdown, description, submits to POST /reports)
+- [x] Report button (flag icon) on every task card in the Browse marketplace
+- [x] Trust score card on profile page (score bar, level badge, factor breakdown)
+- [x] Suspended / banned account banner in dashboard layout (yellow = suspended, red = banned)
 
 ---
 
@@ -254,7 +256,7 @@
 | 4 | Credit Economy | ✅ Complete |
 | 5 | Task & Campaign System | ✅ Complete |
 | 6 | Gamification | ✅ Complete |
-| 7 | Anti-Abuse Systems | ⏳ Next |
-| 8 | Admin Dashboard | ⏳ Pending |
+| 7 | Anti-Abuse Systems | ✅ Complete |
+| 8 | Admin Dashboard | ⏳ Next |
 | 9 | Analytics | ⏳ Pending |
 | 10 | Production Hardening | ⏳ Pending |

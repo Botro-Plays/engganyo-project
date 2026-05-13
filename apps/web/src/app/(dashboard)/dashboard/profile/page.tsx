@@ -17,6 +17,7 @@ import {
   Music,
   Globe,
   Lock,
+  Shield,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -108,6 +109,76 @@ const PLATFORMS = [
   { value: 'TWITCH', label: 'Twitch', icon: Globe, color: 'text-purple-400' },
   { value: 'SPOTIFY', label: 'Spotify', icon: Music, color: 'text-green-400' },
 ];
+
+// ─── Trust score card ─────────────────────────────────────────
+const TRUST_LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string; bar: string }> = {
+  NEW:      { label: 'New',      color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   bar: 'bg-zinc-500'   },
+  LOW:      { label: 'Low',      color: 'text-red-400',    bg: 'bg-red-500/10',    bar: 'bg-red-500'    },
+  MEDIUM:   { label: 'Medium',   color: 'text-yellow-400', bg: 'bg-yellow-500/10', bar: 'bg-yellow-500' },
+  HIGH:     { label: 'High',     color: 'text-green-400',  bg: 'bg-green-500/10',  bar: 'bg-green-500'  },
+  VERIFIED: { label: 'Verified', color: 'text-brand-400',  bg: 'bg-brand-500/10',  bar: 'bg-brand-500'  },
+};
+
+interface TrustScore {
+  score: number;
+  level: string;
+  completionRate: number;
+  accountAgeDays: number;
+  verifiedSocials: number;
+  reportCount: number;
+  abuseFlagCount: number;
+}
+
+function TrustScoreCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['trust', 'me'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<TrustScore>>('trust/me');
+      return res.data.data;
+    },
+  });
+
+  const cfg = TRUST_LEVEL_CONFIG[data?.level ?? 'NEW'] ?? TRUST_LEVEL_CONFIG.NEW;
+
+  return (
+    <div className="card-glass rounded-xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-zinc-400" />
+          <h2 className="text-sm font-semibold text-white">Trust Score</h2>
+        </div>
+        {data && (
+          <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.color}`}>
+            {cfg.label}
+          </span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="h-10 animate-pulse bg-zinc-800 rounded-lg" />
+      ) : data ? (
+        <>
+          <div className="flex items-center gap-3 mb-3">
+            <span className={`text-3xl font-bold ${cfg.color}`}>{Math.round(data.score)}</span>
+            <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${cfg.bar}`}
+                style={{ width: `${data.score}%` }}
+              />
+            </div>
+            <span className="text-xs text-zinc-600">/ 100</span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-500">
+            <span>Completion rate: <span className="text-zinc-300">{Math.round(data.completionRate * 100)}%</span></span>
+            <span>Account age: <span className="text-zinc-300">{data.accountAgeDays}d</span></span>
+            <span>Verified socials: <span className="text-zinc-300">{data.verifiedSocials}</span></span>
+            <span>Reports received: <span className={data.reportCount > 0 ? 'text-red-400' : 'text-zinc-300'}>{data.reportCount}</span></span>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────
 export default function ProfilePage() {
@@ -277,6 +348,9 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* ── Trust score card ── */}
+      <TrustScoreCard />
 
       {/* ── Edit profile form ── */}
       <div className="card-glass rounded-xl p-6">

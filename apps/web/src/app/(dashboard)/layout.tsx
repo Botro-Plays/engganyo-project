@@ -13,6 +13,7 @@ import {
   LogOut,
   Zap,
   Bell,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -119,6 +120,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </div>
         </header>
+
+        {/* Suspended / banned banner */}
+        {user && (user.status === 'SUSPENDED' || user.status === 'BANNED') && (
+          <div className={`px-6 py-3 flex items-center gap-3 text-sm ${
+            user.status === 'BANNED'
+              ? 'bg-red-500/10 border-b border-red-500/30 text-red-400'
+              : 'bg-yellow-500/10 border-b border-yellow-500/30 text-yellow-400'
+          }`}>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {user.status === 'BANNED'
+              ? 'Your account has been permanently banned. Contact support if you believe this is an error.'
+              : 'Your account is suspended. You can still browse but cannot complete tasks or create campaigns.'}
+          </div>
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-auto scrollbar-thin p-6">
