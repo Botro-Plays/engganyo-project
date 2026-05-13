@@ -1,13 +1,11 @@
 import { Module } from '@nestjs/common';
 
-/**
- * WalletModule — Phase 4
- * Handles: credit balance, transactions, earning, spending
- */
+import { WalletController } from './wallet.controller';
+import { WalletService } from './wallet.service';
+
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  controllers: [WalletController],
+  providers: [WalletService],
+  exports: [WalletService],
 })
 export class WalletModule {}

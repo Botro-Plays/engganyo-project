@@ -73,14 +73,20 @@ const profileSchema = z.object({
   location: z.string().max(100).optional().or(z.literal('')),
 });
 
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, 'Required'),
-  newPassword: z
-    .string()
-    .min(8, 'At least 8 characters')
-    .regex(/[A-Z]/, 'Must contain an uppercase letter')
-    .regex(/[0-9]/, 'Must contain a number'),
-});
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Required'),
+    newPassword: z
+      .string()
+      .min(8, 'At least 8 characters')
+      .regex(/[A-Z]/, 'Must contain an uppercase letter')
+      .regex(/[0-9]/, 'Must contain a number'),
+    confirmPassword: z.string().min(1, 'Required'),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
 const socialSchema = z.object({
   platform: z.string().min(1),
@@ -177,7 +183,11 @@ export default function ProfilePage() {
   });
 
   const passwordMutation = useMutation({
-    mutationFn: (data: PasswordFormData) => apiClient.patch('users/me/password', data),
+    mutationFn: (data: PasswordFormData) =>
+      apiClient.patch('users/me/password', {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      }),
     onSuccess: () => {
       passwordForm.reset();
       setPasswordSuccess(true);
@@ -505,6 +515,17 @@ export default function ProfilePage() {
             />
             {passwordForm.formState.errors.newPassword && (
               <p className="text-xs text-red-400 mt-1">{passwordForm.formState.errors.newPassword.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm new password</label>
+            <input
+              {...passwordForm.register('confirmPassword')}
+              type="password"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
+            {passwordForm.formState.errors.confirmPassword && (
+              <p className="text-xs text-red-400 mt-1">{passwordForm.formState.errors.confirmPassword.message}</p>
             )}
           </div>
           <div className="flex justify-end pt-1">
