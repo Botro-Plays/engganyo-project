@@ -1,15 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-
-const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'];
+import { AuthGuard } from '@/components/auth-guard';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -21,18 +19,10 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, logout } = useAuthStore();
 
-  useEffect(() => {
-    if (user && !ADMIN_ROLES.includes(user.role)) {
-      void router.replace('/dashboard');
-    }
-  }, [user, router]);
-
-  if (!user || !ADMIN_ROLES.includes(user.role)) return null;
-
   return (
+    <AuthGuard roles={['ADMIN', 'MODERATOR', 'SUPER_ADMIN']}>
     <div className="min-h-screen bg-surface flex">
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
@@ -90,8 +80,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
             <span className="text-red-400 font-medium">Admin Panel</span>
             <span>·</span>
-            <span>{user.username}</span>
-            <span className="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-xs">{user.role}</span>
+            <span>{user?.username}</span>
+            <span className="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-xs">{user?.role}</span>
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">
@@ -99,5 +89,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
     </div>
+    </AuthGuard>
   );
 }

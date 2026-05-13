@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
+import { AuthGuard } from '@/components/auth-guard';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -35,6 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, logout } = useAuthStore();
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-surface flex">
       {/* Sidebar */}
       <aside className="w-64 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
@@ -153,5 +155,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
     </div>
+    </AuthGuard>
   );
 }
