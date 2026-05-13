@@ -24,7 +24,7 @@ export default function DashboardPage() {
 
   const { data: stats } = useQuery<MyStats>({
     queryKey: ['my-stats'],
-    queryFn: () => apiClient.get<MyStats>('/analytics/users/me/stats').then((r) => r.data),
+    queryFn: () => apiClient.get<{ data: MyStats }>('/analytics/users/me/stats').then((r) => r.data.data),
   });
 
   const activityData = (stats?.dailyActivity ?? []).map((d) => ({

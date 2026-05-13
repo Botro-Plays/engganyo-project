@@ -23,7 +23,7 @@ export default function CampaignAnalyticsPage() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['campaign-analytics', id],
-    queryFn: () => apiClient.get<CampaignAnalyticsData>(`/analytics/campaigns/${id}`).then((r) => r.data),
+    queryFn: () => apiClient.get<{ data: CampaignAnalyticsData }>(`/analytics/campaigns/${id}`).then((r) => r.data.data),
   });
 
   if (isLoading) {
