@@ -64,6 +64,9 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('access_token');
         }
         set({ user: null, accessToken: null, isAuthenticated: false });
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
       },
     }),
     {
