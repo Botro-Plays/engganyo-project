@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 
-/**
- * GamificationModule — Phase 6
- * Handles: XP, levels, achievements, streaks, daily missions, leaderboards
- */
+import { WalletModule } from '../wallet/wallet.module';
+import { GamificationController } from './gamification.controller';
+import { GamificationService } from './gamification.service';
+
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  imports: [WalletModule],
+  controllers: [GamificationController],
+  providers: [GamificationService],
+  exports: [GamificationService],
 })
 export class GamificationModule {}

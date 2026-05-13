@@ -9,6 +9,7 @@ import { CompletionStatus, CampaignStatus, TransactionType } from '@prisma/clien
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { GamificationService, XP_REWARDS } from '../gamification/gamification.service';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -42,6 +43,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly campaignsService: CampaignsService,
+    private readonly gamificationService: GamificationService,
   ) {}
 
   // ─── Browse available tasks ────────────────────────────────
@@ -219,6 +221,16 @@ export class TasksService {
       referenceId: campaignId,
       referenceType: 'campaign',
     });
+
+    // Award XP + update missions + check achievements
+    await this.gamificationService.awardXp(
+      userId,
+      XP_REWARDS.TASK_COMPLETION,
+      'task_completion',
+      campaignId,
+    );
+    await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
+    await this.gamificationService.checkAchievements(userId);
 
     return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
   }

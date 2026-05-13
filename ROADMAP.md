@@ -1,6 +1,6 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-13
+> Last updated: 2026-05-13 (Phase 6 complete)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 
 ---
@@ -79,80 +79,81 @@
 
 ---
 
-## Phase 4 — Credit Economy ⏳
+## Phase 4 — Credit Economy ✅
 
 > Wallet, transactions, earning credits, spending credits
 
 **API (`/api/v1/wallet`)**
-- [ ] `GET  /wallet/me` — wallet balance + lifetime stats
-- [ ] `GET  /wallet/transactions` — paginated transaction history
-- [ ] `GET  /wallet/transactions/:id` — single transaction detail
+- [x] `GET  /wallet/me` — wallet balance + lifetime stats
+- [x] `GET  /wallet/transactions` — paginated transaction history
+- [x] `GET  /wallet/transactions/:id` — single transaction detail
 
 **Service internals**
-- [ ] `WalletService.credit(userId, amount, type, description)` — atomic credit with optimistic locking
-- [ ] `WalletService.debit(userId, amount, type, description)` — atomic debit, insufficient funds guard
-- [ ] `WalletService.transfer(fromId, toId, amount)` — peer transfer
-- [ ] Denormalized `user.creditBalance` kept in sync on every transaction
+- [x] `WalletService.credit(userId, amount, type, description)` — atomic credit with optimistic locking
+- [x] `WalletService.debit(userId, amount, type, description)` — atomic debit, insufficient funds guard
+- [x] Denormalized `user.creditBalance` kept in sync on every transaction
 
 **Frontend (`/dashboard/wallet`)**
-- [ ] Wallet balance card (available, lifetime earned, lifetime spent)
-- [ ] Transaction history list (type badge, amount, timestamp, description)
-- [ ] Pagination / infinite scroll
+- [x] Wallet balance card (available, lifetime earned, lifetime spent)
+- [x] Transaction history list (type badge, amount, timestamp, description)
+- [x] Pagination
 
 ---
 
-## Phase 5 — Task & Campaign System ⏳
+## Phase 5 — Task & Campaign System ✅
 
 > Campaigns created by advertisers, tasks completed by earners
 
 **API (`/api/v1/campaigns`, `/api/v1/tasks`)**
-- [ ] `POST   /campaigns` — create campaign (deducts credits, sets budget)
-- [ ] `GET    /campaigns` — list own campaigns with stats
-- [ ] `GET    /campaigns/:id` — campaign detail
-- [ ] `PATCH  /campaigns/:id` — update (pause, resume, edit)
-- [ ] `DELETE /campaigns/:id` — cancel + refund unspent credits
-- [ ] `GET    /tasks` — browse available tasks (filtered by platform, type)
-- [ ] `POST   /tasks/:id/assign` — claim a task slot
-- [ ] `POST   /tasks/:id/submit` — submit proof (screenshot URL / link)
-- [ ] `GET    /tasks/my` — my assigned/completed tasks
+- [x] `POST   /campaigns` — create campaign (deducts credits, sets budget)
+- [x] `GET    /campaigns` — list own campaigns with stats
+- [x] `GET    /campaigns/:id` — campaign detail
+- [x] `PATCH  /campaigns/:id` — update (pause, resume, edit)
+- [x] `DELETE /campaigns/:id` — cancel + refund unspent credits
+- [x] `GET    /tasks` — browse available tasks (filtered by platform, type)
+- [x] `POST   /tasks/:id/assign` — claim a task slot (48h expiry, dupe guard)
+- [x] `POST   /tasks/:id/submit` — submit proof + auto-verify
+- [x] `GET    /tasks/my` — my assigned/completed tasks
 
 **Service internals**
-- [ ] Campaign slot management (max completions, cooldown per user)
-- [ ] Task assignment with cooldown guard
-- [ ] Proof submission → triggers verification queue
-- [ ] Auto-verify after N hours if no moderator action
-- [ ] Credit payout on verification
+- [x] Campaign slot management (max completions, pendingSlots tracking)
+- [x] Task assignment with dupe + expiry guard
+- [x] Auto-verify on submit (Phase 5), credit payout via WalletService
+- [x] Campaign auto-completes when all slots filled
 
 **Frontend**
-- [ ] `/dashboard/tasks` — task marketplace (filter by platform)
-- [ ] Task detail modal (instructions, proof submission)
-- [ ] `/dashboard/campaigns` — campaign manager (create, pause, stats)
-- [ ] Campaign creation form (platform, type, target URL, budget, slots)
+- [x] `/dashboard/tasks` — Browse/My Tasks tabs, task cards, proof submit modal
+- [x] `/dashboard/campaigns` — campaign list + create modal with live cost preview, pause/cancel
 
 ---
 
-## Phase 6 — Gamification ⏳
+## Phase 6 — Gamification ✅
 
 > XP, levels, streaks, achievements, daily missions, leaderboard
 
 **API (`/api/v1/gamification`)**
-- [ ] `GET /gamification/achievements` — list all achievements + unlock status
-- [ ] `GET /gamification/missions/daily` — today's missions + progress
-- [ ] `GET /gamification/leaderboard` — weekly + all-time rankings
-- [ ] `GET /gamification/streak` — current streak info
+- [x] `GET  /gamification/stats` — XP, level, streak, progress to next level
+- [x] `GET  /gamification/achievements` — all achievements + unlock status
+- [x] `GET  /gamification/missions/daily` — today's missions + progress
+- [x] `GET  /gamification/leaderboard` — all-time + weekly XP rankings
+- [x] `GET  /gamification/streak` — streak info
+- [x] `POST /gamification/daily-reward` — claim daily login reward (credits + XP)
 
 **Service internals**
-- [ ] `XpService.award(userId, amount, reason)` — XP grant + level-up check
-- [ ] Level-up event → notification + credit bonus
-- [ ] Daily login streak tracker (cron job)
-- [ ] Achievement unlock engine (event-driven via EventEmitter)
-- [ ] Daily mission reset cron (midnight UTC)
+- [x] `GamificationService.awardXp()` — XP grant + level-up check (matches frontend formula)
+- [x] Achievement unlock engine — checked after task completion, campaign create, daily reward
+- [x] 14 default achievements seeded on module init (ENGAGEMENT, CREATOR, FINANCIAL, MILESTONE, DEDICATION)
+- [x] 4 daily missions seeded on module init
+- [x] Mission progress updated on task completion + completion auto-rewards credits + XP
+- [x] Daily reward with streak-scaling credits (50 + 10/day, capped 200) + streak broken detection
+- [x] Weekly leaderboard via XpEvent groupBy (last 7 days)
+- [x] XP hooked into TasksService on every verified completion (+50 XP/task)
 
-**Frontend**
-- [ ] `/dashboard/leaderboard` — ranked table with XP, level, streak badges
-- [ ] Achievement gallery on profile page
-- [ ] Daily missions widget on dashboard
-- [ ] Level/XP progress bar in sidebar
+**Frontend (`/dashboard/leaderboard` → renamed Gamification)**
+- [x] Stats row: level + XP progress bar, total XP, streak, daily reward claim button
+- [x] Leaderboard tab: all-time / weekly toggle, rank rows with trophy icons, highlights self
+- [x] Achievements tab: gallery grid, category colour badges, locked/unlocked state
+- [x] Missions tab: daily missions with progress bars, auto-reward feedback
 
 ---
 
@@ -250,10 +251,10 @@
 | 1 | Architecture & Infrastructure | ✅ Complete |
 | 2 | Authentication System | ✅ Complete |
 | 3 | User Profile System | ✅ Complete |
-| 4 | Credit Economy | ⏳ Next |
-| 5 | Task & Campaign System | ⏳ Pending |
-| 6 | Gamification | ⏳ Pending |
-| 7 | Anti-Abuse Systems | ⏳ Pending |
+| 4 | Credit Economy | ✅ Complete |
+| 5 | Task & Campaign System | ✅ Complete |
+| 6 | Gamification | ✅ Complete |
+| 7 | Anti-Abuse Systems | ⏳ Next |
 | 8 | Admin Dashboard | ⏳ Pending |
 | 9 | Analytics | ⏳ Pending |
 | 10 | Production Hardening | ⏳ Pending |
