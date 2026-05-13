@@ -12,6 +12,7 @@ import { ReviewCampaignDto } from './dto/review-campaign.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 import { GrantCreditsDto } from './dto/grant-credits.dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
+import { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -83,6 +84,19 @@ export class AdminController {
     @Body() dto: GrantCreditsDto,
   ) {
     return this.adminService.grantCredits(admin.sub, id, dto);
+  }
+
+  // ─── Platform Tasks ──────────────────────────────────────
+
+  @Post('tasks')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a platform task (goes live immediately as ACTIVE)' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  createPlatformTask(
+    @CurrentUser() admin: JwtPayload,
+    @Body() dto: CreatePlatformTaskDto,
+  ) {
+    return this.adminService.createPlatformTask(admin.sub, dto);
   }
 
   // ─── Campaigns ────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { CampaignStatus, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -105,6 +106,38 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  async createPlatformTask(adminId: string, dto: CreatePlatformTaskDto) {
+    const campaign = await this.prisma.campaign.create({
+      data: {
+        userId: adminId,
+        title: dto.title,
+        description: dto.description,
+        taskType: dto.taskType,
+        targetUrl: dto.targetUrl,
+        totalSlots: dto.totalSlots,
+        creditPerTask: dto.creditPerTask,
+        totalCost: dto.totalSlots * dto.creditPerTask,
+        status: CampaignStatus.ACTIVE,
+        requiresProof: dto.requiresProof ?? true,
+        proofInstructions: dto.proofInstructions,
+        targetCountries: [],
+        targetLanguages: [],
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'platform_task.created',
+        entityType: 'Campaign',
+        entityId: campaign.id,
+        newValue: { title: dto.title, taskType: dto.taskType, totalSlots: dto.totalSlots },
+      },
+    });
+
+    return campaign;
   }
 
   async changeUserRole(adminId: string, userId: string, dto: ChangeUserRoleDto) {

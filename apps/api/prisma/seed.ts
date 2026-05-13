@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, CampaignStatus, TaskType } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -267,6 +267,90 @@ async function main(): Promise<void> {
     });
   }
   console.log(`✅ Seeded ${configs.length} platform configs`);
+
+  // ─── Sample Platform Campaigns ──────────────────────────────
+  const sampleCampaigns = [
+    {
+      title: 'Subscribe to Engganyo on YouTube',
+      description: 'Help us grow our YouTube channel! Subscribe and turn on notifications.',
+      taskType: TaskType.YOUTUBE_SUBSCRIBE,
+      targetUrl: 'https://youtube.com/@engganyo',
+      totalSlots: 100,
+      creditPerTask: 50,
+      proofInstructions: 'Take a screenshot showing you are subscribed and paste the URL.',
+    },
+    {
+      title: 'Follow Engganyo on TikTok',
+      description: 'Follow our TikTok account for daily creator tips and platform updates.',
+      taskType: TaskType.TIKTOK_FOLLOW,
+      targetUrl: 'https://tiktok.com/@engganyo',
+      totalSlots: 200,
+      creditPerTask: 30,
+      proofInstructions: 'Screenshot your follower confirmation screen.',
+    },
+    {
+      title: 'Follow Engganyo on Instagram',
+      description: 'Follow our Instagram for behind-the-scenes content and updates.',
+      taskType: TaskType.INSTAGRAM_FOLLOW,
+      targetUrl: 'https://instagram.com/engganyo',
+      totalSlots: 150,
+      creditPerTask: 30,
+      proofInstructions: 'Screenshot your profile showing you are following.',
+    },
+    {
+      title: 'Follow Engganyo on Twitter/X',
+      description: 'Follow us on Twitter/X to stay up-to-date with announcements.',
+      taskType: TaskType.TWITTER_FOLLOW,
+      targetUrl: 'https://twitter.com/engganyo',
+      totalSlots: 150,
+      creditPerTask: 25,
+      proofInstructions: 'Screenshot showing you are following @engganyo.',
+    },
+    {
+      title: 'Like our YouTube Introduction Video',
+      description: 'Watch and like our intro video to help with YouTube reach.',
+      taskType: TaskType.YOUTUBE_LIKE,
+      targetUrl: 'https://youtube.com/watch?v=example',
+      totalSlots: 300,
+      creditPerTask: 20,
+      proofInstructions: 'Screenshot the video page showing your like.',
+    },
+    {
+      title: 'Retweet our Platform Launch Post',
+      description: 'Help spread the word about Engganyo by retweeting our launch post.',
+      taskType: TaskType.TWITTER_RETWEET,
+      targetUrl: 'https://twitter.com/engganyo/status/example',
+      totalSlots: 500,
+      creditPerTask: 15,
+      proofInstructions: 'Screenshot your retweet confirmation.',
+    },
+  ];
+
+  for (const campaign of sampleCampaigns) {
+    const existing = await prisma.campaign.findFirst({
+      where: { title: campaign.title, userId: admin.id },
+    });
+    if (!existing) {
+      await prisma.campaign.create({
+        data: {
+          userId: admin.id,
+          title: campaign.title,
+          description: campaign.description,
+          taskType: campaign.taskType,
+          targetUrl: campaign.targetUrl,
+          totalSlots: campaign.totalSlots,
+          creditPerTask: campaign.creditPerTask,
+          totalCost: campaign.totalSlots * campaign.creditPerTask,
+          status: CampaignStatus.ACTIVE,
+          requiresProof: true,
+          proofInstructions: campaign.proofInstructions,
+          targetCountries: [],
+          targetLanguages: [],
+        },
+      });
+    }
+  }
+  console.log(`✅ Seeded ${sampleCampaigns.length} sample platform campaigns`);
 
   console.log('✅ Database seeded successfully!');
 }
