@@ -172,7 +172,7 @@ export default function LandingPage() {
             </div>
             <span className="font-semibold text-sm">Engganyo</span>
           </div>
-          <p className="text-zinc-500 text-sm">© 2024 Engganyo. All rights reserved.</p>
+          <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
           <div className="flex gap-6 text-zinc-500 text-sm">
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-white transition-colors">Terms</Link>
