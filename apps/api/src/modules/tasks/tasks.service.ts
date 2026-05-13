@@ -71,6 +71,7 @@ export class TasksService {
         id: true,
         userId: true,
         status: true,
+        taskType: true,
         totalSlots: true,
         completedSlots: true,
         pendingSlots: true,
@@ -81,6 +82,18 @@ export class TasksService {
 
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId === userId) throw new BadRequestException('Cannot assign your own campaign');
+
+    // ── Require linked social account for the campaign's platform ──────────
+    const requiredPlatform = SocialAuthService.getPlatformForTaskType(campaign.taskType as never);
+    if (requiredPlatform) {
+      const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
+      if (!linked) {
+        const platformLabel = requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase();
+        throw new BadRequestException(
+          `You must link your ${platformLabel} account before accepting this task. Go to Settings → Connected Accounts.`,
+        );
+      }
+    }
     if (campaign.status !== CampaignStatus.ACTIVE) {
       throw new BadRequestException('Campaign is not active');
     }

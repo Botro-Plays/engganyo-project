@@ -7,8 +7,8 @@ import {
   Youtube, Music, Twitch, Twitter, Instagram, Facebook,
   Link2, Unlink, CheckCircle2, AlertCircle, Loader2, ExternalLink,
 } from 'lucide-react';
-import { apiClient, getApiErrorMessage } from '@/lib/api-client';
-import type { ApiResponse } from '@/lib/api-client';
+import { apiClient, getApiErrorMessage } from '@/lib/api';
+import type { ApiResponse } from '@/types';
 
 interface ConnectedAccount {
   id: string;
@@ -99,6 +99,8 @@ export default function ConnectedAccountsPage() {
   const searchParams = useSearchParams();
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
+  const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({});
 
   // Handle OAuth return
   useEffect(() => {
@@ -123,6 +125,18 @@ export default function ConnectedAccountsPage() {
       const res = await apiClient.get<ApiResponse<ConnectedAccount[]>>('social-auth/accounts');
       return res.data.data ?? [];
     },
+  });
+
+  const manualLinkMutation = useMutation({
+    mutationFn: ({ platform, profileUrl }: { platform: string; profileUrl: string }) =>
+      apiClient.post(`social-auth/manual-link`, { platform, profileUrl }),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['social-accounts'] });
+      setNotice({ type: 'success', msg: `${variables.platform} account linked.` });
+      setManualExpanded((m) => ({ ...m, [variables.platform]: false }));
+      setManualInputs((m) => ({ ...m, [variables.platform]: '' }));
+    },
+    onError: (err) => setNotice({ type: 'error', msg: getApiErrorMessage(err) }),
   });
 
   const disconnectMutation = useMutation({
@@ -193,42 +207,43 @@ export default function ConnectedAccountsPage() {
             const isConnecting = connecting === p.id;
 
             return (
-              <div key={p.id} className={`card-glass rounded-xl p-5 border ${p.border} flex items-center gap-4`}>
-                <div className={`w-10 h-10 rounded-xl ${p.bg} flex items-center justify-center shrink-0`}>
-                  <Icon className={`w-5 h-5 ${p.color}`} />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-white text-sm">{p.label}</p>
-                    {linked && (
-                      <span className="flex items-center gap-1 text-xs text-green-400">
-                        <CheckCircle2 className="w-3 h-3" /> Connected
-                      </span>
-                    )}
-                    {!p.supported && (
-                      <span className="text-xs text-zinc-600 bg-surface-hover px-2 py-0.5 rounded-full">
-                        Screenshot only
-                      </span>
-                    )}
+              <div key={p.id} className={`card-glass rounded-xl p-5 border ${p.border}`}>
+                {/* ── Main row ── */}
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl ${p.bg} flex items-center justify-center shrink-0`}>
+                    <Icon className={`w-5 h-5 ${p.color}`} />
                   </div>
-                  {linked ? (
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs text-zinc-400">@{linked.platformUsername}</p>
-                      {linked.profileUrl && (
-                        <a href={linked.profileUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-zinc-600 hover:text-brand-400 transition-colors">
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-white text-sm">{p.label}</p>
+                      {linked && (
+                        <span className="flex items-center gap-1 text-xs text-green-400">
+                          <CheckCircle2 className="w-3 h-3" /> Connected
+                        </span>
+                      )}
+                      {!p.supported && !linked && (
+                        <span className="text-xs text-zinc-600 bg-surface-hover px-2 py-0.5 rounded-full">
+                          Manual link
+                        </span>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-xs text-zinc-500 mt-0.5">{p.description}</p>
-                  )}
-                </div>
+                    {linked ? (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-zinc-400">{linked.platformUsername ?? linked.profileUrl}</p>
+                        {linked.profileUrl && (
+                          <a href={linked.profileUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-zinc-600 hover:text-brand-400 transition-colors">
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-500 mt-0.5">{p.description}</p>
+                    )}
+                  </div>
 
-                {p.supported ? (
-                  linked ? (
+                  {linked ? (
                     <button
                       onClick={() => disconnectMutation.mutate(p.id)}
                       disabled={disconnectMutation.isPending}
@@ -236,7 +251,7 @@ export default function ConnectedAccountsPage() {
                     >
                       <Unlink className="w-3.5 h-3.5" /> Disconnect
                     </button>
-                  ) : (
+                  ) : p.supported ? (
                     <button
                       onClick={() => handleConnect(p.id)}
                       disabled={isConnecting}
@@ -245,9 +260,37 @@ export default function ConnectedAccountsPage() {
                       {isConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
                       Connect
                     </button>
-                  )
-                ) : (
-                  <span className="shrink-0 text-xs text-zinc-600 italic">API not available</span>
+                  ) : (
+                    <button
+                      onClick={() => setManualExpanded((m) => ({ ...m, [p.id]: !m[p.id] }))}
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${p.bg} ${p.color} hover:opacity-80 text-xs font-medium transition-all`}
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      {manualExpanded[p.id] ? 'Cancel' : 'Add account'}
+                    </button>
+                  )}
+                </div>
+
+                {/* ── Manual link input (expands below) ── */}
+                {!linked && !p.supported && manualExpanded[p.id] && (
+                  <div className="mt-3 flex gap-2 items-center border-t border-surface-border pt-3">
+                    <input
+                      value={manualInputs[p.id] ?? ''}
+                      onChange={(e) => setManualInputs((m) => ({ ...m, [p.id]: e.target.value }))}
+                      placeholder={`Your ${p.label} profile URL`}
+                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                    <button
+                      onClick={() => {
+                        const url = manualInputs[p.id]?.trim();
+                        if (url) manualLinkMutation.mutate({ platform: p.id, profileUrl: url });
+                      }}
+                      disabled={manualLinkMutation.isPending || !manualInputs[p.id]?.trim()}
+                      className={`shrink-0 px-3 py-1.5 rounded-lg ${p.bg} ${p.color} text-xs font-medium transition-all disabled:opacity-50`}
+                    >
+                      {manualLinkMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+                    </button>
+                  </div>
                 )}
               </div>
             );

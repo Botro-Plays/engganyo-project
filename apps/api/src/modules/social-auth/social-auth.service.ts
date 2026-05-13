@@ -49,12 +49,22 @@ const PLATFORM_CONFIGS: Partial<Record<SocialPlatform, PlatformOAuthConfig>> = {
 // ─── Map task types to platforms ─────────────────────────────────────────────
 const TASK_TYPE_PLATFORM: Partial<Record<TaskType, SocialPlatform>> = {
   [TaskType.YOUTUBE_SUBSCRIBE]: SocialPlatform.YOUTUBE,
-  [TaskType.YOUTUBE_LIKE]: SocialPlatform.YOUTUBE,
-  [TaskType.YOUTUBE_COMMENT]: SocialPlatform.YOUTUBE,
-  [TaskType.YOUTUBE_WATCH]: SocialPlatform.YOUTUBE,
-  [TaskType.TWITCH_FOLLOW]: SocialPlatform.TWITCH,
-  [TaskType.SPOTIFY_FOLLOW]: SocialPlatform.SPOTIFY,
-  [TaskType.SPOTIFY_STREAM]: SocialPlatform.SPOTIFY,
+  [TaskType.YOUTUBE_LIKE]:      SocialPlatform.YOUTUBE,
+  [TaskType.YOUTUBE_COMMENT]:   SocialPlatform.YOUTUBE,
+  [TaskType.YOUTUBE_WATCH]:     SocialPlatform.YOUTUBE,
+  [TaskType.TIKTOK_FOLLOW]:     SocialPlatform.TIKTOK,
+  [TaskType.TIKTOK_LIKE]:       SocialPlatform.TIKTOK,
+  [TaskType.TIKTOK_COMMENT]:    SocialPlatform.TIKTOK,
+  [TaskType.INSTAGRAM_FOLLOW]:  SocialPlatform.INSTAGRAM,
+  [TaskType.INSTAGRAM_LIKE]:    SocialPlatform.INSTAGRAM,
+  [TaskType.INSTAGRAM_COMMENT]: SocialPlatform.INSTAGRAM,
+  [TaskType.TWITTER_FOLLOW]:    SocialPlatform.TWITTER,
+  [TaskType.TWITTER_LIKE]:      SocialPlatform.TWITTER,
+  [TaskType.TWITTER_RETWEET]:   SocialPlatform.TWITTER,
+  [TaskType.FACEBOOK_PAGE_LIKE]:SocialPlatform.FACEBOOK,
+  [TaskType.TWITCH_FOLLOW]:     SocialPlatform.TWITCH,
+  [TaskType.SPOTIFY_FOLLOW]:    SocialPlatform.SPOTIFY,
+  [TaskType.SPOTIFY_STREAM]:    SocialPlatform.SPOTIFY,
 };
 
 @Injectable()
@@ -66,6 +76,55 @@ export class SocialAuthService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
   ) {}
+
+  // ─── Check if user has a linked account for a platform ────────────────────
+
+  async hasLinkedAccount(userId: string, platform: SocialPlatform): Promise<boolean> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { userId_platform: { userId, platform } },
+      select: { id: true },
+    });
+    return !!account;
+  }
+
+  // ─── Manual link (non-OAuth platforms: Twitter, TikTok, Instagram, Facebook) ─
+
+  async manualLink(userId: string, platform: SocialPlatform, profileUrl: string) {
+    const oauthPlatforms = [SocialPlatform.YOUTUBE, SocialPlatform.TWITCH, SocialPlatform.SPOTIFY];
+    if ((oauthPlatforms as SocialPlatform[]).includes(platform)) {
+      throw new BadRequestException(`${platform} requires OAuth — use the Connect button instead.`);
+    }
+
+    // Extract a username hint from the URL
+    const username = this.extractUsernameFromUrl(profileUrl);
+
+    await this.prisma.socialAccount.upsert({
+      where: { userId_platform: { userId, platform } },
+      create: {
+        userId,
+        platform,
+        platformUserId: `manual_${userId}_${platform}`,
+        platformUsername: username,
+        profileUrl,
+        isVerified: false,
+        lastSyncedAt: new Date(),
+      },
+      update: {
+        platformUsername: username,
+        profileUrl,
+        isVerified: false,
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    return { linked: true, platform, profileUrl, verified: false };
+  }
+
+  private extractUsernameFromUrl(url: string): string | null {
+    // e.g. https://twitter.com/username  https://tiktok.com/@username  https://instagram.com/username
+    const match = url.match(/\/(?:@)?(\w[\w.-]{1,30})(?:\/|$|\?)/i);
+    return match ? match[1] : null;
+  }
 
   // ─── Build OAuth authorization URL ─────────────────────────────────────────
 

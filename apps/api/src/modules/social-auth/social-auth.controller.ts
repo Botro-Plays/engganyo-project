@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Delete, Param, Query, Res, UseGuards, HttpCode, HttpStatus,
+  Controller, Get, Post, Delete, Param, Query, Body, Res, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -48,6 +48,19 @@ export class SocialAuthController {
   @ApiOperation({ summary: 'List current user connected social accounts' })
   getConnectedAccounts(@CurrentUser() user: JwtPayload) {
     return this.socialAuthService.getConnectedAccounts(user.sub);
+  }
+
+  @Post('manual-link')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manually link a social account by profile URL (non-OAuth platforms)' })
+  manualLink(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { platform: string; profileUrl: string },
+  ) {
+    const p = body.platform.toUpperCase() as SocialPlatform;
+    return this.socialAuthService.manualLink(user.sub, p, body.profileUrl);
   }
 
   @Delete(':platform')

@@ -10,11 +10,28 @@ import {
   ChevronLeft, ChevronRight, Send, Flag,
 } from 'lucide-react';
 
+import Link from 'next/link';
 import { ReportModal } from '@/components/report-modal';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
+
+const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
+  YOUTUBE_SUBSCRIBE: 'YOUTUBE',  YOUTUBE_LIKE: 'YOUTUBE',
+  YOUTUBE_COMMENT: 'YOUTUBE',    YOUTUBE_WATCH: 'YOUTUBE',
+  TIKTOK_FOLLOW: 'TIKTOK',       TIKTOK_LIKE: 'TIKTOK',   TIKTOK_COMMENT: 'TIKTOK',
+  INSTAGRAM_FOLLOW: 'INSTAGRAM', INSTAGRAM_LIKE: 'INSTAGRAM', INSTAGRAM_COMMENT: 'INSTAGRAM',
+  TWITTER_FOLLOW: 'TWITTER',     TWITTER_LIKE: 'TWITTER',  TWITTER_RETWEET: 'TWITTER',
+  FACEBOOK_PAGE_LIKE: 'FACEBOOK',
+  TWITCH_FOLLOW: 'TWITCH',
+  SPOTIFY_FOLLOW: 'SPOTIFY',     SPOTIFY_STREAM: 'SPOTIFY',
+};
+
+const PLATFORM_LABEL: Record<string, string> = {
+  YOUTUBE: 'YouTube', TIKTOK: 'TikTok', INSTAGRAM: 'Instagram',
+  TWITTER: 'Twitter', FACEBOOK: 'Facebook', TWITCH: 'Twitch', SPOTIFY: 'Spotify',
+};
 
 // ─── Types ────────────────────────────────────────────────────
 const TASK_TYPE_LABELS: Record<string, string> = {
@@ -111,6 +128,15 @@ export default function TasksPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [reporting, setReporting] = useState<{ userId: string; label: string } | null>(null);
+
+  // ─── Connected social accounts (for task gating) ──────────
+  const { data: linkedAccounts } = useQuery({
+    queryKey: ['social-accounts'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<Array<{ platform: string }>>>('social-auth/accounts');
+      return new Set((res.data.data ?? []).map((a) => a.platform));
+    },
+  });
 
   // ─── Browse tasks ──────────────────────────────────────────
   const { data: browseData, isLoading: browseLoading } = useQuery({
@@ -242,17 +268,33 @@ export default function TasksPage() {
                         <span>by @{task.user.username}</span>
                       </div>
                       <div className="flex gap-1.5">
-                        <button
-                          onClick={() => assignMutation.mutate(task.id)}
-                          disabled={assignMutation.isPending || available <= 0}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {assignMutation.isPending ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            'Accept task'
-                          )}
-                        </button>
+                        {(() => {
+                          const reqPlatform = TASK_TYPE_TO_PLATFORM[task.taskType];
+                          const isLinked = !reqPlatform || (linkedAccounts?.has(reqPlatform) ?? false);
+                          if (!isLinked) {
+                            return (
+                              <Link
+                                href="/settings/connected-accounts"
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 text-xs font-medium transition-all"
+                              >
+                                Link {PLATFORM_LABEL[reqPlatform]} to accept
+                              </Link>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={() => assignMutation.mutate(task.id)}
+                              disabled={assignMutation.isPending || available <= 0}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {assignMutation.isPending ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                'Accept task'
+                              )}
+                            </button>
+                          );
+                        })()}
                         <button
                           onClick={() => setReporting({ userId: task.user.username, label: task.title })}
                           className="px-2 py-2 rounded-lg bg-red-500/5 border border-red-500/10 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
