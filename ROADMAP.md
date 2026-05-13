@@ -1,6 +1,6 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-13 (Phase 8 complete)
+> Last updated: 2026-05-13 (Phase 9 complete)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 
 ---
@@ -212,23 +212,24 @@
 
 ---
 
-## Phase 9 — Analytics ⏳
+## Phase 9 — Analytics ✅
 
 > Platform-wide and per-user analytics
 
 **API (`/api/v1/analytics`)**
-- [ ] `GET /analytics/overview` — admin platform stats (DAU, MAU, revenue, task volume)
-- [ ] `GET /analytics/campaigns/:id` — per-campaign funnel (assigned → submitted → verified)
-- [ ] `GET /analytics/users/me/stats` — personal stats dashboard
+- [x] `GET /analytics/overview` — admin platform stats (DAU, MAU, users, task volume, credit flow) with `?days=` range
+- [x] `GET /analytics/campaigns/:id` — per-campaign funnel (assigned → submitted → verified → rejected), CPA, completion rate, daily trend
+- [x] `GET /analytics/users/me/stats` — personal stats (tasks, credits, campaigns, streak, leaderboard rank)
 
 **Service internals**
-- [ ] Daily stats snapshot cron (aggregates into `AnalyticsSnapshot` table)
-- [ ] Campaign performance metrics (CTR, completion rate, cost per action)
+- [x] `AnalyticsSnapshot` Prisma model + migration (one row per calendar day)
+- [x] Daily stats snapshot `@Cron(EVERY_DAY_AT_MIDNIGHT)` — upserts yesterday's aggregated metrics
+- [x] Campaign performance metrics: completion rate, cost per action, daily verified trend
 
 **Frontend**
-- [ ] Admin analytics dashboard (charts via recharts or tremor)
-- [ ] Per-campaign analytics on campaign detail page
-- [ ] Personal stats cards on dashboard
+- [x] `/admin/analytics` — admin analytics dashboard with DAU/MAU area chart, task volume bar chart, credits issued area chart, 8 KPI cards, 7/30/90d range toggle
+- [x] `/campaigns/[id]/analytics` — per-campaign funnel horizontal bar chart, KPI cards (CPA, completion rate, credits spent), daily verified completions trend
+- [x] `/dashboard` — real personal stats (tasks verified, credits, campaigns, level), 30-day activity sparkline, streak/rank quick stats
 
 ---
 
@@ -265,5 +266,5 @@
 | 6 | Gamification | ✅ Complete |
 | 7 | Anti-Abuse Systems | ✅ Complete |
 | 8 | Admin Dashboard | ✅ Complete |
-| 9 | Analytics | ⏳ Next |
-| 10 | Production Hardening | ⏳ Pending |
+| 9 | Analytics | ✅ Complete |
+| 10 | Production Hardening | ⏳ Next |

@@ -848,3 +848,37 @@ model PlatformConfig {
 
   @@map("platform_configs")
 }
+
+// =============================================================
+// ANALYTICS
+// =============================================================
+
+model AnalyticsSnapshot {
+  id   String   @id @default(cuid())
+  date DateTime @unique @db.Date // one row per calendar day
+
+  // Users
+  totalUsers    Int @default(0) @map("total_users")
+  newUsers      Int @default(0) @map("new_users")
+  dailyActive   Int @default(0) @map("daily_active")   // sessions started that day
+  monthlyActive Int @default(0) @map("monthly_active") // distinct users with session last 30d
+
+  // Tasks
+  tasksAssigned  Int @default(0) @map("tasks_assigned")
+  tasksSubmitted Int @default(0) @map("tasks_submitted")
+  tasksVerified  Int @default(0) @map("tasks_verified")
+  tasksRejected  Int @default(0) @map("tasks_rejected")
+
+  // Campaigns
+  campaignsCreated   Int @default(0) @map("campaigns_created")
+  campaignsCompleted Int @default(0) @map("campaigns_completed")
+
+  // Credits
+  creditsIssued  Int @default(0) @map("credits_issued")   // earned by workers
+  creditsSpent   Int @default(0) @map("credits_spent")    // paid by campaign owners
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([date])
+  @@map("analytics_snapshots")
+}
