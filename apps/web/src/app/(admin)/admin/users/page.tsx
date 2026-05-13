@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatDate } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
 
 interface AdminUser {
@@ -25,6 +26,21 @@ const STATUS_COLORS: Record<string, string> = {
   DEACTIVATED: 'text-zinc-500 bg-zinc-700/30',
 };
 
+const ROLE_COLORS: Record<string, string> = {
+  USER: 'text-zinc-400 bg-zinc-500/10',
+  CREATOR: 'text-blue-400 bg-blue-500/10',
+  MODERATOR: 'text-purple-400 bg-purple-500/10',
+  ADMIN: 'text-orange-400 bg-orange-500/10',
+  SUPER_ADMIN: 'text-red-400 bg-red-500/20 font-semibold',
+};
+
+const ASSIGNABLE_ROLES = ['USER', 'CREATOR', 'MODERATOR', 'ADMIN'] as const;
+
+const roleSchema = z.object({
+  role: z.enum(ASSIGNABLE_ROLES),
+});
+type RoleFormData = z.infer<typeof roleSchema>;
+
 const creditSchema = z.object({
   action: z.enum(['grant', 'deduct']),
   amount: z.coerce.number().int().min(1),
@@ -33,11 +49,16 @@ const creditSchema = z.object({
 type CreditFormData = z.infer<typeof creditSchema>;
 
 export default function AdminUsersPage() {
+  const { user: currentAdmin } = useAuthStore();
+  const isSuperAdmin = currentAdmin?.role === 'SUPER_ADMIN';
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [roleUser, setRoleUser] = useState<AdminUser | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [roleSuccess, setRoleSuccess] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
   const [creditSuccess, setCreditSuccess] = useState(false);
 
@@ -61,6 +82,17 @@ export default function AdminUsersPage() {
     mutationFn: ({ userId, newStatus }: { userId: string; newStatus: string }) =>
       apiClient.patch(`admin/users/${userId}/status`, { status: newStatus }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+
+  const roleForm = useForm<RoleFormData>({ resolver: zodResolver(roleSchema) });
+  const roleMutation = useMutation({
+    mutationFn: (d: RoleFormData) => apiClient.patch(`admin/users/${roleUser!.id}/role`, d),
+    onSuccess: () => {
+      setRoleSuccess(true);
+      setRoleError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => setRoleError(getApiErrorMessage(err)),
   });
 
   const creditForm = useForm<CreditFormData>({ resolver: zodResolver(creditSchema), defaultValues: { action: 'grant' } });
@@ -112,6 +144,7 @@ export default function AdminUsersPage() {
           <thead>
             <tr className="border-b border-surface-border text-xs text-zinc-500 uppercase tracking-wide">
               <th className="text-left px-4 py-3">User</th>
+              <th className="text-left px-4 py-3">Role</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="text-left px-4 py-3">Level</th>
               <th className="text-left px-4 py-3">Credits</th>
@@ -125,7 +158,7 @@ export default function AdminUsersPage() {
             {isLoading
               ? Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b border-surface-border">
-                  <td colSpan={8} className="px-4 py-3"><div className="h-4 bg-zinc-800 rounded animate-pulse" /></td>
+                  <td colSpan={9} className="px-4 py-3"><div className="h-4 bg-zinc-800 rounded animate-pulse" /></td>
                 </tr>
               ))
               : (data?.items ?? []).map((u) => (
@@ -133,6 +166,11 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">{u.username}</p>
                     <p className="text-xs text-zinc-500">{u.email}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'text-zinc-400 bg-zinc-500/10'}`}>
+                      {u.role}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] ?? 'text-zinc-400'}`}>
@@ -149,38 +187,35 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(u.createdAt)}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      {u.status !== 'SUSPENDED' && u.status !== 'BANNED' && (
-                        <button
-                          onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'SUSPENDED' })}
-                          className="px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
-                        >
-                          Suspend
-                        </button>
-                      )}
-                      {u.status !== 'BANNED' && (
-                        <button
-                          onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'BANNED' })}
-                          className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                        >
-                          Ban
-                        </button>
-                      )}
-                      {(u.status === 'SUSPENDED' || u.status === 'BANNED') && (
-                        <button
-                          onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })}
-                          className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
-                        >
-                          Activate
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }}
-                        className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors"
-                      >
-                        <Coins className="w-3 h-3" />
-                      </button>
-                    </div>
+                    {(() => {
+                      const isPrivileged = u.role === 'ADMIN' || u.role === 'SUPER_ADMIN';
+                      const canAct = !isPrivileged || isSuperAdmin;
+                      const isSelf = u.id === currentAdmin?.id;
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          {canAct && !isSelf && u.status !== 'SUSPENDED' && u.status !== 'BANNED' && (
+                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'SUSPENDED' })} className="px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors">Suspend</button>
+                          )}
+                          {canAct && !isSelf && u.status !== 'BANNED' && (
+                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'BANNED' })} className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">Ban</button>
+                          )}
+                          {canAct && !isSelf && (u.status === 'SUSPENDED' || u.status === 'BANNED') && (
+                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })} className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors">Activate</button>
+                          )}
+                          {canAct && (
+                            <button onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }} className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors">
+                              <Coins className="w-3 h-3" />
+                            </button>
+                          )}
+                          {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
+                            <button onClick={() => { setRoleUser(u); setRoleSuccess(false); setRoleError(null); roleForm.reset({ role: u.role as typeof ASSIGNABLE_ROLES[number] }); }} className="px-2 py-1 text-xs rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors">
+                              <ShieldCheck className="w-3 h-3" />
+                            </button>
+                          )}
+                          {!canAct && <span className="text-xs text-zinc-600 italic">Protected</span>}
+                        </div>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}
@@ -200,6 +235,45 @@ export default function AdminUsersPage() {
             <button onClick={() => setPage((p) => p + 1)} disabled={page >= (data?.meta.totalPages ?? 1)} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40">
               <ChevronRight className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Role change modal — SUPER_ADMIN only */}
+      {roleUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-purple-400" />
+                <h2 className="text-base font-semibold text-white">Change Role</h2>
+              </div>
+              <button onClick={() => setRoleUser(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4">
+              User: <span className="text-zinc-300">@{roleUser.username}</span> · Current role: <span className={`${ROLE_COLORS[roleUser.role]} px-1.5 rounded`}>{roleUser.role}</span>
+            </p>
+            {roleSuccess ? (
+              <div className="py-4 text-center">
+                <p className="text-green-400 font-medium mb-3">Role updated!</p>
+                <button onClick={() => setRoleUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+              </div>
+            ) : (
+              <>
+                {roleError && <p className="text-xs text-red-400 mb-3">{roleError}</p>}
+                <form onSubmit={roleForm.handleSubmit((d) => roleMutation.mutate(d))} className="space-y-3">
+                  <select {...roleForm.register('role')} className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    {ASSIGNABLE_ROLES.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-600">Note: SUPER_ADMIN can only be granted via the server seed script.</p>
+                  <button type="submit" disabled={roleMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-60">
+                    {roleMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}

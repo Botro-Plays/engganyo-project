@@ -11,6 +11,7 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { ReviewCampaignDto } from './dto/review-campaign.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 import { GrantCreditsDto } from './dto/grant-credits.dto';
+import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -58,7 +59,19 @@ export class AdminController {
     @Param('id') id: string,
     @Body() dto: UpdateUserStatusDto,
   ) {
-    return this.adminService.updateUserStatus(admin.sub, id, dto);
+    return this.adminService.updateUserStatus(admin.sub, admin.role, id, dto);
+  }
+
+  @Patch('users/:id/role')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change a user\'s role — SUPER_ADMIN only' })
+  @Roles(UserRole.SUPER_ADMIN)
+  changeUserRole(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ChangeUserRoleDto,
+  ) {
+    return this.adminService.changeUserRole(admin.sub, id, dto);
   }
 
   @Post('users/:id/credits')

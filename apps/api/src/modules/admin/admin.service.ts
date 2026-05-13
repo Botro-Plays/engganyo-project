@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { CampaignStatus, ReportStatus, TransactionType, UserStatus } from '@prisma/client';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { CampaignStatus, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -8,6 +8,7 @@ import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
 import type { ResolveReportDto } from './dto/resolve-report.dto';
 import type { GrantCreditsDto } from './dto/grant-credits.dto';
+import type { ChangeUserRoleDto } from './dto/change-user-role.dto';
 
 @Injectable()
 export class AdminService {
@@ -78,9 +79,13 @@ export class AdminService {
     return user;
   }
 
-  async updateUserStatus(adminId: string, userId: string, dto: UpdateUserStatusDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { status: true, username: true } });
+  async updateUserStatus(adminId: string, adminRole: string, userId: string, dto: UpdateUserStatusDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { status: true, username: true, role: true } });
     if (!user) throw new NotFoundException('User not found');
+    const privileged = [UserRole.ADMIN, UserRole.SUPER_ADMIN] as string[];
+    if (privileged.includes(user.role) && adminRole !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only SUPER_ADMIN can modify other admin accounts');
+    }
 
     const updated = await this.prisma.user.update({
       where: { id: userId },
@@ -96,6 +101,32 @@ export class AdminService {
         entityId: userId,
         oldValue: { status: user.status },
         newValue: { status: dto.status, reason: dto.reason },
+      },
+    });
+
+    return updated;
+  }
+
+  async changeUserRole(adminId: string, userId: string, dto: ChangeUserRoleDto) {
+    if (adminId === userId) throw new BadRequestException('Cannot change your own role');
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, username: true } });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot modify a SUPER_ADMIN account');
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: dto.role },
+      select: { id: true, username: true, role: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'user.role.changed',
+        entityType: 'User',
+        entityId: userId,
+        oldValue: { role: user.role },
+        newValue: { role: dto.role },
       },
     });
 
