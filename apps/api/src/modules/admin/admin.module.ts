@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 
-/**
- * AdminModule — Phase 8
- * Handles: user management, campaign moderation, fraud monitoring, analytics dashboard
- */
+import { WalletModule } from '../wallet/wallet.module';
+import { AdminController } from './admin.controller';
+import { AdminService } from './admin.service';
+
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  imports: [WalletModule],
+  controllers: [AdminController],
+  providers: [AdminService],
+  exports: [AdminService],
 })
 export class AdminModule {}

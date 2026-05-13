@@ -1,0 +1,249 @@
+'use client';
+
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { formatCredits, formatDate } from '@/lib/utils';
+import type { ApiResponse } from '@/types';
+
+interface AdminUser {
+  id: string; username: string; email: string; displayName: string | null;
+  role: string; status: string; level: number; creditBalance: number;
+  createdAt: string;
+  _count: { completions: number; campaigns: number; abuseFlags: number };
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE: 'text-green-400 bg-green-500/10',
+  SUSPENDED: 'text-yellow-400 bg-yellow-500/10',
+  BANNED: 'text-red-400 bg-red-500/10',
+  PENDING_VERIFICATION: 'text-zinc-400 bg-zinc-500/10',
+  DEACTIVATED: 'text-zinc-500 bg-zinc-700/30',
+};
+
+const creditSchema = z.object({
+  action: z.enum(['grant', 'deduct']),
+  amount: z.coerce.number().int().min(1),
+  reason: z.string().min(3).max(300),
+});
+type CreditFormData = z.infer<typeof creditSchema>;
+
+export default function AdminUsersPage() {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [creditError, setCreditError] = useState<string | null>(null);
+  const [creditSuccess, setCreditSuccess] = useState(false);
+
+  const params = new URLSearchParams({
+    page: String(page), limit: '25',
+    ...(search && { search }),
+    ...(status && { status }),
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'users', page, search, status],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ items: AdminUser[]; meta: { total: number; totalPages: number } }>>(
+        `admin/users?${params}`,
+      );
+      return res.data.data;
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ userId, newStatus }: { userId: string; newStatus: string }) =>
+      apiClient.patch(`admin/users/${userId}/status`, { status: newStatus }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+
+  const creditForm = useForm<CreditFormData>({ resolver: zodResolver(creditSchema), defaultValues: { action: 'grant' } });
+  const creditMutation = useMutation({
+    mutationFn: (d: CreditFormData) => apiClient.post(`admin/users/${selectedUser!.id}/credits`, d),
+    onSuccess: () => {
+      setCreditSuccess(true);
+      setCreditError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => setCreditError(getApiErrorMessage(err)),
+  });
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Users</h1>
+          <p className="text-zinc-400 text-sm mt-1">Manage accounts, status, and credits.</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search username, email..."
+            className="w-full pl-9 pr-3 py-2 bg-surface-hover border border-surface-border rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+        </div>
+        <select
+          value={status}
+          onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+          className="bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+        >
+          <option value="">All statuses</option>
+          {['ACTIVE', 'SUSPENDED', 'BANNED', 'PENDING_VERIFICATION'].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Table */}
+      <div className="card-glass rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-surface-border text-xs text-zinc-500 uppercase tracking-wide">
+              <th className="text-left px-4 py-3">User</th>
+              <th className="text-left px-4 py-3">Status</th>
+              <th className="text-left px-4 py-3">Level</th>
+              <th className="text-left px-4 py-3">Credits</th>
+              <th className="text-left px-4 py-3">Tasks</th>
+              <th className="text-left px-4 py-3">Flags</th>
+              <th className="text-left px-4 py-3">Joined</th>
+              <th className="text-left px-4 py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading
+              ? Array.from({ length: 10 }).map((_, i) => (
+                <tr key={i} className="border-b border-surface-border">
+                  <td colSpan={8} className="px-4 py-3"><div className="h-4 bg-zinc-800 rounded animate-pulse" /></td>
+                </tr>
+              ))
+              : (data?.items ?? []).map((u) => (
+                <tr key={u.id} className="border-b border-surface-border last:border-0 hover:bg-surface-hover transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-white">{u.username}</p>
+                    <p className="text-xs text-zinc-500">{u.email}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] ?? 'text-zinc-400'}`}>
+                      {u.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-300">{u.level}</td>
+                  <td className="px-4 py-3 text-zinc-300">{formatCredits(u.creditBalance)}</td>
+                  <td className="px-4 py-3 text-zinc-300">{u._count.completions}</td>
+                  <td className="px-4 py-3">
+                    <span className={u._count.abuseFlags > 0 ? 'text-red-400' : 'text-zinc-600'}>
+                      {u._count.abuseFlags}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500">{formatDate(u.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      {u.status !== 'SUSPENDED' && u.status !== 'BANNED' && (
+                        <button
+                          onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'SUSPENDED' })}
+                          className="px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
+                        >
+                          Suspend
+                        </button>
+                      )}
+                      {u.status !== 'BANNED' && (
+                        <button
+                          onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'BANNED' })}
+                          className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                        >
+                          Ban
+                        </button>
+                      )}
+                      {(u.status === 'SUSPENDED' || u.status === 'BANNED') && (
+                        <button
+                          onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })}
+                          className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                        >
+                          Activate
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }}
+                        className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors"
+                      >
+                        <Coins className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {(data?.meta.totalPages ?? 0) > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+          <span>{data?.meta.total} users</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span>Page {page} / {data?.meta.totalPages}</span>
+            <button onClick={() => setPage((p) => p + 1)} disabled={page >= (data?.meta.totalPages ?? 1)} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Grant/deduct credits modal */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white">Adjust Credits</h2>
+              <button onClick={() => setSelectedUser(null)} className="text-zinc-500 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{selectedUser.username}</span> · Balance: <span className="text-brand-300">{formatCredits(selectedUser.creditBalance)} cr</span></p>
+
+            {creditSuccess ? (
+              <div className="py-4 text-center">
+                <p className="text-green-400 font-medium mb-3">Done!</p>
+                <button onClick={() => setSelectedUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+              </div>
+            ) : (
+              <>
+                {creditError && <p className="text-xs text-red-400 mb-3">{creditError}</p>}
+                <form onSubmit={creditForm.handleSubmit((d) => creditMutation.mutate(d))} className="space-y-3">
+                  <div className="flex gap-2">
+                    {(['grant', 'deduct'] as const).map((a) => (
+                      <button key={a} type="button" onClick={() => creditForm.setValue('action', a)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${creditForm.watch('action') === a ? (a === 'grant' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-surface-hover text-zinc-500'}`}>
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                  <input {...creditForm.register('amount')} type="number" placeholder="Amount" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <input {...creditForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <button type="submit" disabled={creditMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-60">
+                    {creditMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

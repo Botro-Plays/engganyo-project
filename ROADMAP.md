@@ -1,6 +1,6 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-13 (Phase 7 complete)
+> Last updated: 2026-05-13 (Phase 8 complete)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 
 ---
@@ -182,26 +182,33 @@
 
 ---
 
-## Phase 8 — Admin Dashboard ⏳
+## Phase 8 — Admin Dashboard ✅
 
 > Internal moderation, user management, campaign review
 
 **API (`/api/v1/admin`)**
-- [ ] `GET    /admin/users` — list all users (filter, search, paginate)
-- [ ] `PATCH  /admin/users/:id/status` — ban, suspend, activate
-- [ ] `GET    /admin/campaigns/pending` — campaigns awaiting review
-- [ ] `PATCH  /admin/campaigns/:id/review` — approve / reject campaign
-- [ ] `GET    /admin/reports` — open reports queue
-- [ ] `PATCH  /admin/reports/:id` — resolve / dismiss report
-- [ ] `POST   /admin/users/:id/credits` — grant / deduct credits manually
-- [ ] `GET    /admin/audit-log` — full audit trail
+- [x] `GET    /admin/stats` — platform overview (users, campaigns, reports, tasks)
+- [x] `GET    /admin/users` — list all users (search, filter by status/role, paginate)
+- [x] `GET    /admin/users/:id` — single user detail with trust score + flags
+- [x] `PATCH  /admin/users/:id/status` — ban, suspend, activate (+ AuditLog)
+- [x] `POST   /admin/users/:id/credits` — grant or deduct credits manually (+ AuditLog)
+- [x] `GET    /admin/campaigns/pending` — campaigns awaiting review
+- [x] `PATCH  /admin/campaigns/:id/review` — approve / reject campaign (+ AuditLog)
+- [x] `GET    /admin/reports` — open reports queue
+- [x] `PATCH  /admin/reports/:id` — resolve / dismiss report (+ AuditLog)
+- [x] `GET    /admin/audit-log` — full audit trail (filter by action / entityType)
+
+**Access control**
+- [x] `RolesGuard` + `@Roles(ADMIN, MODERATOR, SUPER_ADMIN)` on all admin routes
+- [x] JWT payload carries `role` — no extra DB query needed
 
 **Frontend (`/admin`)**
-- [ ] Separate `/admin` route group with admin-only layout
-- [ ] User management table (search, ban, suspend, credit grant)
-- [ ] Campaign moderation queue
-- [ ] Report resolution queue
-- [ ] Audit log viewer
+- [x] Separate `(admin)` route group with admin-only layout (role-gated redirect)
+- [x] `/admin` — overview with 4 stat cards (users, pending campaigns, open reports, verified tasks)
+- [x] `/admin/users` — searchable table, status filter, Suspend/Ban/Activate actions, credits modal
+- [x] `/admin/campaigns` — pending review queue, approve/reject with optional notes
+- [x] `/admin/reports` — open reports queue, resolve/dismiss with admin notes
+- [x] `/admin/audit-log` — full log with action filter, colour-coded action badges, JSON payload preview
 
 ---
 
@@ -257,6 +264,6 @@
 | 5 | Task & Campaign System | ✅ Complete |
 | 6 | Gamification | ✅ Complete |
 | 7 | Anti-Abuse Systems | ✅ Complete |
-| 8 | Admin Dashboard | ⏳ Next |
-| 9 | Analytics | ⏳ Pending |
+| 8 | Admin Dashboard | ✅ Complete |
+| 9 | Analytics | ⏳ Next |
 | 10 | Production Hardening | ⏳ Pending |
