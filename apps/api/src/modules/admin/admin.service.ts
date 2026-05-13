@@ -241,9 +241,12 @@ export class AdminService {
 
   async listPendingSubmissions(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
+    const now = new Date();
+    // Admin queue: SUBMITTED completions where creator's 48h review window has passed (escalated)
     const where = {
       status: CompletionStatus.SUBMITTED,
       campaign: { autoVerify: false },
+      reviewDeadline: { lt: now },
     };
     const [items, total] = await Promise.all([
       this.prisma.taskCompletion.findMany({
@@ -252,6 +255,7 @@ export class AdminService {
           id: true,
           proofUrl: true,
           submittedAt: true,
+          reviewDeadline: true,
           creditsEarned: true,
           campaign: {
             select: {
@@ -259,11 +263,12 @@ export class AdminService {
               title: true,
               taskType: true,
               creditPerTask: true,
+              user: { select: { username: true } },
             },
           },
           user: { select: { id: true, username: true } },
         },
-        orderBy: { submittedAt: 'asc' },
+        orderBy: { reviewDeadline: 'asc' },
         skip,
         take: limit,
       }),

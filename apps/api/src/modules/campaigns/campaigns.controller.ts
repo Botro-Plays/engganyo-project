@@ -57,4 +57,33 @@ export class CampaignsController {
   cancel(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.campaignsService.cancel(user.sub, id);
   }
+
+  @Get(':id/submissions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Creator: list pending proof submissions for their campaign' })
+  getSubmissions(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.campaignsService.getMySubmissions(
+      user.sub,
+      id,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
+  }
+
+  @Patch(':id/submissions/:completionId/review')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Creator: approve or reject a proof submission' })
+  reviewSubmission(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Param('completionId') completionId: string,
+    @Body() dto: { action: 'approve' | 'reject'; reason?: string },
+  ) {
+    return this.campaignsService.reviewSubmission(user.sub, id, completionId, dto);
+  }
 }

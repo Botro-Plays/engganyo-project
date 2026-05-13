@@ -249,17 +249,24 @@ export class TasksService {
 
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
     } else {
-      // ── Manual review: hold proof, await admin approval ────
+      // ── Manual review: hold proof, creator reviews first (48h), then admin ──
+      const reviewDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
       await this.prisma.taskCompletion.update({
         where: { id: completion.id },
         data: {
           status: CompletionStatus.SUBMITTED,
           proofUrl: dto.proofUrl,
           submittedAt: now,
+          reviewDeadline,
         },
       });
 
-      return { creditsEarned: 0, status: 'SUBMITTED', message: 'Proof submitted and awaiting admin review.' };
+      return {
+        creditsEarned: 0,
+        status: 'SUBMITTED',
+        message: 'Proof submitted. The campaign creator will review within 48 hours.',
+        reviewDeadline,
+      };
     }
   }
 

@@ -4,13 +4,16 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { CampaignStatus, TaskType, TransactionType } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, TaskType, TransactionType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
+
+// Platforms with full OAuth API verification — auto-verify defaults to true for these
+const OAUTH_PLATFORMS = new Set(['YOUTUBE', 'TWITCH', 'SPOTIFY']);
 
 const CAMPAIGN_SELECT = {
   id: true,
@@ -75,7 +78,7 @@ export class CampaignsService {
         cooldownHours: dto.cooldownHours ?? 24,
         requiresProof: dto.requiresProof ?? true,
         proofInstructions: dto.proofInstructions,
-        autoVerify: dto.autoVerify ?? true,
+        autoVerify: dto.autoVerify ?? OAUTH_PLATFORMS.has((dto.taskType as string).split('_')[0]),
         // Auto-activate for Phase 5 (admin review added in Phase 8)
         status: CampaignStatus.ACTIVE,
       },
@@ -124,6 +127,130 @@ export class CampaignsService {
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
     return campaign;
+  }
+
+  // ─── Creator: list submissions for a campaign ─────────────
+
+  async getMySubmissions(userId: string, campaignId: string, page = 1, limit = 20) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { userId: true, creditPerTask: true },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
+
+    const now = new Date();
+    const skip = (page - 1) * limit;
+    const where = { campaignId, status: CompletionStatus.SUBMITTED };
+
+    const [items, total] = await Promise.all([
+      this.prisma.taskCompletion.findMany({
+        where,
+        select: {
+          id: true,
+          proofUrl: true,
+          submittedAt: true,
+          reviewDeadline: true,
+          user: { select: { id: true, username: true, displayName: true } },
+        },
+        orderBy: { submittedAt: 'asc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.taskCompletion.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => ({
+        ...item,
+        escalated: item.reviewDeadline ? item.reviewDeadline < now : false,
+      })),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // ─── Creator: approve or reject a submission ───────────────
+
+  async reviewSubmission(
+    userId: string,
+    campaignId: string,
+    completionId: string,
+    dto: { action: 'approve' | 'reject'; reason?: string },
+  ) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { userId: true, creditPerTask: true, completedSlots: true, totalSlots: true },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
+
+    const completion = await this.prisma.taskCompletion.findUnique({
+      where: { id: completionId },
+      select: { id: true, status: true, userId: true, campaignId: true },
+    });
+    if (!completion) throw new NotFoundException('Submission not found');
+    if (completion.campaignId !== campaignId) throw new ForbiddenException('Submission does not belong to this campaign');
+    if (completion.status !== CompletionStatus.SUBMITTED) {
+      throw new BadRequestException('Submission is not pending review');
+    }
+
+    const now = new Date();
+
+    if (dto.action === 'approve') {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.taskCompletion.update({
+          where: { id: completionId },
+          data: {
+            status: CompletionStatus.VERIFIED,
+            verifiedAt: now,
+            verifiedBy: userId,
+            creditsEarned: campaign.creditPerTask,
+          },
+        });
+
+        const isFull = campaign.completedSlots + 1 >= campaign.totalSlots;
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: {
+            completedSlots: { increment: 1 },
+            pendingSlots: { decrement: 1 },
+            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+          },
+        });
+
+        await tx.userProfile.updateMany({
+          where: { userId: completion.userId },
+          data: { totalTasksDone: { increment: 1 } },
+        });
+      });
+
+      await this.walletService.credit(completion.userId, campaign.creditPerTask, {
+        type: TransactionType.EARN_TASK_COMPLETION,
+        description: 'Task approved by campaign creator',
+        referenceId: campaignId,
+        referenceType: 'campaign',
+      });
+
+      return { reviewed: true, action: 'approve', creditsAwarded: campaign.creditPerTask };
+    } else {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.taskCompletion.update({
+          where: { id: completionId },
+          data: {
+            status: CompletionStatus.REJECTED,
+            rejectionReason: dto.reason ?? 'Rejected by campaign creator',
+            verifiedAt: now,
+            verifiedBy: userId,
+          },
+        });
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: { pendingSlots: { decrement: 1 } },
+        });
+      });
+
+      return { reviewed: true, action: 'reject' };
+    }
   }
 
   // ─── Update (pause / resume / edit) ───────────────────────
