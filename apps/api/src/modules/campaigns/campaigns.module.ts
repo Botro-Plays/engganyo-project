@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 
-/**
- * CampaignsModule — Phase 5
- * Handles: campaign creation, management, moderation, queue
- */
+import { WalletModule } from '../wallet/wallet.module';
+import { CampaignsController } from './campaigns.controller';
+import { CampaignsService } from './campaigns.service';
+
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  imports: [WalletModule],
+  controllers: [CampaignsController],
+  providers: [CampaignsService],
+  exports: [CampaignsService],
 })
 export class CampaignsModule {}

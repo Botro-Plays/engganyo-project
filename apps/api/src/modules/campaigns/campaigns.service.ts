@@ -1,0 +1,248 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { CampaignStatus, TransactionType } from '@prisma/client';
+
+import { PrismaService } from '../../database/prisma.service';
+import { WalletService } from '../wallet/wallet.service';
+import type { CreateCampaignDto } from './dto/create-campaign.dto';
+import type { UpdateCampaignDto } from './dto/update-campaign.dto';
+import type { ListCampaignsDto } from './dto/list-campaigns.dto';
+
+const CAMPAIGN_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  taskType: true,
+  targetUrl: true,
+  totalSlots: true,
+  completedSlots: true,
+  pendingSlots: true,
+  creditPerTask: true,
+  totalCost: true,
+  status: true,
+  rejectionReason: true,
+  targetCountries: true,
+  targetLanguages: true,
+  minTrustScore: true,
+  cooldownHours: true,
+  requiresProof: true,
+  proofInstructions: true,
+  startsAt: true,
+  expiresAt: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  userId: true,
+  user: { select: { username: true, displayName: true, avatarUrl: true } },
+} as const;
+
+@Injectable()
+export class CampaignsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly walletService: WalletService,
+  ) {}
+
+  // ─── Create ────────────────────────────────────────────────
+
+  async create(userId: string, dto: CreateCampaignDto) {
+    const totalCost = dto.totalSlots * dto.creditPerTask;
+
+    // Debit the full campaign cost upfront
+    await this.walletService.debit(userId, totalCost, {
+      type: TransactionType.SPEND_CAMPAIGN_CREATE,
+      description: `Campaign: ${dto.title}`,
+    });
+
+    const campaign = await this.prisma.campaign.create({
+      select: CAMPAIGN_SELECT,
+      data: {
+        userId,
+        title: dto.title,
+        description: dto.description,
+        taskType: dto.taskType,
+        targetUrl: dto.targetUrl,
+        totalSlots: dto.totalSlots,
+        creditPerTask: dto.creditPerTask,
+        totalCost,
+        targetCountries: dto.targetCountries ?? [],
+        targetLanguages: dto.targetLanguages ?? [],
+        cooldownHours: dto.cooldownHours ?? 24,
+        requiresProof: dto.requiresProof ?? true,
+        proofInstructions: dto.proofInstructions,
+        // Auto-activate for Phase 5 (admin review added in Phase 8)
+        status: CampaignStatus.ACTIVE,
+      },
+    });
+
+    return campaign;
+  }
+
+  // ─── List own campaigns ────────────────────────────────────
+
+  async listMyCampaigns(userId: string, dto: ListCampaignsDto) {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where = {
+      userId,
+      ...(dto.status && { status: dto.status }),
+      ...(dto.taskType && { taskType: dto.taskType }),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.campaign.findMany({
+        where,
+        select: CAMPAIGN_SELECT,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.campaign.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  // ─── Get one (own) ─────────────────────────────────────────
+
+  async getOne(userId: string, campaignId: string) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: CAMPAIGN_SELECT,
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
+    return campaign;
+  }
+
+  // ─── Update (pause / resume / edit) ───────────────────────
+
+  async update(userId: string, campaignId: string, dto: UpdateCampaignDto) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, userId: true, status: true },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
+
+    const modifiableStatuses: CampaignStatus[] = [
+      CampaignStatus.ACTIVE,
+      CampaignStatus.PAUSED,
+      CampaignStatus.DRAFT,
+    ];
+    if (!modifiableStatuses.includes(campaign.status)) {
+      throw new BadRequestException(`Cannot modify a campaign with status ${campaign.status}`);
+    }
+
+    return this.prisma.campaign.update({
+      where: { id: campaignId },
+      select: CAMPAIGN_SELECT,
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.proofInstructions !== undefined && { proofInstructions: dto.proofInstructions }),
+        ...(dto.status !== undefined && { status: dto.status }),
+      },
+    });
+  }
+
+  // ─── Cancel + refund ───────────────────────────────────────
+
+  async cancel(userId: string, campaignId: string) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        status: true,
+        totalSlots: true,
+        completedSlots: true,
+        pendingSlots: true,
+        creditPerTask: true,
+      },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
+
+    const cancellableStatuses: CampaignStatus[] = [
+      CampaignStatus.ACTIVE,
+      CampaignStatus.PAUSED,
+      CampaignStatus.DRAFT,
+      CampaignStatus.PENDING_REVIEW,
+    ];
+    if (!cancellableStatuses.includes(campaign.status)) {
+      throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
+    }
+
+    // Refund uncompleted and non-pending slots
+    const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
+    const refundAmount = refundableSlots * campaign.creditPerTask;
+
+    await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
+    });
+
+    if (refundAmount > 0) {
+      await this.walletService.credit(userId, refundAmount, {
+        type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+        description: `Refund for cancelled campaign: ${campaign.title}`,
+        referenceId: campaignId,
+        referenceType: 'campaign',
+      });
+    }
+
+    return { refundAmount };
+  }
+
+  // ─── Public browse (for task marketplace) ─────────────────
+
+  async browseActive(
+    excludeUserId: string,
+    filters: { taskType?: string; page?: number; limit?: number },
+  ) {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    // Exclude campaigns the user already has a completion for
+    const alreadyAssigned = await this.prisma.taskCompletion.findMany({
+      where: { userId: excludeUserId },
+      select: { campaignId: true },
+    });
+    const excludeIds = alreadyAssigned.map((c) => c.campaignId);
+
+    const where = {
+      status: CampaignStatus.ACTIVE,
+      userId: { not: excludeUserId },
+      id: { notIn: excludeIds.length > 0 ? excludeIds : ['__none__'] },
+      ...(filters.taskType && { taskType: filters.taskType as never }),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.campaign.findMany({
+        where,
+        select: CAMPAIGN_SELECT,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.campaign.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+}

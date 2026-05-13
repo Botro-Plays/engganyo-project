@@ -1,20 +1,454 @@
-import { ListTodo } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Loader2, ExternalLink, X, CheckCircle2, Clock,
+  ChevronLeft, ChevronRight, Send,
+} from 'lucide-react';
+
+import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { formatCredits, formatRelativeTime } from '@/lib/utils';
+import type { ApiResponse } from '@/types';
+
+// ─── Types ────────────────────────────────────────────────────
+const TASK_TYPE_LABELS: Record<string, string> = {
+  YOUTUBE_SUBSCRIBE: 'YouTube · Subscribe',
+  YOUTUBE_LIKE: 'YouTube · Like',
+  YOUTUBE_COMMENT: 'YouTube · Comment',
+  YOUTUBE_WATCH: 'YouTube · Watch',
+  TIKTOK_FOLLOW: 'TikTok · Follow',
+  TIKTOK_LIKE: 'TikTok · Like',
+  TIKTOK_COMMENT: 'TikTok · Comment',
+  INSTAGRAM_FOLLOW: 'Instagram · Follow',
+  INSTAGRAM_LIKE: 'Instagram · Like',
+  INSTAGRAM_COMMENT: 'Instagram · Comment',
+  TWITTER_FOLLOW: 'Twitter · Follow',
+  TWITTER_LIKE: 'Twitter · Like',
+  TWITTER_RETWEET: 'Twitter · Retweet',
+  FACEBOOK_PAGE_LIKE: 'Facebook · Page Like',
+  TWITCH_FOLLOW: 'Twitch · Follow',
+  SPOTIFY_FOLLOW: 'Spotify · Follow',
+  SPOTIFY_STREAM: 'Spotify · Stream',
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  YOUTUBE: 'text-red-400 bg-red-500/10',
+  TIKTOK: 'text-white bg-white/10',
+  INSTAGRAM: 'text-pink-400 bg-pink-500/10',
+  TWITTER: 'text-sky-400 bg-sky-500/10',
+  FACEBOOK: 'text-blue-400 bg-blue-500/10',
+  TWITCH: 'text-purple-400 bg-purple-500/10',
+  SPOTIFY: 'text-green-400 bg-green-500/10',
+};
+
+interface AvailableTask {
+  id: string;
+  title: string;
+  taskType: string;
+  targetUrl: string;
+  totalSlots: number;
+  completedSlots: number;
+  pendingSlots: number;
+  creditPerTask: number;
+  requiresProof: boolean;
+  proofInstructions: string | null;
+  user: { username: string; displayName: string | null };
+}
+
+interface MyTask {
+  id: string;
+  status: string;
+  creditsEarned: number;
+  proofUrl: string | null;
+  assignedAt: string;
+  submittedAt: string | null;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  campaign: {
+    id: string;
+    title: string;
+    taskType: string;
+    targetUrl: string;
+    creditPerTask: number;
+    requiresProof: boolean;
+    proofInstructions: string | null;
+  };
+}
+
+interface PaginatedResponse<T> {
+  items: T[];
+  meta: { total: number; page: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+}
+
+const MY_TASK_STATUS: Record<string, { label: string; color: string }> = {
+  ASSIGNED:    { label: 'To do',     color: 'text-yellow-400' },
+  IN_PROGRESS: { label: 'In progress', color: 'text-blue-400' },
+  SUBMITTED:   { label: 'Submitted', color: 'text-sky-400' },
+  VERIFIED:    { label: 'Verified',  color: 'text-green-400' },
+  REJECTED:    { label: 'Rejected',  color: 'text-red-400' },
+  EXPIRED:     { label: 'Expired',   color: 'text-zinc-500' },
+  CANCELLED:   { label: 'Cancelled', color: 'text-zinc-500' },
+};
+
+const proofSchema = z.object({
+  proofUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  notes: z.string().max(500).optional().or(z.literal('')),
+});
+type ProofFormData = z.infer<typeof proofSchema>;
 
 export default function TasksPage() {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'browse' | 'mine'>('browse');
+  const [browsePage, setBrowsePage] = useState(1);
+  const [myPage, setMyPage] = useState(1);
+  const [submitting, setSubmitting] = useState<MyTask | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+
+  // ─── Browse tasks ──────────────────────────────────────────
+  const { data: browseData, isLoading: browseLoading } = useQuery({
+    queryKey: ['tasks', 'browse', browsePage],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<PaginatedResponse<AvailableTask>>>(
+        `tasks?page=${browsePage}&limit=12`,
+      );
+      return res.data.data;
+    },
+    enabled: tab === 'browse',
+  });
+
+  // ─── My tasks ──────────────────────────────────────────────
+  const { data: myData, isLoading: myLoading } = useQuery({
+    queryKey: ['tasks', 'my', myPage],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<PaginatedResponse<MyTask>>>(
+        `tasks/my?page=${myPage}&limit=12`,
+      );
+      return res.data.data;
+    },
+    enabled: tab === 'mine',
+  });
+
+  // ─── Assign task ───────────────────────────────────────────
+  const assignMutation = useMutation({
+    mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/assign`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setAssignError(null);
+    },
+    onError: (err) => setAssignError(getApiErrorMessage(err)),
+  });
+
+  // ─── Submit proof ──────────────────────────────────────────
+  const proofForm = useForm<ProofFormData>({ resolver: zodResolver(proofSchema) });
+
+  const submitMutation = useMutation({
+    mutationFn: ({ campaignId, data }: { campaignId: string; data: ProofFormData }) =>
+      apiClient.post(`tasks/${campaignId}/submit`, {
+        proofUrl: data.proofUrl || undefined,
+        notes: data.notes || undefined,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      proofForm.reset();
+      setSubmitting(null);
+      setSubmitError(null);
+    },
+    onError: (err) => setSubmitError(getApiErrorMessage(err)),
+  });
+
+  const getPlatform = (taskType: string) => taskType.split('_')[0];
+
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Tasks</h1>
-        <p className="text-zinc-400 text-sm mt-1">Browse and complete tasks to earn credits.</p>
+        <p className="text-zinc-400 text-sm mt-1">Complete engagement tasks to earn credits.</p>
       </div>
-      <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
-        <ListTodo className="w-12 h-12 text-zinc-600 mb-4" />
-        <h2 className="text-lg font-semibold text-white mb-2">Task marketplace coming soon</h2>
-        <p className="text-zinc-500 text-sm max-w-sm">
-          The task system is being built in Phase 5. You&apos;ll be able to browse YouTube, TikTok,
-          Instagram tasks and earn credits for completing them.
-        </p>
+
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 mb-6 p-1 bg-surface-hover rounded-lg w-fit">
+        {(['browse', 'mine'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            {t === 'browse' ? 'Browse Tasks' : 'My Tasks'}
+          </button>
+        ))}
       </div>
+
+      {/* ── Assign error banner ── */}
+      {assignError && (
+        <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center justify-between">
+          {assignError}
+          <button onClick={() => setAssignError(null)}><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* ── Browse tab ── */}
+      {tab === 'browse' && (
+        <>
+          {browseLoading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-40" />
+              ))}
+            </div>
+          ) : !browseData?.items.length ? (
+            <div className="card-glass rounded-2xl p-16 text-center">
+              <p className="text-zinc-500 text-sm">No tasks available right now.</p>
+              <p className="text-zinc-600 text-xs mt-1">Check back later or create a campaign to get engagement.</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {browseData.items.map((task) => {
+                  const platform = getPlatform(task.taskType);
+                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
+                  const available = task.totalSlots - task.completedSlots - task.pendingSlots;
+                  return (
+                    <div key={task.id} className="card-glass rounded-xl p-5 flex flex-col">
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${platformColor}`}>
+                          {TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
+                        </span>
+                        <span className="text-xs font-bold text-green-400 shrink-0">
+                          +{formatCredits(task.creditPerTask)} cr
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-white mb-1 line-clamp-2 flex-1">{task.title}</p>
+                      <a
+                        href={task.targetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-400 transition-colors mb-3 truncate"
+                      >
+                        {task.targetUrl.slice(0, 40)}{task.targetUrl.length > 40 ? '…' : ''}
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3">
+                        <span>{available} slots left</span>
+                        <span>by @{task.user.username}</span>
+                      </div>
+                      <button
+                        onClick={() => assignMutation.mutate(task.id)}
+                        disabled={assignMutation.isPending || available <= 0}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {assignMutation.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          'Accept task'
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {browseData.meta.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6">
+                  <button
+                    onClick={() => setBrowsePage((p) => p - 1)}
+                    disabled={!browseData.meta.hasPrev}
+                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </button>
+                  <span className="text-xs text-zinc-500">
+                    Page {browseData.meta.page} of {browseData.meta.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setBrowsePage((p) => p + 1)}
+                    disabled={!browseData.meta.hasNext}
+                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── My Tasks tab ── */}
+      {tab === 'mine' && (
+        <>
+          {myLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-16" />
+              ))}
+            </div>
+          ) : !myData?.items.length ? (
+            <div className="card-glass rounded-2xl p-16 text-center">
+              <p className="text-zinc-500 text-sm">No tasks yet.</p>
+              <p className="text-zinc-600 text-xs mt-1">Browse tasks and accept some to start earning.</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {myData.items.map((task) => {
+                  const st = MY_TASK_STATUS[task.status] ?? { label: task.status, color: 'text-zinc-400' };
+                  const platform = getPlatform(task.campaign.taskType);
+                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
+                  const canSubmit = task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS';
+                  return (
+                    <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-center gap-4">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${platformColor}`}>
+                        {TASK_TYPE_LABELS[task.campaign.taskType]?.split(' · ')[0] ?? platform}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{task.campaign.title}</p>
+                        <p className={`text-xs ${st.color}`}>{st.label} · {formatRelativeTime(task.assignedAt)}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {task.status === 'VERIFIED' ? (
+                          <div className="flex items-center gap-1 text-green-400 text-sm font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            +{formatCredits(task.creditsEarned)} cr
+                          </div>
+                        ) : task.status === 'SUBMITTED' ? (
+                          <div className="flex items-center gap-1 text-sky-400 text-xs">
+                            <Clock className="w-3.5 h-3.5" /> Pending review
+                          </div>
+                        ) : canSubmit ? (
+                          <button
+                            onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); }}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
+                          >
+                            <Send className="w-3 h-3" /> Submit
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {myData.meta.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6">
+                  <button
+                    onClick={() => setMyPage((p) => p - 1)}
+                    disabled={!myData.meta.hasPrev}
+                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </button>
+                  <span className="text-xs text-zinc-500">
+                    Page {myData.meta.page} of {myData.meta.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setMyPage((p) => p + 1)}
+                    disabled={!myData.meta.hasNext}
+                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── Submit proof modal ── */}
+      {submitting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white">Submit Proof</h2>
+              <button onClick={() => setSubmitting(null)} className="text-zinc-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 rounded-lg bg-surface-hover border border-surface-border">
+              <p className="text-sm text-white font-medium">{submitting.campaign.title}</p>
+              <a
+                href={submitting.campaign.targetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-400 transition-colors mt-1"
+              >
+                Open link <ExternalLink className="w-3 h-3" />
+              </a>
+              {submitting.campaign.proofInstructions && (
+                <p className="text-xs text-zinc-400 mt-2 border-t border-surface-border pt-2">
+                  {submitting.campaign.proofInstructions}
+                </p>
+              )}
+            </div>
+
+            {submitError && (
+              <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                {submitError}
+              </div>
+            )}
+
+            <form
+              onSubmit={proofForm.handleSubmit((d) =>
+                submitMutation.mutate({ campaignId: submitting.campaign.id, data: d }),
+              )}
+              className="space-y-3"
+            >
+              {submitting.campaign.requiresProof && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                    Proof screenshot URL <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...proofForm.register('proofUrl')}
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    placeholder="https://imgur.com/your-screenshot.png"
+                  />
+                  {proofForm.formState.errors.proofUrl && (
+                    <p className="text-xs text-red-400 mt-1">{proofForm.formState.errors.proofUrl.message}</p>
+                  )}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Notes (optional)</label>
+                <textarea
+                  {...proofForm.register('notes')}
+                  rows={2}
+                  className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                  placeholder="Any additional info..."
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSubmitting(null)}
+                  className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitMutation.isPending}
+                  className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+                >
+                  {submitMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <>Submit & earn +{formatCredits(submitting.campaign.creditPerTask)} cr</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
