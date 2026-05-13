@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -95,6 +95,14 @@ const PLATFORMS = [
 ] as const;
 
 export default function ConnectedAccountsPage() {
+  return (
+    <Suspense>
+      <ConnectedAccountsPageInner />
+    </Suspense>
+  );
+}
+
+function ConnectedAccountsPageInner() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
