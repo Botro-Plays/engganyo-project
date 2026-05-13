@@ -2,13 +2,13 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CompletionStatus, CampaignStatus } from '@prisma/client';
 
-import { DatabaseService } from '../../database/database.service';
+import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
-  constructor(private readonly prisma: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── Platform overview (admin) ──────────────────────────────────────────────
 
