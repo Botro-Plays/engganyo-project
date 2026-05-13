@@ -1,13 +1,11 @@
 import { Module } from '@nestjs/common';
 
-/**
- * UsersModule — Phase 3
- * Handles: user profile CRUD, avatar, social links, reputation, statistics
- */
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
+
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  controllers: [UsersController],
+  providers: [UsersService],
+  exports: [UsersService],
 })
 export class UsersModule {}

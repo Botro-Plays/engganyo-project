@@ -14,6 +14,7 @@ export interface AuthUser {
   level: number;
   currentStreak: number;
   reputationScore: number;
+  referralCode: string | null;
 }
 
 interface AuthState {
