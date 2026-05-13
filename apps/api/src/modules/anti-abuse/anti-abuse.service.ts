@@ -130,7 +130,7 @@ export class AntiAbuseService {
         submittedById,
         targetUserId: dto.targetUserId,
         campaignId: dto.campaignId,
-        reason: dto.reason as ReportReason,
+        reason: dto.reason,
         description: dto.description,
       },
       select: {
@@ -152,7 +152,7 @@ export class AntiAbuseService {
         BOT_ACTIVITY:      { severity: 'critical',  flagType: 'bot_pattern' },
       };
 
-      const autoFlag = autoFlagReasons[dto.reason as ReportReason];
+      const autoFlag = autoFlagReasons[dto.reason];
       if (autoFlag) {
         await this.flagUser(dto.targetUserId, autoFlag.flagType, autoFlag.severity, `Auto-flagged from report: ${dto.reason}`);
         await this.checkAndEscalate(dto.targetUserId);

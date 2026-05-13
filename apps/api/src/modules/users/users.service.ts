@@ -142,7 +142,7 @@ export class UsersService {
     }
 
     // Strip email from public view
-    const { email: _email, ...publicUser } = user;
+    const { email: _, ...publicUser } = user;
     return publicUser;
   }
 

@@ -22,7 +22,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     // Log slow queries in development
     if (process.env['NODE_ENV'] === 'development') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
       (this.$on as any)('query', (event: { duration: number; query: string }) => {
         if (event.duration > 500) {
           this.logger.warn(`Slow query (${event.duration}ms): ${event.query}`);

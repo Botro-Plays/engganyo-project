@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException,
+  Injectable, Logger, BadRequestException, NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
