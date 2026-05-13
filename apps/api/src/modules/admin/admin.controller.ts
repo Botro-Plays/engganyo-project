@@ -196,4 +196,26 @@ export class AdminController {
   ) {
     return this.adminService.getAuditLog(Number(page), Number(limit), action, entityType);
   }
+
+  // ─── OAuth Config (SUPER_ADMIN only) ─────────────────────
+
+  @Get('oauth-config')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List OAuth platform credentials (SUPER_ADMIN only)' })
+  getOAuthConfigs() {
+    return this.adminService.getOAuthConfigs();
+  }
+
+  @Patch('oauth-config/:platform')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update OAuth credentials for a platform (SUPER_ADMIN only)' })
+  updateOAuthConfig(
+    @CurrentUser() admin: JwtPayload,
+    @Param('platform') platform: string,
+    @Body() dto: { clientId?: string; clientSecret?: string; enabled?: boolean },
+  ) {
+    return this.adminService.updateOAuthConfig(admin.sub, platform, dto);
+  }
 }

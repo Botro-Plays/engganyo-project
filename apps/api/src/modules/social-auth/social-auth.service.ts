@@ -126,18 +126,41 @@ export class SocialAuthService {
     return match ? match[1] : null;
   }
 
+  // ─── Load OAuth credentials: DB first, env fallback ───────────────────────
+
+  private async getOAuthCredentials(
+    platform: SocialPlatform,
+  ): Promise<{ clientId: string; clientSecret: string }> {
+    const cfg = PLATFORM_CONFIGS[platform];
+    if (!cfg) throw new BadRequestException(`OAuth not supported for platform: ${platform}`);
+
+    // Try DB first
+    const dbConfig = await this.prisma.oAuthConfig.findUnique({
+      where: { platform },
+      select: { clientId: true, clientSecret: true, enabled: true },
+    });
+
+    const clientId     = dbConfig?.clientId     ?? this.config.get<string>(cfg.clientIdEnv, '');
+    const clientSecret = dbConfig?.clientSecret ?? this.config.get<string>(cfg.clientSecretEnv, '');
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException(
+        `OAuth not configured for ${platform}. Set credentials in Admin → Integrations.`,
+      );
+    }
+
+    return { clientId, clientSecret };
+  }
+
   // ─── Build OAuth authorization URL ─────────────────────────────────────────
 
-  getConnectUrl(userId: string, platform: SocialPlatform): { url: string } {
+  async getConnectUrl(userId: string, platform: SocialPlatform): Promise<{ url: string }> {
     const cfg = PLATFORM_CONFIGS[platform];
     if (!cfg) {
       throw new BadRequestException(`OAuth not supported for platform: ${platform}`);
     }
 
-    const clientId = this.config.get<string>(cfg.clientIdEnv);
-    if (!clientId) {
-      throw new BadRequestException(`OAuth not configured for platform: ${platform}. Missing ${cfg.clientIdEnv}.`);
-    }
+    const { clientId } = await this.getOAuthCredentials(platform);
 
     const redirectUri = this.callbackUrl(platform);
 
@@ -180,8 +203,7 @@ export class SocialAuthService {
     const cfg = PLATFORM_CONFIGS[platform];
     if (!cfg) return `${frontendUrl}/settings/connected-accounts?error=unsupported_platform`;
 
-    const clientId = this.config.get<string>(cfg.clientIdEnv, '');
-    const clientSecret = this.config.get<string>(cfg.clientSecretEnv, '');
+    const { clientId, clientSecret } = await this.getOAuthCredentials(platform);
     const redirectUri = this.callbackUrl(platform);
 
     try {
@@ -402,7 +424,7 @@ export class SocialAuthService {
     const broadcasterLogin = targetUrl.replace(/^https?:\/\/(?:www\.)?twitch\.tv\//, '').split('/')[0];
     if (!broadcasterLogin) throw new BadRequestException('Could not extract Twitch channel from URL');
 
-    const clientId = this.config.get<string>('TWITCH_CLIENT_ID', '');
+    const { clientId } = await this.getOAuthCredentials(SocialPlatform.TWITCH);
 
     // Resolve broadcaster ID
     const userRes = await fetch(
@@ -476,8 +498,13 @@ export class SocialAuthService {
     const cfg = PLATFORM_CONFIGS[platform];
     if (!cfg) return null;
 
-    const clientId = this.config.get<string>(cfg.clientIdEnv, '');
-    const clientSecret = this.config.get<string>(cfg.clientSecretEnv, '');
+    let clientId: string;
+    let clientSecret: string;
+    try {
+      ({ clientId, clientSecret } = await this.getOAuthCredentials(platform));
+    } catch {
+      return null;
+    }
 
     try {
       const tokens = await this.exchangeCode(cfg.tokenUrl, {
@@ -531,9 +558,9 @@ export class SocialAuthService {
       }
 
       case SocialPlatform.TWITCH: {
-        const clientId = this.config.get<string>('TWITCH_CLIENT_ID', '');
+        const { clientId: twitchClientId } = await this.getOAuthCredentials(SocialPlatform.TWITCH);
         const res = await fetch('https://api.twitch.tv/helix/users', {
-          headers: { Authorization: `Bearer ${accessToken}`, 'Client-Id': clientId },
+          headers: { Authorization: `Bearer ${accessToken}`, 'Client-Id': twitchClientId },
         });
         if (!res.ok) throw new Error('Failed to fetch Twitch profile');
         const data = await res.json() as {
@@ -583,12 +610,9 @@ export class SocialAuthService {
     let headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
 
     if (isSpotify) {
-      // Spotify uses Basic Auth for token exchange
-      const clientId = this.config.get<string>('SPOTIFY_CLIENT_ID', '');
-      const clientSecret = this.config.get<string>('SPOTIFY_CLIENT_SECRET', '');
-      const b64 = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      // Spotify uses Basic Auth for token exchange — credentials are in body, use them then remove
+      const b64 = Buffer.from(`${body.client_id ?? ''}:${body.client_secret ?? ''}`).toString('base64');
       headers = { ...headers, Authorization: `Basic ${b64}` };
-      // Remove client_id/client_secret from body for Spotify
       delete body.client_id;
       delete body.client_secret;
     }

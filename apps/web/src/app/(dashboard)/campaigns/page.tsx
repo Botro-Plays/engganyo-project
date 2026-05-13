@@ -315,8 +315,8 @@ export default function CampaignsPage() {
                       watchedAutoVerify ? 'bg-green-500' : 'bg-zinc-600'
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                      watchedAutoVerify ? 'translate-x-5' : 'translate-x-0.5'
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                      watchedAutoVerify ? 'translate-x-5' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>

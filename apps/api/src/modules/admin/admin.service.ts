@@ -559,6 +559,67 @@ export class AdminService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
+  // ─── OAuth Config (SUPER_ADMIN only) ─────────────────────
+
+  private readonly OAUTH_PLATFORMS = ['YOUTUBE', 'TWITCH', 'SPOTIFY'] as const;
+
+  async getOAuthConfigs() {
+    const configs = await this.prisma.oAuthConfig.findMany({
+      select: {
+        platform: true,
+        clientId: true,
+        clientSecret: true,
+        enabled: true,
+        updatedAt: true,
+        updatedById: true,
+      },
+    });
+
+    // Build a map for O(1) lookup
+    const configMap = new Map(configs.map((c) => [c.platform, c]));
+
+    return this.OAUTH_PLATFORMS.map((platform) => {
+      const cfg = configMap.get(platform as never);
+      return {
+        platform,
+        clientId: cfg?.clientId ?? null,
+        clientSecretSet: !!cfg?.clientSecret,   // never expose the secret itself
+        enabled: cfg?.enabled ?? false,
+        updatedAt: cfg?.updatedAt ?? null,
+      };
+    });
+  }
+
+  async updateOAuthConfig(
+    adminId: string,
+    platform: string,
+    dto: { clientId?: string; clientSecret?: string; enabled?: boolean },
+  ) {
+    const p = platform.toUpperCase() as never;
+    if (!this.OAUTH_PLATFORMS.includes(p)) {
+      throw new BadRequestException(`${platform} does not support OAuth configuration`);
+    }
+
+    const data: {
+      clientId?: string;
+      clientSecret?: string;
+      enabled?: boolean;
+      updatedById: string;
+    } = { updatedById: adminId };
+
+    if (dto.clientId !== undefined)     data.clientId     = dto.clientId;
+    if (dto.clientSecret !== undefined) data.clientSecret = dto.clientSecret;
+    if (dto.enabled !== undefined)      data.enabled      = dto.enabled;
+
+    await this.prisma.oAuthConfig.upsert({
+      where: { platform: p },
+      create: { platform: p, ...data },
+      update: data,
+    });
+
+    return { updated: true, platform };
+  }
+
   // ─── Overview stats ───────────────────────────────────────
 
   async getOverviewStats() {

@@ -342,6 +342,17 @@ model PasswordReset {
 // SOCIAL ACCOUNTS
 // =============================================================
 
+model OAuthConfig {
+  platform     SocialPlatform @id
+  clientId     String?        @map("client_id")
+  clientSecret String?        @map("client_secret")
+  enabled      Boolean        @default(false)
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  updatedById  String?        @map("updated_by_id")
+
+  @@map("oauth_configs")
+}
+
 model SocialAccount {
   id     String @id @default(cuid())
   userId String @map("user_id")
