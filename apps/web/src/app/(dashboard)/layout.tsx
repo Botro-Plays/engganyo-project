@@ -14,6 +14,7 @@ import {
   Zap,
   Bell,
   AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -26,6 +27,8 @@ const navItems = [
   { href: '/dashboard/discover', icon: Compass, label: 'Discover' },
   { href: '/dashboard/leaderboard', icon: Trophy, label: 'Leaderboard' },
 ];
+
+const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -78,6 +81,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Bottom links */}
         <div className="px-3 pb-4 space-y-1 border-t border-surface-border pt-4">
+          {user && ADMIN_ROLES.includes(user.role) && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+            >
+              <ShieldAlert className="w-4 h-4" />
+              Admin Panel
+            </Link>
+          )}
           <Link
             href="/dashboard/settings"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
