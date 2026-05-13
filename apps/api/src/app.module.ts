@@ -23,6 +23,7 @@ import { ReferralsModule } from './modules/referrals/referrals.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { HealthModule } from './modules/health/health.module';
+import { SocialAuthModule } from './modules/social-auth/social-auth.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { HealthModule } from './modules/health/health.module';
     AdminModule,
     AnalyticsModule,
     HealthModule,
+    SocialAuthModule,
   ],
 })
 export class AppModule {}

@@ -11,6 +11,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { GamificationService, XP_REWARDS } from '../gamification/gamification.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
+import { SocialAuthService } from '../social-auth/social-auth.service';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -47,6 +48,7 @@ export class TasksService {
     private readonly campaignsService: CampaignsService,
     private readonly gamificationService: GamificationService,
     private readonly antiAbuseService: AntiAbuseService,
+    private readonly socialAuthService: SocialAuthService,
   ) {}
 
   // ─── Browse available tasks ────────────────────────────────
@@ -140,6 +142,8 @@ export class TasksService {
         campaign: {
           select: {
             id: true,
+            taskType: true,
+            targetUrl: true,
             creditPerTask: true,
             requiresProof: true,
             autoVerify: true,
@@ -171,7 +175,21 @@ export class TasksService {
 
     const now = new Date();
 
-    if (completion.campaign.autoVerify) {
+    // ── API verification for supported platforms ──────────────
+    // If the user has a linked social account, verify via platform API.
+    // This overrides screenshot-only proof for supported platforms.
+    const apiVerified = await this.socialAuthService.verifyPlatformAction(
+      userId,
+      completion.campaign.taskType as never,
+      completion.campaign.targetUrl,
+    );
+    // apiVerified = true → verified via API (treat as auto-verify)
+    // apiVerified = null → platform not supported or account not linked → use campaign setting
+    // apiVerified = throws → verification failed (BadRequestException propagates to user)
+
+    const shouldAutoVerify = apiVerified === true ? true : completion.campaign.autoVerify;
+
+    if (shouldAutoVerify) {
       // ── Auto-verify: credits paid immediately ──────────────
       await this.prisma.withTransaction(async (tx) => {
         await tx.taskCompletion.update({
