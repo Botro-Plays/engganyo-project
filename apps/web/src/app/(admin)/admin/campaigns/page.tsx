@@ -287,7 +287,7 @@ export default function AdminCampaignsPage() {
           ) : !ptData?.items.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
               <p className="text-white font-medium mb-1">No platform tasks yet.</p>
-              <p className="text-zinc-500 text-sm">Click "Create Platform Task" to add one.</p>
+              <p className="text-zinc-500 text-sm">Click &quot;Create Platform Task&quot; to add one.</p>
             </div>
           ) : (
             <div className="space-y-3">
