@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from '../../database/database.module';
+import { UserRateLimitGuard } from '../../common/guards/user-rate-limit.guard';
 
 import { WalletModule } from '../wallet/wallet.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
@@ -8,9 +10,9 @@ import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
 @Module({
-  imports: [WalletModule, CampaignsModule, GamificationModule, AntiAbuseModule],
+  imports: [DatabaseModule, WalletModule, CampaignsModule, GamificationModule, AntiAbuseModule],
   controllers: [TasksController],
-  providers: [TasksService],
+  providers: [TasksService, UserRateLimitGuard],
   exports: [TasksService],
 })
 export class TasksModule {}

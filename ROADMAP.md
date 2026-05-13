@@ -1,6 +1,6 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-13 (Phase 9 complete)
+> Last updated: 2026-05-13 (Phase 10 in progress — local hardening done)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 
 ---
@@ -233,24 +233,34 @@
 
 ---
 
-## Phase 10 — Production Hardening ⏳
+## Phase 10 — Production Hardening 🚧
 
 > Security, performance, deployment
 
-- [ ] Nginx reverse proxy config (SSL termination, gzip, caching headers)
-- [ ] Production Docker Compose (`docker-compose.yml`)
-- [ ] CI/CD pipeline (GitHub Actions — lint, test, build, deploy)
-- [ ] Environment-specific `.env` for staging + production
-- [ ] Database connection pooling (PgBouncer or Prisma `connection_limit`)
+**Infrastructure (already existed)**
+- [x] Nginx reverse proxy config (`infra/nginx/nginx.conf`) — SSL, gzip, rate-limit zones, WebSocket upgrade
+- [x] Production Docker Compose (`docker-compose.yml`) — postgres, redis, api, web, nginx services
+- [x] API Dockerfile — multi-stage build, non-root user, dumb-init
+- [x] Web Dockerfile
+
+**Local hardening (this session)**
+- [x] `GET /api/health` — DB + Redis liveness probe (VERSION_NEUTRAL, public, skip-throttle)
+- [x] Unit tests — `WalletService` (credit/debit/optimistic-lock/not-found) · Jest config (`jest.config.ts`)
+- [x] `@types/jest` + `jest` added to API devDependencies
+- [x] CI/CD pipeline — `.github/workflows/ci.yml` (GitHub Actions: lint + unit tests + build for both API and Web; spins up Postgres + Redis services)
+- [x] Winston logger — `nest-winston` with colorised console (dev) + rotating JSON files (prod)
+- [x] Per-user Redis rate limiting — `UserRateLimitGuard` + `@UserRateLimit` decorator; applied to `POST /tasks/:id/assign` (10/min) and `POST /tasks/:id/submit` (20/min)
+- [x] `.env.production.example` with connection_limit, Sentry DSN slot, all prod vars
+- [x] Prisma `connection_limit=10` documented in production env template
+
+**Needs VPS / external services**
+- [ ] Deploy to production VPS
 - [ ] Redis cluster / Upstash for managed Redis
-- [ ] BullMQ job queues for async tasks (email, notifications, verification)
-- [ ] Sentry error tracking (API + Web)
-- [ ] Log aggregation (Winston → file/CloudWatch)
-- [ ] Rate limiting per user (Redis-backed, beyond global throttle)
-- [ ] E2E tests (Playwright for critical auth + payment flows)
-- [ ] Unit tests for WalletService, AuthService (Jest)
-- [ ] Health check endpoint (`GET /health`)
-- [ ] README with setup, deployment, and contribution guide
+- [ ] SSL certificate (Let's Encrypt via Certbot)
+- [ ] BullMQ job queues for async email + notifications
+- [ ] Sentry DSN wired (add `SENTRY_DSN` to `.env` and install `@sentry/nestjs`)
+- [ ] E2E tests (Playwright for critical auth + wallet flows)
+- [ ] Log shipping (CloudWatch / Loki)
 
 ---
 

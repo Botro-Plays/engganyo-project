@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { WinstonModule } from 'nest-winston';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -9,11 +10,13 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { createWinstonConfig } from './config/logger.config';
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
+  const nodeEnvEarly = process.env['NODE_ENV'] ?? 'development';
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+    logger: WinstonModule.createLogger(createWinstonConfig(nodeEnvEarly)),
   });
 
   const configService = app.get(ConfigService);

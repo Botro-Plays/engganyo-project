@@ -8,6 +8,7 @@ import { TasksService } from './tasks.service';
 import { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import { SubmitProofDto } from './dto/submit-proof.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserRateLimitGuard, UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
@@ -34,6 +35,8 @@ export class TasksController {
 
   @Post(':campaignId/assign')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(UserRateLimitGuard)
+  @UserRateLimit({ limit: 10, ttl: 60, scope: 'task_assign' })
   @ApiOperation({ summary: 'Claim a task slot from a campaign' })
   assign(@CurrentUser() user: JwtPayload, @Param('campaignId') campaignId: string) {
     return this.tasksService.assignTask(user.sub, campaignId);
@@ -41,6 +44,8 @@ export class TasksController {
 
   @Post(':campaignId/submit')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(UserRateLimitGuard)
+  @UserRateLimit({ limit: 20, ttl: 60, scope: 'task_submit' })
   @ApiOperation({ summary: 'Submit proof for an assigned task (auto-verifies in Phase 5)' })
   submit(
     @CurrentUser() user: JwtPayload,
