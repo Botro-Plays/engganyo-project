@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { CampaignStatus, TransactionType } from '@prisma/client';
+import { CampaignStatus, TaskType, TransactionType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -209,7 +209,7 @@ export class CampaignsService {
 
   async browseActive(
     excludeUserId: string,
-    filters: { taskType?: string; page?: number; limit?: number },
+    filters: { taskType?: string; platformPrefix?: string; page?: number; limit?: number },
   ) {
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
@@ -222,11 +222,24 @@ export class CampaignsService {
     });
     const excludeIds = alreadyAssigned.map((c) => c.campaignId);
 
+    // Build taskType filter: exact match OR all enum values starting with platform prefix
+    let taskTypeWhere: object | undefined;
+    if (filters.taskType) {
+      taskTypeWhere = { taskType: filters.taskType as never };
+    } else if (filters.platformPrefix) {
+      const matching = Object.values(TaskType).filter((t) =>
+        t.startsWith(filters.platformPrefix!),
+      );
+      if (matching.length > 0) {
+        taskTypeWhere = { taskType: { in: matching } };
+      }
+    }
+
     const where = {
       status: CampaignStatus.ACTIVE,
       userId: { not: excludeUserId },
       id: { notIn: excludeIds.length > 0 ? excludeIds : ['__none__'] },
-      ...(filters.taskType && { taskType: filters.taskType as never }),
+      ...taskTypeWhere,
     };
 
     const [items, total] = await Promise.all([

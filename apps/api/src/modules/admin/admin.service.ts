@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { CampaignStatus, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
+import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -138,6 +139,74 @@ export class AdminService {
     });
 
     return campaign;
+  }
+
+  async listPlatformTasks(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const adminRoles = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MODERATOR];
+    const where = {
+      status: CampaignStatus.ACTIVE,
+      user: { role: { in: adminRoles } },
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.campaign.findMany({
+        where,
+        select: {
+          id: true, title: true, taskType: true, targetUrl: true, description: true,
+          totalSlots: true, completedSlots: true, pendingSlots: true,
+          creditPerTask: true, totalCost: true, requiresProof: true,
+          proofInstructions: true, status: true, createdAt: true,
+          user: { select: { username: true, role: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.campaign.count({ where }),
+    ]);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async updatePlatformTask(adminId: string, taskId: string, dto: UpdatePlatformTaskDto) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: taskId },
+      select: { id: true, title: true, totalSlots: true, creditPerTask: true, user: { select: { role: true } } },
+    });
+    if (!campaign) throw new NotFoundException('Task not found');
+    const adminRoles = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MODERATOR];
+    if (!(adminRoles as UserRole[]).includes(campaign.user.role)) {
+      throw new ForbiddenException('Can only edit platform-created tasks');
+    }
+
+    const updatedSlots = dto.totalSlots ?? campaign.totalSlots;
+    const updatedCredits = dto.creditPerTask ?? campaign.creditPerTask;
+
+    const updated = await this.prisma.campaign.update({
+      where: { id: taskId },
+      data: {
+        ...(dto.title && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.targetUrl && { targetUrl: dto.targetUrl }),
+        ...(dto.totalSlots && { totalSlots: dto.totalSlots }),
+        ...(dto.creditPerTask && { creditPerTask: dto.creditPerTask }),
+        totalCost: updatedSlots * updatedCredits,
+        ...(dto.proofInstructions !== undefined && { proofInstructions: dto.proofInstructions }),
+        ...(dto.requiresProof !== undefined && { requiresProof: dto.requiresProof }),
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'platform_task.updated',
+        entityType: 'Campaign',
+        entityId: taskId,
+        oldValue: { title: campaign.title },
+        newValue: { ...dto },
+      },
+    });
+
+    return updated;
   }
 
   async changeUserRole(adminId: string, userId: string, dto: ChangeUserRoleDto) {

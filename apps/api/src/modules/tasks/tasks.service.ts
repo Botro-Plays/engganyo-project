@@ -51,14 +51,9 @@ export class TasksService {
   // ─── Browse available tasks ────────────────────────────────
 
   async browseTasks(userId: string, dto: ListTasksDto) {
-    const taskTypeFilter = dto.taskType
-      ? dto.taskType
-      : dto.platform
-        ? { startsWith: dto.platform } as never
-        : undefined;
-
     return this.campaignsService.browseActive(userId, {
-      taskType: taskTypeFilter as string | undefined,
+      taskType: dto.taskType as string | undefined,
+      platformPrefix: dto.platform,
       page: dto.page,
       limit: dto.limit,
     });

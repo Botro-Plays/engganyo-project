@@ -13,6 +13,7 @@ import { ResolveReportDto } from './dto/resolve-report.dto';
 import { GrantCreditsDto } from './dto/grant-credits.dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
+import { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -88,6 +89,16 @@ export class AdminController {
 
   // ─── Platform Tasks ──────────────────────────────────────
 
+  @Get('tasks')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all active platform tasks created by admins' })
+  listPlatformTasks(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    return this.adminService.listPlatformTasks(Number(page), Number(limit));
+  }
+
   @Post('tasks')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a platform task (goes live immediately as ACTIVE)' })
@@ -97,6 +108,18 @@ export class AdminController {
     @Body() dto: CreatePlatformTaskDto,
   ) {
     return this.adminService.createPlatformTask(admin.sub, dto);
+  }
+
+  @Patch('tasks/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a platform task' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  updatePlatformTask(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdatePlatformTaskDto,
+  ) {
+    return this.adminService.updatePlatformTask(admin.sub, id, dto);
   }
 
   // ─── Campaigns ────────────────────────────────────────────
