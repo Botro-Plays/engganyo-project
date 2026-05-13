@@ -42,6 +42,21 @@ async function main(): Promise<void> {
   });
   console.log(`✅ Admin user: ${admin.email}`);
 
+  // ─── Owner / super-admin account ─────────────────────────────
+  await prisma.user.updateMany({
+    where: {
+      OR: [
+        { email: 'aquariusbotro@gmail.com' },
+        { username: 'botro' },
+      ],
+    },
+    data: {
+      role: UserRole.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+    },
+  });
+  console.log('✅ Owner account (botro) ensured as SUPER_ADMIN');
+
   // ─── Achievements ────────────────────────────────────────────
   const achievements = [
     {
