@@ -537,7 +537,7 @@ export class AdminService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const updateData: any = {};
+    const updateData: Record<string, string> = {};
 
     if (dto.email && dto.email !== user.email) {
       const existingEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
