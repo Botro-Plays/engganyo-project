@@ -58,8 +58,9 @@ export class GamificationService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedAchievements();
-    await this.seedMissions();
+    // Seeding disabled - run migrations first with: docker-compose exec api npx prisma migrate deploy
+    // await this.seedAchievements();
+    // await this.seedMissions();
   }
 
   // ─── Seeds ────────────────────────────────────────────────
