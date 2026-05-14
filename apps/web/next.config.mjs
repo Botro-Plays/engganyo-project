@@ -2,6 +2,7 @@
 const nextConfig = {
   poweredByHeader: false,
   compress: true,
+  output: 'standalone',
   images: {
     domains: ['localhost', 'avatars.githubusercontent.com'],
     formats: ['image/avif', 'image/webp'],
