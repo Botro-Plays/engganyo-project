@@ -99,8 +99,10 @@ async function bootstrap(): Promise<void> {
   // ─── Graceful Shutdown ────────────────────────────────────
   app.enableShutdownHooks();
 
-  await app.listen(port);
-  logger.log(`🚀 Engganyo API running on http://localhost:${port}/api/v1`);
+  // Ensure the API binds to all interfaces so Nginx can reach it from another container
+  await app.listen(port, '0.0.0.0');
+  logger.log(`🚀 Engganyo API running on http://0.0.0.0:${port}/api/v1`);
+
   logger.log(`🌍 Environment: ${nodeEnv}`);
 }
 
