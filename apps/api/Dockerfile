@@ -28,6 +28,10 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
+# Create logs directory with proper permissions
+RUN mkdir -p /app/logs && \
+    chown -R nestjs:nodejs /app/logs
+
 # Copy only what's needed
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
