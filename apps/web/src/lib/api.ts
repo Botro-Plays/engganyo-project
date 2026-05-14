@@ -1,7 +1,17 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL =
-  process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/api/v1';
+function normalizeApiBaseUrl(input: string): string {
+  // Ensure we always end up with .../api (not .../api/v1)
+  let url = input.trim();
+  url = url.replace(/\/+$/, ''); // drop trailing slash
+  url = url.replace(/\/api\/v1$/i, '/api');
+  url = url.replace(/\/api$/i, '/api');
+  return url;
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(
+  process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/api',
+);
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
