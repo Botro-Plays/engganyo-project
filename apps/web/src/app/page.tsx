@@ -18,10 +18,10 @@ export default function LandingPage() {
 
       {/* Navbar */}
       <nav className="relative z-10 flex items-center justify-between px-6 py-5 max-w-7xl mx-auto">
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <img src="/logo-square.svg" alt="Engganyo" className="w-8 h-8" />
           <span className="font-bold text-xl tracking-tight">Engganyo</span>
-        </div>
+        </Link>
 
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
           <Link href="#features" className="hover:text-white transition-colors">Features</Link>
