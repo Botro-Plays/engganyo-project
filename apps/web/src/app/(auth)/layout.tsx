@@ -10,9 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Header */}
       <header className="relative z-10 p-6">
         <Link href="/" className="inline-flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
+          <img src="/logo-square.svg" alt="Engganyo" className="w-8 h-8" />
           <span className="font-bold text-xl tracking-tight text-white">Engganyo</span>
         </Link>
       </header>

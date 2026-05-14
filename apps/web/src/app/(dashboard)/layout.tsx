@@ -43,9 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logo */}
         <div className="p-6 border-b border-surface-border">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
+            <img src="/logo-square.svg" alt="Engganyo" className="w-8 h-8" />
             <span className="font-bold text-lg tracking-tight text-white">Engganyo</span>
           </Link>
         </div>
