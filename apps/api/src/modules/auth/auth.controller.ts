@@ -24,7 +24,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
 @ApiTags('auth')
-@Controller({ path: 'auth', version: '1' })
+@Controller({ path: 'auth' })
 @UseGuards(JwtAuthGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
