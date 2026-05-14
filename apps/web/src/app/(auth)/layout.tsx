@@ -23,8 +23,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 p-6 text-center text-zinc-600 text-xs">
-        © {new Date().getFullYear()} Engganyo. All rights reserved.
+      <footer className="relative z-10 p-6 text-center">
+        <p className="text-zinc-600 text-xs mb-2">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
+        <div className="flex gap-4 text-zinc-600 text-xs justify-center">
+          <Link href="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
+          <Link href="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
+          <Link href="/contact" className="hover:text-zinc-400 transition-colors">Contact</Link>
+        </div>
       </footer>
     </div>
   );
