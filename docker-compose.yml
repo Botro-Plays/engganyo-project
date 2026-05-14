@@ -57,7 +57,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${DATABASE_USER:-engganyo}:${DATABASE_PASSWORD:-engganyo_dev_pass}@postgres:5432/${DATABASE_NAME:-engganyo_db}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      REDIS_URL: redis://redis:6379
     ports:
       - '${APP_PORT:-3001}:3001'
     depends_on:
