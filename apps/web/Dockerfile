@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install && npm cache clean --force
 
+# Create public directory if it doesn't exist
+RUN mkdir -p public
+
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -25,8 +28,7 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-RUN mkdir -p /app/public
-COPY --from=builder /app/public ./public || true
+COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
