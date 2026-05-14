@@ -3,9 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies first (layer cache optimization)
+# Install all dependencies (dev needed for build)
 COPY package*.json ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # Copy source
 COPY . .
