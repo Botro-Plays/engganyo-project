@@ -5,7 +5,7 @@
 set -e
 
 PROJECT_DIR="/opt/engganyo-project"
-LOG_FILE="/var/log/engganyo-auto-deploy.log"
+LOG_FILE="/opt/engganyo-project/auto-deploy.log"
 
 # Function to log messages
 log() {
