@@ -8,7 +8,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiCookieAuth } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
@@ -25,7 +24,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
 @ApiTags('auth')
-@Controller({ path: 'auth', version: VERSION_NEUTRAL })
+@Controller({ path: 'auth', version: '1' })
 @UseGuards(JwtAuthGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
