@@ -59,7 +59,7 @@ export default function TermsPage() {
             <p>
               You retain ownership of content you submit. By using our service, you grant us a license 
               to use your content for the purpose of providing our services. You agree not to submit 
-              content that infringes on others' intellectual property rights.
+              content that infringes on others&apos; intellectual property rights.
             </p>
           </section>
 
@@ -74,7 +74,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-white mb-3">7. Limitation of Liability</h2>
             <p>
-              Engganyo is provided "as is" without warranties of any kind. We shall not be liable 
+              Engganyo is provided &quot;as is&quot; without warranties of any kind. We shall not be liable 
               for any indirect, incidental, or consequential damages arising from use of our service.
             </p>
           </section>

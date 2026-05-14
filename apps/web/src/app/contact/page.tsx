@@ -14,7 +14,7 @@ export default function ContactPage() {
           <section className="card-glass rounded-xl p-6">
             <h2 className="text-xl font-semibold text-white mb-4">Get in Touch</h2>
             <p className="text-zinc-300 mb-6">
-              Have questions, feedback, or need support? We'd love to hear from you.
+              Have questions, feedback, or need support? We&apos;d love to hear from you.
             </p>
 
             <div className="space-y-4">
@@ -46,7 +46,7 @@ export default function ContactPage() {
               <div>
                 <h3 className="text-sm font-medium text-white mb-1">How do I earn credits?</h3>
                 <p className="text-zinc-300 text-sm">
-                  Complete tasks from the campaigns page. Each task has a credit reward that's added to your wallet upon verification.
+                  Complete tasks from the campaigns page. Each task has a credit reward that&apos;s added to your wallet upon verification.
                 </p>
               </div>
 
@@ -60,7 +60,7 @@ export default function ContactPage() {
               <div>
                 <h3 className="text-sm font-medium text-white mb-1">What happens if my task is rejected?</h3>
                 <p className="text-zinc-300 text-sm">
-                  If your proof doesn't meet requirements, the task will be rejected and you can resubmit with correct proof.
+                  If your proof doesn&apos;t meet requirements, the task will be rejected and you can resubmit with correct proof.
                 </p>
               </div>
 
