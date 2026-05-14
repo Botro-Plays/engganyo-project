@@ -48,6 +48,14 @@ const creditSchema = z.object({
 });
 type CreditFormData = z.infer<typeof creditSchema>;
 
+const userDetailsSchema = z.object({
+  email: z.string().email().optional(),
+  username: z.string().min(3).max(30).optional(),
+  displayName: z.string().min(1).max(50).optional(),
+  password: z.string().min(8).optional(),
+});
+type UserDetailsFormData = z.infer<typeof userDetailsSchema>;
+
 export default function AdminUsersPage() {
   const { user: currentAdmin } = useAuthStore();
   const isSuperAdmin = currentAdmin?.role === 'SUPER_ADMIN';
@@ -57,10 +65,13 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [roleUser, setRoleUser] = useState<AdminUser | null>(null);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleSuccess, setRoleSuccess] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
   const [creditSuccess, setCreditSuccess] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState(false);
 
   const params = new URLSearchParams({
     page: String(page), limit: '25',
@@ -104,6 +115,17 @@ export default function AdminUsersPage() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: (err) => setCreditError(getApiErrorMessage(err)),
+  });
+
+  const userDetailsForm = useForm<UserDetailsFormData>({ resolver: zodResolver(userDetailsSchema) });
+  const userDetailsMutation = useMutation({
+    mutationFn: (d: UserDetailsFormData) => apiClient.patch(`admin/users/${editUser!.id}/details`, d),
+    onSuccess: () => {
+      setEditSuccess(true);
+      setEditError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => setEditError(getApiErrorMessage(err)),
   });
 
   return (
@@ -202,6 +224,9 @@ export default function AdminUsersPage() {
                           {canAct && !isSelf && (u.status === 'SUSPENDED' || u.status === 'BANNED') && (
                             <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })} className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors">Activate</button>
                           )}
+                          {canAct && u.status === 'PENDING_VERIFICATION' && (
+                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })} className="px-2 py-1 text-xs rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">Approve</button>
+                          )}
                           {canAct && (
                             <button onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }} className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors">
                               <Coins className="w-3 h-3" />
@@ -211,6 +236,9 @@ export default function AdminUsersPage() {
                             <button onClick={() => { setRoleUser(u); setRoleSuccess(false); setRoleError(null); roleForm.reset({ role: u.role as typeof ASSIGNABLE_ROLES[number] }); }} className="px-2 py-1 text-xs rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors">
                               <ShieldCheck className="w-3 h-3" />
                             </button>
+                          )}
+                          {isSuperAdmin && (
+                            <button onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }} className="px-2 py-1 text-xs rounded bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors">Edit</button>
                           )}
                           {!canAct && <span className="text-xs text-zinc-600 italic">Protected</span>}
                         </div>
@@ -311,6 +339,53 @@ export default function AdminUsersPage() {
                   <input {...creditForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500" />
                   <button type="submit" disabled={creditMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-60">
                     {creditMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit user details modal — SUPER_ADMIN only */}
+      {editUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white">Edit User Details</h2>
+              <button onClick={() => setEditUser(null)} className="text-zinc-500 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{editUser.username}</span></p>
+
+            {editSuccess ? (
+              <div className="py-4 text-center">
+                <p className="text-green-400 font-medium mb-3">Updated!</p>
+                <button onClick={() => setEditUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+              </div>
+            ) : (
+              <>
+                {editError && <p className="text-xs text-red-400 mb-3">{editError}</p>}
+                <form onSubmit={userDetailsForm.handleSubmit((d) => userDetailsMutation.mutate(d))} className="space-y-3">
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1 block">Email</label>
+                    <input {...userDetailsForm.register('email')} type="email" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1 block">Username</label>
+                    <input {...userDetailsForm.register('username')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1 block">Display Name</label>
+                    <input {...userDetailsForm.register('displayName')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-500 mb-1 block">New Password</label>
+                    <input {...userDetailsForm.register('password')} type="password" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  </div>
+                  <button type="submit" disabled={userDetailsMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-60">
+                    {userDetailsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                   </button>
                 </form>
               </>

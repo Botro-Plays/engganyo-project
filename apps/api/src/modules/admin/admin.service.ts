@@ -11,6 +11,7 @@ import type { ReviewCampaignDto } from './dto/review-campaign.dto';
 import type { ResolveReportDto } from './dto/resolve-report.dto';
 import type { GrantCreditsDto } from './dto/grant-credits.dto';
 import type { ChangeUserRoleDto } from './dto/change-user-role.dto';
+import type { UpdateUserDetailsDto } from './dto/update-user-details.dto';
 
 @Injectable()
 export class AdminService {
@@ -530,6 +531,51 @@ export class AdminService {
     });
 
     return { success: true, userId, action: dto.action, amount: dto.amount };
+  }
+
+  async updateUserDetails(userId: string, dto: UpdateUserDetailsDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const updateData: any = {};
+
+    if (dto.email && dto.email !== user.email) {
+      const existingEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (existingEmail) throw new BadRequestException('Email already in use');
+      updateData.email = dto.email;
+    }
+
+    if (dto.username && dto.username !== user.username) {
+      const existingUsername = await this.prisma.user.findUnique({ where: { username: dto.username } });
+      if (existingUsername) throw new BadRequestException('Username already taken');
+      updateData.username = dto.username;
+    }
+
+    if (dto.displayName !== undefined) {
+      updateData.displayName = dto.displayName;
+    }
+
+    if (dto.password) {
+      const { default: argon2 } = await import('argon2');
+      updateData.passwordHash = await argon2.hash(dto.password);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return { success: true, message: 'No changes made' };
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        displayName: true,
+      },
+    });
+
+    return { success: true, user: updated };
   }
 
   // ─── Audit log ────────────────────────────────────────────

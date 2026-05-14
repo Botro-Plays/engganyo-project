@@ -14,6 +14,7 @@ import { GrantCreditsDto } from './dto/grant-credits.dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
+import { UpdateUserDetailsDto } from './dto/update-user-details.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -85,6 +86,17 @@ export class AdminController {
     @Body() dto: GrantCreditsDto,
   ) {
     return this.adminService.grantCredits(admin.sub, id, dto);
+  }
+
+  @Patch('users/:id/details')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update user details (email, username, displayName, password) — SUPER_ADMIN only' })
+  @Roles(UserRole.SUPER_ADMIN)
+  updateUserDetails(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDetailsDto,
+  ) {
+    return this.adminService.updateUserDetails(id, dto);
   }
 
   // ─── Platform Tasks ──────────────────────────────────────
