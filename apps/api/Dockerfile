@@ -19,7 +19,7 @@ RUN npm run build
 # ─── Production Stage ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS production
 
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init openssl1.1-compat
 
 ENV NODE_ENV=production
 WORKDIR /app
