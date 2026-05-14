@@ -25,6 +25,11 @@ export const metadata: Metadata = {
   keywords: ['creator growth', 'social media', 'engagement', 'community', 'creators'],
   authors: [{ name: 'Engganyo' }],
   creator: 'Engganyo',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
