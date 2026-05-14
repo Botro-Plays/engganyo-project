@@ -11,7 +11,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @ApiTags('anti-abuse')
-@Controller({ version: '1' })
+@Controller()
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class AntiAbuseController {

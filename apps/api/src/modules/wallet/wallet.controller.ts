@@ -8,7 +8,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @ApiTags('wallet')
-@Controller({ path: 'wallet', version: '1' })
+@Controller({ path: 'wallet' })
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class WalletController {

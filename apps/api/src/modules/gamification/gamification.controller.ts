@@ -7,7 +7,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @ApiTags('gamification')
-@Controller({ path: 'gamification', version: '1' })
+@Controller({ path: 'gamification' })
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class GamificationController {

@@ -13,7 +13,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @ApiTags('campaigns')
-@Controller({ path: 'campaigns', version: '1' })
+@Controller({ path: 'campaigns' })
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class CampaignsController {

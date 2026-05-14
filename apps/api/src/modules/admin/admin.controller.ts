@@ -21,7 +21,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @ApiTags('admin')
-@Controller({ path: 'admin', version: '1' })
+@Controller({ path: 'admin' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPER_ADMIN)
 @ApiBearerAuth('access-token')
