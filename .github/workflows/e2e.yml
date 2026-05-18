@@ -94,6 +94,7 @@ jobs:
         run: |
           npm run build
           cp -r public .next/standalone/public
+          mkdir -p .next/standalone/.next
           cp -r .next/static .next/standalone/.next/static
           PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js > /tmp/web.log 2>&1 &
         working-directory: apps/web
