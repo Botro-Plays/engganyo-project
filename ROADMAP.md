@@ -1,6 +1,6 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-13 (Phase 10 in progress — local hardening done)
+> Last updated: 2026-05-18 (All phases complete — live at https://engganyo.com)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 
 ---
@@ -233,7 +233,7 @@
 
 ---
 
-## Phase 10 — Production Hardening 🚧
+## Phase 10 — Production Hardening ✅
 
 > Security, performance, deployment
 
@@ -253,14 +253,14 @@
 - [x] `.env.production.example` with connection_limit, Sentry DSN slot, all prod vars
 - [x] Prisma `connection_limit=10` documented in production env template
 
-**Needs VPS / external services**
-- [ ] Deploy to production VPS
-- [ ] Redis cluster / Upstash for managed Redis
-- [ ] SSL certificate (Let's Encrypt via Certbot)
-- [ ] BullMQ job queues for async email + notifications
-- [ ] Sentry DSN wired (add `SENTRY_DSN` to `.env` and install `@sentry/nestjs`)
-- [ ] E2E tests (Playwright for critical auth + wallet flows)
-- [ ] Log shipping (CloudWatch / Loki)
+**VPS / external services**
+- [x] Deploy to production VPS — live at https://engganyo.com with Cloudflare Full (Strict) SSL
+- [x] SSL certificate — Cloudflare Origin Certificate (equivalent to Let's Encrypt)
+- [x] BullMQ job queues — async email with 3-retry exponential backoff (`EmailModule` + `EmailProcessor`)
+- [x] Sentry DSN wired — `@sentry/nestjs` + `instrument.ts`, captures all 5xx errors
+- [x] E2E tests — Playwright for auth + wallet flows, runs in GitHub Actions on every push
+- [x] Log shipping — Grafana Cloud Loki via `winston-loki` transport (opt-in via `LOKI_*` env vars)
+- [ ] Redis cluster / Upstash — optional future upgrade (self-hosted Redis sufficient for current scale)
 
 ---
 
@@ -277,4 +277,4 @@
 | 7 | Anti-Abuse Systems | ✅ Complete |
 | 8 | Admin Dashboard | ✅ Complete |
 | 9 | Analytics | ✅ Complete |
-| 10 | Production Hardening | ⏳ Next |
+| 10 | Production Hardening | ✅ Complete |
