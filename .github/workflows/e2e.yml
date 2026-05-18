@@ -79,19 +79,30 @@ jobs:
           npm run db:generate --workspace=apps/api
           npm run db:seed --workspace=apps/api
 
+      - name: Build API
+        run: npm run build --workspace=apps/api
+
       - name: Start API server
-        run: npm run start --workspace=apps/api &
+        run: npm run start --workspace=apps/api > /tmp/api.log 2>&1 &
         env:
           NODE_ENV: test
 
       - name: Build + start web server
         run: |
           npm run build --workspace=apps/web
-          npm run start --workspace=apps/web &
+          npm run start --workspace=apps/web > /tmp/web.log 2>&1 &
 
       - name: Wait for servers to be ready
         run: |
-          npx wait-on http://localhost:3001/api/health http://localhost:3000 --timeout 60000
+          npx wait-on http://localhost:3001/api/health http://localhost:3000 --timeout 120000
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          echo "=== API LOG ==="
+          cat /tmp/api.log || true
+          echo "=== WEB LOG ==="
+          cat /tmp/web.log || true
 
       - name: Run Playwright tests
         run: npm run test:e2e --workspace=apps/web
