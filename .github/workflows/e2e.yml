@@ -76,6 +76,7 @@ jobs:
       - name: Run API migrations + seed
         run: |
           npm run db:migrate:prod --workspace=apps/api
+          npm run db:generate --workspace=apps/api
           npm run db:seed --workspace=apps/api
 
       - name: Start API server
