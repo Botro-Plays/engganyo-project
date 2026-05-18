@@ -42,9 +42,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="w-64 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
         {/* Logo */}
         <div className="p-6 border-b border-surface-border">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <img src="/logo-square.svg" alt="Engganyo" className="w-8 h-8" />
-            <span className="font-bold text-lg tracking-tight text-white">Engganyo</span>
+          <Link href="/dashboard" className="flex items-center">
+            <img src="/logo-horizontal.svg" alt="Engganyo" className="h-8" />
           </Link>
         </div>
 

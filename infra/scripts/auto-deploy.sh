@@ -37,14 +37,18 @@ sleep 10
 log "Running Prisma migrations..."
 docker-compose exec -T api npx prisma migrate deploy
 
-# Run database seed only if no users exist yet
-log "Checking if database needs seeding..."
-USER_COUNT=$(docker-compose exec -T api npx prisma db execute --stdin <<< "SELECT COUNT(*) FROM users;" 2>/dev/null || echo "0")
-if [ "$USER_COUNT" -eq 0 ]; then
-  log "Running database seed..."
-  docker-compose exec -T api npx prisma db seed || log "Seed failed (may be non-critical)"
+# Run database seed only on first deploy (tracked by a local sentinel file)
+SEED_SENTINEL="/opt/engganyo-project/.seeded"
+if [ ! -f "$SEED_SENTINEL" ]; then
+  log "Running database seed (first deploy)..."
+  if docker-compose exec -T api npx prisma db seed; then
+    touch "$SEED_SENTINEL"
+    log "Seed completed successfully"
+  else
+    log "Seed failed — check logs. Re-run manually: docker-compose exec api npx prisma db seed"
+  fi
 else
-  log "Database already has users, skipping seed"
+  log "Seed already ran, skipping"
 fi
 
 log "Auto-deploy completed successfully!"

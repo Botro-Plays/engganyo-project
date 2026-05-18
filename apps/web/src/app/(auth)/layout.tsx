@@ -1,4 +1,3 @@
-import { Zap } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -9,9 +8,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
       {/* Header */}
       <header className="relative z-10 p-6">
-        <Link href="/" className="inline-flex items-center gap-2">
-          <img src="/logo-square.svg" alt="Engganyo" className="w-8 h-8" />
-          <span className="font-bold text-xl tracking-tight text-white">Engganyo</span>
+        <Link href="/" className="inline-flex items-center">
+          <img src="/logo-horizontal.svg" alt="Engganyo" className="h-9" />
         </Link>
       </header>
 

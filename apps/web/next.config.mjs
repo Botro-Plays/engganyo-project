@@ -4,7 +4,7 @@ const nextConfig = {
   compress: true,
   output: 'standalone',
   images: {
-    domains: ['localhost', 'avatars.githubusercontent.com'],
+    domains: ['localhost', 'engganyo.com', 'www.engganyo.com', 'avatars.githubusercontent.com'],
     formats: ['image/avif', 'image/webp'],
   },
   async headers() {

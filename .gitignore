@@ -26,6 +26,12 @@ pnpm-debug.log*
 Thumbs.db
 *.pem
 
+# SSL certificates — place on VPS only, never commit
+infra/nginx/ssl/*.pem
+infra/nginx/ssl/*.crt
+infra/nginx/ssl/*.key
+.seeded
+
 # Testing
 coverage/
 .nyc_output

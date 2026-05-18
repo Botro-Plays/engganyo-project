@@ -20,7 +20,19 @@ git clone https://github.com/Botro-Plays/engganyo-project.git
 cd engganyo-project
 ```
 
-## Step 2: Configure Environment Variables
+## Step 2: Place SSL Certificates
+
+Before starting services, place your Cloudflare Origin Certificates:
+
+```bash
+# See infra/nginx/ssl/README.md for how to generate these
+nano /opt/engganyo-project/infra/nginx/ssl/cert.pem   # paste certificate
+nano /opt/engganyo-project/infra/nginx/ssl/key.pem    # paste private key
+chmod 644 infra/nginx/ssl/cert.pem
+chmod 600 infra/nginx/ssl/key.pem
+```
+
+## Step 3: Configure Environment Variables
 
 ```bash
 # Copy the production environment template
@@ -39,35 +51,35 @@ nano .env
 - `ADMIN_EMAIL` - Admin account email
 - `ADMIN_PASSWORD` - Admin account password
 
-## Step 3: Start Infrastructure Services
+## Step 4: Start Infrastructure Services
 
 ```bash
 # Start PostgreSQL and Redis
 docker-compose up -d postgres redis
 ```
 
-## Step 4: Run Database Migrations
+## Step 5: Run Database Migrations
 
 ```bash
 # Run Prisma migrations to create database tables
 docker-compose exec -T api npx prisma migrate deploy
 ```
 
-## Step 5: Seed Database with Initial Data
+## Step 6: Seed Database with Initial Data
 
 ```bash
 # Run the seed script to create admin user and initial data
 docker-compose exec -T api npx prisma db seed
 ```
 
-## Step 6: Start All Services
+## Step 7: Start All Services
 
 ```bash
 # Start API, web, and nginx
 docker-compose up -d --build
 ```
 
-## Step 7: Verify Services are Running
+## Step 8: Verify Services are Running
 
 ```bash
 # Check all containers are running
@@ -79,10 +91,10 @@ docker-compose logs -f web
 docker-compose logs -f nginx
 ```
 
-## Step 8: Access the Application
+## Step 9: Access the Application
 
-- **Admin Dashboard:** `http://134.255.225.158/admin`
-- **Main Application:** `http://134.255.225.158`
+- **Main Application:** `https://engganyo.com`
+- **Admin Dashboard:** `https://engganyo.com/admin`
 
 Default admin credentials (from seed):
 - Email: `admin@engganyo.com` (or your `ADMIN_EMAIL` env var)

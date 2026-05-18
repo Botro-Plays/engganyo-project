@@ -34,7 +34,12 @@ async function bootstrap(): Promise<void> {
 
   // ─── CORS ─────────────────────────────────────────────────
   app.enableCors({
-    origin: [frontendUrl, 'http://localhost:3000', 'http://134.255.225.158', 'http://134.255.225.158:3000'],
+    origin: [
+      frontendUrl,
+      'https://engganyo.com',
+      'https://www.engganyo.com',
+      'http://localhost:3000',
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
