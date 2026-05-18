@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -24,6 +25,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocialAuthModule } from './modules/social-auth/social-auth.module';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
@@ -62,6 +64,18 @@ import { SocialAuthModule } from './modules/social-auth/social-auth.module';
     // ─── Task Scheduler ─────────────────────────────────────
     ScheduleModule.forRoot(),
 
+    // ─── Job Queues (BullMQ via Redis) ──────────────────────
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        redis: {
+          host: config.get<string>('redis.host', 'redis'),
+          port: config.get<number>('redis.port', 6379),
+          password: config.get<string>('redis.password') || undefined,
+        },
+      }),
+    }),
+
     // ─── Database ───────────────────────────────────────────
     DatabaseModule,
 
@@ -79,6 +93,7 @@ import { SocialAuthModule } from './modules/social-auth/social-auth.module';
     AnalyticsModule,
     HealthModule,
     SocialAuthModule,
+    EmailModule,
   ],
 })
 export class AppModule {}

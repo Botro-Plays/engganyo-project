@@ -10,11 +10,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { nanoid } from 'nanoid';
-import * as nodemailer from 'nodemailer';
 import type { Request, Response } from 'express';
 import { UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { EmailService } from '../email/email.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -57,26 +57,13 @@ const WELCOME_CREDITS = 200;
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly mailer: nodemailer.Transporter;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {
-    this.mailer = nodemailer.createTransport({
-      host: this.configService.get<string>('email.host', 'localhost'),
-      port: this.configService.get<number>('email.port', 1025),
-      secure: this.configService.get<boolean>('email.secure', false),
-      auth:
-        this.configService.get<string>('email.user')
-          ? {
-              user: this.configService.get<string>('email.user'),
-              pass: this.configService.get<string>('email.pass'),
-            }
-          : undefined,
-    });
-  }
+    private readonly emailService: EmailService,
+  ) {}
 
   // ─── Register ──────────────────────────────────────────────
 
@@ -169,8 +156,8 @@ export class AuthService {
     });
 
     if (emailVerificationEnabled && emailVerToken) {
-      this.sendVerificationEmail(dto.email, emailVerToken).catch((err: Error) => {
-        this.logger.warn(`Failed to send verification email: ${err.message}`);
+      this.emailService.queueVerificationEmail(dto.email, emailVerToken).catch((err: Error) => {
+        this.logger.warn(`Failed to queue verification email: ${err.message}`);
       });
     }
 
@@ -322,8 +309,8 @@ export class AuthService {
       },
     });
 
-    this.sendPasswordResetEmail(email, token).catch((err: Error) => {
-      this.logger.warn(`Failed to send password reset email: ${err.message}`);
+    this.emailService.queuePasswordResetEmail(email, token).catch((err: Error) => {
+      this.logger.warn(`Failed to queue password reset email: ${err.message}`);
     });
   }
 
@@ -484,27 +471,4 @@ export class AuthService {
     return value * (multipliers[unit] ?? 1_000);
   }
 
-  private async sendVerificationEmail(email: string, token: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('app.frontendUrl', 'http://localhost:3000');
-    const fromName = this.configService.get<string>('email.fromName', 'Engganyo');
-    const fromEmail = this.configService.get<string>('email.fromEmail', 'noreply@engganyo.com');
-    await this.mailer.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to: email,
-      subject: 'Verify your Engganyo account',
-      html: `<p>Welcome to Engganyo! Click <a href="${frontendUrl}/verify-email?token=${token}">here</a> to verify your email. Expires in 24 hours.</p>`,
-    });
-  }
-
-  private async sendPasswordResetEmail(email: string, token: string): Promise<void> {
-    const frontendUrl = this.configService.get<string>('app.frontendUrl', 'http://localhost:3000');
-    const fromName = this.configService.get<string>('email.fromName', 'Engganyo');
-    const fromEmail = this.configService.get<string>('email.fromEmail', 'noreply@engganyo.com');
-    await this.mailer.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to: email,
-      subject: 'Reset your Engganyo password',
-      html: `<p>Click <a href="${frontendUrl}/reset-password?token=${token}">here</a> to reset your password. Expires in 1 hour. If you didn't request this, ignore this email.</p>`,
-    });
-  }
 }
