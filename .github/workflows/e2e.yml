@@ -93,7 +93,9 @@ jobs:
       - name: Build + start web server
         run: |
           npm run build
-          node .next/standalone/server.js > /tmp/web.log 2>&1 &
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
+          PORT=3000 HOSTNAME=0.0.0.0 node .next/standalone/server.js > /tmp/web.log 2>&1 &
         working-directory: apps/web
 
       - name: Wait for servers to be ready
