@@ -34,15 +34,19 @@ test.describe('Authentication', () => {
     await expect(page).toHaveURL(/dashboard/, { timeout: 10_000 });
   });
 
-  test('login with wrong password → error message', async ({ page }) => {
+  test('login with wrong password → stays on login page', async ({ page }) => {
     await page.goto('/login');
 
     await page.getByLabel(/email or username/i).fill('nobody@example.com');
     await page.getByLabel(/password/i).fill('WrongPassword!');
 
-    await page.getByRole('button', { name: /login|sign in/i }).click();
+    const [response] = await Promise.all([
+      page.waitForResponse((resp) => resp.url().includes('/api/auth/login')),
+      page.getByRole('button', { name: /login|sign in/i }).click(),
+    ]);
 
-    await expect(page.getByText(/invalid|incorrect|wrong|not found/i)).toBeVisible({ timeout: 5_000 });
+    expect(response.status()).toBe(401);
+    await expect(page).toHaveURL(/login/);
   });
 
   test('forgot-password page loads', async ({ page }) => {
