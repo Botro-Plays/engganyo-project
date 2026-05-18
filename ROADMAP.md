@@ -264,6 +264,141 @@
 
 ---
 
+## Phase 11 — Social Verification Engine ⏳
+
+> Auto-resolve task completions via official platform APIs (like like4like.com)
+
+**Core concept**
+- When a user submits a task ("I liked your YouTube video"), the API calls the social platform using the completer's stored OAuth token to confirm the action happened — no manual review needed.
+
+**API verification per platform**
+- [ ] YouTube — `videos.getRating(videoId)` via YouTube Data API v3 (confirm `like`)
+- [ ] YouTube — `subscriptions.list` (confirm channel subscribe)
+- [ ] Twitter/X — `GET /2/users/:id/liked_tweets` + `GET /2/users/:id/following` via API v2
+- [ ] TikTok — liked videos + following endpoints via TikTok for Developers
+- [ ] Telegram — channel member check via Bot API (`getChatMember`)
+- [ ] Instagram — follow check via Basic Display API (limited scope)
+
+**Infrastructure**
+- [ ] `VerificationJob` BullMQ worker — pulls stored OAuth token, calls platform API, marks completion VERIFIED or REJECTED
+- [ ] Retry logic — re-check after 5 min if token expired or API rate-limited
+- [ ] `SocialVerification` Prisma model — tracks per-completion verification attempts + result
+- [ ] Fallback to manual review if platform API is unavailable or token missing
+
+**P2P Exchange (like4like mode)**
+- [ ] P2P matching engine — users offer engagement on their content, get matched with others who need the same
+- [ ] Low-credit micro-transactions (1–5 credits per action) to keep it accessible
+- [ ] Trust-score gate — users below MEDIUM trust cannot participate in P2P exchange
+- [ ] Illegitimate action detection — if verification fails after credit award, deduct credits + flag user
+
+---
+
+## Phase 12 — Community & Social Features ⏳
+
+> User discovery, interaction, and reputation
+
+**User profiles**
+- [ ] Public profile pages (`/u/:username`) — visible to all logged-in users
+- [ ] Profile stats: tasks completed, campaigns run, trust level, achievements, member since
+- [ ] Follow/unfollow other users
+
+**Comments & reviews**
+- [ ] Campaign reviews — completers can leave a star rating + comment after task verified
+- [ ] User reviews — rate a campaign creator after completing their task
+- [ ] Comment moderation — report comment, admin remove
+
+**Enhanced reporting**
+- [ ] Report user button on public profile page
+- [ ] Report campaign from task browse page
+- [ ] Report reasons: fake engagement, spam, harassment, scam
+- [ ] Auto-hide content after threshold reports (pending admin review)
+
+**Telegram platform**
+- [ ] Telegram OAuth connect (via Telegram Login Widget)
+- [ ] Telegram channel/group member verification via Bot API
+- [ ] Telegram task types: join channel, join group
+
+---
+
+## Phase 13 — Gamification 2.0 ⏳
+
+> Make progression feel rewarding with perks, a rewards store, and richer achievements
+
+**Level perks system**
+- [ ] Each level milestone (5, 10, 20, 50…) unlocks a perk:
+  - Reduced platform fee on campaigns
+  - Higher task earning multiplier
+  - Access to exclusive high-credit campaigns
+  - Custom profile badge / flair
+- [ ] `UserPerk` model — tracks which perks are active per user
+
+**Rewards store**
+- [ ] `/rewards` page — spend credits on real or virtual rewards
+- [ ] Reward types: profile customisation, boost visibility, extended campaign duration
+- [ ] Admin creates/manages reward inventory
+
+**Richer achievements**
+- [ ] 30+ achievements across more categories: Social, Veteran, Whale, Streak Master, Referral King
+- [ ] Tiered achievements (Bronze → Silver → Gold → Platinum)
+- [ ] Achievement showcase on public profile (user picks 3 to display)
+
+**Seasonal events**
+- [ ] Weekly challenges with bonus credit rewards
+- [ ] Seasonal leaderboard resets with exclusive titles for top 3
+
+---
+
+## Phase 14 — Security & Trust Hardening ⏳
+
+> reCAPTCHA, 2FA, and email confirmation flows
+
+**reCAPTCHA**
+- [ ] Google reCAPTCHA v3 on `/register`, `/login`, `/forgot-password`
+- [ ] Server-side token verification in `AuthService`
+- [ ] Score threshold configurable via env (`RECAPTCHA_MIN_SCORE=0.5`)
+
+**Email flows**
+- [ ] Registration confirmation email — currently behind feature flag; make it default-on in production
+- [ ] Welcome email with onboarding tips after first login
+- [ ] Email for credit transactions above threshold (anti-fraud alert)
+- [ ] Weekly digest email (tasks completed, credits earned, streak)
+- [ ] Unsubscribe / notification preferences in settings
+
+**Two-factor authentication (2FA)**
+- [ ] TOTP 2FA (Google Authenticator / Authy) via `otplib`
+- [ ] Backup codes (8 single-use codes)
+- [ ] 2FA enforce option for admin accounts
+
+---
+
+## Phase 15 — Payments & Monetisation ⏳
+
+> Let users buy credits with real money (fiat + crypto)
+
+**Fiat payments**
+- [ ] Stripe integration — buy credit packs ($5 = 500 credits, $20 = 2200 credits, etc.)
+- [ ] Stripe webhook handler — credit wallet on `payment_intent.succeeded`
+- [ ] Invoice / receipt email after purchase
+- [ ] Admin configurable credit pack pricing
+
+**Crypto payments (USDT)**
+- [ ] USDT payment via Tron (TRC-20) or Ethereum (ERC-20)
+- [ ] Wallet address generation per user per order (HD wallet or payment processor)
+- [ ] On-chain confirmation listener — credit wallet after N confirmations
+- [ ] Or use a payment processor: NOWPayments / CoinGate (simpler, no on-chain code)
+
+**Withdrawal**
+- [ ] Users can withdraw earned credits as USDT (above minimum threshold)
+- [ ] Withdrawal request queue — admin approves before transfer
+- [ ] KYC gate for withdrawals above limit (document upload)
+
+**Platform fees**
+- [ ] Campaign creation fee (% of budget, configurable)
+- [ ] Withdrawal fee (flat or %)
+- [ ] Revenue dashboard in admin analytics
+
+---
+
 ## Quick Status Summary
 
 | Phase | Name | Status |
@@ -278,3 +413,8 @@
 | 8 | Admin Dashboard | ✅ Complete |
 | 9 | Analytics | ✅ Complete |
 | 10 | Production Hardening | ✅ Complete |
+| 11 | Social Verification Engine | ⏳ Pending |
+| 12 | Community & Social Features | ⏳ Pending |
+| 13 | Gamification 2.0 | ⏳ Pending |
+| 14 | Security & Trust Hardening | ⏳ Pending |
+| 15 | Payments & Monetisation | ⏳ Pending |
