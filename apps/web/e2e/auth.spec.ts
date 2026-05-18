@@ -6,8 +6,8 @@ test.describe('Authentication', () => {
   test('landing page loads and shows login/register links', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Engganyo/i);
-    await expect(page.getByRole('link', { name: /login/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /register|get started|sign up/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /get started free/i })).toBeVisible();
   });
 
   test('register → redirect to dashboard', async ({ page }) => {
@@ -26,7 +26,7 @@ test.describe('Authentication', () => {
   test('login with valid credentials → dashboard', async ({ page }) => {
     await page.goto('/login');
 
-    await page.getByLabel(/email|username/i).fill(process.env['E2E_TEST_EMAIL'] ?? 'admin@engganyo.com');
+    await page.getByLabel(/email or username/i).fill(process.env['E2E_TEST_EMAIL'] ?? 'admin@engganyo.com');
     await page.getByLabel(/password/i).fill(process.env['E2E_TEST_PASSWORD'] ?? 'Admin@123456');
 
     await page.getByRole('button', { name: /login|sign in/i }).click();
@@ -37,7 +37,7 @@ test.describe('Authentication', () => {
   test('login with wrong password → error message', async ({ page }) => {
     await page.goto('/login');
 
-    await page.getByLabel(/email|username/i).fill('nobody@example.com');
+    await page.getByLabel(/email or username/i).fill('nobody@example.com');
     await page.getByLabel(/password/i).fill('WrongPassword!');
 
     await page.getByRole('button', { name: /login|sign in/i }).click();
