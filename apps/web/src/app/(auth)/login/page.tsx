@@ -78,11 +78,12 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* Email / Username */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+            <label htmlFor="emailOrUsername" className="block text-sm font-medium text-zinc-300 mb-1.5">
               Email or username
             </label>
             <input
               {...register('emailOrUsername')}
+              id="emailOrUsername"
               type="text"
               autoComplete="username"
               placeholder="you@example.com"
@@ -96,7 +97,7 @@ export default function LoginPage() {
           {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-medium text-zinc-300">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-zinc-300">Password</label>
               <Link
                 href="/forgot-password"
                 className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
@@ -107,6 +108,7 @@ export default function LoginPage() {
             <div className="relative">
               <input
                 {...register('password')}
+                id="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"

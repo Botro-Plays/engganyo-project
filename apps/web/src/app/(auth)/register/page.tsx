@@ -109,9 +109,10 @@ function RegisterPageInner() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Email</label>
+            <label htmlFor="email" className="block text-sm font-medium text-zinc-300 mb-1.5">Email</label>
             <input
               {...register('email')}
+              id="email"
               type="email"
               autoComplete="email"
               placeholder="you@example.com"
@@ -124,11 +125,12 @@ function RegisterPageInner() {
 
           {/* Username */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Username</label>
+            <label htmlFor="username" className="block text-sm font-medium text-zinc-300 mb-1.5">Username</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">@</span>
               <input
                 {...register('username')}
+                id="username"
                 type="text"
                 autoComplete="username"
                 placeholder="yourcreatorname"
@@ -142,10 +144,11 @@ function RegisterPageInner() {
 
           {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-1.5">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-1.5">Password</label>
             <div className="relative">
               <input
                 {...register('password')}
+                id="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder="••••••••"

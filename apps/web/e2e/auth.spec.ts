@@ -14,9 +14,9 @@ test.describe('Authentication', () => {
     const uid = UNIQUE();
     await page.goto('/register');
 
-    await page.getByLabel(/username/i).fill(`testuser_${uid}`);
-    await page.getByLabel(/email/i).fill(`test_${uid}@example.com`);
-    await page.getByLabel(/^password$/i).fill('TestPassword123!');
+    await page.getByLabel('Email').fill(`test_${uid}@example.com`);
+    await page.getByLabel('Username').fill(`testuser_${uid}`);
+    await page.getByLabel('Password').fill('TestPassword123!');
 
     await page.getByRole('button', { name: /register|sign up|create account/i }).click();
 
