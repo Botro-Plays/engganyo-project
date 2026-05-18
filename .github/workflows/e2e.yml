@@ -75,22 +75,26 @@ jobs:
 
       - name: Run API migrations + seed
         run: |
-          npm run db:migrate:prod --workspace=apps/api
-          npm run db:generate --workspace=apps/api
-          npm run db:seed --workspace=apps/api
+          npm run db:migrate:prod
+          npm run db:generate
+          npm run db:seed
+        working-directory: apps/api
 
       - name: Build API
-        run: npm run build --workspace=apps/api
+        run: npm run build
+        working-directory: apps/api
 
       - name: Start API server
-        run: npm run start --workspace=apps/api > /tmp/api.log 2>&1 &
+        run: node dist/main > /tmp/api.log 2>&1 &
+        working-directory: apps/api
         env:
           NODE_ENV: test
 
       - name: Build + start web server
         run: |
-          npm run build --workspace=apps/web
-          npm run start --workspace=apps/web > /tmp/web.log 2>&1 &
+          npm run build
+          node .next/standalone/server.js > /tmp/web.log 2>&1 &
+        working-directory: apps/web
 
       - name: Wait for servers to be ready
         run: |
