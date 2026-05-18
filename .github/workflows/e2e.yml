@@ -1,0 +1,108 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: engganyo
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: engganyo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://engganyo:testpassword@localhost:5432/engganyo_test
+      REDIS_URL: redis://localhost:6379
+      REDIS_HOST: localhost
+      REDIS_PASSWORD: ""
+      JWT_ACCESS_SECRET: e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      JWT_REFRESH_SECRET: e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      COOKIE_SECRET: e2e-cookie-secret-32chars-xxxxxxx
+      ENCRYPTION_KEY: e2e-encryption-key-32chars-xxxxxx
+      APP_PORT: 3001
+      APP_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
+      API_PREFIX: api
+      ADMIN_EMAIL: admin@engganyo.com
+      ADMIN_PASSWORD: Admin@123456
+      ENABLE_EMAIL_VERIFICATION: "false"
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+        working-directory: apps/web
+
+      - name: Run API migrations + seed
+        run: |
+          npm run db:migrate:prod --workspace=apps/api
+          npm run db:seed --workspace=apps/api
+
+      - name: Start API server
+        run: npm run start --workspace=apps/api &
+        env:
+          NODE_ENV: test
+
+      - name: Build + start web server
+        run: |
+          npm run build --workspace=apps/web
+          npm run start --workspace=apps/web &
+
+      - name: Wait for servers to be ready
+        run: |
+          npx wait-on http://localhost:3001/api/health http://localhost:3000 --timeout 60000
+
+      - name: Run Playwright tests
+        run: npm run test:e2e --workspace=apps/web
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_TEST_EMAIL: admin@engganyo.com
+          E2E_TEST_PASSWORD: Admin@123456
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
