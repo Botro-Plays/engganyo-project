@@ -211,7 +211,7 @@ See `.github/workflows/ci.yml`.
 - [x] **Phase 8** — Admin dashboard (user mgmt, campaign moderation, reports, audit log)
 - [x] **Phase 9** — Analytics (platform overview, per-campaign funnel, personal stats, daily snapshot cron)
 - [x] **Phase 9+** — SUPER_ADMIN role management (promote/demote users, protect admin accounts)
-- [🚧] **Phase 10** — Production hardening (health check ✅, unit tests ✅, CI/CD ✅, Winston ✅, per-user rate limiting ✅ · VPS deploy pending)
+- [x] **Phase 10** — Production hardening (health check ✅, unit tests ✅, CI/CD ✅, Winston ✅, per-user rate limiting ✅, VPS deploy ✅ · live at https://engganyo.com)
 
 ## License
 
