@@ -103,7 +103,7 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   await app.listen(port);
-  logger.log(`🚀 Engganyo API running on http://localhost:${port}/api/v1`);
+  logger.log(`🚀 Engganyo API running on http://localhost:${port}/api`);
 
   logger.log(`🌍 Environment: ${nodeEnv}`);
 
