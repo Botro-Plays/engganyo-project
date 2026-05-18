@@ -285,11 +285,26 @@
 - [ ] `SocialVerification` Prisma model — tracks per-completion verification attempts + result
 - [ ] Fallback to manual review if platform API is unavailable or token missing
 
-**P2P Exchange (like4like mode)**
-- [ ] P2P matching engine — users offer engagement on their content, get matched with others who need the same
-- [ ] Low-credit micro-transactions (1–5 credits per action) to keep it accessible
-- [ ] Trust-score gate — users below MEDIUM trust cannot participate in P2P exchange
-- [ ] Illegitimate action detection — if verification fails after credit award, deduct credits + flag user
+**Supported task types per platform**
+
+| Platform | Task Types |
+|----------|------------|
+| YouTube | Like video, Subscribe to channel, Watch video (30s+), Comment |
+| Facebook | Like page, Follow page, Like post, Share post |
+| Instagram | Follow account, Like post |
+| Twitter/X | Follow account, Like tweet, Retweet |
+| TikTok | Follow account, Like video |
+| Telegram | Join channel, Join group |
+| Spotify | Follow artist, Follow playlist |
+
+**P2P Cross-Platform Exchange**
+- [ ] Credits are the universal currency — earn by completing *any* task on *any* platform, spend to get *any* task done
+- [ ] Example: complete a Facebook page follow (earn 2 credits) → spend 2 credits to get a YouTube subscriber
+- [ ] No same-platform restriction — fully cross-platform by design
+- [ ] P2P micro-task UX — lightweight "I need X" form (no full campaign setup required), appears instantly in task feed
+- [ ] Low-credit micro-transactions (1–10 credits per action) to keep it accessible
+- [ ] Trust-score gate — users below MEDIUM trust cannot post P2P tasks or participate
+- [ ] Illegitimate action detection — if API verification fails after credit award, auto-deduct + abuse flag
 
 ---
 
@@ -314,9 +329,12 @@
 - [ ] Auto-hide content after threshold reports (pending admin review)
 
 **Telegram platform**
-- [ ] Telegram OAuth connect (via Telegram Login Widget)
-- [ ] Telegram channel/group member verification via Bot API
-- [ ] Telegram task types: join channel, join group
+- [ ] Telegram account connect via Telegram Login Widget (no OAuth scope needed — just identity)
+- [ ] Telegram Bot API integration — `getChatMember(chatId, userId)` to verify join
+- [ ] Task types: Join channel, Join group
+- [ ] Campaign creators provide their Telegram channel/group `@username` or invite link
+- [ ] Bot must be admin in the channel/group to check membership
+- [ ] `TELEGRAM_BOT_TOKEN` env var — create via @BotFather
 
 ---
 
