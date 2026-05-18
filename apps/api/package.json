@@ -30,6 +30,7 @@
     "@nestjs/throttler": "^5.1.2",
     "@nestjs/websockets": "^10.3.8",
     "@prisma/client": "^5.14.0",
+    "@sentry/nestjs": "^10.53.1",
     "argon2": "^0.40.1",
     "bullmq": "^5.7.8",
     "class-transformer": "^0.5.1",
