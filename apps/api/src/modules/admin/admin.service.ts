@@ -590,19 +590,19 @@ export class AdminService {
 
     // Use raw SQL for all deletions to bypass Prisma's relation checks
     await this.prisma.$transaction(async (tx) => {
-      // Delete non-cascade tables first
-      await tx.$executeRawUnsafe(`DELETE FROM "task_completions" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "xp_events" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "audit_log" WHERE "user_id" = $1`, [userId]);
+      // Delete non-cascade tables first with explicit type casting
+      await tx.$executeRawUnsafe(`DELETE FROM "task_completions" WHERE "user_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "target_user_id" = $1::text OR "submitted_by_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "referrals" WHERE "referrer_id" = $1::text OR "referee_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "xp_events" WHERE "user_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "abuse_flags" WHERE "user_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1::text`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "audit_log" WHERE "user_id" = $1::text`, [userId]);
 
       // Delete user using raw SQL to bypass Prisma's relation checks
-      await tx.$executeRawUnsafe(`DELETE FROM "users" WHERE "id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "users" WHERE "id" = $1::text`, [userId]);
 
       // Create audit log entry using admin's ID
       await tx.auditLog.create({
