@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse, User } from '@/types';
@@ -26,6 +27,7 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
     .regex(/[0-9]/, 'Must contain at least one number'),
   referralCode: z.string().optional(),
+  recaptchaToken: z.string().optional(),
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -49,6 +51,7 @@ function RegisterPageInner() {
   const { setUser, setAccessToken } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const defaultReferralCode = searchParams.get('ref') ?? '';
 
@@ -85,8 +88,20 @@ function RegisterPageInner() {
     },
   });
 
-  const onSubmit = (data: RegisterFormData) => {
+  const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
+
+    // Generate reCAPTCHA token if available
+    if (executeRecaptcha) {
+      try {
+        const token = await executeRecaptcha('register');
+        data.recaptchaToken = token;
+      } catch (error) {
+        console.error('reCAPTCHA execution failed:', error);
+        // Continue without token if reCAPTCHA fails (backend will handle)
+      }
+    }
+
     registerMutation.mutate(data);
   };
 
