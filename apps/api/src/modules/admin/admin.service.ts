@@ -589,21 +589,32 @@ export class AdminService {
     if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot delete a SUPER_ADMIN account');
 
     await this.prisma.$transaction(async (tx) => {
-      // Delete non-cascade related data
-      await tx.campaign.deleteMany({ where: { userId } });
+      // Delete child records first (dependencies that reference user)
+      // TaskCompletion depends on Campaign, so delete it first
       await tx.taskCompletion.deleteMany({ where: { userId } });
+      
+      // Delete campaigns (after their completions are deleted)
+      await tx.campaign.deleteMany({ where: { userId } });
+      
+      // Delete other user-related records
       await tx.xpEvent.deleteMany({ where: { userId } });
       await tx.abuseFlag.deleteMany({ where: { userId } });
       await tx.ipRecord.deleteMany({ where: { userId } });
       await tx.deviceFingerprint.deleteMany({ where: { userId } });
+      
+      // Delete reports where user is submitter or target
       await tx.report.deleteMany({ where: { OR: [{ targetUserId: userId }, { submittedById: userId }] } });
+      
+      // Delete audit logs for this user
       await tx.auditLog.deleteMany({ where: { userId } });
+      
+      // Delete referrals where user is referrer or referee
       await tx.referral.deleteMany({ where: { OR: [{ referrerId: userId }, { refereeId: userId }] } });
 
       // Delete user (this will cascade delete: UserProfile, UserSession, EmailVerification, PasswordReset, SocialAccount, Wallet, UserAchievement, UserMissionProgress, TrustScore, Notification)
       await tx.user.delete({ where: { id: userId } });
 
-      // Create audit log entry
+      // Create audit log entry (after user is deleted, using admin's ID)
       await tx.auditLog.create({
         data: {
           userId: adminId,

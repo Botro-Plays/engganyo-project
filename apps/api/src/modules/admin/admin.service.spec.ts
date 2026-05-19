@@ -145,8 +145,8 @@ describe('AdminService', () => {
       const result = await service.deleteUser('admin-id', 'user-id');
 
       expect(result).toEqual({ success: true });
-      expect(mockPrisma.campaign.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-id' } });
       expect(mockPrisma.taskCompletion.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-id' } });
+      expect(mockPrisma.campaign.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-id' } });
       expect(mockPrisma.xpEvent.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-id' } });
       expect(mockPrisma.abuseFlag.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-id' } });
       expect(mockPrisma.ipRecord.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-id' } });
