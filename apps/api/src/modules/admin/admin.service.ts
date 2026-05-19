@@ -588,32 +588,56 @@ export class AdminService {
     if (!user) throw new NotFoundException('User not found');
     if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot delete a SUPER_ADMIN account');
 
-    // Use raw SQL for all deletions to bypass Prisma's relation checks
     await this.prisma.$transaction(async (tx) => {
-      // Delete non-cascade tables first - $executeRawUnsafe takes individual args, not arrays
+      // Step 1: Null out self-referential referred_by_id on OTHER users who were referred by this user
+      await tx.$executeRawUnsafe(`UPDATE "users" SET "referred_by_id" = NULL WHERE "referred_by_id" = $1`, userId);
+
+      // Step 2: Delete task_completions for ALL completions in this user's campaigns (by any user)
+      // Must happen before campaigns can be deleted
+      await tx.$executeRawUnsafe(`DELETE FROM "task_completions" WHERE "campaign_id" IN (SELECT "id" FROM "campaigns" WHERE "user_id" = $1)`, userId);
+
+      // Step 3: Delete this user's own task_completions in other people's campaigns
       await tx.$executeRawUnsafe(`DELETE FROM "task_completions" WHERE "user_id" = $1`, userId);
-      await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1`, userId);
+
+      // Step 4: Delete reports that reference this user's campaigns (campaign_id FK)
+      await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "campaign_id" IN (SELECT "id" FROM "campaigns" WHERE "user_id" = $1)`, userId);
+
+      // Step 5: Delete reports where user is the submitter or target
       await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, userId, userId);
+
+      // Step 6: Delete this user's campaigns (now safe — completions and reports removed)
+      await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1`, userId);
+
+      // Step 7: Delete referrals (referrer or referee)
       await tx.$executeRawUnsafe(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, userId, userId);
+
+      // Step 8: Delete transactions BEFORE wallet is cascade-deleted with the user
+      // Transaction → Wallet FK has no cascade, so wallet deletion would fail otherwise
+      await tx.$executeRawUnsafe(`DELETE FROM "transactions" WHERE "wallet_id" IN (SELECT "id" FROM "wallets" WHERE "user_id" = $1)`, userId);
+
+      // Step 9: Delete other non-cascade tables
       await tx.$executeRawUnsafe(`DELETE FROM "xp_events" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "audit_logs" WHERE "user_id" = $1`, userId);
 
-      // Delete user using raw SQL to bypass Prisma's relation checks
+      // Step 10: Delete the user — DB cascade handles:
+      // user_profiles, user_sessions, email_verifications, password_resets,
+      // social_accounts, wallets (+ transactions already gone), user_achievements,
+      // user_mission_progress, trust_scores, notifications
       await tx.$executeRawUnsafe(`DELETE FROM "users" WHERE "id" = $1`, userId);
+    });
 
-      // Create audit log entry using admin's ID
-      await tx.auditLog.create({
-        data: {
-          userId: adminId,
-          action: 'user.deleted',
-          entityType: 'User',
-          entityId: userId,
-          oldValue: { username: user.username, role: user.role },
-        },
-      });
+    // Create audit log entry AFTER transaction using admin's ID (admin still exists)
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'user.deleted',
+        entityType: 'User',
+        entityId: userId,
+        oldValue: { username: user.username, role: user.role },
+      },
     });
 
     return { success: true };
