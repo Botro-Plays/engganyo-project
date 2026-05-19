@@ -588,33 +588,23 @@ export class AdminService {
     if (!user) throw new NotFoundException('User not found');
     if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot delete a SUPER_ADMIN account');
 
+    // Use raw SQL to bypass Prisma's relation checks and handle orphaned records
     await this.prisma.$transaction(async (tx) => {
-      // Delete child records first (dependencies that reference user)
-      // TaskCompletion depends on Campaign, so delete it first
-      await tx.taskCompletion.deleteMany({ where: { userId } });
-      
-      // Delete campaigns (after their completions are deleted)
-      await tx.campaign.deleteMany({ where: { userId } });
-      
-      // Delete other user-related records
-      await tx.xpEvent.deleteMany({ where: { userId } });
-      await tx.abuseFlag.deleteMany({ where: { userId } });
-      await tx.ipRecord.deleteMany({ where: { userId } });
-      await tx.deviceFingerprint.deleteMany({ where: { userId } });
-      
-      // Delete reports where user is submitter or target
-      await tx.report.deleteMany({ where: { OR: [{ targetUserId: userId }, { submittedById: userId }] } });
-      
-      // Delete audit logs for this user
-      await tx.auditLog.deleteMany({ where: { userId } });
-      
-      // Delete referrals where user is referrer or referee
-      await tx.referral.deleteMany({ where: { OR: [{ referrerId: userId }, { refereeId: userId }] } });
+      // Delete all related records using raw SQL to avoid "Related record not found" errors
+      await tx.$executeRawUnsafe(`DELETE FROM "task_completions" WHERE "user_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "xp_events" WHERE "user_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, [userId]);
+      await tx.$executeRawUnsafe(`DELETE FROM "audit_log" WHERE "user_id" = $1`, [userId]);
 
-      // Delete user (this will cascade delete: UserProfile, UserSession, EmailVerification, PasswordReset, SocialAccount, Wallet, UserAchievement, UserMissionProgress, TrustScore, Notification)
+      // Delete user (this cascades to: UserProfile, UserSession, EmailVerification, PasswordReset, SocialAccount, Wallet, UserAchievement, UserMissionProgress, TrustScore, Notification)
       await tx.user.delete({ where: { id: userId } });
 
-      // Create audit log entry (after user is deleted, using admin's ID)
+      // Create audit log entry using admin's ID
       await tx.auditLog.create({
         data: {
           userId: adminId,
