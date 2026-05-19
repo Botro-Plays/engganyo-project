@@ -133,16 +133,16 @@ describe('AdminService', () => {
       const result = await service.deleteUser('admin-id', 'user-id');
 
       expect(result).toEqual({ success: true });
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "task_completions" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "campaigns" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "reports" WHERE "target_user_id" = $1::text OR "submitted_by_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "referrals" WHERE "referrer_id" = $1::text OR "referee_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "xp_events" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "abuse_flags" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "ip_records" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "audit_log" WHERE "user_id" = $1::text`, ['user-id']);
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "users" WHERE "id" = $1::text`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "task_completions" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "campaigns" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, 'user-id', 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, 'user-id', 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "xp_events" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "ip_records" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "audit_log" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "users" WHERE "id" = $1`, 'user-id');
       expect((mockPrisma.auditLog as { create: jest.Mock }).create).toHaveBeenCalledWith({
         data: {
           userId: 'admin-id',
