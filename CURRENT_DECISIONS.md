@@ -813,6 +813,50 @@
 
 ---
 
+---
+
+## ADMIN DECISIONS
+
+### ADR-010: User Deletion with Cascade Handling
+**Status**: Implemented (Phase 8)
+**Date**: 2026-05-19
+**Context**: SUPER_ADMIN needs ability to delete users and all associated data
+**Decision**: Use raw SQL with explicit cascade deletion order to bypass Prisma's ORM-level relation checks
+**Rationale**:
+- Prisma's relation checks fail when deleting users with complex FK dependencies
+- Some tables lack `onDelete: Cascade` in schema (Campaign, TaskCompletion, Report, Referral, XpEvent, AbuseFlag, IpRecord, AuditLog, Transaction)
+- Raw SQL provides complete control over deletion order
+- Transaction ensures atomicity
+**Implementation**:
+- `DELETE /admin/users/:id` endpoint restricted to SUPER_ADMIN
+- 10-step deletion order respecting all FK constraints:
+  1. NULL out `users.referred_by_id` self-reference
+  2. Delete ALL task_completions in user's campaigns (by any user)
+  3. Delete user's own task_completions in other campaigns
+  4. Delete reports for user's campaigns
+  5. Delete reports where user is submitter/target
+  6. Delete campaigns
+  7. Delete referrals
+  8. Delete transactions (before wallet cascade - Transaction→Wallet FK has no cascade)
+  9. Delete non-cascade tables (xp_events, abuse_flags, ip_records, device_fingerprints, audit_logs)
+  10. Delete user (DB cascade handles: user_profiles, user_sessions, email_verifications, password_resets, social_accounts, wallets, user_achievements, user_mission_progress, trust_scores, notifications)
+- Audit log creation moved outside transaction (admin still exists after user deletion)
+- Safety checks: cannot delete own account, cannot delete SUPER_ADMIN
+**Tradeoffs**:
+- Raw SQL bypasses Prisma's type safety and relation checks
+- Requires manual maintenance of deletion order as schema evolves
+- More complex than using Prisma's built-in cascade
+**Alternatives Considered**:
+- Prisma `deleteMany` with try-catch (rejected: "Related record not found" errors persisted)
+- Database-level `ON DELETE CASCADE` (rejected: requires schema migration, affects all deletions globally)
+- Soft delete only (rejected: doesn't actually remove data, GDPR compliance issues)
+**Lessons Learned**:
+- `$executeRawUnsafe` takes individual args, not arrays: `tx.$executeRawUnsafe(query, userId)` not `tx.$executeRawUnsafe(query, [userId])`
+- Table names in schema may differ from database (e.g., `AuditLog` model → `audit_logs` table via `@@map`)
+- Subqueries in raw SQL are supported and useful for cascade dependencies
+
+---
+
 ## DECISION RECORD MAINTENANCE
 
 This document should be updated when:

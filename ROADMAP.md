@@ -264,6 +264,7 @@
 - [x] `GET    /admin/users/:id` — single user detail with trust score + flags
 - [x] `PATCH  /admin/users/:id/status` — ban, suspend, activate (+ AuditLog)
 - [x] `POST   /admin/users/:id/credits` — grant or deduct credits manually (+ AuditLog)
+- [x] `DELETE /admin/users/:id` — delete user and all related data (SUPER_ADMIN only, raw SQL cascade)
 - [x] `GET    /admin/campaigns/pending` — campaigns awaiting review
 - [x] `PATCH  /admin/campaigns/:id/review` — approve / reject campaign (+ AuditLog)
 - [x] `GET    /admin/reports` — open reports queue
@@ -277,7 +278,7 @@
 **Frontend (`/admin`)**
 - [x] Separate `(admin)` route group with admin-only layout (role-gated redirect)
 - [x] `/admin` — overview with 4 stat cards (users, pending campaigns, open reports, verified tasks)
-- [x] `/admin/users` — searchable table, status filter, Suspend/Ban/Activate actions, credits modal
+- [x] `/admin/users` — searchable table, status filter, Suspend/Ban/Activate actions, credits modal, Delete user button with confirmation dialog (SUPER_ADMIN only)
 - [x] `/admin/campaigns` — pending review queue, approve/reject with optional notes
 - [x] `/admin/reports` — open reports queue, resolve/dismiss with admin notes
 - [x] `/admin/audit-log` — full log with action filter, colour-coded action badges, JSON payload preview

@@ -222,6 +222,7 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - **Database indexes** on all query-hot columns
 - **Integer credits** — never floats
 - **CUID2** primary keys — URL-safe, k-sortable
+- **Manual cascade deletion** for complex FK dependencies — raw SQL with explicit deletion order used when schema lacks `onDelete: Cascade` (see ADR-010 in CURRENT_DECISIONS.md)
 
 ---
 
