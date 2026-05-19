@@ -599,7 +599,7 @@ export class AdminService {
       await tx.$executeRawUnsafe(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, userId);
-      await tx.$executeRawUnsafe(`DELETE FROM "audit_log" WHERE "user_id" = $1`, userId);
+      await tx.$executeRawUnsafe(`DELETE FROM "audit_logs" WHERE "user_id" = $1`, userId);
 
       // Delete user using raw SQL to bypass Prisma's relation checks
       await tx.$executeRawUnsafe(`DELETE FROM "users" WHERE "id" = $1`, userId);

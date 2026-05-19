@@ -141,7 +141,7 @@ describe('AdminService', () => {
       expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, 'user-id');
       expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "ip_records" WHERE "user_id" = $1`, 'user-id');
       expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, 'user-id');
-      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "audit_log" WHERE "user_id" = $1`, 'user-id');
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "audit_logs" WHERE "user_id" = $1`, 'user-id');
       expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "users" WHERE "id" = $1`, 'user-id');
       expect((mockPrisma.auditLog as { create: jest.Mock }).create).toHaveBeenCalledWith({
         data: {
