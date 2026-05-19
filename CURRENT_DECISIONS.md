@@ -513,6 +513,51 @@
 - Manual review required for reinstatement
 - Audit log entry for all suspensions
 
+### ABR-004: Rate Limiting on Sensitive Endpoints
+**Status**: Implemented (Phase 0)
+**Date**: 2026-05-19
+**Context**: Prevent brute force and abuse on auth endpoints
+**Decision**: Add per-endpoint rate limiting via UserRateLimitGuard
+**Rationale**:
+- Prevent credential stuffing
+- Prevent email flooding
+- Prevent account enumeration
+- Reduce automated abuse
+**Implementation**:
+- Register: 3 requests/hour per IP
+- Forgot-password: 3 requests/hour per IP
+- Verify-email: 5 requests/5 minutes per IP
+- Redis-based storage with TTL
+- Decorator-based implementation (@UserRateLimit)
+
+### ABR-005: reCAPTCHA v3 Integration
+**Status**: Partially Implemented (Phase 0) - NOT FUNCTIONING IN PRODUCTION
+**Date**: 2026-05-19
+**Context**: Bot protection on registration
+**Decision**: Integrate Google reCAPTCHA v3 with conditional feature flag
+**Rationale**:
+- Prevent automated registration
+- Reduce bot traffic
+- Improve platform trust
+- Industry-standard protection
+**Implementation**:
+- Frontend: react-google-recaptcha-v3 package
+- Backend: Token validation via Google API
+- Feature flag: ENABLE_RECAPTCHA (disabled by default for dev/test)
+- Optional recaptchaToken in RegisterDto
+- Disposable email detection added
+**Current Status**:
+- Code implemented and deployed
+- Token generation NOT working in production
+- No requests to Google reCAPTCHA API visible
+- Possible causes: Brave shields, Cloudflare, provider configuration
+- **Requires investigation and debugging**
+**Known Issues**:
+- executeRecaptcha hook may not be available
+- GoogleReCaptchaProvider may not be loading script
+- Site key configuration issues
+- Browser blocking (Brave shields, Cloudflare)
+
 ---
 
 ## AUTHENTICATION DECISIONS
@@ -660,9 +705,9 @@
 ## TEMPORARY COMPROMISES
 
 ### TMP-001: Email Verification Disabled
-**Status**: NEEDS IMMEDIATE ACTION
-**Compromise**: Disabled for development convenience
-**Impact**: Spam accounts, multi-accounting, lower trust
+**Status**: Partially Addressed (Feature-Flagged)
+**Compromise**: Disabled for development convenience, now feature-flagged
+**Impact**: Spam accounts, multi-accounting, lower trust (mitigated by rate limiting and reCAPTCHA attempt)
 **Resolution**: Enable by default in production immediately
 **Timeline**: Week 1 (CRITICAL)
 

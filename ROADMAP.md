@@ -31,16 +31,18 @@
   - **Risk**: HIGH - multi-accounting, spam, abuse
   - **Timeline**: Week 1, Day 1
   - **Effort**: 2-3 hours (config change + testing)
-- [🔴] Add rate limiting to password reset and email verification endpoints
-  - **Impact**: No rate limits, vulnerable to email spam and account enumeration
-  - **Risk**: HIGH - email flooding, account enumeration attacks
+- [✅] Add rate limiting to password reset and email verification endpoints
+  - **Impact**: Rate limiting implemented on register, forgot-password, verify-email
+  - **Risk**: MITIGATED - email flooding, account enumeration attacks
   - **Timeline**: Week 1, Day 2
   - **Effort**: 2-3 hours (add @UserRateLimit decorators)
-- [🔴] Add reCAPTCHA v3 on registration, login, and forgot-password
-  - **Impact**: No bot protection on sensitive endpoints
+- [�] Add reCAPTCHA v3 on registration, login, and forgot-password
+  - **Impact**: Code implemented but NOT FUNCTIONING in production (token generation not working)
   - **Risk**: HIGH - automated registration, credential stuffing
-  - **Timeline**: Week 1, Day 3
-  - **Effort**: 4-6 hours (Google reCAPTCHA integration)
+  - **Status**: Backend + frontend code complete, requires investigation
+  - **Known Issues**: executeRecaptcha hook not available, no requests to Google reCAPTCHA API
+  - **Timeline**: Week 1, Day 3-4 (debugging required)
+  - **Effort**: 4-6 hours (Google reCAPTCHA integration) + 2-4 hours (debugging)
 - [🔴] Add 2FA for admin accounts (TOTP via otplib)
   - **Impact**: Admin accounts have no 2FA, single password compromise = full platform compromise
   - **Risk**: CRITICAL - admin account takeover
@@ -565,10 +567,12 @@
 **Dependencies**: Phase 0 (Critical Security)
 
 **reCAPTCHA**
-- [🔴] Google reCAPTCHA v3 on `/register`, `/login`, `/forgot-password`
-- [🔴] Server-side token verification in `AuthService`
-- [🔴] Score threshold configurable via env (`RECAPTCHA_MIN_SCORE=0.5`)
-- [🟡] reCAPTCHA v2 fallback for high-risk actions
+- [�] Google reCAPTCHA v3 on `/register` (code implemented but NOT FUNCTIONING in production)
+- [�] Server-side token verification in `AuthService` (implemented but not receiving tokens)
+- [�] Score threshold configurable via env (`RECAPTCHA_MIN_SCORE=0.5`)
+- [🟡] reCAPTCHA v3 on `/login` and `/forgot-password` (pending)
+- [🟡] reCAPTCHA v2 fallback for high-risk actions (pending)
+- **Current Issues**: Token generation not working, no requests to Google reCAPTCHA API, requires investigation
 
 **Email flows**
 - [🔴] Registration confirmation email — currently behind feature flag; make it default-on in production

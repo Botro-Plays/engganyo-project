@@ -260,9 +260,9 @@ Tasks   Campaigns  Tasks   Campaigns
 ### Defense in Depth
 
 **Layer 1: Prevention**
-- Email verification (required)
-- CAPTCHA on registration/login
-- Rate limiting on all sensitive endpoints
+- Email verification (required, currently feature-flagged)
+- CAPTCHA on registration (reCAPTCHA v3 implemented but NOT FUNCTIONING in production)
+- Rate limiting on register, forgot-password, verify-email (implemented)
 - IP-based restrictions
 - Device fingerprinting
 

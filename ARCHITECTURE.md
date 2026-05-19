@@ -197,20 +197,19 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 1. **Transport**: HTTPS only, HSTS (Cloudflare Full SSL)
 2. **Auth**: JWT (15m access) + Refresh tokens (7d), HTTP-only cookies
 3. **Input**: Zod validation on all DTOs
-4. **Rate Limiting**: Per-endpoint throttling via Redis (UserRateLimitGuard)
+4. **Rate Limiting**: Per-endpoint throttling via Redis (UserRateLimitGuard) - implemented on register, forgot-password, verify-email
 5. **CORS**: Whitelist-based origin control
 6. **Headers**: Helmet.js security headers
 7. **Passwords**: Argon2id hashing (12 rounds)
 8. **Secrets**: Environment-only, never in code
 9. **Email Verification**: Feature-flagged, currently disabled (CRITICAL - see ROADMAP.md Phase 0)
-10. **CAPTCHA**: Not yet implemented (CRITICAL - see ROADMAP.md Phase 0)
+10. **CAPTCHA**: reCAPTCHA v3 implemented on registration (conditional via ENABLE_RECAPTCHA flag) - NOT FUNCTIONING IN PRODUCTION (token generation not working, no requests to Google reCAPTCHA API - requires investigation)
 11. **2FA**: Not yet implemented for admin accounts (CRITICAL - see ROADMAP.md Phase 0)
 
 **Security Gaps (See ROADMAP.md Phase 0 for immediate actions)**:
 - Email verification disabled by default
-- No CAPTCHA on registration/login
+- reCAPTCHA v3 implemented but NOT FUNCTIONING in production (token generation not working, requires investigation)
 - No 2FA for admin accounts
-- Insufficient rate limiting on sensitive endpoints
 - No file upload validation for proof screenshots
 
 ---
