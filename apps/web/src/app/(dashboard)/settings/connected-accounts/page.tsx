@@ -96,7 +96,13 @@ const PLATFORMS = [
 
 export default function ConnectedAccountsPage() {
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-20" />
+        ))}
+      </div>
+    }>
       <ConnectedAccountsPageInner />
     </Suspense>
   );
@@ -109,9 +115,16 @@ function ConnectedAccountsPageInner() {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
   const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({});
+  const [mounted, setMounted] = useState(false);
+
+  // Handle hydration mismatch by setting mounted state
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Handle OAuth return
   useEffect(() => {
+    if (!mounted) return;
     const connected = searchParams.get('connected');
     const error = searchParams.get('error');
     if (connected) {
@@ -125,13 +138,18 @@ function ConnectedAccountsPageInner() {
       };
       setNotice({ type: 'error', msg: messages[error] ?? `OAuth error: ${error}` });
     }
-  }, [searchParams, queryClient]);
+  }, [searchParams, queryClient, mounted]);
 
-  const { data: accounts, isLoading } = useQuery({
+  const { data: accounts, isLoading, error } = useQuery({
     queryKey: ['social-accounts'],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<ConnectedAccount[]>>('social-auth/accounts');
-      return res.data.data ?? [];
+      try {
+        const res = await apiClient.get<ApiResponse<ConnectedAccount[]>>('social-auth/accounts');
+        return res.data.data ?? [];
+      } catch (err) {
+        console.error('Failed to fetch connected accounts:', err);
+        throw err;
+      }
     },
   });
 

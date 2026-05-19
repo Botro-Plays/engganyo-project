@@ -133,9 +133,15 @@ export default function TasksPage() {
   const { data: linkedAccounts } = useQuery({
     queryKey: ['social-accounts'],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<Array<{ platform: string }>>>('social-auth/accounts');
-      return new Set((res.data.data ?? []).map((a) => a.platform));
+      try {
+        const res = await apiClient.get<ApiResponse<Array<{ platform: string }>>>('social-auth/accounts');
+        return new Set((res.data.data ?? []).map((a) => a.platform));
+      } catch (err) {
+        console.error('Failed to fetch linked accounts:', err);
+        return new Set<string>();
+      }
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // ─── Browse tasks ──────────────────────────────────────────
