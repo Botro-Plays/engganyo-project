@@ -3,20 +3,19 @@ import { AdminService } from './admin.service';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { UserRole, UserStatus, CampaignStatus, CompletionStatus } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 
 describe('AdminService', () => {
   let service: AdminService;
-  let prisma: PrismaService;
-  let walletService: WalletService;
 
-  const mockPrisma: any = {
+  const mockPrisma: Record<string, unknown> = {
     user: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     campaign: {
       findMany: jest.fn(),
@@ -60,7 +59,7 @@ describe('AdminService', () => {
     userProfile: {
       updateMany: jest.fn(),
     },
-    $transaction: jest.fn((callback: any) => callback(mockPrisma)),
+    $transaction: jest.fn((callback: (tx: Record<string, unknown>) => Promise<unknown>) => callback(mockPrisma)),
     $executeRawUnsafe: jest.fn(),
   };
 
@@ -79,8 +78,6 @@ describe('AdminService', () => {
     }).compile();
 
     service = module.get<AdminService>(AdminService);
-    prisma = module.get<PrismaService>(PrismaService);
-    walletService = module.get<WalletService>(WalletService);
   });
 
   afterEach(() => {
@@ -98,7 +95,7 @@ describe('AdminService', () => {
     });
 
     it('should throw NotFoundException if user does not exist', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
+      (mockPrisma.user as { findUnique: jest.Mock }).findUnique.mockResolvedValue(null);
 
       await expect(service.deleteUser('admin-id', 'nonexistent-id')).rejects.toThrow(
         NotFoundException,
@@ -109,7 +106,7 @@ describe('AdminService', () => {
     });
 
     it('should prevent deleting SUPER_ADMIN accounts', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({
+      (mockPrisma.user as { findUnique: jest.Mock }).findUnique.mockResolvedValue({
         id: 'super-admin-id',
         username: 'superadmin',
         role: UserRole.SUPER_ADMIN,
@@ -130,33 +127,24 @@ describe('AdminService', () => {
         role: UserRole.USER,
       };
 
-      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
-      mockPrisma.campaign.deleteMany.mockResolvedValue({ count: 2 });
-      mockPrisma.taskCompletion.deleteMany.mockResolvedValue({ count: 5 });
-      mockPrisma.xpEvent.deleteMany.mockResolvedValue({ count: 10 });
-      mockPrisma.abuseFlag.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrisma.ipRecord.deleteMany.mockResolvedValue({ count: 3 });
-      mockPrisma.deviceFingerprint.deleteMany.mockResolvedValue({ count: 2 });
-      mockPrisma.report.deleteMany.mockResolvedValue({ count: 0 });
-      mockPrisma.auditLog.deleteMany.mockResolvedValue({ count: 7 });
-      mockPrisma.referral.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrisma.user.delete.mockResolvedValue(mockUser);
-      mockPrisma.auditLog.create.mockResolvedValue({ id: 'audit-log-id' });
+      (mockPrisma.user as { findUnique: jest.Mock }).findUnique.mockResolvedValue(mockUser);
+      (mockPrisma.user as { delete: jest.Mock }).delete.mockResolvedValue(mockUser);
+      (mockPrisma.auditLog as { create: jest.Mock }).create.mockResolvedValue({ id: 'audit-log-id' });
 
       const result = await service.deleteUser('admin-id', 'user-id');
 
       expect(result).toEqual({ success: true });
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "task_completions" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "campaigns" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "xp_events" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "ip_records" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "audit_log" WHERE "user_id" = $1`, ['user-id']);
-      expect(mockPrisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user-id' } });
-      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "task_completions" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "campaigns" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "xp_events" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "ip_records" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma as { $executeRawUnsafe: jest.Mock }).$executeRawUnsafe).toHaveBeenCalledWith(`DELETE FROM "audit_log" WHERE "user_id" = $1`, ['user-id']);
+      expect((mockPrisma.user as { delete: jest.Mock }).delete).toHaveBeenCalledWith({ where: { id: 'user-id' } });
+      expect((mockPrisma.auditLog as { create: jest.Mock }).create).toHaveBeenCalledWith({
         data: {
           userId: 'admin-id',
           action: 'user.deleted',
@@ -168,3 +156,4 @@ describe('AdminService', () => {
     });
   });
 });
+
