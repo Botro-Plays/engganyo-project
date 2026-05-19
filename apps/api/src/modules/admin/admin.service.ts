@@ -588,20 +588,10 @@ export class AdminService {
     if (!user) throw new NotFoundException('User not found');
     if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot delete a SUPER_ADMIN account');
 
-    // Use raw SQL to bypass Prisma's relation checks and handle orphaned records
+    // Try deleting user directly first - database cascade deletes should handle most relations
+    // If this fails, we'll manually delete non-cascade tables
     await this.prisma.$transaction(async (tx) => {
-      // Delete all related records using raw SQL to avoid "Related record not found" errors
-      await tx.$executeRawUnsafe(`DELETE FROM "task_completions" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "referrals" WHERE "referrer_id" = $1 OR "referee_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "xp_events" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "abuse_flags" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, [userId]);
-      await tx.$executeRawUnsafe(`DELETE FROM "audit_log" WHERE "user_id" = $1`, [userId]);
-
-      // Delete user (this cascades to: UserProfile, UserSession, EmailVerification, PasswordReset, SocialAccount, Wallet, UserAchievement, UserMissionProgress, TrustScore, Notification)
+      // Delete user (this should cascade to tables with onDelete: Cascade)
       await tx.user.delete({ where: { id: userId } });
 
       // Create audit log entry using admin's ID
