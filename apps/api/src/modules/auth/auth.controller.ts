@@ -19,6 +19,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -31,6 +32,7 @@ export class AuthController {
 
   @Post('register')
   @Public()
+  @UserRateLimit({ limit: 3, ttl: 3600, scope: 'register' })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user account' })
   async register(
@@ -84,6 +86,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @Public()
+  @UserRateLimit({ limit: 3, ttl: 3600, scope: 'forgot-password' })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset email' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -102,6 +105,7 @@ export class AuthController {
 
   @Post('verify-email')
   @Public()
+  @UserRateLimit({ limit: 5, ttl: 300, scope: 'verify-email' })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email address using token from email' })
   async verifyEmail(@Body() dto: VerifyEmailDto) {

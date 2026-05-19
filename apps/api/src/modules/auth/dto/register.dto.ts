@@ -30,4 +30,8 @@ export class RegisterDto {
   @IsString()
   @Transform(({ value }: { value: string | undefined }) => value?.toUpperCase().trim())
   referralCode?: string | undefined;
+
+  @ApiProperty({ example: '03AGdBq24...' })
+  @IsString()
+  recaptchaToken!: string;
 }

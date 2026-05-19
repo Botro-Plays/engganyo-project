@@ -68,6 +68,17 @@ export class AuthService {
   // ─── Register ──────────────────────────────────────────────
 
   async register(dto: RegisterDto, res: Response): Promise<AuthResult> {
+    // Validate reCAPTCHA
+    const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
+    if (recaptchaScore < 0.5) {
+      throw new BadRequestException('reCAPTCHA validation failed - possible bot detected');
+    }
+
+    // Block disposable email addresses
+    if (await this.isDisposableEmail(dto.email)) {
+      throw new BadRequestException('Disposable email addresses are not allowed');
+    }
+
     const [existingEmail, existingUsername] = await Promise.all([
       this.prisma.user.findUnique({ where: { email: dto.email }, select: { id: true } }),
       this.prisma.user.findUnique({ where: { username: dto.username }, select: { id: true } }),
@@ -469,6 +480,71 @@ export class AuthService {
       d: 24 * 60 * 60 * 1_000,
     };
     return value * (multipliers[unit] ?? 1_000);
+  }
+
+  private async validateRecaptcha(token: string): Promise<number> {
+    const secret = this.configService.get<string>('recaptcha.secret');
+    if (!secret) {
+      // If reCAPTCHA not configured, allow all requests (dev mode)
+      this.logger.warn('reCAPTCHA not configured - skipping validation');
+      return 1.0;
+    }
+
+    try {
+      const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `secret=${secret}&response=${token}`,
+      });
+      const data = (await response.json()) as { success: boolean; score?: number };
+      return data.success ? (data.score ?? 0.5) : 0;
+    } catch (error) {
+      this.logger.warn(`reCAPTCHA validation failed: ${String(error)}`);
+      return 0; // Fail closed on error
+    }
+  }
+
+  private async isDisposableEmail(email: string): Promise<boolean> {
+    const domain = email.split('@')[1]?.toLowerCase();
+
+    // Local blocklist of common disposable email domains
+    const blocklist = [
+      'temp-mail.org',
+      'guerrillamail.com',
+      'mailinator.com',
+      '10minutemail.com',
+      'throwawaymail.com',
+      'sharklasers.com',
+      'getairmail.com',
+      'tempmail.net',
+      'yopmail.com',
+      'maildrop.cc',
+    ];
+
+    // Check local blocklist first
+    if (blocklist.some(blocked => domain === blocked || domain.endsWith(`.${blocked}`))) {
+      return true;
+    }
+
+    // Optional: Check against external API (debounce.io)
+    // This provides more comprehensive coverage but adds external dependency
+    const enableDisposableCheck = this.configService.get<boolean>(
+      'features.antiAbuse',
+      true,
+    );
+
+    if (enableDisposableCheck) {
+      try {
+        const response = await fetch(`https://disposable.debounce.io/?domain=${domain}`);
+        const data = (await response.json()) as { disposable: string };
+        return data.disposable === 'true';
+      } catch (error) {
+        // If API fails, fall back to local blocklist only
+        this.logger.warn(`Disposable email check API failed: ${String(error)}`);
+      }
+    }
+
+    return false;
   }
 
 }

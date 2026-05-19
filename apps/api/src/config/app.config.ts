@@ -16,4 +16,7 @@ export default registerAs('app', () => ({
     antiAbuse: process.env['ENABLE_ANTI_ABUSE'] !== 'false',
     websockets: process.env['ENABLE_WEBSOCKETS'] !== 'false',
   },
+  recaptcha: {
+    secret: process.env['RECAPTCHA_SECRET'] ?? '',
+  },
 }));
