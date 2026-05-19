@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -72,6 +72,8 @@ export default function AdminUsersPage() {
   const [creditSuccess, setCreditSuccess] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState(false);
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const params = new URLSearchParams({
     page: String(page), limit: '25',
@@ -126,6 +128,16 @@ export default function AdminUsersPage() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: (err) => setEditError(getApiErrorMessage(err)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => apiClient.delete(`admin/users/${userId}`),
+    onSuccess: () => {
+      setDeleteUser(null);
+      setDeleteError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => setDeleteError(getApiErrorMessage(err)),
   });
 
   return (
@@ -239,6 +251,11 @@ export default function AdminUsersPage() {
                           )}
                           {isSuperAdmin && (
                             <button onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }} className="px-2 py-1 text-xs rounded bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors">Edit</button>
+                          )}
+                          {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
+                            <button onClick={() => { setDeleteUser(u); setDeleteError(null); }} className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           )}
                           {!canAct && <span className="text-xs text-zinc-600 italic">Protected</span>}
                         </div>
@@ -390,6 +407,46 @@ export default function AdminUsersPage() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete user confirmation modal — SUPER_ADMIN only */}
+      {deleteUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <h2 className="text-base font-semibold text-white">Delete User</h2>
+              </div>
+              <button onClick={() => setDeleteUser(null)} className="text-zinc-500 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4">
+              User: <span className="text-zinc-300">@{deleteUser.username}</span> · 
+              Role: <span className={`${ROLE_COLORS[deleteUser.role]} px-1.5 rounded`}>{deleteUser.role}</span>
+            </p>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4">
+              <p className="text-xs text-red-400 font-medium mb-1">Warning: This action cannot be undone</p>
+              <p className="text-xs text-zinc-400">This will permanently delete the user and all related data including:</p>
+              <ul className="text-xs text-zinc-500 mt-1 list-disc list-inside">
+                <li>Profile and account data</li>
+                <li>Campaigns and task completions</li>
+                <li>Wallet and transactions</li>
+                <li>Trust score and XP history</li>
+                <li>Reports and abuse flags</li>
+                <li>All other related records</li>
+              </ul>
+            </div>
+            {deleteError && <p className="text-xs text-red-400 mb-3">{deleteError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteUser(null)} className="flex-1 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm font-medium hover:bg-surface-hover/80 transition-colors">Cancel</button>
+              <button onClick={() => deleteMutation.mutate(deleteUser.id)} disabled={deleteMutation.isPending} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-60 transition-colors">
+                {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete User'}
+              </button>
+            </div>
           </div>
         </div>
       )}

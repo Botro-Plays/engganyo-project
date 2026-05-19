@@ -578,6 +578,46 @@ export class AdminService {
     return { success: true, user: updated };
   }
 
+  async deleteUser(adminId: string, userId: string) {
+    if (adminId === userId) throw new BadRequestException('Cannot delete your own account');
+    
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot delete a SUPER_ADMIN account');
+
+    await this.prisma.$transaction(async (tx) => {
+      // Delete non-cascade related data
+      await tx.campaign.deleteMany({ where: { userId } });
+      await tx.taskCompletion.deleteMany({ where: { userId } });
+      await tx.xpEvent.deleteMany({ where: { userId } });
+      await tx.abuseFlag.deleteMany({ where: { userId } });
+      await tx.ipRecord.deleteMany({ where: { userId } });
+      await tx.deviceFingerprint.deleteMany({ where: { userId } });
+      await tx.report.deleteMany({ where: { OR: [{ targetUserId: userId }, { submittedById: userId }] } });
+      await tx.auditLog.deleteMany({ where: { userId } });
+      await tx.referral.deleteMany({ where: { OR: [{ referrerId: userId }, { refereeId: userId }] } });
+
+      // Delete user (this will cascade delete: UserProfile, UserSession, EmailVerification, PasswordReset, SocialAccount, Wallet, UserAchievement, UserMissionProgress, TrustScore, Notification)
+      await tx.user.delete({ where: { id: userId } });
+
+      // Create audit log entry
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'user.deleted',
+          entityType: 'User',
+          entityId: userId,
+          oldValue: { username: user.username, role: user.role },
+        },
+      });
+    });
+
+    return { success: true };
+  }
+
   // ─── Audit log ────────────────────────────────────────────
 
   async getAuditLog(page = 1, limit = 50, action?: string, entityType?: string) {

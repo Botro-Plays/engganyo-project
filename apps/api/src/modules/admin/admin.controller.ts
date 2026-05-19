@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Body, Param, Query,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query,
   UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -97,6 +97,17 @@ export class AdminController {
     @Body() dto: UpdateUserDetailsDto,
   ) {
     return this.adminService.updateUserDetails(id, dto);
+  }
+
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a user and all related data — SUPER_ADMIN only' })
+  @Roles(UserRole.SUPER_ADMIN)
+  deleteUser(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.deleteUser(admin.sub, id);
   }
 
   // ─── Platform Tasks ──────────────────────────────────────
