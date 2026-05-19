@@ -68,10 +68,16 @@ export class AuthService {
   // ─── Register ──────────────────────────────────────────────
 
   async register(dto: RegisterDto, res: Response): Promise<AuthResult> {
-    // Validate reCAPTCHA
-    const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
-    if (recaptchaScore < 0.5) {
-      throw new BadRequestException('reCAPTCHA validation failed - possible bot detected');
+    // Validate reCAPTCHA if enabled
+    const recaptchaEnabled = this.configService.get<boolean>('features.recaptcha', false);
+    if (recaptchaEnabled) {
+      if (!dto.recaptchaToken) {
+        throw new BadRequestException('reCAPTCHA token is required');
+      }
+      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
+      if (recaptchaScore < 0.5) {
+        throw new BadRequestException('reCAPTCHA validation failed - possible bot detected');
+      }
     }
 
     // Block disposable email addresses
