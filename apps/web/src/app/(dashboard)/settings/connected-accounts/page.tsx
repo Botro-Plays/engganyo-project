@@ -145,10 +145,12 @@ function ConnectedAccountsPageInner() {
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<ConnectedAccount[]>>('social-auth/accounts');
-        return res.data.data ?? [];
+        const data = res.data.data;
+        // Ensure data is an array
+        return Array.isArray(data) ? data : [];
       } catch (err) {
         console.error('Failed to fetch connected accounts:', err);
-        throw err;
+        return [];
       }
     },
   });

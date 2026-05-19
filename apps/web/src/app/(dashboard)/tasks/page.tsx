@@ -135,7 +135,10 @@ export default function TasksPage() {
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<Array<{ platform: string }>>>('social-auth/accounts');
-        return new Set((res.data.data ?? []).map((a) => a.platform));
+        const data = res.data.data;
+        // Ensure data is an array before mapping
+        const accounts = Array.isArray(data) ? data : [];
+        return new Set(accounts.map((a) => a.platform));
       } catch (err) {
         console.error('Failed to fetch linked accounts:', err);
         return new Set<string>();
