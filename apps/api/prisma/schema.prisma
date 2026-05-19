@@ -193,7 +193,7 @@ model User {
   username     String     @unique
   passwordHash String     @map("password_hash")
   role         UserRole   @default(USER)
-  status       UserStatus @default(PENDING_VERIFICATION)
+  status       UserStatus @default(ACTIVE)
 
   // Basic profile
   displayName String? @map("display_name")
