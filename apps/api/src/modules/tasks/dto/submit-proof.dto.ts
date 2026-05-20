@@ -1,13 +1,13 @@
-import { IsOptional, IsUrl, IsString, MaxLength, Matches } from 'class-validator';
+import { IsOptional, IsString, MaxLength, Matches } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SubmitProofDto {
-  @ApiPropertyOptional({ example: 'https://imgur.com/screenshot.png' })
+  @ApiPropertyOptional({ example: '/uploads/proofs/user123/task456/abc123.png' })
   @IsOptional()
-  @IsUrl({}, { message: 'Proof URL must be a valid URL' })
+  @IsString()
   @Matches(
-    /\.(png|jpg|jpeg|gif|webp)$/i,
-    { message: 'Proof URL must point to an image file (png, jpg, jpeg, gif, webp)' },
+    /^\/uploads\/proofs\/.+\.(png|jpg|jpeg|webp)$/i,
+    { message: 'Proof URL must be an internal upload path (e.g., /uploads/proofs/user/task/file.png)' },
   )
   proofUrl?: string;
 

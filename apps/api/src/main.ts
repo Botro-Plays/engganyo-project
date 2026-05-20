@@ -7,6 +7,7 @@ import { WinstonModule } from 'nest-winston';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -17,7 +18,7 @@ import { createWinstonConfig } from './config/logger.config';
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
   const nodeEnvEarly = process.env['NODE_ENV'] ?? 'development';
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger(createWinstonConfig(nodeEnvEarly)),
   });
 
@@ -52,6 +53,14 @@ async function bootstrap(): Promise<void> {
 
   // ─── Cookie Parser ────────────────────────────────────────
   app.use(cookieParser(configService.get<string>('app.cookieSecret')));
+
+  // ─── Static File Serving (Uploads) ─────────────────────────
+  app.useStaticAssets('uploads', {
+    prefix: '/uploads/',
+    setHeaders: (res, path) => {
+      res.set('Cache-Control', 'public, max-age=86400'); // 1 day cache
+    },
+  });
 
   // ─── Global Prefix ────────────────────────────────────────
   app.setGlobalPrefix('api');

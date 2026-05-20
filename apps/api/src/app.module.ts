@@ -26,6 +26,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { HealthModule } from './modules/health/health.module';
 import { SocialAuthModule } from './modules/social-auth/social-auth.module';
 import { EmailModule } from './modules/email/email.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { EmailModule } from './modules/email/email.module';
     HealthModule,
     SocialAuthModule,
     EmailModule,
+    UploadsModule,
   ],
 })
 export class AppModule {}

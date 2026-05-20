@@ -41,7 +41,7 @@ const CAMPAIGN_SELECT = {
   updatedAt: true,
   completedAt: true,
   userId: true,
-  user: { select: { username: true, displayName: true, avatarUrl: true } },
+  user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
 } as const;
 
 @Injectable()
@@ -192,6 +192,11 @@ export class CampaignsService {
     if (completion.campaignId !== campaignId) throw new ForbiddenException('Submission does not belong to this campaign');
     if (completion.status !== CompletionStatus.SUBMITTED) {
       throw new BadRequestException('Submission is not pending review');
+    }
+
+    // ── Ownership enforcement: campaign owners cannot receive rewards for their own tasks ──
+    if (completion.userId === campaign.userId) {
+      throw new BadRequestException('Campaign owners cannot receive rewards for their own tasks');
     }
 
     const now = new Date();

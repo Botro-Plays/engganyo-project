@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, ExternalLink, X, CheckCircle2, Clock,
-  ChevronLeft, ChevronRight, Send, Flag,
+  ChevronLeft, ChevronRight, Send, Flag, Upload,
 } from 'lucide-react';
 
 import Link from 'next/link';
@@ -76,7 +76,7 @@ interface AvailableTask {
   creditPerTask: number;
   requiresProof: boolean;
   proofInstructions: string | null;
-  user: { username: string; displayName: string | null };
+  user: { id: string; username: string; displayName: string | null };
 }
 
 interface MyTask {
@@ -115,7 +115,7 @@ const MY_TASK_STATUS: Record<string, { label: string; color: string }> = {
 };
 
 const proofSchema = z.object({
-  proofUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  proofUrl: z.string().optional().or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
 });
 type ProofFormData = z.infer<typeof proofSchema>;
@@ -130,6 +130,10 @@ export default function TasksPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [reporting, setReporting] = useState<{ userId: string; label: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedProofUrl, setUploadedProofUrl] = useState<string | null>(null);
 
   // ─── Connected social accounts (for task gating) ──────────
   const { data: linkedAccounts } = useQuery({
@@ -219,10 +223,28 @@ export default function TasksPage() {
   // ─── Submit proof ──────────────────────────────────────────
   const proofForm = useForm<ProofFormData>({ resolver: zodResolver(proofSchema) });
 
+  // File upload mutation
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('taskId', submitting?.id || '');
+      const res = await apiClient.post<ApiResponse<{ proofUrl: string }>>('uploads/proof', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      setUploadedProofUrl(data.proofUrl);
+      setUploadError(null);
+    },
+    onError: (err) => setUploadError(getApiErrorMessage(err)),
+  });
+
   const submitMutation = useMutation({
     mutationFn: ({ campaignId, data }: { campaignId: string; data: ProofFormData }) =>
       apiClient.post(`tasks/${campaignId}/submit`, {
-        proofUrl: data.proofUrl || undefined,
+        proofUrl: uploadedProofUrl || data.proofUrl || undefined,
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
@@ -230,11 +252,55 @@ export default function TasksPage() {
       proofForm.reset();
       setSubmitting(null);
       setSubmitError(null);
+      setSelectedFile(null);
+      setFilePreview(null);
+      setUploadedProofUrl(null);
+      setUploadError(null);
     },
     onError: (err) => setSubmitError(getApiErrorMessage(err)),
   });
 
   const getPlatform = (taskType: string) => taskType.split('_')[0];
+
+  // File selection handler
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Invalid file type. Only PNG, JPG, JPEG, and WebP are allowed.');
+      setSelectedFile(null);
+      setFilePreview(null);
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File size exceeds 5MB limit.');
+      setSelectedFile(null);
+      setFilePreview(null);
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploadError(null);
+    setUploadedProofUrl(null);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFilePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload file handler
+  const handleUploadFile = async () => {
+    if (!selectedFile) return;
+    await uploadMutation.mutateAsync(selectedFile);
+  };
 
   return (
     <div>
@@ -287,6 +353,7 @@ export default function TasksPage() {
                   const platform = getPlatform(task.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
                   const available = task.totalSlots - task.completedSlots - task.pendingSlots;
+                  const isOwner = user?.id === task.user.id;
                   return (
                     <div key={task.id} className="card-glass rounded-xl p-5 flex flex-col">
                       <div className="flex items-start justify-between gap-2 mb-3">
@@ -312,7 +379,11 @@ export default function TasksPage() {
                         <span>by @{task.user.username}</span>
                       </div>
                       <div className="flex gap-1.5">
-                        {(() => {
+                        {isOwner ? (
+                          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 text-xs font-medium">
+                            Owner View Only
+                          </div>
+                        ) : (() => {
                           const reqPlatform = TASK_TYPE_TO_PLATFORM[task.taskType];
                           const isLinked = !reqPlatform || (safeLinkedAccounts?.has(reqPlatform) ?? false);
                           if (!isLinked) {
@@ -339,13 +410,14 @@ export default function TasksPage() {
                             </button>
                           );
                         })()}
-                        <button
-                          onClick={() => setReporting({ userId: task.user.username, label: task.title })}
-                          className="px-2 py-2 rounded-lg bg-red-500/5 border border-red-500/10 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                          title="Report this campaign"
-                        >
-                          <Flag className="w-3 h-3" />
-                        </button>
+                        {!isOwner && (
+                          <button
+                            onClick={() => setReporting({ userId: task.user.username, label: task.title })}
+                            className="px-3 py-2 rounded-lg border border-surface-border text-zinc-500 hover:text-white hover:border-zinc-400 text-xs transition-colors"
+                          >
+                            <Flag className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -511,15 +583,71 @@ export default function TasksPage() {
               {submitting.campaign.requiresProof && (
                 <div>
                   <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                    Proof screenshot URL <span className="text-red-400">*</span>
+                    Proof screenshot <span className="text-red-400">*</span>
                   </label>
-                  <input
-                    {...proofForm.register('proofUrl')}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    placeholder="https://imgur.com/your-screenshot.png"
-                  />
-                  {proofForm.formState.errors.proofUrl && (
-                    <p className="text-xs text-red-400 mt-1">{proofForm.formState.errors.proofUrl.message}</p>
+                  
+                  {!filePreview ? (
+                    <div className="border-2 border-dashed border-surface-border rounded-lg p-6 text-center hover:border-brand-500 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        id="file-upload"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className="cursor-pointer flex flex-col items-center gap-2"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-surface-hover border border-surface-border flex items-center justify-center">
+                          <Upload className="w-5 h-5 text-zinc-500" />
+                        </div>
+                        <p className="text-sm text-zinc-400">Click to upload screenshot</p>
+                        <p className="text-xs text-zinc-600">PNG, JPG, JPEG, WebP (max 5MB)</p>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative rounded-lg overflow-hidden border border-surface-border">
+                        <img src={filePreview} alt="Proof preview" className="w-full h-auto max-h-48 object-contain bg-surface-hover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setFilePreview(null);
+                            setUploadedProofUrl(null);
+                            setUploadError(null);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {uploadError && (
+                        <p className="text-xs text-red-400 mt-1">{uploadError}</p>
+                      )}
+                      {!uploadedProofUrl && !uploadMutation.isPending && (
+                        <button
+                          type="button"
+                          onClick={handleUploadFile}
+                          className="w-full py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+                        >
+                          Upload Screenshot
+                        </button>
+                      )}
+                      {uploadMutation.isPending && (
+                        <div className="flex items-center justify-center gap-2 py-2 text-sm text-zinc-400">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Uploading...
+                        </div>
+                      )}
+                      {uploadedProofUrl && (
+                        <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Uploaded successfully
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -535,14 +663,21 @@ export default function TasksPage() {
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => setSubmitting(null)}
+                  onClick={() => {
+                    setSubmitting(null);
+                    setSelectedFile(null);
+                    setFilePreview(null);
+                    setUploadedProofUrl(null);
+                    setUploadError(null);
+                    proofForm.reset();
+                  }}
                   className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submitMutation.isPending}
+                  disabled={submitMutation.isPending || (submitting.campaign.requiresProof && !uploadedProofUrl)}
                   className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
                 >
                   {submitMutation.isPending ? (

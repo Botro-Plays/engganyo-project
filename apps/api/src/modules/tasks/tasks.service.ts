@@ -155,6 +155,7 @@ export class TasksService {
         campaign: {
           select: {
             id: true,
+            userId: true,
             taskType: true,
             targetUrl: true,
             creditPerTask: true,
@@ -169,6 +170,11 @@ export class TasksService {
     });
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
+
+    // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
+    if (completion.campaign.userId === userId) {
+      throw new BadRequestException('Campaign owners cannot complete their own tasks');
+    }
 
     const submittable: CompletionStatus[] = [
       CompletionStatus.ASSIGNED,

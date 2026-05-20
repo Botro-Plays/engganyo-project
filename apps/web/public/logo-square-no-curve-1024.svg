@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b62f5"/>
+      <stop offset="100%" stop-color="#d946ef"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Square background (no rounded corners) -->
+  <rect width="64" height="64" fill="url(#bg)"/>
+
+  <!-- Content group centered -->
+  <g transform="translate(-4, 0)">
+    <!-- Bold geometric E mark -->
+    <!-- Vertical bar — rx rounds outer left corners of the E -->
+    <rect x="12" y="13" width="7"  height="38" rx="3.5" fill="white"/>
+    <!-- Top bar -->
+    <rect x="12" y="13" width="28" height="7"  rx="3.5" fill="white"/>
+    <!-- Middle bar (shorter — classic E proportion) -->
+    <rect x="12" y="28.5" width="21" height="7" rx="3"  fill="white"/>
+    <!-- Bottom bar -->
+    <rect x="12" y="44" width="28" height="7"  rx="3.5" fill="white"/>
+
+    <!-- Amber star glow halo -->
+    <circle cx="51" cy="13" r="9" fill="#FCD34D" opacity="0.14"/>
+    <!-- 4-pointed sparkle star -->
+    <path d="M51,7.5 L52.56,11.44 L56.5,13 L52.56,14.56 L51,18.5 L49.44,14.56 L45.5,13 L49.44,11.44 Z" fill="#FCD34D"/>
+    <!-- Tiny trailing sparkle dot -->
+    <circle cx="54" cy="23" r="2" fill="#FCD34D" opacity="0.45"/>
+    <circle cx="56" cy="33" r="1.3" fill="#FCD34D" opacity="0.25"/>
+  </g>
+</svg>
