@@ -1,12 +1,12 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, UseGuards, Body } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { Request } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UploadsService } from './uploads.service';
+import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { v4 as uuidv4 } from 'uuid';
 
 const ALLOWED_MIME_TYPES = [
@@ -27,19 +27,12 @@ export class UploadsController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: (req, file, cb) => {
-          const userId = (req as any).user?.id;
-          const taskId = (req as any).body?.taskId;
-
-          if (!userId || !taskId) {
-            return cb(new BadRequestException('userId and taskId required'), '');
+        destination: (_req, _file, cb) => {
+          const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+          if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
           }
-
-          const uploadsDir = path.join(process.cwd(), 'uploads', 'proofs', userId, taskId);
-          if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-          }
-          cb(null, uploadsDir);
+          cb(null, tempDir);
         },
         filename: (req, file, cb) => {
           if (!file) {
@@ -62,13 +55,37 @@ export class UploadsController {
       },
     }),
   )
-  async uploadProof(@UploadedFile() file: Express.Multer.File | undefined, @CurrentUser() user: any, @Req() req: Request) {
+  uploadProof(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { taskId?: string },
+  ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
-    const taskId = (req.body as any)?.taskId || uuidv4();
-    const userId = user.id;
+    const taskId: string = body.taskId || uuidv4();
+    const userId: string = user.sub;
+
+    // Move file from temp to final location
+    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+    const finalDir = path.join(process.cwd(), 'uploads', 'proofs', userId, taskId);
+    const tempPath = path.join(tempDir, file.filename);
+    const finalPath = path.join(finalDir, file.filename);
+
+    if (!fs.existsSync(finalDir)) {
+      fs.mkdirSync(finalDir, { recursive: true });
+    }
+
+    if (fs.existsSync(tempPath)) {
+      fs.renameSync(tempPath, finalPath);
+      // Clean up temp directory
+      const tempFiles = fs.readdirSync(tempDir);
+      if (tempFiles.length === 0) {
+        fs.rmdirSync(tempDir);
+      }
+    }
+
     const relativePath = `/uploads/proofs/${userId}/${taskId}/${file.filename}`;
 
     return {

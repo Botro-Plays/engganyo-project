@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { Request, Response, NextFunction } from 'express';
 
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -57,9 +58,19 @@ async function bootstrap(): Promise<void> {
   // ─── Static File Serving (Uploads) ─────────────────────────
   app.useStaticAssets('uploads', {
     prefix: '/uploads/',
-    setHeaders: (res, path) => {
-      res.set('Cache-Control', 'public, max-age=86400'); // 1 day cache
+    setHeaders: (res: Response, _path) => {
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 day cache
     },
+  });
+
+  // Protect static uploads with JWT auth
+  app.use('/uploads', (req: Request, res: Response, next: NextFunction): void => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+    next();
   });
 
   // ─── Global Prefix ────────────────────────────────────────

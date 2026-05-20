@@ -60,6 +60,8 @@ services:
       REDIS_URL: redis://redis:6379
     ports:
       - '${APP_PORT:-3001}:3001'
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +113,8 @@ volumes:
     name: engganyo_pgdata
   redisdata:
     name: engganyo_redisdata
+  uploads_data:
+    name: engganyo_uploads
 
 networks:
   engganyo_network:
