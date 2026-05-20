@@ -8,20 +8,20 @@ export class UploadsService {
   private readonly uploadsDir = path.join(process.cwd(), 'uploads', 'proofs');
 
   constructor() {
-    // Ensure uploads directory exists
-    this.ensureUploadsDir();
+    // Directory creation moved to lazy initialization
   }
 
-  private ensureUploadsDir() {
+  private ensureUploadsDir(): void {
     if (!fs.existsSync(this.uploadsDir)) {
-      fs.mkdirSync(this.uploadsDir, { recursive: true });
+      fs.mkdirSync(this.uploadsDir, { recursive: true, mode: 0o755 });
     }
   }
 
   getUserUploadDir(userId: string, taskId: string): string {
+    this.ensureUploadsDir();
     const userDir = path.join(this.uploadsDir, userId, taskId);
     if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
+      fs.mkdirSync(userDir, { recursive: true, mode: 0o755 });
     }
     return userDir;
   }
