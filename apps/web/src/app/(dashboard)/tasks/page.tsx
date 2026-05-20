@@ -151,10 +151,20 @@ export default function TasksPage() {
   const { data: browseData, isLoading: browseLoading } = useQuery({
     queryKey: ['tasks', 'browse', browsePage],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<PaginatedResponse<AvailableTask>>>(
-        `tasks?page=${browsePage}&limit=12`,
-      );
-      return res.data.data;
+      try {
+        const res = await apiClient.get<ApiResponse<PaginatedResponse<AvailableTask>>>(
+          `tasks?page=${browsePage}&limit=12`,
+        );
+        const data = res.data.data;
+        // Ensure items is always an array
+        return {
+          ...data,
+          items: Array.isArray(data?.items) ? data.items : [],
+        };
+      } catch (err) {
+        console.error('Failed to fetch browse tasks:', err);
+        return { items: [], meta: { total: 0, page: 1, totalPages: 1, hasNext: false, hasPrev: false } };
+      }
     },
     enabled: tab === 'browse',
   });
@@ -163,10 +173,20 @@ export default function TasksPage() {
   const { data: myData, isLoading: myLoading } = useQuery({
     queryKey: ['tasks', 'my', myPage],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<PaginatedResponse<MyTask>>>(
-        `tasks/my?page=${myPage}&limit=12`,
-      );
-      return res.data.data;
+      try {
+        const res = await apiClient.get<ApiResponse<PaginatedResponse<MyTask>>>(
+          `tasks/my?page=${myPage}&limit=12`,
+        );
+        const data = res.data.data;
+        // Ensure items is always an array
+        return {
+          ...data,
+          items: Array.isArray(data?.items) ? data.items : [],
+        };
+      } catch (err) {
+        console.error('Failed to fetch my tasks:', err);
+        return { items: [], meta: { total: 0, page: 1, totalPages: 1, hasNext: false, hasPrev: false } };
+      }
     },
     enabled: tab === 'mine',
   });
