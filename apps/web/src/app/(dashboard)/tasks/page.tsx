@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -151,6 +151,13 @@ export default function TasksPage() {
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // Defensive normalization: React Query doesn't preserve Set/Map during serialization
+  const safeLinkedAccounts = useMemo(() => {
+    if (linkedAccounts instanceof Set) return linkedAccounts;
+    if (Array.isArray(linkedAccounts)) return new Set(linkedAccounts);
+    return new Set<string>();
+  }, [linkedAccounts]);
 
   // ─── Browse tasks ──────────────────────────────────────────
   const { data: browseData, isLoading: browseLoading } = useQuery({
@@ -304,7 +311,7 @@ export default function TasksPage() {
                       <div className="flex gap-1.5">
                         {(() => {
                           const reqPlatform = TASK_TYPE_TO_PLATFORM[task.taskType];
-                          const isLinked = !reqPlatform || (linkedAccounts?.has(reqPlatform) ?? false);
+                          const isLinked = !reqPlatform || (safeLinkedAccounts?.has(reqPlatform) ?? false);
                           if (!isLinked) {
                             return (
                               <Link
