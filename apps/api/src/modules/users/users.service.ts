@@ -72,7 +72,11 @@ export class UsersService {
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    // Ensure socialAccounts is always an array (defensive check for malformed data)
+    return {
+      ...user,
+      socialAccounts: Array.isArray(user.socialAccounts) ? user.socialAccounts : [],
+    };
   }
 
   // ─── Update profile ────────────────────────────────────────
@@ -143,7 +147,11 @@ export class UsersService {
 
     // Strip email from public view
     const { email: _, ...publicUser } = user;
-    return publicUser;
+    // Ensure socialAccounts is always an array (defensive check for malformed data)
+    return {
+      ...publicUser,
+      socialAccounts: Array.isArray(publicUser.socialAccounts) ? publicUser.socialAccounts : [],
+    };
   }
 
   // ─── Upsert social link ────────────────────────────────────

@@ -189,7 +189,7 @@ function ConnectedAccountsPageInner() {
     }
   };
 
-  const accountMap = new Map((accounts ?? []).map((a) => [a.platform, a]));
+  const accountMap = new Map((Array.isArray(accounts) ? accounts : []).map((a) => [a.platform, a]));
 
   return (
     <div>

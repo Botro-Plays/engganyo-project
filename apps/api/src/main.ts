@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { SerializationInterceptor } from './common/interceptors/serialization.interceptor';
 import { createWinstonConfig } from './config/logger.config';
 
 async function bootstrap(): Promise<void> {
@@ -71,7 +72,10 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   // ─── Global Interceptors ──────────────────────────────────
-  app.useGlobalInterceptors(new ResponseInterceptor());
+  app.useGlobalInterceptors(
+    new SerializationInterceptor(),
+    new ResponseInterceptor(),
+  );
 
   // ─── Swagger (non-production) ─────────────────────────────
   if (nodeEnv !== 'production') {

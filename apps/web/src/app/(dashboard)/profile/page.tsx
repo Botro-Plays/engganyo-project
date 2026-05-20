@@ -511,7 +511,7 @@ export default function ProfilePage() {
           </form>
         )}
 
-        {profile?.socialAccounts && profile.socialAccounts.length > 0 ? (
+        {profile?.socialAccounts && Array.isArray(profile.socialAccounts) && profile.socialAccounts.length > 0 ? (
           <div className="space-y-2">
             {profile.socialAccounts.map((acct) => {
               const platformCfg = PLATFORMS.find((p) => p.value === acct.platform);
