@@ -138,7 +138,12 @@ export default function TasksPage() {
         const data = res.data.data;
         // Ensure data is an array before mapping
         const accounts = Array.isArray(data) ? data : [];
-        return new Set(accounts.map((a) => a.platform));
+        // Filter out any malformed entries and extract platform safely
+        return new Set(
+          accounts
+            .filter((a): a is { platform: string } => a && typeof a === 'object' && typeof a.platform === 'string')
+            .map((a) => a.platform),
+        );
       } catch (err) {
         console.error('Failed to fetch linked accounts:', err);
         return new Set<string>();

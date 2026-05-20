@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckSquare, Megaphone, Flame, Trophy } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
@@ -27,7 +28,7 @@ export default function DashboardPage() {
 }
 
 function DashboardPageInner() {
-  const { user } = useAuthStore();
+  const { user, updateCreditBalance } = useAuthStore();
   const searchParams = useSearchParams();
   const isWelcome = searchParams.get('welcome') === '1';
 
@@ -35,6 +36,13 @@ function DashboardPageInner() {
     queryKey: ['my-stats'],
     queryFn: () => apiClient.get<{ data: MyStats }>('/analytics/users/me/stats').then((r) => r.data.data),
   });
+
+  // Sync auth store credit balance with fresh API data to prevent flicker
+  useEffect(() => {
+    if (stats?.credits?.balance !== undefined) {
+      updateCreditBalance(stats.credits.balance);
+    }
+  }, [stats?.credits?.balance, updateCreditBalance]);
 
   const activityData = (stats?.dailyActivity ?? []).map((d) => ({
     date: new Date(d.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

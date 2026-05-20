@@ -235,12 +235,15 @@ export class GamificationService implements OnModuleInit {
       return users.map((u, i) => ({ rank: skip + i + 1, ...u }));
     }
 
-    // Weekly: sum XP events in last 7 days
+    // Weekly: sum XP events in last 7 days (exclude daily_login rewards)
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const weekly = await this.prisma.xpEvent.groupBy({
       by: ['userId'],
-      where: { createdAt: { gte: since } },
+      where: { 
+        createdAt: { gte: since },
+        source: { not: 'daily_login' }, // Exclude daily claim rewards from leaderboard
+      },
       _sum: { amount: true },
       orderBy: { _sum: { amount: 'desc' } },
       skip,
