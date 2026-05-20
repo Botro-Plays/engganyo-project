@@ -16,6 +16,7 @@ import { ReportModal } from '@/components/report-modal';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
+import { useAuthStore } from '@/store/auth.store';
 
 const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   YOUTUBE_SUBSCRIBE: 'YOUTUBE',  YOUTUBE_LIKE: 'YOUTUBE',
@@ -121,6 +122,7 @@ type ProofFormData = z.infer<typeof proofSchema>;
 
 export default function TasksPage() {
   const queryClient = useQueryClient();
+  const { user, isAuthenticated } = useAuthStore();
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
   const [browsePage, setBrowsePage] = useState(1);
   const [myPage, setMyPage] = useState(1);
@@ -131,7 +133,7 @@ export default function TasksPage() {
 
   // ─── Connected social accounts (for task gating) ──────────
   const { data: linkedAccounts } = useQuery({
-    queryKey: ['social-accounts'],
+    queryKey: ['social-accounts', user?.id],
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<Array<{ platform: string }>>>('social-auth/accounts');
@@ -149,7 +151,8 @@ export default function TasksPage() {
         return new Set<string>();
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!user && isAuthenticated,
+    staleTime: 0, // Disable stale time to always fetch fresh data
   });
 
   // Defensive normalization: React Query doesn't preserve Set/Map during serialization

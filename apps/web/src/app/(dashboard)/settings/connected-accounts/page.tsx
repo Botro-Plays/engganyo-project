@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
+import { useAuthStore } from '@/store/auth.store';
 
 interface ConnectedAccount {
   id: string;
@@ -111,6 +112,7 @@ export default function ConnectedAccountsPage() {
 function ConnectedAccountsPageInner() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const { user, isAuthenticated } = useAuthStore();
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
@@ -129,7 +131,7 @@ function ConnectedAccountsPageInner() {
     const error = searchParams.get('error');
     if (connected) {
       setNotice({ type: 'success', msg: `${connected.toUpperCase()} account connected successfully!` });
-      void queryClient.invalidateQueries({ queryKey: ['social-accounts'] });
+      void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
     } else if (error) {
       const messages: Record<string, string> = {
         invalid_state: 'OAuth session expired. Please try again.',
@@ -138,10 +140,10 @@ function ConnectedAccountsPageInner() {
       };
       setNotice({ type: 'error', msg: messages[error] ?? `OAuth error: ${error}` });
     }
-  }, [searchParams, queryClient, mounted]);
+  }, [searchParams, queryClient, mounted, user?.id]);
 
   const { data: accounts, isLoading, error } = useQuery({
-    queryKey: ['social-accounts'],
+    queryKey: ['social-accounts', user?.id],
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<ConnectedAccount[]>>('social-auth/accounts');
@@ -153,13 +155,15 @@ function ConnectedAccountsPageInner() {
         return [];
       }
     },
+    enabled: !!user && isAuthenticated,
+    staleTime: 0, // Disable stale time to always fetch fresh data
   });
 
   const manualLinkMutation = useMutation({
     mutationFn: ({ platform, profileUrl }: { platform: string; profileUrl: string }) =>
       apiClient.post(`social-auth/manual-link`, { platform, profileUrl }),
     onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: ['social-accounts'] });
+      void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
       setNotice({ type: 'success', msg: `${variables.platform} account linked.` });
       setManualExpanded((m) => ({ ...m, [variables.platform]: false }));
       setManualInputs((m) => ({ ...m, [variables.platform]: '' }));
@@ -170,7 +174,7 @@ function ConnectedAccountsPageInner() {
   const disconnectMutation = useMutation({
     mutationFn: (platform: string) => apiClient.delete(`social-auth/${platform.toLowerCase()}`),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['social-accounts'] });
+      void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
       setNotice({ type: 'success', msg: 'Account disconnected.' });
     },
     onError: (err) => setNotice({ type: 'error', msg: getApiErrorMessage(err) }),
