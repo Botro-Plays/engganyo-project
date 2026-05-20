@@ -122,7 +122,7 @@ export default function LeaderboardPage() {
 
       {/* ── Stats row ── */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
           <div className="card-glass rounded-xl p-4">
             <p className="text-xs text-zinc-500 mb-1">Level</p>
             <p className="text-2xl font-bold text-yellow-400">{stats.level}</p>
@@ -143,12 +143,13 @@ export default function LeaderboardPage() {
             </p>
             <p className="text-xs text-zinc-600 mt-2">Best: {stats.longestStreak} days</p>
           </div>
-          <div className="card-glass rounded-xl p-4 flex flex-col justify-between">
-            <p className="text-xs text-zinc-500 mb-1">Daily reward</p>
-            <div className="text-xs text-zinc-500">
-              {stats.dailyRewardAvailable ? 'Available on dashboard' : 'Claimed today'}
-            </div>
-          </div>
+        </div>
+      )}
+
+      {/* ── Daily reward status (derived, no card) ── */}
+      {stats && (
+        <div className="mb-6 text-xs text-zinc-500">
+          Daily reward: {stats.dailyRewardAvailable ? <span className="text-brand-400">Available on dashboard</span> : 'Claimed today'}
         </div>
       )}
 
