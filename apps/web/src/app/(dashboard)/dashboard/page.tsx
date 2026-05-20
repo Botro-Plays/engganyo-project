@@ -1,15 +1,16 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckSquare, Megaphone, Flame, Trophy } from 'lucide-react';
+import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
-import { apiClient } from '@/lib/api';
+import { apiClient, getApiErrorMessage } from '@/lib/api';
+import type { ApiResponse } from '@/types';
 
 interface MyStats {
   tasks: { totalVerified: number; last7Days: number; last30Days: number };
@@ -17,6 +18,18 @@ interface MyStats {
   campaigns: { total: number; active: number };
   gamification: { xp: number; level: number; currentStreak: number; longestStreak: number; reputationScore: number; leaderboardRank: number };
   dailyActivity: { day: string; count: number }[];
+}
+
+interface GamStats {
+  xp: number;
+  level: number;
+  xpToNext: number;
+  levelProgress: number;
+  currentStreak: number;
+  longestStreak: number;
+  dailyRewardAvailable: boolean;
+  totalTasks: number;
+  totalCampaigns: number;
 }
 
 export default function DashboardPage() {
@@ -29,12 +42,34 @@ export default function DashboardPage() {
 
 function DashboardPageInner() {
   const { user, updateCreditBalance } = useAuthStore();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const isWelcome = searchParams.get('welcome') === '1';
+  const [rewardError, setRewardError] = useState<string | null>(null);
+  const [rewardResult, setRewardResult] = useState<{ creditReward: number; xpReward: number; newStreak: number } | null>(null);
 
   const { data: stats } = useQuery<MyStats>({
     queryKey: ['my-stats'],
     queryFn: () => apiClient.get<{ data: MyStats }>('/analytics/users/me/stats').then((r) => r.data.data),
+  });
+
+  const { data: gamStats } = useQuery<GamStats>({
+    queryKey: ['gamification', 'stats'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<GamStats>>('gamification/stats');
+      return res.data.data;
+    },
+  });
+
+  const rewardMutation = useMutation({
+    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward'),
+    onSuccess: (res) => {
+      setRewardResult(res.data.data);
+      setRewardError(null);
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+    },
+    onError: (err) => setRewardError(getApiErrorMessage(err)),
   });
 
   // Sync auth store credit balance with fresh API data to prevent flicker
@@ -132,17 +167,42 @@ function DashboardPageInner() {
         <div className="card-glass rounded-xl p-6 space-y-4">
           <h2 className="font-semibold text-white">Your Stats</h2>
           <div className="space-y-3">
+            {/* Daily reward */}
+            {gamStats && (
+              <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Gift className="w-4 h-4 text-orange-400" /> Daily reward
+                </div>
+                {rewardResult ? (
+                  <div className="text-xs text-green-400">
+                    +{formatCredits(rewardResult.creditReward)} cr · +{rewardResult.xpReward} XP · Day {rewardResult.newStreak}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => rewardMutation.mutate()}
+                    disabled={!gamStats.dailyRewardAvailable || rewardMutation.isPending}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-orange-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {rewardMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Gift className="w-3.5 h-3.5" /> Claim</>}
+                  </button>
+                )}
+                {rewardError && <p className="text-xs text-red-400 mt-1">{rewardError}</p>}
+                {!gamStats.dailyRewardAvailable && !rewardResult && (
+                  <span className="text-xs text-zinc-500">Claimed today</span>
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-zinc-400">
                 <Flame className="w-4 h-4 text-orange-400" /> Current streak
               </div>
-              <span className="text-white font-medium">{stats?.gamification.currentStreak ?? 0} days</span>
+              <span className="text-white font-medium">{stats?.gamification.currentStreak ?? gamStats?.currentStreak ?? 0} days</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-zinc-400">
                 <Flame className="w-4 h-4 text-red-400" /> Longest streak
               </div>
-              <span className="text-white font-medium">{stats?.gamification.longestStreak ?? 0} days</span>
+              <span className="text-white font-medium">{stats?.gamification.longestStreak ?? gamStats?.longestStreak ?? 0} days</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-zinc-400">
