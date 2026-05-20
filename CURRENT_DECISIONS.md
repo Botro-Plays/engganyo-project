@@ -857,6 +857,174 @@
 
 ---
 
+## UPLOADS & STORAGE DECISIONS
+
+### USR-001: Local File Upload System
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: Task proof screenshot submission mechanism
+**Decision**: Direct file upload to local VPS storage via multer, no external image hosting
+**Rationale**:
+- Simpler implementation than third-party image hosting APIs
+- No external service dependencies
+- Full control over file lifecycle and retention
+- Cost-effective for early-stage platform
+**Implementation**:
+- Storage: `/uploads/proofs/{userId}/{taskId}/` on VPS filesystem
+- Upload endpoint: `POST /uploads/proof` (multipart/form-data)
+- Validation: PNG/JPG/JPEG/WebP only, 5MB max size
+- Serving: Static file route `/uploads/*` with 1-day cache
+- Database: `proofUrl` stores internal path
+**Security**:
+- JWT authentication required for upload and access
+- Server-side MIME type validation
+- File size enforcement
+- Lazy directory initialization (moved from constructor to fix permission error)
+**Tradeoffs**:
+- No CDN distribution (served from VPS)
+- Storage scales with VPS disk
+- Manual cleanup required for old files
+- No built-in backup (requires volume mount)
+**Migration Plan**:
+- Move to S3/R2 + CDN when 10K+ users (Phase 16)
+
+### USR-002: Docker Volume Persistence for Uploads
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: Upload data persistence across container rebuilds
+**Decision**: Named Docker volume `uploads_data` mounted to `/app/uploads`
+**Rationale**:
+- Prevents data loss during container rebuilds
+- Survives Docker Compose down/up cycles
+- Simple to implement and maintain
+**Implementation**:
+- Volume: `uploads_data` named volume
+- Mount: `/app/uploads` in API container
+- Volume name: `engganyo_uploads`
+**Tradeoffs**:
+- Volume management requires manual cleanup
+- No automatic backup to external storage
+- Tied to specific Docker host
+**Migration Plan**:
+- Move to S3/R2 when scaling (Phase 16)
+
+### USR-003: JWT-Protected Static File Serving
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: Protect uploaded proof files from unauthorized access
+**Decision**: JWT authentication middleware on `/uploads/*` route
+**Rationale**:
+- Prevents public access to user-uploaded content
+- Only authenticated users can view proofs
+- Aligns with platform privacy requirements
+**Implementation**:
+- Middleware checks `Authorization: Bearer <token>` header
+- Returns 401 if token missing or invalid
+- Applied before static file serving middleware
+**Tradeoffs**:
+- Cannot share proof URLs publicly
+- Requires authentication to view proofs
+- Adds overhead to file serving
+**Alternatives Considered**:
+- Signed URLs (rejected: more complex, not needed yet)
+- Public access with obscurity (rejected: security risk)
+
+### USR-004: Lazy Directory Initialization for Uploads
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: Permission denied error on container startup with volume mount
+**Decision**: Move directory creation from constructor to lazy initialization
+**Rationale**:
+- Volume mount permissions may not be ready at service startup
+- Container user may not have write permission initially
+- Lazy initialization allows directory creation on first use
+**Implementation**:
+- Removed `ensureUploadsDir()` from UploadsService constructor
+- Call `ensureUploadsDir()` in `getUserUploadDir()` before use
+- Added explicit `mode: 0o755` for mkdirSync calls
+**Tradeoffs**:
+- Directory created on first upload (not at startup)
+- Slight delay on first upload
+- More complex initialization flow
+**Lessons Learned**:
+- Docker volume mount permissions can be tricky with non-root users
+- Lazy initialization is safer for filesystem-dependent services
+
+---
+
+## FRONTEND ARCHITECTURE DECISIONS
+
+### FAD-001: Daily Reward Location
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: Daily login reward feature placement
+**Decision**: Moved from leaderboard page to dashboard page
+**Rationale**:
+- Dashboard is the primary user landing page
+- Higher visibility for daily reward claim
+- Leaderboard should be read-only metrics only
+- Better UX: reward claim where users spend most time
+**Implementation**:
+- Daily reward card in dashboard/page.tsx
+- React Query mutation for claim
+- Query invalidation after claim
+- Leaderboard page remains read-only
+**Tradeoffs**:
+- Leaderboard page less feature-rich
+- Dashboard page more cluttered
+**Alternatives Considered**:
+- Keep in leaderboard (rejected: leaderboard should be read-only)
+- Separate dedicated rewards page (rejected: over-engineering)
+
+### FAD-002: React Query Auth-Aware Hydration
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: Social accounts data hydration with authentication state
+**Decision**: Query key includes user ID, enabled only when authenticated
+**Rationale**:
+- Prevents data leakage between users
+- Ensures fresh data on auth state changes
+- Defensive against Set/Map serialization issues
+**Implementation**:
+- Query key: `['social-accounts', user?.id]`
+- Enabled: `!!user && isAuthenticated`
+- staleTime: 0 (always fetch fresh data)
+- Defensive normalization for Set/Map serialization
+**Tradeoffs**:
+- More frequent API calls (no caching)
+- Slightly more complex query setup
+**Lessons Learned**:
+- React Query doesn't preserve Set/Map during serialization
+- Auth-aware query keys are critical for multi-user apps
+
+---
+
+## CODE QUALITY DECISIONS
+
+### CQD-001: Strict TypeScript Compliance
+**Status**: Implemented (2026-05-20)
+**Date**: 2026-05-20
+**Context**: CI lint errors with unsafe types
+**Decision**: Remove all `any` types and `eslint-disable` comments
+**Rationale**:
+- Type safety prevents runtime errors
+- No suppression of lint warnings
+- Maintainable codebase
+**Implementation**:
+- main.ts: Proper Response typing, no any types
+- uploads.controller.ts: Proper types for Express.Multer.File, JwtPayload
+- Removed module augmentation entirely (conflicted with Express/Passport)
+- Added explicit type annotations for middleware parameters
+**Tradeoffs**:
+- More verbose type annotations
+- Longer development time
+- Stricter compiler requirements
+**Alternatives Considered**:
+- Use eslint-disable (rejected: suppresses real issues)
+- Use any types (rejected: defeats type safety)
+
+---
+
 ## DECISION RECORD MAINTENANCE
 
 This document should be updated when:
@@ -871,6 +1039,9 @@ This document should be updated when:
 - Major tradeoffs are identified
 - Temporary compromises are resolved
 - Alternatives are rejected or reconsidered
+- Uploads/storage decisions are made
+- Frontend architecture decisions are made
+- Code quality decisions are made
 
-**Last Updated**: 2026-05-19
-**Next Review**: 2026-08-19 (quarterly)
+**Last Updated**: 2026-05-20
+**Next Review**: 2026-08-20 (quarterly)

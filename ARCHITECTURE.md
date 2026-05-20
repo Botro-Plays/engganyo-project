@@ -255,7 +255,7 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 ---
 
-## Current Architecture Status
+### Current Architecture Status
 
 ### Completed (Phases 1-10)
 - ✅ Modular monolith architecture with NestJS
@@ -269,12 +269,19 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - ✅ Admin dashboard with moderation tools
 - ✅ Analytics with daily snapshots
 - ✅ Production deployment with Docker Compose
+- ✅ Local file upload system for proof screenshots (multer-based)
+- ✅ Docker volume persistence for uploads
+- ✅ JWT-protected static file serving
+- ✅ Campaign ownership enforcement (frontend + backend)
+- ✅ Daily reward moved to dashboard (from leaderboard)
+- ✅ React Query auth-aware hydration for social accounts
+- ✅ Strict TypeScript compliance (no any types, no eslint-disable)
 
 ### Critical Gaps (Phase 0 - Immediate Action Required)
 - 🔴 Email verification disabled by default
 - 🔴 No CAPTCHA on registration/login
 - 🔴 No 2FA for admin accounts
-- 🔴 Insufficient rate limiting on sensitive endpoints
+- 🔴 No file upload validation for proof screenshots
 - 🟠 Synchronous trust score calculation (blocks API)
 - 🟠 Synchronous analytics snapshots (blocks cron)
 - 🟠 No caching strategy
@@ -377,8 +384,8 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 ## Last Updated
 
-**Last Updated**: 2026-05-19
-**Next Review**: 2026-08-19 (quarterly)
+**Last Updated**: 2026-05-20
+**Next Review**: 2026-08-20 (quarterly)
 **Reviewed By**: Project Architect (Cascade)
 
 **Changes in this update**:
@@ -394,3 +401,11 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - Added monitoring & observability section
 - Added deployment architecture section
 - Added last updated metadata
+- Updated current architecture status with recent implementations:
+  - Local file upload system for proof screenshots
+  - Docker volume persistence for uploads
+  - JWT-protected static file serving
+  - Campaign ownership enforcement
+  - Daily reward moved to dashboard
+  - React Query auth-aware hydration
+  - Strict TypeScript compliance

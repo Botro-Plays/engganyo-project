@@ -266,6 +266,8 @@ sudo kill -9 <PID>
 - Regularly update Docker images: `docker-compose pull && docker-compose up -d --build`
 - Monitor logs for suspicious activity
 - Keep your VPS updated: `sudo apt update && sudo apt upgrade`
+- Uploads are protected by JWT authentication - only authenticated users can access proof files
+- Upload volume `engganyo_uploads` persists across container rebuilds
 
 ---
 

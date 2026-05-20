@@ -80,11 +80,17 @@
   - **Risk**: LOW - achievements/missions not seeded
   - **Timeline**: Week 1, Day 1
   - **Effort**: 1 hour (uncomment + test)
-- [🟡] Add file upload validation for proof screenshots
-  - **Impact**: No validation on proof uploads
-  - **Risk**: MEDIUM - malicious file uploads, XSS via image metadata
-  - **Timeline**: Week 1, Day 4
+- [✅] Add file upload validation for proof screenshots
+  - **Impact**: Validation implemented on proof uploads
+  - **Risk**: MITIGATED - server-side MIME type validation, file size enforcement
+  - **Timeline**: Completed 2026-05-20
   - **Effort**: 3-4 hours (file validation middleware)
+  - **Implementation**: 
+    - Multer-based file upload with MIME type validation
+    - Allowed types: PNG, JPG, JPEG, WebP
+    - Max file size: 5MB
+    - Server-side validation in uploads.controller.ts
+    - JWT authentication required for upload and access
 
 ---
 

@@ -212,6 +212,11 @@ See `.github/workflows/ci.yml`.
 - [x] **Phase 9** — Analytics (platform overview, per-campaign funnel, personal stats, daily snapshot cron)
 - [x] **Phase 9+** — SUPER_ADMIN role management (promote/demote users, protect admin accounts)
 - [x] **Phase 10** — Production hardening (health check ✅, unit tests ✅, CI/CD ✅, Winston ✅, per-user rate limiting ✅, VPS deploy ✅ · live at https://engganyo.com)
+- [x] **Phase 10+** — Upload system (local VPS storage, multer-based, JWT-protected, Docker volume persistence)
+- [x] **Phase 10+** — Campaign ownership enforcement (frontend + backend)
+- [x] **Phase 10+** — Daily reward refactor (moved to dashboard)
+- [x] **Phase 10+** — React Query auth-aware hydration (social accounts)
+- [x] **Phase 10+** — Strict TypeScript compliance (no any types, no eslint-disable)
 
 ## License
 
