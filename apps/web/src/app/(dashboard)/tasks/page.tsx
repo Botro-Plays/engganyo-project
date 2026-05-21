@@ -502,12 +502,21 @@ export default function TasksPage() {
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
                         ) : canSubmit ? (
-                          <button
-                            onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); }}
-                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
-                          >
-                            <Send className="w-3 h-3" /> Submit
-                          </button>
+                          task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? (
+                            <button
+                              onClick={() => { setSubmitting(task); setSubmitError(null); }}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
+                            >
+                              Check
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); }}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
+                            >
+                              <Send className="w-3 h-3" /> Submit
+                            </button>
+                          )
                         ) : null}
                       </div>
                     </div>
@@ -587,18 +596,32 @@ export default function TasksPage() {
             )}
 
             {submitting.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? (
-              // YouTube Subscribe: Show recheck button instead of proof upload
-              <div className="space-y-3">
+              // YouTube Subscribe: Show check button instead of proof upload
+              <div className="space-y-4">
                 <p className="text-sm text-zinc-400">
                   1. Open the link above and subscribe to the channel<br />
                   2. Click the button below to verify your subscription
                 </p>
+                {recheckMutation.isSuccess ? (
+                  <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Subscription verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                    </div>
+                  </div>
+                ) : recheckMutation.isError ? (
+                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div className="text-red-400 text-sm">
+                      {submitError || 'Subscription not verified. Please make sure you subscribed to the channel and try again.'}
+                    </div>
+                  </div>
+                ) : null}
                 <button
                   onClick={() => recheckMutation.mutate(submitting.campaign.id)}
                   disabled={recheckMutation.isPending}
                   className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {recheckMutation.isPending ? 'Checking...' : 'Recheck Subscription'}
+                  {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
                 </button>
               </div>
             ) : (
