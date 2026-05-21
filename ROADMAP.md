@@ -68,11 +68,19 @@
   - **Timeline**: Week 1, Day 5-6
   - **Effort**: 8-12 hours (cache layer implementation)
   - **Scope**: User profiles (1h TTL), campaign listings (5m TTL), leaderboard (15m TTL), trust scores (1h TTL)
-- [🟠] Add database backup strategy documentation
-  - **Impact**: No documented backup/disaster recovery process
-  - **Risk**: HIGH - data loss without recovery plan
-  - **Timeline**: Week 1, Day 7
+- [✅] Add database backup strategy documentation
+  - **Impact**: Backup/disaster recovery process documented in DEPLOYMENT.md
+  - **Risk**: MITIGATED - backup strategy documented with retention policy, cron jobs, restore procedures
+  - **Timeline**: Completed 2026-05-21
   - **Effort**: 2-3 hours (documentation + pg_dump automation)
+  - **Implementation**:
+    - Manual backup commands with pg_dump and gzip
+    - Backup naming convention (engganyo_db_YYYYMMDD_HHMMSS.sql.gz)
+    - Retention policy (7 daily, 4 weekly, 3 monthly)
+    - Automated cron job examples for daily/weekly/monthly backups
+    - Disaster recovery procedures for PostgreSQL restore
+    - Uploads persistence status documented (volume-based, LOW risk)
+    - Operational safety notes (restore testing, integrity verification, off-site recommendations)
 
 ### Technical Debt (MEDIUM)
 - [🟡] Re-enable achievement and mission seed functions

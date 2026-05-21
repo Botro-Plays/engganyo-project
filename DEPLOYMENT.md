@@ -287,3 +287,403 @@ docker-compose restart api
 ```
 
 When enabled, new users will have `PENDING_VERIFICATION` status and must be approved by admin in the admin dashboard.
+
+---
+
+## Database Backup Strategy
+
+### Current Infrastructure
+
+- **PostgreSQL service**: `engganyo_postgres`
+- **Database volume**: `engganyo_pgdata` (mounted at `/var/lib/postgresql/data` in container)
+- **Project directory**: `/opt/engganyo-project`
+- **Backup directory**: `/opt/engganyo-project/backups` (recommended)
+
+### Manual Database Backup
+
+```bash
+# Create backup directory
+mkdir -p /opt/engganyo-project/backups
+
+# Backup PostgreSQL database (compressed)
+docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/engganyo_db_$(date +%Y%m%d_%H%M%S).sql.gz
+
+# Verify backup was created
+ls -lh /opt/engganyo-project/backups/
+```
+
+### Backup Naming Convention
+
+Format: `engganyo_db_YYYYMMDD_HHMMSS.sql.gz`
+
+Examples:
+- `engganyo_db_20260521_030000.sql.gz` (daily backup at 3:00 AM UTC)
+- `engganyo_db_20260521_120000.sql.gz` (manual backup)
+- `engganyo_db_20260521_235959.sql.gz` (end-of-day backup)
+
+### Backup Retention Policy
+
+**Recommended retention**:
+- **Daily backups**: Keep last 7 days
+- **Weekly backups**: Keep last 4 weeks
+- **Monthly backups**: Keep last 3 months
+
+**Backup directory structure**:
+```
+/opt/engganyo-project/backups/
+├── daily/
+│   ├── engganyo_db_20260521_030000.sql.gz
+│   ├── engganyo_db_20260520_030000.sql.gz
+│   └── ...
+├── weekly/
+│   ├── engganyo_db_week_20260521.sql.gz
+│   └── ...
+└── monthly/
+    ├── engganyo_db_month_202605.sql.gz
+    └── ...
+```
+
+### Manual Backup Rotation
+
+```bash
+# Delete backups older than 7 days
+find /opt/engganyo-project/backups/daily -name "*.sql.gz" -mtime +7 -delete
+
+# Delete weekly backups older than 4 weeks
+find /opt/engganyo-project/backups/weekly -name "*.sql.gz" -mtime +28 -delete
+
+# Delete monthly backups older than 3 months
+find /opt/engganyo-project/backups/monthly -name "*.sql.gz" -mtime +90 -delete
+```
+
+### Restore Verification
+
+After creating a backup, verify it can be restored:
+
+```bash
+# Test restore to a temporary database
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "CREATE DATABASE engganyo_test_restore;"
+gunzip -c /opt/engganyo-project/backups/engganyo_db_20260521_030000.sql.gz | docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore
+docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore -c "\dt"
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "DROP DATABASE engganyo_test_restore;"
+```
+
+---
+
+## Automated Backup Flow
+
+### Cron Job Setup
+
+Add a cron job to run daily backups at 3:00 AM UTC:
+
+```bash
+# Open crontab for root
+sudo crontab -e
+
+# Add the following line (runs daily at 3:00 AM UTC)
+0 3 * * * mkdir -p /opt/engganyo-project/backups/daily && cd /opt/engganyo-project && /usr/bin/docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/daily/engganyo_db_$(date +\%Y\%m\%d_\%H\%M\%S).sql.gz && find /opt/engganyo-project/backups/daily -name "*.sql.gz" -mtime +7 -delete >> /opt/engganyo-project/backups/backup.log 2>&1
+
+# Save and exit
+```
+
+### Weekly Backup Cron Job
+
+```bash
+# Add weekly backup (Sundays at 4:00 AM UTC)
+0 4 * * 0 mkdir -p /opt/engganyo-project/backups/weekly && cd /opt/engganyo-project && /usr/bin/docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/weekly/engganyo_db_week_$(date +\%Y\%m\%d).sql.gz && find /opt/engganyo-project/backups/weekly -name "*.sql.gz" -mtime +28 -delete >> /opt/engganyo-project/backups/backup.log 2>&1
+```
+
+### Monthly Backup Cron Job
+
+```bash
+# Add monthly backup (1st of month at 5:00 AM UTC)
+0 5 1 * * mkdir -p /opt/engganyo-project/backups/monthly && cd /opt/engganyo-project && /usr/bin/docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/monthly/engganyo_db_month_$(date +\%Y\%m).sql.gz && find /opt/engganyo-project/backups/monthly -name "*.sql.gz" -mtime +90 -delete >> /opt/engganyo-project/backups/backup.log 2>&1
+```
+
+### Safe Backup Timing
+
+**Recommended backup schedule**:
+- **Daily**: 3:00 AM UTC (lowest traffic period)
+- **Weekly**: Sunday 4:00 AM UTC
+- **Monthly**: 1st of month 5:00 AM UTC
+
+**Avoid backing up during**:
+- Active deployment (auto-deploy.sh runs `docker-compose down`)
+- Prisma migrations (database schema changes)
+- High-traffic periods
+
+### Log Output Strategy
+
+Backup logs are written to `/opt/engganyo-project/backups/backup.log`
+
+```bash
+# View backup logs
+tail -f /opt/engganyo-project/backups/backup.log
+
+# Check last backup status
+tail -20 /opt/engganyo-project/backups/backup.log
+```
+
+---
+
+## Disaster Recovery
+
+### Full PostgreSQL Restore
+
+```bash
+# Stop application services (keeps PostgreSQL running)
+docker-compose stop api web nginx
+
+# Restore from backup
+gunzip -c /opt/engganyo-project/backups/daily/engganyo_db_20260521_030000.sql.gz | docker-compose exec -T postgres psql -U engganyo -d engganyo_db
+
+# Restart application services
+docker-compose start api web nginx
+
+# Verify services are running
+docker-compose ps
+```
+
+### Restoring Uploads Directory
+
+**Current status**: Uploads ARE persisted via Docker volume `engganyo_uploads` (mounted at `/app/uploads` in API container). The volume persists across container rebuilds.
+
+**If volume is corrupted or lost**:
+
+```bash
+# Check if volume exists
+docker volume ls | grep engganyo_uploads
+
+# If volume exists but data is corrupted, restore from backup (if you have off-site backup)
+# Currently, there is NO automated off-site backup for uploads - this is a gap
+
+# Recommended: Add rsync to remote storage for uploads backup
+# (See Future Recommendations below)
+```
+
+### Restoring Docker Services
+
+```bash
+# If all containers are down
+cd /opt/engganyo-project
+
+# Start infrastructure services
+docker-compose up -d postgres redis
+
+# Wait for services to be healthy
+sleep 10
+
+# Start application services
+docker-compose up -d api web nginx
+
+# Verify services
+docker-compose ps
+```
+
+### Restore Order
+
+**Recommended restore sequence**:
+1. Stop application services (`docker-compose stop api web nginx`)
+2. Restore PostgreSQL database from backup
+3. Verify database integrity (`docker-compose exec postgres psql -U engganyo -d engganyo_db -c "\dt"`)
+4. Start application services (`docker-compose start api web nginx`)
+5. Verify application functionality
+6. Check logs for errors (`docker-compose logs -f api web`)
+
+### Verification Steps After Restore
+
+```bash
+# 1. Check database tables exist
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "\dt"
+
+# 2. Check user count
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "SELECT COUNT(*) FROM \"User\";"
+
+# 3. Check wallet balances
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "SELECT COUNT(*) FROM Wallet;"
+
+# 4. Check API is responding
+curl -f https://engganyo.com/api/v1/health || echo "API not responding"
+
+# 5. Check web is responding
+curl -f https://engganyo.com || echo "Web not responding"
+
+# 6. Check container logs
+docker-compose logs api web nginx
+```
+
+---
+
+## Uploads Persistence Status
+
+### Current Implementation
+
+**Uploads ARE persisted via Docker volume**:
+- Volume name: `engganyo_uploads`
+- Mount point: `/app/uploads` in API container
+- Docker Compose configuration: `uploads_data:/app/uploads` (line 64 in docker-compose.yml)
+- Persistence: Volume persists across container rebuilds and restarts
+
+### Verification
+
+```bash
+# Check volume exists
+docker volume ls | grep engganyo_uploads
+
+# Check volume details
+docker volume inspect engganyo_uploads
+
+# Check uploads directory in container
+docker-compose exec api ls -la /app/uploads
+```
+
+### Current Risk
+
+**LOW RISK**: Uploads are persisted via Docker volume and will survive:
+- Container restarts
+- Container rebuilds
+- Service restarts
+- Auto-deploy script execution
+
+**MEDIUM RISK**: Uploads will be lost if:
+- Docker volume is manually deleted (`docker volume rm engganyo_uploads`)
+- VPS suffers catastrophic disk failure
+- Volume corruption occurs
+
+**NO OFF-SITE BACKUP**: Currently, uploads are NOT backed up to external storage. This is a gap for disaster recovery.
+
+### Recommended Future Fix
+
+Add off-site backup for uploads directory:
+
+```bash
+# Example: rsync uploads to remote storage (not yet implemented)
+# This would require:
+# 1. Remote storage service (S3, Backblaze B2, or remote VPS)
+# 2. rsync or rclone configuration
+# 3. Cron job for periodic sync
+# 4. Encryption for sensitive uploads
+```
+
+---
+
+## Operational Safety Notes
+
+### Testing Restores Periodically
+
+**Recommended**: Test restore process monthly
+
+```bash
+# Monthly restore test procedure:
+# 1. Take a fresh backup
+docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/test_restore_$(date +%Y%m%d).sql.gz
+
+# 2. Create test database
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "CREATE DATABASE engganyo_test_restore;"
+
+# 3. Restore to test database
+gunzip -c /opt/engganyo-project/backups/test_restore_$(date +%Y%m%d).sql.gz | docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore
+
+# 4. Verify data integrity
+docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore -c "SELECT COUNT(*) FROM \"User\";"
+
+# 5. Drop test database
+docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "DROP DATABASE engganyo_test_restore;"
+
+# 6. Document results in backup log
+echo "$(date): Monthly restore test completed successfully" >> /opt/engganyo-project/backups/backup.log
+```
+
+### Verifying Backup Integrity
+
+```bash
+# Check backup file size (should be > 0)
+ls -lh /opt/engganyo-project/backups/daily/
+
+# Verify backup is valid gzip file
+gunzip -t /opt/engganyo-project/backups/daily/engganyo_db_20260521_030000.sql.gz
+
+# Check backup content (first few lines)
+gunzip -c /opt/engganyo-project/backups/daily/engganyo_db_20260521_030000.sql.gz | head -20
+```
+
+### Off-Site Backup Recommendations
+
+**Current status**: No off-site backup configured
+
+**Recommended**: Add off-site backup for disaster recovery
+
+**Options**:
+1. **S3-compatible storage** (AWS S3, DigitalOcean Spaces, Wasabi)
+2. **Backblaze B2** (cost-effective object storage)
+3. **Remote VPS** (rsync to backup server)
+4. **GitHub Actions artifact** (for smaller databases)
+
+**Example cron job for S3 sync** (requires AWS CLI setup):
+```bash
+# Install AWS CLI
+sudo apt install awscli
+
+# Configure AWS credentials
+aws configure
+
+# Sync backups to S3 (not yet implemented)
+# 0 6 * * * aws s3 sync /opt/engganyo-project/backups/ s3://engganyo-backups/ --delete >> /opt/engganyo-project/backups/s3-sync.log 2>&1
+```
+
+### Disk Space Monitoring
+
+```bash
+# Check disk space
+df -h
+
+# Check backup directory size
+du -sh /opt/engganyo-project/backups/
+
+# Set up disk space alert (add to crontab)
+# Alert if disk usage > 80%
+0 */6 * * * df -h | awk '$5 > 80 {print "Disk usage warning: " $0}' | mail -s "Disk space alert" admin@engganyo.com
+```
+
+### Avoiding Backup During Migrations
+
+**Risk**: Backing up during Prisma migrations can capture inconsistent database state
+
+**Mitigation**:
+1. Schedule backups outside of deployment windows
+2. Auto-deploy.sh runs migrations after `docker-compose up -d --build`
+3. Avoid running manual backups during deployment
+4. Check deployment log before running manual backup
+
+**Recommended**: Run backups at least 1 hour after any deployment
+
+```bash
+# Check last deployment time
+tail -20 /opt/engganyo-project/auto-deploy.log
+
+# If recent deployment, wait before manual backup
+```
+
+---
+
+## Future Recommendations
+
+### High Priority
+1. **Add off-site backup for PostgreSQL**: Use S3, Backblaze B2, or remote VPS
+2. **Add off-site backup for uploads**: Sync `engganyo_uploads` volume to remote storage
+3. **Add backup monitoring**: Alert on backup failure, disk space issues
+4. **Add automated restore testing**: Monthly restore test with automated verification
+
+### Medium Priority
+1. **Add point-in-time recovery**: Configure PostgreSQL WAL archiving
+2. **Add backup encryption**: Encrypt backups before off-site sync
+3. **Add backup compression optimization**: Use pg_dump custom format for faster restores
+4. **Add multi-region backup**: Store backups in different geographic region
+
+### Low Priority
+1. **Add backup dashboard**: Web UI for backup status monitoring
+2. **Add one-click restore**: Scripted restore with confirmation
+3. **Add backup retention policies per environment**: Different policies for dev/staging/prod
+4. **Add backup cost optimization**: Lifecycle policies for off-site storage
+
+---
