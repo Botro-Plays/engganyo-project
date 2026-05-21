@@ -63,16 +63,6 @@ export default function LandingPage() {
           Earn credits by engaging with others, then use them to promote your own content.
         </p>
 
-        <p className="text-sm text-zinc-500 mb-10">
-          <Link href="/privacy" className="text-brand-400 hover:underline">
-            Privacy Policy
-          </Link>
-          {' '}•{' '}
-          <Link href="/terms" className="text-brand-400 hover:underline">
-            Terms of Service
-          </Link>
-        </p>
-
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
             href="/register"
