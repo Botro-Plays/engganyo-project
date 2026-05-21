@@ -19,7 +19,9 @@ cd "$PROJECT_DIR" || exit 1
 
 # Pull latest changes from git
 log "Pulling latest changes from git..."
-git pull origin main
+# Reset local branch to origin/main to handle any divergence from force pushes
+git fetch origin main
+git reset --hard origin/main
 
 # Stop existing containers
 log "Stopping Docker containers..."
