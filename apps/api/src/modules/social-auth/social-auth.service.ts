@@ -375,7 +375,10 @@ export class SocialAuthService {
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
-    if (!res.ok) throw new Error(`YouTube API error: ${res.status}`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new BadRequestException(`YouTube API error (${res.status}): ${errorText}`);
+    }
     const data = await res.json() as { items?: Array<{ rating: string }> };
 
     if (!data.items?.[0] || data.items[0].rating !== 'like') {
