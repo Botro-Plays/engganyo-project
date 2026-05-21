@@ -145,6 +145,17 @@ export class AdminController {
     return this.adminService.updatePlatformTask(admin.sub, id, dto);
   }
 
+  @Delete('tasks/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a platform task' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  cancelPlatformTask(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.cancelPlatformTask(admin.sub, id);
+  }
+
   // ─── Proof Submissions ───────────────────────────────────
 
   @Get('submissions')

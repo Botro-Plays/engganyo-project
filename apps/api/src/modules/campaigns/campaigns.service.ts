@@ -97,6 +97,7 @@ export class CampaignsService {
 
     const where = {
       userId,
+      isPlatformTask: false,
       ...(dto.status && { status: dto.status }),
       ...(dto.taskType && { taskType: dto.taskType }),
     };

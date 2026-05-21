@@ -213,6 +213,55 @@ export class AdminService {
     return updated;
   }
 
+  async cancelPlatformTask(adminId: string, taskId: string) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        title: true,
+        totalSlots: true,
+        completedSlots: true,
+        pendingSlots: true,
+        creditPerTask: true,
+        status: true,
+        user: { select: { role: true } },
+      },
+    });
+    if (!campaign) throw new NotFoundException('Task not found');
+
+    const adminRoles = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MODERATOR];
+    if (!(adminRoles as UserRole[]).includes(campaign.user.role)) {
+      throw new ForbiddenException('Can only cancel platform-created tasks');
+    }
+
+    const cancellableStatuses: CampaignStatus[] = [
+      CampaignStatus.ACTIVE,
+      CampaignStatus.PAUSED,
+    ];
+    if (!cancellableStatuses.includes(campaign.status)) {
+      throw new BadRequestException(`Cannot cancel a task with status ${campaign.status}`);
+    }
+
+    // No refund for platform tasks (they're created by admin, no credits deducted)
+    await this.prisma.campaign.update({
+      where: { id: taskId },
+      data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'platform_task.cancelled',
+        entityType: 'Campaign',
+        entityId: taskId,
+        oldValue: { title: campaign.title, status: campaign.status },
+        newValue: { status: CampaignStatus.CANCELLED },
+      },
+    });
+
+    return { message: 'Platform task cancelled successfully' };
+  }
+
   async changeUserRole(adminId: string, userId: string, dto: ChangeUserRoleDto) {
     if (adminId === userId) throw new BadRequestException('Cannot change your own role');
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, username: true } });
