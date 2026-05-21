@@ -331,7 +331,7 @@ export class AdminService {
       if (refundAmount > 0) {
         await tx.user.update({
           where: { id: campaign.userId },
-          data: { credits: { increment: refundAmount } },
+          data: { creditBalance: { increment: refundAmount } },
         });
       }
 
