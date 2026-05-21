@@ -264,12 +264,22 @@ export default function TasksPage() {
   // ─── Recheck task (for YouTube subscribe) ───────────────────────
   const recheckMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/recheck`),
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setSubmitError(null);
+      setRecheckResult({ status: data.data.status, message: data.data.message });
+      // Check if verification actually succeeded
+      if (data.data.status === 'VERIFIED') {
+        setSubmitting(null);
+      }
     },
-    onError: (err) => setSubmitError(getApiErrorMessage(err)),
+    onError: (err) => {
+      setSubmitError(getApiErrorMessage(err));
+      setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
+    },
   });
+
+  const [recheckResult, setRecheckResult] = useState<{ status: string; message?: string } | null>(null);
 
   const getPlatform = (taskType: string) => taskType.split('_')[0];
 
@@ -505,14 +515,14 @@ export default function TasksPage() {
                         ) : canSubmit ? (
                           task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' || task.campaign.taskType === 'YOUTUBE_LIKE' ? (
                             <button
-                              onClick={() => { setSubmitting(task); setSubmitError(null); }}
+                              onClick={() => { setSubmitting(task); setSubmitError(null); setRecheckResult(null); }}
                               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
                             >
                               Check
                             </button>
                           ) : (
                             <button
-                              onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); }}
+                              onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); setRecheckResult(null); }}
                               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
                             >
                               <Send className="w-3 h-3" /> Submit
@@ -605,17 +615,17 @@ export default function TasksPage() {
                   1. Open the link above and subscribe to the channel<br />
                   2. Click the button below to verify your subscription
                 </p>
-                {recheckMutation.isSuccess ? (
+                {recheckResult?.status === 'VERIFIED' ? (
                   <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
                     <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
                       <CheckCircle2 className="w-4 h-4" />
                       Subscription verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
                     </div>
                   </div>
-                ) : recheckMutation.isError ? (
+                ) : recheckResult?.status === 'FAILED' || recheckMutation.isError ? (
                   <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
                     <div className="text-red-400 text-sm">
-                      {submitError || 'Subscription not verified. Please make sure you subscribed to the channel and try again.'}
+                      {recheckResult?.message || submitError || 'Subscription not yet verified. Please subscribe to the channel and try again.'}
                     </div>
                   </div>
                 ) : null}
@@ -634,17 +644,17 @@ export default function TasksPage() {
                   1. Open the link above and like the video<br />
                   2. Click the button below to verify your like
                 </p>
-                {recheckMutation.isSuccess ? (
+                {recheckResult?.status === 'VERIFIED' ? (
                   <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
                     <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
                       <CheckCircle2 className="w-4 h-4" />
                       Like verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
                     </div>
                   </div>
-                ) : recheckMutation.isError ? (
+                ) : recheckResult?.status === 'FAILED' || recheckMutation.isError ? (
                   <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
                     <div className="text-red-400 text-sm">
-                      {submitError || 'Like not verified. Please make sure you liked the video and try again.'}
+                      {recheckResult?.message || submitError || 'Like not verified. Please make sure you liked the video and try again.'}
                     </div>
                   </div>
                 ) : null}

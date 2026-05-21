@@ -149,6 +149,7 @@ export class AdminService {
     const adminRoles = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MODERATOR];
     const where = {
       status: CampaignStatus.ACTIVE,
+      isPlatformTask: true,
       user: { role: { in: adminRoles } },
     };
     const [items, total] = await Promise.all([
@@ -159,6 +160,30 @@ export class AdminService {
           totalSlots: true, completedSlots: true, pendingSlots: true,
           creditPerTask: true, totalCost: true, requiresProof: true,
           proofInstructions: true, status: true, createdAt: true,
+          user: { select: { username: true, role: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.campaign.count({ where }),
+    ]);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
+  async listUserCampaigns(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const where = {
+      isPlatformTask: false,
+      status: { in: [CampaignStatus.ACTIVE, CampaignStatus.PAUSED] },
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.campaign.findMany({
+        where,
+        select: {
+          id: true, title: true, taskType: true, targetUrl: true,
+          totalSlots: true, completedSlots: true, pendingSlots: true,
+          creditPerTask: true, totalCost: true, status: true, createdAt: true,
           user: { select: { username: true, role: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -260,6 +285,82 @@ export class AdminService {
     });
 
     return { message: 'Platform task cancelled successfully' };
+  }
+
+  async cancelUserCampaign(adminId: string, campaignId: string) {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        status: true,
+        totalSlots: true,
+        completedSlots: true,
+        pendingSlots: true,
+        creditPerTask: true,
+      },
+    });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const cancellableStatuses: CampaignStatus[] = [
+      CampaignStatus.ACTIVE,
+      CampaignStatus.PAUSED,
+      CampaignStatus.DRAFT,
+      CampaignStatus.PENDING_REVIEW,
+    ];
+    if (!cancellableStatuses.includes(campaign.status)) {
+      throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
+    }
+
+    // Calculate refund: only for unused slots (total - completed - pending)
+    const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
+    const refundAmount = refundableSlots * campaign.creditPerTask;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Update campaign status
+      await tx.campaign.update({
+        where: { id: campaignId },
+        data: {
+          status: CampaignStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+      });
+
+      // Refund campaign owner for unused slots
+      if (refundAmount > 0) {
+        await tx.user.update({
+          where: { id: campaign.userId },
+          data: { credits: { increment: refundAmount } },
+        });
+      }
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'user_campaign.cancelled',
+          entityType: 'Campaign',
+          entityId: campaignId,
+          oldValue: {
+            title: campaign.title,
+            status: campaign.status,
+            refundableSlots,
+            refundAmount,
+          },
+          newValue: {
+            status: CampaignStatus.CANCELLED,
+            refunded: refundAmount,
+          },
+        },
+      });
+    });
+
+    return {
+      message: 'Campaign cancelled successfully',
+      refunded: refundAmount,
+      refundableSlots,
+    };
   }
 
   async changeUserRole(adminId: string, userId: string, dto: ChangeUserRoleDto) {

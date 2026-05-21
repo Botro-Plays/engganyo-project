@@ -156,6 +156,17 @@ export class AdminController {
     return this.adminService.cancelPlatformTask(admin.sub, id);
   }
 
+  @Delete('campaigns/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a user campaign with refund' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  cancelUserCampaign(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.cancelUserCampaign(admin.sub, id);
+  }
+
   // ─── Proof Submissions ───────────────────────────────────
 
   @Get('submissions')
@@ -184,6 +195,13 @@ export class AdminController {
   @ApiOperation({ summary: 'Campaigns awaiting review' })
   listPendingCampaigns(@Query('page') page = 1, @Query('limit') limit = 20) {
     return this.adminService.listPendingCampaigns(Number(page), Number(limit));
+  }
+
+  @Get('campaigns/user')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List active user campaigns (not platform tasks)' })
+  listUserCampaigns(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.adminService.listUserCampaigns(Number(page), Number(limit));
   }
 
   @Patch('campaigns/:id/review')

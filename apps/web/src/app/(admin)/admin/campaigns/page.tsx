@@ -52,6 +52,13 @@ interface PlatformTask {
   createdAt: string; user: { username: string; role: string };
 }
 
+interface UserCampaign {
+  id: string; title: string; taskType: string; targetUrl: string;
+  totalSlots: number; completedSlots: number; pendingSlots: number;
+  creditPerTask: number; totalCost: number; status: string; createdAt: string;
+  user: { username: string; role: string };
+}
+
 const editTaskSchema = z.object({
   title: z.string().min(5).max(120),
   description: z.string().max(1000).optional(),
@@ -66,9 +73,10 @@ type EditTaskForm = z.infer<typeof editTaskSchema>;
 
 export default function AdminCampaignsPage() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'pending' | 'platform' | 'submissions'>('pending');
+  const [tab, setTab] = useState<'pending' | 'platform' | 'user' | 'submissions'>('pending');
   const [page, setPage] = useState(1);
   const [ptPage, setPtPage] = useState(1);
+  const [ucPage, setUcPage] = useState(1);
   const [subPage, setSubPage] = useState(1);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [rejReasons, setRejReasons] = useState<Record<string, string>>({});
@@ -149,6 +157,17 @@ export default function AdminCampaignsPage() {
     enabled: tab === 'platform',
   });
 
+  const { data: ucData, isLoading: ucLoading } = useQuery({
+    queryKey: ['admin', 'campaigns', 'user', ucPage],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ items: UserCampaign[]; meta: { total: number; totalPages: number } }>>(
+        `admin/campaigns/user?page=${ucPage}&limit=20`,
+      );
+      return res.data.data;
+    },
+    enabled: tab === 'user',
+  });
+
   // ─── Mutations ────────────────────────────────────────────
   const createMutation = useMutation({
     mutationFn: (data: CreateTaskForm) => apiClient.post('admin/tasks', data),
@@ -184,6 +203,16 @@ export default function AdminCampaignsPage() {
     onError: (err) => setActionError(getApiErrorMessage(err)),
   });
 
+  const cancelUserCampaignMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`admin/campaigns/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'campaigns', 'user'] });
+      void queryClient.invalidateQueries({ queryKey: ['discover'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err) => setActionError(getApiErrorMessage(err)),
+  });
+
   const reviewMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'approve' | 'reject' }) =>
       apiClient.patch(`admin/campaigns/${id}/review`, { action, notes: notes[id] }),
@@ -213,10 +242,10 @@ export default function AdminCampaignsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-surface-hover rounded-lg p-1 w-fit">
-        {(['pending', 'platform', 'submissions'] as const).map((t) => (
+        {(['pending', 'platform', 'user', 'submissions'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t ? 'bg-surface-card text-white shadow' : 'text-zinc-500 hover:text-zinc-300'}`}>
-            {t === 'pending' ? 'Pending Review' : t === 'platform' ? 'Platform Tasks' : 'Proof Review'}
+            {t === 'pending' ? 'Pending Review' : t === 'platform' ? 'Platform Tasks' : t === 'user' ? 'User Campaigns' : 'Proof Review'}
           </button>
         ))}
       </div>
@@ -339,6 +368,61 @@ export default function AdminCampaignsPage() {
                 <button onClick={() => setPtPage((p) => p - 1)} disabled={ptPage <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
                 <span>Page {ptPage} / {ptData?.meta.totalPages}</span>
                 <button onClick={() => setPtPage((p) => p + 1)} disabled={ptPage >= (ptData?.meta.totalPages ?? 1)} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── User Campaigns tab ─────────────────────────────── */}
+      {tab === 'user' && (
+        <>
+          {ucLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-24" />)}
+            </div>
+          ) : !ucData?.items.length ? (
+            <div className="card-glass rounded-2xl p-12 text-center">
+              <p className="text-white font-medium mb-1">No user campaigns yet.</p>
+              <p className="text-zinc-500 text-sm">Active user campaigns will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {ucData.items.map((c) => {
+                const available = c.totalSlots - c.completedSlots - c.pendingSlots;
+                return (
+                  <div key={c.id} className="card-glass rounded-xl p-5 flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-white truncate">{c.title}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {c.taskType.replace(/_/g, ' ')} · {formatCredits(c.creditPerTask)} cr · {available} / {c.totalSlots} slots available · by @{c.user.username}
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Status: {c.status} · Total budget: {formatCredits(c.totalCost)} cr
+                      </p>
+                      <a href={c.targetUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-400 mt-1 transition-colors">
+                        {c.targetUrl.slice(0, 55)}{c.targetUrl.length > 55 ? '…' : ''}
+                        <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    </div>
+                    <button onClick={() => cancelUserCampaignMutation.mutate(c.id)}
+                      disabled={cancelUserCampaignMutation.isPending}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition-all disabled:opacity-50">
+                      <Loader2 className="w-3 h-3 animate-spin hidden" /> Cancel
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {(ucData?.meta.totalPages ?? 0) > 1 && (
+            <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+              <span>{ucData?.meta.total} campaigns</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setUcPage((p) => p - 1)} disabled={ucPage <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+                <span>Page {ucPage} / {ucData?.meta.totalPages}</span>
+                <button onClick={() => setUcPage((p) => p + 1)} disabled={ucPage >= (ucData?.meta.totalPages ?? 1)} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
               </div>
             </div>
           )}
