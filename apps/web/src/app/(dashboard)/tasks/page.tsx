@@ -268,10 +268,12 @@ export default function TasksPage() {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setSubmitError(null);
       setRecheckResult({ status: data.data.status, message: data.data.message });
+      console.log('Recheck success:', data.data);
       // Don't auto-close modal on success - let user see the message and close manually
     },
     onError: (err) => {
       setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
+      console.log('Recheck error:', err);
     },
   });
 
