@@ -502,7 +502,7 @@ export default function TasksPage() {
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
                         ) : canSubmit ? (
-                          task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? (
+                          task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' || task.campaign.taskType === 'YOUTUBE_LIKE' ? (
                             <button
                               onClick={() => { setSubmitting(task); setSubmitError(null); }}
                               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
@@ -565,7 +565,9 @@ export default function TasksPage() {
           <div className="w-full max-w-md card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-white">
-                {submitting.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? 'Subscribe & Verify' : 'Submit Proof'}
+                {submitting.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? 'Subscribe & Verify' :
+                 submitting.campaign.taskType === 'YOUTUBE_LIKE' ? 'Like & Verify' :
+                 'Submit Proof'}
               </h2>
               <button onClick={() => setSubmitting(null)} className="text-zinc-500 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
@@ -622,6 +624,35 @@ export default function TasksPage() {
                   className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
+                </button>
+              </div>
+            ) : submitting.campaign.taskType === 'YOUTUBE_LIKE' ? (
+              // YouTube Like: Show check button instead of proof upload
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-400">
+                  1. Open the link above and like the video<br />
+                  2. Click the button below to verify your like
+                </p>
+                {recheckMutation.isSuccess ? (
+                  <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Like verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                    </div>
+                  </div>
+                ) : recheckMutation.isError ? (
+                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <div className="text-red-400 text-sm">
+                      {submitError || 'Like not verified. Please make sure you liked the video and try again.'}
+                    </div>
+                  </div>
+                ) : null}
+                <button
+                  onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                  disabled={recheckMutation.isPending}
+                  className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {recheckMutation.isPending ? 'Checking...' : 'Check Like'}
                 </button>
               </div>
             ) : (
