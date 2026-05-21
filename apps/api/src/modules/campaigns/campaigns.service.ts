@@ -371,7 +371,6 @@ export class CampaignsService {
 
     const where = {
       status: CampaignStatus.ACTIVE,
-      userId: { not: excludeUserId },
       id: { notIn: excludeIds.length > 0 ? excludeIds : ['__none__'] },
       ...taskTypeWhere,
     };
