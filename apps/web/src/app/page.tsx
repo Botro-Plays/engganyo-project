@@ -197,6 +197,14 @@ export default function LandingPage() {
             <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
           </div>
         </div>
+        <div className="mt-4 text-center">
+          <a
+            href="https://engganyo.com/privacy"
+            className="text-sm text-white underline"
+          >
+            Privacy Policy
+          </a>
+        </div>
       </footer>
     </main>
   );
