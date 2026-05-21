@@ -377,6 +377,10 @@ export class SocialAuthService {
 
     if (!res.ok) {
       const errorText = await res.text();
+      // Check for scope insufficient error
+      if (res.status === 403 && errorText.includes('insufficient authentication scopes')) {
+        throw new BadRequestException('YouTube permission insufficient. Please disconnect and re-link your YouTube account in Settings > Connected Accounts to update permissions.');
+      }
       throw new BadRequestException(`YouTube API error (${res.status}): ${errorText}`);
     }
     const data = await res.json() as { items?: Array<{ rating: string }> };
