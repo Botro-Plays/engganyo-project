@@ -274,7 +274,6 @@ export default function TasksPage() {
       }
     },
     onError: (err) => {
-      setSubmitError(getApiErrorMessage(err));
       setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
     },
   });
