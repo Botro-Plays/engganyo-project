@@ -13,7 +13,7 @@ import { SocialAuthController } from './social-auth.controller';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('jwt.secret'),
+        secret: config.get<string>('jwt.accessSecret'),
       }),
     }),
   ],
