@@ -263,20 +263,23 @@ export default function TasksPage() {
 
   // ─── Recheck task (for YouTube subscribe) ───────────────────────
   const recheckMutation = useMutation({
-    mutationFn: (campaignId: string) => {
-      console.log('Recheck mutation called for campaign:', campaignId);
-      return apiClient.post(`tasks/${campaignId}/recheck`);
+    mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/recheck`),
+    onMutate: () => {
+      setRecheckResult(null);
     },
-    onSuccess: (data) => {
-      console.log('Recheck onSuccess called, full response:', data);
-      console.log('Recheck success data.data:', data.data);
+    onSuccess: (response) => {
+      console.log('Recheck full response:', response);
+      const payload = response?.data?.data ?? response?.data;
+      console.log('Recheck payload:', payload);
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setSubmitError(null);
-      setRecheckResult({ status: data.data.status, message: data.data.message });
-      // Don't auto-close modal on success - let user see the message and close manually
+      setRecheckResult({
+        status: payload?.status,
+        message: payload?.message,
+      });
     },
     onError: (err) => {
-      console.log('Recheck onError called:', err);
+      console.log('Recheck error:', err);
       setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
     },
   });
@@ -632,7 +635,7 @@ export default function TasksPage() {
                       Close
                     </button>
                   </>
-                ) : recheckResult?.status === 'FAILED' || recheckMutation.isError ? (
+                ) : recheckResult?.status === 'FAILED' ? (
                   <>
                     <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
                       <div className="text-red-400 text-sm">
@@ -679,7 +682,7 @@ export default function TasksPage() {
                       Close
                     </button>
                   </>
-                ) : recheckResult?.status === 'FAILED' || recheckMutation.isError ? (
+                ) : recheckResult?.status === 'FAILED' ? (
                   <>
                     <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
                       <div className="text-red-400 text-sm">
