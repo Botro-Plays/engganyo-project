@@ -58,9 +58,19 @@ export default function LandingPage() {
           <span className="text-gradient">the right way</span>
         </h1>
 
-        <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+        <p className="text-xl text-zinc-400 max-w-2xl mx-auto mb-8 leading-relaxed">
           Engganyo is a community-driven platform where real creators help each other grow.
           Earn credits by engaging with others, then use them to promote your own content.
+        </p>
+
+        <p className="text-sm text-zinc-500 mb-10">
+          <Link href="/privacy" className="text-brand-400 hover:underline">
+            Privacy Policy
+          </Link>
+          {' '}•{' '}
+          <Link href="/terms" className="text-brand-400 hover:underline">
+            Terms of Service
+          </Link>
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
