@@ -270,7 +270,8 @@ export default function TasksPage() {
       setRecheckResult({ status: data.data.status, message: data.data.message });
       // Check if verification actually succeeded
       if (data.data.status === 'VERIFIED') {
-        setSubmitting(null);
+        // Delay closing modal so user can see success message
+        setTimeout(() => setSubmitting(null), 2000);
       }
     },
     onError: (err) => {
