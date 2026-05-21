@@ -276,6 +276,113 @@ export class TasksService {
     }
   }
 
+  // ─── Recheck task (for YouTube subscribe tasks) ───────────────
+
+  async recheckTask(userId: string, campaignId: string) {
+    const completion = await this.prisma.taskCompletion.findUnique({
+      where: { campaignId_userId: { campaignId, userId } },
+      select: {
+        id: true,
+        status: true,
+        expiresAt: true,
+        campaign: {
+          select: {
+            id: true,
+            userId: true,
+            taskType: true,
+            targetUrl: true,
+            creditPerTask: true,
+            completedSlots: true,
+            pendingSlots: true,
+            totalSlots: true,
+          },
+        },
+      },
+    });
+
+    if (!completion) throw new NotFoundException('Task not assigned to you');
+
+    // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
+    if (completion.campaign.userId === userId) {
+      throw new BadRequestException('Campaign owners cannot complete their own tasks');
+    }
+
+    const recheckable: CompletionStatus[] = [
+      CompletionStatus.ASSIGNED,
+      CompletionStatus.IN_PROGRESS,
+    ];
+    if (!recheckable.includes(completion.status)) {
+      throw new BadRequestException(`Task is already ${completion.status.toLowerCase()}`);
+    }
+
+    if (completion.expiresAt && completion.expiresAt < new Date()) {
+      throw new BadRequestException('Task assignment has expired');
+    }
+
+    const now = new Date();
+
+    // ── API verification for supported platforms ──────────────
+    const apiVerified = await this.socialAuthService.verifyPlatformAction(
+      userId,
+      completion.campaign.taskType as never,
+      completion.campaign.targetUrl,
+    );
+
+    if (apiVerified === true) {
+      // ── Auto-verify: credits paid immediately ──────────────
+      await this.prisma.withTransaction(async (tx) => {
+        await tx.taskCompletion.update({
+          where: { id: completion.id },
+          data: {
+            status: CompletionStatus.VERIFIED,
+            submittedAt: now,
+            verifiedAt: now,
+            verifiedBy: 'system',
+            creditsEarned: completion.campaign.creditPerTask,
+          },
+        });
+
+        const newCompleted = completion.campaign.completedSlots + 1;
+        const isFull = newCompleted >= completion.campaign.totalSlots;
+
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: {
+            completedSlots: { increment: 1 },
+            pendingSlots: { decrement: 1 },
+            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+          },
+        });
+
+        await tx.userProfile.updateMany({
+          where: { userId },
+          data: { totalTasksDone: { increment: 1 } },
+        });
+      });
+
+      await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+        type: TransactionType.EARN_TASK_COMPLETION,
+        description: `Task verified`,
+        referenceId: campaignId,
+        referenceType: 'campaign',
+      });
+
+      await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+      await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
+      await this.gamificationService.checkAchievements(userId);
+      void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
+
+      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+    } else {
+      // ── Not yet subscribed: keep in current state ──────────────
+      return {
+        creditsEarned: 0,
+        status: completion.status,
+        message: 'Subscription not yet verified. Please subscribe to the channel and try again.',
+      };
+    }
+  }
+
   // ─── Get my tasks ──────────────────────────────────────────
 
   async getMyTasks(userId: string, dto: ListMyTasksDto) {

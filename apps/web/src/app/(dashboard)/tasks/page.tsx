@@ -260,6 +260,16 @@ export default function TasksPage() {
     onError: (err) => setSubmitError(getApiErrorMessage(err)),
   });
 
+  // ─── Recheck task (for YouTube subscribe) ───────────────────────
+  const recheckMutation = useMutation({
+    mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/recheck`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setSubmitError(null);
+    },
+    onError: (err) => setSubmitError(getApiErrorMessage(err)),
+  });
+
   const getPlatform = (taskType: string) => taskType.split('_')[0];
 
   // File selection handler
@@ -492,12 +502,26 @@ export default function TasksPage() {
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
                         ) : canSubmit ? (
-                          <button
-                            onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); }}
-                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
-                          >
-                            <Send className="w-3 h-3" /> Submit
-                          </button>
+                          task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? (
+                            <button
+                              onClick={() => recheckMutation.mutate(task.campaign.id)}
+                              disabled={recheckMutation.isPending}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all disabled:opacity-50"
+                            >
+                              {recheckMutation.isPending ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                'Recheck'
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); }}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
+                            >
+                              <Send className="w-3 h-3" /> Submit
+                            </button>
+                          )
                         ) : null}
                       </div>
                     </div>

@@ -54,4 +54,13 @@ export class TasksController {
   ) {
     return this.tasksService.submitProof(user.sub, campaignId, dto);
   }
+
+  @Post(':campaignId/recheck')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(UserRateLimitGuard)
+  @UserRateLimit({ limit: 30, ttl: 60, scope: 'task_recheck' })
+  @ApiOperation({ summary: 'Recheck task verification via platform API (for YouTube subscribe tasks)' })
+  recheck(@CurrentUser() user: JwtPayload, @Param('campaignId') campaignId: string) {
+    return this.tasksService.recheckTask(user.sub, campaignId);
+  }
 }
