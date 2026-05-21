@@ -25,7 +25,8 @@ export default function LandingPage() {
         <div className="hidden md:flex items-center gap-8 text-sm text-zinc-400">
           <Link href="#features" className="hover:text-white transition-colors">Features</Link>
           <Link href="#how-it-works" className="hover:text-white transition-colors">How it works</Link>
-          <Link href="#community" className="hover:text-white transition-colors">Community</Link>
+          <Link href="#about" className="hover:text-white transition-colors">About</Link>
+          <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
         </div>
 
         <div className="flex items-center gap-3">
@@ -139,6 +140,26 @@ export default function LandingPage() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="relative z-10 py-24 px-6 max-w-4xl mx-auto">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl font-bold mb-4">About Engganyo</h2>
+          <p className="text-zinc-400 text-lg">A platform built for creators, by creators.</p>
+        </div>
+
+        <div className="card-glass rounded-2xl p-8 space-y-4">
+          <p className="text-zinc-300 leading-relaxed">
+            <strong className="text-white">Engganyo</strong> is a creator growth platform designed to help content creators increase their audience engagement through authentic, community-driven interactions. Our platform enables creators to earn credits by completing engagement tasks for other creators, then use those credits to promote their own content across multiple social media platforms including YouTube, TikTok, Instagram, Twitter, Twitch, and Spotify.
+          </p>
+          <p className="text-zinc-300 leading-relaxed">
+            Unlike traditional engagement services that rely on bots or fake accounts, Engganyo uses a credit-based economy combined with advanced anti-abuse protection and trust scoring to ensure that all engagement comes from real, verified human users. Creators can set up campaigns for specific engagement types (subscribes, likes, follows, comments, etc.) and set their own pricing, while task earners earn credits by completing these tasks with proper verification.
+          </p>
+          <p className="text-zinc-300 leading-relaxed">
+            Our mission is to create a fair, transparent ecosystem where creators can grow their audiences organically while helping others do the same. We believe in genuine engagement over vanity metrics, and our platform is built to facilitate meaningful connections between creators in similar niches.
+          </p>
         </div>
       </section>
 
