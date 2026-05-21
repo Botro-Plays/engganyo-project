@@ -39,9 +39,9 @@ export const metadata: Metadata = {
     description: 'Grow your social presence through real human engagement.',
     images: [
       {
-        url: 'https://engganyo.com/logo-square.png',
-        width: 200,
-        height: 200,
+        url: 'https://engganyo.com/logo-square-no-curve-1024.png',
+        width: 1024,
+        height: 1024,
         alt: 'Engganyo - Collaborative Creator Growth',
       },
     ],
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Engganyo — Collaborative Creator Growth',
     description: 'Grow your social presence through real human engagement.',
-    images: ['https://engganyo.com/logo-square.png'],
+    images: ['https://engganyo.com/logo-square-no-curve-1024.png'],
   },
   robots: {
     index: true,
