@@ -263,17 +263,21 @@ export default function TasksPage() {
 
   // ─── Recheck task (for YouTube subscribe) ───────────────────────
   const recheckMutation = useMutation({
-    mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/recheck`),
+    mutationFn: (campaignId: string) => {
+      console.log('Recheck mutation called for campaign:', campaignId);
+      return apiClient.post(`tasks/${campaignId}/recheck`);
+    },
     onSuccess: (data) => {
+      console.log('Recheck onSuccess called, full response:', data);
+      console.log('Recheck success data.data:', data.data);
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setSubmitError(null);
       setRecheckResult({ status: data.data.status, message: data.data.message });
-      console.log('Recheck success:', data.data);
       // Don't auto-close modal on success - let user see the message and close manually
     },
     onError: (err) => {
+      console.log('Recheck onError called:', err);
       setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
-      console.log('Recheck error:', err);
     },
   });
 
