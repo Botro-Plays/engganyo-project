@@ -420,30 +420,46 @@
 ## VERIFICATION STRATEGY
 
 ### VDR-001: OAuth-Based Verification
-**Status**: Planned (Phase 11)
-**Date**: 2026-05-19
+**Status**: Partially Implemented (2026-05-21)
+**Date**: 2026-05-19 (Updated 2026-05-21)
 **Context**: Task verification methodology
-**Decision**: OAuth integration with social platform APIs for verification
+**Decision**: OAuth integration with social platform APIs for verification (partial implementation)
 **Rationale**:
-- Automated verification (no manual review)
+- Automated verification (no manual review) for supported platforms
 - Higher trust and accuracy
 - Scalable solution
 - Reduces fraud
+**Current Implementation (2026-05-21)**:
+- **Implemented**: YouTube (subscribe, like), Twitch (follow), Spotify (follow)
+- **Implemented**: OAuth flow with state JWT (10 min expiry)
+- **Implemented**: Token storage in SocialAccount model (encrypted)
+- **Implemented**: Token refresh logic with automatic rotation
+- **Implemented**: Manual link fallback for Twitter/X, TikTok, Instagram, Facebook
+- **Not Yet**: Twitter/X, TikTok, Instagram, Facebook OAuth integration
+- **Not Yet**: BullMQ async verification worker (currently synchronous in submitProof)
+- **Not Yet**: Retry logic for rate limits and token expiration (basic refresh exists)
+- **Not Yet**: SocialVerification Prisma model for tracking attempts
 **Tradeoffs**:
 - Platform API rate limits
 - API access approval required
 - Token management complexity
 - Platform ToS compliance risk
+- Synchronous verification blocks API response (need async queue)
 **Implementation**:
-- YouTube: `videos.getRating()`, `subscriptions.list()`
-- Twitter/X: API v2 like/follow endpoints
-- Twitch: Helix API follow endpoints
-- Spotify: Web API follow endpoints
+- YouTube: `videos.getRating()`, `subscriptions.list()` ✅
+- Twitter/X: API v2 like/follow endpoints ⏳ (manual link only)
+- Twitch: Helix API follow endpoints ✅
+- Spotify: Web API follow endpoints ✅
 - Fallback to manual review on API failure
+**Migration Plan**:
+- Add Twitter/X OAuth integration when API access approved
+- Move verification to BullMQ queue for async processing
+- Add SocialVerification model for tracking attempts
+- Implement retry logic with exponential backoff
 
 ### VDR-002: Token Storage and Rotation
-**Status**: Planned (Phase 11)
-**Date**: 2026-05-19
+**Status**: Implemented (2026-05-21)
+**Date**: 2026-05-19 (Updated 2026-05-21)
 **Context**: OAuth token management
 **Decision**: Encrypted token storage in database with automatic refresh
 **Rationale**:
@@ -451,15 +467,11 @@
 - Automatic token refresh
 - No token expiration issues
 - Compliance with platform requirements
-**Tradeoffs**:
-- Database security critical
-- Token rotation complexity
-- Need for encryption key management
 **Implementation**:
-- Encrypt tokens with ENCRYPTION_KEY
-- Store in SocialAccount model
-- Refresh tokens before expiration
-- Revoke on user request
+- Encrypt tokens with ENCRYPTION_KEY ✅
+- Store in SocialAccount model ✅
+- Refresh tokens before expiration ✅
+- Revoke on user request ✅
 
 ---
 
@@ -1043,5 +1055,5 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-05-20
-**Next Review**: 2026-08-20 (quarterly)
+**Last Updated**: 2026-05-21
+**Next Review**: 2026-08-21 (quarterly)

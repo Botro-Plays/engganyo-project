@@ -1,8 +1,8 @@
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-19 (Critical security issues identified — immediate action required)
+> Last updated: 2026-05-21 (Documentation synchronization pass - OAuth verification partially implemented)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phases 11-15 Pending
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Phases 11.5-15 Pending
 
 ---
 
@@ -343,44 +343,50 @@
 
 ---
 
-## Phase 11 — Social Verification Engine ⏳
+## Phase 11 — Social Verification Engine 🟠
 
 > Auto-resolve task completions via official platform APIs (like like4like.com)
 
 **Priority**: 🟠 HIGH - Critical for platform legitimacy and fraud prevention
 **Dependencies**: Phase 0 (Security), OAuth configuration
+**Current Status**: PARTIALLY IMPLEMENTED - OAuth verification working for YouTube, Twitch, Spotify; manual link fallback for Twitter/X, TikTok, Instagram, Facebook
 
 **Core concept**
 - When a user submits a task ("I liked your YouTube video"), the API calls the social platform using the completer's stored OAuth token to confirm the action happened — no manual review needed.
 
-**API verification per platform**
-- [🟠] YouTube — `videos.getRating(videoId)` via YouTube Data API v3 (confirm `like`)
-- [🟠] YouTube — `subscriptions.list` (confirm channel subscribe)
-- [🟠] Twitter/X — `GET /2/users/:id/liked_tweets` + `GET /2/users/:id/following` via API v2
-- [🟡] TikTok — liked videos + following endpoints via TikTok for Developers (limited API)
-- [🟡] Telegram — channel member check via Bot API (`getChatMember`)
-- [🟡] Instagram — follow check via Basic Display API (limited scope)
-- [🟠] Twitch — Helix API follow endpoints
+**API verification per platform (CURRENT IMPLEMENTATION)**
+- [✅] YouTube — `videos.getRating(videoId)` via YouTube Data API v3 (confirm `like`)
+- [✅] YouTube — `subscriptions.list` (confirm channel subscribe)
+- [✅] Twitch — Helix API follow endpoints (confirm channel follow)
+- [✅] Spotify — Web API follow endpoints (confirm artist/user follow)
+- [⏳] Twitter/X — API v2 like/follow endpoints (manual link only currently)
+- [⏳] TikTok — liked videos + following endpoints via TikTok for Developers (manual link only currently)
+- [⏳] Instagram — follow check via Basic Display API (manual link only currently)
+- [⏳] Telegram — channel member check via Bot API (not implemented)
+- [⏳] Facebook — Graph API (manual link only currently)
 
-**Infrastructure**
-- [🟠] `VerificationJob` BullMQ worker — pulls stored OAuth token, calls platform API, marks completion VERIFIED or REJECTED
-- [🟠] Retry logic — re-check after 5 min if token expired or API rate-limited
-- [🟠] `SocialVerification` Prisma model — tracks per-completion verification attempts + result
-- [🟠] Fallback to manual review if platform API is unavailable or token missing
-- [🟠] Token refresh and rotation strategy
+**Infrastructure (CURRENT IMPLEMENTATION)**
+- [✅] OAuth flow with state JWT (10 min expiry)
+- [✅] Token storage in SocialAccount model (encrypted with ENCRYPTION_KEY)
+- [✅] Token refresh logic with automatic rotation
+- [✅] API verification for YouTube, Twitch, Spotify (synchronous in submitProof)
+- [✅] Manual link fallback for Twitter/X, TikTok, Instagram, Facebook
+- [⏳] `VerificationJob` BullMQ worker — pull token, call API, mark VERIFIED/REJECTED (not yet implemented)
+- [⏳] Retry logic — re-check after 5 min if token expired or API rate-limited (not yet implemented)
+- [⏳] `SocialVerification` Prisma model — tracks per-completion verification attempts + result (not yet implemented)
 
 **Supported task types per platform**
 
 | Platform | Task Types | Verification Status |
 |----------|------------|-------------------|
-| YouTube | Like video, Subscribe to channel, Watch video (30s+), Comment | 🟠 OAuth API |
-| Twitter/X | Follow account, Like tweet, Retweet | 🟠 OAuth API |
-| Twitch | Follow account | 🟠 OAuth API |
-| Spotify | Follow artist, Follow playlist | 🟠 OAuth API |
-| TikTok | Follow account, Like video | 🟡 Limited API |
-| Instagram | Follow account, Like post | 🟡 Limited API |
-| Telegram | Join channel, Join group | 🟡 Bot API |
-| Facebook | Like page, Follow page, Like post, Share post | 🟡 Graph API |
+| YouTube | Like video, Subscribe to channel, Watch video (30s+), Comment | ✅ OAuth API (Implemented) |
+| Twitch | Follow account | ✅ OAuth API (Implemented) |
+| Spotify | Follow artist, Follow playlist | ✅ OAuth API (Implemented) |
+| Twitter/X | Follow account, Like tweet, Retweet | ⏳ Manual link only (OAuth not yet) |
+| TikTok | Follow account, Like video | ⏳ Manual link only (OAuth not yet) |
+| Instagram | Follow account, Like post | ⏳ Manual link only (OAuth not yet) |
+| Telegram | Join channel, Join group | ⏳ Not implemented |
+| Facebook | Like page, Follow page, Like post, Share post | ⏳ Manual link only (OAuth not yet) |
 
 **P2P Cross-Platform Exchange**
 - [🟡] Credits are the universal currency — earn by completing *any* task on *any* platform, spend to get *any* task done
@@ -744,7 +750,7 @@
 | 8 | Admin Dashboard | ✅ Complete | - |
 | 9 | Analytics | ✅ Complete | - |
 | 10 | Production Hardening | ✅ Complete | - |
-| 11 | Social Verification Engine | ⏳ Pending | 🟠 HIGH |
+| 11 | Social Verification Engine | 🟠 Partially Implemented | 🟠 HIGH |
 | 11.5 | Anti-Abuse Enhancements | ⏳ Pending | 🟠 HIGH |
 | 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
 | 12.5 | UX & Onboarding Improvements | ⏳ Pending | 🟡 MEDIUM |
@@ -769,7 +775,6 @@
 
 ### Week 1 - Day 3
 - [🔴] Add reCAPTCHA v3 on registration, login, and forgot-password
-- [🟡] Add file upload validation for proof screenshots
 
 ### Week 1 - Day 4-5
 - [🔴] Add 2FA for admin accounts (TOTP via otplib)

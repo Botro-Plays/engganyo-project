@@ -210,7 +210,6 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - Email verification disabled by default
 - reCAPTCHA v3 implemented but NOT FUNCTIONING in production (token generation not working, requires investigation)
 - No 2FA for admin accounts
-- No file upload validation for proof screenshots
 
 ---
 
@@ -281,14 +280,13 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - 🔴 Email verification disabled by default
 - 🔴 No CAPTCHA on registration/login
 - 🔴 No 2FA for admin accounts
-- 🔴 No file upload validation for proof screenshots
-- 🟠 Synchronous trust score calculation (blocks API)
+-  Synchronous trust score calculation (blocks API)
 - 🟠 Synchronous analytics snapshots (blocks cron)
 - 🟠 No caching strategy
 - 🟠 No backup strategy documentation
 
 ### Pending (Phases 11-17)
-- Social verification via OAuth APIs
+- Social verification via OAuth APIs (PARTIALLY IMPLEMENTED: YouTube, Twitch, Spotify working; Twitter/X, TikTok, Instagram, Facebook manual link only)
 - Enhanced anti-abuse with behavioral analysis
 - Community and social features
 - UX and onboarding improvements
@@ -384,28 +382,11 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 ## Last Updated
 
-**Last Updated**: 2026-05-20
-**Next Review**: 2026-08-20 (quarterly)
+**Last Updated**: 2026-05-21
+**Next Review**: 2026-08-21 (quarterly)
 **Reviewed By**: Project Architect (Cascade)
 
 **Changes in this update**:
-- Added architecture governance section
-- Added decision-making process
-- Added architecture review process
-- Added architectural principles
-- Added architecture review checklist
-- Updated security layers with current gaps
-- Updated development phases with priorities
-- Added current architecture status
-- Added scalability strategy
-- Added monitoring & observability section
-- Added deployment architecture section
-- Added last updated metadata
-- Updated current architecture status with recent implementations:
-  - Local file upload system for proof screenshots
-  - Docker volume persistence for uploads
-  - JWT-protected static file serving
-  - Campaign ownership enforcement
-  - Daily reward moved to dashboard
-  - React Query auth-aware hydration
-  - Strict TypeScript compliance
+- Removed "No file upload validation for proof screenshots" from security gaps (implemented)
+- Updated pending phases to reflect partial OAuth verification implementation (YouTube, Twitch, Spotify working)
+- Added clarification that social verification is partially implemented
