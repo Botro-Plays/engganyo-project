@@ -76,6 +76,7 @@ interface AvailableTask {
   creditPerTask: number;
   requiresProof: boolean;
   proofInstructions: string | null;
+  isPlatformTask: boolean;
   user: { id: string; username: string; displayName: string | null };
 }
 
@@ -389,7 +390,7 @@ export default function TasksPage() {
                         <span>by @{task.user.username}</span>
                       </div>
                       <div className="flex gap-1.5">
-                        {isOwner ? (
+                        {isOwner && !task.isPlatformTask ? (
                           <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 text-xs font-medium">
                             Owner View Only
                           </div>
