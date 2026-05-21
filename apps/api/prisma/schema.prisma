@@ -474,6 +474,9 @@ model Campaign {
   proofInstructions  String?  @map("proof_instructions") @db.Text
   autoVerify         Boolean  @default(true) @map("auto_verify") // true = instant payout; false = admin must review proof
 
+  // Platform task flag - if true, admin creator can assign/complete for testing (no credit reward)
+  isPlatformTask Boolean @default(false) @map("is_platform_task")
+
   // Scheduling
   startsAt   DateTime? @map("starts_at")
   expiresAt  DateTime? @map("expires_at")

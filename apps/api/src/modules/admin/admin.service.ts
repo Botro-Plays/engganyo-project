@@ -127,6 +127,7 @@ export class AdminService {
         proofInstructions: dto.proofInstructions,
         targetCountries: [],
         targetLanguages: [],
+        isPlatformTask: true,
       },
     });
 

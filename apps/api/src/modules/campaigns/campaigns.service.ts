@@ -41,6 +41,7 @@ const CAMPAIGN_SELECT = {
   updatedAt: true,
   completedAt: true,
   userId: true,
+  isPlatformTask: true,
   user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
 } as const;
 

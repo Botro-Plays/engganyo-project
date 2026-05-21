@@ -77,11 +77,14 @@ export class TasksService {
         pendingSlots: true,
         cooldownHours: true,
         expiresAt: true,
+        isPlatformTask: true,
       },
     });
 
     if (!campaign) throw new NotFoundException('Campaign not found');
-    if (campaign.userId === userId) throw new BadRequestException('Cannot assign your own campaign');
+    if (campaign.userId === userId && !campaign.isPlatformTask) {
+      throw new BadRequestException('Cannot assign your own campaign');
+    }
 
     // ── Require linked social account for the campaign's platform ──────────
     const requiredPlatform = SocialAuthService.getPlatformForTaskType(campaign.taskType as never);
@@ -295,6 +298,7 @@ export class TasksService {
             completedSlots: true,
             pendingSlots: true,
             totalSlots: true,
+            isPlatformTask: true,
           },
         },
       },
@@ -302,8 +306,8 @@ export class TasksService {
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
 
-    // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
-    if (completion.campaign.userId === userId) {
+    // ── Ownership enforcement: campaign owners cannot complete their own tasks unless it's a platform task ──
+    if (completion.campaign.userId === userId && !completion.campaign.isPlatformTask) {
       throw new BadRequestException('Campaign owners cannot complete their own tasks');
     }
 
@@ -329,7 +333,10 @@ export class TasksService {
     );
 
     if (apiVerified === true) {
-      // ── Auto-verify: credits paid immediately ──────────────
+      // ── Auto-verify: credits paid immediately (unless platform task by creator) ──────────────
+      const isPlatformTaskByCreator = completion.campaign.isPlatformTask && completion.campaign.userId === userId;
+      const creditsEarned = isPlatformTaskByCreator ? 0 : completion.campaign.creditPerTask;
+
       await this.prisma.withTransaction(async (tx) => {
         await tx.taskCompletion.update({
           where: { id: completion.id },
@@ -338,7 +345,7 @@ export class TasksService {
             submittedAt: now,
             verifiedAt: now,
             verifiedBy: 'system',
-            creditsEarned: completion.campaign.creditPerTask,
+            creditsEarned,
           },
         });
 
@@ -360,19 +367,22 @@ export class TasksService {
         });
       });
 
-      await this.walletService.credit(userId, completion.campaign.creditPerTask, {
-        type: TransactionType.EARN_TASK_COMPLETION,
-        description: `Task verified`,
-        referenceId: campaignId,
-        referenceType: 'campaign',
-      });
+      // Only reward credits if not a platform task completed by the creator
+      if (!isPlatformTaskByCreator) {
+        await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+          type: TransactionType.EARN_TASK_COMPLETION,
+          description: `Task verified`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        });
 
-      await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
-      await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
-      await this.gamificationService.checkAchievements(userId);
-      void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
+        await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+        await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
+        await this.gamificationService.checkAchievements(userId);
+        void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
+      }
 
-      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+      return { creditsEarned, status: 'VERIFIED', isPlatformTask: completion.campaign.isPlatformTask };
     } else {
       // ── Not yet subscribed: keep in current state ──────────────
       return {
