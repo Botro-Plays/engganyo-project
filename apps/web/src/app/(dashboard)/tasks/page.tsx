@@ -268,11 +268,7 @@ export default function TasksPage() {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setSubmitError(null);
       setRecheckResult({ status: data.data.status, message: data.data.message });
-      // Check if verification actually succeeded
-      if (data.data.status === 'VERIFIED') {
-        // Delay closing modal so user can see success message
-        setTimeout(() => setSubmitting(null), 2000);
-      }
+      // Don't auto-close modal on success - let user see the message and close manually
     },
     onError: (err) => {
       setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
@@ -616,26 +612,44 @@ export default function TasksPage() {
                   2. Click the button below to verify your subscription
                 </p>
                 {recheckResult?.status === 'VERIFIED' ? (
-                  <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                    <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Subscription verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                  <>
+                    <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                      <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Subscription verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                      </div>
                     </div>
-                  </div>
+                    <button
+                      onClick={() => setSubmitting(null)}
+                      className="w-full py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium transition-colors"
+                    >
+                      Close
+                    </button>
+                  </>
                 ) : recheckResult?.status === 'FAILED' || recheckMutation.isError ? (
-                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                    <div className="text-red-400 text-sm">
-                      {recheckResult?.message || submitError || 'Subscription not yet verified. Please subscribe to the channel and try again.'}
+                  <>
+                    <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                      <div className="text-red-400 text-sm">
+                        {recheckResult?.message || submitError || 'Subscription not yet verified. Please subscribe to the channel and try again.'}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-                <button
-                  onClick={() => recheckMutation.mutate(submitting.campaign.id)}
-                  disabled={recheckMutation.isPending}
-                  className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
-                </button>
+                    <button
+                      onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                      disabled={recheckMutation.isPending}
+                      className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                    disabled={recheckMutation.isPending}
+                    className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
+                  </button>
+                )}
               </div>
             ) : submitting.campaign.taskType === 'YOUTUBE_LIKE' ? (
               // YouTube Like: Show check button instead of proof upload
@@ -645,26 +659,44 @@ export default function TasksPage() {
                   2. Click the button below to verify your like
                 </p>
                 {recheckResult?.status === 'VERIFIED' ? (
-                  <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                    <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Like verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                  <>
+                    <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                      <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Like verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                      </div>
                     </div>
-                  </div>
+                    <button
+                      onClick={() => setSubmitting(null)}
+                      className="w-full py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium transition-colors"
+                    >
+                      Close
+                    </button>
+                  </>
                 ) : recheckResult?.status === 'FAILED' || recheckMutation.isError ? (
-                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                    <div className="text-red-400 text-sm">
-                      {recheckResult?.message || submitError || 'Like not verified. Please make sure you liked the video and try again.'}
+                  <>
+                    <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                      <div className="text-red-400 text-sm">
+                        {recheckResult?.message || submitError || 'Like not verified. Please make sure you liked the video and try again.'}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-                <button
-                  onClick={() => recheckMutation.mutate(submitting.campaign.id)}
-                  disabled={recheckMutation.isPending}
-                  className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {recheckMutation.isPending ? 'Checking...' : 'Check Like'}
-                </button>
+                    <button
+                      onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                      disabled={recheckMutation.isPending}
+                      className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {recheckMutation.isPending ? 'Checking...' : 'Check Like'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                    disabled={recheckMutation.isPending}
+                    className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {recheckMutation.isPending ? 'Checking...' : 'Check Like'}
+                  </button>
+                )}
               </div>
             ) : (
               // Other tasks: Show proof upload form

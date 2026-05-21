@@ -376,7 +376,7 @@ export class TasksService {
       await this.gamificationService.checkAchievements(userId);
       void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
 
-      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED', message: 'Verification successful' };
     } else if (apiVerified === null) {
       // ── API verification not available (not linked or API error) ──────────────
       const taskLabel = completion.campaign.taskType.replace(/_/g, ' ').toLowerCase();
