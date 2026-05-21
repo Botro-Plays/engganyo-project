@@ -28,7 +28,7 @@ export default function LandingPage() {
           <Link href="#about" className="hover:text-white transition-colors">About</Link>
         </div>
         <div className="flex items-center gap-4 text-sm text-zinc-400">
-          <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+          <a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a>
         </div>
 
         <div className="flex items-center gap-3">
@@ -192,7 +192,7 @@ export default function LandingPage() {
           </div>
           <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
           <div className="flex gap-6 text-zinc-500 text-sm">
-            <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a>
             <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
             <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
           </div>
