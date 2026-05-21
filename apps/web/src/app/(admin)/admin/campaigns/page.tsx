@@ -174,6 +174,16 @@ export default function AdminCampaignsPage() {
     onError: (err) => setActionError(getApiErrorMessage(err)),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`admin/tasks/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['discover'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err) => setActionError(getApiErrorMessage(err)),
+  });
+
   const reviewMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'approve' | 'reject' }) =>
       apiClient.patch(`admin/campaigns/${id}/review`, { action, notes: notes[id] }),
@@ -306,10 +316,17 @@ export default function AdminCampaignsPage() {
                         <ExternalLink className="w-3 h-3 shrink-0" />
                       </a>
                     </div>
-                    <button onClick={() => openEdit(t)}
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 text-xs font-medium transition-all">
-                      <Loader2 className="w-3 h-3 hidden" /> Edit
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => openEdit(t)}
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 text-xs font-medium transition-all">
+                        <Loader2 className="w-3 h-3 hidden" /> Edit
+                      </button>
+                      <button onClick={() => cancelMutation.mutate(t.id)}
+                        disabled={cancelMutation.isPending}
+                        className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition-all disabled:opacity-50">
+                        <Loader2 className="w-3 h-3 animate-spin hidden" /> Cancel
+                      </button>
+                    </div>
                   </div>
                 );
               })}
