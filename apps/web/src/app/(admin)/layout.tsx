@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
+import { AuthenticatedProviders } from '@/app/providers';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -24,7 +25,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <AuthGuard roles={['ADMIN', 'MODERATOR', 'SUPER_ADMIN']}>
-    <div className="min-h-screen bg-surface flex">
+      <AuthenticatedProviders>
+        <div className="min-h-screen bg-surface flex">
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
         <div className="p-5 border-b border-surface-border">
@@ -103,6 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
     </div>
+      </AuthenticatedProviders>
     </AuthGuard>
   );
 }

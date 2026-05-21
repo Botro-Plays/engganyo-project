@@ -19,18 +19,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
-  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-
   return (
     <QueryClientProvider client={queryClient}>
-      {recaptchaSiteKey ? (
-        <GoogleReCaptchaProvider reCaptchaKey={recaptchaSiteKey}>
-          {children}
-        </GoogleReCaptchaProvider>
-      ) : (
-        children
-      )}
+      {children}
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
+  );
+}
+
+export function AuthenticatedProviders({ children }: { children: React.ReactNode }) {
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+
+  return recaptchaSiteKey ? (
+    <GoogleReCaptchaProvider reCaptchaKey={recaptchaSiteKey}>
+      {children}
+    </GoogleReCaptchaProvider>
+  ) : (
+    children
   );
 }
