@@ -337,6 +337,10 @@ export class SocialAuthService {
           return null;
       }
     } catch (err) {
+      // Re-throw BadRequestException to show user the actual error
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       this.logger.warn(`Platform verification error (${taskType}): ${(err as Error).message}`);
       return null; // On API error, fall back to screenshot rather than blocking the user
     }
