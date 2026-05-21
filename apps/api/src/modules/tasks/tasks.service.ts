@@ -333,10 +333,7 @@ export class TasksService {
     );
 
     if (apiVerified === true) {
-      // ── Auto-verify: credits paid immediately (unless platform task by creator) ──────────────
-      const isPlatformTaskByCreator = completion.campaign.isPlatformTask && completion.campaign.userId === userId;
-      const creditsEarned = isPlatformTaskByCreator ? 0 : completion.campaign.creditPerTask;
-
+      // ── Auto-verify: credits paid immediately ──────────────
       await this.prisma.withTransaction(async (tx) => {
         await tx.taskCompletion.update({
           where: { id: completion.id },
@@ -345,7 +342,7 @@ export class TasksService {
             submittedAt: now,
             verifiedAt: now,
             verifiedBy: 'system',
-            creditsEarned,
+            creditsEarned: completion.campaign.creditPerTask,
           },
         });
 
@@ -367,22 +364,19 @@ export class TasksService {
         });
       });
 
-      // Only reward credits if not a platform task completed by the creator
-      if (!isPlatformTaskByCreator) {
-        await this.walletService.credit(userId, completion.campaign.creditPerTask, {
-          type: TransactionType.EARN_TASK_COMPLETION,
-          description: `Task verified`,
-          referenceId: campaignId,
-          referenceType: 'campaign',
-        });
+      await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+        type: TransactionType.EARN_TASK_COMPLETION,
+        description: `Task verified`,
+        referenceId: campaignId,
+        referenceType: 'campaign',
+      });
 
-        await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
-        await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
-        await this.gamificationService.checkAchievements(userId);
-        void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
-      }
+      await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+      await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
+      await this.gamificationService.checkAchievements(userId);
+      void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
 
-      return { creditsEarned, status: 'VERIFIED', isPlatformTask: completion.campaign.isPlatformTask };
+      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
     } else {
       // ── Not yet subscribed: keep in current state ──────────────
       return {
