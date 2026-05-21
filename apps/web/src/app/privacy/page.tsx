@@ -14,7 +14,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold text-white mb-4">1. Introduction</h2>
             <p className="leading-relaxed">
-              Engganyo ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our creator growth platform. Please read this policy carefully. If you do not agree with the terms of this policy, please do not access the platform.
+              Engganyo (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our creator growth platform. Please read this policy carefully. If you do not agree with the terms of this policy, please do not access the platform.
             </p>
           </section>
 
@@ -125,7 +125,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-4">9. Children's Privacy</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">9. Children&apos;s Privacy</h2>
             <p className="leading-relaxed">
               Our platform is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected such information, we will take steps to delete it.
             </p>
@@ -141,7 +141,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold text-white mb-4">11. Changes to This Policy</h2>
             <p className="leading-relaxed">
-              We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new policy on our platform and updating the "Last updated" date. Your continued use of the platform after such changes constitutes acceptance of the updated policy.
+              We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new policy on our platform and updating the &ldquo;Last updated&rdquo; date. Your continued use of the platform after such changes constitutes acceptance of the updated policy.
             </p>
           </section>
 
