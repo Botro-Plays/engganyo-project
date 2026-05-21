@@ -377,12 +377,19 @@ export class TasksService {
       void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
 
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+    } else if (apiVerified === null) {
+      // ── API verification not available (not linked or API error) ──────────────
+      const taskLabel = completion.campaign.taskType.replace(/_/g, ' ').toLowerCase();
+      throw new BadRequestException(
+        `Could not verify ${taskLabel}. Please link your account in Settings > Connected Accounts or upload a screenshot proof instead.`,
+      );
     } else {
-      // ── Not yet subscribed: keep in current state ──────────────
+      // ── Verification failed (false) ──────────────
+      const taskLabel = completion.campaign.taskType.replace(/_/g, ' ').toLowerCase();
       return {
         creditsEarned: 0,
         status: completion.status,
-        message: 'Subscription not yet verified. Please subscribe to the channel and try again.',
+        message: `${taskLabel} not yet verified. Please complete the action and try again.`,
       };
     }
   }

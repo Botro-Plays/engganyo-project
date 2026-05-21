@@ -26,7 +26,7 @@ const PLATFORM_CONFIGS: Partial<Record<SocialPlatform, PlatformOAuthConfig>> = {
   [SocialPlatform.YOUTUBE]: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: ['https://www.googleapis.com/auth/youtube.readonly', 'openid', 'profile'],
+    scopes: ['https://www.googleapis.com/auth/youtube', 'openid', 'profile'],
     clientIdEnv: 'GOOGLE_CLIENT_ID',
     clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
   },
