@@ -37,15 +37,27 @@ export const metadata: Metadata = {
     siteName: 'Engganyo',
     title: 'Engganyo — Collaborative Creator Growth',
     description: 'Grow your social presence through real human engagement.',
+    images: [
+      {
+        url: 'https://engganyo.com/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Engganyo - Collaborative Creator Growth',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Engganyo — Collaborative Creator Growth',
     description: 'Grow your social presence through real human engagement.',
+    images: ['https://engganyo.com/og-image.png'],
   },
   robots: {
     index: true,
     follow: true,
+  },
+  alternates: {
+    canonical: 'https://engganyo.com',
   },
 };
 

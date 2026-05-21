@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Script from 'next/script';
 import {
   Zap,
   Users,
@@ -10,9 +11,45 @@ import {
   Globe,
 } from 'lucide-react';
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Engganyo',
+      url: 'https://engganyo.com',
+      logo: 'https://engganyo.com/logo-square.svg',
+      description: 'Engganyo is a creator growth platform designed to help content creators increase their audience engagement through authentic, community-driven interactions.',
+    },
+    {
+      '@type': 'WebSite',
+      url: 'https://engganyo.com',
+      name: 'Engganyo',
+      description: 'Grow your social presence through real human engagement. Earn credits, complete tasks, and build a genuine creator community.',
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: 'https://engganyo.com/search?q={search_term_string}',
+        'query-input': 'required name=search_term_string',
+      },
+    },
+    {
+      '@type': 'WebPage',
+      url: 'https://engganyo.com',
+      name: 'Engganyo — Collaborative Creator Growth',
+      description: 'Grow your social presence through real human engagement. Earn credits, complete tasks, and build a genuine creator community.',
+    },
+  ],
+};
+
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-surface text-white overflow-hidden">
+    <>
+      <Script
+        id="json-ld"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <main className="min-h-screen bg-surface text-white overflow-hidden">
       {/* Hero gradient */}
       <div className="absolute inset-0 bg-gradient-hero pointer-events-none" />
 
@@ -207,6 +244,7 @@ export default function LandingPage() {
         </div>
       </footer>
     </main>
+    </>
   );
 }
 
