@@ -483,12 +483,15 @@
 - [🟡] Auto-hide content after threshold reports (pending admin review)
 
 **Telegram platform**
-- [🟡] Telegram account connect via Telegram Login Widget (no OAuth scope needed — just identity)
-- [🟡] Telegram Bot API integration — `getChatMember(chatId, userId)` to verify join
-- [🟡] Task types: Join channel, Join group
-- [🟡] Campaign creators provide their Telegram channel/group `@username` or invite link
-- [🟡] Bot must be admin in the channel/group to check membership
-- [🟡] `TELEGRAM_BOT_TOKEN` env var — create via @BotFather
+- [✅] Task types: Join channel, Join group — manual screenshot proof (same as FB/Twitter/Instagram)
+- [✅] TELEGRAM added to SocialPlatform enum; TELEGRAM_JOIN_CHANNEL, TELEGRAM_JOIN_GROUP added to TaskType
+- [✅] Optional manual profile link (t.me URL) in Connected Accounts
+- [❌ REJECTED] Telegram Bot API auto-verification — requires creators to add bot as admin to their own channel/group, too much friction for campaign creators. Deferred to post-10K users if demand warrants it.
+
+**Discord platform**
+- [✅] Task type: Join server — manual screenshot proof
+- [✅] DISCORD added to SocialPlatform enum; DISCORD_JOIN_SERVER added to TaskType
+- [✅] Optional manual profile link in Connected Accounts
 
 **Discovery features**
 - [🟡] User search and discovery
