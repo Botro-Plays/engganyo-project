@@ -56,7 +56,7 @@ jobs:
       ADMIN_EMAIL: admin@engganyo.com
       ADMIN_PASSWORD: Admin@123456
       ENABLE_EMAIL_VERIFICATION: "false"
-      NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
 
     steps:
       - uses: actions/checkout@v4
