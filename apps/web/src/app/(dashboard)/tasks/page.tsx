@@ -21,17 +21,23 @@ import { useAuthStore } from '@/store/auth.store';
 const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   YOUTUBE_SUBSCRIBE: 'YOUTUBE',  YOUTUBE_LIKE: 'YOUTUBE',
   YOUTUBE_COMMENT: 'YOUTUBE',    YOUTUBE_WATCH: 'YOUTUBE',
-  TIKTOK_FOLLOW: 'TIKTOK',       TIKTOK_LIKE: 'TIKTOK',   TIKTOK_COMMENT: 'TIKTOK',
+  TIKTOK_FOLLOW: 'TIKTOK',       TIKTOK_LIKE: 'TIKTOK',      TIKTOK_COMMENT: 'TIKTOK',
   INSTAGRAM_FOLLOW: 'INSTAGRAM', INSTAGRAM_LIKE: 'INSTAGRAM', INSTAGRAM_COMMENT: 'INSTAGRAM',
-  TWITTER_FOLLOW: 'TWITTER',     TWITTER_LIKE: 'TWITTER',  TWITTER_RETWEET: 'TWITTER',
-  FACEBOOK_PAGE_LIKE: 'FACEBOOK',
+  TWITTER_FOLLOW: 'TWITTER',     TWITTER_LIKE: 'TWITTER',    TWITTER_RETWEET: 'TWITTER', TWITTER_REPLY: 'TWITTER',
+  FACEBOOK_PAGE_LIKE: 'FACEBOOK', FACEBOOK_POST_LIKE: 'FACEBOOK', FACEBOOK_SHARE: 'FACEBOOK',
   TWITCH_FOLLOW: 'TWITCH',
   SPOTIFY_FOLLOW: 'SPOTIFY',     SPOTIFY_STREAM: 'SPOTIFY',
+  TELEGRAM_JOIN_CHANNEL: 'TELEGRAM', TELEGRAM_JOIN_GROUP: 'TELEGRAM',
+  DISCORD_JOIN_SERVER: 'DISCORD',
 };
+
+// Only these platforms require a linked account to accept a task (OAuth-based verification)
+const OAUTH_REQUIRED_PLATFORMS = new Set(['YOUTUBE', 'TWITCH', 'SPOTIFY']);
 
 const PLATFORM_LABEL: Record<string, string> = {
   YOUTUBE: 'YouTube', TIKTOK: 'TikTok', INSTAGRAM: 'Instagram',
   TWITTER: 'Twitter', FACEBOOK: 'Facebook', TWITCH: 'Twitch', SPOTIFY: 'Spotify',
+  TELEGRAM: 'Telegram', DISCORD: 'Discord',
 };
 
 // ─── Types ────────────────────────────────────────────────────
@@ -49,20 +55,28 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   TWITTER_FOLLOW: 'Twitter · Follow',
   TWITTER_LIKE: 'Twitter · Like',
   TWITTER_RETWEET: 'Twitter · Retweet',
+  TWITTER_REPLY: 'Twitter · Reply',
   FACEBOOK_PAGE_LIKE: 'Facebook · Page Like',
+  FACEBOOK_POST_LIKE: 'Facebook · Post Like',
+  FACEBOOK_SHARE: 'Facebook · Share',
   TWITCH_FOLLOW: 'Twitch · Follow',
   SPOTIFY_FOLLOW: 'Spotify · Follow',
   SPOTIFY_STREAM: 'Spotify · Stream',
+  TELEGRAM_JOIN_CHANNEL: 'Telegram · Join Channel',
+  TELEGRAM_JOIN_GROUP: 'Telegram · Join Group',
+  DISCORD_JOIN_SERVER: 'Discord · Join Server',
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
-  YOUTUBE: 'text-red-400 bg-red-500/10',
-  TIKTOK: 'text-white bg-white/10',
-  INSTAGRAM: 'text-pink-400 bg-pink-500/10',
-  TWITTER: 'text-sky-400 bg-sky-500/10',
+  YOUTUBE:  'text-red-400 bg-red-500/10',
+  TIKTOK:   'text-white bg-white/10',
+  INSTAGRAM:'text-pink-400 bg-pink-500/10',
+  TWITTER:  'text-sky-400 bg-sky-500/10',
   FACEBOOK: 'text-blue-400 bg-blue-500/10',
-  TWITCH: 'text-purple-400 bg-purple-500/10',
-  SPOTIFY: 'text-green-400 bg-green-500/10',
+  TWITCH:   'text-purple-400 bg-purple-500/10',
+  SPOTIFY:  'text-green-400 bg-green-500/10',
+  TELEGRAM: 'text-sky-300 bg-sky-400/10',
+  DISCORD:  'text-indigo-400 bg-indigo-500/10',
 };
 
 interface AvailableTask {
@@ -408,8 +422,13 @@ export default function TasksPage() {
                           </div>
                         ) : (() => {
                           const reqPlatform = TASK_TYPE_TO_PLATFORM[task.taskType];
-                          const isLinked = !reqPlatform || (safeLinkedAccounts?.has(reqPlatform) ?? false);
-                          if (!isLinked) {
+                          // Only OAuth platforms require a linked account to accept;
+                          // manual-proof platforms (FB, Twitter, Instagram, TikTok, Telegram, Discord)
+                          // can always be accepted and completed via screenshot.
+                          const needsLink = !!reqPlatform
+                            && OAUTH_REQUIRED_PLATFORMS.has(reqPlatform)
+                            && !(safeLinkedAccounts?.has(reqPlatform) ?? false);
+                          if (needsLink) {
                             return (
                               <Link
                                 href="/settings/connected-accounts"

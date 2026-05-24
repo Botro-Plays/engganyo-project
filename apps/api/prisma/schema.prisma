@@ -90,6 +90,9 @@ enum TaskType {
   TWITCH_FOLLOW
   SPOTIFY_FOLLOW
   SPOTIFY_STREAM
+  TELEGRAM_JOIN_CHANNEL
+  TELEGRAM_JOIN_GROUP
+  DISCORD_JOIN_SERVER
 }
 
 enum CompletionStatus {
@@ -111,6 +114,8 @@ enum SocialPlatform {
   TWITTER
   TWITCH
   SPOTIFY
+  TELEGRAM
+  DISCORD
 }
 
 enum NotificationType {

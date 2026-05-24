@@ -93,6 +93,26 @@ const PLATFORMS = [
     description: 'Facebook tasks use screenshot proof.',
     supported: false,
   },
+  {
+    id: 'TELEGRAM',
+    label: 'Telegram',
+    icon: Link2,
+    color: 'text-sky-300',
+    bg: 'bg-sky-400/10',
+    border: 'border-sky-400/20',
+    description: 'Telegram join tasks use screenshot proof. Optionally link your t.me profile.',
+    supported: false,
+  },
+  {
+    id: 'DISCORD',
+    label: 'Discord',
+    icon: Link2,
+    color: 'text-indigo-400',
+    bg: 'bg-indigo-500/10',
+    border: 'border-indigo-500/20',
+    description: 'Discord join tasks use screenshot proof. Optionally link your Discord profile.',
+    supported: false,
+  },
 ] as const;
 
 export default function ConnectedAccountsPage() {
@@ -117,6 +137,8 @@ function ConnectedAccountsPageInner() {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
   const [manualExpanded, setManualExpanded] = useState<Record<string, boolean>>({});
+  const [pendingManualLink, setPendingManualLink] = useState<string | null>(null);
+  const [pendingDisconnect, setPendingDisconnect] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   // Handle hydration mismatch by setting mounted state
@@ -142,7 +164,7 @@ function ConnectedAccountsPageInner() {
     }
   }, [searchParams, queryClient, mounted, user?.id]);
 
-  const { data: accounts, isLoading, error } = useQuery({
+  const { data: accounts, isLoading } = useQuery({
     queryKey: ['social-accounts', user?.id],
     queryFn: async () => {
       try {
@@ -150,8 +172,7 @@ function ConnectedAccountsPageInner() {
         const data = res.data.data;
         // Ensure data is an array
         return Array.isArray(data) ? data : [];
-      } catch (err) {
-        console.error('Failed to fetch connected accounts:', err);
+      } catch {
         return [];
       }
     },
@@ -160,24 +181,37 @@ function ConnectedAccountsPageInner() {
   });
 
   const manualLinkMutation = useMutation({
-    mutationFn: ({ platform, profileUrl }: { platform: string; profileUrl: string }) =>
-      apiClient.post(`social-auth/manual-link`, { platform, profileUrl }),
+    mutationFn: ({ platform, profileUrl }: { platform: string; profileUrl: string }) => {
+      setPendingManualLink(platform);
+      return apiClient.post(`social-auth/manual-link`, { platform, profileUrl });
+    },
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
       setNotice({ type: 'success', msg: `${variables.platform} account linked.` });
       setManualExpanded((m) => ({ ...m, [variables.platform]: false }));
       setManualInputs((m) => ({ ...m, [variables.platform]: '' }));
+      setPendingManualLink(null);
     },
-    onError: (err) => setNotice({ type: 'error', msg: getApiErrorMessage(err) }),
+    onError: (err) => {
+      setNotice({ type: 'error', msg: getApiErrorMessage(err) });
+      setPendingManualLink(null);
+    },
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: (platform: string) => apiClient.delete(`social-auth/${platform.toLowerCase()}`),
+    mutationFn: (platform: string) => {
+      setPendingDisconnect(platform);
+      return apiClient.delete(`social-auth/${platform.toLowerCase()}`);
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
       setNotice({ type: 'success', msg: 'Account disconnected.' });
+      setPendingDisconnect(null);
     },
-    onError: (err) => setNotice({ type: 'error', msg: getApiErrorMessage(err) }),
+    onError: (err) => {
+      setNotice({ type: 'error', msg: getApiErrorMessage(err) });
+      setPendingDisconnect(null);
+    },
   });
 
   const handleConnect = async (platform: string) => {
@@ -278,10 +312,13 @@ function ConnectedAccountsPageInner() {
                   {linked ? (
                     <button
                       onClick={() => disconnectMutation.mutate(p.id)}
-                      disabled={disconnectMutation.isPending}
+                      disabled={pendingDisconnect === p.id}
                       className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition-all disabled:opacity-50"
                     >
-                      <Unlink className="w-3.5 h-3.5" /> Disconnect
+                      {pendingDisconnect === p.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Unlink className="w-3.5 h-3.5" />}
+                      Disconnect
                     </button>
                   ) : p.supported ? (
                     <button
@@ -317,10 +354,10 @@ function ConnectedAccountsPageInner() {
                         const url = manualInputs[p.id]?.trim();
                         if (url) manualLinkMutation.mutate({ platform: p.id, profileUrl: url });
                       }}
-                      disabled={manualLinkMutation.isPending || !manualInputs[p.id]?.trim()}
+                      disabled={pendingManualLink === p.id || !manualInputs[p.id]?.trim()}
                       className={`shrink-0 px-3 py-1.5 rounded-lg ${p.bg} ${p.color} text-xs font-medium transition-all disabled:opacity-50`}
                     >
-                      {manualLinkMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+                      {pendingManualLink === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
                     </button>
                   </div>
                 )}
