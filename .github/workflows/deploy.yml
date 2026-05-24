@@ -106,22 +106,22 @@ jobs:
             docker pull "$WEB_IMAGE"
 
             # Restart containers without rebuilding
-            docker-compose up -d
+            docker compose up -d
 
             # Wait for API container to become ready
             sleep 8
 
             # Run any pending Prisma migrations
-            docker-compose exec -T api npx prisma migrate deploy
+            docker compose exec -T api npx prisma migrate deploy
 
             # Seed database on first-ever deploy only
             if [ ! -f ".seeded" ]; then
               echo "Running initial database seed..."
-              if docker-compose exec -T api npx prisma db seed; then
+              if docker compose exec -T api npx prisma db seed; then
                 touch ".seeded"
                 echo "Seed completed"
               else
-                echo "WARNING: Seed failed — run manually: docker-compose exec api npx prisma db seed"
+                echo "WARNING: Seed failed — run manually: docker compose exec api npx prisma db seed"
               fi
             else
               echo "Database already seeded, skipping"

@@ -49,7 +49,7 @@ docker pull "$WEB_IMAGE"
 
 # Start containers using pulled images
 log "Starting containers..."
-docker-compose up -d
+docker compose up -d
 
 # Wait for API to be ready
 log "Waiting for containers to be healthy..."
@@ -57,17 +57,17 @@ sleep 10
 
 # Run Prisma migrations
 log "Running Prisma migrations..."
-docker-compose exec -T api npx prisma migrate deploy
+docker compose exec -T api npx prisma migrate deploy
 
 # Seed database on first-ever deploy only
 SEED_SENTINEL="/opt/engganyo-project/.seeded"
 if [ ! -f "$SEED_SENTINEL" ]; then
     log "Running database seed (first deploy)..."
-    if docker-compose exec -T api npx prisma db seed; then
+    if docker compose exec -T api npx prisma db seed; then
         touch "$SEED_SENTINEL"
         log "Seed completed successfully"
     else
-        log "Seed failed — run manually: docker-compose exec api npx prisma db seed"
+        log "Seed failed — run manually: docker compose exec api npx prisma db seed"
     fi
 else
     log "Seed already ran, skipping"
