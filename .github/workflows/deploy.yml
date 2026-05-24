@@ -105,7 +105,10 @@ jobs:
             docker pull "$API_IMAGE"
             docker pull "$WEB_IMAGE"
 
-            # Restart containers without rebuilding
+            # Stop and remove old containers to avoid name conflicts
+            docker compose down
+
+            # Start containers with new images
             docker compose up -d
 
             # Wait for API container to become ready

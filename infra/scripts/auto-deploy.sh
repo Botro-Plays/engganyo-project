@@ -47,6 +47,10 @@ log "Pulling pre-built images from GHCR..."
 docker pull "$API_IMAGE"
 docker pull "$WEB_IMAGE"
 
+# Stop and remove old containers to avoid name conflicts
+log "Stopping and removing old containers..."
+docker compose down
+
 # Start containers using pulled images
 log "Starting containers..."
 docker compose up -d
