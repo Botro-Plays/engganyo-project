@@ -72,11 +72,21 @@ docker-compose exec -T api npx prisma migrate deploy
 docker-compose exec -T api npx prisma db seed
 ```
 
-## Step 7: Start All Services
+## Step 7: Pull Pre-built Images and Start All Services
+
+On first VPS setup, pull the latest images from GHCR (built by GitHub Actions) then start:
 
 ```bash
-# Start API, web, and nginx
-docker-compose up -d --build
+# Authenticate to GHCR (requires GHCR_TOKEN in .env — see GitHub Secrets section below)
+set -a; source .env; set +a
+echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+# Pull pre-built images
+docker pull ghcr.io/botro-plays/engganyo-project/api:latest
+docker pull ghcr.io/botro-plays/engganyo-project/web:latest
+
+# Start all services (no --build; uses pulled images)
+docker-compose up -d
 ```
 
 ## Step 8: Verify Services are Running
@@ -102,11 +112,39 @@ Default admin credentials (from seed):
 
 ---
 
-## Auto-Deployment Setup
+## Automated Deployment (GitHub Actions → GHCR → VPS)
 
-The project includes a systemd service for automatic deployment on VPS boot.
+Deployments are **fully automated** on every push to `main`:
 
-### Setup Auto-Deploy Service (One-time Setup)
+1. **CI** (`ci.yml`) — lint, test, build
+2. **Deploy** (`deploy.yml`) — triggered when CI passes:
+   - Builds Docker images on GitHub's fast servers
+   - Pushes to GitHub Container Registry (GHCR)
+   - SSHes into VPS → pulls pre-built images → restarts containers → runs migrations
+
+**No manual action required.** Deploy time: ~3 minutes (down from ~15 min).
+
+---
+
+### Required GitHub Secrets
+
+Configure these in **GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `VPS_HOST` | VPS IP address or domain (e.g. `134.255.225.158`) |
+| `VPS_USER` | SSH username (e.g. `engganyo`, `ubuntu`, or `root`) |
+| `VPS_SSH_KEY` | **Full contents** of the VPS SSH private key (`~/.ssh/id_rsa`) |
+| `NEXT_PUBLIC_API_URL` | Production API URL baked into Next.js build (e.g. `https://engganyo.com/api`) |
+| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | Google reCAPTCHA v3 site key (public, baked into Next.js bundle) |
+
+> `GITHUB_TOKEN` is **automatic** — no setup needed. It is used to push images to GHCR and for the VPS pull.
+
+---
+
+### Setup Auto-Deploy Service (One-time, Manual Fallback)
+
+The systemd service is a **manual fallback** only (e.g., if GitHub Actions is unavailable).
 
 ```bash
 # Copy the systemd service file
@@ -118,39 +156,33 @@ chmod +x infra/scripts/auto-deploy.sh
 # Reload systemd daemon
 sudo systemctl daemon-reload
 
-# Enable the service to start on boot
+# Enable on boot (optional)
 sudo systemctl enable auto-deploy
+```
 
-# Start the service now
+For the manual fallback to work, add these two lines to `/opt/engganyo-project/.env`:
+
+```bash
+GHCR_TOKEN=<GitHub PAT with read:packages scope>
+GHCR_USER=<your GitHub username, e.g. botro-plays>
+```
+
+To trigger a manual deploy:
+
+```bash
 sudo systemctl start auto-deploy
 ```
 
-### Manual Deployment After Code Changes
-
-When you push new code to GitHub, deploy it to VPS:
+### Check Deployment Logs
 
 ```bash
-# SSH into VPS
-ssh engganyo@134.255.225.158
-
-# Navigate to project directory
-cd /opt/engganyo-project
-
-# Pull latest changes
-git pull origin main
-
-# Trigger auto-deploy
-sudo systemctl start auto-deploy
-```
-
-### Check Auto-Deploy Logs
-
-```bash
-# View deployment logs
+# View deployment logs (manual fallback)
 tail -f /opt/engganyo-project/auto-deploy.log
 
-# Check service status
+# Check systemd service status
 sudo systemctl status auto-deploy
+
+# GitHub Actions deploys: check the Deploy workflow on github.com/Botro-Plays/engganyo-project/actions
 ```
 
 ---
