@@ -92,14 +92,13 @@ export class SocialAuthService {
 
   // ─── Manual link (non-OAuth platforms: Twitter, TikTok, Instagram, Facebook) ─
 
-  async manualLink(userId: string, platform: SocialPlatform, profileUrl: string) {
+  async manualLink(userId: string, platform: SocialPlatform, input: string) {
     const oauthPlatforms = [SocialPlatform.YOUTUBE, SocialPlatform.TWITCH, SocialPlatform.SPOTIFY];
     if ((oauthPlatforms as SocialPlatform[]).includes(platform)) {
       throw new BadRequestException(`${platform} requires OAuth — use the Connect button instead.`);
     }
 
-    // Extract a username hint from the URL
-    const username = this.extractUsernameFromUrl(profileUrl);
+    const { profileUrl, username } = this.normalizeInput(platform, input);
 
     await this.prisma.socialAccount.upsert({
       where: { userId_platform: { userId, platform } },
@@ -120,7 +119,40 @@ export class SocialAuthService {
       },
     });
 
-    return { linked: true, platform, profileUrl, verified: false };
+    return { linked: true, platform, profileUrl, username, verified: false };
+  }
+
+  private normalizeInput(
+    platform: SocialPlatform,
+    input: string,
+  ): { profileUrl: string | null; username: string | null } {
+    const trimmed = input.trim();
+
+    // Already a full URL — keep it and extract username
+    if (/^https?:\/\//i.test(trimmed)) {
+      return { profileUrl: trimmed, username: this.extractUsernameFromUrl(trimmed) };
+    }
+
+    // Handle or bare username (strip leading @)
+    const handle = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+
+    switch (platform) {
+      case SocialPlatform.TWITTER:
+        return { profileUrl: `https://x.com/${handle}`, username: handle };
+      case SocialPlatform.INSTAGRAM:
+        return { profileUrl: `https://instagram.com/${handle}`, username: handle };
+      case SocialPlatform.TIKTOK:
+        return { profileUrl: `https://tiktok.com/@${handle}`, username: handle };
+      case SocialPlatform.FACEBOOK:
+        return { profileUrl: `https://facebook.com/${handle}`, username: handle };
+      case SocialPlatform.TELEGRAM:
+        return { profileUrl: `https://t.me/${handle}`, username: handle };
+      case SocialPlatform.DISCORD:
+        // Discord has no canonical profile URL derivable from a username
+        return { profileUrl: null, username: handle };
+      default:
+        return { profileUrl: trimmed, username: this.extractUsernameFromUrl(trimmed) };
+    }
   }
 
   private extractUsernameFromUrl(url: string): string | null {

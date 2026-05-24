@@ -54,13 +54,13 @@ export class SocialAuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Manually link a social account by profile URL (non-OAuth platforms)' })
+  @ApiOperation({ summary: 'Manually link a social account by profile URL or @handle/username (non-OAuth platforms)' })
   manualLink(
     @CurrentUser() user: JwtPayload,
-    @Body() body: { platform: string; profileUrl: string },
+    @Body() body: { platform: string; input: string },
   ) {
     const p = body.platform.toUpperCase() as SocialPlatform;
-    return this.socialAuthService.manualLink(user.sub, p, body.profileUrl);
+    return this.socialAuthService.manualLink(user.sub, p, body.input);
   }
 
   @Delete(':platform')

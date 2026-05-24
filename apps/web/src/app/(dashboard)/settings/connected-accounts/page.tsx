@@ -61,6 +61,7 @@ const PLATFORMS = [
     bg: 'bg-sky-500/10',
     border: 'border-sky-500/20',
     description: 'Twitter tasks use screenshot proof (API verification coming soon).',
+    inputPlaceholder: '@handle or https://x.com/username',
     supported: false,
   },
   {
@@ -71,6 +72,7 @@ const PLATFORMS = [
     bg: 'bg-zinc-500/10',
     border: 'border-zinc-500/20',
     description: 'TikTok tasks use screenshot proof (TikTok API is highly restricted).',
+    inputPlaceholder: '@username or https://tiktok.com/@username',
     supported: false,
   },
   {
@@ -81,6 +83,7 @@ const PLATFORMS = [
     bg: 'bg-pink-500/10',
     border: 'border-pink-500/20',
     description: 'Instagram tasks use screenshot proof (Meta API requires business approval).',
+    inputPlaceholder: '@username or https://instagram.com/username',
     supported: false,
   },
   {
@@ -91,6 +94,7 @@ const PLATFORMS = [
     bg: 'bg-blue-500/10',
     border: 'border-blue-500/20',
     description: 'Facebook tasks use screenshot proof.',
+    inputPlaceholder: 'username or https://facebook.com/username',
     supported: false,
   },
   {
@@ -101,6 +105,7 @@ const PLATFORMS = [
     bg: 'bg-sky-400/10',
     border: 'border-sky-400/20',
     description: 'Telegram join tasks use screenshot proof. Optionally link your t.me profile.',
+    inputPlaceholder: '@username or https://t.me/username',
     supported: false,
   },
   {
@@ -111,6 +116,7 @@ const PLATFORMS = [
     bg: 'bg-indigo-500/10',
     border: 'border-indigo-500/20',
     description: 'Discord join tasks use screenshot proof. Optionally link your Discord profile.',
+    inputPlaceholder: 'username or discord.gg/invitecode',
     supported: false,
   },
 ] as const;
@@ -181,9 +187,9 @@ function ConnectedAccountsPageInner() {
   });
 
   const manualLinkMutation = useMutation({
-    mutationFn: ({ platform, profileUrl }: { platform: string; profileUrl: string }) => {
+    mutationFn: ({ platform, input }: { platform: string; input: string }) => {
       setPendingManualLink(platform);
-      return apiClient.post(`social-auth/manual-link`, { platform, profileUrl });
+      return apiClient.post(`social-auth/manual-link`, { platform, input });
     },
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
@@ -346,13 +352,13 @@ function ConnectedAccountsPageInner() {
                     <input
                       value={manualInputs[p.id] ?? ''}
                       onChange={(e) => setManualInputs((m) => ({ ...m, [p.id]: e.target.value }))}
-                      placeholder={`Your ${p.label} profile URL`}
+                      placeholder={(p as { inputPlaceholder: string }).inputPlaceholder}
                       className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                     <button
                       onClick={() => {
-                        const url = manualInputs[p.id]?.trim();
-                        if (url) manualLinkMutation.mutate({ platform: p.id, profileUrl: url });
+                        const input = manualInputs[p.id]?.trim();
+                        if (input) manualLinkMutation.mutate({ platform: p.id, input });
                       }}
                       disabled={pendingManualLink === p.id || !manualInputs[p.id]?.trim()}
                       className={`shrink-0 px-3 py-1.5 rounded-lg ${p.bg} ${p.color} text-xs font-medium transition-all disabled:opacity-50`}
