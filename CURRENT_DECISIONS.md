@@ -1055,5 +1055,54 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-05-21
-**Next Review**: 2026-08-21 (quarterly)
+**Last Updated**: 2026-05-22
+**Next Review**: 2026-08-22 (quarterly)
+
+---
+
+## Frontend UI/UX Decisions (2026-05-22)
+
+### FUI-001: LandingNavbar as Separate Client Component
+- **Status**: Implemented
+- **Decision**: Extract landing page navbar into `LandingNavbar` client component at `apps/web/src/components/landing-navbar.tsx`
+- **Reason**: Landing page is a server component for SEO; mobile hamburger menu requires `useState` which needs a client component
+- **Implementation**: Server component imports `LandingNavbar`, all menu state lives in the client component only
+- **Tradeoffs**: Minimal hydration footprint; only the navbar triggers client bundle
+
+### FUI-002: Mobile Bottom Navigation for Dashboard
+- **Status**: Implemented
+- **Decision**: Add fixed bottom nav bar in dashboard layout, visible on mobile (`md:hidden`), with 5 primary items: Home, Tasks, Campaigns, Wallet, Settings
+- **Reason**: Sidebar is `hidden md:flex` — mobile users had zero navigation
+- **Implementation**: Fixed `<nav>` inside `AuthenticatedProviders`, page content has `pb-20 md:pb-6` to clear the nav bar
+- **Tradeoffs**: Leaderboard and Discover not in bottom nav; accessible via sidebar on desktop and Settings page links on mobile
+
+### FUI-003: Landing Page Mobile-First Responsive Design
+- **Status**: Implemented
+- **Decision**: Rebuild all landing page padding and typography with mobile-first breakpoints (`sm:`, `md:`, `lg:` progressively larger)
+- **Reason**: Original design was desktop-first with `p-16`, `text-5xl`, `pt-24 pb-32` that overflowed on portrait mobile
+- **Implementation**: Hero: `pt-14 pb-20 sm:pt-20 md:pt-24`, h1: `text-4xl sm:text-5xl md:text-6xl lg:text-7xl`, CTA buttons `flex-col sm:flex-row`, section padding `py-16 sm:py-20 md:py-24`
+- **Removed**: Orphaned Privacy Policy nav div (Google OAuth review artifact), duplicate standalone Privacy Policy footer link
+
+### FUI-004: Landing Page main Positioning Fix
+- **Status**: Implemented
+- **Decision**: Changed landing page `<main>` from `overflow-hidden` to `relative … overflow-x-hidden`
+- **Reason**: Gradient `absolute inset-0` requires a `relative` positioned ancestor; `overflow-hidden` was cutting off content
+- **Tradeoffs**: None — both issues fixed in single class change
+
+## CI/CD Decisions (2026-05-22)
+
+### CCD-001: E2E Workflow Node Version Alignment
+- **Status**: Fixed
+- **Decision**: Updated `e2e.yml` Node version from 20 to 24 to match `ci.yml`
+- **Reason**: Node version inconsistency between CI and E2E could cause differing behavior; `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` with Node 20 was contradictory
+- **Removed**: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var (contradictory with old Node 20)
+- **Fixed**: `NEXT_PUBLIC_API_URL` normalized to `/api/v1` in both CI and E2E for consistency
+
+## Security Fixes (2026-05-22)
+
+### SEC-001: Upload Static File Middleware Ordering Bug
+- **Status**: Fixed
+- **Decision**: Moved JWT auth middleware for `/uploads` to register BEFORE `useStaticAssets` in `main.ts`
+- **Reason**: Express `useStaticAssets` short-circuits the middleware chain when a file matches; JWT check registered after it would never fire, making uploads publicly accessible without authentication
+- **Impact**: This was a real security bug — any user knowing a file path could access proof uploads without a valid token
+- **Also**: Changed `Cache-Control` from `public` to `private` (correct for auth-gated content)
