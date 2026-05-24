@@ -1,5 +1,5 @@
-import { IsString, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 export class LoginDto {
@@ -12,4 +12,9 @@ export class LoginDto {
   @IsString()
   @MinLength(1)
   password!: string;
+
+  @ApiPropertyOptional({ example: '03AGdBq24...' })
+  @IsOptional()
+  @IsString()
+  recaptchaToken?: string;
 }

@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -16,6 +17,7 @@ import type { ApiResponse, User } from '@/types';
 const loginSchema = z.object({
   emailOrUsername: z.string().min(1, 'Email or username is required'),
   password: z.string().min(1, 'Password is required'),
+  recaptchaToken: z.string().optional(),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -30,6 +32,7 @@ export default function LoginPage() {
   const { setUser, setAccessToken } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const {
     register,
@@ -54,8 +57,19 @@ export default function LoginPage() {
     },
   });
 
-  const onSubmit = (data: LoginFormData) => {
+  const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
+
+    // Generate reCAPTCHA token if available
+    if (executeRecaptcha) {
+      try {
+        const token = await executeRecaptcha('login');
+        data.recaptchaToken = token;
+      } catch {
+        // Continue without token if reCAPTCHA fails (backend will handle)
+      }
+    }
+
     loginMutation.mutate(data);
   };
 

@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { AuthenticatedProviders } from '@/app/providers';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
+    <AuthenticatedProviders>
     <div className="min-h-screen bg-surface flex flex-col">
       {/* Ambient gradient */}
       <div className="fixed inset-0 bg-gradient-hero pointer-events-none" />
@@ -28,5 +30,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </footer>
     </div>
+    </AuthenticatedProviders>
   );
 }
