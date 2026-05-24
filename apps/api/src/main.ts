@@ -56,14 +56,8 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser(configService.get<string>('app.cookieSecret')));
 
   // ─── Static File Serving (Uploads) ─────────────────────────
-  app.useStaticAssets('uploads', {
-    prefix: '/uploads/',
-    setHeaders: (res: Response, _path) => {
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 day cache
-    },
-  });
-
-  // Protect static uploads with JWT auth
+  // JWT auth middleware MUST be registered before useStaticAssets so that
+  // Express evaluates it before the static file handler short-circuits the chain.
   app.use('/uploads', (req: Request, res: Response, next: NextFunction): void => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -71,6 +65,13 @@ async function bootstrap(): Promise<void> {
       return;
     }
     next();
+  });
+
+  app.useStaticAssets('uploads', {
+    prefix: '/uploads/',
+    setHeaders: (res: Response, _path) => {
+      res.setHeader('Cache-Control', 'private, max-age=86400'); // private: auth required
+    },
   });
 
   // ─── Global Prefix ────────────────────────────────────────

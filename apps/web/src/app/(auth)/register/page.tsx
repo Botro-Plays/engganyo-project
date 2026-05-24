@@ -53,10 +53,6 @@ function RegisterPageInner() {
   const [serverError, setServerError] = useState<string | null>(null);
   const { executeRecaptcha } = useGoogleReCaptcha();
 
-  // Debug logging
-  console.log('[reCAPTCHA Debug] executeRecaptcha available:', !!executeRecaptcha);
-  console.log('[reCAPTCHA Debug] Site key:', process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
-
   const defaultReferralCode = searchParams.get('ref') ?? '';
 
   const {
@@ -98,16 +94,11 @@ function RegisterPageInner() {
     // Generate reCAPTCHA token if available
     if (executeRecaptcha) {
       try {
-        console.log('[reCAPTCHA Debug] Executing reCAPTCHA...');
         const token = await executeRecaptcha('register');
-        console.log('[reCAPTCHA Debug] Token received:', token ? 'YES' : 'NO');
         data.recaptchaToken = token;
-      } catch (error) {
-        console.error('[reCAPTCHA Debug] Execution failed:', error);
+      } catch {
         // Continue without token if reCAPTCHA fails (backend will handle)
       }
-    } else {
-      console.log('[reCAPTCHA Debug] executeRecaptcha not available');
     }
 
     registerMutation.mutate(data);

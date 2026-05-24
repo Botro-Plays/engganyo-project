@@ -261,6 +261,8 @@ export default function TasksPage() {
     onError: (err) => setSubmitError(getApiErrorMessage(err)),
   });
 
+  const [recheckResult, setRecheckResult] = useState<{ status: string; message?: string } | null>(null);
+
   // ─── Recheck task (for YouTube subscribe) ───────────────────────
   const recheckMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/recheck`),
@@ -268,9 +270,7 @@ export default function TasksPage() {
       setRecheckResult(null);
     },
     onSuccess: (response) => {
-      console.log('Recheck full response:', response);
       const payload = response?.data?.data ?? response?.data;
-      console.log('Recheck payload:', payload);
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setSubmitError(null);
       setRecheckResult({
@@ -279,12 +279,9 @@ export default function TasksPage() {
       });
     },
     onError: (err) => {
-      console.log('Recheck error:', err);
       setRecheckResult({ status: 'FAILED', message: getApiErrorMessage(err) });
     },
   });
-
-  const [recheckResult, setRecheckResult] = useState<{ status: string; message?: string } | null>(null);
 
   const getPlatform = (taskType: string) => taskType.split('_')[0];
 
@@ -438,7 +435,7 @@ export default function TasksPage() {
                         })()}
                         {!isOwner && (
                           <button
-                            onClick={() => setReporting({ userId: task.user.username, label: task.title })}
+                            onClick={() => setReporting({ userId: task.user.id, label: task.title })}
                             className="px-3 py-2 rounded-lg border border-surface-border text-zinc-500 hover:text-white hover:border-zinc-400 text-xs transition-colors"
                           >
                             <Flag className="w-3 h-3" />

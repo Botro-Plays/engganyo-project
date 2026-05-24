@@ -11,7 +11,6 @@ import {
   Trophy,
   Settings,
   LogOut,
-  Zap,
   Bell,
   AlertTriangle,
   ShieldAlert,
@@ -28,6 +27,14 @@ const navItems = [
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
+];
+
+const mobileNavItems = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Home' },
+  { href: '/tasks', icon: ListTodo, label: 'Tasks' },
+  { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { href: '/wallet', icon: Wallet, label: 'Wallet' },
+  { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'];
@@ -111,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <header className="h-16 border-b border-surface-border flex items-center justify-between px-6 shrink-0">
+        <header className="h-16 border-b border-surface-border flex items-center justify-between px-4 sm:px-6 shrink-0">
           <div />
           <div className="flex items-center gap-3">
             <button className="relative w-9 h-9 rounded-lg border border-surface-border hover:bg-surface-hover flex items-center justify-center text-zinc-400 hover:text-white transition-all">
@@ -144,7 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Suspended / banned banner */}
         {user && (user.status === 'SUSPENDED' || user.status === 'BANNED') && (
-          <div className={`px-6 py-3 flex items-center gap-3 text-sm ${
+          <div className={`px-4 sm:px-6 py-3 flex items-center gap-3 text-sm ${
             user.status === 'BANNED'
               ? 'bg-red-500/10 border-b border-red-500/30 text-red-400'
               : 'bg-yellow-500/10 border-b border-yellow-500/30 text-yellow-400'
@@ -156,12 +163,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        {/* Page content */}
-        <main className="flex-1 overflow-auto scrollbar-thin p-6">
+        {/* Page content — extra bottom padding on mobile for the bottom nav */}
+        <main className="flex-1 overflow-auto scrollbar-thin p-4 sm:p-6 pb-20 md:pb-6">
           {children}
         </main>
       </div>
     </div>
+
+      {/* Mobile bottom navigation — visible only below md breakpoint */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border">
+        <div className="flex items-center justify-around px-1 py-2">
+          {mobileNavItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center gap-0.5 flex-1 py-1 rounded-lg transition-all ${
+                  isActive ? 'text-brand-300' : 'text-zinc-500'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
       </AuthenticatedProviders>
     </AuthGuard>
   );

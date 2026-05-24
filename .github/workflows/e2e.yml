@@ -56,15 +56,14 @@ jobs:
       ADMIN_EMAIL: admin@engganyo.com
       ADMIN_PASSWORD: Admin@123456
       ENABLE_EMAIL_VERIFICATION: "false"
-      NEXT_PUBLIC_API_URL: http://localhost:3001/api
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '24'
           cache: npm
 
       - name: Install dependencies
