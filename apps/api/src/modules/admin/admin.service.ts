@@ -882,6 +882,242 @@ export class AdminService {
     return { updated: true, platform };
   }
 
+  // ─── Platform Config (SUPER_ADMIN only) ──────────────────────
+
+  private readonly CONFIG_DEFAULTS: Record<string, { value: unknown; description: string; isPublic: boolean }> = {
+    initial_credits:         { value: 200,   description: 'Welcome credits given to each new user on registration', isPublic: false },
+    referral_bonus_referrer: { value: 50,    description: 'Credits given to referrer when their invite qualifies', isPublic: false },
+    referral_bonus_referee:  { value: 50,    description: 'Bonus credits for new users who sign up via referral link', isPublic: false },
+    registration_enabled:    { value: true,  description: 'Allow new user registrations', isPublic: true },
+    maintenance_mode:        { value: false, description: 'Put the platform in read-only maintenance mode', isPublic: true },
+    recaptcha_enabled:       { value: false, description: 'Enable reCAPTCHA protection on auth endpoints', isPublic: true },
+    recaptcha_v3_site_key:   { value: '',    description: 'reCAPTCHA v3 public site key (invisible)', isPublic: true },
+    recaptcha_v3_secret_key: { value: '',    description: 'reCAPTCHA v3 secret key (server-side verification)', isPublic: false },
+    recaptcha_v2_site_key:   { value: '',    description: 'reCAPTCHA v2 Checkbox public site key', isPublic: true },
+    recaptcha_v2_secret_key: { value: '',    description: 'reCAPTCHA v2 Checkbox secret key (server-side verification)', isPublic: false },
+  };
+
+  async getServerConfig() {
+    const rows = await this.prisma.platformConfig.findMany();
+    const map = new Map(rows.map((r) => [r.key, r]));
+    return Object.entries(this.CONFIG_DEFAULTS).map(([key, def]) => {
+      const row = map.get(key);
+      return {
+        key,
+        value: row ? row.value : def.value,
+        description: def.description,
+        isPublic: def.isPublic,
+        updatedAt: row?.updatedAt ?? null,
+        updatedBy: row?.updatedBy ?? null,
+      };
+    });
+  }
+
+  async updateServerConfig(adminId: string, key: string, value: unknown) {
+    if (!this.CONFIG_DEFAULTS[key]) {
+      throw new BadRequestException(`Unknown config key: ${key}`);
+    }
+    await this.prisma.platformConfig.upsert({
+      where: { key },
+      create: {
+        key,
+        value: value as never,
+        description: this.CONFIG_DEFAULTS[key]!.description,
+        isPublic: this.CONFIG_DEFAULTS[key]!.isPublic,
+        updatedBy: adminId,
+      },
+      update: { value: value as never, updatedBy: adminId },
+    });
+    return { updated: true, key };
+  }
+
+  // ─── CSV Export ───────────────────────────────────────────────
+
+  private csvEscape(val: unknown): string {
+    if (val === null || val === undefined) return '';
+    const s = String(val);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  }
+
+  private toCsv(headers: string[], rows: Record<string, unknown>[]): string {
+    return [
+      headers.join(','),
+      ...rows.map((r) => headers.map((h) => this.csvEscape(r[h])).join(',')),
+    ].join('\n');
+  }
+
+  async exportCsv(table: string): Promise<{ csv: string; filename: string }> {
+    const date = new Date().toISOString().slice(0, 10);
+    switch (table) {
+      case 'users': {
+        const rows = await this.prisma.user.findMany({
+          select: { id: true, username: true, email: true, role: true, status: true, level: true, xp: true, creditBalance: true, currentStreak: true, referralCode: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        return {
+          filename: `users_${date}.csv`,
+          csv: this.toCsv(
+            ['id','username','email','role','status','level','xp','creditBalance','currentStreak','referralCode','createdAt'],
+            rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+          ),
+        };
+      }
+      case 'campaigns': {
+        const rows = await this.prisma.campaign.findMany({
+          select: { id: true, title: true, taskType: true, status: true, totalSlots: true, completedSlots: true, creditPerTask: true, totalCost: true, createdAt: true, user: { select: { username: true } } },
+          orderBy: { createdAt: 'desc' },
+        });
+        return {
+          filename: `campaigns_${date}.csv`,
+          csv: this.toCsv(
+            ['id','username','title','taskType','status','totalSlots','completedSlots','creditPerTask','totalCost','createdAt'],
+            rows.map((r) => ({ ...r, username: r.user.username, createdAt: r.createdAt.toISOString() })),
+          ),
+        };
+      }
+      case 'completions': {
+        const rows = await this.prisma.taskCompletion.findMany({
+          select: { id: true, status: true, creditsEarned: true, assignedAt: true, submittedAt: true, verifiedAt: true, user: { select: { username: true } }, campaign: { select: { id: true, taskType: true } } },
+          orderBy: { assignedAt: 'desc' },
+        });
+        return {
+          filename: `completions_${date}.csv`,
+          csv: this.toCsv(
+            ['id','username','status','creditsEarned','campaignId','taskType','assignedAt','submittedAt','verifiedAt'],
+            rows.map((r) => ({
+              ...r,
+              username: r.user.username,
+              campaignId: r.campaign.id,
+              taskType: r.campaign.taskType,
+              assignedAt: r.assignedAt.toISOString(),
+              submittedAt: r.submittedAt?.toISOString() ?? '',
+              verifiedAt: r.verifiedAt?.toISOString() ?? '',
+            })),
+          ),
+        };
+      }
+      case 'transactions': {
+        const rows = await this.prisma.transaction.findMany({
+          select: { id: true, type: true, status: true, amount: true, balanceBefore: true, balanceAfter: true, description: true, referenceType: true, createdAt: true, wallet: { select: { user: { select: { username: true } } } } },
+          orderBy: { createdAt: 'desc' },
+        });
+        return {
+          filename: `transactions_${date}.csv`,
+          csv: this.toCsv(
+            ['id','username','type','status','amount','balanceBefore','balanceAfter','description','referenceType','createdAt'],
+            rows.map((r) => ({
+              ...r,
+              username: r.wallet.user.username,
+              description: r.description ?? '',
+              referenceType: r.referenceType ?? '',
+              createdAt: r.createdAt.toISOString(),
+            })),
+          ),
+        };
+      }
+      case 'audit_logs': {
+        const rows = await this.prisma.auditLog.findMany({
+          select: { id: true, action: true, entityType: true, entityId: true, ipAddress: true, createdAt: true, user: { select: { username: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 50_000,
+        });
+        return {
+          filename: `audit_logs_${date}.csv`,
+          csv: this.toCsv(
+            ['id','username','action','entityType','entityId','ipAddress','createdAt'],
+            rows.map((r) => ({
+              ...r,
+              username: r.user?.username ?? 'system',
+              entityType: r.entityType ?? '',
+              entityId: r.entityId ?? '',
+              ipAddress: r.ipAddress ?? '',
+              createdAt: r.createdAt.toISOString(),
+            })),
+          ),
+        };
+      }
+      default:
+        throw new BadRequestException(`Unknown export table: ${table}`);
+    }
+  }
+
+  // ─── System Operations (SUPER_ADMIN only) ────────────────────
+
+  async clearAuditLogs(adminId: string) {
+    const count = await this.prisma.auditLog.count();
+    await this.prisma.auditLog.deleteMany({});
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'system.clear_audit_logs',
+        entityType: 'AuditLog',
+        metadata: { deletedCount: count },
+      },
+    });
+    return { deleted: count };
+  }
+
+  async resetDatabase(adminId: string, confirmToken: string) {
+    if (confirmToken !== 'RESET') {
+      throw new BadRequestException('Confirmation token must be exactly "RESET"');
+    }
+
+    const creditRow = await this.prisma.platformConfig.findUnique({ where: { key: 'initial_credits' } });
+    const initialCredits: number = typeof creditRow?.value === 'number' ? creditRow.value : 200;
+
+    const superAdmins = await this.prisma.user.findMany({
+      where: { role: UserRole.SUPER_ADMIN },
+      select: { id: true },
+    });
+    const saIds = superAdmins.map((u) => u.id);
+
+    if (!saIds.includes(adminId)) {
+      throw new ForbiddenException('Only a SUPER_ADMIN account may reset the database');
+    }
+
+    await this.prisma.$transaction(
+      async (tx) => {
+        // Delete in dependency order to avoid FK violations
+        await tx.taskCompletion.deleteMany({});
+        await tx.transaction.deleteMany({});
+        await tx.report.deleteMany({});
+        await tx.campaign.deleteMany({});
+        await tx.referral.deleteMany({});
+        await tx.abuseFlag.deleteMany({});
+        await tx.ipRecord.deleteMany({});
+        await tx.auditLog.deleteMany({});
+        await tx.analyticsSnapshot.deleteMany({});
+        // Delete all non-SUPER_ADMIN users (cascades: wallet, sessions, notifications, achievements, etc.)
+        await tx.user.deleteMany({ where: { id: { notIn: saIds } } });
+        // Reset SUPER_ADMIN users
+        for (const saId of saIds) {
+          await tx.user.update({
+            where: { id: saId },
+            data: { creditBalance: initialCredits, xp: 0, level: 1, currentStreak: 0, longestStreak: 0, lastActiveAt: null, lastDailyRewardAt: null },
+          });
+          await tx.wallet.upsert({
+            where: { userId: saId },
+            create: { userId: saId, balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0 },
+            update: { balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0, version: 0 },
+          });
+        }
+        await tx.auditLog.create({
+          data: {
+            userId: adminId,
+            action: 'system.database_reset',
+            entityType: 'System',
+            metadata: { keptSuperAdmins: saIds, initialCredits, timestamp: new Date().toISOString() },
+          },
+        });
+      },
+      { timeout: 60_000 },
+    );
+
+    return { reset: true, keptAccounts: saIds.length, initialCredits };
+  }
+
   // ─── Overview stats ───────────────────────────────────────
 
   async getOverviewStats() {

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
-  ScrollText, Zap, LogOut, ShieldAlert, BarChart2, KeyRound,
+  ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -61,15 +61,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="px-3 pb-4 border-t border-surface-border pt-4 space-y-1">
           {user?.role === 'SUPER_ADMIN' && (
             <Link
-              href="/admin/integrations"
+              href="/admin/server-config"
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                pathname.startsWith('/admin/integrations')
+                pathname.startsWith('/admin/server-config') || pathname.startsWith('/admin/integrations')
                   ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
                   : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
               }`}
             >
-              <KeyRound className="w-4 h-4 shrink-0" />
-              Integrations
+              <Settings2 className="w-4 h-4 shrink-0" />
+              Server Config
             </Link>
           )}
           <Link

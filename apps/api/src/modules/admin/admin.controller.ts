@@ -270,4 +270,57 @@ export class AdminController {
   ) {
     return this.adminService.updateOAuthConfig(admin.sub, platform, dto);
   }
+
+  // ─── Server Config (SUPER_ADMIN only) ────────────────────────
+
+  @Get('server-config')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get all platform config key-value pairs (SUPER_ADMIN only)' })
+  getServerConfig() {
+    return this.adminService.getServerConfig();
+  }
+
+  @Patch('server-config/:key')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a platform config value (SUPER_ADMIN only)' })
+  updateServerConfig(
+    @CurrentUser() admin: JwtPayload,
+    @Param('key') key: string,
+    @Body() body: { value: unknown },
+  ) {
+    return this.adminService.updateServerConfig(admin.sub, key, body.value);
+  }
+
+  // ─── CSV Export (SUPER_ADMIN only) ───────────────────────────
+
+  @Get('export/:table')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Export a table as CSV (SUPER_ADMIN only)' })
+  exportCsv(@Param('table') table: string) {
+    return this.adminService.exportCsv(table);
+  }
+
+  // ─── System Operations (SUPER_ADMIN only) ────────────────────
+
+  @Delete('system/audit-logs')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Clear all audit logs (SUPER_ADMIN only)' })
+  clearAuditLogs(@CurrentUser() admin: JwtPayload) {
+    return this.adminService.clearAuditLogs(admin.sub);
+  }
+
+  @Post('system/reset')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset database — wipes all data except SUPER_ADMIN accounts (SUPER_ADMIN only)' })
+  resetDatabase(
+    @CurrentUser() admin: JwtPayload,
+    @Body() body: { confirmToken: string },
+  ) {
+    return this.adminService.resetDatabase(admin.sub, body.confirmToken);
+  }
 }
