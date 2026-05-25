@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Coins, Users, ChevronLeft, ChevronRight, ExternalLink, Compass } from 'lucide-react';
 import Link from 'next/link';
@@ -57,16 +57,48 @@ function getPlatform(taskType: string) {
   return taskType.split('_')[0] ?? 'UNKNOWN';
 }
 
+const COUNTRY_CACHE_KEY = 'discover_country';
+const COUNTRY_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function getCachedCountry(): string | null {
+  try {
+    const code = localStorage.getItem(COUNTRY_CACHE_KEY);
+    const ts = localStorage.getItem(`${COUNTRY_CACHE_KEY}_at`);
+    if (code && ts && Date.now() - Number(ts) < COUNTRY_CACHE_TTL) return code;
+  } catch { /* ignore */ }
+  return null;
+}
+
 export default function DiscoverPage() {
   const [platform, setPlatform] = useState('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [userCountry, setUserCountry] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cached = getCachedCountry();
+    if (cached) { setUserCountry(cached); return; }
+    fetch('https://ipapi.co/country/')
+      .then((r) => r.text())
+      .then((code) => {
+        const c = code.trim();
+        if (c.length === 2 && /^[A-Z]{2}$/.test(c)) {
+          setUserCountry(c);
+          try {
+            localStorage.setItem(COUNTRY_CACHE_KEY, c);
+            localStorage.setItem(`${COUNTRY_CACHE_KEY}_at`, String(Date.now()));
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => { /* fail silently — show all campaigns */ });
+  }, []);
 
   const { data, isLoading } = useQuery<PaginatedCampaigns>({
-    queryKey: ['discover', platform, page],
+    queryKey: ['discover', platform, page, userCountry],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: '12' });
       if (platform !== 'ALL') params.set('platform', platform);
+      if (userCountry) params.set('country', userCountry);
       const res = await apiClient.get<ApiResponse<PaginatedCampaigns>>(`tasks?${params}`);
       return res.data.data;
     },

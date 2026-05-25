@@ -345,7 +345,7 @@ export class CampaignsService {
 
   async browseActive(
     excludeUserId: string,
-    filters: { taskType?: string; platformPrefix?: string; page?: number; limit?: number },
+    filters: { taskType?: string; platformPrefix?: string; country?: string; page?: number; limit?: number },
   ) {
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
@@ -371,10 +371,21 @@ export class CampaignsService {
       }
     }
 
+    // Geo filter: if country provided, show campaigns targeting that country OR unrestricted ones
+    const countryWhere = filters.country
+      ? {
+          OR: [
+            { targetCountries: { isEmpty: true } },
+            { targetCountries: { has: filters.country.toUpperCase() } },
+          ],
+        }
+      : {};
+
     const where = {
       status: CampaignStatus.ACTIVE,
       id: { notIn: excludeIds.length > 0 ? excludeIds : ['__none__'] },
       ...taskTypeWhere,
+      ...countryWhere,
     };
 
     const [items, total] = await Promise.all([

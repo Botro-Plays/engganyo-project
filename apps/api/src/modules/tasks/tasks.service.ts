@@ -57,6 +57,7 @@ export class TasksService {
     return this.campaignsService.browseActive(userId, {
       taskType: dto.taskType as string | undefined,
       platformPrefix: dto.platform,
+      country: dto.country,
       page: dto.page,
       limit: dto.limit,
     });

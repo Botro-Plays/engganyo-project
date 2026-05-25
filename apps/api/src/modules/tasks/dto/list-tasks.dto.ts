@@ -28,6 +28,11 @@ export class ListTasksDto {
   @IsOptional()
   @IsString()
   platform?: string;
+
+  @ApiPropertyOptional({ description: 'ISO 3166-1 alpha-2 country code of the browsing user e.g. PH' })
+  @IsOptional()
+  @IsString()
+  country?: string;
 }
 
 export class ListMyTasksDto {

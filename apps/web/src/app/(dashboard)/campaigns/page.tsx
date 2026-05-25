@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
-  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye,
+  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -80,6 +80,25 @@ interface CampaignsResponse {
   meta: { total: number; page: number; totalPages: number };
 }
 
+// ─── Country list (ISO 3166-1 alpha-2) ──────────────────────
+const COUNTRIES: Record<string, string> = {
+  'AE': 'UAE', 'AR': 'Argentina', 'AU': 'Australia', 'AT': 'Austria',
+  'BD': 'Bangladesh', 'BE': 'Belgium', 'BR': 'Brazil', 'CA': 'Canada',
+  'CL': 'Chile', 'CN': 'China', 'CO': 'Colombia', 'CZ': 'Czech Republic',
+  'DK': 'Denmark', 'EG': 'Egypt', 'FI': 'Finland', 'FR': 'France',
+  'DE': 'Germany', 'GH': 'Ghana', 'GR': 'Greece', 'HK': 'Hong Kong',
+  'HU': 'Hungary', 'IN': 'India', 'ID': 'Indonesia', 'IE': 'Ireland',
+  'IL': 'Israel', 'IT': 'Italy', 'JP': 'Japan', 'KE': 'Kenya',
+  'KR': 'South Korea', 'LB': 'Lebanon', 'MY': 'Malaysia', 'MX': 'Mexico',
+  'MA': 'Morocco', 'NL': 'Netherlands', 'NZ': 'New Zealand', 'NG': 'Nigeria',
+  'NO': 'Norway', 'PK': 'Pakistan', 'PE': 'Peru', 'PH': 'Philippines',
+  'PL': 'Poland', 'PT': 'Portugal', 'RO': 'Romania', 'RU': 'Russia',
+  'SA': 'Saudi Arabia', 'SG': 'Singapore', 'ZA': 'South Africa', 'ES': 'Spain',
+  'SE': 'Sweden', 'CH': 'Switzerland', 'TW': 'Taiwan', 'TH': 'Thailand',
+  'TR': 'Turkey', 'UA': 'Ukraine', 'GB': 'United Kingdom', 'US': 'United States',
+  'VN': 'Vietnam',
+};
+
 // ─── Create form schema ───────────────────────────────────────
 const OAUTH_PLATFORMS = new Set(['YOUTUBE', 'TWITCH', 'SPOTIFY']);
 const getAutoVerifyDefault = (taskType: string) =>
@@ -103,6 +122,9 @@ export default function CampaignsPage() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
   const [page, setPage] = useState(1);
   const [reviewingCampaign, setReviewingCampaign] = useState<Campaign | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -139,10 +161,14 @@ export default function CampaignsPage() {
         ...d,
         description: d.description || undefined,
         proofInstructions: d.proofInstructions || undefined,
+        targetCountries: selectedCountries.length > 0 ? selectedCountries : undefined,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
       form.reset({ requiresProof: true, autoVerify: true, creditPerTask: 50, totalSlots: 100 });
+      setSelectedCountries([]);
+      setShowCountryPicker(false);
+      setCountrySearch('');
       setShowCreate(false);
       setCreateError(null);
     },
@@ -204,7 +230,7 @@ export default function CampaignsPage() {
           <div className="w-full max-w-lg card-glass rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-white">Create Campaign</h2>
-              <button onClick={() => setShowCreate(false)} className="text-zinc-500 hover:text-white transition-colors">
+              <button onClick={() => { setShowCreate(false); setShowCountryPicker(false); setCountrySearch(''); }} className="text-zinc-500 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -298,6 +324,72 @@ export default function CampaignsPage() {
                   className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                   placeholder="e.g. Take a screenshot showing you subscribed."
                 />
+              </div>
+
+              {/* ── Geo filter ── */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-zinc-400">Target countries</label>
+                  <span className="text-xs text-zinc-600">Leave empty for worldwide</span>
+                </div>
+                {selectedCountries.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {selectedCountries.map((code) => (
+                      <span key={code} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-300 border border-brand-500/20">
+                        {COUNTRIES[code] ?? code} <span className="text-zinc-500">{code}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCountries((prev) => prev.filter((c) => c !== code))}
+                          className="text-zinc-500 hover:text-white ml-0.5"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCountryPicker((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-sm text-zinc-400 hover:text-white transition-colors"
+                >
+                  <span>{selectedCountries.length > 0 ? `${selectedCountries.length} countr${selectedCountries.length === 1 ? 'y' : 'ies'} selected` : 'All countries (worldwide)'}</span>
+                  <Globe className="w-3.5 h-3.5" />
+                </button>
+                {showCountryPicker && (
+                  <div className="mt-1 rounded-lg border border-surface-border bg-surface-hover overflow-hidden">
+                    <input
+                      type="text"
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      placeholder="Search countries..."
+                      className="w-full px-3 py-2 text-sm text-white bg-transparent border-b border-surface-border placeholder-zinc-600 focus:outline-none"
+                    />
+                    <div className="max-h-44 overflow-y-auto">
+                      {Object.entries(COUNTRIES)
+                        .filter(([code, name]) =>
+                          name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+                          code.toLowerCase().includes(countrySearch.toLowerCase())
+                        )
+                        .map(([code, name]) => (
+                          <label key={code} className="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-700/50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedCountries.includes(code)}
+                              onChange={() =>
+                                setSelectedCountries((prev) =>
+                                  prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+                                )
+                              }
+                              className="accent-brand-500 shrink-0"
+                            />
+                            <span className="text-xs text-zinc-300 flex-1">{name}</span>
+                            <span className="text-xs text-zinc-600">{code}</span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Verification mode */}
