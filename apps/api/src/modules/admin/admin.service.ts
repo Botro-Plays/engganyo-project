@@ -922,8 +922,8 @@ export class AdminService {
       create: {
         key,
         value: value,
-        description: this.CONFIG_DEFAULTS[key]!.description,
-        isPublic: this.CONFIG_DEFAULTS[key]!.isPublic,
+        description: this.CONFIG_DEFAULTS[key].description,
+        isPublic: this.CONFIG_DEFAULTS[key].isPublic,
         updatedBy: adminId,
       },
       update: { value, updatedBy: adminId },
