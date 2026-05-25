@@ -93,25 +93,25 @@ jobs:
         working-directory: apps/api
 
       - name: Start API server
-        run: node dist/main > /tmp/api.log 2>&1 &
+        run: |
+          export NODE_ENV=test
+          export DATABASE_URL=postgresql://engganyo:testpassword@localhost:5432/engganyo_test
+          export REDIS_URL=redis://localhost:6379
+          export REDIS_HOST=localhost
+          export REDIS_PASSWORD=""
+          export JWT_ACCESS_SECRET=e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          export JWT_REFRESH_SECRET=e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          export JWT_ACCESS_EXPIRES_IN=15m
+          export JWT_REFRESH_EXPIRES_IN=7d
+          export COOKIE_SECRET=e2e-cookie-secret-32chars-xxxxxxx
+          export ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+          export APP_PORT=3001
+          export APP_URL=http://localhost:3001
+          export FRONTEND_URL=http://localhost:3000
+          export API_PREFIX=api
+          export ENABLE_EMAIL_VERIFICATION=false
+          node dist/main > /tmp/api.log 2>&1 &
         working-directory: apps/api
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://engganyo:testpassword@localhost:5432/engganyo_test
-          REDIS_URL: redis://localhost:6379
-          REDIS_HOST: localhost
-          REDIS_PASSWORD: ""
-          JWT_ACCESS_SECRET: e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          JWT_REFRESH_SECRET: e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          JWT_ACCESS_EXPIRES_IN: 15m
-          JWT_REFRESH_EXPIRES_IN: 7d
-          COOKIE_SECRET: e2e-cookie-secret-32chars-xxxxxxx
-          ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
-          APP_PORT: 3001
-          APP_URL: http://localhost:3001
-          FRONTEND_URL: http://localhost:3000
-          API_PREFIX: api
-          ENABLE_EMAIL_VERIFICATION: "false"
 
       - name: Start web server
         run: npm run start > /tmp/web.log 2>&1 &
