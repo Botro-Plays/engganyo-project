@@ -42,6 +42,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       JWT_ACCESS_SECRET: ci_access_secret_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       JWT_REFRESH_SECRET: ci_refresh_secret_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      ENCRYPTION_KEY: ci-encryption-key-32-byte-hex-string-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       NODE_ENV: test
 
     steps:
