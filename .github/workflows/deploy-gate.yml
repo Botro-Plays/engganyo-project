@@ -25,82 +25,113 @@ jobs:
           COMMIT_SHA="${{ github.sha }}"
           REPO="${{ github.repository }}"
           
-          echo "=== Deploy Gate Validation (Checks API) ==="
+          echo "=== Deploy Gate Validation (Check Suites API) ==="
           echo "Commit SHA: $COMMIT_SHA"
           echo "Repository: $REPO"
           
-          # Query check runs for this commit using GitHub Checks API
-          echo "=== Fetching check runs for SHA $COMMIT_SHA ==="
-          CHECKS=$(gh api \
+          # Query check suites for this commit using GitHub Check Suites API
+          echo "=== Fetching check suites for SHA $COMMIT_SHA ==="
+          SUITES=$(gh api \
             --method GET \
             -H "Accept: application/vnd.github+json" \
-            "/repos/$REPO/commits/$COMMIT_SHA/check-runs" \
-            --jq '.check_runs')
+            "/repos/$REPO/commits/$COMMIT_SHA/check-suites" \
+            --jq '.check_suites')
           
-          # Find CI check run
-          CI_CHECK=$(echo "$CHECKS" | jq --arg NAME "CI" '[.[] | select(.name == $NAME)] | .[0]')
+          # Filter for GitHub Actions app, completed status, and success conclusion
+          SUITES_FILTERED=$(echo "$SUITES" | jq '[.[] | select(.app.slug == "github-actions" and .status == "completed" and .conclusion == "success")]')
           
-          if [ "$CI_CHECK" = "null" ] || [ -z "$CI_CHECK" ]; then
-            echo "❌ CI check run not found for SHA $COMMIT_SHA. Blocking deployment."
-            echo "Available check runs:"
-            echo "$CHECKS" | jq -r '.[] | "  Name: \(.name), Status: \(.status), Conclusion: \(.conclusion)"' || true
+          if [ "$SUITES_FILTERED" = "null" ] || [ "$SUITES_FILTERED" = "[]" ]; then
+            echo "❌ No successful GitHub Actions check suites found for SHA $COMMIT_SHA. Blocking deployment."
+            echo "Available check suites:"
+            echo "$SUITES" | jq -r '.[] | "  App: \(.app.slug), Status: \(.status), Conclusion: \(.conclusion), Head SHA: \(.head_sha)"' || true
             exit 1
           fi
           
-          CI_STATUS=$(echo "$CI_CHECK" | jq -r '.status')
-          CI_CONCLUSION=$(echo "$CI_CHECK" | jq -r '.conclusion')
+          # Group suites by workflow name and select latest for each
+          echo "=== Identifying CI and E2E suites ==="
           
-          echo "CI check:"
-          echo "  Status: $CI_STATUS"
-          echo "  Conclusion: $CI_CONCLUSION"
+          # Extract workflow names from check runs within suites
+          CI_SUITE=$(echo "$SUITES_FILTERED" | jq '[.[] | select(.check_runs[].name | contains("CI") and (.check_runs[].name | contains("E2E") | not))] | sort_by(.created_at) | reverse | .[0]')
+          E2E_SUITE=$(echo "$SUITES_FILTERED" | jq '[.[] | select(.check_runs[].name | contains("E2E"))] | sort_by(.created_at) | reverse | .[0]')
           
-          if [ "$CI_STATUS" != "completed" ]; then
-            echo "❌ CI check not completed (status: $CI_STATUS). Blocking deployment."
+          if [ "$CI_SUITE" = "null" ] || [ -z "$CI_SUITE" ]; then
+            echo "❌ CI check suite not found for SHA $COMMIT_SHA. Blocking deployment."
+            echo "Available suites:"
+            echo "$SUITES_FILTERED" | jq -r '.[] | "  Created: \(.created_at), Check runs: \([.check_runs[].name] | join(\", \"))"' || true
             exit 1
           fi
           
-          if [ "$CI_CONCLUSION" != "success" ]; then
-            echo "❌ CI check did not succeed (conclusion: $CI_CONCLUSION). Blocking deployment."
+          if [ "$E2E_SUITE" = "null" ] || [ -z "$E2E_SUITE" ]; then
+            echo "❌ E2E check suite not found for SHA $COMMIT_SHA. Blocking deployment."
+            echo "Available suites:"
+            echo "$SUITES_FILTERED" | jq -r '.[] | "  Created: \(.created_at), Check runs: \([.check_runs[].name] | join(\", \"))"' || true
             exit 1
           fi
           
-          echo "CI: success (check completed)"
+          # Validate CI suite
+          CI_SUITE_ID=$(echo "$CI_SUITE" | jq -r '.id')
+          CI_SUITE_SHA=$(echo "$CI_SUITE" | jq -r '.head_sha')
+          CI_SUITE_STATUS=$(echo "$CI_SUITE" | jq -r '.status')
+          CI_SUITE_CONCLUSION=$(echo "$CI_SUITE" | jq -r '.conclusion')
           
-          # Find E2E check run
-          E2E_CHECK=$(echo "$CHECKS" | jq --arg NAME "E2E Tests" '[.[] | select(.name == $NAME)] | .[0]')
+          echo "CI suite:"
+          echo "  Suite ID: $CI_SUITE_ID"
+          echo "  Head SHA: $CI_SUITE_SHA"
+          echo "  Status: $CI_SUITE_STATUS"
+          echo "  Conclusion: $CI_SUITE_CONCLUSION"
           
-          if [ "$E2E_CHECK" = "null" ] || [ -z "$E2E_CHECK" ]; then
-            echo "❌ E2E check run not found for SHA $COMMIT_SHA. Blocking deployment."
-            echo "Available check runs:"
-            echo "$CHECKS" | jq -r '.[] | "  Name: \(.name), Status: \(.status), Conclusion: \(.conclusion)"' || true
+          if [ "$CI_SUITE_STATUS" != "completed" ]; then
+            echo "❌ CI suite not completed (status: $CI_SUITE_STATUS). Blocking deployment."
             exit 1
           fi
           
-          E2E_STATUS=$(echo "$E2E_CHECK" | jq -r '.status')
-          E2E_CONCLUSION=$(echo "$E2E_CHECK" | jq -r '.conclusion')
-          
-          echo "E2E check:"
-          echo "  Status: $E2E_STATUS"
-          echo "  Conclusion: $E2E_CONCLUSION"
-          
-          if [ "$E2E_STATUS" != "completed" ]; then
-            echo "❌ E2E check not completed (status: $E2E_STATUS). Blocking deployment."
+          if [ "$CI_SUITE_CONCLUSION" != "success" ]; then
+            echo "❌ CI suite did not succeed (conclusion: $CI_SUITE_CONCLUSION). Blocking deployment."
             exit 1
           fi
           
-          if [ "$E2E_CONCLUSION" != "success" ]; then
-            echo "❌ E2E check did not succeed (conclusion: $E2E_CONCLUSION). Blocking deployment."
+          if [ "$CI_SUITE_SHA" != "$COMMIT_SHA" ]; then
+            echo "❌ CI suite SHA mismatch. Expected: $COMMIT_SHA, Got: $CI_SUITE_SHA. Blocking deployment."
             exit 1
           fi
           
-          echo "E2E: success (check completed)"
-          echo "SHA consistency: OK (Checks API guarantees same SHA)"
+          echo "CI: success (check suite matched)"
+          
+          # Validate E2E suite
+          E2E_SUITE_ID=$(echo "$E2E_SUITE" | jq -r '.id')
+          E2E_SUITE_SHA=$(echo "$E2E_SUITE" | jq -r '.head_sha')
+          E2E_SUITE_STATUS=$(echo "$E2E_SUITE" | jq -r '.status')
+          E2E_SUITE_CONCLUSION=$(echo "$E2E_SUITE" | jq -r '.conclusion')
+          
+          echo "E2E suite:"
+          echo "  Suite ID: $E2E_SUITE_ID"
+          echo "  Head SHA: $E2E_SUITE_SHA"
+          echo "  Status: $E2E_SUITE_STATUS"
+          echo "  Conclusion: $E2E_SUITE_CONCLUSION"
+          
+          if [ "$E2E_SUITE_STATUS" != "completed" ]; then
+            echo "❌ E2E suite not completed (status: $E2E_SUITE_STATUS). Blocking deployment."
+            exit 1
+          fi
+          
+          if [ "$E2E_SUITE_CONCLUSION" != "success" ]; then
+            echo "❌ E2E suite did not succeed (conclusion: $E2E_SUITE_CONCLUSION). Blocking deployment."
+            exit 1
+          fi
+          
+          if [ "$E2E_SUITE_SHA" != "$COMMIT_SHA" ]; then
+            echo "❌ E2E suite SHA mismatch. Expected: $COMMIT_SHA, Got: $E2E_SUITE_SHA. Blocking deployment."
+            exit 1
+          fi
+          
+          echo "E2E: success (check suite matched)"
+          echo "SHA consistency: OK"
           echo "DEPLOYMENT: APPROVED"
           echo ""
           echo "✅ All validations passed:"
-          echo "   - CI check: completed + success"
-          echo "   - E2E check: completed + success"
-          echo "   - SHA consistency: OK (native guarantee)"
+          echo "   - CI suite: completed + success (SHA matched)"
+          echo "   - E2E suite: completed + success (SHA matched)"
+          echo "   - SHA consistency: OK"
           echo "   - Deployment is authorized"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
