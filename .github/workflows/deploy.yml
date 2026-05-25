@@ -1,13 +1,8 @@
 name: Deploy
 
-# Triggers on push to main — builds Docker images, pushes to GHCR,
-# then SSHes into VPS to pull pre-built images and restart containers.
-# No building happens on the VPS; deploy time drops from ~15 min to ~3 min.
-# 
-# IMPORTANT: Branch protection rules must be configured to require:
-# - CI workflow = success
-# - E2E Tests workflow = success
-# This prevents deployment if either workflow fails.
+# Deployment safety is enforced through GitHub Actions job dependency graph:
+# CI → E2E → Build → Deploy
+# No deployment occurs unless ALL upstream jobs succeed.
 
 on:
   push:
@@ -15,15 +10,246 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # Lowercase repo path for GHCR (GHCR requires lowercase owner/repo)
   API_IMAGE: ghcr.io/botro-plays/engganyo-project/api
   WEB_IMAGE: ghcr.io/botro-plays/engganyo-project/web
 
 jobs:
+  # ─── CI: Lint + Test + Build ───────────────────────────────────────────────
+  ci-api:
+    name: CI — API lint, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: engganyo_test
+          POSTGRES_USER: engganyo
+          POSTGRES_PASSWORD: test_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://engganyo:test_pass@localhost:5432/engganyo_test
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci_access_secret_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      JWT_REFRESH_SECRET: ci_refresh_secret_min_64_chars_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=apps/api/prisma/schema.prisma
+
+      - name: Run migrations
+        run: npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
+
+      - name: Lint API
+        run: npm run lint --workspace=apps/api
+
+      - name: Test API (unit)
+        run: npm test --workspace=apps/api
+
+      - name: Build API
+        run: npm run build --workspace=apps/api
+
+  ci-web:
+    name: CI — Web lint, build
+    runs-on: ubuntu-latest
+
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint Web
+        run: npm run lint --workspace=apps/web
+
+      - name: Build Web
+        run: npm run build --workspace=apps/web
+
+  # ─── E2E: Playwright Tests ───────────────────────────────────────────────────
+  e2e:
+    name: E2E — Playwright tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [ci-api, ci-web]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: engganyo
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: engganyo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://engganyo:testpassword@localhost:5432/engganyo_test
+      REDIS_URL: redis://localhost:6379
+      REDIS_HOST: localhost
+      REDIS_PASSWORD: ""
+      JWT_ACCESS_SECRET: e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      JWT_REFRESH_SECRET: e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      COOKIE_SECRET: e2e-cookie-secret-32chars-xxxxxxx
+      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      APP_PORT: 3001
+      APP_URL: http://localhost:3001
+      FRONTEND_URL: http://localhost:3000
+      API_PREFIX: api
+      ADMIN_EMAIL: admin@engganyo.com
+      ADMIN_PASSWORD: Admin@123456
+      ENABLE_EMAIL_VERIFICATION: "false"
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+        working-directory: apps/web
+
+      - name: Run API migrations + seed
+        run: |
+          npm run db:migrate:prod
+          npm run db:generate
+          npm run db:seed
+        working-directory: apps/api
+
+      - name: Build API
+        run: npm run build
+        working-directory: apps/api
+
+      - name: Build web
+        run: npm run build
+        working-directory: apps/web
+
+      - name: Create uploads directory
+        run: mkdir -p uploads
+        working-directory: apps/api
+
+      - name: Start API server
+        run: |
+          export NODE_ENV=test
+          export DATABASE_URL=postgresql://engganyo:testpassword@localhost:5432/engganyo_test
+          export REDIS_URL=redis://localhost:6379
+          export REDIS_HOST=localhost
+          export REDIS_PASSWORD=""
+          export JWT_ACCESS_SECRET=e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          export JWT_REFRESH_SECRET=e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+          export JWT_ACCESS_EXPIRES_IN=15m
+          export JWT_REFRESH_EXPIRES_IN=7d
+          export COOKIE_SECRET=e2e-cookie-secret-32chars-xxxxxxx
+          export ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+          export APP_PORT=3001
+          export APP_URL=http://localhost:3001
+          export FRONTEND_URL=http://localhost:3000
+          export API_PREFIX=api
+          export ENABLE_EMAIL_VERIFICATION=false
+          node dist/main > /tmp/api.log 2>&1 &
+        working-directory: apps/api
+
+      - name: Start web server
+        run: npm run start > /tmp/web.log 2>&1 &
+        working-directory: apps/web
+
+      - name: Wait for servers to be ready
+        run: |
+          npx wait-on http://localhost:3001/api/health http://localhost:3000 --timeout 120000
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          echo "=== API LOG ==="
+          cat /tmp/api.log || true
+          echo "=== WEB LOG ==="
+          cat /tmp/web.log || true
+
+      - name: Run Playwright tests
+        run: npm run test:e2e --workspace=apps/web
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_TEST_EMAIL: admin@engganyo.com
+          E2E_TEST_PASSWORD: Admin@123456
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
   # ─── Build & push Docker images to GHCR ───────────────────────────────────
-  build-and-push:
+  build:
     name: Build & push images
     runs-on: ubuntu-latest
+    needs: e2e
 
     permissions:
       contents: read
@@ -72,7 +298,7 @@ jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build
 
     permissions:
       packages: read
@@ -81,7 +307,6 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
-          # Forward GITHUB_TOKEN so VPS can authenticate to GHCR for the pull
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           API_IMAGE: ${{ env.API_IMAGE }}:latest
@@ -95,29 +320,21 @@ jobs:
             set -e
             cd /opt/engganyo-project
 
-            # Sync config files: nginx.conf, docker-compose.yml, .env additions, etc.
             git pull origin main
 
-            # Authenticate to GHCR (token is scoped to this workflow run)
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            # Pull pre-built images (no building on VPS)
             docker pull "$API_IMAGE"
             docker pull "$WEB_IMAGE"
 
-            # Stop and remove old containers to avoid name conflicts
             docker compose down
 
-            # Start containers with new images
             docker compose up -d
 
-            # Wait for API container to become ready
             sleep 8
 
-            # Run any pending Prisma migrations
             docker compose exec -T api npx prisma migrate deploy
 
-            # Seed database on first-ever deploy only
             if [ ! -f ".seeded" ]; then
               echo "Running initial database seed..."
               if docker compose exec -T api npx prisma db seed; then
