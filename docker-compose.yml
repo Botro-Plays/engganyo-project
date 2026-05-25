@@ -19,7 +19,8 @@ services:
       test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER:-engganyo} -d ${DATABASE_NAME:-engganyo_db}']
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 60s
     networks:
       - engganyo_network
 
