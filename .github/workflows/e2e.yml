@@ -110,14 +110,8 @@ jobs:
           export FRONTEND_URL=http://localhost:3000
           export API_PREFIX=api
           export ENABLE_EMAIL_VERIFICATION=false
-          export ENABLE_ANTI_ABUSE=true
-          export ENABLE_WEBSOCKETS=true
-          export ENABLE_RECAPTCHA=false
           node dist/main > /tmp/api.log 2>&1 &
         working-directory: apps/api
-
-      - name: Wait for API to initialize
-        run: sleep 10
 
       - name: Start web server
         run: npm run start > /tmp/web.log 2>&1 &
