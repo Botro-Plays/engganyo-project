@@ -13,7 +13,7 @@ export class CryptoUtil {
 
   constructor(private readonly config: ConfigService) {
     const encryptionKey = this.config.get<string>('ENCRYPTION_KEY', '');
-    if (!encryptionKey || encryptionKey.length !== 64) {
+    if (!encryptionKey || !/^[0-9a-fA-F]{64}$/.test(encryptionKey)) {
       throw new Error(
         'ENCRYPTION_KEY must be a 32-byte hex string (64 characters). ' +
         'Generate with: openssl rand -hex 32'
