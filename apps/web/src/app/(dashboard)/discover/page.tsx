@@ -27,7 +27,7 @@ interface PaginatedCampaigns {
   meta: { total: number; page: number; totalPages: number };
 }
 
-const PLATFORMS = ['ALL', 'YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'TWITTER', 'FACEBOOK', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD'];
+const PLATFORMS = ['ALL', 'YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'TWITTER', 'FACEBOOK', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE'];
 
 const PLATFORM_STYLES: Record<string, { color: string; bg: string; label: string }> = {
   YOUTUBE:   { color: 'text-red-400',    bg: 'bg-red-500/10',    label: 'YouTube' },
@@ -38,7 +38,9 @@ const PLATFORM_STYLES: Record<string, { color: string; bg: string; label: string
   TWITCH:    { color: 'text-purple-400', bg: 'bg-purple-500/10', label: 'Twitch' },
   SPOTIFY:   { color: 'text-green-400',  bg: 'bg-green-500/10',  label: 'Spotify' },
   TELEGRAM:  { color: 'text-sky-300',    bg: 'bg-sky-400/10',    label: 'Telegram' },
-  DISCORD:   { color: 'text-indigo-400', bg: 'bg-indigo-500/10', label: 'Discord' },
+  DISCORD:      { color: 'text-indigo-400', bg: 'bg-indigo-500/10',  label: 'Discord' },
+  TRUSTPILOT:   { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'TrustPilot' },
+  GOOGLE:       { color: 'text-orange-400',  bg: 'bg-orange-500/10',  label: 'Google' },
 };
 
 const TASK_ACTION: Record<string, string> = {
@@ -51,6 +53,8 @@ const TASK_ACTION: Record<string, string> = {
   SPOTIFY_FOLLOW: 'Follow', SPOTIFY_STREAM: 'Stream',
   TELEGRAM_JOIN_CHANNEL: 'Join Channel', TELEGRAM_JOIN_GROUP: 'Join Group',
   DISCORD_JOIN_SERVER: 'Join Server',
+  TRUSTPILOT_REVIEW: 'Write Review',
+  GOOGLE_REVIEW: 'Write Review',
 };
 
 function getPlatform(taskType: string) {

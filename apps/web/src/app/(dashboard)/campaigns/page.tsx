@@ -37,6 +37,8 @@ const TASK_TYPES = [
   { value: 'TELEGRAM_JOIN_CHANNEL',label: 'Telegram · Join Channel' },
   { value: 'TELEGRAM_JOIN_GROUP',  label: 'Telegram · Join Group' },
   { value: 'DISCORD_JOIN_SERVER',  label: 'Discord · Join Server' },
+  { value: 'TRUSTPILOT_REVIEW',    label: 'TrustPilot · Write Review' },
+  { value: 'GOOGLE_REVIEW',        label: 'Google · Write Review' },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
