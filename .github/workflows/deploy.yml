@@ -320,6 +320,9 @@ jobs:
             set -e
             cd /opt/engganyo-project
 
+            # Remove dangling images + stopped containers from previous deploys to free disk space
+            docker system prune -f
+
             git pull origin main
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
@@ -330,6 +333,9 @@ jobs:
             docker compose down
 
             docker compose up -d
+
+            # Clean up images made dangling by this deploy (old :latest replaced by new :latest)
+            docker image prune -f
 
             sleep 8
 
