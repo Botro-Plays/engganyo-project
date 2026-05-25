@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
-  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe,
+  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -428,6 +428,14 @@ export default function CampaignsPage() {
                       : '⚠ This platform has no API verification — manual review is recommended.'}
                   </p>
                 )}
+              </div>
+
+              {/* ToS disclaimer */}
+              <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-300/70 leading-relaxed">
+                  By creating this campaign, you acknowledge that the requested tasks may violate the Terms of Service of the target platform. You are solely responsible for any account actions taken against you or your participants.
+                </p>
               </div>
 
               <div className="flex items-center gap-3 pt-1">
