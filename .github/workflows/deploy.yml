@@ -1,14 +1,16 @@
 name: Deploy
 
-# Triggers after Deploy Gate passes on main — builds Docker images, pushes to GHCR,
+# Triggers on push to main — builds Docker images, pushes to GHCR,
 # then SSHes into VPS to pull pre-built images and restart containers.
 # No building happens on the VPS; deploy time drops from ~15 min to ~3 min.
-# Deploy Gate ensures both CI and E2E have succeeded for the same commit SHA.
+# 
+# IMPORTANT: Branch protection rules must be configured to require:
+# - CI workflow = success
+# - E2E Tests workflow = success
+# This prevents deployment if either workflow fails.
 
 on:
-  workflow_run:
-    workflows: ["Deploy Gate"]
-    types: [completed]
+  push:
     branches: [main]
 
 env:
@@ -22,26 +24,14 @@ jobs:
   build-and-push:
     name: Build & push images
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Checkout (at the SHA that triggered workflow)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Check Deploy Gate success before deploy
-        run: |
-          echo "Checking Deploy Gate status"
-          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
-            echo "❌ Deploy Gate failed: blocking deploy"
-            exit 1
-          fi
-          echo "✅ Deploy Gate succeeded: proceeding with deploy"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
