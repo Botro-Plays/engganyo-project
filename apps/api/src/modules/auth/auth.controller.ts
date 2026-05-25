@@ -30,6 +30,14 @@ import type { JwtPayload } from './interfaces/jwt-payload.interface';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Get('public-config')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get public platform config (reCAPTCHA enabled status + site keys)' })
+  async getPublicConfig() {
+    return this.authService.getPublicConfig();
+  }
+
   @Post('register')
   @Public()
   @UserRateLimit({ limit: 3, ttl: 3600, scope: 'register' })

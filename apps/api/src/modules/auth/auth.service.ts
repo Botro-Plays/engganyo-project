@@ -68,8 +68,8 @@ export class AuthService {
   // ─── Register ──────────────────────────────────────────────
 
   async register(dto: RegisterDto, res: Response): Promise<AuthResult> {
-    // Validate reCAPTCHA if enabled
-    const recaptchaEnabled = this.configService.get<boolean>('features.recaptcha', false);
+    // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
+    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
     if (recaptchaEnabled) {
       if (!dto.recaptchaToken) {
         throw new BadRequestException('reCAPTCHA token is required');
@@ -195,8 +195,8 @@ export class AuthService {
   // ─── Login ─────────────────────────────────────────────────
 
   async login(dto: LoginDto, res: Response): Promise<AuthResult> {
-    // Validate reCAPTCHA if enabled
-    const recaptchaEnabled = this.configService.get<boolean>('features.recaptcha', false);
+    // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
+    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
     if (recaptchaEnabled) {
       if (!dto.recaptchaToken) {
         throw new BadRequestException('reCAPTCHA token is required');
@@ -500,14 +500,52 @@ export class AuthService {
     return value * (multipliers[unit] ?? 1_000);
   }
 
+  // ─── reCAPTCHA (DB-backed config with 30s in-memory cache) ──
+
+  private recaptchaCache: {
+    enabled: boolean;
+    v3SiteKey: string;
+    v3SecretKey: string;
+    v2SiteKey: string;
+    v2SecretKey: string;
+    cachedAt: number;
+  } | null = null;
+
+  private async getRecaptchaConfig() {
+    const CACHE_TTL = 30_000;
+    if (this.recaptchaCache && Date.now() - this.recaptchaCache.cachedAt < CACHE_TTL) {
+      return this.recaptchaCache;
+    }
+    const keys = ['recaptcha_enabled','recaptcha_v3_site_key','recaptcha_v3_secret_key','recaptcha_v2_site_key','recaptcha_v2_secret_key'];
+    const rows = await this.prisma.platformConfig.findMany({ where: { key: { in: keys } } });
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    this.recaptchaCache = {
+      enabled:      (map.get('recaptcha_enabled')       as boolean) ?? false,
+      v3SiteKey:    (map.get('recaptcha_v3_site_key')   as string)  ?? '',
+      v3SecretKey:  (map.get('recaptcha_v3_secret_key') as string)  ?? '',
+      v2SiteKey:    (map.get('recaptcha_v2_site_key')   as string)  ?? '',
+      v2SecretKey:  (map.get('recaptcha_v2_secret_key') as string)  ?? '',
+      cachedAt: Date.now(),
+    };
+    return this.recaptchaCache;
+  }
+
+  async getPublicConfig() {
+    const cfg = await this.getRecaptchaConfig();
+    return {
+      recaptchaEnabled:   cfg.enabled,
+      recaptchaV3SiteKey: cfg.v3SiteKey  || null,
+      recaptchaV2SiteKey: cfg.v2SiteKey  || null,
+    };
+  }
+
   private async validateRecaptcha(token: string): Promise<number> {
-    const secret = this.configService.get<string>('recaptcha.secret');
+    const cfg = await this.getRecaptchaConfig();
+    const secret = cfg.v3SecretKey || this.configService.get<string>('recaptcha.secret', '');
     if (!secret) {
-      // If reCAPTCHA not configured, allow all requests (dev mode)
-      this.logger.warn('reCAPTCHA not configured - skipping validation');
+      this.logger.warn('reCAPTCHA secret not configured - skipping validation');
       return 1.0;
     }
-
     try {
       const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
         method: 'POST',
@@ -518,7 +556,7 @@ export class AuthService {
       return data.success ? (data.score ?? 0.5) : 0;
     } catch (error) {
       this.logger.warn(`reCAPTCHA validation failed: ${String(error)}`);
-      return 0; // Fail closed on error
+      return 0;
     }
   }
 
