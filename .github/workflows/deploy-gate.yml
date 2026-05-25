@@ -25,13 +25,11 @@ jobs:
           
           TRIGGERING_WORKFLOW="${{ github.event.workflow_run.name }}"
           TRIGGERING_SHA="${{ github.event.workflow_run.head_sha }}"
-          TRIGGERING_BRANCH="${{ github.event.workflow_run.head_branch }}"
           TRIGGERING_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
           
           echo "=== Deploy Gate Validation ==="
           echo "Triggered by: $TRIGGERING_WORKFLOW"
           echo "Commit SHA: $TRIGGERING_SHA"
-          echo "Branch: $TRIGGERING_BRANCH"
           echo "Conclusion: $TRIGGERING_CONCLUSION"
           
           # If the triggering workflow failed, block deployment immediately
@@ -40,51 +38,57 @@ jobs:
             exit 1
           fi
           
-          # Fetch CI run for this specific SHA
-          echo "=== Fetching CI run for SHA $TRIGGERING_SHA ==="
-          CI_RUN=$(gh run list --workflow=CI --branch="$TRIGGERING_BRANCH" --limit 10 --json databaseId,headSha,conclusion --jq ".[] | select(.headSha == \"$TRIGGERING_SHA\") | .[0]")
+          # Fetch ALL CI runs and filter by exact SHA match (strict SHA locking)
+          echo "=== Fetching CI run for SHA $TRIGGERING_SHA (strict SHA locking) ==="
+          CI_RUNS=$(gh run list --workflow=CI --limit 100 --json databaseId,headSha,status,conclusion,createdAt --jq ".[]")
           
-          if [ -z "$CI_RUN" ]; then
-            echo "❌ No CI run found for SHA $TRIGGERING_SHA. Blocking deployment."
+          # Filter for exact SHA match, completed status, and success conclusion
+          CI_MATCHING_RUN=$(echo "$CI_RUNS" | jq --arg SHA "$TRIGGERING_SHA" '[.[] | select(.headSha == $SHA and .status == "completed" and .conclusion == "success")] | sort_by(.createdAt) | reverse | .[0]')
+          
+          if [ "$CI_MATCHING_RUN" = "null" ] || [ -z "$CI_MATCHING_RUN" ]; then
+            echo "❌ No successful CI run found for SHA $TRIGGERING_SHA. Blocking deployment."
+            echo "Available CI runs:"
+            echo "$CI_RUNS" | jq -r '.[] | "  SHA: \(.headSha), Status: \(.status), Conclusion: \(.conclusion), Created: \(.createdAt)"' || true
             exit 1
           fi
           
-          CI_RUN_ID=$(echo "$CI_RUN" | jq -r '.databaseId')
-          CI_SHA=$(echo "$CI_RUN" | jq -r '.headSha')
-          CI_CONCLUSION=$(echo "$CI_RUN" | jq -r '.conclusion')
+          CI_RUN_ID=$(echo "$CI_MATCHING_RUN" | jq -r '.databaseId')
+          CI_SHA=$(echo "$CI_MATCHING_RUN" | jq -r '.headSha')
+          CI_STATUS=$(echo "$CI_MATCHING_RUN" | jq -r '.status')
+          CI_CONCLUSION=$(echo "$CI_MATCHING_RUN" | jq -r '.conclusion')
           
-          echo "CI run ID: $CI_RUN_ID"
-          echo "CI SHA: $CI_SHA"
-          echo "CI conclusion: $CI_CONCLUSION"
+          echo "CI: success (SHA matched)"
+          echo "  Run ID: $CI_RUN_ID"
+          echo "  SHA: $CI_SHA"
+          echo "  Status: $CI_STATUS"
+          echo "  Conclusion: $CI_CONCLUSION"
           
-          if [ "$CI_CONCLUSION" != "success" ]; then
-            echo "❌ CI workflow did not succeed (conclusion: $CI_CONCLUSION). Blocking deployment."
+          # Fetch ALL E2E runs and filter by exact SHA match (strict SHA locking)
+          echo "=== Fetching E2E run for SHA $TRIGGERING_SHA (strict SHA locking) ==="
+          E2E_RUNS=$(gh run list --workflow="E2E Tests" --limit 100 --json databaseId,headSha,status,conclusion,createdAt --jq ".[]")
+          
+          # Filter for exact SHA match, completed status, and success conclusion
+          E2E_MATCHING_RUN=$(echo "$E2E_RUNS" | jq --arg SHA "$TRIGGERING_SHA" '[.[] | select(.headSha == $SHA and .status == "completed" and .conclusion == "success")] | sort_by(.createdAt) | reverse | .[0]')
+          
+          if [ "$E2E_MATCHING_RUN" = "null" ] || [ -z "$E2E_MATCHING_RUN" ]; then
+            echo "❌ No successful E2E run found for SHA $TRIGGERING_SHA. Blocking deployment."
+            echo "Available E2E runs:"
+            echo "$E2E_RUNS" | jq -r '.[] | "  SHA: \(.headSha), Status: \(.status), Conclusion: \(.conclusion), Created: \(.createdAt)"' || true
             exit 1
           fi
           
-          # Fetch E2E run for this specific SHA
-          echo "=== Fetching E2E run for SHA $TRIGGERING_SHA ==="
-          E2E_RUN=$(gh run list --workflow="E2E Tests" --branch="$TRIGGERING_BRANCH" --limit 10 --json databaseId,headSha,conclusion --jq ".[] | select(.headSha == \"$TRIGGERING_SHA\") | .[0]")
+          E2E_RUN_ID=$(echo "$E2E_MATCHING_RUN" | jq -r '.databaseId')
+          E2E_SHA=$(echo "$E2E_MATCHING_RUN" | jq -r '.headSha')
+          E2E_STATUS=$(echo "$E2E_MATCHING_RUN" | jq -r '.status')
+          E2E_CONCLUSION=$(echo "$E2E_MATCHING_RUN" | jq -r '.conclusion')
           
-          if [ -z "$E2E_RUN" ]; then
-            echo "❌ No E2E run found for SHA $TRIGGERING_SHA. Blocking deployment."
-            exit 1
-          fi
+          echo "E2E: success (SHA matched)"
+          echo "  Run ID: $E2E_RUN_ID"
+          echo "  SHA: $E2E_SHA"
+          echo "  Status: $E2E_STATUS"
+          echo "  Conclusion: $E2E_CONCLUSION"
           
-          E2E_RUN_ID=$(echo "$E2E_RUN" | jq -r '.databaseId')
-          E2E_SHA=$(echo "$E2E_RUN" | jq -r '.headSha')
-          E2E_CONCLUSION=$(echo "$E2E_RUN" | jq -r '.conclusion')
-          
-          echo "E2E run ID: $E2E_RUN_ID"
-          echo "E2E SHA: $E2E_SHA"
-          echo "E2E conclusion: $E2E_CONCLUSION"
-          
-          if [ "$E2E_CONCLUSION" != "success" ]; then
-            echo "❌ E2E workflow did not succeed (conclusion: $E2E_CONCLUSION). Blocking deployment."
-            exit 1
-          fi
-          
-          # Validate SHA consistency
+          # Final SHA consistency validation
           echo "=== Validating SHA consistency ==="
           if [ "$CI_SHA" != "$TRIGGERING_SHA" ] || [ "$E2E_SHA" != "$TRIGGERING_SHA" ]; then
             echo "❌ SHA mismatch detected!"
@@ -94,10 +98,13 @@ jobs:
             exit 1
           fi
           
+          echo "SHA consistency: OK"
+          echo "DEPLOYMENT: APPROVED"
+          echo ""
           echo "✅ All validations passed:"
-          echo "   - CI workflow succeeded for SHA $TRIGGERING_SHA"
-          echo "   - E2E workflow succeeded for SHA $TRIGGERING_SHA"
-          echo "   - SHA consistency verified"
+          echo "   - CI workflow: success (SHA matched)"
+          echo "   - E2E workflow: success (SHA matched)"
+          echo "   - SHA consistency: OK"
           echo "   - Deployment is authorized"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
