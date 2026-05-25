@@ -323,7 +323,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Avatar + header ── */}
-      <div className="card-glass rounded-xl p-6 flex items-center gap-4">
+      <div className="card-glass rounded-xl p-6 flex items-center gap-4 flex-wrap">
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-2xl font-bold shrink-0">
           {profile?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -332,12 +332,12 @@ export default function ProfilePage() {
             initials
           )}
         </div>
-        <div className="flex-1">
-          <p className="text-lg font-bold text-white">{displayName}</p>
-          <p className="text-zinc-400 text-sm">@{profile?.username ?? user?.username}</p>
-          <p className="text-zinc-500 text-xs">{profile?.email ?? user?.email}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-bold text-white truncate">{displayName}</p>
+          <p className="text-zinc-400 text-sm truncate">@{profile?.username ?? user?.username}</p>
+          <p className="text-zinc-500 text-xs truncate">{profile?.email ?? user?.email}</p>
         </div>
-        <div className="text-right">
+        <div className="w-full sm:w-auto sm:text-right">
           <p className="text-xs text-zinc-500 mb-1">Referral code</p>
           <button
             onClick={copyReferral}
