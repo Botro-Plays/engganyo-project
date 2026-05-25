@@ -1,14 +1,12 @@
 name: Deploy
 
-# Triggers after E2E passes on main — builds Docker images, pushes to GHCR,
+# Triggers after CI and E2E pass on main — builds Docker images, pushes to GHCR,
 # then SSHes into VPS to pull pre-built images and restart containers.
 # No building happens on the VPS; deploy time drops from ~15 min to ~3 min.
-# E2E is used as the gate because it runs after CI (longer runtime) and
-# we verify both CI and E2E status before deployment.
 
 on:
   workflow_run:
-    workflows: ["E2E Tests"]
+    workflows: ["CI", "E2E Tests"]
     types: [completed]
     branches: [main]
 
@@ -30,85 +28,19 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout (at the SHA that triggered E2E)
+      - name: Checkout (at the SHA that triggered workflow)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Verify CI and E2E workflows passed
+      - name: Check workflow success before deploy
         run: |
-          set -e
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          BRANCH="${{ github.event.workflow_run.head_branch }}"
-
-          echo "=== Verifying CI workflow status for SHA $SHA ==="
-          CI_STATUS=$(gh run list --workflow=CI --branch="$BRANCH" --limit 1 --json conclusion,outcome --jq '.[0] | {conclusion, outcome}')
-          CI_CONCLUSION=$(echo "$CI_STATUS" | jq -r '.conclusion')
-          CI_OUTCOME=$(echo "$CI_STATUS" | jq -r '.outcome')
-
-          echo "CI conclusion: $CI_CONCLUSION, outcome: $CI_OUTCOME"
-
-          if [ "$CI_CONCLUSION" != "success" ]; then
-            echo "ERROR: CI workflow did not conclude success (status: $CI_CONCLUSION). Aborting deploy."
+          echo "Checking triggering workflow: ${{ github.event.workflow_run.name }}"
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "❌ Workflow failed: blocking deploy"
             exit 1
           fi
-
-          if [ "$CI_OUTCOME" != "success" ]; then
-            echo "ERROR: CI workflow outcome is not success (status: $CI_OUTCOME). Aborting deploy."
-            exit 1
-          fi
-
-          echo "=== Verifying CI job outcomes ==="
-          CI_RUN_ID=$(gh run list --workflow=CI --branch="$BRANCH" --limit 1 --json databaseId --jq '.[0].databaseId')
-
-          API_JOB_OUTCOME=$(gh run view "$CI_RUN_ID" --json jobs --jq '.jobs[] | select(.name == "API — lint, test, build") | .outcome')
-          WEB_JOB_OUTCOME=$(gh run view "$CI_RUN_ID" --json jobs --jq '.jobs[] | select(.name == "Web — lint, build") | .outcome')
-
-          echo "CI/api job outcome: $API_JOB_OUTCOME"
-          echo "CI/web job outcome: $WEB_JOB_OUTCOME"
-
-          if [ "$API_JOB_OUTCOME" != "success" ]; then
-            echo "ERROR: CI/api job did not succeed (outcome: $API_JOB_OUTCOME). Aborting deploy."
-            exit 1
-          fi
-
-          if [ "$WEB_JOB_OUTCOME" != "success" ]; then
-            echo "ERROR: CI/web job did not succeed (outcome: $WEB_JOB_OUTCOME). Aborting deploy."
-            exit 1
-          fi
-
-          echo "=== Verifying E2E workflow status ==="
-          E2E_STATUS=$(gh run list --workflow="E2E Tests" --branch="$BRANCH" --limit 1 --json conclusion,outcome --jq '.[0] | {conclusion, outcome}')
-          E2E_CONCLUSION=$(echo "$E2E_STATUS" | jq -r '.conclusion')
-          E2E_OUTCOME=$(echo "$E2E_STATUS" | jq -r '.outcome')
-
-          echo "E2E conclusion: $E2E_CONCLUSION, outcome: $E2E_OUTCOME"
-
-          if [ "$E2E_CONCLUSION" != "success" ]; then
-            echo "ERROR: E2E workflow did not conclude success (status: $E2E_CONCLUSION). Aborting deploy."
-            exit 1
-          fi
-
-          if [ "$E2E_OUTCOME" != "success" ]; then
-            echo "ERROR: E2E workflow outcome is not success (status: $E2E_OUTCOME). Aborting deploy."
-            exit 1
-          fi
-
-          echo "=== Verifying E2E job outcome ==="
-          E2E_RUN_ID=$(gh run list --workflow="E2E Tests" --branch="$BRANCH" --limit 1 --json databaseId --jq '.[0].databaseId')
-
-          E2E_JOB_OUTCOME=$(gh run view "$E2E_RUN_ID" --json jobs --jq '.jobs[] | select(.name == "Playwright E2E") | .outcome')
-
-          echo "E2E/e2e job outcome: $E2E_JOB_OUTCOME"
-
-          if [ "$E2E_JOB_OUTCOME" != "success" ]; then
-            echo "ERROR: E2E/e2e job did not succeed (outcome: $E2E_JOB_OUTCOME). Aborting deploy."
-            exit 1
-          fi
-
-          echo "=== All checks passed. Proceeding with deployment. ==="
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "✅ Workflow succeeded: proceeding with deploy"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
