@@ -1,13 +1,11 @@
 name: Deploy Gate
 
 # This workflow is the single source of truth for deployment readiness.
-# It validates that BOTH CI and E2E workflows have completed successfully
-# for the SAME commit SHA before allowing deployment to proceed.
+# It validates that BOTH CI and E2E check runs have completed successfully
+# for the SAME commit SHA using GitHub's native Checks API.
 
 on:
-  workflow_run:
-    workflows: ["CI", "E2E Tests"]
-    types: [completed]
+  push:
     branches: [main]
 
 jobs:
@@ -17,94 +15,92 @@ jobs:
 
     permissions:
       contents: read
+      checks: read
 
     steps:
       - name: Validate deployment readiness
         run: |
           set -e
           
-          TRIGGERING_WORKFLOW="${{ github.event.workflow_run.name }}"
-          TRIGGERING_SHA="${{ github.event.workflow_run.head_sha }}"
-          TRIGGERING_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          COMMIT_SHA="${{ github.sha }}"
+          REPO="${{ github.repository }}"
           
-          echo "=== Deploy Gate Validation ==="
-          echo "Triggered by: $TRIGGERING_WORKFLOW"
-          echo "Commit SHA: $TRIGGERING_SHA"
-          echo "Conclusion: $TRIGGERING_CONCLUSION"
+          echo "=== Deploy Gate Validation (Checks API) ==="
+          echo "Commit SHA: $COMMIT_SHA"
+          echo "Repository: $REPO"
           
-          # If the triggering workflow failed, block deployment immediately
-          if [ "$TRIGGERING_CONCLUSION" != "success" ]; then
-            echo "❌ Triggering workflow ($TRIGGERING_WORKFLOW) failed. Blocking deployment."
+          # Query check runs for this commit using GitHub Checks API
+          echo "=== Fetching check runs for SHA $COMMIT_SHA ==="
+          CHECKS=$(gh api \
+            --method GET \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$REPO/commits/$COMMIT_SHA/check-runs" \
+            --jq '.check_runs')
+          
+          # Find CI check run
+          CI_CHECK=$(echo "$CHECKS" | jq --arg NAME "CI" '[.[] | select(.name == $NAME)] | .[0]')
+          
+          if [ "$CI_CHECK" = "null" ] || [ -z "$CI_CHECK" ]; then
+            echo "❌ CI check run not found for SHA $COMMIT_SHA. Blocking deployment."
+            echo "Available check runs:"
+            echo "$CHECKS" | jq -r '.[] | "  Name: \(.name), Status: \(.status), Conclusion: \(.conclusion)"' || true
             exit 1
           fi
           
-          # Fetch ALL CI runs and filter by exact SHA match (strict SHA locking)
-          echo "=== Fetching CI run for SHA $TRIGGERING_SHA (strict SHA locking) ==="
-          CI_RUNS=$(gh run list --workflow=CI --limit 100 --json databaseId,headSha,status,conclusion,createdAt --jq ".[]")
+          CI_STATUS=$(echo "$CI_CHECK" | jq -r '.status')
+          CI_CONCLUSION=$(echo "$CI_CHECK" | jq -r '.conclusion')
           
-          # Filter for exact SHA match, completed status, and success conclusion
-          CI_MATCHING_RUN=$(echo "$CI_RUNS" | jq --arg SHA "$TRIGGERING_SHA" '[.[] | select(.headSha == $SHA and .status == "completed" and .conclusion == "success")] | sort_by(.createdAt) | reverse | .[0]')
-          
-          if [ "$CI_MATCHING_RUN" = "null" ] || [ -z "$CI_MATCHING_RUN" ]; then
-            echo "❌ No successful CI run found for SHA $TRIGGERING_SHA. Blocking deployment."
-            echo "Available CI runs:"
-            echo "$CI_RUNS" | jq -r '.[] | "  SHA: \(.headSha), Status: \(.status), Conclusion: \(.conclusion), Created: \(.createdAt)"' || true
-            exit 1
-          fi
-          
-          CI_RUN_ID=$(echo "$CI_MATCHING_RUN" | jq -r '.databaseId')
-          CI_SHA=$(echo "$CI_MATCHING_RUN" | jq -r '.headSha')
-          CI_STATUS=$(echo "$CI_MATCHING_RUN" | jq -r '.status')
-          CI_CONCLUSION=$(echo "$CI_MATCHING_RUN" | jq -r '.conclusion')
-          
-          echo "CI: success (SHA matched)"
-          echo "  Run ID: $CI_RUN_ID"
-          echo "  SHA: $CI_SHA"
+          echo "CI check:"
           echo "  Status: $CI_STATUS"
           echo "  Conclusion: $CI_CONCLUSION"
           
-          # Fetch ALL E2E runs and filter by exact SHA match (strict SHA locking)
-          echo "=== Fetching E2E run for SHA $TRIGGERING_SHA (strict SHA locking) ==="
-          E2E_RUNS=$(gh run list --workflow="E2E Tests" --limit 100 --json databaseId,headSha,status,conclusion,createdAt --jq ".[]")
-          
-          # Filter for exact SHA match, completed status, and success conclusion
-          E2E_MATCHING_RUN=$(echo "$E2E_RUNS" | jq --arg SHA "$TRIGGERING_SHA" '[.[] | select(.headSha == $SHA and .status == "completed" and .conclusion == "success")] | sort_by(.createdAt) | reverse | .[0]')
-          
-          if [ "$E2E_MATCHING_RUN" = "null" ] || [ -z "$E2E_MATCHING_RUN" ]; then
-            echo "❌ No successful E2E run found for SHA $TRIGGERING_SHA. Blocking deployment."
-            echo "Available E2E runs:"
-            echo "$E2E_RUNS" | jq -r '.[] | "  SHA: \(.headSha), Status: \(.status), Conclusion: \(.conclusion), Created: \(.createdAt)"' || true
+          if [ "$CI_STATUS" != "completed" ]; then
+            echo "❌ CI check not completed (status: $CI_STATUS). Blocking deployment."
             exit 1
           fi
           
-          E2E_RUN_ID=$(echo "$E2E_MATCHING_RUN" | jq -r '.databaseId')
-          E2E_SHA=$(echo "$E2E_MATCHING_RUN" | jq -r '.headSha')
-          E2E_STATUS=$(echo "$E2E_MATCHING_RUN" | jq -r '.status')
-          E2E_CONCLUSION=$(echo "$E2E_MATCHING_RUN" | jq -r '.conclusion')
+          if [ "$CI_CONCLUSION" != "success" ]; then
+            echo "❌ CI check did not succeed (conclusion: $CI_CONCLUSION). Blocking deployment."
+            exit 1
+          fi
           
-          echo "E2E: success (SHA matched)"
-          echo "  Run ID: $E2E_RUN_ID"
-          echo "  SHA: $E2E_SHA"
+          echo "CI: success (check completed)"
+          
+          # Find E2E check run
+          E2E_CHECK=$(echo "$CHECKS" | jq --arg NAME "E2E Tests" '[.[] | select(.name == $NAME)] | .[0]')
+          
+          if [ "$E2E_CHECK" = "null" ] || [ -z "$E2E_CHECK" ]; then
+            echo "❌ E2E check run not found for SHA $COMMIT_SHA. Blocking deployment."
+            echo "Available check runs:"
+            echo "$CHECKS" | jq -r '.[] | "  Name: \(.name), Status: \(.status), Conclusion: \(.conclusion)"' || true
+            exit 1
+          fi
+          
+          E2E_STATUS=$(echo "$E2E_CHECK" | jq -r '.status')
+          E2E_CONCLUSION=$(echo "$E2E_CHECK" | jq -r '.conclusion')
+          
+          echo "E2E check:"
           echo "  Status: $E2E_STATUS"
           echo "  Conclusion: $E2E_CONCLUSION"
           
-          # Final SHA consistency validation
-          echo "=== Validating SHA consistency ==="
-          if [ "$CI_SHA" != "$TRIGGERING_SHA" ] || [ "$E2E_SHA" != "$TRIGGERING_SHA" ]; then
-            echo "❌ SHA mismatch detected!"
-            echo "Expected SHA: $TRIGGERING_SHA"
-            echo "CI SHA: $CI_SHA"
-            echo "E2E SHA: $E2E_SHA"
+          if [ "$E2E_STATUS" != "completed" ]; then
+            echo "❌ E2E check not completed (status: $E2E_STATUS). Blocking deployment."
             exit 1
           fi
           
-          echo "SHA consistency: OK"
+          if [ "$E2E_CONCLUSION" != "success" ]; then
+            echo "❌ E2E check did not succeed (conclusion: $E2E_CONCLUSION). Blocking deployment."
+            exit 1
+          fi
+          
+          echo "E2E: success (check completed)"
+          echo "SHA consistency: OK (Checks API guarantees same SHA)"
           echo "DEPLOYMENT: APPROVED"
           echo ""
           echo "✅ All validations passed:"
-          echo "   - CI workflow: success (SHA matched)"
-          echo "   - E2E workflow: success (SHA matched)"
-          echo "   - SHA consistency: OK"
+          echo "   - CI check: completed + success"
+          echo "   - E2E check: completed + success"
+          echo "   - SHA consistency: OK (native guarantee)"
           echo "   - Deployment is authorized"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
