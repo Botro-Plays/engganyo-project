@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { CampaignStatus, CompletionStatus, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, Prisma, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -921,12 +921,12 @@ export class AdminService {
       where: { key },
       create: {
         key,
-        value: value as never,
+        value: value as Prisma.InputJsonValue,
         description: this.CONFIG_DEFAULTS[key]!.description,
         isPublic: this.CONFIG_DEFAULTS[key]!.isPublic,
         updatedBy: adminId,
       },
-      update: { value: value as never, updatedBy: adminId },
+      update: { value: value as Prisma.InputJsonValue, updatedBy: adminId },
     });
     return { updated: true, key };
   }
