@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DatabaseModule } from '../../database/database.module';
 import { SocialAuthService } from './social-auth.service';
 import { SocialAuthController } from './social-auth.controller';
+import { CryptoUtil } from '../../common/utils/crypto.util';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { SocialAuthController } from './social-auth.controller';
     }),
   ],
   controllers: [SocialAuthController],
-  providers: [SocialAuthService],
+  providers: [SocialAuthService, CryptoUtil],
   exports: [SocialAuthService],
 })
 export class SocialAuthModule {}

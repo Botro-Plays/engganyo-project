@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { SocialPlatform, TaskType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { CryptoUtil } from '../../common/utils/crypto.util';
 
 // ─── State JWT payload ────────────────────────────────────────────────────────
 interface OAuthState {
@@ -78,6 +79,7 @@ export class SocialAuthService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
+    private readonly crypto: CryptoUtil,
   ) {}
 
   // ─── Check if user has a linked account for a platform ────────────────────
@@ -211,9 +213,13 @@ export class SocialAuthService {
       response_type: 'code',
       scope: cfg.scopes.join(' '),
       state,
-      access_type: 'offline',   // Google: get refresh token
-      prompt: 'consent',        // Google: always show consent to get refresh token
     });
+
+    // Google-specific params to ensure refresh token is returned
+    if (platform === SocialPlatform.YOUTUBE) {
+      params.append('access_type', 'offline');
+      params.append('prompt', 'consent');
+    }
 
     return { url: `${cfg.authUrl}?${params.toString()}` };
   }
@@ -254,6 +260,10 @@ export class SocialAuthService {
       // Fetch platform profile
       const profile = await this.fetchPlatformProfile(platform, tokens.access_token);
 
+      // Encrypt tokens before storage
+      const encryptedAccessToken = this.crypto.encrypt(tokens.access_token);
+      const encryptedRefreshToken = tokens.refresh_token ? this.crypto.encrypt(tokens.refresh_token) : null;
+
       // Upsert social account
       await this.prisma.socialAccount.upsert({
         where: { userId_platform: { userId: payload.userId, platform } },
@@ -264,8 +274,8 @@ export class SocialAuthService {
           platformUsername: profile.username,
           profileUrl: profile.profileUrl,
           avatarUrl: profile.avatarUrl,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? null,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           tokenExpiresAt: tokens.expires_in
             ? new Date(Date.now() + tokens.expires_in * 1000)
             : null,
@@ -277,8 +287,8 @@ export class SocialAuthService {
           platformUsername: profile.username,
           profileUrl: profile.profileUrl,
           avatarUrl: profile.avatarUrl,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? null,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           tokenExpiresAt: tokens.expires_in
             ? new Date(Date.now() + tokens.expires_in * 1000)
             : null,
@@ -533,9 +543,18 @@ export class SocialAuthService {
   ): Promise<string | null> {
     if (!account.accessToken) return null;
 
+    // Decrypt access token
+    let accessToken: string;
+    try {
+      accessToken = this.crypto.decrypt(account.accessToken);
+    } catch {
+      this.logger.error(`Failed to decrypt access token for userId=${userId} platform=${platform}`);
+      return null;
+    }
+
     // Token not expired
     if (!account.tokenExpiresAt || account.tokenExpiresAt > new Date(Date.now() + 60_000)) {
-      return account.accessToken;
+      return accessToken;
     }
 
     // Attempt refresh
@@ -553,18 +572,31 @@ export class SocialAuthService {
     }
 
     try {
+      // Decrypt refresh token
+      let refreshToken: string;
+      try {
+        refreshToken = this.crypto.decrypt(account.refreshToken);
+      } catch {
+        this.logger.error(`Failed to decrypt refresh token for userId=${userId} platform=${platform}`);
+        return null;
+      }
+
       const tokens = await this.exchangeCode(cfg.tokenUrl, {
-        refresh_token: account.refreshToken,
+        refresh_token: refreshToken,
         client_id: clientId,
         client_secret: clientSecret,
         grant_type: 'refresh_token',
       }, platform);
 
+      // Encrypt new tokens before storage
+      const encryptedAccessToken = this.crypto.encrypt(tokens.access_token);
+      const encryptedRefreshToken = tokens.refresh_token ? this.crypto.encrypt(tokens.refresh_token) : account.refreshToken;
+
       await this.prisma.socialAccount.update({
         where: { userId_platform: { userId, platform } },
         data: {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? account.refreshToken,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           tokenExpiresAt: tokens.expires_in
             ? new Date(Date.now() + tokens.expires_in * 1000)
             : null,
