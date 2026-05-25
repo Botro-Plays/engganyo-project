@@ -543,13 +543,10 @@ export class SocialAuthService {
   ): Promise<string | null> {
     if (!account.accessToken) return null;
 
-    // Decrypt access token
-    let accessToken: string;
-    try {
-      accessToken = this.crypto.decrypt(account.accessToken);
-    } catch {
-      this.logger.error(`Failed to decrypt access token for userId=${userId} platform=${platform}`);
-      return null;
+    // Decrypt access token with backward compatibility for legacy plaintext tokens
+    const { value: accessToken, isLegacy: accessTokenIsLegacy } = this.crypto.decryptOrReturnPlaintext(account.accessToken);
+    if (accessTokenIsLegacy) {
+      this.logger.warn(`Legacy plaintext access token detected for userId=${userId} platform=${platform} - will migrate to encrypted on next refresh`);
     }
 
     // Token not expired
@@ -572,13 +569,10 @@ export class SocialAuthService {
     }
 
     try {
-      // Decrypt refresh token
-      let refreshToken: string;
-      try {
-        refreshToken = this.crypto.decrypt(account.refreshToken);
-      } catch {
-        this.logger.error(`Failed to decrypt refresh token for userId=${userId} platform=${platform}`);
-        return null;
+      // Decrypt refresh token with backward compatibility
+      const { value: refreshToken, isLegacy: refreshTokenIsLegacy } = this.crypto.decryptOrReturnPlaintext(account.refreshToken);
+      if (refreshTokenIsLegacy) {
+        this.logger.warn(`Legacy plaintext refresh token detected for userId=${userId} platform=${platform} - will migrate to encrypted on refresh`);
       }
 
       const tokens = await this.exchangeCode(cfg.tokenUrl, {
@@ -588,7 +582,7 @@ export class SocialAuthService {
         grant_type: 'refresh_token',
       }, platform);
 
-      // Encrypt new tokens before storage
+      // Encrypt new tokens before storage (migration happens here)
       const encryptedAccessToken = this.crypto.encrypt(tokens.access_token);
       const encryptedRefreshToken = tokens.refresh_token ? this.crypto.encrypt(tokens.refresh_token) : account.refreshToken;
 
@@ -602,6 +596,11 @@ export class SocialAuthService {
             : null,
         },
       });
+
+      // Log successful migration
+      if (accessTokenIsLegacy || refreshTokenIsLegacy) {
+        this.logger.log(`Successfully migrated legacy tokens to encrypted storage for userId=${userId} platform=${platform}`);
+      }
 
       return tokens.access_token;
     } catch {

@@ -69,4 +69,21 @@ export class CryptoUtil {
       throw new Error(`Decryption failed: ${(error as Error).message}`);
     }
   }
+
+  /**
+   * Attempt decryption, return plaintext if decryption fails (backward compatibility)
+   * Returns { value: string, isLegacy: boolean }
+   * isLegacy = true if decryption failed and input was treated as plaintext
+   */
+  decryptOrReturnPlaintext(ciphertext: string): { value: string; isLegacy: boolean } {
+    if (!ciphertext) return { value: '', isLegacy: false };
+
+    try {
+      const decrypted = this.decrypt(ciphertext);
+      return { value: decrypted, isLegacy: false };
+    } catch {
+      // Decryption failed - treat as legacy plaintext token
+      return { value: ciphertext, isLegacy: true };
+    }
+  }
 }
