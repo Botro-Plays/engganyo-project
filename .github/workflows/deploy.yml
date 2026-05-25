@@ -28,6 +28,11 @@ jobs:
       packages: write
 
     steps:
+      - name: Checkout (at the SHA that triggered E2E)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
       - name: Verify CI passed
         run: |
           # Check CI workflow status for the same SHA
@@ -39,11 +44,6 @@ jobs:
           echo "CI workflow passed, proceeding with deploy."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Checkout (at the SHA that triggered E2E)
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
