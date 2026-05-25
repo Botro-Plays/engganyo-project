@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-import { formatCredits } from '@/lib/utils';
+import { formatCredits, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 
@@ -62,7 +62,12 @@ function DashboardPageInner() {
   });
 
   const rewardMutation = useMutation({
-    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward'),
+    mutationFn: () => {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward', {}, {
+        headers: { 'x-timezone': timezone },
+      });
+    },
     onSuccess: (res) => {
       setRewardResult(res.data.data);
       setRewardError(null);
@@ -83,6 +88,8 @@ function DashboardPageInner() {
     date: new Date(d.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     Tasks: d.count,
   }));
+
+  const levelInfo = gamStats ? getLevelProgress(gamStats.xp) : null;
 
   const statCards = [
     {
@@ -106,8 +113,9 @@ function DashboardPageInner() {
     {
       label: 'Level',
       value: stats?.gamification.level ?? (user?.level ?? '—'),
-      sub: `${(stats?.gamification.xp ?? user?.xp ?? 0).toLocaleString()} XP`,
+      sub: gamStats ? `${gamStats.xpToNext} XP to next` : `${(stats?.gamification.xp ?? user?.xp ?? 0).toLocaleString()} XP`,
       icon: Trophy, color: 'text-purple-400',
+      progress: levelInfo?.progress ?? 0,
     },
   ];
 
@@ -131,6 +139,13 @@ function DashboardPageInner() {
               {s.icon && <s.icon className={`w-4 h-4 ${s.color}`} />}
             </div>
             <p className={`text-2xl font-bold ${s.color}`}>{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}</p>
+            {s.progress !== undefined && (
+              <>
+                <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-purple-400 rounded-full transition-all" style={{ width: `${s.progress}%` }} />
+                </div>
+              </>
+            )}
             <p className="text-xs text-zinc-600 mt-0.5">{s.sub}</p>
           </div>
         ))}

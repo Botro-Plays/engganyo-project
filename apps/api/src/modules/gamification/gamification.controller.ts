@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Query, UseGuards, HttpCode, HttpStatus, Headers } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
 import { GamificationService } from './gamification.service';
@@ -56,7 +56,10 @@ export class GamificationController {
   @Post('daily-reward')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Claim daily login reward (credits + XP + streak update)' })
-  claimDailyReward(@CurrentUser() user: JwtPayload) {
-    return this.gamificationService.claimDailyReward(user.sub);
+  claimDailyReward(
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-timezone') timezone?: string,
+  ) {
+    return this.gamificationService.claimDailyReward(user.sub, timezone);
   }
 }

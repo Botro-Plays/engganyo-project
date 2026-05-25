@@ -286,7 +286,7 @@ export class GamificationService implements OnModuleInit {
 
   // ─── Claim daily reward ────────────────────────────────────
 
-  async claimDailyReward(userId: string) {
+  async claimDailyReward(userId: string, userTimezone?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { currentStreak: true, longestStreak: true, lastDailyRewardAt: true, lastActiveAt: true },
@@ -298,7 +298,7 @@ export class GamificationService implements OnModuleInit {
     }
 
     const now = new Date();
-    const streakBroken = this.isStreakBroken(user.lastActiveAt);
+    const streakBroken = this.isStreakBroken(user.lastActiveAt, userTimezone);
     const newStreak = streakBroken ? 1 : user.currentStreak + 1;
     const newLongest = Math.max(newStreak, user.longestStreak);
 
@@ -451,13 +451,33 @@ export class GamificationService implements OnModuleInit {
     );
   }
 
-  private isStreakBroken(lastActiveAt: Date | null): boolean {
+  private isStreakBroken(lastActiveAt: Date | null, userTimezone?: string): boolean {
     if (!lastActiveAt) return false;
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    yesterday.setUTCHours(0, 0, 0, 0);
-    const last = new Date(lastActiveAt);
-    last.setUTCHours(0, 0, 0, 0);
-    return last < yesterday;
+
+    // Use UTC as fallback if no timezone provided
+    const timezone = userTimezone || 'UTC';
+
+    // Convert timestamps to user's local calendar day (YYYY-MM-DD format)
+    const lastLocalDay = this.toLocalCalendarDay(lastActiveAt, timezone);
+    const todayLocalDay = this.toLocalCalendarDay(new Date(), timezone);
+
+    // Calculate day gap between calendar days
+    const lastDate = new Date(lastLocalDay);
+    const todayDate = new Date(todayLocalDay);
+    const dayGap = Math.floor((todayDate.getTime() - lastDate.getTime()) / (24 * 60 * 60 * 1000));
+
+    // Streak broken if gap >= 2 days (missed a full calendar day)
+    return dayGap >= 2;
+  }
+
+  private toLocalCalendarDay(date: Date, timezone: string): string {
+    // Convert to YYYY-MM-DD format in user's timezone
+    return new Date(date).toLocaleDateString('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
   }
 
   private async checkStreakAchievements(userId: string, streak: number) {
