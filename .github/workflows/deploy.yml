@@ -1,12 +1,12 @@
 name: Deploy
 
-# Triggers after CI passes on main — builds Docker images, pushes to GHCR,
+# Triggers after both CI and E2E pass on main — builds Docker images, pushes to GHCR,
 # then SSHes into VPS to pull pre-built images and restart containers.
 # No building happens on the VPS; deploy time drops from ~15 min to ~3 min.
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["E2E Tests"]
     types: [completed]
     branches: [main]
 
@@ -28,7 +28,19 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout (at the SHA that triggered CI)
+      - name: Verify CI passed
+        run: |
+          # Check CI workflow status for the same SHA
+          CI_STATUS=$(gh run list --workflow=CI --branch=${{ github.event.workflow_run.head_branch }} --limit 1 --json conclusion --jq '.[0].conclusion')
+          if [ "$CI_STATUS" != "success" ]; then
+            echo "CI workflow did not pass (status: $CI_STATUS). Aborting deploy."
+            exit 1
+          fi
+          echo "CI workflow passed, proceeding with deploy."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout (at the SHA that triggered E2E)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
