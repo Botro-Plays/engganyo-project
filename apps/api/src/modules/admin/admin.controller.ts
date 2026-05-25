@@ -3,7 +3,7 @@ import {
   UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 
 import { AdminService } from './admin.service';
 import { ListUsersDto } from './dto/list-users.dto';
@@ -288,7 +288,7 @@ export class AdminController {
   updateServerConfig(
     @CurrentUser() admin: JwtPayload,
     @Param('key') key: string,
-    @Body() body: { value: unknown },
+    @Body() body: { value: Prisma.InputJsonValue },
   ) {
     return this.adminService.updateServerConfig(admin.sub, key, body.value);
   }

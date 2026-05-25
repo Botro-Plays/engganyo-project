@@ -913,7 +913,7 @@ export class AdminService {
     });
   }
 
-  async updateServerConfig(adminId: string, key: string, value: unknown) {
+  async updateServerConfig(adminId: string, key: string, value: Prisma.InputJsonValue) {
     if (!this.CONFIG_DEFAULTS[key]) {
       throw new BadRequestException(`Unknown config key: ${key}`);
     }
@@ -921,12 +921,12 @@ export class AdminService {
       where: { key },
       create: {
         key,
-        value: value as Prisma.InputJsonValue,
+        value: value,
         description: this.CONFIG_DEFAULTS[key]!.description,
         isPublic: this.CONFIG_DEFAULTS[key]!.isPublic,
         updatedBy: adminId,
       },
-      update: { value: value as Prisma.InputJsonValue, updatedBy: adminId },
+      update: { value, updatedBy: adminId },
     });
     return { updated: true, key };
   }
