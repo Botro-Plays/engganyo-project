@@ -18,6 +18,8 @@ import {
   Globe,
   Lock,
   Shield,
+  Share2,
+  Mail,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -185,12 +187,17 @@ export default function ProfilePage() {
   const { user, updateUser } = useAuthStore();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
+  const [canShare, setCanShare] = useState(false);
   const [showSocialForm, setShowSocialForm] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [socialError, setSocialError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCanShare(!!navigator.share);
+  }, []);
 
   // ─── Fetch full profile ────────────────────────────────────
   const { data: profile, isLoading } = useQuery({
@@ -304,6 +311,29 @@ export default function ProfilePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ─── Share referral link ──────────────────────────────────
+  const getReferralUrl = () => {
+    const code = profile?.referralCode ?? user?.referralCode;
+    return `${window.location.origin}/register?ref=${code ?? ''}`;
+  };
+
+  const getShareText = () => {
+    const code = profile?.referralCode ?? user?.referralCode;
+    return `Join Engganyo and earn credits by completing tasks! Use my referral code ${code ?? ''} to sign up:`;
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      await navigator.share({
+        title: 'Join Engganyo',
+        text: getShareText(),
+        url: getReferralUrl(),
+      });
+    } catch {
+      // User cancelled or share failed — no action needed
+    }
+  };
+
   const displayName = profile?.displayName ?? user?.displayName ?? user?.username ?? '?';
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -346,6 +376,52 @@ export default function ProfilePage() {
             {profile?.referralCode ?? user?.referralCode ?? '—'}
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
+          <div className="flex items-center gap-1.5 mt-2 sm:justify-end">
+            <span className="text-xs text-zinc-600">Share:</span>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-7 h-7 flex items-center justify-center rounded-md bg-green-500/10 text-green-400 text-[10px] font-bold hover:bg-green-500/20 transition-all"
+              title="Share via WhatsApp"
+            >
+              WA
+            </a>
+            <a
+              href={`https://t.me/share/url?url=${encodeURIComponent(getReferralUrl())}&text=${encodeURIComponent(getShareText())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-7 h-7 flex items-center justify-center rounded-md bg-sky-500/10 text-sky-400 text-[10px] font-bold hover:bg-sky-500/20 transition-all"
+              title="Share via Telegram"
+            >
+              TG
+            </a>
+            <a
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-500/10 text-zinc-300 hover:bg-zinc-500/20 transition-all"
+              title="Share via X"
+            >
+              <Twitter className="w-3.5 h-3.5" />
+            </a>
+            <a
+              href={`mailto:?subject=${encodeURIComponent('Join me on Engganyo')}&body=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
+              className="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-500/10 text-zinc-300 hover:bg-zinc-500/20 transition-all"
+              title="Share via Email"
+            >
+              <Mail className="w-3.5 h-3.5" />
+            </a>
+            {canShare && (
+              <button
+                onClick={() => void handleNativeShare()}
+                className="w-7 h-7 flex items-center justify-center rounded-md bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-all"
+                title="Share"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
