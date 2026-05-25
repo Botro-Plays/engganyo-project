@@ -84,47 +84,19 @@ jobs:
         run: npm run build
         working-directory: apps/api
 
+      - name: Build web
+        run: npm run build
+        working-directory: apps/web
+
       - name: Create uploads directory
-        run: mkdir -p apps/api/uploads
-        working-directory: .
+        run: mkdir -p uploads
+        working-directory: apps/api
 
       - name: Start API server
         run: node dist/main > /tmp/api.log 2>&1 &
         working-directory: apps/api
         env:
           NODE_ENV: test
-          DATABASE_URL: postgresql://engganyo:testpassword@localhost:5432/engganyo_test
-          REDIS_URL: redis://localhost:6379
-          REDIS_HOST: localhost
-          REDIS_PASSWORD: ""
-          JWT_ACCESS_SECRET: e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          JWT_REFRESH_SECRET: e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          JWT_ACCESS_EXPIRES_IN: 15m
-          JWT_REFRESH_EXPIRES_IN: 7d
-          COOKIE_SECRET: e2e-cookie-secret-32chars-xxxxxxx
-          ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
-          APP_PORT: 3001
-          APP_URL: http://localhost:3001
-          FRONTEND_URL: http://localhost:3000
-          API_PREFIX: api
-          ENABLE_EMAIL_VERIFICATION: "false"
-          ENABLE_ANTI_ABUSE: "true"
-          ENABLE_WEBSOCKETS: "true"
-          ENABLE_RECAPTCHA: "false"
-
-      - name: Wait for API to initialize
-        run: sleep 10
-
-      - name: Check API logs before health check
-        run: |
-          echo "=== API LOG ==="
-          cat /tmp/api.log || true
-          echo "=== CHECKING PROCESS ==="
-          ps aux | grep node || true
-
-      - name: Build web
-        run: npm run build
-        working-directory: apps/web
 
       - name: Start web server
         run: npm run start > /tmp/web.log 2>&1 &
@@ -133,8 +105,6 @@ jobs:
       - name: Wait for servers to be ready
         run: |
           npx wait-on http://localhost:3001/api/health http://localhost:3000 --timeout 120000
-        env:
-          NODE_ENV: test
 
       - name: Show server logs on failure
         if: failure()
