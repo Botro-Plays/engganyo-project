@@ -1,4 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Privacy Policy',
+  description: 'Learn how Engganyo collects, uses, and protects your personal information on our creator growth platform.',
+  alternates: { canonical: 'https://engganyo.com/privacy' },
+  robots: { index: true, follow: false },
+};
 
 export default function PrivacyPage() {
   return (

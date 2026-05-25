@@ -1,4 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Terms of Service',
+  description: 'Read the terms and conditions governing your use of the Engganyo creator growth platform.',
+  alternates: { canonical: 'https://engganyo.com/terms' },
+  robots: { index: true, follow: false },
+};
 
 export default function TermsPage() {
   return (

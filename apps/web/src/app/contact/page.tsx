@@ -1,4 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Contact Us',
+  description: 'Get in touch with the Engganyo team. We are here to help with questions, feedback, or support.',
+  alternates: { canonical: 'https://engganyo.com/contact' },
+  robots: { index: true, follow: true },
+};
 
 export default function ContactPage() {
   return (
