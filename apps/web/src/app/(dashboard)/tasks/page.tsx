@@ -637,6 +637,14 @@ export default function TasksPage() {
               )}
             </div>
 
+            {/* ToS disclaimer */}
+            <div className="mb-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-300/70 leading-relaxed">
+                By proceeding, you acknowledge this task may violate the Terms of Service of the third-party platform and could result in account restrictions or a ban. Proceed at your own risk.
+              </p>
+            </div>
+
             {submitError && (
               <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                 {submitError}
