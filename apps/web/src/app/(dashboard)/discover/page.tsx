@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Coins, Users, ChevronLeft, ChevronRight, ExternalLink, Compass } from 'lucide-react';
+import { Search, Coins, Users, ChevronLeft, ChevronRight, ExternalLink, Compass, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
 import { formatCredits } from '@/lib/utils';
@@ -129,6 +129,14 @@ export default function DiscoverPage() {
             <span><span className="text-white font-medium">{data.meta.total}</span> active tasks</span>
           </div>
         )}
+      </div>
+
+      {/* Platform ToS disclaimer */}
+      <div className="mb-5 px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-300/70 leading-relaxed">
+          <span className="font-semibold text-amber-300">Notice:</span> Participating in tasks may violate the Terms of Service of third-party platforms and could result in account restrictions or bans. Proceed at your own risk.
+        </p>
       </div>
 
       {/* Search + Platform filters */}

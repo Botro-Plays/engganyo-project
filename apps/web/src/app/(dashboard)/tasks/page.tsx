@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, ExternalLink, X, CheckCircle2, Clock,
-  ChevronLeft, ChevronRight, Send, Flag, Upload,
+  ChevronLeft, ChevronRight, Send, Flag, Upload, AlertTriangle,
 } from 'lucide-react';
 
 import Link from 'next/link';
@@ -29,6 +29,8 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   SPOTIFY_FOLLOW: 'SPOTIFY',     SPOTIFY_STREAM: 'SPOTIFY',
   TELEGRAM_JOIN_CHANNEL: 'TELEGRAM', TELEGRAM_JOIN_GROUP: 'TELEGRAM',
   DISCORD_JOIN_SERVER: 'DISCORD',
+  TRUSTPILOT_REVIEW: 'TRUSTPILOT',
+  GOOGLE_REVIEW: 'GOOGLE',
 };
 
 // Only these platforms require a linked account to accept a task (OAuth-based verification)
@@ -38,6 +40,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   YOUTUBE: 'YouTube', TIKTOK: 'TikTok', INSTAGRAM: 'Instagram',
   TWITTER: 'Twitter', FACEBOOK: 'Facebook', TWITCH: 'Twitch', SPOTIFY: 'Spotify',
   TELEGRAM: 'Telegram', DISCORD: 'Discord',
+  TRUSTPILOT: 'TrustPilot', GOOGLE: 'Google',
 };
 
 // ─── Types ────────────────────────────────────────────────────
@@ -65,6 +68,8 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   TELEGRAM_JOIN_CHANNEL: 'Telegram · Join Channel',
   TELEGRAM_JOIN_GROUP: 'Telegram · Join Group',
   DISCORD_JOIN_SERVER: 'Discord · Join Server',
+  TRUSTPILOT_REVIEW: 'TrustPilot · Write Review',
+  GOOGLE_REVIEW: 'Google · Write Review',
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -75,8 +80,10 @@ const PLATFORM_COLORS: Record<string, string> = {
   FACEBOOK: 'text-blue-400 bg-blue-500/10',
   TWITCH:   'text-purple-400 bg-purple-500/10',
   SPOTIFY:  'text-green-400 bg-green-500/10',
-  TELEGRAM: 'text-sky-300 bg-sky-400/10',
-  DISCORD:  'text-indigo-400 bg-indigo-500/10',
+  TELEGRAM:    'text-sky-300 bg-sky-400/10',
+  DISCORD:     'text-indigo-400 bg-indigo-500/10',
+  TRUSTPILOT:  'text-emerald-400 bg-emerald-500/10',
+  GOOGLE:      'text-orange-400 bg-orange-500/10',
 };
 
 interface AvailableTask {
@@ -372,6 +379,13 @@ export default function TasksPage() {
       {/* ── Browse tab ── */}
       {tab === 'browse' && (
         <>
+          {/* Platform ToS disclaimer */}
+          <div className="mb-4 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-300/80 leading-relaxed">
+              <span className="font-semibold text-amber-300">Disclaimer:</span> Completing tasks on Engganyo may violate the Terms of Service of third-party platforms (YouTube, Instagram, TikTok, X, Facebook, etc.) and could result in account warnings, restrictions, or permanent bans. Participate at your own risk. Engganyo is not responsible for any account actions taken by third-party platforms.
+            </p>
+          </div>
           {browseLoading ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
