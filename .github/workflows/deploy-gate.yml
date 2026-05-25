@@ -1,0 +1,103 @@
+name: Deploy Gate
+
+# This workflow is the single source of truth for deployment readiness.
+# It validates that BOTH CI and E2E workflows have completed successfully
+# for the SAME commit SHA before allowing deployment to proceed.
+
+on:
+  workflow_run:
+    workflows: ["CI", "E2E Tests"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  validate-deployment-readiness:
+    name: Validate CI + E2E success for same SHA
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate deployment readiness
+        run: |
+          set -e
+          
+          TRIGGERING_WORKFLOW="${{ github.event.workflow_run.name }}"
+          TRIGGERING_SHA="${{ github.event.workflow_run.head_sha }}"
+          TRIGGERING_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          TRIGGERING_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          
+          echo "=== Deploy Gate Validation ==="
+          echo "Triggered by: $TRIGGERING_WORKFLOW"
+          echo "Commit SHA: $TRIGGERING_SHA"
+          echo "Branch: $TRIGGERING_BRANCH"
+          echo "Conclusion: $TRIGGERING_CONCLUSION"
+          
+          # If the triggering workflow failed, block deployment immediately
+          if [ "$TRIGGERING_CONCLUSION" != "success" ]; then
+            echo "❌ Triggering workflow ($TRIGGERING_WORKFLOW) failed. Blocking deployment."
+            exit 1
+          fi
+          
+          # Fetch CI run for this specific SHA
+          echo "=== Fetching CI run for SHA $TRIGGERING_SHA ==="
+          CI_RUN=$(gh run list --workflow=CI --branch="$TRIGGERING_BRANCH" --limit 10 --json databaseId,headSha,conclusion --jq ".[] | select(.headSha == \"$TRIGGERING_SHA\") | .[0]")
+          
+          if [ -z "$CI_RUN" ]; then
+            echo "❌ No CI run found for SHA $TRIGGERING_SHA. Blocking deployment."
+            exit 1
+          fi
+          
+          CI_RUN_ID=$(echo "$CI_RUN" | jq -r '.databaseId')
+          CI_SHA=$(echo "$CI_RUN" | jq -r '.headSha')
+          CI_CONCLUSION=$(echo "$CI_RUN" | jq -r '.conclusion')
+          
+          echo "CI run ID: $CI_RUN_ID"
+          echo "CI SHA: $CI_SHA"
+          echo "CI conclusion: $CI_CONCLUSION"
+          
+          if [ "$CI_CONCLUSION" != "success" ]; then
+            echo "❌ CI workflow did not succeed (conclusion: $CI_CONCLUSION). Blocking deployment."
+            exit 1
+          fi
+          
+          # Fetch E2E run for this specific SHA
+          echo "=== Fetching E2E run for SHA $TRIGGERING_SHA ==="
+          E2E_RUN=$(gh run list --workflow="E2E Tests" --branch="$TRIGGERING_BRANCH" --limit 10 --json databaseId,headSha,conclusion --jq ".[] | select(.headSha == \"$TRIGGERING_SHA\") | .[0]")
+          
+          if [ -z "$E2E_RUN" ]; then
+            echo "❌ No E2E run found for SHA $TRIGGERING_SHA. Blocking deployment."
+            exit 1
+          fi
+          
+          E2E_RUN_ID=$(echo "$E2E_RUN" | jq -r '.databaseId')
+          E2E_SHA=$(echo "$E2E_RUN" | jq -r '.headSha')
+          E2E_CONCLUSION=$(echo "$E2E_RUN" | jq -r '.conclusion')
+          
+          echo "E2E run ID: $E2E_RUN_ID"
+          echo "E2E SHA: $E2E_SHA"
+          echo "E2E conclusion: $E2E_CONCLUSION"
+          
+          if [ "$E2E_CONCLUSION" != "success" ]; then
+            echo "❌ E2E workflow did not succeed (conclusion: $E2E_CONCLUSION). Blocking deployment."
+            exit 1
+          fi
+          
+          # Validate SHA consistency
+          echo "=== Validating SHA consistency ==="
+          if [ "$CI_SHA" != "$TRIGGERING_SHA" ] || [ "$E2E_SHA" != "$TRIGGERING_SHA" ]; then
+            echo "❌ SHA mismatch detected!"
+            echo "Expected SHA: $TRIGGERING_SHA"
+            echo "CI SHA: $CI_SHA"
+            echo "E2E SHA: $E2E_SHA"
+            exit 1
+          fi
+          
+          echo "✅ All validations passed:"
+          echo "   - CI workflow succeeded for SHA $TRIGGERING_SHA"
+          echo "   - E2E workflow succeeded for SHA $TRIGGERING_SHA"
+          echo "   - SHA consistency verified"
+          echo "   - Deployment is authorized"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
