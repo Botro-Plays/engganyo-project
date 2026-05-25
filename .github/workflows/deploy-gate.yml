@@ -41,26 +41,27 @@ jobs:
           # Fetch CI run for this exact SHA
           echo "=== Fetching CI run for SHA $TRIGGERING_SHA ==="
           CI_RUNS=$(gh api \
-            --method GET \
-            -H "Accept: application/vnd.github+json" \
             "/repos/${{ github.repository }}/actions/runs?head_sha=$TRIGGERING_SHA&event=push" \
-            --jq '.workflow_runs[] | select(.name == "CI")')
+            --jq '[.workflow_runs[] | select(.name == "CI" and .status == "completed")]')
           
-          if [ -z "$CI_RUNS" ]; then
-            echo "❌ No CI run found for SHA $TRIGGERING_SHA. Blocking deployment."
+          if [ -z "$CI_RUNS" ] || [ "$CI_RUNS" = "null" ] || [ "$CI_RUNS" = "[]" ]; then
+            echo "❌ No completed CI run found for SHA $TRIGGERING_SHA. Blocking deployment."
             exit 1
           fi
           
-          # Count matching CI runs - must be exactly 1
+          # Count matching CI runs - must have at least 1
           CI_COUNT=$(echo "$CI_RUNS" | jq 'length')
-          if [ "$CI_COUNT" -ne 1 ]; then
-            echo "❌ Ambiguous CI runs found (count: $CI_COUNT). Blocking deployment."
+          if [ "$CI_COUNT" -lt 1 ]; then
+            echo "❌ No CI runs found (count: $CI_COUNT). Blocking deployment."
             exit 1
           fi
           
-          CI_STATUS=$(echo "$CI_RUNS" | jq -r '.status')
-          CI_CONCLUSION=$(echo "$CI_RUNS" | jq -r '.conclusion')
-          CI_HEAD_SHA=$(echo "$CI_RUNS" | jq -r '.head_sha')
+          # Select latest run deterministically
+          CI_RUN=$(echo "$CI_RUNS" | jq 'sort_by(.created_at) | last')
+          
+          CI_STATUS=$(echo "$CI_RUN" | jq -r '.status')
+          CI_CONCLUSION=$(echo "$CI_RUN" | jq -r '.conclusion')
+          CI_HEAD_SHA=$(echo "$CI_RUN" | jq -r '.head_sha')
           
           echo "CI run:"
           echo "  Status: $CI_STATUS"
@@ -87,26 +88,27 @@ jobs:
           # Fetch E2E run for this exact SHA
           echo "=== Fetching E2E run for SHA $TRIGGERING_SHA ==="
           E2E_RUNS=$(gh api \
-            --method GET \
-            -H "Accept: application/vnd.github+json" \
             "/repos/${{ github.repository }}/actions/runs?head_sha=$TRIGGERING_SHA&event=push" \
-            --jq '.workflow_runs[] | select(.name == "E2E Tests")')
+            --jq '[.workflow_runs[] | select(.name == "E2E Tests" and .status == "completed")]')
           
-          if [ -z "$E2E_RUNS" ]; then
-            echo "❌ No E2E run found for SHA $TRIGGERING_SHA. Blocking deployment."
+          if [ -z "$E2E_RUNS" ] || [ "$E2E_RUNS" = "null" ] || [ "$E2E_RUNS" = "[]" ]; then
+            echo "❌ No completed E2E run found for SHA $TRIGGERING_SHA. Blocking deployment."
             exit 1
           fi
           
-          # Count matching E2E runs - must be exactly 1
+          # Count matching E2E runs - must have at least 1
           E2E_COUNT=$(echo "$E2E_RUNS" | jq 'length')
-          if [ "$E2E_COUNT" -ne 1 ]; then
-            echo "❌ Ambiguous E2E runs found (count: $E2E_COUNT). Blocking deployment."
+          if [ "$E2E_COUNT" -lt 1 ]; then
+            echo "❌ No E2E runs found (count: $E2E_COUNT). Blocking deployment."
             exit 1
           fi
           
-          E2E_STATUS=$(echo "$E2E_RUNS" | jq -r '.status')
-          E2E_CONCLUSION=$(echo "$E2E_RUNS" | jq -r '.conclusion')
-          E2E_HEAD_SHA=$(echo "$E2E_RUNS" | jq -r '.head_sha')
+          # Select latest run deterministically
+          E2E_RUN=$(echo "$E2E_RUNS" | jq 'sort_by(.created_at) | last')
+          
+          E2E_STATUS=$(echo "$E2E_RUN" | jq -r '.status')
+          E2E_CONCLUSION=$(echo "$E2E_RUN" | jq -r '.conclusion')
+          E2E_HEAD_SHA=$(echo "$E2E_RUN" | jq -r '.head_sha')
           
           echo "E2E run:"
           echo "  Status: $E2E_STATUS"
