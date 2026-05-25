@@ -46,10 +46,14 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
       .get<ApiResponse<PublicConfig>>('auth/public-config')
       .then((res) => {
         const cfg = res.data.data;
-        setSiteKey(cfg?.recaptchaEnabled ? (cfg.recaptchaV3SiteKey ?? null) : null);
+        // Use DB site key when available; keep env-var fallback otherwise.
+        // recaptchaEnabled controls backend enforcement only, not frontend loading.
+        if (cfg?.recaptchaV3SiteKey) {
+          setSiteKey(cfg.recaptchaV3SiteKey);
+        }
       })
       .catch(() => {
-        // Keep build-time fallback on error; reCAPTCHA stays disabled if no env key
+        // Keep build-time env-var fallback on error
       });
   }, []);
 
