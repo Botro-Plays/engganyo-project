@@ -72,9 +72,11 @@ export class AuthService {
     const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
     if (recaptchaEnabled) {
       if (!dto.recaptchaToken) {
+        this.logger.warn('Register attempt without reCAPTCHA token');
         throw new BadRequestException('reCAPTCHA token is required');
       }
       const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
+      this.logger.debug(`reCAPTCHA validation score: ${recaptchaScore}`);
       if (recaptchaScore < 0.5) {
         this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
         throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
@@ -200,9 +202,11 @@ export class AuthService {
     const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
     if (recaptchaEnabled) {
       if (!dto.recaptchaToken) {
+        this.logger.warn('Login attempt without reCAPTCHA token');
         throw new BadRequestException('reCAPTCHA token is required');
       }
       const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
+      this.logger.debug(`reCAPTCHA validation score: ${recaptchaScore}`);
       if (recaptchaScore < 0.5) {
         this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
         throw new BadRequestException('reCAPTCHA validation failed. Please try again.');

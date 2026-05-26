@@ -112,9 +112,14 @@ function RegisterPageInner() {
         if (v3Recaptcha?.executeRecaptcha) {
           try {
             const token = await v3Recaptcha.executeRecaptcha('register');
+            if (!token) {
+              setServerError('reCAPTCHA verification failed. Please try again.');
+              return;
+            }
             data.recaptchaToken = token;
-          } catch {
-            // Continue without token if reCAPTCHA fails (backend will handle)
+          } catch (error) {
+            setServerError('reCAPTCHA verification failed. Please try again.');
+            return;
           }
         }
       }
