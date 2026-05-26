@@ -5,15 +5,18 @@ import {
   Patch,
   Body,
   Param,
+  UseGuards,
   HttpCode,
   HttpStatus,
   Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import type { Request } from 'express';
 
 import { ChatService } from './chat.service';
 import { ChatMessageDto, ChatResponseDto } from './dto/chat.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -50,7 +53,9 @@ export class ChatController {
 
   // Admin endpoints
   @Get('admin/list')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all conversations (admin only)' })
   async listChats(@CurrentUser() user: JwtPayload) {
     const conversations = await this.chatService.listConversations(user.sub);
@@ -58,14 +63,18 @@ export class ChatController {
   }
 
   @Get('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get conversation details (admin only)' })
   async getConversation(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.chatService.getConversation(id, user.sub);
   }
 
   @Post('admin/:id/send')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send message as admin (admin only)' })
   async sendAdminMessage(
@@ -77,7 +86,9 @@ export class ChatController {
   }
 
   @Patch('admin/:id/transfer')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Transfer conversation to human (admin only)' })
   async transferToHuman(@Param('id') id: string, @CurrentUser() user: JwtPayload) {

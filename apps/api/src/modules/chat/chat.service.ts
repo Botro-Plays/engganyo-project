@@ -41,7 +41,7 @@ export class ChatService {
     });
 
     const apiKey = apiKeyRow?.value as string || this.configService.get<string>('app.groq.apiKey') || '';
-    const model = modelRow?.value as string || this.configService.get<string>('app.groq.model') || 'llama3-8b-8192';
+    const model = modelRow?.value as string || this.configService.get<string>('app.groq.model') || 'llama-3.3-70b-versatile';
 
     return { apiKey, model };
   }
