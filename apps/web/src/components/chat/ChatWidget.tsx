@@ -49,18 +49,14 @@ export function ChatWidget() {
 
   const handleQuickAction = (action: string) => {
     setInput(action);
-    // Auto-send after a short delay to allow UI to update
-    setTimeout(() => sendMessage(), 100);
+    // Pass the action directly since state update is async
+    sendMessageWithMessage(action);
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const sendMessageWithMessage = async (message?: string) => {
+    const userMessage = (message || input).trim();
+    if (!userMessage || isLoading) return;
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
     setInput('');
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
@@ -87,6 +83,14 @@ export function ChatWidget() {
       setIsLoading(false);
     }
   };
+
+  const sendMessage = () => {
+    sendMessageWithMessage();
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
