@@ -195,6 +195,11 @@ export class ForumService {
       if (campaign.userId !== userId) {
         throw new ForbiddenException('You can only link your own campaigns');
       }
+
+      // Only allow linking active campaigns
+      if (campaign.status !== 'ACTIVE' && campaign.status !== 'PENDING_REVIEW') {
+        throw new BadRequestException('Can only link active campaigns');
+      }
     }
 
     const topic = await this.prisma.forumTopic.create({
@@ -365,6 +370,11 @@ export class ForumService {
 
       if (campaign.userId !== userId) {
         throw new ForbiddenException('You can only link your own campaigns');
+      }
+
+      // Only allow linking active campaigns
+      if (campaign.status !== 'ACTIVE' && campaign.status !== 'PENDING_REVIEW') {
+        throw new BadRequestException('Can only link active campaigns');
       }
     }
 

@@ -20,15 +20,11 @@ export default function NewTopicPage() {
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<{ items: { id: string; title: string; status: string }[]; meta: any }>>('campaigns');
-        console.log('Campaigns full response:', res);
-        console.log('Campaigns res.data:', res.data);
-        console.log('Campaigns res.data.data:', res.data.data);
         const result = res.data.data?.items;
-        console.log('Campaigns items:', result);
         if (Array.isArray(result)) {
-          return result;
+          // Filter to only show active campaigns (not cancelled, completed, etc.)
+          return result.filter(c => c.status === 'ACTIVE' || c.status === 'PENDING_REVIEW');
         }
-        console.warn('Campaigns items is not an array, type:', typeof result);
         return [];
       } catch (err) {
         console.error('Failed to fetch campaigns:', err);

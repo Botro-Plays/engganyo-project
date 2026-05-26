@@ -89,7 +89,12 @@ export default function ForumTopicPage() {
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<{ items: { id: string; title: string; status: string }[]; meta: any }>>('campaigns');
-        return res.data.data.items;
+        const result = res.data.data?.items;
+        if (Array.isArray(result)) {
+          // Filter to only show active campaigns (not cancelled, completed, etc.)
+          return result.filter(c => c.status === 'ACTIVE' || c.status === 'PENDING_REVIEW');
+        }
+        return [];
       } catch (err) {
         console.error('Failed to fetch campaigns:', err);
         return [];
