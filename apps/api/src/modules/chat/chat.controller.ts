@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -120,5 +121,45 @@ export class ChatController {
   @ApiOperation({ summary: 'Transfer conversation to human (admin only)' })
   async transferToHuman(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.chatService.transferToHuman(id, user.sub);
+  }
+
+  @Patch('admin/:id/close')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Close conversation (admin only)' })
+  async closeConversation(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.chatService.updateConversationStatus(id, 'CLOSED', user.sub);
+  }
+
+  @Patch('admin/:id/reopen')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reopen conversation (admin only)' })
+  async reopenConversation(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.chatService.updateConversationStatus(id, 'AI_HANDLING', user.sub);
+  }
+
+  @Delete('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete conversation (admin only)' })
+  async deleteConversation(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.chatService.deleteConversation(id, user.sub);
+  }
+
+  @Delete('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete all conversations (admin only)' })
+  async deleteAllConversations(@CurrentUser() user: JwtPayload) {
+    return this.chatService.deleteAllConversations(user.sub);
   }
 }

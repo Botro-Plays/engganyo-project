@@ -300,7 +300,99 @@ Important:
       },
     });
 
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: 'chat.transferred_to_human',
+        entityType: 'ChatConversation',
+        entityId: conversationId,
+        metadata: { previousStatus: conversation.status },
+      },
+    });
+
     return { success: true };
+  }
+
+  async updateConversationStatus(conversationId: string, status: ChatStatus, adminUserId: string) {
+    const conversation = await this.prisma.chatConversation.findUnique({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new UnauthorizedException('Conversation not found');
+    }
+
+    await this.prisma.chatConversation.update({
+      where: { id: conversationId },
+      data: {
+        status,
+        assignedTo: status === ChatStatus.HUMAN_HANDLING ? adminUserId : null,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: `chat.${status.toLowerCase()}`,
+        entityType: 'ChatConversation',
+        entityId: conversationId,
+        metadata: { previousStatus: conversation.status },
+      },
+    });
+
+    return { success: true };
+  }
+
+  async deleteConversation(conversationId: string, adminUserId: string) {
+    const conversation = await this.prisma.chatConversation.findUnique({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new UnauthorizedException('Conversation not found');
+    }
+
+    // Delete messages first (cascade would handle this, but being explicit)
+    await this.prisma.chatMessage.deleteMany({
+      where: { conversationId },
+    });
+
+    await this.prisma.chatConversation.delete({
+      where: { id: conversationId },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: 'chat.deleted',
+        entityType: 'ChatConversation',
+        entityId: conversationId,
+        metadata: { status: conversation.status },
+      },
+    });
+
+    return { success: true };
+  }
+
+  async deleteAllConversations(adminUserId: string) {
+    const count = await this.prisma.chatConversation.count();
+
+    // Delete all messages first
+    await this.prisma.chatMessage.deleteMany({});
+
+    // Delete all conversations
+    await this.prisma.chatConversation.deleteMany({});
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: 'chat.deleted_all',
+        entityType: 'ChatConversation',
+        metadata: { deletedCount: count },
+      },
+    });
+
+    return { success: true, count };
   }
 
   async sendAdminMessage(conversationId: string, adminUserId: string, message: string) {
@@ -319,6 +411,16 @@ Important:
         role: ChatRole.ASSISTANT,
         content: message,
         isHuman: true,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: 'chat.admin_message_sent',
+        entityType: 'ChatConversation',
+        entityId: conversationId,
+        metadata: { messageLength: message.length },
       },
     });
 

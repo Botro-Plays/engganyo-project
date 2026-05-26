@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Send, User, Clock, ChevronLeft, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Send, User, Clock, ChevronLeft, ChevronRight, Loader2, AlertTriangle, Trash2, X, RotateCcw } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
@@ -84,6 +84,46 @@ export default function AdminChatsPage() {
     },
   });
 
+  const closeMutation = useMutation({
+    mutationFn: (chatId: string) =>
+      apiClient.patch(`chat/admin/${chatId}/close`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'chats'] });
+      if (selectedChat) {
+        queryClient.invalidateQueries({ queryKey: ['admin', 'chat', selectedChat.id] });
+      }
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: (chatId: string) =>
+      apiClient.patch(`chat/admin/${chatId}/reopen`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'chats'] });
+      if (selectedChat) {
+        queryClient.invalidateQueries({ queryKey: ['admin', 'chat', selectedChat.id] });
+      }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (chatId: string) =>
+      apiClient.delete(`chat/admin/${chatId}`),
+    onSuccess: () => {
+      setSelectedChat(null);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'chats'] });
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () =>
+      apiClient.delete('chat/admin/all'),
+    onSuccess: () => {
+      setSelectedChat(null);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'chats'] });
+    },
+  });
+
   const { data: selectedChatData, isLoading: isLoadingChat } = useQuery({
     queryKey: ['admin', 'chat', selectedChat?.id],
     queryFn: async () => {
@@ -110,13 +150,53 @@ export default function AdminChatsPage() {
     });
   };
 
+  const handleClose = (chatId: string) => {
+    if (confirm('Close this conversation?')) {
+      closeMutation.mutate(chatId);
+    }
+  };
+
+  const handleReopen = (chatId: string) => {
+    if (confirm('Reopen this conversation?')) {
+      reopenMutation.mutate(chatId);
+    }
+  };
+
+  const handleDelete = (chatId: string) => {
+    if (confirm('Delete this conversation? This action cannot be undone.')) {
+      deleteMutation.mutate(chatId);
+    }
+  };
+
+  const handleDeleteAll = () => {
+    if (confirm('Delete ALL conversations? This action cannot be undone.')) {
+      deleteAllMutation.mutate();
+    }
+  };
+
   const currentChat = selectedChatData || selectedChat;
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white mb-2">Chat Support</h1>
-        <p className="text-zinc-400">Manage and respond to user conversations</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-2">Chat Support</h1>
+          <p className="text-zinc-400">Manage and respond to user conversations</p>
+        </div>
+        <button
+          onClick={handleDeleteAll}
+          disabled={deleteAllMutation.isPending}
+          className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg text-sm transition-colors disabled:opacity-50"
+        >
+          {deleteAllMutation.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <Trash2 className="w-4 h-4 inline mr-2" />
+              Delete All
+            </>
+          )}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -187,19 +267,67 @@ export default function AdminChatsPage() {
                     {currentChat.user?.email || currentChat.ipAddress || 'Unknown'}
                   </p>
                 </div>
-                {currentChat.status === 'AI_HANDLING' && (
+                <div className="flex items-center gap-2">
+                  {currentChat.status === 'AI_HANDLING' && (
+                    <button
+                      onClick={() => handleTransfer(currentChat.id)}
+                      disabled={transferMutation.isPending}
+                      className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border text-white text-sm rounded-lg transition-colors"
+                    >
+                      {transferMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Take Over'
+                      )}
+                    </button>
+                  )}
+                  {currentChat.status === 'CLOSED' && (
+                    <button
+                      onClick={() => handleReopen(currentChat.id)}
+                      disabled={reopenMutation.isPending}
+                      className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 text-sm rounded-lg transition-colors"
+                    >
+                      {reopenMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <RotateCcw className="w-4 h-4 inline mr-1" />
+                          Reopen
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {currentChat.status !== 'CLOSED' && (
+                    <button
+                      onClick={() => handleClose(currentChat.id)}
+                      disabled={closeMutation.isPending}
+                      className="px-3 py-1.5 bg-zinc-500/10 hover:bg-zinc-500/20 text-zinc-400 border border-zinc-500/30 text-sm rounded-lg transition-colors"
+                    >
+                      {closeMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <X className="w-4 h-4 inline mr-1" />
+                          Close
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleTransfer(currentChat.id)}
-                    disabled={transferMutation.isPending}
-                    className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border text-white text-sm rounded-lg transition-colors"
+                    onClick={() => handleDelete(currentChat.id)}
+                    disabled={deleteMutation.isPending}
+                    className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-sm rounded-lg transition-colors"
                   >
-                    {transferMutation.isPending ? (
+                    {deleteMutation.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      'Take Over'
+                      <>
+                        <Trash2 className="w-4 h-4 inline mr-1" />
+                        Delete
+                      </>
                     )}
                   </button>
-                )}
+                </div>
               </div>
 
               {/* Messages */}
