@@ -47,7 +47,7 @@ export function MentionTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  const filteredCampaigns = campaigns.filter((campaign) =>
+  const filteredCampaigns = (campaigns || []).filter((campaign) =>
     campaign.title.toLowerCase().includes(filter.toLowerCase())
   );
 

@@ -7,6 +7,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { MentionTextarea } from '@/components/mention-textarea';
 import Link from 'next/link';
+import type { ApiResponse } from '@/types';
 
 export default function NewTopicPage() {
   const router = useRouter();
@@ -14,11 +15,16 @@ export default function NewTopicPage() {
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const { data: userCampaigns } = useQuery({
+  const { data: userCampaigns, error: campaignsError } = useQuery({
     queryKey: ['user', 'campaigns'],
     queryFn: async () => {
-      const res = await apiClient.get<{ id: string; title: string; status: string }[]>('campaigns');
-      return res.data;
+      try {
+        const res = await apiClient.get<ApiResponse<{ id: string; title: string; status: string }[]>>('campaigns');
+        return res.data.data;
+      } catch (err) {
+        console.error('Failed to fetch campaigns:', err);
+        return [];
+      }
     },
   });
 
@@ -26,8 +32,8 @@ export default function NewTopicPage() {
 
   const handleUserSearch = async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
     if (!query || query.length < 2) return [];
-    const res = await apiClient.get<{ id: string; username: string; displayName: string | null }[]>(`users/search?q=${query}&limit=10`);
-    return res.data;
+    const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
+    return res.data.data;
   };
 
   const createMutation = useMutation({
