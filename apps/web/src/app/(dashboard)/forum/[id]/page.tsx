@@ -88,8 +88,8 @@ export default function ForumTopicPage() {
     queryKey: ['user', 'campaigns'],
     queryFn: async () => {
       try {
-        const res = await apiClient.get<ApiResponse<{ id: string; title: string; status: string }[]>>('campaigns');
-        return res.data.data;
+        const res = await apiClient.get<ApiResponse<{ items: { id: string; title: string; status: string }[]; meta: any }>>('campaigns');
+        return res.data.data.items;
       } catch (err) {
         console.error('Failed to fetch campaigns:', err);
         return [];

@@ -15,12 +15,21 @@ export default function NewTopicPage() {
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const { data: userCampaigns, error: campaignsError } = useQuery({
+  const { data: userCampaigns } = useQuery({
     queryKey: ['user', 'campaigns'],
     queryFn: async () => {
       try {
-        const res = await apiClient.get<ApiResponse<{ id: string; title: string; status: string }[]>>('campaigns');
-        return res.data.data;
+        const res = await apiClient.get<ApiResponse<{ items: { id: string; title: string; status: string }[]; meta: any }>>('campaigns');
+        console.log('Campaigns full response:', res);
+        console.log('Campaigns res.data:', res.data);
+        console.log('Campaigns res.data.data:', res.data.data);
+        const result = res.data.data?.items;
+        console.log('Campaigns items:', result);
+        if (Array.isArray(result)) {
+          return result;
+        }
+        console.warn('Campaigns items is not an array, type:', typeof result);
+        return [];
       } catch (err) {
         console.error('Failed to fetch campaigns:', err);
         return [];
@@ -32,8 +41,14 @@ export default function NewTopicPage() {
 
   const handleUserSearch = async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
     if (!query || query.length < 2) return [];
-    const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
-    return res.data.data;
+    try {
+      const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
+      const result = res.data.data;
+      return Array.isArray(result) ? result : [];
+    } catch (err) {
+      console.error('Failed to search users:', err);
+      return [];
+    }
   };
 
   const createMutation = useMutation({
