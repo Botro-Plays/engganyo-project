@@ -92,6 +92,9 @@ Before implementing major architectural changes:
 │  │  Notifications Module│  │
 │  │  Analytics Module    │  │
 │  │  Admin Module        │  │
+│  │  Forum Module        │  │
+│  │  Chat Module         │  │
+│  │  Social Auth Module  │  │
 │  └──────────────────────┘  │
 └────────────┬───────────────┘
              │
@@ -382,11 +385,10 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 ## Last Updated
 
-**Last Updated**: 2026-05-21
-**Next Review**: 2026-08-21 (quarterly)
+**Last Updated**: 2026-05-26
+**Next Review**: 2026-08-26 (quarterly)
 **Reviewed By**: Project Architect (Cascade)
 
 **Changes in this update**:
-- Removed "No file upload validation for proof screenshots" from security gaps (implemented)
-- Updated pending phases to reflect partial OAuth verification implementation (YouTube, Twitch, Spotify working)
-- Added clarification that social verification is partially implemented
+- Added Forum Module, Chat Module, and Social Auth Module to architecture diagram
+- Updated to reflect Phase 10.5 community features implementation
