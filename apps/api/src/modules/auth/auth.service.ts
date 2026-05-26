@@ -76,7 +76,8 @@ export class AuthService {
       }
       const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
       if (recaptchaScore < 0.5) {
-        throw new BadRequestException('reCAPTCHA validation failed - possible bot detected');
+        this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
+        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
       }
     }
 
@@ -203,7 +204,8 @@ export class AuthService {
       }
       const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
       if (recaptchaScore < 0.5) {
-        throw new BadRequestException('reCAPTCHA validation failed - possible bot detected');
+        this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
+        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
       }
     }
 
@@ -548,13 +550,13 @@ export class AuthService {
 
   private async validateRecaptcha(token: string): Promise<number> {
     const cfg = await this.getRecaptchaConfig();
-    const secret = cfg.version === 'v2' 
+    const secret = cfg.version === 'v2'
       ? (cfg.v2SecretKey || this.configService.get<string>('recaptcha.secret', ''))
       : (cfg.v3SecretKey || this.configService.get<string>('recaptcha.secret', ''));
-    
+
     if (!secret) {
       this.logger.warn('reCAPTCHA secret not configured - skipping validation');
-      return 1.0;
+      return 1.0; // Allow login if secret not configured
     }
     try {
       const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
@@ -562,17 +564,22 @@ export class AuthService {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `secret=${secret}&response=${token}`,
       });
-      const data = (await response.json()) as { success: boolean; score?: number };
-      
+      const data = (await response.json()) as { success: boolean; score?: number; 'error-codes'?: string[] };
+
+      // Log error codes for debugging
+      if (!data.success && data['error-codes']) {
+        this.logger.warn(`reCAPTCHA validation failed with error codes: ${data['error-codes'].join(', ')}`);
+      }
+
       // v2 uses boolean success, v3 uses score
       if (cfg.version === 'v2') {
         return data.success ? 1.0 : 0;
       }
-      
+
       return data.success ? (data.score ?? 0.5) : 0;
     } catch (error) {
-      this.logger.warn(`reCAPTCHA validation failed: ${String(error)}`);
-      return 0;
+      this.logger.warn(`reCAPTCHA validation failed (network error): ${String(error)}`);
+      return 1.0; // Allow login on network errors to not block legitimate users
     }
   }
 
