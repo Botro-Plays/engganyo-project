@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { AuthService } from '../auth/auth.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
@@ -68,12 +69,17 @@ describe('AdminService', () => {
     debit: jest.fn(),
   };
 
+  const mockAuthService = {
+    invalidateRecaptchaCache: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WalletService, useValue: mockWalletService },
+        { provide: AuthService, useValue: mockAuthService },
       ],
     }).compile();
 
