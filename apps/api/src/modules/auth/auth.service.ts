@@ -198,21 +198,7 @@ export class AuthService {
   // ─── Login ─────────────────────────────────────────────────
 
   async login(dto: LoginDto, res: Response): Promise<AuthResult> {
-    // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
-    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
-    if (recaptchaEnabled) {
-      if (!dto.recaptchaToken) {
-        this.logger.warn('Login attempt without reCAPTCHA token');
-        throw new BadRequestException('reCAPTCHA token is required');
-      }
-      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
-      this.logger.debug(`reCAPTCHA validation score: ${recaptchaScore}`);
-      if (recaptchaScore < 0.5) {
-        this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
-        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
-      }
-    }
-
+    // Validate credentials first
     const isEmail = dto.emailOrUsername.includes('@');
     const user = await this.prisma.user.findFirst({
       where: isEmail
@@ -233,6 +219,21 @@ export class AuthService {
     }
     if (user.status === UserStatus.DEACTIVATED) {
       throw new UnauthorizedException('Account has been deactivated');
+    }
+
+    // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
+    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
+    if (recaptchaEnabled) {
+      if (!dto.recaptchaToken) {
+        this.logger.warn('Login attempt without reCAPTCHA token');
+        throw new BadRequestException('reCAPTCHA token is required');
+      }
+      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
+      this.logger.debug(`reCAPTCHA validation score: ${recaptchaScore}`);
+      if (recaptchaScore < 0.5) {
+        this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
+        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
+      }
     }
 
     await this.prisma.user.update({
