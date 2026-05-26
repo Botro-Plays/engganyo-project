@@ -641,6 +641,35 @@ export class ForumService {
     return updated;
   }
 
+  async unhideTopic(id: string, adminId: string) {
+    const topic = await this.prisma.forumTopic.findUnique({
+      where: { id },
+    });
+
+    if (!topic) {
+      throw new NotFoundException('Topic not found');
+    }
+
+    const updated = await this.prisma.forumTopic.update({
+      where: { id },
+      data: {
+        status: ForumTopicStatus.OPEN,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'forum.topic_unhidden',
+        entityType: 'ForumTopic',
+        entityId: id,
+        metadata: { previousStatus: topic.status },
+      },
+    });
+
+    return updated;
+  }
+
   async adminDeleteTopic(id: string, adminId: string) {
     const topic = await this.prisma.forumTopic.findUnique({
       where: { id },

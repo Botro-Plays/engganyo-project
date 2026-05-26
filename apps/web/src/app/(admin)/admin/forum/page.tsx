@@ -66,6 +66,15 @@ export default function AdminForumPage() {
     onError: (err) => setActionError(getApiErrorMessage(err)),
   });
 
+  const unhideMutation = useMutation({
+    mutationFn: (id: string) => apiClient.patch(`forum/admin/topics/${id}/unhide`),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'forum'] });
+    },
+    onError: (err) => setActionError(getApiErrorMessage(err)),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`forum/admin/topics/${id}`),
     onSuccess: () => {
@@ -145,14 +154,25 @@ export default function AdminForumPage() {
                   >
                     <Pin className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={() => hideMutation.mutate(topic.id)}
-                    disabled={hideMutation.isPending}
-                    className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                    title="Hide"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
+                  {topic.status === 'HIDDEN' ? (
+                    <button
+                      onClick={() => unhideMutation.mutate(topic.id)}
+                      disabled={unhideMutation.isPending}
+                      className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-lg transition-colors disabled:opacity-50"
+                      title="Unhide"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => hideMutation.mutate(topic.id)}
+                      disabled={hideMutation.isPending}
+                      className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                      title="Hide"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       if (confirm('Are you sure you want to delete this topic?')) {

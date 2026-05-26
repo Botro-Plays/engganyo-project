@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Public } from '../../common/decorators/public.decorator';
+import { Public, OptionalAuth } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../modules/auth/interfaces/jwt-payload.interface';
 import { ForumService } from './forum.service';
@@ -22,7 +22,8 @@ export class ForumController {
   // ─── Public Endpoints ──────────────────────────────────────
 
   @Get('topics')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List forum topics' })
   listTopics(@Query() dto: ListTopicsDto, @CurrentUser() user?: JwtPayload) {
@@ -172,6 +173,16 @@ export class ForumController {
   @ApiOperation({ summary: 'Hide forum topic (admin only)' })
   hideTopic(@CurrentUser() admin: JwtPayload, @Param('id') id: string) {
     return this.forumService.hideTopic(id, admin.sub);
+  }
+
+  @Patch('admin/topics/:id/unhide')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unhide forum topic (admin only)' })
+  unhideTopic(@CurrentUser() admin: JwtPayload, @Param('id') id: string) {
+    return this.forumService.unhideTopic(id, admin.sub);
   }
 
   @Delete('admin/topics/:id')
