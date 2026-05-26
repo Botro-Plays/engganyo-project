@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { useRecaptcha } from '@/app/providers';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -32,7 +33,11 @@ export default function LoginPage() {
   const { setUser, setAccessToken } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const { executeRecaptcha } = useGoogleReCaptcha();
+  
+  // v3 hook
+  const v3Recaptcha = useGoogleReCaptcha();
+  // v2/v3 context
+  const { version, executeRecaptcha: v2ExecuteRecaptcha, recaptchaRef } = useRecaptcha();
 
   const {
     register,
@@ -60,13 +65,27 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
 
-    // Generate reCAPTCHA token if available
-    if (executeRecaptcha) {
-      try {
-        const token = await executeRecaptcha('login');
-        data.recaptchaToken = token;
-      } catch {
-        // Continue without token if reCAPTCHA fails (backend will handle)
+    // Generate reCAPTCHA token based on version
+    if (version === 'v2') {
+      // v2: use the checkbox token
+      if (v2ExecuteRecaptcha) {
+        try {
+          const token = await v2ExecuteRecaptcha('login');
+          data.recaptchaToken = token;
+        } catch {
+          setServerError('Please complete the reCAPTCHA checkbox');
+          return;
+        }
+      }
+    } else if (version === 'v3') {
+      // v3: use invisible execution
+      if (v3Recaptcha?.executeRecaptcha) {
+        try {
+          const token = await v3Recaptcha.executeRecaptcha('login');
+          data.recaptchaToken = token;
+        } catch {
+          // Continue without token if reCAPTCHA fails (backend will handle)
+        }
       }
     }
 
@@ -140,6 +159,15 @@ export default function LoginPage() {
               <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>
             )}
           </div>
+
+          {/* reCAPTCHA v2 checkbox */}
+          {version === 'v2' && (
+            <div className="flex justify-center">
+              <div className="transform scale-90 origin-center">
+                <div ref={recaptchaRef as any} />
+              </div>
+            </div>
+          )}
 
           {/* Submit */}
           <button

@@ -504,6 +504,7 @@ export class AuthService {
 
   private recaptchaCache: {
     enabled: boolean;
+    version: 'v2' | 'v3';
     v3SiteKey: string;
     v3SecretKey: string;
     v2SiteKey: string;
@@ -516,11 +517,12 @@ export class AuthService {
     if (this.recaptchaCache && Date.now() - this.recaptchaCache.cachedAt < CACHE_TTL) {
       return this.recaptchaCache;
     }
-    const keys = ['recaptcha_enabled','recaptcha_v3_site_key','recaptcha_v3_secret_key','recaptcha_v2_site_key','recaptcha_v2_secret_key'];
+    const keys = ['recaptcha_enabled','recaptcha_version','recaptcha_v3_site_key','recaptcha_v3_secret_key','recaptcha_v2_site_key','recaptcha_v2_secret_key'];
     const rows = await this.prisma.platformConfig.findMany({ where: { key: { in: keys } } });
     const map = new Map(rows.map((r) => [r.key, r.value]));
     this.recaptchaCache = {
       enabled:      (map.get('recaptcha_enabled')       as boolean) ?? false,
+      version:      ((map.get('recaptcha_version') as string) ?? 'v3') as 'v2' | 'v3',
       v3SiteKey:    (map.get('recaptcha_v3_site_key')   as string)  ?? '',
       v3SecretKey:  (map.get('recaptcha_v3_secret_key') as string)  ?? '',
       v2SiteKey:    (map.get('recaptcha_v2_site_key')   as string)  ?? '',
@@ -534,6 +536,7 @@ export class AuthService {
     const cfg = await this.getRecaptchaConfig();
     return {
       recaptchaEnabled:   cfg.enabled,
+      recaptchaVersion:    cfg.version,
       recaptchaV3SiteKey: cfg.v3SiteKey  || null,
       recaptchaV2SiteKey: cfg.v2SiteKey  || null,
     };
@@ -541,7 +544,10 @@ export class AuthService {
 
   private async validateRecaptcha(token: string): Promise<number> {
     const cfg = await this.getRecaptchaConfig();
-    const secret = cfg.v3SecretKey || this.configService.get<string>('recaptcha.secret', '');
+    const secret = cfg.version === 'v2' 
+      ? (cfg.v2SecretKey || this.configService.get<string>('recaptcha.secret', ''))
+      : (cfg.v3SecretKey || this.configService.get<string>('recaptcha.secret', ''));
+    
     if (!secret) {
       this.logger.warn('reCAPTCHA secret not configured - skipping validation');
       return 1.0;
@@ -553,6 +559,12 @@ export class AuthService {
         body: `secret=${secret}&response=${token}`,
       });
       const data = (await response.json()) as { success: boolean; score?: number };
+      
+      // v2 uses boolean success, v3 uses score
+      if (cfg.version === 'v2') {
+        return data.success ? 1.0 : 0;
+      }
+      
       return data.success ? (data.score ?? 0.5) : 0;
     } catch (error) {
       this.logger.warn(`reCAPTCHA validation failed: ${String(error)}`);

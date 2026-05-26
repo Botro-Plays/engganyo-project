@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Eye, EyeOff, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { useRecaptcha } from '@/app/providers';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse, User } from '@/types';
@@ -51,7 +52,11 @@ function RegisterPageInner() {
   const { setUser, setAccessToken } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const { executeRecaptcha } = useGoogleReCaptcha();
+  
+  // v3 hook
+  const v3Recaptcha = useGoogleReCaptcha();
+  // v2/v3 context
+  const { version, executeRecaptcha: v2ExecuteRecaptcha, recaptchaRef } = useRecaptcha();
 
   const defaultReferralCode = searchParams.get('ref') ?? '';
 
@@ -91,13 +96,27 @@ function RegisterPageInner() {
   const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
 
-    // Generate reCAPTCHA token if available
-    if (executeRecaptcha) {
-      try {
-        const token = await executeRecaptcha('register');
-        data.recaptchaToken = token;
-      } catch {
-        // Continue without token if reCAPTCHA fails (backend will handle)
+    // Generate reCAPTCHA token based on version
+    if (version === 'v2') {
+      // v2: use the checkbox token
+      if (v2ExecuteRecaptcha) {
+        try {
+          const token = await v2ExecuteRecaptcha('register');
+          data.recaptchaToken = token;
+        } catch {
+          setServerError('Please complete the reCAPTCHA checkbox');
+          return;
+        }
+      }
+    } else if (version === 'v3') {
+      // v3: use invisible execution
+      if (v3Recaptcha?.executeRecaptcha) {
+        try {
+          const token = await v3Recaptcha.executeRecaptcha('register');
+          data.recaptchaToken = token;
+        } catch {
+          // Continue without token if reCAPTCHA fails (backend will handle)
+        }
       }
     }
 
@@ -207,6 +226,15 @@ function RegisterPageInner() {
               className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all uppercase"
             />
           </div>
+
+          {/* reCAPTCHA v2 checkbox */}
+          {version === 'v2' && (
+            <div className="flex justify-center">
+              <div className="transform scale-90 origin-center">
+                <div ref={recaptchaRef as any} />
+              </div>
+            </div>
+          )}
 
           {/* Terms */}
           <p className="text-xs text-zinc-600">
