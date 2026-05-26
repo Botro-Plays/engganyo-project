@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
-  ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2,
+  ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/admin/analytics', icon: BarChart2, label: 'Analytics' },
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/campaigns', icon: Megaphone, label: 'Campaigns' },
+  { href: '/admin/chats', icon: MessageSquare, label: 'Chats' },
   { href: '/admin/reports', icon: Flag, label: 'Reports' },
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ];

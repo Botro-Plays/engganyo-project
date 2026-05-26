@@ -6,6 +6,7 @@ import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
+import { ChatWidget } from '@/components/chat/ChatWidget';
 
 interface PublicConfig {
   recaptchaEnabled: boolean;
@@ -30,6 +31,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
+      <ChatWidget />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
@@ -60,8 +62,12 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
   return siteKey ? (
     <GoogleReCaptchaProvider reCaptchaKey={siteKey}>
       {children}
+      <ChatWidget />
     </GoogleReCaptchaProvider>
   ) : (
-    <>{children}</>
+    <>
+      {children}
+      <ChatWidget />
+    </>
   );
 }

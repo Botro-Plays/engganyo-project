@@ -247,6 +247,8 @@ model User {
   reportsReceived      Report[]              @relation("ReportTarget")
   userAchievements     UserAchievement[]
   missionProgress      UserMissionProgress[]
+  chats               ChatConversation[]    @relation("UserChats")
+  assignedChats       ChatConversation[]    @relation("AgentChats")
   trustScore           TrustScore?
   abuseFlags           AbuseFlag[]
   ipRecords            IpRecord[]
@@ -905,4 +907,58 @@ model AnalyticsSnapshot {
 
   @@index([date])
   @@map("analytics_snapshots")
+}
+
+// =============================================================
+// CHAT SYSTEM
+// =============================================================
+
+model ChatConversation {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id") // null for anonymous users
+  ipAddress String?  @map("ip_address") // for anonymous users
+
+  status   ChatStatus @default(AI_HANDLING)
+  assignedTo String?  @map("assigned_to") // admin userId when transferred to human
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User?   @relation("UserChats", fields: [userId], references: [id], onDelete: Cascade)
+  agent  User?   @relation("AgentChats", fields: [assignedTo], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([assignedTo])
+  @@index([createdAt])
+  @@map("chat_conversations")
+}
+
+model ChatMessage {
+  id             String            @id @default(cuid())
+  conversationId String            @map("conversation_id")
+  role           ChatRole
+  content        String
+  isHuman        Boolean           @default(false) @map("is_human") // true if sent by human agent
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+enum ChatStatus {
+  AI_HANDLING
+  PENDING_HUMAN
+  HUMAN_HANDLING
+  CLOSED
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
 }

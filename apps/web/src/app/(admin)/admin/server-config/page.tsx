@@ -6,7 +6,7 @@ import {
   Loader2, Save, Eye, EyeOff, CheckCircle2, AlertCircle, KeyRound,
   Settings2, Download, AlertTriangle, RotateCcw, Trash2, X,
   ShieldOff, ToggleLeft, Coins, Users, BarChart2, ScrollText,
-  Megaphone, FileText,
+  Megaphone, FileText, MessageSquare,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -67,9 +67,11 @@ const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 
   recaptcha_v3_secret_key: { label: 'v3 Secret Key',               type: 'password', section: 'reCAPTCHA' },
   recaptcha_v2_site_key:   { label: 'v2 Checkbox Site Key',        type: 'text',     section: 'reCAPTCHA' },
   recaptcha_v2_secret_key: { label: 'v2 Checkbox Secret Key',      type: 'password', section: 'reCAPTCHA' },
+  groq_api_key:            { label: 'Groq API Key',                 type: 'password', section: 'AI Chat' },
+  groq_model:              { label: 'Groq Model',                   type: 'text',     section: 'AI Chat' },
 };
 
-const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA'];
+const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA', 'AI Chat'];
 
 const EXPORT_TABLES = [
   { key: 'users',        label: 'Users',             icon: Users,     description: 'All user accounts with role, status, XP, and credits' },
@@ -389,6 +391,7 @@ export default function ServerConfigPage() {
                       {section === 'reCAPTCHA' && <ShieldOff className="w-4 h-4 text-sky-400" />}
                       {section === 'Platform' && <ToggleLeft className="w-4 h-4 text-amber-400" />}
                       {section === 'Referral' && <Users className="w-4 h-4 text-green-400" />}
+                      {section === 'AI Chat' && <MessageSquare className="w-4 h-4 text-brand-400" />}
                       {section}
                     </h3>
                     <div className="space-y-4">

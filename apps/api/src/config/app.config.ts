@@ -20,4 +20,8 @@ export default registerAs('app', () => ({
   recaptcha: {
     secret: process.env['RECAPTCHA_SECRET'] ?? '',
   },
+  groq: {
+    apiKey: process.env['GROQ_API_KEY'] ?? '',
+    model: process.env['GROQ_MODEL'] ?? 'llama3-8b-8192',
+  },
 }));
