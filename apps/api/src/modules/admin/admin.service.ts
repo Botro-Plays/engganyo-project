@@ -891,6 +891,7 @@ export class AdminService {
     registration_enabled:    { value: true,  description: 'Allow new user registrations', isPublic: true },
     maintenance_mode:        { value: false, description: 'Put the platform in read-only maintenance mode', isPublic: true },
     recaptcha_enabled:       { value: false, description: 'Enable reCAPTCHA protection on auth endpoints', isPublic: true },
+    recaptcha_version:       { value: 'v3',  description: 'reCAPTCHA version to use (v2 checkbox or v3 invisible)', isPublic: true },
     recaptcha_v3_site_key:   { value: '',    description: 'reCAPTCHA v3 public site key (invisible)', isPublic: true },
     recaptcha_v3_secret_key: { value: '',    description: 'reCAPTCHA v3 secret key (server-side verification)', isPublic: false },
     recaptcha_v2_site_key:   { value: '',    description: 'reCAPTCHA v2 Checkbox public site key', isPublic: true },
