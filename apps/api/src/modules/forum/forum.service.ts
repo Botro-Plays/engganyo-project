@@ -113,9 +113,11 @@ export class ForumService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  async getTopic(id: string) {
+  async getTopic(id: string, userRole?: string) {
+    const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN || userRole === UserRole.MODERATOR;
+    
     const topic = await this.prisma.forumTopic.findUnique({
-      where: { id },
+      where: isAdmin ? { id } : { id, status: { not: ForumTopicStatus.HIDDEN } },
       select: {
         id: true,
         title: true,
@@ -292,7 +294,7 @@ export class ForumService {
 
   // ─── Replies ─────────────────────────────────────────────
 
-  async getReplies(topicId: string, page = 1, limit = 20) {
+  async getReplies(topicId: string, page = 1, limit = 20, _userRole?: string) {
     const skip = (page - 1) * limit;
 
     const [items, total] = await Promise.all([

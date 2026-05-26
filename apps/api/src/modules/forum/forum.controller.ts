@@ -3,7 +3,6 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Public, OptionalAuth } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../modules/auth/interfaces/jwt-payload.interface';
 import { ForumService } from './forum.service';
@@ -23,11 +22,10 @@ export class ForumController {
 
   @Get('topics')
   @UseGuards(JwtAuthGuard)
-  @OptionalAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List forum topics' })
-  listTopics(@Query() dto: ListTopicsDto, @CurrentUser() user?: JwtPayload) {
-    return this.forumService.listTopics(dto, user?.role);
+  listTopics(@Query() dto: ListTopicsDto, @CurrentUser() user: JwtPayload) {
+    return this.forumService.listTopics(dto, user.role);
   }
 
   @Get('admin/topics')
@@ -41,23 +39,24 @@ export class ForumController {
   }
 
   @Get('topics/:id')
-  @Public()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get forum topic with replies' })
-  getTopic(@Param('id') id: string) {
-    return this.forumService.getTopic(id);
+  getTopic(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.forumService.getTopic(id, user.role);
   }
 
   @Get('topics/:id/replies')
-  @Public()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get topic replies' })
   getReplies(
     @Param('id') topicId: string,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.forumService.getReplies(topicId, Number(page), Number(limit));
+    return this.forumService.getReplies(topicId, Number(page), Number(limit), user.role);
   }
 
   // ─── Authenticated Endpoints ───────────────────────────────
