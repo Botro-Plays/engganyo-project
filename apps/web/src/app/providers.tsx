@@ -1,9 +1,9 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext } from 'react';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { ChatWidget } from '@/components/chat/ChatWidget';
@@ -57,29 +57,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 
 export function AuthenticatedProviders({ children }: { children: React.ReactNode }) {
-  const [config, setConfig] = useState<PublicConfig | null>(null);
-  const [v3SiteKey, setV3SiteKey] = useState<string | null>(
-    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? null,
-  );
-  const [v2SiteKey, setV2SiteKey] = useState<string | null>(null);
+  const { data: config } = useQuery({
+    queryKey: ['public-config'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<PublicConfig>>('auth/public-config');
+      return res.data.data;
+    },
+    staleTime: 60 * 1000, // 1 minute
+  });
 
-  useEffect(() => {
-    apiClient
-      .get<ApiResponse<PublicConfig>>('auth/public-config')
-      .then((res) => {
-        const cfg = res.data.data;
-        setConfig(cfg);
-        if (cfg?.recaptchaV3SiteKey) {
-          setV3SiteKey(cfg.recaptchaV3SiteKey);
-        }
-        if (cfg?.recaptchaV2SiteKey) {
-          setV2SiteKey(cfg.recaptchaV2SiteKey);
-        }
-      })
-      .catch(() => {
-        // Keep build-time env-var fallback on error
-      });
-  }, []);
+  const v3SiteKey = config?.recaptchaV3SiteKey ?? process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? null;
+  const v2SiteKey = config?.recaptchaV2SiteKey ?? null;
 
   const recaptchaContextValue: RecaptchaContextValue = {
     enabled: config?.recaptchaEnabled ?? false,

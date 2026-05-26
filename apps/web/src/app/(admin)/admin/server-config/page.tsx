@@ -155,6 +155,7 @@ export default function ServerConfigPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-server-config'] });
+      void queryClient.invalidateQueries({ queryKey: ['public-config'] });
       setConfigEdits({});
       setConfigNotice({ type: 'success', msg: 'Settings saved successfully.' });
       setTimeout(() => setConfigNotice(null), 4000);
