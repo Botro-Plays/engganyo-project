@@ -1,0 +1,97 @@
+'use client';
+
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Send } from 'lucide-react';
+import { apiClient, getApiErrorMessage } from '@/lib/api';
+import Link from 'next/link';
+
+export default function NewTopicPage() {
+  const router = useRouter();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: (data: { title: string; content: string }) =>
+      apiClient.post('forum/topics', data),
+    onSuccess: (res) => {
+      router.push(`/forum/${res.data.data.id}`);
+    },
+    onError: (err) => setError(getApiErrorMessage(err)),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!title.trim() || !content.trim()) {
+      setError('Please fill in all fields');
+      return;
+    }
+    createMutation.mutate({ title, content });
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <Link
+        href="/forum"
+        className="inline-flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Forum
+      </Link>
+
+      <div className="card-glass rounded-xl p-6">
+        <h1 className="text-2xl font-bold text-white mb-6">Create New Topic</h1>
+
+        {error && (
+          <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="What's your topic about?"
+              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              maxLength={200}
+              required
+            />
+            <p className="text-zinc-500 text-xs mt-1">{title.length}/200 characters</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Content</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Share your thoughts, questions, or ideas..."
+              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none"
+              rows={10}
+              maxLength={10000}
+              required
+            />
+            <p className="text-zinc-500 text-xs mt-1">{content.length}/10000 characters</p>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              {createMutation.isPending ? 'Creating...' : 'Create Topic'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

@@ -190,6 +190,21 @@ enum TrustLevel {
   VERIFIED  // 81-100 — fully trusted creator
 }
 
+enum ForumTopicStatus {
+  OPEN
+  LOCKED
+  PINNED
+  HIDDEN
+}
+
+enum ForumReactionType {
+  LIKE
+  DISLIKE
+  LOVE
+  LAUGH
+  ANGRY
+}
+
 // =============================================================
 // CORE USER MODELS
 // =============================================================
@@ -255,6 +270,9 @@ model User {
   auditLogs            AuditLog[]
   referralsGiven       Referral[]            @relation("ReferralReferrer")
   referralReceived     Referral?             @relation("ReferralReferee")
+  forumTopics         ForumTopic[]          @relation("ForumTopics")
+  forumReplies        ForumReply[]         @relation("ForumReplies")
+  forumReactions      ForumReaction[]      @relation("ForumReactions")
 
   @@index([email])
   @@index([username])
@@ -802,11 +820,15 @@ model Report {
   submittedById String @map("submitted_by_id")
   submittedBy   User   @relation("ReportSubmitter", fields: [submittedById], references: [id])
 
-  // Target can be a user, a campaign, or both
+  // Target can be a user, a campaign, a forum topic, or a forum reply
   targetUserId String?   @map("target_user_id")
   targetUser   User?     @relation("ReportTarget", fields: [targetUserId], references: [id])
   campaignId   String?   @map("campaign_id")
   campaign     Campaign? @relation(fields: [campaignId], references: [id])
+  topicId      String?   @unique @map("topic_id")
+  topic        ForumTopic? @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  replyId      String?   @unique @map("reply_id")
+  reply        ForumReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
 
   reason      ReportReason
   description String       @db.Text
@@ -961,4 +983,86 @@ enum ChatStatus {
 enum ChatRole {
   USER
   ASSISTANT
+}
+
+// =============================================================
+// FORUM SYSTEM
+// =============================================================
+
+model ForumTopic {
+  id          String            @id @default(cuid())
+  title       String
+  content     String            @db.Text
+  status      ForumTopicStatus  @default(OPEN)
+  isPinned    Boolean           @default(false) @map("is_pinned")
+  viewCount   Int               @default(0) @map("view_count")
+  replyCount  Int               @default(0) @map("reply_count")
+  lockedAt    DateTime?         @map("locked_at")
+  lockedBy    String?           @map("locked_by")
+
+  authorId    String            @map("author_id")
+  author      User              @relation("ForumTopics", fields: [authorId], references: [id], onDelete: Cascade)
+
+  replies     ForumReply[]
+  reactions   ForumReaction[]
+  reports     Report[]
+
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([authorId])
+  @@index([status])
+  @@index([isPinned])
+  @@index([createdAt])
+  @@map("forum_topics")
+}
+
+model ForumReply {
+  id          String            @id @default(cuid())
+  content     String            @db.Text
+  isEdited    Boolean           @default(false) @map("is_edited")
+  editedAt    DateTime?         @map("edited_at")
+
+  topicId     String            @map("topic_id")
+  topic       ForumTopic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  authorId    String            @map("author_id")
+  author      User              @relation("ForumReplies", fields: [authorId], references: [id], onDelete: Cascade)
+
+  parentReplyId String?         @unique @map("parent_reply_id")
+  parentReply ForumReply?       @relation("ReplyReplies", fields: [parentReplyId], references: [id], onDelete: Cascade)
+  childReplies ForumReply[]     @relation("ReplyReplies")
+
+  reactions   ForumReaction[]
+  reports     Report[]
+
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([topicId])
+  @@index([authorId])
+  @@index([parentReplyId])
+  @@index([createdAt])
+  @@map("forum_replies")
+}
+
+model ForumReaction {
+  id          String            @id @default(cuid())
+  type        ForumReactionType
+
+  topicId     String?           @map("topic_id")
+  topic       ForumTopic?       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  replyId     String?           @map("reply_id")
+  reply       ForumReply?       @relation(fields: [replyId], references: [id], onDelete: Cascade)
+
+  userId      String            @map("user_id")
+  user        User              @relation("ForumReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@unique([topicId, userId])
+  @@unique([replyId, userId])
+  @@index([userId])
+  @@map("forum_reactions")
 }

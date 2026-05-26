@@ -28,6 +28,7 @@ import { SocialAuthModule } from './modules/social-auth/social-auth.module';
 import { EmailModule } from './modules/email/email.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { ForumModule } from './modules/forum/forum.module';
 
 @Module({
   imports: [
@@ -98,6 +99,7 @@ import { ChatModule } from './modules/chat/chat.module';
     EmailModule,
     UploadsModule,
     ChatModule,
+    ForumModule,
   ],
 })
 export class AppModule {}

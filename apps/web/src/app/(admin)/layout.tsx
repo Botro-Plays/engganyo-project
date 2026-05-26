@@ -16,6 +16,7 @@ const navItems = [
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/admin/chats', icon: MessageSquare, label: 'Chats' },
+  { href: '/admin/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/admin/reports', icon: Flag, label: 'Reports' },
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ];
