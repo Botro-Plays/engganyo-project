@@ -82,10 +82,7 @@ async function bootstrap(): Promise<void> {
     new ValidationPipe({
       whitelist: true,           // strip unknown properties
       forbidNonWhitelisted: false, // allow extra properties for query params
-      transform: true,           // auto-transform to DTO types
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      transform: false,          // disable auto-transform to prevent issues
       disableErrorMessages: false,
     }),
   );

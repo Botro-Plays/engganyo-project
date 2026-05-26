@@ -57,10 +57,12 @@ export class ForumController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create forum topic' })
   createTopic(@CurrentUser() user: JwtPayload, @Body() dto: CreateTopicDto) {
-    console.log('CreateTopic DTO received:', dto);
-    console.log('DTO title:', dto.title);
-    console.log('DTO content:', dto.content);
-    console.log('DTO campaignId:', dto.campaignId);
+    console.log('Raw request body type:', typeof dto);
+    console.log('Raw request body constructor:', dto?.constructor?.name);
+    console.log('Raw request body:', dto);
+    console.log('DTO title:', dto?.title);
+    console.log('DTO content:', dto?.content);
+    console.log('DTO campaignId:', dto?.campaignId);
     return this.forumService.createTopic(user.sub, dto);
   }
 
