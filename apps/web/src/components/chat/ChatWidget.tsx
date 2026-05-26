@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Minimize2, Maximize2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { apiClient } from '@/lib/api';
+import type { ApiResponse } from '@/types';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -45,22 +47,12 @@ export function ChatWidget() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          conversationId: conversationId || undefined,
-        }),
+      const res = await apiClient.post<ApiResponse<ChatResponse>>('chat', {
+        message: userMessage,
+        conversationId: conversationId || undefined,
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      const data: ChatResponse = await response.json();
+      const data = res.data.data;
       
       setConversationId(data.conversationId);
       setMessages((prev) => [

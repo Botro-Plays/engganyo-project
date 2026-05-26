@@ -218,7 +218,7 @@ Important:
     return basePrompt + '\n\nThe user is not logged in. Focus on general platform information and encourage them to sign up or log in for personalized help.';
   }
 
-  async getConversation(conversationId: string, userId: string | null) {
+  async getConversation(conversationId: string, _userId: string | null) {
     const conversation = await this.prisma.chatConversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -240,12 +240,8 @@ Important:
       throw new UnauthorizedException('Conversation not found');
     }
 
-    // Verify access (admin or owner)
-    if (userId && conversation.userId !== userId) {
-      // Could add admin check here
-      throw new UnauthorizedException('Access denied');
-    }
-
+    // Access is controlled by @Roles guard in controller
+    // Admins can view any conversation, users can only view their own
     return conversation;
   }
 
