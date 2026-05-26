@@ -202,34 +202,39 @@ export class ForumService {
       }
     }
 
-    const topic = await this.prisma.forumTopic.create({
-      data: {
-        title: dto.title,
-        content: dto.content,
-        authorId: userId,
-        campaignId: dto.campaignId,
-      },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        status: true,
-        createdAt: true,
-        campaign: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            taskType: true,
+    try {
+      const topic = await this.prisma.forumTopic.create({
+        data: {
+          title: dto.title,
+          content: dto.content,
+          authorId: userId,
+          campaignId: dto.campaignId,
+        },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          status: true,
+          createdAt: true,
+          campaign: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              taskType: true,
+            },
+          },
+          author: {
+            select: { id: true, username: true, displayName: true, avatarUrl: true },
           },
         },
-        author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
-        },
-      },
-    });
+      });
 
-    return topic;
+      return topic;
+    } catch (error) {
+      console.error('Prisma createTopic error:', error);
+      throw error;
+    }
   }
 
   async updateTopic(id: string, userId: string, dto: UpdateTopicDto) {

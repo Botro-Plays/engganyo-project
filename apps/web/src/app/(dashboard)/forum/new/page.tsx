@@ -59,10 +59,22 @@ export default function NewTopicPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
     if (!title.trim() || !content.trim()) {
       setError('Please fill in all fields');
       return;
     }
+    
+    if (title.trim().length < 5) {
+      setError('Title must be at least 5 characters');
+      return;
+    }
+    
+    if (content.trim().length < 10) {
+      setError('Content must be at least 10 characters');
+      return;
+    }
+    
     createMutation.mutate({ title, content });
   };
 
@@ -97,7 +109,9 @@ export default function NewTopicPage() {
               maxLength={200}
               required
             />
-            <p className="text-zinc-500 text-xs mt-1">{title.length}/200 characters</p>
+            <p className={`text-xs mt-1 ${title.length < 5 ? 'text-red-400' : 'text-zinc-500'}`}>
+              {title.length}/200 characters (minimum 5)
+            </p>
           </div>
 
           <div>
@@ -111,13 +125,15 @@ export default function NewTopicPage() {
               rows={10}
               className="focus:outline-none focus:border-indigo-500"
             />
-            <p className="text-zinc-500 text-xs mt-1">{content.length}/10000 characters</p>
+            <p className={`text-xs mt-1 ${content.length < 10 ? 'text-red-400' : 'text-zinc-500'}`}>
+              {content.length}/10000 characters (minimum 10)
+            </p>
           </div>
 
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || title.trim().length < 5 || content.trim().length < 10}
               className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               <Send className="w-4 h-4" />

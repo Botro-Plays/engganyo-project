@@ -50,6 +50,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       status = HttpStatus.BAD_REQUEST;
       message = 'Invalid data provided';
       error = 'ValidationError';
+      this.logger.error(`Prisma validation error: ${exception.message}`, exception.stack);
     } else if (exception instanceof Error) {
       this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
     }
