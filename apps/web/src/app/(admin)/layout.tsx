@@ -91,7 +91,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-surface-border flex items-center px-6 shrink-0">
+        <header className="h-14 border-b border-surface-border flex items-center justify-between px-4 sm:px-6 shrink-0">
+          <Link href="/admin" className="flex items-center md:hidden">
+            <img src="/logo-horizontal.svg" alt="Engganyo" className="h-6" />
+          </Link>
           <div className="flex items-center gap-2 text-xs text-zinc-500">
             <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
             <span className="text-red-400 font-medium">Admin Panel</span>

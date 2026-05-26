@@ -119,7 +119,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="h-16 border-b border-surface-border flex items-center justify-between px-4 sm:px-6 shrink-0">
-          <div />
+          <Link href="/dashboard" className="flex items-center md:hidden">
+            <img src="/logo-horizontal.svg" alt="Engganyo" className="h-7" />
+          </Link>
           <div className="flex items-center gap-3">
             <button className="relative w-9 h-9 rounded-lg border border-surface-border hover:bg-surface-hover flex items-center justify-center text-zinc-400 hover:text-white transition-all">
               <Bell className="w-4 h-4" />

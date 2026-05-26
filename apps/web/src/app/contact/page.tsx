@@ -11,8 +11,15 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <div className="min-h-screen bg-surface">
+      {/* Header with logo - visible on mobile */}
+      <header className="md:hidden border-b border-surface-border p-4">
+        <Link href="/" className="inline-flex items-center">
+          <img src="/logo-horizontal.svg" alt="Engganyo" className="h-7" />
+        </Link>
+      </header>
+
       <div className="max-w-3xl mx-auto px-4 py-12">
-        <Link href="/" className="inline-flex items-center text-zinc-400 hover:text-white mb-8">
+        <Link href="/" className="hidden md:inline-flex items-center text-zinc-400 hover:text-white mb-8">
           ← Back to Home
         </Link>
 
