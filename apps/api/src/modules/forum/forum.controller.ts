@@ -94,7 +94,7 @@ export class ForumController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create reply to topic' })
   createReply(@CurrentUser() user: JwtPayload, @Param('id') topicId: string, @Body() dto: CreateReplyDto) {
-    return this.forumService.createReply(topicId, user.sub, dto);
+    return this.forumService.createReply(topicId, user.sub, user.role, dto);
   }
 
   @Patch('replies/:id')

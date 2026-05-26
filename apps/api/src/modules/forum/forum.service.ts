@@ -71,14 +71,14 @@ export class ForumService {
     const validStatuses: ForumTopicStatus[] = ['OPEN', 'LOCKED', 'PINNED', 'HIDDEN'];
     const isValidStatus = status && validStatuses.includes(status as ForumTopicStatus);
     
-    // Admins can see all statuses, regular users only see OPEN and PINNED
+    // Admins can see all statuses, regular users see OPEN, PINNED, and LOCKED
     const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN || userRole === UserRole.MODERATOR;
     
     const where = isValidStatus
       ? { status: status as ForumTopicStatus }
       : isAdmin
         ? {} // Admins see all topics when no status filter
-        : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED] } };
+        : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED, ForumTopicStatus.LOCKED] } };
 
     const [items, total] = await Promise.all([
       this.prisma.forumTopic.findMany({
@@ -331,7 +331,7 @@ export class ForumService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  async createReply(topicId: string, userId: string, dto: CreateReplyDto) {
+  async createReply(topicId: string, userId: string, userRole: string, dto: CreateReplyDto) {
     const topic = await this.prisma.forumTopic.findUnique({
       where: { id: topicId },
       select: { status: true, lockedAt: true },
@@ -341,7 +341,9 @@ export class ForumService {
       throw new NotFoundException('Topic not found');
     }
 
-    if (topic.status === ForumTopicStatus.LOCKED || topic.status === ForumTopicStatus.HIDDEN) {
+    // Regular users cannot reply to locked or hidden topics, but admins can
+    const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN || userRole === UserRole.MODERATOR;
+    if (!isAdmin && (topic.status === ForumTopicStatus.LOCKED || topic.status === ForumTopicStatus.HIDDEN)) {
       throw new ForbiddenException('This topic is locked or hidden');
     }
 
