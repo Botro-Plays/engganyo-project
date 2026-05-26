@@ -67,10 +67,9 @@ export class ForumService {
     const { page = 1, limit = 20, status } = dto;
     const skip = (page - 1) * limit;
 
-    const where = {
-      ...(status && { status }),
-      status: status || { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED] },
-    };
+    const where = status 
+      ? { status }
+      : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED] } };
 
     const [items, total] = await Promise.all([
       this.prisma.forumTopic.findMany({

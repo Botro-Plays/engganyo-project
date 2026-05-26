@@ -87,7 +87,7 @@ export default function ForumTopicPage() {
   const { data: userCampaigns } = useQuery({
     queryKey: ['user', 'campaigns'],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<{ id: string; title: string; status: string }[]>>('campaigns/my');
+      const res = await apiClient.get<ApiResponse<{ id: string; title: string; status: string }[]>>('campaigns');
       return res.data.data;
     },
   });
