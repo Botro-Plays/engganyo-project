@@ -81,11 +81,12 @@ async function bootstrap(): Promise<void> {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,           // strip unknown properties
-      forbidNonWhitelisted: true, // throw on unknown properties
+      forbidNonWhitelisted: false, // allow extra properties for query params
       transform: true,           // auto-transform to DTO types
       transformOptions: {
         enableImplicitConversion: true,
       },
+      disableErrorMessages: false,
     }),
   );
 

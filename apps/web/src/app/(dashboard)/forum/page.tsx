@@ -35,14 +35,15 @@ export default function ForumPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['forum', 'topics', page, statusFilter],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
-        ...(statusFilter && { status: statusFilter }),
-      });
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('limit', '20');
+      if (statusFilter && statusFilter !== '') {
+        params.append('status', statusFilter);
+      }
       const res = await apiClient.get<ApiResponse<{ items: ForumTopic[]; meta: { total: number; totalPages: number } }>>(
         `forum/topics?${params.toString()}`,
       );
@@ -99,7 +100,12 @@ export default function ForumPage() {
             <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-28" />
           ))}
         </div>
-      ) : !data?.items.length ? (
+      ) : error ? (
+        <div className="card-glass rounded-2xl p-12 text-center">
+          <p className="text-red-400 font-medium mb-2">Error loading topics</p>
+          <p className="text-zinc-500 text-sm">{getApiErrorMessage(error)}</p>
+        </div>
+      ) : !data || !data.items || data.items.length === 0 ? (
         <div className="card-glass rounded-2xl p-12 text-center">
           <MessageSquare className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
           <p className="text-white font-medium mb-1">No topics yet</p>

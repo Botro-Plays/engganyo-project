@@ -1,13 +1,11 @@
-import { IsOptional, IsEnum, IsInt, Min } from 'class-validator';
+import { IsOptional, IsInt, Min } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ForumTopicStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class ListTopicsDto {
-  @ApiPropertyOptional({ enum: ForumTopicStatus })
-  @IsEnum(ForumTopicStatus)
+  @ApiPropertyOptional()
   @IsOptional()
-  status?: ForumTopicStatus;
+  status?: string;
 
   @ApiPropertyOptional({ example: 1 })
   @Type(() => Number)

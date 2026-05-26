@@ -67,8 +67,12 @@ export class ForumService {
     const { page = 1, limit = 20, status } = dto;
     const skip = (page - 1) * limit;
 
-    const where = status 
-      ? { status }
+    // Build where clause - if status is provided and valid, use it, otherwise default to OPEN and PINNED
+    const validStatuses: ForumTopicStatus[] = ['OPEN', 'LOCKED', 'PINNED', 'HIDDEN'];
+    const isValidStatus = status && validStatuses.includes(status as ForumTopicStatus);
+    
+    const where = isValidStatus
+      ? { status: status as ForumTopicStatus }
       : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED] } };
 
     const [items, total] = await Promise.all([
