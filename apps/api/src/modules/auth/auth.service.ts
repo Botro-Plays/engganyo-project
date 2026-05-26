@@ -532,6 +532,10 @@ export class AuthService {
     return this.recaptchaCache;
   }
 
+  invalidateRecaptchaCache() {
+    this.recaptchaCache = null;
+  }
+
   async getPublicConfig() {
     const cfg = await this.getRecaptchaConfig();
     return {

@@ -5,6 +5,7 @@ import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { AuthService } from '../auth/auth.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -18,6 +19,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
+    private readonly authService: AuthService,
   ) {}
 
   // ─── Users ────────────────────────────────────────────────
@@ -931,6 +933,10 @@ export class AdminService {
       },
       update: { value, updatedBy: adminId },
     });
+    // Invalidate reCAPTCHA cache if any reCAPTCHA-related config was updated
+    if (key.startsWith('recaptcha_')) {
+      this.authService.invalidateRecaptchaCache();
+    }
     return { updated: true, key };
   }
 
