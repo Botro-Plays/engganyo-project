@@ -36,6 +36,7 @@ const mobileNavItems = [
   { href: '/tasks', icon: ListTodo, label: 'Tasks' },
   { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
+  { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
