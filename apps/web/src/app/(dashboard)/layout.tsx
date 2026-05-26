@@ -14,6 +14,7 @@ import {
   Bell,
   AlertTriangle,
   ShieldAlert,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/tasks', icon: ListTodo, label: 'Tasks' },
   { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
+  { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
 ];
