@@ -1,8 +1,8 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-21 (Documentation synchronization pass - OAuth verification partially implemented)
+> Last updated: 2026-05-26 (Forum, Chat, reCAPTCHA v2/v3 switch implemented)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Phases 11.5-15 Pending
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Forum & Chat Implemented | Phases 11.5-15 Pending
 
 ---
 
@@ -349,6 +349,45 @@
 
 ---
 
+## Phase 10.5 — Community Features ✅
+
+> Forum system and AI-powered chat support
+
+**Priority**: 🟡 MEDIUM - Important for community building and user support
+**Dependencies**: Phase 10 (Production Hardening)
+
+**Forum System**
+- [✅] ForumTopic model with OPEN, LOCKED, PINNED, HIDDEN statuses
+- [✅] ForumReply model with nested replies (parentReplyId)
+- [✅] ForumReaction model with LIKE, DISLIKE, LOVE, LAUGH, ANGRY types
+- [✅] User mention validation with allowMentions preference
+- [✅] Admin visibility on hidden topics everywhere
+- [✅] Logged-in only access to forum
+- [✅] Lock functionality prevents replies but allows viewing
+- [✅] Hide/unhide endpoints for admins
+- [✅] Campaign-linked topics and replies
+- [✅] Report system integration for forum content
+
+**Chat System**
+- [✅] ChatConversation model with AI_HANDLING, PENDING_HUMAN, HUMAN_HANDLING, CLOSED statuses
+- [✅] ChatMessage model with USER/ASSISTANT roles
+- [✅] Groq API integration for AI responses
+- [✅] Human agent escalation for complex issues
+- [✅] Anonymous user support via IP tracking
+- [✅] Chat widget component in frontend
+- [✅] Real-time message streaming
+
+**Frontend**
+- [✅] `/forum` — public forum page (logged-in only)
+- [✅] `/forum/[id]` — topic detail with replies
+- [✅] `/forum/new` — create new topic
+- [✅] Chat widget in bottom-right corner
+- [✅] Rich text editor for forum posts
+- [✅] Reaction buttons on topics and replies
+- [✅] User mention autocomplete (@[username])
+
+---
+
 ## Phase 11 — Social Verification Engine 🟠
 
 > Auto-resolve task completions via official platform APIs (like like4like.com)
@@ -589,9 +628,10 @@
 **Dependencies**: Phase 0 (Critical Security)
 
 **reCAPTCHA**
-- [✅] Google reCAPTCHA v3 on `/register` -- fixed; root cause was `GoogleReCaptchaProvider` not mounted in `(auth)/layout.tsx`
+- [✅] Add reCAPTCHA v3 on `/register` -- fixed; root cause was `GoogleReCaptchaProvider` not mounted in `(auth)/layout.tsx`
 - [✅] Server-side token verification in `AuthService.register()` -- functioning
 - [✅] reCAPTCHA v3 on `/login` -- added `useGoogleReCaptcha` hook + `LoginDto.recaptchaToken` + backend validation
+- [✅] reCAPTCHA v2/v3 switch in admin panel with cache invalidation
 - [✅] Score threshold 0.5; gated by `ENABLE_RECAPTCHA=true` + `RECAPTCHA_SECRET` env vars
 - [🟡] reCAPTCHA v3 on `/forgot-password` (pending -- page not yet implemented)
 - [🟡] reCAPTCHA v2 fallback for high-risk actions (pending)

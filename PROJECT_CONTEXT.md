@@ -38,6 +38,10 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - **Credit System**: Internal-only, no fiat/crypto conversion
 - **Platform Fees**: Not implemented
 - **Withdrawals**: Not available
+- **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
+- **Chat System**: Implemented with AI chat support (Groq integration)
+- **Social OAuth**: Partially implemented (YouTube, Twitch, Spotify working; others manual link)
+- **reCAPTCHA**: v2/v3 switch implemented in admin panel with cache invalidation
 
 ### Target Monetization Strategy
 
@@ -261,10 +265,10 @@ Tasks   Campaigns  Tasks   Campaigns
 
 **Layer 1: Prevention**
 - Email verification (required, currently feature-flagged)
-- CAPTCHA on registration (reCAPTCHA v3 implemented but NOT FUNCTIONING in production)
+- CAPTCHA on registration (reCAPTCHA v2/v3 with admin panel switch, cache invalidation)
 - Rate limiting on register, forgot-password, verify-email (implemented)
 - IP-based restrictions
-- Device fingerprinting
+- Device fingerprinting (implemented)
 
 **Layer 2: Detection**
 - Trust score calculation (5-factor weighted)
@@ -272,6 +276,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Social graph analysis (abuse ring detection)
 - IP VPN/proxy detection
 - Multi-account heuristics
+- Device fingerprinting
 
 **Layer 3: Response**
 - Auto-suspension thresholds
@@ -669,5 +674,5 @@ This document should be updated when:
 - Risk factors change
 - Success metrics change
 
-**Last Updated**: 2026-05-19
-**Next Review**: 2026-08-19 (quarterly)
+**Last Updated**: 2026-05-26
+**Next Review**: 2026-08-26 (quarterly)

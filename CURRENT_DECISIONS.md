@@ -962,6 +962,77 @@
 - Docker volume mount permissions can be tricky with non-root users
 - Lazy initialization is safer for filesystem-dependent services
 
+### USR-005: Forum System Implementation
+**Status**: Implemented (2026-05-26)
+**Date**: 2026-05-26
+**Context**: Community discussion and support platform
+**Decision**: Implement forum system with topics, replies, reactions, and moderation
+**Rationale**:
+- Community building and user engagement
+- Support channel for platform users
+- Campaign discussion and feedback
+**Implementation**:
+- ForumTopic model with OPEN, LOCKED, PINNED, HIDDEN statuses
+- ForumReply model with nested replies (parentReplyId)
+- ForumReaction model with LIKE, DISLIKE, LOVE, LAUGH, ANGRY types
+- User mention validation with allowMentions preference
+- Admin visibility on hidden topics everywhere
+- Logged-in only access to forum
+- Lock functionality prevents replies but allows viewing
+**Tradeoffs**:
+- Additional moderation overhead
+- Database complexity with nested replies
+- Requires logged-in access (reduces public visibility)
+**Alternatives Considered**:
+- Third-party forum (Discourse, Flarum) - rejected: want integrated experience
+- No forum - rejected: community features important for engagement
+
+### USR-006: Chat System with AI Support
+**Status**: Implemented (2026-05-26)
+**Date**: 2026-05-26
+**Context**: User support and assistance
+**Decision**: Implement chat system with Groq AI integration
+**Rationale**:
+- Instant support for users
+- Reduces support burden on admins
+- Scalable solution for common questions
+**Implementation**:
+- ChatConversation model with AI_HANDLING, PENDING_HUMAN, HUMAN_HANDLING, CLOSED statuses
+- ChatMessage model with USER/ASSISTANT roles
+- Groq API integration for AI responses
+- Human agent escalation for complex issues
+- Anonymous user support via IP tracking
+**Tradeoffs**:
+- AI hallucination risk
+- API costs for Groq
+- Requires human escalation path
+**Alternatives Considered**:
+- Pure human support - rejected: not scalable
+- No chat - rejected: poor user experience
+- Self-hosted LLM - rejected: infrastructure complexity
+
+### USR-007: reCAPTCHA v2/v3 Switch with Cache Invalidation
+**Status**: Implemented (2026-05-26)
+**Date**: 2026-05-26
+**Context**: Flexible reCAPTCHA version selection for different environments
+**Decision**: Admin panel switch for reCAPTCHA v2/v3 with backend cache invalidation
+**Rationale**:
+- v3 invisible for production, v2 checkbox for low-traffic sites
+- Immediate UI reflection after config change
+- Backend cache invalidation prevents stale config
+**Implementation**:
+- recaptcha_version config key in PlatformConfig (default: v3)
+- Admin panel select dropdown for version selection
+- React Query for public-config with staleTime: 0 and refetchOnMount: always
+- Backend invalidateRecaptchaCache() method called on config update
+- Frontend conditional rendering based on version
+**Tradeoffs**:
+- Additional config complexity
+- React Query refetch overhead (minimal)
+**Alternatives Considered**:
+- Hardcode version - rejected: inflexible
+- Server restart required - rejected: poor UX
+
 ---
 
 ## FRONTEND ARCHITECTURE DECISIONS
