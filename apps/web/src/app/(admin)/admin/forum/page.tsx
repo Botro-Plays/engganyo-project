@@ -33,7 +33,7 @@ export default function AdminForumPage() {
     queryKey: ['admin', 'forum', page],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ items: ForumTopic[]; meta: { total: number; totalPages: number } }>>(
-        `forum/topics?page=${page}&limit=20`,
+        `forum/admin/topics?page=${page}&limit=20`,
       );
       return res.data.data;
     },

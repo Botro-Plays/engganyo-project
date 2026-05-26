@@ -25,8 +25,18 @@ export class ForumController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List forum topics' })
-  listTopics(@Query() dto: ListTopicsDto) {
-    return this.forumService.listTopics(dto);
+  listTopics(@Query() dto: ListTopicsDto, @CurrentUser() user?: JwtPayload) {
+    return this.forumService.listTopics(dto, user?.role);
+  }
+
+  @Get('admin/topics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all forum topics (admin only)' })
+  listAdminTopics(@Query() dto: ListTopicsDto) {
+    return this.forumService.listTopics(dto, 'ADMIN');
   }
 
   @Get('topics/:id')
@@ -57,12 +67,6 @@ export class ForumController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create forum topic' })
   createTopic(@CurrentUser() user: JwtPayload, @Body() dto: CreateTopicDto) {
-    console.log('Raw request body type:', typeof dto);
-    console.log('Raw request body constructor:', dto?.constructor?.name);
-    console.log('Raw request body:', dto);
-    console.log('DTO title:', dto?.title);
-    console.log('DTO content:', dto?.content);
-    console.log('DTO campaignId:', dto?.campaignId);
     return this.forumService.createTopic(user.sub, dto);
   }
 

@@ -63,17 +63,22 @@ export class ForumService {
 
   // ─── Topics ──────────────────────────────────────────────
 
-  async listTopics(dto: ListTopicsDto) {
+  async listTopics(dto: ListTopicsDto, userRole?: string) {
     const { page = 1, limit = 20, status } = dto;
     const skip = (page - 1) * limit;
 
-    // Build where clause - if status is provided and valid, use it, otherwise default to OPEN and PINNED
+    // Build where clause
     const validStatuses: ForumTopicStatus[] = ['OPEN', 'LOCKED', 'PINNED', 'HIDDEN'];
     const isValidStatus = status && validStatuses.includes(status as ForumTopicStatus);
     
+    // Admins can see all statuses, regular users only see OPEN and PINNED
+    const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN || userRole === UserRole.MODERATOR;
+    
     const where = isValidStatus
       ? { status: status as ForumTopicStatus }
-      : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED] } };
+      : isAdmin
+        ? {} // Admins see all topics when no status filter
+        : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED] } };
 
     const [items, total] = await Promise.all([
       this.prisma.forumTopic.findMany({
@@ -202,39 +207,34 @@ export class ForumService {
       }
     }
 
-    try {
-      const topic = await this.prisma.forumTopic.create({
-        data: {
-          title: dto.title,
-          content: dto.content,
-          authorId: userId,
-          campaignId: dto.campaignId,
-        },
-        select: {
-          id: true,
-          title: true,
-          content: true,
-          status: true,
-          createdAt: true,
-          campaign: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              taskType: true,
-            },
-          },
-          author: {
-            select: { id: true, username: true, displayName: true, avatarUrl: true },
+    const topic = await this.prisma.forumTopic.create({
+      data: {
+        title: dto.title,
+        content: dto.content,
+        authorId: userId,
+        campaignId: dto.campaignId,
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        status: true,
+        createdAt: true,
+        campaign: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            taskType: true,
           },
         },
-      });
+        author: {
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
+        },
+      },
+    });
 
-      return topic;
-    } catch (error) {
-      console.error('Prisma createTopic error:', error);
-      throw error;
-    }
+    return topic;
   }
 
   async updateTopic(id: string, userId: string, dto: UpdateTopicDto) {
