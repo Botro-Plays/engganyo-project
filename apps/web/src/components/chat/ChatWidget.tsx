@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageSquare, X, Send, Minimize2, Maximize2, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -49,6 +49,8 @@ export function ChatWidget() {
 
   const handleQuickAction = (action: string) => {
     setInput(action);
+    // Auto-send after a short delay to allow UI to update
+    setTimeout(() => sendMessage(), 100);
   };
 
   useEffect(() => {
@@ -127,7 +129,7 @@ export function ChatWidget() {
             aria-label="New conversation"
             title="New conversation"
           >
-            <Maximize2 className="w-4 h-4" />
+            <RefreshCw className="w-4 h-4" />
           </button>
           <button
             onClick={() => setIsMinimized(!isMinimized)}
