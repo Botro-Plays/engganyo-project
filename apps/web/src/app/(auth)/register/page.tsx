@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Eye, EyeOff, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { useRecaptcha } from '@/app/providers';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -52,11 +53,12 @@ function RegisterPageInner() {
   const { setUser, setAccessToken } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   
   // v3 hook
   const v3Recaptcha = useGoogleReCaptcha();
   // v2/v3 context
-  const { version, executeRecaptcha: v2ExecuteRecaptcha, recaptchaRef } = useRecaptcha();
+  const { version, v2SiteKey } = useRecaptcha();
 
   const defaultReferralCode = searchParams.get('ref') ?? '';
 
@@ -99,15 +101,11 @@ function RegisterPageInner() {
     // Generate reCAPTCHA token based on version
     if (version === 'v2') {
       // v2: use the checkbox token
-      if (v2ExecuteRecaptcha) {
-        try {
-          const token = await v2ExecuteRecaptcha('register');
-          data.recaptchaToken = token;
-        } catch {
-          setServerError('Please complete the reCAPTCHA checkbox');
-          return;
-        }
+      if (!recaptchaToken) {
+        setServerError('Please complete the reCAPTCHA checkbox');
+        return;
       }
+      data.recaptchaToken = recaptchaToken;
     } else if (version === 'v3') {
       // v3: use invisible execution
       if (v3Recaptcha?.executeRecaptcha) {
@@ -228,11 +226,13 @@ function RegisterPageInner() {
           </div>
 
           {/* reCAPTCHA v2 checkbox */}
-          {version === 'v2' && (
-            <div className="flex justify-center">
-              <div className="transform scale-90 origin-center">
-                <div ref={recaptchaRef as any} />
-              </div>
+          {version === 'v2' && v2SiteKey && (
+            <div className="flex justify-center mb-4">
+              <ReCAPTCHA
+                sitekey={v2SiteKey}
+                onChange={(token: string | null) => setRecaptchaToken(token)}
+                onExpired={() => setRecaptchaToken(null)}
+              />
             </div>
           )}
 
