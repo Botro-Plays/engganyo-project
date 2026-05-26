@@ -7,12 +7,12 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../modules/auth/interfaces/jwt-payload.interface';
 import { ForumService } from './forum.service';
-import type { CreateTopicDto } from './dto/create-topic.dto';
-import type { UpdateTopicDto } from './dto/update-topic.dto';
-import type { CreateReplyDto } from './dto/create-reply.dto';
-import type { UpdateReplyDto } from './dto/update-reply.dto';
-import type { CreateReactionDto } from './dto/create-reaction.dto';
-import type { ListTopicsDto } from './dto/list-topics.dto';
+import { CreateTopicDto } from './dto/create-topic.dto';
+import { UpdateTopicDto } from './dto/update-topic.dto';
+import { CreateReplyDto } from './dto/create-reply.dto';
+import { UpdateReplyDto } from './dto/update-reply.dto';
+import { CreateReactionDto } from './dto/create-reaction.dto';
+import { ListTopicsDto } from './dto/list-topics.dto';
 
 @ApiTags('forum')
 @Controller('forum')
