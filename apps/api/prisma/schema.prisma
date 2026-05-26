@@ -515,6 +515,7 @@ model Campaign {
 
   completions TaskCompletion[]
   reports     Report[]
+  forumReplies ForumReply[] @relation("ForumCampaignReplies")
 
   @@index([userId])
   @@index([status])
@@ -1029,6 +1030,9 @@ model ForumReply {
   authorId    String            @map("author_id")
   author      User              @relation("ForumReplies", fields: [authorId], references: [id], onDelete: Cascade)
 
+  campaignId  String?           @map("campaign_id")
+  campaign    Campaign?         @relation("ForumCampaignReplies", fields: [campaignId], references: [id], onDelete: SetNull)
+
   parentReplyId String?         @unique @map("parent_reply_id")
   parentReply ForumReply?       @relation("ReplyReplies", fields: [parentReplyId], references: [id], onDelete: Cascade)
   childReplies ForumReply[]     @relation("ReplyReplies")
@@ -1041,6 +1045,7 @@ model ForumReply {
 
   @@index([topicId])
   @@index([authorId])
+  @@index([campaignId])
   @@index([parentReplyId])
   @@index([createdAt])
   @@map("forum_replies")

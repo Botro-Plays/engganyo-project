@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MessageSquare, ThumbsUp, Send, Edit2, Trash2, Lock, Pin } from 'lucide-react';
+import { ArrowLeft, MessageSquare, ThumbsUp, Send, Edit2, Trash2, Lock, Pin, Megaphone } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
@@ -40,6 +40,12 @@ interface ForumReply {
   editedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  campaign?: {
+    id: string;
+    title: string;
+    status: string;
+    taskType: string;
+  };
   author: {
     id: string;
     username: string;
@@ -58,6 +64,7 @@ export default function ForumTopicPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [replyContent, setReplyContent] = useState('');
+  const [selectedCampaignId, setSelectedCampaignId] = useState('');
   const [replyError, setReplyError] = useState<string | null>(null);
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -70,11 +77,20 @@ export default function ForumTopicPage() {
     },
   });
 
+  const { data: userCampaigns } = useQuery({
+    queryKey: ['user', 'campaigns'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ id: string; title: string; status: string }[]>>('campaigns/my');
+      return res.data.data;
+    },
+  });
+
   const replyMutation = useMutation({
-    mutationFn: (content: string) =>
-      apiClient.post(`forum/topics/${params.id}/replies`, { content }),
+    mutationFn: (data: { content: string; campaignId?: string }) =>
+      apiClient.post(`forum/topics/${params.id}/replies`, data),
     onSuccess: () => {
       setReplyContent('');
+      setSelectedCampaignId('');
       setReplyError(null);
       void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id] });
     },
@@ -101,7 +117,7 @@ export default function ForumTopicPage() {
   const handleReplySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyContent.trim()) return;
-    replyMutation.mutate(replyContent);
+    replyMutation.mutate({ content: replyContent, campaignId: selectedCampaignId || undefined });
   };
 
   const handleEditReply = (reply: ForumReply) => {
@@ -186,6 +202,23 @@ export default function ForumTopicPage() {
             className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none"
             rows={3}
           />
+          {userCampaigns && userCampaigns.length > 0 && (
+            <div className="mt-3">
+              <label className="text-zinc-400 text-sm mb-1 block">Link your campaign (optional)</label>
+              <select
+                value={selectedCampaignId}
+                onChange={(e) => setSelectedCampaignId(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">No campaign</option>
+                {userCampaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.title} ({campaign.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {replyError && <p className="text-red-400 text-sm mt-2">{replyError}</p>}
           <div className="flex justify-end mt-3">
             <button
@@ -218,10 +251,23 @@ export default function ForumTopicPage() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-white font-medium">@{reply.author.username}</span>
                     <span className="text-zinc-500 text-sm">{formatRelativeTime(reply.createdAt)}</span>
                     {reply.isEdited && <span className="text-zinc-500 text-xs">(edited)</span>}
+                    {reply.campaign && (
+                      <Link
+                        href={`/campaigns/${reply.campaign.id}`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                          reply.campaign.status === 'ACTIVE' || reply.campaign.status === 'PENDING_REVIEW'
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                        }`}
+                      >
+                        <Megaphone className="w-3 h-3" />
+                        {reply.campaign.title}
+                      </Link>
+                    )}
                   </div>
                 </div>
                 {editingReplyId === reply.id ? (

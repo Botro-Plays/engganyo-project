@@ -215,6 +215,14 @@ export class ForumService {
           editedAt: true,
           createdAt: true,
           updatedAt: true,
+          campaign: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              taskType: true,
+            },
+          },
           author: {
             select: { id: true, username: true, displayName: true, avatarUrl: true },
           },
@@ -261,17 +269,42 @@ export class ForumService {
       throw new ForbiddenException('You need at least MEDIUM trust level to post replies');
     }
 
+    // Validate campaign if provided
+    if (dto.campaignId) {
+      const campaign = await this.prisma.campaign.findUnique({
+        where: { id: dto.campaignId },
+        select: { userId: true, status: true },
+      });
+
+      if (!campaign) {
+        throw new NotFoundException('Campaign not found');
+      }
+
+      if (campaign.userId !== userId) {
+        throw new ForbiddenException('You can only link your own campaigns');
+      }
+    }
+
     const reply = await this.prisma.forumReply.create({
       data: {
         content: dto.content,
         topicId,
         authorId: userId,
         parentReplyId: dto.parentReplyId,
+        campaignId: dto.campaignId,
       },
       select: {
         id: true,
         content: true,
         createdAt: true,
+        campaign: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            taskType: true,
+          },
+        },
         author: {
           select: { id: true, username: true, displayName: true, avatarUrl: true },
         },
