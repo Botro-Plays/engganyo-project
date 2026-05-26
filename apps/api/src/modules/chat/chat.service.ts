@@ -65,6 +65,15 @@ export class ChatService {
         throw new UnauthorizedException('Conversation not found');
       }
 
+      // Auto-link anonymous conversation to authenticated user
+      if (userId && !conversation.userId && conversation.ipAddress === ipAddress) {
+        conversation = await this.prisma.chatConversation.update({
+          where: { id: conversationId },
+          data: { userId, ipAddress: null },
+          include: { messages: true },
+        });
+      }
+
       // Verify user owns this conversation
       if (userId && conversation.userId !== userId) {
         throw new UnauthorizedException('Access denied');

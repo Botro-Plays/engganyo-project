@@ -11,6 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 
 import { ChatService } from './chat.service';
@@ -22,11 +23,16 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('chat')
 @Controller({ path: 'chat' })
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post()
   @Public()
@@ -38,7 +44,12 @@ export class ChatController {
     @CurrentUser() user: JwtPayload | null,
     @Req() req: Request,
   ): Promise<ChatResponseDto> {
-    const userId = user?.sub || null;
+    // Try to extract user from JWT token even with @Public()
+    let userId = user?.sub || null;
+    if (!userId) {
+      userId = this.extractUserIdFromToken(req);
+    }
+    
     const ipAddress = this.getClientIp(req);
     return this.chatService.sendMessage(userId, ipAddress, dto);
   }
@@ -49,6 +60,22 @@ export class ChatController {
       return forwarded.split(',')[0].trim();
     }
     return req.socket.remoteAddress || req.connection.remoteAddress || 'unknown';
+  }
+
+  private extractUserIdFromToken(req: Request): string | null {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return null;
+      }
+      const token = authHeader.substring(7);
+      const payload = this.jwtService.verify<JwtPayload>(token, {
+        secret: this.configService.get<string>('jwt.accessSecret'),
+      });
+      return payload.sub;
+    } catch {
+      return null;
+    }
   }
 
   // Admin endpoints

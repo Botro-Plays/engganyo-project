@@ -30,8 +30,25 @@ export function ChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated } = useAuthStore();
 
+  const quickActions = [
+    'How does Engganyo work?',
+    'How do I earn credits?',
+    'How do I create a campaign?',
+    'What platforms are supported?',
+  ];
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const startNewConversation = () => {
+    setMessages([]);
+    setConversationId(null);
+    setInput('');
+  };
+
+  const handleQuickAction = (action: string) => {
+    setInput(action);
   };
 
   useEffect(() => {
@@ -105,6 +122,14 @@ export function ChatWidget() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={startNewConversation}
+            className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
+            aria-label="New conversation"
+            title="New conversation"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => setIsMinimized(!isMinimized)}
             className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
             aria-label={isMinimized ? 'Maximize' : 'Minimize'}
@@ -135,9 +160,20 @@ export function ChatWidget() {
                   <MessageSquare className="w-6 h-6 text-brand-400" />
                 </div>
                 <p className="text-zinc-400 text-sm mb-1">Hi there! 👋</p>
-                <p className="text-zinc-500 text-xs">
+                <p className="text-zinc-500 text-xs mb-4">
                   How can I help you with Engganyo today?
                 </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {quickActions.map((action) => (
+                    <button
+                      key={action}
+                      onClick={() => handleQuickAction(action)}
+                      className="px-3 py-1.5 text-xs bg-surface-hover border border-surface-border rounded-lg text-zinc-400 hover:text-white hover:border-brand-500/50 transition-colors"
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
