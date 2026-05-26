@@ -63,7 +63,8 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
       const res = await apiClient.get<ApiResponse<PublicConfig>>('auth/public-config');
       return res.data.data;
     },
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 0, // Always refetch to get latest config
+    refetchOnMount: 'always',
   });
 
   const v3SiteKey = config?.recaptchaV3SiteKey ?? process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? null;
