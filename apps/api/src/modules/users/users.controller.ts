@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -73,6 +74,17 @@ export class UsersController {
   @ApiOperation({ summary: 'Check if a username is available' })
   checkUsername(@Param('username') username: string) {
     return this.usersService.checkUsername(username);
+  }
+
+  @Get('search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search users by username or displayName for mentions' })
+  searchUsers(
+    @CurrentUser() user: JwtPayload,
+    @Query('q') query: string,
+    @Query('limit') limit: number = 10,
+  ) {
+    return this.usersService.searchUsers(user.sub, query, limit);
   }
 
   @Get(':username')

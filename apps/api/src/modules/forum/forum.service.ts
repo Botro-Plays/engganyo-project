@@ -12,6 +12,55 @@ import type { ListTopicsDto } from './dto/list-topics.dto';
 export class ForumService {
   constructor(private prisma: PrismaService) {}
 
+  // ─── Helper: Validate user mentions ─────────────────────────────
+
+  private async validateUserMentions(content: string, authorId: string): Promise<void> {
+    // Parse user mentions from content: @[username](user:id)
+    const userMentionRegex = /@\[([^\]]+)\]\(user:([a-zA-Z0-9-]+)\)/g;
+    const mentionedUserIds = new Set<string>();
+    let match;
+
+    while ((match = userMentionRegex.exec(content)) !== null) {
+      mentionedUserIds.add(match[2]);
+    }
+
+    if (mentionedUserIds.size === 0) return;
+
+    // Get current user's role
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: authorId },
+      select: { role: true },
+    });
+
+    const isAdmin = currentUser?.role === UserRole.ADMIN || 
+                    currentUser?.role === UserRole.SUPER_ADMIN || 
+                    currentUser?.role === UserRole.MODERATOR;
+
+    // Admins can mention anyone
+    if (isAdmin) return;
+
+    // For non-admins, check if mentioned users allow mentions
+    const mentionedUsers = await this.prisma.user.findMany({
+      where: {
+        id: { in: Array.from(mentionedUserIds) },
+      },
+      select: {
+        id: true,
+        profile: {
+          select: {
+            allowMentions: true,
+          },
+        },
+      },
+    });
+
+    for (const user of mentionedUsers) {
+      if (user.profile?.allowMentions === false) {
+        throw new ForbiddenException(`User ${user.id} has disabled mentions`);
+      }
+    }
+  }
+
   // ─── Topics ──────────────────────────────────────────────
 
   async listTopics(dto: ListTopicsDto) {
@@ -125,6 +174,9 @@ export class ForumService {
     if (user.trustScore.level !== TrustLevel.MEDIUM && user.trustScore.level !== TrustLevel.HIGH && user.trustScore.level !== TrustLevel.VERIFIED) {
       throw new ForbiddenException('You need at least MEDIUM trust level to create forum topics');
     }
+
+    // Validate user mentions
+    await this.validateUserMentions(dto.content, userId);
 
     // Validate campaign if provided
     if (dto.campaignId) {
@@ -293,6 +345,9 @@ export class ForumService {
     if (user.trustScore.level !== TrustLevel.MEDIUM && user.trustScore.level !== TrustLevel.HIGH && user.trustScore.level !== TrustLevel.VERIFIED) {
       throw new ForbiddenException('You need at least MEDIUM trust level to post replies');
     }
+
+    // Validate user mentions
+    await this.validateUserMentions(dto.content, userId);
 
     // Validate campaign if provided
     if (dto.campaignId) {

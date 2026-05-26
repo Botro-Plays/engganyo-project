@@ -22,6 +22,14 @@ export default function NewTopicPage() {
     },
   });
 
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  const handleUserSearch = async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
+    if (!query || query.length < 2) return [];
+    const res = await apiClient.get<{ id: string; username: string; displayName: string | null }[]>(`users/search?q=${query}&limit=10`);
+    return res.data;
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: { title: string; content: string }) =>
       apiClient.post('forum/topics', data),
@@ -81,7 +89,8 @@ export default function NewTopicPage() {
               value={content}
               onChange={setContent}
               campaigns={userCampaigns || []}
-              placeholder="Share your thoughts, questions, or ideas... Type @ to mention your campaigns"
+              onUserSearch={handleUserSearch}
+              placeholder="Share your thoughts, questions, or ideas... Type ! for campaigns, @ for users"
               rows={10}
               className="focus:outline-none focus:border-indigo-500"
             />

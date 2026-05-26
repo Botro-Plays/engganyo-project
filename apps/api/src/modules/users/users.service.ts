@@ -226,4 +226,46 @@ export class UsersService {
     }
     return { available: true };
   }
+
+  // ─── Search users for mentions ─────────────────────────────
+
+  async searchUsers(currentUserId: string, query: string, limit: number = 10) {
+    if (!query || query.length < 2) {
+      return [];
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        id: { not: currentUserId },
+        OR: [
+          { username: { contains: query, mode: 'insensitive' } },
+          { displayName: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatarUrl: true,
+        profile: {
+          select: {
+            allowMentions: true,
+          },
+        },
+      },
+      take: limit,
+    });
+
+    // Filter out users who have disabled mentions (unless current user is admin)
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { role: true },
+    });
+
+    const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MODERATOR';
+
+    return users.filter((user) => isAdmin || user.profile?.allowMentions !== false);
+  }
 }

@@ -92,6 +92,12 @@ export default function ForumTopicPage() {
     },
   });
 
+  const handleUserSearch = async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
+    if (!query || query.length < 2) return [];
+    const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
+    return res.data.data;
+  };
+
   const replyMutation = useMutation({
     mutationFn: (data: { content: string }) =>
       apiClient.post(`forum/topics/${params.id}/replies`, data),
@@ -205,7 +211,8 @@ export default function ForumTopicPage() {
             value={replyContent}
             onChange={setReplyContent}
             campaigns={userCampaigns || []}
-            placeholder="Write a reply... Type @ to mention your campaigns"
+            onUserSearch={handleUserSearch}
+            placeholder="Write a reply... Type ! for campaigns, @ for users"
             rows={3}
             className="focus:outline-none focus:border-indigo-500"
           />

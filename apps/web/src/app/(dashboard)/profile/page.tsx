@@ -63,6 +63,7 @@ interface FullProfile {
     totalCampaigns: number;
     completionRate: number;
     isPublic: boolean;
+    allowMentions: boolean;
   } | null;
   socialAccounts: SocialAccount[];
 }
@@ -74,6 +75,7 @@ const profileSchema = z.object({
   avatarUrl: z.string().url().optional().or(z.literal('')),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
+  allowMentions: z.boolean().optional(),
 });
 
 const passwordSchema = z
@@ -228,6 +230,7 @@ export default function ProfilePage() {
         avatarUrl: profile.avatarUrl ?? '',
         websiteUrl: profile.profile?.websiteUrl ?? '',
         location: profile.profile?.location ?? '',
+        allowMentions: profile.profile?.allowMentions ?? true,
       });
     }
   }, [profile, profileForm]);
@@ -240,6 +243,7 @@ export default function ProfilePage() {
         avatarUrl: data.avatarUrl || undefined,
         websiteUrl: data.websiteUrl || undefined,
         location: data.location || undefined,
+        allowMentions: data.allowMentions,
       }),
     onSuccess: (res) => {
       const updated = res.data.data;
@@ -502,6 +506,18 @@ export default function ProfilePage() {
                 <p className="text-xs text-red-400 mt-1">{profileForm.formState.errors.avatarUrl.message}</p>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <input
+              {...profileForm.register('allowMentions')}
+              type="checkbox"
+              id="allowMentions"
+              className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-brand-500 focus:ring-brand-500 focus:ring-offset-0"
+            />
+            <label htmlFor="allowMentions" className="text-sm text-zinc-300 cursor-pointer">
+              Allow others to mention me in forum posts
+            </label>
           </div>
 
           <div className="flex justify-end pt-1">
