@@ -172,6 +172,12 @@ export default function LandingPage() {
             <p className="text-zinc-300 text-sm sm:text-base leading-relaxed">
               Our mission is to create a fair, transparent ecosystem where creators can grow their audiences organically while helping others do the same. We believe in genuine engagement over vanity metrics, and our platform is built to facilitate meaningful connections between creators in similar niches.
             </p>
+            <div className="pt-2">
+              <Link href="/about" className="inline-flex items-center text-brand-400 hover:text-brand-300 text-sm font-medium transition-colors">
+                Learn more about us
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -183,13 +189,21 @@ export default function LandingPage() {
             <p className="text-zinc-400 mb-7 sm:mb-8 text-sm sm:text-base">
               Join thousands of creators already building their audience on Engganyo.
             </p>
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg shadow-brand-500/25 text-base sm:text-lg"
-            >
-              Create free account
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Link>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg shadow-brand-500/25 text-base sm:text-lg"
+              >
+                Create free account
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Link>
+              <Link
+                href="/faq"
+                className="inline-flex items-center text-zinc-400 hover:text-white text-sm font-medium transition-colors"
+              >
+                Learn how it works
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -202,9 +216,11 @@ export default function LandingPage() {
             </div>
             <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
             <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-zinc-500 text-sm">
-              <a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+              <Link href="/about" className="hover:text-white transition-colors">About</Link>
+              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
               <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
+              <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
             </div>
           </div>
         </footer>
