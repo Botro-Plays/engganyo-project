@@ -16,12 +16,14 @@ interface PublicConfig {
 }
 
 interface RecaptchaContextValue {
+  enabled: boolean;
   version: 'v2' | 'v3';
   v2SiteKey: string | null;
   v3SiteKey: string | null;
 }
 
 const RecaptchaContext = createContext<RecaptchaContextValue>({
+  enabled: false,
   version: 'v3',
   v2SiteKey: null,
   v3SiteKey: null,
@@ -80,6 +82,7 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
   }, []);
 
   const recaptchaContextValue: RecaptchaContextValue = {
+    enabled: config?.recaptchaEnabled ?? false,
     version: config?.recaptchaVersion ?? 'v3',
     v2SiteKey,
     v3SiteKey,

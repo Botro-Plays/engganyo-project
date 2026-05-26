@@ -39,7 +39,7 @@ export default function LoginPage() {
   // v3 hook
   const v3Recaptcha = useGoogleReCaptcha();
   // v2/v3 context
-  const { version, v2SiteKey } = useRecaptcha();
+  const { enabled, version, v2SiteKey } = useRecaptcha();
 
   const {
     register,
@@ -67,22 +67,24 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormData) => {
     setServerError(null);
 
-    // Generate reCAPTCHA token based on version
-    if (version === 'v2') {
-      // v2: use the checkbox token
-      if (!recaptchaToken) {
-        setServerError('Please complete the reCAPTCHA checkbox');
-        return;
-      }
-      data.recaptchaToken = recaptchaToken;
-    } else if (version === 'v3') {
-      // v3: use invisible execution
-      if (v3Recaptcha?.executeRecaptcha) {
-        try {
-          const token = await v3Recaptcha.executeRecaptcha('login');
-          data.recaptchaToken = token;
-        } catch {
-          // Continue without token if reCAPTCHA fails (backend will handle)
+    // Generate reCAPTCHA token based on version and enabled status
+    if (enabled) {
+      if (version === 'v2') {
+        // v2: use the checkbox token
+        if (!recaptchaToken) {
+          setServerError('Please complete the reCAPTCHA checkbox');
+          return;
+        }
+        data.recaptchaToken = recaptchaToken;
+      } else if (version === 'v3') {
+        // v3: use invisible execution
+        if (v3Recaptcha?.executeRecaptcha) {
+          try {
+            const token = await v3Recaptcha.executeRecaptcha('login');
+            data.recaptchaToken = token;
+          } catch {
+            // Continue without token if reCAPTCHA fails (backend will handle)
+          }
         }
       }
     }
@@ -159,7 +161,7 @@ export default function LoginPage() {
           </div>
 
           {/* reCAPTCHA v2 checkbox */}
-          {version === 'v2' && v2SiteKey && (
+          {enabled && version === 'v2' && v2SiteKey && (
             <div className="flex justify-center mb-4">
               <ReCAPTCHA
                 sitekey={v2SiteKey}

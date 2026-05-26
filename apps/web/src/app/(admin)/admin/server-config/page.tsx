@@ -56,13 +56,14 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
 };
 
 // ─── Server config meta ──────────────────────────────────────
-const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 'text' | 'password'; section: string }> = {
+const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 'text' | 'password' | 'select'; section: string; options?: string[] }> = {
   maintenance_mode:        { label: 'Maintenance Mode',            type: 'boolean',  section: 'Platform' },
   registration_enabled:    { label: 'Open Registration',           type: 'boolean',  section: 'Platform' },
   initial_credits:         { label: 'Welcome Credits',             type: 'number',   section: 'Platform' },
   referral_bonus_referrer: { label: 'Referral Bonus (Referrer)',   type: 'number',   section: 'Referral' },
   referral_bonus_referee:  { label: 'Referral Bonus (New User)',   type: 'number',   section: 'Referral' },
   recaptcha_enabled:       { label: 'Enable reCAPTCHA',            type: 'boolean',  section: 'reCAPTCHA' },
+  recaptcha_version:       { label: 'reCAPTCHA Version',           type: 'select',   section: 'reCAPTCHA', options: ['v2', 'v3'] },
   recaptcha_v3_site_key:   { label: 'v3 Site Key',                 type: 'text',     section: 'reCAPTCHA' },
   recaptcha_v3_secret_key: { label: 'v3 Secret Key',               type: 'password', section: 'reCAPTCHA' },
   recaptcha_v2_site_key:   { label: 'v2 Checkbox Site Key',        type: 'text',     section: 'reCAPTCHA' },
@@ -434,6 +435,16 @@ export default function ServerConfigPage() {
                                     {showConfigSecret[key] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                   </button>
                                 </div>
+                              ) : meta.type === 'select' ? (
+                                <select
+                                  value={String(currentVal ?? meta.options?.[0])}
+                                  onChange={(e) => setConfigEdits((ed) => ({ ...ed, [key]: e.target.value }))}
+                                  className="w-32 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                >
+                                  {meta.options?.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
                               ) : (
                                 <input
                                   type="text"
