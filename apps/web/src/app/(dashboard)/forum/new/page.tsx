@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Send } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { MentionTextarea } from '@/components/mention-textarea';
 import Link from 'next/link';
 
 export default function NewTopicPage() {
@@ -12,6 +13,14 @@ export default function NewTopicPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const { data: userCampaigns } = useQuery({
+    queryKey: ['user', 'campaigns'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ id: string; title: string; status: string }[]>('campaigns/my');
+      return res.data;
+    },
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: { title: string; content: string }) =>
@@ -68,14 +77,13 @@ export default function NewTopicPage() {
 
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">Content</label>
-            <textarea
+            <MentionTextarea
               value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Share your thoughts, questions, or ideas..."
-              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none"
+              onChange={setContent}
+              campaigns={userCampaigns || []}
+              placeholder="Share your thoughts, questions, or ideas... Type @ to mention your campaigns"
               rows={10}
-              maxLength={10000}
-              required
+              className="focus:outline-none focus:border-indigo-500"
             />
             <p className="text-zinc-500 text-xs mt-1">{content.length}/10000 characters</p>
           </div>

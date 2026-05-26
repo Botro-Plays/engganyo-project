@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MessageSquare, ThumbsUp, Send, Edit2, Trash2, Lock, Pin, Megaphone } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
+import { MentionTextarea } from '@/components/mention-textarea';
+import { renderContentWithMentions } from '@/lib/render-content';
 import type { ApiResponse } from '@/types';
 import Link from 'next/link';
 
@@ -21,6 +23,12 @@ interface ForumTopic {
   lockedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  campaign?: {
+    id: string;
+    title: string;
+    status: string;
+    taskType: string;
+  };
   author: {
     id: string;
     username: string;
@@ -64,7 +72,6 @@ export default function ForumTopicPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [replyContent, setReplyContent] = useState('');
-  const [selectedCampaignId, setSelectedCampaignId] = useState('');
   const [replyError, setReplyError] = useState<string | null>(null);
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -86,11 +93,10 @@ export default function ForumTopicPage() {
   });
 
   const replyMutation = useMutation({
-    mutationFn: (data: { content: string; campaignId?: string }) =>
+    mutationFn: (data: { content: string }) =>
       apiClient.post(`forum/topics/${params.id}/replies`, data),
     onSuccess: () => {
       setReplyContent('');
-      setSelectedCampaignId('');
       setReplyError(null);
       void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id] });
     },
@@ -117,7 +123,7 @@ export default function ForumTopicPage() {
   const handleReplySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyContent.trim()) return;
-    replyMutation.mutate({ content: replyContent, campaignId: selectedCampaignId || undefined });
+    replyMutation.mutate({ content: replyContent });
   };
 
   const handleEditReply = (reply: ForumReply) => {
@@ -190,35 +196,19 @@ export default function ForumTopicPage() {
             </div>
           </div>
         </div>
-        <div className="text-zinc-300 leading-relaxed whitespace-pre-wrap">{data.content}</div>
+        {renderContentWithMentions(data.content)}
       </div>
 
       {!isLocked && (
         <form onSubmit={handleReplySubmit} className="card-glass rounded-xl p-4 mb-6">
-          <textarea
+          <MentionTextarea
             value={replyContent}
-            onChange={(e) => setReplyContent(e.target.value)}
-            placeholder="Write a reply..."
-            className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none"
+            onChange={setReplyContent}
+            campaigns={userCampaigns || []}
+            placeholder="Write a reply... Type @ to mention your campaigns"
             rows={3}
+            className="focus:outline-none focus:border-indigo-500"
           />
-          {userCampaigns && userCampaigns.length > 0 && (
-            <div className="mt-3">
-              <label className="text-zinc-400 text-sm mb-1 block">Link your campaign (optional)</label>
-              <select
-                value={selectedCampaignId}
-                onChange={(e) => setSelectedCampaignId(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500"
-              >
-                <option value="">No campaign</option>
-                {userCampaigns.map((campaign) => (
-                  <option key={campaign.id} value={campaign.id}>
-                    {campaign.title} ({campaign.status})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           {replyError && <p className="text-red-400 text-sm mt-2">{replyError}</p>}
           <div className="flex justify-end mt-3">
             <button
@@ -299,7 +289,9 @@ export default function ForumTopicPage() {
                     </div>
                   </form>
                 ) : (
-                  <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
+                  <div className="text-zinc-300 leading-relaxed">
+                    {renderContentWithMentions(reply.content)}
+                  </div>
                 )}
               </div>
             </div>

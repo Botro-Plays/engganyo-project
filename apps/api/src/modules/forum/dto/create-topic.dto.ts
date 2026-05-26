@@ -1,5 +1,5 @@
-import { IsString, IsNotEmpty, MaxLength, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, MaxLength, MinLength, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class CreateTopicDto {
@@ -18,4 +18,10 @@ export class CreateTopicDto {
   @MaxLength(10000)
   @Type(() => String)
   content!: string;
+
+  @ApiPropertyOptional({ example: 'campaign-id', description: 'Optional campaign to link with this topic' })
+  @IsString()
+  @IsOptional()
+  @Type(() => String)
+  campaignId?: string;
 }
