@@ -143,16 +143,6 @@ export class ChatController {
     return this.chatService.updateConversationStatus(id, 'AI_HANDLING', user.sub);
   }
 
-  @Delete('admin/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
-  @ApiBearerAuth('access-token')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete conversation (admin only)' })
-  async deleteConversation(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.chatService.deleteConversation(id, user.sub);
-  }
-
   @Delete('admin/all')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -161,5 +151,15 @@ export class ChatController {
   @ApiOperation({ summary: 'Delete all conversations (admin only)' })
   async deleteAllConversations(@CurrentUser() user: JwtPayload) {
     return this.chatService.deleteAllConversations(user.sub);
+  }
+
+  @Delete('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete conversation (admin only)' })
+  async deleteConversation(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.chatService.deleteConversation(id, user.sub);
   }
 }
