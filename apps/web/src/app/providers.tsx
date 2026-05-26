@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
-import { GoogleReCaptcha } from 'react-google-recaptcha';
+import ReCAPTCHA from 'react-google-recaptcha';
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -21,7 +21,7 @@ interface RecaptchaContextValue {
   v2SiteKey: string | null;
   v3SiteKey: string | null;
   executeRecaptcha: ((action: string) => Promise<string>) | null;
-  recaptchaRef: React.RefObject<GoogleReCaptcha> | null;
+  recaptchaRef: React.RefObject<ReCAPTCHA> | null;
 }
 
 const RecaptchaContext = createContext<RecaptchaContextValue>({
@@ -66,7 +66,7 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
   );
   const [v2SiteKey, setV2SiteKey] = useState<string | null>(null);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
-  const recaptchaRef = useRef<GoogleReCaptcha>(null);
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   useEffect(() => {
     apiClient
@@ -118,7 +118,7 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
         {children}
         <ChatWidget />
         <div className="hidden">
-          <GoogleReCaptcha
+          <ReCAPTCHA
             ref={recaptchaRef}
             sitekey={v2SiteKey}
             onChange={(token: string | null) => setRecaptchaToken(token)}
