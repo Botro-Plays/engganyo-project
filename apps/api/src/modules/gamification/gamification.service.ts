@@ -286,7 +286,7 @@ export class GamificationService implements OnModuleInit {
 
   // ─── Claim daily reward ────────────────────────────────────
 
-  async claimDailyReward(userId: string, userTimezone?: string) {
+  async claimDailyReward(userId: string, userTimezone?: string, clientIp?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { currentStreak: true, longestStreak: true, lastDailyRewardAt: true, lastActiveAt: true },
@@ -295,6 +295,23 @@ export class GamificationService implements OnModuleInit {
 
     if (!this.isDailyRewardAvailable(user.lastDailyRewardAt)) {
       throw new BadRequestException('Daily reward already claimed today');
+    }
+
+    // Single-IP restriction: one claim per IP per UTC day
+    if (clientIp) {
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const ipClaimedByOther = await this.prisma.user.findFirst({
+        where: {
+          id: { not: userId },
+          lastClaimIp: clientIp,
+          lastDailyRewardAt: { gte: todayStart },
+        },
+        select: { id: true },
+      });
+      if (ipClaimedByOther) {
+        throw new BadRequestException('Daily reward already claimed from this network today.');
+      }
     }
 
     const now = new Date();
@@ -313,6 +330,7 @@ export class GamificationService implements OnModuleInit {
         longestStreak: newLongest,
         lastActiveAt: now,
         lastDailyRewardAt: now,
+        ...(clientIp && { lastClaimIp: clientIp }),
       },
     });
 
