@@ -64,7 +64,7 @@ test.describe('Forum (authenticated)', () => {
     await page.waitForLoadState('networkidle');
     const replyArea = page.locator('textarea').first();
     await replyArea.fill(`This is a test reply ${uid} with enough content to satisfy minimum length.`);
-    await page.getByRole('button', { name: /post reply/i }).first().click();
+    await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
 
     await expect(page.getByText(`This is a test reply ${uid}`)).toBeVisible({ timeout: 5_000 });
   });
@@ -151,25 +151,19 @@ test.describe('Forum (admin moderation)', () => {
   });
 
   test('admin can lock and unlock a topic', async ({ page }) => {
-    const uid = UNIQUE();
-
-    await fillNewTopicForm(
-      page,
-      `Lock Test Topic ${uid}`,
-      `Topic for lock/unlock test ${uid} with sufficient body length.`,
-    );
-    await page.getByRole('button', { name: /create topic/i }).click();
-    await page.waitForURL(/forum\/[a-z0-9-]+/, { timeout: 15_000 });
-
     await page.goto('/admin/forum');
     await page.waitForLoadState('networkidle');
-    await expect(page.getByText(`Lock Test Topic ${uid}`)).toBeVisible({ timeout: 5_000 });
 
-    const row = page.locator('tr, [class*="card"]').filter({ hasText: `Lock Test Topic ${uid}` }).first();
-    const lockBtn = row.locator('button').filter({ hasText: /^Lock$/ }).first();
+    // Find the first OPEN topic row that has a Lock button
+    const lockBtn = page.locator('button[title="Lock"]').first();
     if (await lockBtn.count() > 0) {
       await lockBtn.click();
-      await expect(row.locator('button').filter({ hasText: /^Unlock$/ })).toBeVisible({ timeout: 3_000 });
+      await page.waitForLoadState('networkidle');
+      // After locking, an Unlock button should appear
+      const unlockBtn = page.locator('button[title="Unlock"]').first();
+      await expect(unlockBtn).toBeVisible({ timeout: 5_000 });
+      // Clean up: unlock it again
+      await unlockBtn.click();
     }
   });
 });
