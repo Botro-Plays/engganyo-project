@@ -45,9 +45,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user account' })
   async register(
     @Body() dto: RegisterDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.register(dto, res);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? '';
+    return this.authService.register(dto, res, ip);
   }
 
   @Post('login')

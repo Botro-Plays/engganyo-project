@@ -67,7 +67,7 @@ export class AuthService {
 
   // ─── Register ──────────────────────────────────────────────
 
-  async register(dto: RegisterDto, res: Response): Promise<AuthResult> {
+  async register(dto: RegisterDto, res: Response, registrationIp?: string): Promise<AuthResult> {
     // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
     const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
     if (recaptchaEnabled) {
@@ -129,6 +129,7 @@ export class AuthService {
           referredById,
           status: initialStatus,
           creditBalance: WELCOME_CREDITS,
+          ...(registrationIp && { registrationIp }),
         },
       });
 
@@ -192,7 +193,42 @@ export class AuthService {
     await this.storeSession(tokens.refreshToken, user.id);
     this.setRefreshCookie(res, tokens.refreshToken);
 
+    // Async IP-based multi-account check (non-blocking)
+    if (registrationIp) {
+      this.checkIpMultiAccount(user.id, registrationIp).catch((err: Error) => {
+        this.logger.warn(`IP multi-account check failed for ${user.id}: ${err.message}`);
+      });
+    }
+
     return { user: this.sanitizeUser(user), accessToken: tokens.accessToken };
+  }
+
+  // ─── IP Multi-account detection (async, non-blocking) ──────
+
+  private async checkIpMultiAccount(newUserId: string, ip: string): Promise<void> {
+    const existingFromIp = await this.prisma.user.findFirst({
+      where: {
+        registrationIp: ip,
+        id: { not: newUserId },
+        OR: [
+          { status: UserStatus.SUSPENDED },
+          { abuseFlags: { some: { isResolved: false, severity: { in: ['critical', 'high'] } } } },
+        ],
+      },
+      select: { id: true, status: true },
+    });
+
+    if (existingFromIp) {
+      this.logger.warn(`Multi-account suspected: new user ${newUserId} shares registration IP ${ip} with flagged/banned account ${existingFromIp.id}`);
+      await this.prisma.abuseFlag.create({
+        data: {
+          userId: newUserId,
+          flagType: 'multi_account',
+          severity: 'high',
+          description: `Registration IP ${ip} previously used by suspended/flagged account`,
+        },
+      });
+    }
   }
 
   // ─── Login ─────────────────────────────────────────────────

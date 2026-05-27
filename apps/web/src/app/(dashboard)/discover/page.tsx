@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Coins, Users, ChevronLeft, ChevronRight, ExternalLink, Compass, AlertTriangle } from 'lucide-react';
+import {
+  Coins, Users, ExternalLink, Compass, MessageSquare,
+  Trophy, ArrowRight, Zap, Star,
+} from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
-import { formatCredits } from '@/lib/utils';
+import { formatCredits, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
 interface Campaign {
@@ -18,242 +20,246 @@ interface Campaign {
   completedSlots: number;
   pendingSlots: number;
   creditPerTask: number;
-  requiresProof: boolean;
   user: { username: string; displayName: string | null };
 }
 
-interface PaginatedCampaigns {
-  items: Campaign[];
-  meta: { total: number; page: number; totalPages: number };
+interface ForumTopic {
+  id: string;
+  title: string;
+  category: string;
+  createdAt: string;
+  author: { username: string };
+  _count: { replies: number };
 }
 
-const PLATFORMS = ['ALL', 'YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'TWITTER', 'FACEBOOK', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE'];
+interface LeaderboardEntry {
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  xp: number;
+  level: number;
+  reputationScore: number;
+}
 
 const PLATFORM_STYLES: Record<string, { color: string; bg: string; label: string }> = {
-  YOUTUBE:   { color: 'text-red-400',    bg: 'bg-red-500/10',    label: 'YouTube' },
-  TIKTOK:    { color: 'text-white',      bg: 'bg-white/10',      label: 'TikTok' },
-  INSTAGRAM: { color: 'text-pink-400',   bg: 'bg-pink-500/10',   label: 'Instagram' },
-  TWITTER:   { color: 'text-sky-400',    bg: 'bg-sky-500/10',    label: 'Twitter / X' },
-  FACEBOOK:  { color: 'text-blue-400',   bg: 'bg-blue-500/10',   label: 'Facebook' },
-  TWITCH:    { color: 'text-purple-400', bg: 'bg-purple-500/10', label: 'Twitch' },
-  SPOTIFY:   { color: 'text-green-400',  bg: 'bg-green-500/10',  label: 'Spotify' },
-  TELEGRAM:  { color: 'text-sky-300',    bg: 'bg-sky-400/10',    label: 'Telegram' },
-  DISCORD:      { color: 'text-indigo-400', bg: 'bg-indigo-500/10',  label: 'Discord' },
-  TRUSTPILOT:   { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'TrustPilot' },
-  GOOGLE:       { color: 'text-orange-400',  bg: 'bg-orange-500/10',  label: 'Google' },
+  YOUTUBE:    { color: 'text-red-400',     bg: 'bg-red-500/10',     label: 'YouTube' },
+  TIKTOK:     { color: 'text-white',       bg: 'bg-white/10',       label: 'TikTok' },
+  INSTAGRAM:  { color: 'text-pink-400',    bg: 'bg-pink-500/10',    label: 'Instagram' },
+  TWITTER:    { color: 'text-sky-400',     bg: 'bg-sky-500/10',     label: 'Twitter' },
+  FACEBOOK:   { color: 'text-blue-400',    bg: 'bg-blue-500/10',    label: 'Facebook' },
+  TWITCH:     { color: 'text-purple-400',  bg: 'bg-purple-500/10',  label: 'Twitch' },
+  SPOTIFY:    { color: 'text-green-400',   bg: 'bg-green-500/10',   label: 'Spotify' },
+  TELEGRAM:   { color: 'text-sky-300',     bg: 'bg-sky-400/10',     label: 'Telegram' },
+  DISCORD:    { color: 'text-indigo-400',  bg: 'bg-indigo-500/10',  label: 'Discord' },
+  TRUSTPILOT: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'TrustPilot' },
+  GOOGLE:     { color: 'text-orange-400',  bg: 'bg-orange-500/10',  label: 'Google' },
 };
 
 const TASK_ACTION: Record<string, string> = {
-  YOUTUBE_SUBSCRIBE: 'Subscribe', YOUTUBE_LIKE: 'Like', YOUTUBE_COMMENT: 'Comment', YOUTUBE_WATCH: 'Watch',
-  TIKTOK_FOLLOW: 'Follow', TIKTOK_LIKE: 'Like', TIKTOK_COMMENT: 'Comment',
-  INSTAGRAM_FOLLOW: 'Follow', INSTAGRAM_LIKE: 'Like', INSTAGRAM_COMMENT: 'Comment',
-  TWITTER_FOLLOW: 'Follow', TWITTER_LIKE: 'Like', TWITTER_RETWEET: 'Retweet', TWITTER_REPLY: 'Reply',
-  FACEBOOK_PAGE_LIKE: 'Page Like', FACEBOOK_POST_LIKE: 'Post Like', FACEBOOK_SHARE: 'Share',
-  TWITCH_FOLLOW: 'Follow',
-  SPOTIFY_FOLLOW: 'Follow', SPOTIFY_STREAM: 'Stream',
-  TELEGRAM_JOIN_CHANNEL: 'Join Channel', TELEGRAM_JOIN_GROUP: 'Join Group',
-  DISCORD_JOIN_SERVER: 'Join Server',
-  TRUSTPILOT_REVIEW: 'Write Review',
-  GOOGLE_REVIEW: 'Write Review',
+  YOUTUBE_SUBSCRIBE: 'Subscribe', YOUTUBE_LIKE: 'Like', YOUTUBE_COMMENT: 'Comment',
+  TIKTOK_FOLLOW: 'Follow', TIKTOK_LIKE: 'Like',
+  INSTAGRAM_FOLLOW: 'Follow', INSTAGRAM_LIKE: 'Like',
+  TWITTER_FOLLOW: 'Follow', TWITTER_LIKE: 'Like', TWITTER_RETWEET: 'Retweet',
+  FACEBOOK_PAGE_LIKE: 'Like', FACEBOOK_POST_LIKE: 'Like', FACEBOOK_SHARE: 'Share',
+  TWITCH_FOLLOW: 'Follow', SPOTIFY_FOLLOW: 'Follow',
+  TELEGRAM_JOIN_CHANNEL: 'Join', TELEGRAM_JOIN_GROUP: 'Join',
+  DISCORD_JOIN_SERVER: 'Join',
+  TRUSTPILOT_REVIEW: 'Review', GOOGLE_REVIEW: 'Review',
 };
 
-function getPlatform(taskType: string) {
-  return taskType.split('_')[0] ?? 'UNKNOWN';
-}
-
-const COUNTRY_CACHE_KEY = 'discover_country';
-const COUNTRY_CACHE_TTL = 24 * 60 * 60 * 1000;
-
-function getCachedCountry(): string | null {
-  try {
-    const code = localStorage.getItem(COUNTRY_CACHE_KEY);
-    const ts = localStorage.getItem(`${COUNTRY_CACHE_KEY}_at`);
-    if (code && ts && Date.now() - Number(ts) < COUNTRY_CACHE_TTL) return code;
-  } catch { /* ignore */ }
-  return null;
+function SectionHeader({ icon: Icon, title, href, linkLabel }: { icon: React.ElementType; title: string; href?: string; linkLabel?: string }) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-base font-semibold text-white flex items-center gap-2">
+        <Icon className="w-4 h-4 text-brand-400" />{title}
+      </h2>
+      {href && (
+        <Link href={href} className="flex items-center gap-1 text-xs text-zinc-400 hover:text-brand-400 transition-colors">
+          {linkLabel ?? 'See all'} <ArrowRight className="w-3 h-3" />
+        </Link>
+      )}
+    </div>
+  );
 }
 
 export default function DiscoverPage() {
-  const [platform, setPlatform] = useState('ALL');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [userCountry, setUserCountry] = useState<string | null>(null);
-
-  useEffect(() => {
-    const cached = getCachedCountry();
-    if (cached) { setUserCountry(cached); return; }
-    fetch('https://ipapi.co/country/')
-      .then((r) => r.text())
-      .then((code) => {
-        const c = code.trim();
-        if (c.length === 2 && /^[A-Z]{2}$/.test(c)) {
-          setUserCountry(c);
-          try {
-            localStorage.setItem(COUNTRY_CACHE_KEY, c);
-            localStorage.setItem(`${COUNTRY_CACHE_KEY}_at`, String(Date.now()));
-          } catch { /* ignore */ }
-        }
-      })
-      .catch(() => { /* fail silently — show all campaigns */ });
-  }, []);
-
-  const { data, isLoading } = useQuery<PaginatedCampaigns>({
-    queryKey: ['discover', platform, page, userCountry],
+  const { data: campaigns, isLoading: campaignsLoading } = useQuery<{ items: Campaign[] }>({
+    queryKey: ['discover', 'campaigns'],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: '12' });
-      if (platform !== 'ALL') params.set('platform', platform);
-      if (userCountry) params.set('country', userCountry);
-      const res = await apiClient.get<ApiResponse<PaginatedCampaigns>>(`tasks?${params}`);
+      const res = await apiClient.get<ApiResponse<{ items: Campaign[]; meta: unknown }>>('tasks?limit=6');
       return res.data.data;
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
-  const filtered = (data?.items ?? []).filter((c) =>
-    search === '' || c.title.toLowerCase().includes(search.toLowerCase()) ||
-    c.user.username.toLowerCase().includes(search.toLowerCase()),
-  );
+  const { data: forumData, isLoading: forumLoading } = useQuery<{ items: ForumTopic[] }>({
+    queryKey: ['discover', 'forum'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ items: ForumTopic[]; meta: unknown }>>('forum/topics?limit=5&sort=latest');
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: leaderboard, isLoading: leaderLoading } = useQuery<{ items: LeaderboardEntry[] }>({
+    queryKey: ['discover', 'leaderboard'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ items: LeaderboardEntry[] }>>('gamification/leaderboard?type=alltime&page=1');
+      return res.data.data;
+    },
+    staleTime: 120_000,
+  });
 
   return (
-    <div>
+    <div className="space-y-10">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Compass className="w-6 h-6 text-brand-400" /> Discover
-          </h1>
-          <p className="text-zinc-400 text-sm mt-1">Browse active tasks from creators across all platforms.</p>
-        </div>
-        {data && (
-          <div className="flex items-center gap-4 text-sm text-zinc-500">
-            <span><span className="text-white font-medium">{data.meta.total}</span> active tasks</span>
+      <div>
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <Compass className="w-6 h-6 text-brand-400" /> Discover
+        </h1>
+        <p className="text-zinc-400 text-sm mt-1">Explore creators, community discussions, and featured campaigns.</p>
+      </div>
+
+      {/* ── Top Creators ── */}
+      <section>
+        <SectionHeader icon={Trophy} title="Top Creators" href="/leaderboard" linkLabel="Full leaderboard" />
+        {leaderLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-24" />
+            ))}
           </div>
-        )}
-      </div>
-
-      {/* Platform ToS disclaimer */}
-      <div className="mb-5 px-3.5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
-        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-300/70 leading-relaxed">
-          <span className="font-semibold text-amber-300">Notice:</span> Participating in tasks may violate the Terms of Service of third-party platforms and could result in account restrictions or bans. Proceed at your own risk.
-        </p>
-      </div>
-
-      {/* Search + Platform filters */}
-      <div className="flex flex-col gap-3 mb-6">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tasks or creators..."
-            className="w-full pl-9 pr-3 py-2 bg-surface-hover border border-surface-border rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p}
-              onClick={() => { setPlatform(p); setPage(1); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                platform === p
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-surface-hover text-zinc-400 hover:text-white hover:bg-surface-border'
-              }`}
-            >
-              {p === 'ALL' ? 'All Platforms' : (PLATFORM_STYLES[p]?.label ?? p)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Campaign grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="card-glass rounded-xl p-4 space-y-3 animate-pulse">
-              <div className="h-3 bg-zinc-800 rounded w-1/3" />
-              <div className="h-4 bg-zinc-800 rounded w-3/4" />
-              <div className="h-3 bg-zinc-800 rounded w-full" />
-              <div className="h-8 bg-zinc-800 rounded" />
-            </div>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
-          <Compass className="w-12 h-12 text-zinc-600 mb-4" />
-          <h2 className="text-lg font-semibold text-white mb-2">No tasks found</h2>
-          <p className="text-zinc-500 text-sm">
-            {search ? 'Try a different search term.' : 'No active tasks in this category right now — check back soon.'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((c) => {
-            const plt = getPlatform(c.taskType);
-            const style = PLATFORM_STYLES[plt] ?? { color: 'text-zinc-400', bg: 'bg-zinc-500/10', label: plt };
-            const available = c.totalSlots - c.completedSlots - c.pendingSlots;
-            return (
-              <div key={c.id} className="card-glass rounded-xl p-4 flex flex-col gap-3 hover:border-brand-500/30 border border-surface-border transition-colors">
-                {/* Platform + action badge */}
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.color} ${style.bg}`}>
-                    {style.label} · {TASK_ACTION[c.taskType] ?? c.taskType}
-                  </span>
-                  <a href={c.targetUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-zinc-400 transition-colors">
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-
-                {/* Title */}
-                <div>
-                  <h3 className="font-semibold text-white text-sm leading-snug line-clamp-2">{c.title}</h3>
-                  {c.description && (
-                    <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{c.description}</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {(leaderboard?.items ?? []).slice(0, 5).map((u, idx) => (
+              <Link
+                key={u.id}
+                href={`/users/${u.username}`}
+                className="card-glass rounded-xl p-4 flex flex-col items-center text-center hover:border-brand-500/30 border border-surface-border transition-colors gap-2"
+              >
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                    {u.avatarUrl
+                      ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
+                      : (u.displayName?.[0] ?? u.username[0]).toUpperCase()}
+                  </div>
+                  {idx < 3 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 text-black text-[9px] font-bold flex items-center justify-center">
+                      {idx + 1}
+                    </span>
                   )}
                 </div>
-
-                {/* Stats */}
-                <div className="flex items-center gap-3 text-xs text-zinc-500">
-                  <span className="flex items-center gap-1 text-yellow-400 font-semibold">
-                    <Coins className="w-3.5 h-3.5" />{formatCredits(c.creditPerTask)} cr
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5" />{available.toLocaleString()} slots left
-                  </span>
+                <div>
+                  <p className="text-xs font-medium text-white truncate max-w-full">{u.displayName ?? u.username}</p>
+                  <div className="flex items-center justify-center gap-1 text-[10px] text-zinc-500 mt-0.5">
+                    <Zap className="w-2.5 h-2.5 text-brand-400" />
+                    <span>Lv {u.level}</span>
+                    <Star className="w-2.5 h-2.5 text-yellow-400 ml-1" />
+                    <span>{u.xp.toLocaleString()} XP</span>
+                  </div>
                 </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
 
-                {/* Creator */}
-                <p className="text-xs text-zinc-600">
-                  by <span className="text-zinc-400">@{c.user.username}</span>
-                  {c.user.displayName ? ` · ${c.user.displayName}` : ''}
-                </p>
+      {/* ── Community Discussions ── */}
+      <section>
+        <SectionHeader icon={MessageSquare} title="Community Discussions" href="/forum" linkLabel="Go to Forum" />
+        {forumLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-14" />
+            ))}
+          </div>
+        ) : (forumData?.items ?? []).length === 0 ? (
+          <div className="card-glass rounded-xl p-8 text-center">
+            <MessageSquare className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+            <p className="text-zinc-500 text-sm">No discussions yet. <Link href="/forum/new" className="text-brand-400 hover:underline">Start one!</Link></p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {(forumData?.items ?? []).map((t) => (
+              <Link
+                key={t.id}
+                href={`/forum/${t.id}`}
+                className="card-glass rounded-xl px-4 py-3 flex items-center gap-3 hover:border-brand-500/20 border border-surface-border transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{t.title}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    <span className="text-zinc-400">@{t.author.username}</span>
+                    {' · '}{formatRelativeTime(t.createdAt)}
+                    {' · '}<span className="text-zinc-500">{t.category}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
+                  <MessageSquare className="w-3 h-3" />
+                  {t._count.replies}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
 
-                {/* CTA */}
-                <Link
-                  href="/tasks"
-                  className="mt-auto w-full text-center py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition-colors"
-                >
-                  {available > 0 ? 'Claim Task' : 'View Task'}
-                </Link>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {(data?.meta.totalPages ?? 0) > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-6 text-sm text-zinc-500">
-          <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1} className="p-1.5 rounded hover:bg-surface-hover disabled:opacity-40">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span>Page {page} / {data?.meta.totalPages}</span>
-          <button onClick={() => setPage((p) => p + 1)} disabled={page >= (data?.meta.totalPages ?? 1)} className="p-1.5 rounded hover:bg-surface-hover disabled:opacity-40">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* ── Featured Campaigns ── */}
+      <section>
+        <SectionHeader icon={Coins} title="Featured Campaigns" href="/tasks" linkLabel="Browse all tasks" />
+        {campaignsLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-28" />
+            ))}
+          </div>
+        ) : (campaigns?.items ?? []).length === 0 ? (
+          <div className="card-glass rounded-xl p-8 text-center">
+            <Users className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+            <p className="text-zinc-500 text-sm">No active campaigns right now.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {(campaigns?.items ?? []).map((c) => {
+              const plt = c.taskType.split('_')[0] ?? 'UNKNOWN';
+              const style = PLATFORM_STYLES[plt] ?? { color: 'text-zinc-400', bg: 'bg-zinc-500/10', label: plt };
+              const available = c.totalSlots - c.completedSlots - c.pendingSlots;
+              return (
+                <div key={c.id} className="card-glass rounded-xl p-4 flex flex-col gap-3 border border-surface-border hover:border-brand-500/30 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.color} ${style.bg}`}>
+                      {style.label} · {TASK_ACTION[c.taskType] ?? c.taskType}
+                    </span>
+                    <a href={c.targetUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-zinc-400 transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white text-sm line-clamp-2">{c.title}</h3>
+                    {c.description && <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{c.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-zinc-500">
+                    <span className="flex items-center gap-1 text-yellow-400 font-semibold">
+                      <Coins className="w-3.5 h-3.5" />{formatCredits(c.creditPerTask)} cr
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" />{available.toLocaleString()} left
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-600">by <Link href={`/users/${c.user.username}`} className="text-zinc-400 hover:text-brand-400">@{c.user.username}</Link></p>
+                  <Link
+                    href="/tasks"
+                    className="mt-auto w-full text-center py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition-colors"
+                  >
+                    Go to Tasks
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

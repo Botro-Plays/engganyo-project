@@ -237,6 +237,7 @@ model User {
   lastActiveAt      DateTime? @map("last_active_at")
   lastDailyRewardAt DateTime? @map("last_daily_reward_at")
   lastClaimIp       String?   @map("last_claim_ip") @db.VarChar(45)
+  registrationIp    String?   @map("registration_ip") @db.VarChar(45)
 
   // Referral
   referralCode String  @unique @map("referral_code")
