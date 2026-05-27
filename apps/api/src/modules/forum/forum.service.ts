@@ -46,6 +46,7 @@ export class ForumService {
       },
       select: {
         id: true,
+        username: true,
         profile: {
           select: {
             allowMentions: true,
@@ -56,7 +57,7 @@ export class ForumService {
 
     for (const user of mentionedUsers) {
       if (user.profile?.allowMentions === false) {
-        throw new ForbiddenException(`User ${user.id} has disabled mentions`);
+        throw new ForbiddenException(`@${user.username} has disabled mentions`);
       }
     }
   }
@@ -73,12 +74,17 @@ export class ForumService {
     
     // Admins can see all statuses, regular users see OPEN, PINNED, and LOCKED
     const isAdmin = userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN || userRole === UserRole.MODERATOR;
-    
+
+    // Build visibility filter: non-admins can never see HIDDEN topics
+    const visibilityFilter = isAdmin
+      ? {}
+      : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED, ForumTopicStatus.LOCKED] } };
+
     const where = isValidStatus
-      ? { status: status as ForumTopicStatus }
+      ? { ...visibilityFilter, status: status as ForumTopicStatus }
       : isAdmin
-        ? {} // Admins see all topics when no status filter
-        : { status: { in: [ForumTopicStatus.OPEN, ForumTopicStatus.PINNED, ForumTopicStatus.LOCKED] } };
+        ? {}
+        : visibilityFilter;
 
     const [items, total] = await Promise.all([
       this.prisma.forumTopic.findMany({
@@ -144,6 +150,30 @@ export class ForumService {
             updatedAt: true,
             author: {
               select: { id: true, username: true, displayName: true, avatarUrl: true },
+            },
+            campaign: {
+              select: { id: true, title: true, status: true, taskType: true },
+            },
+            childReplies: {
+              select: {
+                id: true,
+                content: true,
+                isEdited: true,
+                editedAt: true,
+                createdAt: true,
+                updatedAt: true,
+                parentReplyId: true,
+                author: {
+                  select: { id: true, username: true, displayName: true, avatarUrl: true },
+                },
+                campaign: {
+                  select: { id: true, title: true, status: true, taskType: true },
+                },
+                _count: {
+                  select: { childReplies: true, reactions: true },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
             },
             _count: {
               select: { childReplies: true, reactions: true },
@@ -387,36 +417,35 @@ export class ForumService {
       }
     }
 
-    const reply = await this.prisma.forumReply.create({
-      data: {
-        content: dto.content,
-        topicId,
-        authorId: userId,
-        parentReplyId: dto.parentReplyId,
-        campaignId: dto.campaignId,
-      },
-      select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        campaign: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            taskType: true,
+    const reply = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.forumReply.create({
+        data: {
+          content: dto.content,
+          topicId,
+          authorId: userId,
+          parentReplyId: dto.parentReplyId,
+          campaignId: dto.campaignId,
+        },
+        select: {
+          id: true,
+          content: true,
+          createdAt: true,
+          parentReplyId: true,
+          campaign: {
+            select: { id: true, title: true, status: true, taskType: true },
+          },
+          author: {
+            select: { id: true, username: true, displayName: true, avatarUrl: true },
           },
         },
-        author: {
-          select: { id: true, username: true, displayName: true, avatarUrl: true },
-        },
-      },
-    });
+      });
 
-    // Increment reply count
-    await this.prisma.forumTopic.update({
-      where: { id: topicId },
-      data: { replyCount: { increment: 1 } },
+      await tx.forumTopic.update({
+        where: { id: topicId },
+        data: { replyCount: { increment: 1 } },
+      });
+
+      return created;
     });
 
     return reply;
@@ -473,14 +502,12 @@ export class ForumService {
       throw new ForbiddenException('You can only delete your own replies');
     }
 
-    await this.prisma.forumReply.delete({
-      where: { id },
-    });
-
-    // Decrement reply count
-    await this.prisma.forumTopic.update({
-      where: { id: reply.topicId },
-      data: { replyCount: { decrement: 1 } },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.forumReply.delete({ where: { id } });
+      await tx.forumTopic.update({
+        where: { id: reply.topicId },
+        data: { replyCount: { decrement: 1 } },
+      });
     });
 
     return { success: true };
@@ -554,13 +581,8 @@ export class ForumService {
   // ─── Admin Actions ─────────────────────────────────────────
 
   async lockTopic(id: string, adminId: string) {
-    const topic = await this.prisma.forumTopic.findUnique({
-      where: { id },
-    });
-
-    if (!topic) {
-      throw new NotFoundException('Topic not found');
-    }
+    const topic = await this.prisma.forumTopic.findUnique({ where: { id } });
+    if (!topic) throw new NotFoundException('Topic not found');
 
     const updated = await this.prisma.forumTopic.update({
       where: { id },
@@ -578,6 +600,35 @@ export class ForumService {
         entityType: 'ForumTopic',
         entityId: id,
         metadata: { previousStatus: topic.status },
+      },
+    });
+
+    return updated;
+  }
+
+  async unlockTopic(id: string, adminId: string) {
+    const topic = await this.prisma.forumTopic.findUnique({ where: { id } });
+    if (!topic) throw new NotFoundException('Topic not found');
+
+    if (topic.status !== ForumTopicStatus.LOCKED) {
+      throw new BadRequestException('Topic is not locked');
+    }
+
+    // Restore to PINNED if it was pinned before locking, otherwise OPEN
+    const restoreStatus = topic.isPinned ? ForumTopicStatus.PINNED : ForumTopicStatus.OPEN;
+
+    const updated = await this.prisma.forumTopic.update({
+      where: { id },
+      data: { status: restoreStatus, lockedAt: null, lockedBy: null },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'forum.topic_unlocked',
+        entityType: 'ForumTopic',
+        entityId: id,
+        metadata: { restoredStatus: restoreStatus },
       },
     });
 
@@ -704,17 +755,14 @@ export class ForumService {
       select: { topicId: true },
     });
 
-    if (!reply) {
-      throw new NotFoundException('Reply not found');
-    }
+    if (!reply) throw new NotFoundException('Reply not found');
 
-    await this.prisma.forumReply.delete({
-      where: { id },
-    });
-
-    await this.prisma.forumTopic.update({
-      where: { id: reply.topicId },
-      data: { replyCount: { decrement: 1 } },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.forumReply.delete({ where: { id } });
+      await tx.forumTopic.update({
+        where: { id: reply.topicId },
+        data: { replyCount: { decrement: 1 } },
+      });
     });
 
     await this.prisma.auditLog.create({
@@ -727,5 +775,45 @@ export class ForumService {
     });
 
     return { success: true };
+  }
+
+  // ─── Reaction Listing ──────────────────────────────────────
+
+  async getTopicReactions(topicId: string) {
+    const topic = await this.prisma.forumTopic.findUnique({
+      where: { id: topicId },
+      select: { id: true },
+    });
+    if (!topic) throw new NotFoundException('Topic not found');
+
+    return this.prisma.forumReaction.findMany({
+      where: { topicId },
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        user: { select: { id: true, username: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getReplyReactions(replyId: string) {
+    const reply = await this.prisma.forumReply.findUnique({
+      where: { id: replyId },
+      select: { id: true },
+    });
+    if (!reply) throw new NotFoundException('Reply not found');
+
+    return this.prisma.forumReaction.findMany({
+      where: { replyId },
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        user: { select: { id: true, username: true, avatarUrl: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 }

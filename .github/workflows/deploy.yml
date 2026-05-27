@@ -342,9 +342,21 @@ jobs:
             # Clean up images made dangling by this deploy (old :latest replaced by new :latest)
             docker image prune -f
 
-            sleep 8
+            # Wait for API to be healthy before running migrations
+            echo "Waiting for API to be ready..."
+            for i in $(seq 1 30); do
+              if docker compose exec -T api node -e "process.exit(0)" 2>/dev/null; then
+                STATUS=$(docker compose exec -T api wget -qO- http://localhost:3001/api/health 2>/dev/null | grep -c '"status"' || true)
+                if [ "$STATUS" -ge 1 ]; then
+                  echo "API is ready after ${i}s"
+                  break
+                fi
+              fi
+              echo "  attempt $i/30..."
+              sleep 2
+            done
 
-            docker compose exec -T api npx prisma migrate deploy
+            docker compose exec -T api node_modules/.bin/prisma migrate deploy
 
             if [ ! -f ".seeded" ]; then
               echo "Running initial database seed..."

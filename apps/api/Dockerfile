@@ -1,11 +1,11 @@
 # ─── Build Stage ──────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
 # Install all dependencies (dev needed for build)
 COPY package*.json ./
-RUN npm install && npm cache clean --force
+RUN npm ci && npm cache clean --force
 
 # Copy source
 COPY . .
@@ -17,7 +17,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # ─── Production Stage ─────────────────────────────────────────────────────────
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 
 RUN apk add --no-cache dumb-init openssl
 

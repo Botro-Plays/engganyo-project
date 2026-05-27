@@ -5,6 +5,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../../modules/auth/interfaces/jwt-payload.interface';
+import { UserRateLimitGuard, UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { ForumService } from './forum.service';
 import { CreateTopicDto } from './dto/create-topic.dto';
 import { UpdateTopicDto } from './dto/update-topic.dto';
@@ -62,7 +63,8 @@ export class ForumController {
   // ─── Authenticated Endpoints ───────────────────────────────
 
   @Post('topics')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UserRateLimitGuard)
+  @UserRateLimit({ limit: 5, ttl: 3600, scope: 'forum_create_topic' })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create forum topic' })
@@ -89,7 +91,8 @@ export class ForumController {
   }
 
   @Post('topics/:id/replies')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UserRateLimitGuard)
+  @UserRateLimit({ limit: 20, ttl: 3600, scope: 'forum_create_reply' })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create reply to topic' })
@@ -115,8 +118,17 @@ export class ForumController {
     return this.forumService.deleteReply(id, user.sub, user.role);
   }
 
-  @Post('topics/:id/reactions')
+  @Get('topics/:id/reactions')
   @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get reactions for a topic' })
+  getTopicReactions(@Param('id') topicId: string) {
+    return this.forumService.getTopicReactions(topicId);
+  }
+
+  @Post('topics/:id/reactions')
+  @UseGuards(JwtAuthGuard, UserRateLimitGuard)
+  @UserRateLimit({ limit: 60, ttl: 60, scope: 'forum_react' })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'React to topic' })
@@ -124,8 +136,17 @@ export class ForumController {
     return this.forumService.createReaction(topicId, null, user.sub, dto);
   }
 
-  @Post('replies/:id/reactions')
+  @Get('replies/:id/reactions')
   @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get reactions for a reply' })
+  getReplyReactions(@Param('id') replyId: string) {
+    return this.forumService.getReplyReactions(replyId);
+  }
+
+  @Post('replies/:id/reactions')
+  @UseGuards(JwtAuthGuard, UserRateLimitGuard)
+  @UserRateLimit({ limit: 60, ttl: 60, scope: 'forum_react' })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'React to reply' })
@@ -162,6 +183,16 @@ export class ForumController {
   @ApiOperation({ summary: 'Pin/unpin forum topic (admin only)' })
   pinTopic(@CurrentUser() admin: JwtPayload, @Param('id') id: string) {
     return this.forumService.pinTopic(id, admin.sub);
+  }
+
+  @Patch('admin/topics/:id/unlock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unlock forum topic (admin only)' })
+  unlockTopic(@CurrentUser() admin: JwtPayload, @Param('id') id: string) {
+    return this.forumService.unlockTopic(id, admin.sub);
   }
 
   @Patch('admin/topics/:id/hide')

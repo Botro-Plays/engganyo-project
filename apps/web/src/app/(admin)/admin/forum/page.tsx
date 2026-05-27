@@ -48,6 +48,15 @@ export default function AdminForumPage() {
     onError: (err) => setActionError(getApiErrorMessage(err)),
   });
 
+  const unlockMutation = useMutation({
+    mutationFn: (id: string) => apiClient.patch(`forum/admin/topics/${id}/unlock`),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'forum'] });
+    },
+    onError: (err) => setActionError(getApiErrorMessage(err)),
+  });
+
   const pinMutation = useMutation({
     mutationFn: (id: string) => apiClient.patch(`forum/admin/topics/${id}/pin`),
     onSuccess: () => {
@@ -138,14 +147,25 @@ export default function AdminForumPage() {
                   >
                     View
                   </Link>
-                  <button
-                    onClick={() => lockMutation.mutate(topic.id)}
-                    disabled={lockMutation.isPending}
-                    className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                    title={topic.status === 'LOCKED' ? 'Unlock' : 'Lock'}
-                  >
-                    <Lock className="w-4 h-4" />
-                  </button>
+                  {topic.status === 'LOCKED' ? (
+                    <button
+                      onClick={() => unlockMutation.mutate(topic.id)}
+                      disabled={unlockMutation.isPending}
+                      className="p-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-colors disabled:opacity-50"
+                      title="Unlock"
+                    >
+                      <Lock className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => lockMutation.mutate(topic.id)}
+                      disabled={lockMutation.isPending}
+                      className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                      title="Lock"
+                    >
+                      <Lock className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => pinMutation.mutate(topic.id)}
                     disabled={pinMutation.isPending}
