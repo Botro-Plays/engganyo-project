@@ -128,6 +128,7 @@ export default function CampaignsPage() {
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [page, setPage] = useState(1);
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'finished' | 'cancelled'>('all');
   const [reviewingCampaign, setReviewingCampaign] = useState<Campaign | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
 
@@ -135,7 +136,7 @@ export default function CampaignsPage() {
     queryKey: ['campaigns', 'my', page],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CampaignsResponse>>(
-        `campaigns?page=${page}&limit=10`,
+        `campaigns?page=${page}&limit=50`,
       );
       return res.data.data;
     },
@@ -460,21 +461,73 @@ export default function CampaignsPage() {
         </div>
       )}
 
-      {/* ── Campaign list ── */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-24" />
-          ))}
-        </div>
-      ) : !data?.items.length ? (
-        <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
-          <p className="text-zinc-500 text-sm">No campaigns yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">Create one to start getting real engagement.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {data.items.map((c) => {
+      {/* ── Tabs ── */}
+      {(() => {
+        const TAB_GROUPS: Record<string, string[]> = {
+          all:       ['ACTIVE','PAUSED','PENDING_REVIEW','DRAFT','COMPLETED','CANCELLED','REJECTED'],
+          active:    ['ACTIVE','PAUSED','PENDING_REVIEW','DRAFT'],
+          finished:  ['COMPLETED'],
+          cancelled: ['CANCELLED','REJECTED'],
+        };
+        const tabs = [
+          { key: 'all',       label: 'All' },
+          { key: 'active',    label: 'Active' },
+          { key: 'finished',  label: 'Finished' },
+          { key: 'cancelled', label: 'Cancelled' },
+        ] as const;
+        const allItems = data?.items ?? [];
+        const filteredItems = allItems.filter((c) => TAB_GROUPS[activeTab].includes(c.status));
+        const counts: Record<string, number> = {
+          all:       allItems.length,
+          active:    allItems.filter((c) => TAB_GROUPS.active.includes(c.status)).length,
+          finished:  allItems.filter((c) => TAB_GROUPS.finished.includes(c.status)).length,
+          cancelled: allItems.filter((c) => TAB_GROUPS.cancelled.includes(c.status)).length,
+        };
+
+        return (
+          <>
+            <div className="flex gap-1 mb-4 border-b border-zinc-800 overflow-x-auto pb-0.5">
+              {tabs.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                    activeTab === key
+                      ? 'border-brand-500 text-white'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {label}
+                  {counts[key] > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      activeTab === key ? 'bg-brand-500/20 text-brand-300' : 'bg-zinc-800 text-zinc-600'
+                    }`}>
+                      {counts[key]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Campaign list ── */}
+            {isLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-24" />
+                ))}
+              </div>
+            ) : !filteredItems.length ? (
+              <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
+                <p className="text-zinc-500 text-sm">
+                  {allItems.length === 0 ? 'No campaigns yet.' : `No ${activeTab === 'all' ? '' : activeTab + ' '}campaigns.`}
+                </p>
+                {allItems.length === 0 && (
+                  <p className="text-zinc-600 text-xs mt-1">Create one to start getting real engagement.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredItems.map((c) => {
             const cfg = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.DRAFT;
             const StatusIcon = cfg.icon;
             const progress = c.totalSlots > 0 ? (c.completedSlots / c.totalSlots) * 100 : 0;
@@ -561,8 +614,11 @@ export default function CampaignsPage() {
               </div>
             );
           })}
-        </div>
-      )}
+              </div>
+            )}
+          </>
+        );
+      })()}
       {/* ── Submissions review modal ── */}
       {reviewingCampaign && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
