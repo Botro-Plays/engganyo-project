@@ -94,4 +94,9 @@
     background-color: hsl(var(--border));
     border-radius: 3px;
   }
+
+  /* Push reCAPTCHA badge above the chat widget button (bottom-right corner) */
+  .grecaptcha-badge {
+    bottom: 90px !important;
+  }
 }

@@ -27,7 +27,13 @@ const PLATFORM_CONFIGS: Partial<Record<SocialPlatform, PlatformOAuthConfig>> = {
   [SocialPlatform.YOUTUBE]: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: ['https://www.googleapis.com/auth/youtube', 'openid', 'profile'],
+    scopes: [
+      'https://www.googleapis.com/auth/youtube',
+      'https://www.googleapis.com/auth/youtube.readonly',
+      'https://www.googleapis.com/auth/youtube.force-ssl',
+      'openid',
+      'profile',
+    ],
     clientIdEnv: 'GOOGLE_CLIENT_ID',
     clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
   },
@@ -420,8 +426,8 @@ export class SocialAuthService {
     if (!res.ok) {
       const errorText = await res.text();
       // Check for scope insufficient error
-      if (res.status === 403 && errorText.includes('insufficient authentication scopes')) {
-        throw new BadRequestException('YouTube permission insufficient. Please disconnect and re-link your YouTube account in Settings > Connected Accounts to update permissions.');
+      if (res.status === 403 && (errorText.toLowerCase().includes('insufficient') || res.status === 403)) {
+        throw new BadRequestException('YouTube permission insufficient. Please go to Settings > Connected Accounts, disconnect YouTube, then reconnect it to grant the required permissions.');
       }
       throw new BadRequestException(`YouTube API error (${res.status}): ${errorText}`);
     }
