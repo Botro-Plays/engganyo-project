@@ -1,13 +1,10 @@
 import { Module } from '@nestjs/common';
+import { NotificationsController } from './notifications.controller';
+import { NotificationsService } from './notifications.service';
 
-/**
- * NotificationsModule — Phase 8
- * Handles: in-app notifications, WebSocket push, email notifications
- */
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  controllers: [NotificationsController],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
 })
 export class NotificationsModule {}

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MessageSquare, ThumbsUp, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import { MentionTextarea } from '@/components/mention-textarea';
@@ -85,6 +85,8 @@ export default function ForumTopicPage() {
   const [editingTopic, setEditingTopic] = useState(false);
   const [editTopicTitle, setEditTopicTitle] = useState('');
   const [editTopicContent, setEditTopicContent] = useState('');
+  const [replyingTo, setReplyingTo] = useState<{ id: string; content: string; author: { username: string } } | null>(null);
+  const replyFormRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['forum', 'topic', params.id],
@@ -162,11 +164,12 @@ export default function ForumTopicPage() {
   });
 
   const replyMutation = useMutation({
-    mutationFn: (data: { content: string }) =>
+    mutationFn: (data: { content: string; parentReplyId?: string }) =>
       apiClient.post(`forum/topics/${params.id}/replies`, data),
     onSuccess: () => {
       setReplyContent('');
       setReplyError(null);
+      setReplyingTo(null);
       void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id] });
     },
     onError: (err) => setReplyError(getApiErrorMessage(err)),
@@ -189,10 +192,15 @@ export default function ForumTopicPage() {
     },
   });
 
+  const handleReplyTo = (reply: { id: string; content: string; author: { username: string } }) => {
+    setReplyingTo(reply);
+    setTimeout(() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
+  };
+
   const handleReplySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyContent.trim()) return;
-    replyMutation.mutate({ content: replyContent });
+    replyMutation.mutate({ content: replyContent, parentReplyId: replyingTo?.id });
   };
 
   const handleEditReply = (reply: ForumReply) => {
@@ -340,7 +348,7 @@ export default function ForumTopicPage() {
           </Link>
         )}
 
-        <div className="flex items-center gap-1 pt-3 border-t border-zinc-700/50">
+        <div className="flex items-center gap-2 pt-3 border-t border-zinc-700/50 flex-wrap">
           {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => (
             <button
               key={type}
@@ -356,42 +364,25 @@ export default function ForumTopicPage() {
               {reactionCounts[type] ? <span className="text-xs">{reactionCounts[type]}</span> : null}
             </button>
           ))}
+          {!isLocked && (
+            <button
+              onClick={() => { setReplyingTo(null); setTimeout(() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50); }}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 transition-colors"
+            >
+              <CornerDownRight className="w-3.5 h-3.5" />
+              Reply
+            </button>
+          )}
         </div>
       </div>
 
-      {!isLocked && (
-        <form onSubmit={handleReplySubmit} className="card-glass rounded-xl p-4 mb-6">
-          <MentionTextarea
-            value={replyContent}
-            onChange={setReplyContent}
-            campaigns={userCampaigns || []}
-            onUserSearch={handleUserSearch}
-            placeholder="Write a reply... Type ! for campaigns, @ for users"
-            rows={3}
-            className="focus:outline-none focus:border-indigo-500"
-          />
-          {replyError && <p className="text-red-400 text-sm mt-2">{replyError}</p>}
-          <div className="flex justify-end mt-3">
-            <button
-              type="submit"
-              disabled={replyMutation.isPending || !replyContent.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-            >
-              <Send className="w-4 h-4" />
-              {replyMutation.isPending ? 'Sending...' : 'Reply'}
-            </button>
+      <div className="space-y-4 mt-6">
+        {!data.replies.length && (
+          <div className="card-glass rounded-xl p-8 text-center">
+            <MessageSquare className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+            <p className="text-zinc-400">No replies yet. Be the first to respond!</p>
           </div>
-        </form>
-      )}
-
-      {isLocked && (
-        <div className="card-glass rounded-xl p-4 mb-6 text-center">
-          <Lock className="w-5 h-5 text-yellow-400 mx-auto mb-2" />
-          <p className="text-zinc-400 text-sm">This topic is locked and no longer accepts replies</p>
-        </div>
-      )}
-
-      <div className="space-y-4">
+        )}
         {data.replies.map((reply) => (
           <div key={reply.id}>
             <ReplyCard
@@ -406,10 +397,11 @@ export default function ForumTopicPage() {
               onUpdateReply={handleUpdateReply}
               onDeleteReply={(id) => deleteReplyMutation.mutate(id)}
               onReact={(replyId, type) => replyReactionMutation.mutate({ replyId, type })}
+              onReply={handleReplyTo}
               updatePending={updateReplyMutation.isPending}
             />
             {(reply.childReplies ?? []).length > 0 && (
-              <div className="ml-8 mt-2 space-y-2 border-l-2 border-zinc-700/50 pl-4">
+              <div className="ml-8 mt-2 space-y-2 border-l-2 border-indigo-500/20 pl-4">
                 {(reply.childReplies ?? []).map((child) => (
                   <ReplyCard
                     key={child.id}
@@ -424,8 +416,10 @@ export default function ForumTopicPage() {
                     onUpdateReply={handleUpdateReply}
                     onDeleteReply={(id) => deleteReplyMutation.mutate(id)}
                     onReact={(replyId, type) => replyReactionMutation.mutate({ replyId, type })}
+                    onReply={handleReplyTo}
                     updatePending={updateReplyMutation.isPending}
                     isChild
+                    parentReply={{ content: reply.content, author: reply.author }}
                   />
                 ))}
               </div>
@@ -434,12 +428,65 @@ export default function ForumTopicPage() {
         ))}
       </div>
 
-      {!data.replies.length && (
-        <div className="card-glass rounded-xl p-8 text-center">
-          <MessageSquare className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-          <p className="text-zinc-400">No replies yet. Be the first to respond!</p>
-        </div>
-      )}
+      <div ref={replyFormRef} className="sticky bottom-4 z-10 mt-6 pb-2">
+        {isLocked ? (
+          <div className="card-glass rounded-xl p-4 text-center shadow-lg">
+            <Lock className="w-5 h-5 text-yellow-400 mx-auto mb-2" />
+            <p className="text-zinc-400 text-sm">This topic is locked and no longer accepts replies</p>
+          </div>
+        ) : (
+          <>
+            {replyingTo && (
+              <div className="mb-2 border-l-4 border-indigo-500/60 bg-zinc-800/90 rounded-r-lg px-3 py-2 flex items-start justify-between gap-3 backdrop-blur-sm">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-indigo-400 mb-0.5">
+                    <CornerDownRight className="w-3 h-3 inline mr-1" />
+                    Replying to @{replyingTo.author.username}
+                  </p>
+                  <p className="text-xs text-zinc-400 line-clamp-1">
+                    {replyingTo.content
+                      .replace(/@\[([^\]]+)\]\(user:[^)]+\)/g, '@$1')
+                      .replace(/!\[([^\]]+)\]\(campaign:[^)]+\)/g, '[$1]')
+                      .substring(0, 120)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setReplyingTo(null)}
+                  className="flex-shrink-0 text-zinc-500 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <form onSubmit={handleReplySubmit} className="card-glass rounded-xl p-4 shadow-xl">
+              <MentionTextarea
+                value={replyContent}
+                onChange={setReplyContent}
+                campaigns={userCampaigns || []}
+                onUserSearch={handleUserSearch}
+                placeholder="Write a reply... Type ! for campaigns, @ for users"
+                rows={3}
+                className="focus:outline-none focus:border-indigo-500"
+              />
+              {replyError && (
+                <p className={`text-sm mt-2 ${replyError.includes('disabled mentions') || replyError.includes('has disabled') ? 'text-amber-400' : 'text-red-400'}`}>
+                  {replyError}
+                </p>
+              )}
+              <div className="flex justify-end mt-3">
+                <button
+                  type="submit"
+                  disabled={replyMutation.isPending || !replyContent.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  {replyMutation.isPending ? 'Sending...' : 'Reply'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -456,21 +503,34 @@ interface ReplyCardProps {
   onUpdateReply: (e: React.FormEvent) => void;
   onDeleteReply: (id: string) => void;
   onReact: (replyId: string, type: ReactionType) => void;
+  onReply: (reply: { id: string; content: string; author: { username: string } }) => void;
   updatePending: boolean;
   isChild?: boolean;
+  parentReply?: { content: string; author: { username: string } };
 }
 
 function ReplyCard({
   reply, currentUserId, isTopicLocked,
   editingReplyId, editContent, setEditContent, setEditingReplyId,
-  onEditReply, onUpdateReply, onDeleteReply, onReact,
-  updatePending, isChild = false,
+  onEditReply, onUpdateReply, onDeleteReply, onReact, onReply,
+  updatePending, isChild = false, parentReply,
 }: ReplyCardProps) {
   const isOwner = currentUserId === reply.author.id;
   const isEditing = editingReplyId === reply.id;
 
+  const stripMentions = (text: string) =>
+    text
+      .replace(/@\[([^\]]+)\]\(user:[^)]+\)/g, '@$1')
+      .replace(/!\[([^\]]+)\]\(campaign:[^)]+\)/g, '[$1]');
+
   return (
     <div className={`card-glass rounded-xl p-4 ${isChild ? 'bg-zinc-900/30' : ''}`}>
+      {parentReply && (
+        <div className="mb-3 border-l-2 border-zinc-600/50 bg-zinc-900/50 rounded-r-lg px-2.5 py-1.5">
+          <p className="text-xs text-zinc-500 mb-0.5">↩ @{parentReply.author.username}</p>
+          <p className="text-xs text-zinc-500 line-clamp-1">{stripMentions(parentReply.content).substring(0, 120)}</p>
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0">
           <div className={`rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white font-medium ${isChild ? 'w-7 h-7 text-xs' : 'w-8 h-8 text-sm'}`}>
@@ -548,7 +608,7 @@ function ReplyCard({
             </div>
           )}
 
-          <div className="flex items-center gap-1 mt-2 pt-2 border-t border-zinc-700/30">
+          <div className="flex items-center gap-1 mt-2 pt-2 border-t border-zinc-700/30 flex-wrap">
             {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => (
               <button
                 key={type}
@@ -560,6 +620,15 @@ function ReplyCard({
             ))}
             {reply._count.reactions > 0 && (
               <span className="text-xs text-zinc-500 ml-1">{reply._count.reactions} reaction{reply._count.reactions !== 1 ? 's' : ''}</span>
+            )}
+            {!isTopicLocked && !isEditing && (
+              <button
+                onClick={() => onReply({ id: reply.id, content: reply.content, author: reply.author })}
+                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-xs text-zinc-400 hover:text-indigo-400 transition-colors"
+              >
+                <CornerDownRight className="w-3 h-3" />
+                Reply
+              </button>
             )}
           </div>
         </div>

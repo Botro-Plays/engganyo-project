@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { ForumTopicStatus, TrustLevel, UserRole } from '@prisma/client';
+import { ForumTopicStatus, NotificationType, TrustLevel, UserRole } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CreateTopicDto } from './dto/create-topic.dto';
 import type { UpdateTopicDto } from './dto/update-topic.dto';
 import type { CreateReplyDto } from './dto/create-reply.dto';
@@ -10,7 +11,47 @@ import type { ListTopicsDto } from './dto/list-topics.dto';
 
 @Injectable()
 export class ForumService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
+
+  // ─── Helper: Send mention notifications ──────────────────────────
+
+  private async sendMentionNotifications(
+    content: string,
+    authorId: string,
+    topicId: string,
+    replyId?: string,
+  ): Promise<void> {
+    const mentionRegex = /@\[([^\]]+)\]\(user:([a-zA-Z0-9-]+)\)/g;
+    const mentionedIds = new Set<string>();
+    let match;
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      if (match[2] !== authorId) mentionedIds.add(match[2]);
+    }
+
+    if (mentionedIds.size === 0) return;
+
+    const author = await this.prisma.user.findUnique({
+      where: { id: authorId },
+      select: { username: true, displayName: true },
+    });
+    const authorName = author?.displayName ?? author?.username ?? 'Someone';
+
+    await Promise.all(
+      Array.from(mentionedIds).map((userId) =>
+        this.notifications.createNotification(
+          userId,
+          NotificationType.FORUM_MENTION,
+          'You were mentioned',
+          `${authorName} mentioned you in a forum ${replyId ? 'reply' : 'topic'}`,
+          { topicId, ...(replyId && { replyId }) },
+        ).catch(() => undefined), // fire-and-forget: never block the main action
+      ),
+    );
+  }
 
   // ─── Helper: Validate user mentions ─────────────────────────────
 
@@ -266,6 +307,8 @@ export class ForumService {
       },
     });
 
+    void this.sendMentionNotifications(dto.content, userId, topic.id);
+
     return topic;
   }
 
@@ -447,6 +490,8 @@ export class ForumService {
 
       return created;
     });
+
+    void this.sendMentionNotifications(dto.content, userId, topicId, reply.id);
 
     return reply;
   }

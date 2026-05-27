@@ -11,7 +11,6 @@ import {
   Trophy,
   Settings,
   LogOut,
-  Bell,
   AlertTriangle,
   ShieldAlert,
   MessageSquare,
@@ -20,6 +19,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
 import { AuthGuard } from '@/components/auth-guard';
 import { AuthenticatedProviders } from '@/app/providers';
+import { NotificationBell } from '@/components/notification-bell';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -126,9 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <img src="/logo-horizontal.svg" alt="Engganyo" className="h-7" />
           </Link>
           <div className="flex items-center gap-3">
-            <button className="relative w-9 h-9 rounded-lg border border-surface-border hover:bg-surface-hover flex items-center justify-center text-zinc-400 hover:text-white transition-all">
-              <Bell className="w-4 h-4" />
-            </button>
+            <NotificationBell />
 
             {user && (
               <Link href="/profile" className="flex items-center gap-2 group">

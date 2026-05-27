@@ -75,52 +75,41 @@ export function renderContentWithMentions(
       const campaignTitle = match[2];
       const campaignId = match[3];
       const campaign = campaignData?.get(campaignId);
+      const displayTitle = campaign?.title ?? campaignTitle;
+      const isActive = campaign
+        ? campaign.status === 'ACTIVE' || campaign.status === 'PENDING_REVIEW'
+        : true;
 
-      if (campaign) {
-        parts.push(
-          <Link
-            key={campaignId}
-            href={`/campaigns/${campaignId}`}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-              campaign.status === 'ACTIVE' || campaign.status === 'PENDING_REVIEW'
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
-                : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30 hover:bg-zinc-500/30'
-            }`}
-          >
-            <Megaphone className="w-3 h-3" />
-            {campaign.title}
-          </Link>
-        );
-      } else {
-        parts.push(
-          <span key={campaignId} className="text-zinc-400">
-            !{campaignTitle}
-          </span>
-        );
-      }
+      parts.push(
+        <Link
+          key={`c-${campaignId}-${match.index}`}
+          href={`/campaigns/${campaignId}`}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+            isActive
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
+              : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30 hover:bg-zinc-500/30'
+          }`}
+        >
+          <Megaphone className="w-3 h-3" />
+          {displayTitle}
+        </Link>
+      );
     } else {
       // User mention: @[username](user:id)
       const username = match[4];
       const userId = match[5];
       const user = userData?.get(userId);
+      const displayName = user?.displayName || user?.username || username;
 
-      if (user) {
-        parts.push(
-          <Link
-            key={userId}
-            href={`/users/${userId}`}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30"
-          >
-            @{user.displayName || user.username}
-          </Link>
-        );
-      } else {
-        parts.push(
-          <span key={userId} className="text-zinc-400">
-            @{username}
-          </span>
-        );
-      }
+      parts.push(
+        <Link
+          key={`u-${userId}-${match.index}`}
+          href={`/users/${username}`}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30"
+        >
+          @{displayName}
+        </Link>
+      );
     }
 
     lastIndex = mentionRegex.lastIndex;
