@@ -2,25 +2,18 @@ import { test, expect } from '@playwright/test';
 
 const UNIQUE = () => Date.now().toString(36);
 
-async function login(page: import('@playwright/test').Page) {
-  await page.goto('/login');
-  await page.getByLabel(/email or username/i).fill(process.env['E2E_TEST_EMAIL'] ?? 'admin@engganyo.com');
-  await page.getByLabel(/password/i).fill(process.env['E2E_TEST_PASSWORD'] ?? 'Admin@123456');
-  await page.getByRole('button', { name: /login|sign in/i }).click();
-  await page.waitForURL(/dashboard/, { timeout: 20_000 });
-}
+test.use({ storageState: 'e2e/.auth/user.json' });
 
 async function fillNewTopicForm(page: import('@playwright/test').Page, title: string, content: string) {
   await page.goto('/forum/new');
   await page.waitForLoadState('networkidle');
   await page.getByPlaceholder(/what's your topic about/i).fill(title);
-  await page.locator('textarea').first().fill(content);
+  const contentArea = page.locator('textarea').first();
+  await contentArea.click();
+  await contentArea.pressSequentially(content);
 }
 
 test.describe('Forum (authenticated)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-  });
 
   test('forum listing page loads and shows topics', async ({ page }) => {
     await page.goto('/forum');
@@ -140,10 +133,6 @@ test.describe('Forum (authenticated)', () => {
 });
 
 test.describe('Forum (admin moderation)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-  });
-
   test('admin forum management page loads', async ({ page }) => {
     await page.goto('/admin/forum');
     await expect(page).toHaveURL(/admin\/forum/);
