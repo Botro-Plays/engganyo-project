@@ -57,8 +57,10 @@ export function MentionTextarea({
   // Search users when filter changes for user mentions
   useEffect(() => {
     if (mentionType === 'user' && filter.length >= 2 && onUserSearch) {
-      onUserSearch(filter).then(setSearchedUsers);
-    } else if (mentionType === 'campaign') {
+      onUserSearch(filter)
+        .then((users) => setSearchedUsers(Array.isArray(users) ? users : []))
+        .catch(() => setSearchedUsers([]));
+    } else {
       setSearchedUsers([]);
     }
   }, [filter, mentionType, onUserSearch]);

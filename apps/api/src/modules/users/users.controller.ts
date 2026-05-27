@@ -82,8 +82,9 @@ export class UsersController {
   searchUsers(
     @CurrentUser() user: JwtPayload,
     @Query('q') query: string,
-    @Query('limit') limit: number = 10,
+    @Query('limit') limitStr?: string,
   ) {
+    const limit = limitStr ? Math.min(50, parseInt(limitStr, 10) || 10) : 10;
     return this.usersService.searchUsers(user.sub, query, limit);
   }
 

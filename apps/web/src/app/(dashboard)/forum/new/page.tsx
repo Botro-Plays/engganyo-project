@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Send } from 'lucide-react';
@@ -33,9 +33,7 @@ export default function NewTopicPage() {
     },
   });
 
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-
-  const handleUserSearch = async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
+  const handleUserSearch = useCallback(async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
     if (!query || query.length < 2) return [];
     try {
       const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
@@ -45,7 +43,7 @@ export default function NewTopicPage() {
       console.error('Failed to search users:', err);
       return [];
     }
-  };
+  }, []);
 
   const createMutation = useMutation({
     mutationFn: (data: { title: string; content: string }) =>

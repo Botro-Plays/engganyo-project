@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MessageSquare, ThumbsUp, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight } from 'lucide-react';
@@ -121,11 +121,16 @@ export default function ForumTopicPage() {
     },
   });
 
-  const handleUserSearch = async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
+  const handleUserSearch = useCallback(async (query: string): Promise<{ id: string; username: string; displayName: string | null }[]> => {
     if (!query || query.length < 2) return [];
-    const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
-    return res.data.data;
-  };
+    try {
+      const res = await apiClient.get<ApiResponse<{ id: string; username: string; displayName: string | null }[]>>(`users/search?q=${query}&limit=10`);
+      const result = res.data.data;
+      return Array.isArray(result) ? result : [];
+    } catch {
+      return [];
+    }
+  }, []);
 
   const topicReactionMutation = useMutation({
     mutationFn: (type: ReactionType) =>
