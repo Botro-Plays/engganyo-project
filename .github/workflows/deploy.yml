@@ -273,8 +273,7 @@ jobs:
       - name: Build & push API image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./apps/api/Dockerfile
+          context: ./apps/api
           push: true
           tags: |
             ${{ env.API_IMAGE }}:latest
@@ -285,8 +284,7 @@ jobs:
       - name: Build & push Web image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./apps/web/Dockerfile
+          context: ./apps/web
           push: true
           tags: |
             ${{ env.WEB_IMAGE }}:latest

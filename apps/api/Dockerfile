@@ -3,19 +3,18 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-# Copy root lockfile + both workspace package.json files
-COPY package.json package-lock.json ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY apps/web/package.json ./apps/web/package.json
+# Install all dependencies (dev needed for build)
+COPY package*.json ./
+RUN npm install && npm cache clean --force
 
-# Install only API workspace deps (uses root lockfile)
-RUN npm ci --workspace=apps/api && npm cache clean --force
+# Copy source
+COPY . .
 
-# Copy API source
-COPY apps/api/ ./apps/api/
+# Generate Prisma client
+RUN npx prisma generate
 
-# Generate Prisma client and build
-RUN cd apps/api && npx prisma generate && npm run build
+# Build
+RUN npm run build
 
 # ─── Production Stage ─────────────────────────────────────────────────────────
 FROM node:24-alpine AS production
@@ -33,11 +32,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 RUN mkdir -p /app/logs && \
     chown -R nestjs:nodejs /app/logs
 
-# node_modules are hoisted to root; dist/prisma are in apps/api/
+# Copy only what's needed
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./dist
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./prisma
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./package.json
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
 
 USER nestjs
 
