@@ -72,7 +72,7 @@ function AchievementForm({
 
   return (
     <div className="bg-surface-hover border border-brand-500/30 rounded-xl p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs text-zinc-400">Name</label>
           <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
@@ -128,7 +128,7 @@ function MissionForm({
 
   return (
     <div className="bg-surface-hover border border-brand-500/30 rounded-xl p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs text-zinc-400">Name</label>
           <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
