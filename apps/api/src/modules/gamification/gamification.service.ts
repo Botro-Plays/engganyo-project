@@ -538,4 +538,81 @@ export class GamificationService implements OnModuleInit {
       await this.awardXp(userId, xpReward, 'achievement', achievementId, name);
     }
   }
+
+  // ─── Admin: Achievements ──────────────────────────────────
+
+  async adminListAchievements() {
+    return this.prisma.achievement.findMany({
+      orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }],
+    });
+  }
+
+  async adminCreateAchievement(body: Record<string, unknown>) {
+    const { name, slug, description, category, requirement, creditReward, xpReward, isActive, sortOrder, icon, badgeColor } = body;
+    return this.prisma.achievement.create({
+      data: {
+        name: String(name),
+        slug: String(slug),
+        description: String(description),
+        category: category as AchievementCategory,
+        requirement: Number(requirement),
+        creditReward: Number(creditReward ?? 0),
+        xpReward: Number(xpReward ?? 0),
+        isActive: isActive !== false,
+        sortOrder: Number(sortOrder ?? 0),
+        icon: icon ? String(icon) : undefined,
+        badgeColor: badgeColor ? String(badgeColor) : undefined,
+      },
+    });
+  }
+
+  async adminUpdateAchievement(id: string, body: Record<string, unknown>) {
+    const allowedFields = ['name', 'description', 'requirement', 'creditReward', 'xpReward', 'isActive', 'sortOrder', 'icon', 'badgeColor', 'category'];
+    const data: Record<string, unknown> = {};
+    for (const key of allowedFields) {
+      if (key in body) data[key] = body[key];
+    }
+    return this.prisma.achievement.update({ where: { id }, data });
+  }
+
+  async adminDeleteAchievement(id: string) {
+    await this.prisma.achievement.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  // ─── Admin: Missions ──────────────────────────────────────
+
+  async adminListMissions() {
+    return this.prisma.dailyMission.findMany({ orderBy: { sortOrder: 'asc' } });
+  }
+
+  async adminCreateMission(body: Record<string, unknown>) {
+    const { name, description, type, requirement, creditReward, xpReward, isActive, sortOrder } = body;
+    return this.prisma.dailyMission.create({
+      data: {
+        name: String(name),
+        description: String(description),
+        type: type as MissionType,
+        requirement: Number(requirement),
+        creditReward: Number(creditReward ?? 0),
+        xpReward: Number(xpReward ?? 0),
+        isActive: isActive !== false,
+        sortOrder: Number(sortOrder ?? 0),
+      },
+    });
+  }
+
+  async adminUpdateMission(id: string, body: Record<string, unknown>) {
+    const allowedFields = ['name', 'description', 'requirement', 'creditReward', 'xpReward', 'isActive', 'sortOrder', 'type'];
+    const data: Record<string, unknown> = {};
+    for (const key of allowedFields) {
+      if (key in body) data[key] = body[key];
+    }
+    return this.prisma.dailyMission.update({ where: { id }, data });
+  }
+
+  async adminDeleteMission(id: string) {
+    await this.prisma.dailyMission.delete({ where: { id } });
+    return { deleted: true };
+  }
 }

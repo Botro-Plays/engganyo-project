@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Query, Req, UseGuards, HttpCode, HttpStatus, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, HttpCode, HttpStatus, Headers } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
 import { GamificationService } from './gamification.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
@@ -52,6 +54,82 @@ export class GamificationController {
     @Query('page') page = 1,
   ) {
     return this.gamificationService.getLeaderboard(type, Number(page), 50);
+  }
+
+  // ─── Admin: Achievements ─────────────────────────────────
+
+  @Get('admin/achievements')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Admin] List all achievements' })
+  adminListAchievements() {
+    return this.gamificationService.adminListAchievements();
+  }
+
+  @Post('admin/achievements')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: '[Admin] Create a new achievement' })
+  adminCreateAchievement(@Body() body: Record<string, unknown>) {
+    return this.gamificationService.adminCreateAchievement(body);
+  }
+
+  @Patch('admin/achievements/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Admin] Update an achievement' })
+  adminUpdateAchievement(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.gamificationService.adminUpdateAchievement(id, body);
+  }
+
+  @Delete('admin/achievements/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Admin] Delete an achievement' })
+  adminDeleteAchievement(@Param('id') id: string) {
+    return this.gamificationService.adminDeleteAchievement(id);
+  }
+
+  // ─── Admin: Missions ─────────────────────────────────────
+
+  @Get('admin/missions')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Admin] List all daily missions' })
+  adminListMissions() {
+    return this.gamificationService.adminListMissions();
+  }
+
+  @Post('admin/missions')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: '[Admin] Create a new daily mission' })
+  adminCreateMission(@Body() body: Record<string, unknown>) {
+    return this.gamificationService.adminCreateMission(body);
+  }
+
+  @Patch('admin/missions/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Admin] Update a daily mission' })
+  adminUpdateMission(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.gamificationService.adminUpdateMission(id, body);
+  }
+
+  @Delete('admin/missions/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Admin] Delete a daily mission' })
+  adminDeleteMission(@Param('id') id: string) {
+    return this.gamificationService.adminDeleteMission(id);
   }
 
   @Post('daily-reward')
