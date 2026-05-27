@@ -56,7 +56,8 @@ test.describe('Forum (authenticated)', () => {
 
     await page.waitForLoadState('networkidle');
     const replyArea = page.locator('textarea').first();
-    await replyArea.fill(`This is a test reply ${uid} with enough content to satisfy minimum length.`);
+    await replyArea.click();
+    await replyArea.pressSequentially(`This is a test reply ${uid} with enough content to satisfy minimum length.`);
     await page.getByRole('button', { name: 'Reply', exact: true }).first().click();
 
     await expect(page.getByText(`This is a test reply ${uid}`)).toBeVisible({ timeout: 5_000 });
