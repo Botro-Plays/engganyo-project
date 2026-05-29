@@ -35,6 +35,8 @@ export default function AdminReportsPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [deductionAmounts, setDeductionAmounts] = useState<Record<string, number>>({});
   const [openDropdown, setOpenDropdown] = useState<Set<string>>(new Set());
+  const [resolveOpen, setResolveOpen] = useState<Set<string>>(new Set());
+  const [deductOpen, setDeductOpen] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -98,7 +100,7 @@ export default function AdminReportsPage() {
         <div className="card-glass rounded-2xl p-12 text-center">
           <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
           <p className="text-white font-medium mb-1">All clear!</p>
-          <p className="text-zinc-500 text-sm">No open reports.</p>
+          <p className="text-zinc-500 text-sm">No {statusFilter.toLowerCase()} reports.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -124,88 +126,136 @@ export default function AdminReportsPage() {
 
               <p className="text-sm text-zinc-400 mb-3 leading-relaxed">{r.description}</p>
 
-              <div className="flex gap-2 items-center">
-                <input
-                  value={notes[r.id] ?? ''}
-                  onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
-                  placeholder="Admin notes (optional)..."
-                  className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
-                />
-                {r.targetUser && (
+              <div className="flex gap-2 items-center flex-wrap">
+                {r.status === 'OPEN' ? (
                   <>
-                    <button
-                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'WARN' })}
-                      disabled={resolveMutation.isPending}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                      title="Warn user"
-                    >
-                      Warn
-                    </button>
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenDropdown((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(r.id)) next.delete(r.id);
-                          else next.add(r.id);
-                          return next;
-                        })}
-                        disabled={resolveMutation.isPending}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                        title="Deduct trust score"
-                      >
-                        Deduct Trust
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                      {openDropdown.has(r.id) && (
-                        <div className="absolute top-full left-0 mt-1 z-20 bg-surface border border-surface-border rounded-lg shadow-xl overflow-hidden min-w-[100px]">
-                          {[5, 10, 15, 20, 25, 30, 40, 50].map((v) => (
+                    <input
+                      value={notes[r.id] ?? ''}
+                      onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
+                      placeholder="Admin notes (optional)..."
+                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    />
+                    {r.targetUser && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setResolveOpen((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(r.id)) next.delete(r.id);
+                            else next.add(r.id);
+                            return next;
+                          })}
+                          disabled={resolveMutation.isPending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Resolve <ChevronDown className="w-3 h-3" />
+                        </button>
+                        {resolveOpen.has(r.id) && (
+                          <div className="absolute top-full right-0 mt-1 z-20 bg-surface border border-surface-border rounded-lg shadow-xl overflow-hidden min-w-[140px]">
                             <button
-                              key={v}
                               onClick={() => {
-                                setOpenDropdown((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
-                                resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: v });
+                                setResolveOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'WARN' });
                               }}
                               disabled={resolveMutation.isPending}
-                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-orange-500/20 disabled:opacity-50"
+                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-amber-500/20 disabled:opacity-50"
                             >
-                              {v} pts
+                              Warn
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeductOpen((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(r.id)) next.delete(r.id);
+                                    else next.add(r.id);
+                                    return next;
+                                  });
+                                }}
+                                disabled={resolveMutation.isPending}
+                                className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-white hover:bg-orange-500/20 disabled:opacity-50"
+                              >
+                                Deduct Trust
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                              {deductOpen.has(r.id) && (
+                                <div className="absolute top-0 left-full ml-1 z-30 bg-surface border border-surface-border rounded-lg shadow-xl overflow-hidden min-w-[80px]">
+                                  {[5, 10, 15, 20, 25, 30, 40, 50].map((v) => (
+                                    <button
+                                      key={v}
+                                      onClick={() => {
+                                        setResolveOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                        setDeductOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                        resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: v });
+                                      }}
+                                      disabled={resolveMutation.isPending}
+                                      className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-orange-500/20 disabled:opacity-50"
+                                    >
+                                      {v} pts
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setResolveOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'SUSPEND' });
+                              }}
+                              disabled={resolveMutation.isPending}
+                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-yellow-500/20 disabled:opacity-50"
+                            >
+                              Suspend
+                            </button>
+                            <button
+                              onClick={() => {
+                                setResolveOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'BAN' });
+                              }}
+                              disabled={resolveMutation.isPending}
+                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-red-500/20 disabled:opacity-50"
+                            >
+                              Ban
+                            </button>
+                            <div className="border-t border-surface-border" />
+                            <button
+                              onClick={() => {
+                                setResolveOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                resolveMutation.mutate({ id: r.id, status: 'RESOLVED' });
+                              }}
+                              disabled={resolveMutation.isPending}
+                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-green-500/20 disabled:opacity-50"
+                            >
+                              Resolve only
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!r.targetUser && (
+                      <button
+                        onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED' })}
+                        disabled={resolveMutation.isPending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Resolve
+                      </button>
+                    )}
                     <button
-                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'SUSPEND' })}
+                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'DISMISSED' })}
                       disabled={resolveMutation.isPending}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                      title="Suspend user"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 text-xs font-medium disabled:opacity-50 transition-all"
                     >
-                      Suspend
-                    </button>
-                    <button
-                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'BAN' })}
-                      disabled={resolveMutation.isPending}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                      title="Ban user"
-                    >
-                      Ban
+                      <XCircle className="w-3.5 h-3.5" /> Dismiss
                     </button>
                   </>
+                ) : (
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                    r.status === 'RESOLVED' ? 'bg-green-500/10 text-green-400' : 'bg-zinc-500/10 text-zinc-400'
+                  }`}>
+                    {r.status}
+                  </span>
                 )}
-                <button
-                  onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED' })}
-                  disabled={resolveMutation.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Resolve
-                </button>
-                <button
-                  onClick={() => resolveMutation.mutate({ id: r.id, status: 'DISMISSED' })}
-                  disabled={resolveMutation.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                >
-                  <XCircle className="w-3.5 h-3.5" /> Dismiss
-                </button>
               </div>
             </div>
           ))}

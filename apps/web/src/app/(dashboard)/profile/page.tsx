@@ -177,7 +177,7 @@ function TrustScoreCard() {
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-500">
             <span>Completion rate: <span className="text-zinc-300">{Math.round(data.completionRate * 100)}%</span></span>
             <span>Account age: <span className="text-zinc-300">{data.accountAgeDays}d</span></span>
-            <span>Verified socials: <span className="text-zinc-300">{data.verifiedSocials}</span></span>
+            <span>Linked socials: <span className="text-zinc-300">{data.verifiedSocials}</span></span>
             <span>Reports received: <span className={data.reportCount > 0 ? 'text-red-400' : 'text-zinc-300'}>{data.reportCount}</span></span>
           </div>
         </>
@@ -373,23 +373,23 @@ export default function ProfilePage() {
           <p className="text-zinc-400 text-sm truncate">@{profile?.username ?? user?.username}</p>
           <p className="text-zinc-500 text-xs truncate">{profile?.email ?? user?.email}</p>
         </div>
-        <div className="w-full sm:w-auto sm:text-right">
+        <div className="w-full sm:w-auto sm:text-right sm:flex sm:flex-col sm:items-end">
           <p className="text-xs text-zinc-500 mb-1">Referral code</p>
           <button
             onClick={copyReferral}
-            className="flex items-center justify-center sm:justify-start gap-2 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all mx-auto sm:mx-0"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
           >
             {profile?.referralCode ?? user?.referralCode ?? '—'}
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
           <Link
             href={`/users/${profile?.username ?? user?.username}`}
-            className="inline-flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all w-full sm:w-auto"
+            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all"
           >
             <ExternalLink className="w-3 h-3" />
             View Public Profile
           </Link>
-          <div className="flex items-center gap-1.5 mt-2 sm:justify-end">
+          <div className="flex items-center gap-1.5 mt-2">
             <span className="text-xs text-zinc-600">Share:</span>
             <a
               href={`https://wa.me/?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}

@@ -128,23 +128,8 @@ export function ChatWidget() {
 
   const onDrag = (clientX: number, clientY: number) => {
     if (!isDragging) return;
-    const widgetWidth = 384; // sm:w-96 = 24rem = 384px
-    const widgetHeight = 400; // approximate height when open
-    const headerHeight = 56; // approximate header height
-    const fabSize = 64; // button size when closed
-    const pad = 8;
-
-    const maxX = window.innerWidth - (isOpen ? widgetWidth : fabSize) - pad;
-    const maxY = window.innerHeight - (isOpen ? widgetHeight : fabSize) - pad;
-
-    let newX = clientX - dragOffset.current.x;
-    let newY = clientY - dragOffset.current.y;
-
-    // Clamp to viewport
-    newX = Math.max(pad, Math.min(newX, maxX));
-    newY = Math.max(pad, Math.min(newY, maxY));
-
-    setPos({ x: newX, y: newY });
+    const newPos = { x: clientX - dragOffset.current.x, y: clientY - dragOffset.current.y };
+    setPos(newPos);
   };
 
   const endDrag = () => {
@@ -178,6 +163,11 @@ export function ChatWidget() {
 
   const dragStyle: React.CSSProperties = { transform: `translate(${pos.x}px, ${pos.y}px)`, willChange: 'transform' };
 
+  const isInteractiveTarget = (e: React.MouseEvent | React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    return !!target.closest('button, input, textarea, a, select, [data-no-drag]');
+  };
+
   const isClick = (clientX: number, clientY: number) => {
     if (!dragStartPos.current) return true;
     const dx = clientX - dragStartPos.current.x;
@@ -206,16 +196,21 @@ export function ChatWidget() {
   return (
     <div
       style={dragStyle}
+      onMouseDown={(e) => {
+        if (isInteractiveTarget(e)) return;
+        e.preventDefault();
+        startDrag(e.clientX, e.clientY);
+      }}
+      onTouchStart={(e) => {
+        if (isInteractiveTarget(e)) return;
+        e.preventDefault();
+        if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }}
       className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl touch-none select-none"
     >
-      {/* Header — draggable */}
+      {/* Header — shows grip indicator but whole widget is draggable */}
       <div
         className="flex items-center justify-between p-4 border-b border-surface-border bg-surface-hover cursor-grab active:cursor-grabbing select-none"
-        onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
-        onTouchStart={(e) => {
-          e.preventDefault();
-          if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
-        }}
       >
         <div className="flex items-center gap-3">
           <GripVertical className="w-4 h-4 text-zinc-600" />

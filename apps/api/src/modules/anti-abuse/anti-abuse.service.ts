@@ -65,7 +65,7 @@ export class AntiAbuseService {
       (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24),
     );
 
-    const verifiedSocials = user.socialAccounts.filter((s) => s.isVerified).length;
+    const verifiedSocials = user.socialAccounts.length;
 
     const totalTasks = user.completions.length;
     const verifiedTasks = user.completions.filter((c) => c.status === 'VERIFIED').length;
