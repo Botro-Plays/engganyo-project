@@ -1169,6 +1169,38 @@ This document should be updated when:
 - **Removed**: `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` env var (contradictory with old Node 20)
 - **Fixed**: `NEXT_PUBLIC_API_URL` normalized to `/api/v1` in both CI and E2E for consistency
 
+## Infrastructure & Auto-Recovery (2026-05-29)
+
+### INF-001: Cron-Based Health Check & Auto-Recovery
+- **Status**: Implemented
+- **Decision**: Install `health-check.sh` via cron (every minute) to automatically detect and recover from outages
+- **Reason**: VPS outage was caused by host nginx process stealing port 80 from Docker container; manual intervention was required. Auto-recovery prevents repeat outages without human action.
+- **Implementation**: Script checks API (`:3001/health`) and nginx (`:443`) health; kills rogue host nginx; restarts nginx container; falls back to full `docker compose down && up -d` if needed
+- **Log rotation**: Automatic at 10 MB to prevent disk fill
+- **Setup**: One-time cron install documented in DEPLOYMENT.md
+
+### INF-002: Memory Limits on Docker Services
+- **Status**: Implemented
+- **Decision**: Added `deploy.resources.limits.memory` to all Docker Compose services
+- **Reason**: OOM kills on VPS with limited RAM were causing container crashes and potential daemon instability
+- **Limits**: postgres 1g, api/web 512m, redis 256m, nginx 128m
+
+### INF-003: Nginx Health Check in Docker Compose
+- **Status**: Implemented
+- **Decision**: Added Docker `healthcheck` to nginx service with `wget --spider http://localhost/`
+- **Reason**: Docker's default "running" state doesn't guarantee nginx is actually serving requests; explicit healthcheck enables accurate dependency chains and status reporting
+
+### INF-004: Zero-Downtime Rolling Deploy
+- **Status**: Implemented
+- **Decision**: Changed `auto-deploy.sh` from `docker compose down && up -d` to `docker compose pull && docker compose up -d` (rolling update)
+- **Reason**: `down` stops all containers before new ones start, causing downtime during deploy. Rolling update keeps old containers running until new ones are ready.
+- **Post-deploy verification**: Added `curl` health check after `up -d` to fail deploy if API doesn't respond
+
+### INF-005: Docker Image Cleanup
+- **Status**: Implemented
+- **Decision**: Added `docker image prune -af --filter "until=168h"` to `auto-deploy.sh`
+- **Reason**: Unused images accumulate over time and consume disk space on the VPS
+
 ## Security Fixes (2026-05-22)
 
 ### SEC-001: Upload Static File Middleware Ordering Bug

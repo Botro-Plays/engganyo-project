@@ -698,6 +698,95 @@ tail -20 /opt/engganyo-project/auto-deploy.log
 
 ---
 
+## Monitoring & Auto-Recovery
+
+This section covers the health-check monitoring and auto-recovery mechanism to prevent outages.
+
+### What It Does
+
+The `health-check.sh` script runs every minute via cron. It performs the following checks and recovery actions:
+
+1. **API Health Check** — pings `http://localhost:3001/api/health`
+2. **Nginx Health Check** — pings `https://localhost/`
+3. **Host Nginx Detection** — detects if a host-level nginx process is interfering with Docker port bindings
+4. **Auto-Recovery** — attempts to restart services if any health check fails
+
+### Recovery Behavior
+
+| Failure Type | Recovery Action |
+|-------------|-----------------|
+| Host nginx on port 80 | Stop and disable host nginx service |
+| Nginx container unhealthy | Restart nginx container (`docker compose restart nginx`) |
+| API or full stack down | Full stack restart (`docker compose down && up -d`) |
+
+### One-Time Setup
+
+Run these commands **once** on the VPS after the initial deployment:
+
+```bash
+# Navigate to project directory
+cd /opt/engganyo-project
+
+# Make the health-check script executable
+chmod +x infra/scripts/health-check.sh
+
+# Install the cron job (runs every minute)
+( sudo crontab -l 2>/dev/null; echo "* * * * * /opt/engganyo-project/infra/scripts/health-check.sh >> /opt/engganyo-project/infra/scripts/health-check.log 2>&1" ) | sudo crontab -
+
+# Verify the cron job is installed
+sudo crontab -l | grep health-check
+```
+
+### Monitoring the Logs
+
+```bash
+# View the last 50 log entries
+tail -n 50 /opt/engganyo-project/infra/scripts/health-check.log
+
+# Follow logs in real-time
+tail -f /opt/engganyo-project/infra/scripts/health-check.log
+
+# Check log file size
+ls -lh /opt/engganyo-project/infra/scripts/health-check.log
+```
+
+The script automatically rotates the log file when it exceeds 10 MB.
+
+### Manual Health Check
+
+```bash
+# Run the health check manually (no recovery actions)
+curl -sf --max-time 10 http://localhost:3001/api/health
+
+# Check nginx response
+curl -sf --max-time 10 -k https://localhost/
+```
+
+### Expected Log Output
+
+When everything is healthy (logged once per hour):
+
+```
+[2026-05-29 10:00:00] OK: API and nginx healthy.
+```
+
+When recovery is triggered:
+
+```
+[2026-05-29 10:01:00] ALERT: API health check FAILED (http://localhost:3001/api/health)
+[2026-05-29 10:01:00] RECOVERY: Attempting to restore services...
+[2026-05-29 10:01:05] RECOVERY: Nginx restart succeeded.
+```
+
+### Removing the Cron Job
+
+```bash
+# Remove the health-check cron job
+sudo crontab -l | grep -v health-check | sudo crontab -
+```
+
+---
+
 ## Future Recommendations
 
 ### High Priority
