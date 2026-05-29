@@ -78,7 +78,9 @@ export class UploadsController {
     }
 
     if (fs.existsSync(tempPath)) {
-      fs.renameSync(tempPath, finalPath);
+      // Use copy+unlink instead of rename to handle cross-filesystem moves (Docker volumes)
+      fs.copyFileSync(tempPath, finalPath);
+      fs.unlinkSync(tempPath);
       // Clean up temp directory
       const tempFiles = fs.readdirSync(tempDir);
       if (tempFiles.length === 0) {
@@ -150,7 +152,9 @@ export class UploadsController {
     }
 
     if (fs.existsSync(tempPath)) {
-      fs.renameSync(tempPath, finalPath);
+      // Use copy+unlink instead of rename to handle cross-filesystem moves (Docker volumes)
+      fs.copyFileSync(tempPath, finalPath);
+      fs.unlinkSync(tempPath);
       // Clean up temp directory
       const tempFiles = fs.readdirSync(tempDir);
       if (tempFiles.length === 0) {
