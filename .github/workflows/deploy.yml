@@ -319,58 +319,53 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_SSH_PORT || 22 }}
           timeout: 120s
-          request_pty: true
+          command_timeout: 10m
+          script_stop: true
           envs: GHCR_TOKEN,GITHUB_ACTOR,API_IMAGE,WEB_IMAGE
           script: |
             set -e
             cd /opt/engganyo-project
 
-            # Remove dangling images + stopped containers from previous deploys to free disk space
-            docker system prune -f
+            echo "[1/10] Checking Docker daemon..."
+            docker info > /dev/null
+            echo "Docker OK"
 
+            echo "[2/10] Git pull..."
             git pull origin main
 
+            echo "[3/10] Logging into GHCR..."
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
+            echo "[4/10] Pulling images..."
             docker pull "$API_IMAGE"
             docker pull "$WEB_IMAGE"
 
-            docker compose down --remove-orphans
+            echo "[5/10] Stopping existing containers..."
+            docker compose down --remove-orphans --timeout 30 || echo "Some containers may have already been removed"
 
-            # Small delay to let Docker daemon fully clean up container references
+            echo "[6/10] Waiting for Docker cleanup..."
             sleep 3
 
+            echo "[7/10] Starting new containers..."
             docker compose up -d --remove-orphans
 
-            # Clean up images made dangling by this deploy (old :latest replaced by new :latest)
-            docker image prune -f
-
-            # Wait for API to be healthy before running migrations
-            echo "Waiting for API to be ready..."
+            echo "[8/10] Waiting for API health..."
             for i in $(seq 1 30); do
-              if docker compose exec -T api node -e "process.exit(0)" 2>/dev/null; then
-                STATUS=$(docker compose exec -T api wget -qO- http://localhost:3001/api/health 2>/dev/null | grep -c '"status"' || true)
-                if [ "$STATUS" -ge 1 ]; then
-                  echo "API is ready after ${i}s"
-                  break
-                fi
+              if docker compose exec -T api wget -qO- http://localhost:3001/api/health 2>/dev/null | grep -q '"status"'; then
+                echo "API healthy after ${i}s"
+                break
               fi
-              echo "  attempt $i/30..."
+              if [ "$i" -eq 30 ]; then
+                echo "WARNING: API health check timed out — continuing with migrations..."
+              fi
+              echo "  health check $i/30..."
               sleep 2
             done
 
+            echo "[9/10] Running database migrations..."
             docker compose exec -T api node_modules/.bin/prisma migrate deploy
 
-            if [ ! -f ".seeded" ]; then
-              echo "Running initial database seed..."
-              if docker compose exec -T api npx prisma db seed; then
-                touch ".seeded"
-                echo "Seed completed"
-              else
-                echo "WARNING: Seed failed — run manually: docker compose exec api npx prisma db seed"
-              fi
-            else
-              echo "Database already seeded, skipping"
-            fi
+            echo "[10/10] Final cleanup..."
+            docker image prune -f || true
 
             echo "Deploy complete!"
