@@ -33,7 +33,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 
 ## BUSINESS MODEL
 
-### Current State (Phase 10 Complete)
+### Current State (Phase 10 Complete + Avatar Upload)
 - **Revenue**: None (platform is pre-monetization)
 - **Credit System**: Internal-only, no fiat/crypto conversion
 - **Platform Fees**: Not implemented
@@ -42,6 +42,14 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - **Chat System**: Implemented with AI chat support (Groq integration)
 - **Social OAuth**: Partially implemented (YouTube, Twitch, Spotify working; others manual link)
 - **reCAPTCHA**: v2/v3 switch implemented in admin panel with cache invalidation
+- **Avatar Upload**: Implemented — users upload avatars from device (replaces external URL input)
+  - Backend: `POST /uploads/avatar` with multer, JWT, 5MB limit, PNG/JPG/WebP
+  - Frontend: file picker with live preview, upload spinner, remove button
+  - Storage: `/uploads/avatars/{userId}/{uuid}{ext}` on Docker volume
+  - Serving: public access (no auth), UUID-based filenames for security
+- **Deployment**: Fully automated CI/CD via GitHub Actions → GHCR → VPS SSH
+  - Zero-downtime rolling update (no `docker compose down`)
+  - Post-deploy health check verification
 
 ### Target Monetization Strategy
 
@@ -570,9 +578,13 @@ Tasks   Campaigns  Tasks   Campaigns
 - **Database**: PostgreSQL 16 (single instance)
 - **Cache/Queue**: Redis 7 (single instance)
 - **ORM**: Prisma
-- **Deployment**: Docker Compose on VPS
-- **Reverse Proxy**: Nginx
-- **CI/CD**: GitHub Actions
+- **Deployment**: Docker Compose on VPS with automated CI/CD
+- **Reverse Proxy**: Nginx with Cloudflare SSL
+- **CI/CD**: GitHub Actions (lint, test, build, E2E, deploy → GHCR → VPS SSH)
+- **Static Assets**: Local filesystem via Docker volume (`engganyo_uploads` → `/app/uploads`)
+  - Avatars: public access, UUID filenames
+  - Proofs: JWT-protected
+  - Migration plan: S3/R2 + CDN at 10K+ users
 
 ### Scaling Assumptions
 - **0-10K users**: Current architecture sufficient
@@ -674,5 +686,5 @@ This document should be updated when:
 - Risk factors change
 - Success metrics change
 
-**Last Updated**: 2026-05-26
-**Next Review**: 2026-08-26 (quarterly)
+**Last Updated**: 2026-05-29
+**Next Review**: 2026-08-29 (quarterly)

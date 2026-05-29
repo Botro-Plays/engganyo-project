@@ -1,8 +1,8 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-26 (Forum, Chat, reCAPTCHA v2/v3 switch implemented)
+> Last updated: 2026-05-29 (Avatar upload, deploy automation, Docker permissions, nginx routing fixes)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Forum & Chat Implemented | Phases 11.5-15 Pending
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
 
 ---
 
@@ -157,6 +157,10 @@
 **Frontend (`/dashboard/profile`)**
 - [x] Profile header card (avatar initials, username, email, referral code + copy)
 - [x] Edit profile form (displayName, bio, location, website, avatarUrl)
+- [✅] Avatar upload from device — replaces external URL text input
+  - File picker with live preview, upload spinner, remove button
+  - Object URL cleanup to prevent memory leaks
+  - `POST /uploads/avatar` → multer → `/uploads/avatars/{userId}/{uuid}{ext}`
 - [x] Social accounts manager (add/remove YouTube, TikTok, Instagram, Twitter, etc.)
 - [x] Change password form (current + new + confirm, with Zod cross-validation)
 - [x] Dashboard stub pages for all sidebar routes (tasks, campaigns, wallet, etc.)
@@ -818,12 +822,12 @@
 - [🟡] Re-enable achievement and mission seed functions
 
 ### Week 1 - Day 2
-- [🔴] Add rate limiting to password reset and email verification endpoints
+- [✅] Add rate limiting to password reset and email verification endpoints — DONE
 - [🟠] Move trust score recalculation to BullMQ queue
 - [🟠] Move analytics snapshot generation to BullMQ queue
 
 ### Week 1 - Day 3
-- [✅] Add reCAPTCHA v3 on registration and login -- DONE; forgot-password pending
+- [✅] Add reCAPTCHA v3 on registration and login — DONE; forgot-password pending
 
 ### Week 1 - Day 4-5
 - [🔴] Add 2FA for admin accounts (TOTP via otplib)
@@ -832,7 +836,7 @@
 - [🟠] Implement Redis caching strategy
 
 ### Week 1 - Day 7
-- [🟠] Add database backup strategy documentation
+- [✅] Add database backup strategy documentation — DONE (DEPLOYMENT.md)
 
 ---
 
@@ -842,12 +846,12 @@
 |------|--------|-------------|------------|--------|
 | Email verification disabled | HIGH | HIGH | Enable immediately | 🔴 CRITICAL |
 | No 2FA for admin accounts | CRITICAL | MEDIUM | Implement TOTP 2FA | 🔴 CRITICAL |
-| No rate limiting on sensitive endpoints | HIGH | HIGH | Add @UserRateLimit decorators | 🔴 CRITICAL |
-| No CAPTCHA on registration | HIGH | HIGH | Add reCAPTCHA v3 | 🔴 CRITICAL |
+| No rate limiting on sensitive endpoints | HIGH | HIGH | Add @UserRateLimit decorators | ✅ MITIGATED |
+| No CAPTCHA on registration | HIGH | HIGH | reCAPTCHA v2/v3 switch with admin panel + cache invalidation | ✅ MITIGATED |
 | Synchronous trust score calculation | MEDIUM | HIGH | Move to BullMQ queue | 🟠 HIGH |
 | No caching strategy | MEDIUM | HIGH | Implement Redis caching | 🟠 HIGH |
-| No backup documentation | HIGH | LOW | Document backup process | 🟠 HIGH |
-| No social verification | HIGH | HIGH | Implement OAuth integration | 🟠 HIGH |
+| No backup documentation | HIGH | LOW | Documented in DEPLOYMENT.md with cron jobs, retention, restore | ✅ MITIGATED |
+| No social verification | HIGH | HIGH | Partial: YouTube/Twitch/Spotify OAuth; others manual link | 🟠 HIGH |
 | No monetization | CRITICAL | MEDIUM | Implement Stripe payments | 🟠 HIGH |
 | Single point of failure (VPS) | HIGH | LOW | Plan Kubernetes migration | 🟡 MEDIUM |
 

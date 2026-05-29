@@ -278,15 +278,21 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - ✅ Daily reward moved to dashboard (from leaderboard)
 - ✅ React Query auth-aware hydration for social accounts
 - ✅ Strict TypeScript compliance (no any types, no eslint-disable)
+- ✅ Avatar upload from device (replaces external URL input)
+  - Backend: `POST /uploads/avatar` (multer, JWT, 5MB, PNG/JPG/WebP)
+  - Frontend: file picker with live preview, upload spinner, remove button
+  - Storage: `/uploads/avatars/{userId}/{uuid}{ext}` on Docker volume
+- ✅ Nginx `/uploads/` proxy route (avatars → public, proofs → JWT-protected)
+- ✅ Docker privilege-dropping entrypoint for volume permissions
 
 ### Critical Gaps (Phase 0 - Immediate Action Required)
 - 🔴 Email verification disabled by default
-- 🔴 No CAPTCHA on registration/login
 - 🔴 No 2FA for admin accounts
--  Synchronous trust score calculation (blocks API)
+- ✅ reCAPTCHA v2/v3 on registration and login (admin-panel switchable, cache invalidation)
+- 🟠 Synchronous trust score calculation (blocks API)
 - 🟠 Synchronous analytics snapshots (blocks cron)
 - 🟠 No caching strategy
-- 🟠 No backup strategy documentation
+- ✅ Database backup strategy documented (DEPLOYMENT.md: retention policy, cron jobs, restore procedures)
 
 ### Pending (Phases 11-17)
 - Social verification via OAuth APIs (PARTIALLY IMPLEMENTED: YouTube, Twitch, Spotify working; Twitter/X, TikTok, Instagram, Facebook manual link only)
@@ -360,35 +366,38 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - **Reverse Proxy**: Nginx with Cloudflare SSL
 - **Database**: PostgreSQL 16 (single instance)
 - **Cache/Queue**: Redis 7 (single instance)
-- **CI/CD**: GitHub Actions (lint, test, build)
-- **Deployment**: Manual SSH deployment
+- **CI/CD**: GitHub Actions (lint, test, build, E2E, deploy)
+- **Deployment**: Fully automated via GitHub Actions → GHCR → VPS SSH
 - **SSL**: Cloudflare Origin Certificate
 
 ### Deployment Process
-1. Push code to GitHub
-2. GitHub Actions runs CI (lint, test, build)
-3. Manual SSH to VPS
-4. Pull latest code
-5. Run database migrations
-6. Restart services via Docker Compose
-7. Verify health check endpoint
+1. Push code to `main`
+2. GitHub Actions runs CI (lint, test, build API + Web)
+3. E2E tests run (Playwright with Postgres + Redis services)
+4. Docker images built and pushed to GHCR
+5. SSH into VPS: pull images, recreate containers, run migrations, reload nginx
+6. Post-deploy health check verification
+7. Zero-downtime rolling update (no `docker compose down`)
 
 ### Planned Improvements
-- Automated deployment with GitHub Actions
 - Blue-green deployment for zero-downtime
 - Automated rollback on failure
 - Multi-environment deployment (dev, staging, prod)
 - Infrastructure as Code (Terraform)
 - Managed services (RDS, ElastiCache, S3)
+- Image resizing/optimization for avatars and proofs
+- CDN for static assets (Cloudflare R2 + CDN) when scaling
 
 ---
 
 ## Last Updated
 
-**Last Updated**: 2026-05-26
-**Next Review**: 2026-08-26 (quarterly)
+**Last Updated**: 2026-05-29
+**Next Review**: 2026-08-29 (quarterly)
 **Reviewed By**: Project Architect (Cascade)
 
 **Changes in this update**:
-- Added Forum Module, Chat Module, and Social Auth Module to architecture diagram
-- Updated to reflect Phase 10.5 community features implementation
+- Added avatar upload feature to completed features
+- Updated deployment section: fully automated GitHub Actions → GHCR → VPS
+- Updated static assets: avatars public, proofs JWT-protected, nginx `/uploads/` proxy route
+- Added Docker privilege-dropping entrypoint for volume permissions

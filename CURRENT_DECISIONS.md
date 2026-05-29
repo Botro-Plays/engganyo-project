@@ -288,26 +288,32 @@
 
 ## DEPLOYMENT DECISIONS
 
-### DDR-001: Manual Deployment via SSH
-**Status**: Implemented (Phase 10)
-**Date**: 2026-05-19
+### DDR-001: Automated Deployment via GitHub Actions
+**Status**: Implemented (2026-05-19) — Updated 2026-05-29
+**Date**: 2026-05-19 (Updated 2026-05-29)
 **Context**: Deployment process
-**Decision**: Manual SSH deployment with systemd auto-deploy service
+**Decision**: Fully automated CI/CD via GitHub Actions → GHCR → VPS SSH
 **Rationale**:
-- Simple to understand and debug
-- No additional CI/CD complexity
-- Full control over deployment process
-- Cost-effective (no additional services)
+- Automated on every push to `main`
+- GitHub Actions builds images on fast runners
+- Pushes to GitHub Container Registry (GHCR)
+- SSH into VPS, pulls images, recreates containers, runs migrations
+- No manual intervention required
+**Implementation**:
+- `.github/workflows/deploy.yml`: CI → E2E → Build → Deploy pipeline
+- `appleboy/ssh-action@v0.1.10` for SSH deployment (avoids v1 binary download hang)
+- 10-step deploy script: Docker check → git pull → GHCR login → pull images → stop/recreate → health check → migrations → nginx reload → cleanup
+- Docker Compose rolling update (not `down && up`)
+- Post-deploy health check verification
 **Tradeoffs**:
-- Manual process (error-prone)
-- No automated rollback
-- No deployment history
-- Requires SSH access
+- Depends on GitHub Actions availability
+- Requires GitHub Secrets configuration (VPS_HOST, VPS_USER, VPS_SSH_KEY)
+- SSH connectivity issues can block deploy (addressed by using v0.1.10)
 **Migration Plan**:
-- Add automated CD when 5K+ users
-- Consider GitHub Actions deploy when scaling
 - Add blue-green deployment when critical
-- Implement automated rollback when scaling
+- Implement automated rollback on failure
+- Add multi-environment deployment (dev, staging, prod)
+- Move to Kubernetes CD when 10K+ users
 
 ### DDR-002: Environment-Based Configuration
 **Status**: Implemented (Phase 1)
@@ -920,26 +926,55 @@
 **Migration Plan**:
 - Move to S3/R2 when scaling (Phase 16)
 
-### USR-003: JWT-Protected Static File Serving
-**Status**: Implemented (2026-05-20)
-**Date**: 2026-05-20
-**Context**: Protect uploaded proof files from unauthorized access
-**Decision**: JWT authentication middleware on `/uploads/*` route
+### USR-003: JWT-Protected Static File Serving (Updated)
+**Status**: Implemented (2026-05-20) — Updated 2026-05-29
+**Date**: 2026-05-20 (Updated 2026-05-29)
+**Context**: Protect uploaded proof files from unauthorized access; avatars need public access for browser `<img>` tags
+**Decision**: JWT authentication middleware only on `/uploads/proofs/*`; `/uploads/avatars/*` is public
 **Rationale**:
-- Prevents public access to user-uploaded content
-- Only authenticated users can view proofs
-- Aligns with platform privacy requirements
+- Proof files contain sensitive campaign data — must be protected
+- Browser `<img>` tags cannot send `Authorization` headers
+- Avatar filenames are UUID-based (unguessable), so public access is secure
+- Aligns with platform privacy requirements for proofs only
 **Implementation**:
-- Middleware checks `Authorization: Bearer <token>` header
-- Returns 401 if token missing or invalid
-- Applied before static file serving middleware
+- `/uploads/proofs/*`: Middleware checks `Authorization: Bearer <token>`; returns 401 if missing
+- `/uploads/avatars/*`: No auth required; `Cache-Control: public`
+- Nginx proxies `/uploads/` to API container where NestJS static file serving handles routing
 **Tradeoffs**:
-- Cannot share proof URLs publicly
-- Requires authentication to view proofs
-- Adds overhead to file serving
+- Proof URLs still cannot be shared publicly
+- Avatar URLs are public but unguessable (UUID filenames)
+- Adds nginx routing complexity
 **Alternatives Considered**:
 - Signed URLs (rejected: more complex, not needed yet)
-- Public access with obscurity (rejected: security risk)
+- Public access with obscurity (rejected: security risk for proofs)
+- Proxy all uploads through API with auth (rejected: breaks avatar `<img>` display)
+
+### USR-003A: Avatar Upload Feature
+**Status**: Implemented (2026-05-29)
+**Date**: 2026-05-29
+**Context**: Users previously had to provide external avatar URLs; this was insecure and UX-unfriendly
+**Decision**: Direct file upload for profile avatars with same security as proof uploads
+**Rationale**:
+- Better UX: users upload from device instead of finding external image URLs
+- More secure: no hotlinking of arbitrary external URLs
+- Consistent with existing proof upload infrastructure
+**Implementation**:
+- Backend: `POST /uploads/avatar` endpoint in `UploadsController`
+  - Same multer config as proofs: PNG/JPG/JPEG/WebP, 5MB max
+  - Storage: `/uploads/avatars/{userId}/{uuid}{ext}`
+  - JWT auth required
+  - Uses `copyFileSync + unlinkSync` (not `renameSync`) for cross-filesystem Docker volume compatibility
+- Frontend: `/profile` page replaced Avatar URL text input with file upload widget
+  - Hidden file input with accept filter
+  - Live blob preview before upload completes
+  - Upload button with loading spinner
+  - Remove/clear avatar button
+  - Object URL cleanup to prevent memory leaks
+- Profile update sends `avatarUrl` path to `PATCH /users/me` as before
+**Tradeoffs**:
+- Storage scales with user count (mitigated by 5MB limit)
+- No image resizing yet (avatars served at original resolution)
+- No CDN for avatars (served from VPS)
 
 ### USR-004: Lazy Directory Initialization for Uploads
 **Status**: Implemented (2026-05-20)
@@ -1126,8 +1161,8 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-05-22
-**Next Review**: 2026-08-22 (quarterly)
+**Last Updated**: 2026-05-29
+**Next Review**: 2026-08-29 (quarterly)
 
 ---
 
@@ -1206,6 +1241,32 @@ This document should be updated when:
 - **Decision**: Increased Docker memory limit for redis container from 256m to 512m
 - **Reason**: Redis was configured with `--maxmemory 256mb` (data memory) inside a Docker container limited to 256m (total). The container needs headroom for Redis process overhead, AOF persistence, and forked child processes during AOF rewrite. The mismatch caused the container to exit cleanly (code 0) during startup on production data.
 - **Lesson**: Docker memory limits must exceed application `maxmemory` settings to account for process overhead
+
+### INF-007: Docker Entrypoint for Volume Permissions
+- **Status**: Implemented (2026-05-29)
+- **Decision**: Privilege-dropping entrypoint script — container starts as root, fixes `/app/uploads` ownership, then drops to `nestjs` user
+- **Reason**: API container runs as `nestjs` (uid 1001), but Docker named volume `uploads_data:/app/uploads` is root-owned. Multer's temp directory creation failed with `EACCES: permission denied, mkdir`.
+- **Implementation**:
+  - `apps/api/entrypoint.sh`: `chown -R nestjs:nodejs /app/uploads`, then `su-exec nestjs:nodejs dumb-init -- node dist/main`
+  - Dockerfile: install `su-exec`, create `/app/uploads` with correct ownership, copy entrypoint with `--chmod=755`
+  - Removed `USER nestjs` from Dockerfile — drop happens at runtime
+- **Lesson**: Docker named volumes inherit permissions from the image at first mount, but existing volumes retain root ownership. Runtime privilege drop is the correct pattern for non-root containers with volume mounts.
+- **Also**: `fs.copyFileSync + unlinkSync` instead of `fs.renameSync` for cross-filesystem moves (Docker temp dir vs uploads volume)
+
+### INF-008: Nginx `/uploads/` Proxy Route
+- **Status**: Implemented (2026-05-29)
+- **Decision**: Add explicit `location /uploads/` block in `infra/nginx/nginx.conf` that proxies to the API container
+- **Reason**: Nginx had no `location /uploads/` block, so `/uploads/avatars/...` requests fell through to the Next.js catch-all (`location /`), which returned 404.
+- **Implementation**:
+  ```nginx
+  location /uploads/ {
+      proxy_pass http://api_server;
+      proxy_buffering off;
+      expires 1d;
+      add_header Cache-Control "public, immutable" always;
+  }
+  ```
+- **Lesson**: Every API-served path needs an nginx proxy location; catch-all routing is dangerous for mixed API/static content.
 
 ## Security Infrastructure (2026-05-29)
 
