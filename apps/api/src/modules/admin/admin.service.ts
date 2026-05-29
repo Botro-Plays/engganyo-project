@@ -642,9 +642,10 @@ export class AdminService {
       const adminNote = dto.notes ?? `Report resolved with action: ${action}`;
 
       if (action === 'DEDUCT_TRUST') {
+        const amount = Math.max(1, Math.min(50, dto.deductionAmount ?? 15));
         await this.prisma.trustScore.updateMany({
           where: { userId: targetUserId },
-          data: { score: { decrement: 15 } },
+          data: { score: { decrement: amount } },
         });
       } else if (action === 'SUSPEND') {
         await this.prisma.user.update({

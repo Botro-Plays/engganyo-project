@@ -95,6 +95,14 @@
     border-radius: 3px;
   }
 
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Push reCAPTCHA badge above the chat widget button (bottom-right corner) */
   .grecaptcha-badge {
     bottom: 90px !important;

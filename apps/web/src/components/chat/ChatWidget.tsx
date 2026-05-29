@@ -45,7 +45,7 @@ export function ChatWidget() {
   const [pos, setPos] = useState<{ x: number; y: number }>(loadPos);
   const [isDragging, setIsDragging] = useState(false);
   const dragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const didDragRef = useRef(false);
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated } = useAuthStore();
@@ -119,10 +119,11 @@ export function ChatWidget() {
     }
   };
 
-  // ── Drag handlers ──
+  // ── Drag handlers (distance-based click vs drag) ──
   const startDrag = (clientX: number, clientY: number) => {
     setIsDragging(true);
     dragOffset.current = { x: clientX - pos.x, y: clientY - pos.y };
+    dragStartPos.current = { x: clientX, y: clientY };
   };
 
   const onDrag = (clientX: number, clientY: number) => {
@@ -160,21 +161,26 @@ export function ChatWidget() {
     };
   }, [isDragging]);
 
-  const dragStyle = { transform: `translate(${pos.x}px, ${pos.y}px)` };
+  const dragStyle: React.CSSProperties = { transform: `translate(${pos.x}px, ${pos.y}px)`, willChange: 'transform' };
+
+  const isClick = (clientX: number, clientY: number) => {
+    if (!dragStartPos.current) return true;
+    const dx = clientX - dragStartPos.current.x;
+    const dy = clientY - dragStartPos.current.y;
+    return Math.sqrt(dx * dx + dy * dy) < 5;
+  };
 
   if (!isOpen) {
     return (
       <button
-        onClick={() => { if (!didDragRef.current) setIsOpen(true); }}
-        onMouseDown={(e) => { didDragRef.current = false; startDrag(e.clientX, e.clientY); }}
+        onClick={(e) => { if (isClick(e.clientX, e.clientY)) setIsOpen(true); }}
+        onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
         onTouchStart={(e) => {
-          didDragRef.current = false;
+          e.preventDefault();
           if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
         }}
-        onMouseMove={() => { if (isDragging) didDragRef.current = true; }}
-        onTouchMove={() => { if (isDragging) didDragRef.current = true; }}
         style={dragStyle}
-        className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-white p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105"
+        className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-white p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105 touch-none select-none"
         aria-label="Open chat"
       >
         <MessageSquare className="w-6 h-6" />
@@ -185,18 +191,16 @@ export function ChatWidget() {
   return (
     <div
       style={dragStyle}
-      className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl"
+      className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl touch-none select-none"
     >
       {/* Header — draggable */}
       <div
         className="flex items-center justify-between p-4 border-b border-surface-border bg-surface-hover cursor-grab active:cursor-grabbing select-none"
-        onMouseDown={(e) => { didDragRef.current = false; startDrag(e.clientX, e.clientY); }}
+        onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
         onTouchStart={(e) => {
-          didDragRef.current = false;
+          e.preventDefault();
           if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
         }}
-        onMouseMove={() => { if (isDragging) didDragRef.current = true; }}
-        onTouchMove={() => { if (isDragging) didDragRef.current = true; }}
       >
         <div className="flex items-center gap-3">
           <GripVertical className="w-4 h-4 text-zinc-600" />

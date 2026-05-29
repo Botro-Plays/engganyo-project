@@ -70,7 +70,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 // Build external platform URL from stored profileUrl or construct from username
-function getSocialUrl(platform: string, profileUrl: string | null, username: string | null): string {
+function getSocialUrl(platform: string, profileUrl: string | null, username: string | null): string | null {
   if (profileUrl) {
     // Ensure absolute URL (prevent relative-link fallback to current domain)
     if (profileUrl.startsWith('http://') || profileUrl.startsWith('https://')) return profileUrl;
@@ -78,8 +78,8 @@ function getSocialUrl(platform: string, profileUrl: string | null, username: str
     if (profileUrl.includes('.')) return `https://${profileUrl}`;
     // Otherwise construct from known platform patterns
   }
-  const handle = username ?? '';
-  if (!handle) return '#';
+  const handle = (username ?? '').replace(/^@/, '');
+  if (!handle) return null;
   switch (platform) {
     case 'YOUTUBE':    return `https://youtube.com/@${handle}`;
     case 'TIKTOK':     return `https://tiktok.com/@${handle}`;
@@ -89,8 +89,8 @@ function getSocialUrl(platform: string, profileUrl: string | null, username: str
     case 'TWITCH':     return `https://twitch.tv/${handle}`;
     case 'SPOTIFY':    return `https://open.spotify.com/user/${handle}`;
     case 'TELEGRAM':   return `https://t.me/${handle}`;
-    case 'DISCORD':    return '#'; // Discord has no public profile URL by username alone
-    default:           return '#';
+    case 'DISCORD':    return null; // Discord has no public profile URL by username alone
+    default:           return null;
   }
 }
 
@@ -225,21 +225,35 @@ export default function UserProfilePage() {
         <div className="card-glass rounded-xl p-5">
           <h2 className="text-sm font-semibold text-zinc-300 mb-3">Connected Platforms</h2>
           <div className="flex flex-wrap gap-2">
-            {data.socialAccounts.map((s) => (
-              <a
-                key={s.id}
-                href={getSocialUrl(s.platform, s.profileUrl, s.platformUsername)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700 text-xs ${PLATFORM_COLORS[s.platform] ?? 'text-zinc-300'} hover:bg-zinc-700/60 transition-colors`}
-              >
-                {s.platform.charAt(0) + s.platform.slice(1).toLowerCase()}
-                {s.platformUsername && <span className="text-zinc-500">@{s.platformUsername}</span>}
-                {s.followerCount != null && (
-                  <span className="text-zinc-600">{s.followerCount.toLocaleString()} followers</span>
-                )}
-              </a>
-            ))}
+            {data.socialAccounts.map((s) => {
+              const socialUrl = getSocialUrl(s.platform, s.profileUrl, s.platformUsername);
+              const label = s.platform.charAt(0) + s.platform.slice(1).toLowerCase();
+              const content = (
+                <>
+                  {label}
+                  {s.platformUsername && <span className="text-zinc-500">@{s.platformUsername.replace(/^@/, '')}</span>}
+                  {s.followerCount != null && (
+                    <span className="text-zinc-600">{s.followerCount.toLocaleString()} followers</span>
+                  )}
+                </>
+              );
+              const baseClass = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700 text-xs ${PLATFORM_COLORS[s.platform] ?? 'text-zinc-300'}`;
+              return socialUrl ? (
+                <a
+                  key={s.id}
+                  href={socialUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${baseClass} hover:bg-zinc-700/60 transition-colors`}
+                >
+                  {content}
+                </a>
+              ) : (
+                <span key={s.id} className={baseClass}>
+                  {content}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}

@@ -156,6 +156,9 @@ export class SocialAuthService {
       case SocialPlatform.TELEGRAM:
         return { profileUrl: `https://t.me/${handle}`, username: handle };
       case SocialPlatform.DISCORD:
+        if (/^discord\.gg\//i.test(trimmed)) {
+          return { profileUrl: `https://${trimmed}`, username: null };
+        }
         // Discord has no canonical profile URL derivable from a username
         return { profileUrl: null, username: handle };
       default:

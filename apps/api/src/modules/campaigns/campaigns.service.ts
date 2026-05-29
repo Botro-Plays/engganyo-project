@@ -395,7 +395,7 @@ export class CampaignsService {
       this.prisma.campaign.findMany({
         where,
         select: CAMPAIGN_SELECT,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ isPlatformTask: 'desc' }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),

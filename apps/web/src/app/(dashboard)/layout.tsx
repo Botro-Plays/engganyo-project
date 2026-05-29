@@ -36,10 +36,11 @@ const navItems = [
 const baseMobileNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Home' },
   { href: '/tasks', icon: ListTodo, label: 'Tasks' },
-  { href: '/campaigns', icon: Megaphone, label: 'My Campaigns' },
+  { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/discover', icon: Compass, label: 'Discover' },
+  { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -188,19 +189,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile bottom navigation — visible only below md breakpoint */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border">
-        <div className="flex items-center justify-around px-1 py-2">
+        <div className="flex items-center overflow-x-auto scrollbar-hide px-1 py-2 snap-x">
           {mobileNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 flex-1 py-1 rounded-lg transition-all ${
+                className={`flex flex-col items-center gap-0.5 min-w-[4.5rem] flex-shrink-0 py-1 rounded-lg transition-all snap-start ${
                   isActive ? 'text-brand-300' : 'text-zinc-500'
                 }`}
               >
                 <item.icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+                <span className="text-[10px] font-medium leading-tight whitespace-nowrap">{item.label}</span>
               </Link>
             );
           })}

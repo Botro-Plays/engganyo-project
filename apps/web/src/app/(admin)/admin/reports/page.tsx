@@ -32,6 +32,7 @@ export default function AdminReportsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [deductionAmounts, setDeductionAmounts] = useState<Record<string, number>>({});
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -45,8 +46,8 @@ export default function AdminReportsPage() {
   });
 
   const resolveMutation = useMutation({
-    mutationFn: ({ id, status, action }: { id: string; status: 'RESOLVED' | 'DISMISSED'; action?: string }) =>
-      apiClient.patch(`admin/reports/${id}`, { status, notes: notes[id], action }),
+    mutationFn: ({ id, status, action, deductionAmount }: { id: string; status: 'RESOLVED' | 'DISMISSED'; action?: string; deductionAmount?: number }) =>
+      apiClient.patch(`admin/reports/${id}`, { status, notes: notes[id], action, deductionAmount }),
     onSuccess: () => {
       setActionError(null);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'reports'] });
@@ -117,14 +118,25 @@ export default function AdminReportsPage() {
                     >
                       Warn
                     </button>
-                    <button
-                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST' })}
-                      disabled={resolveMutation.isPending}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 text-xs font-medium disabled:opacity-50 transition-all"
-                      title="Deduct trust score"
-                    >
-                      Deduct Trust
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={deductionAmounts[r.id] ?? 15}
+                        onChange={(e) => setDeductionAmounts((d) => ({ ...d, [r.id]: Number(e.target.value) }))}
+                        className="w-10 bg-surface-hover border border-surface-border rounded-md px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        title="Deduction amount"
+                      />
+                      <button
+                        onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: deductionAmounts[r.id] ?? 15 })}
+                        disabled={resolveMutation.isPending}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                        title="Deduct trust score"
+                      >
+                        Deduct Trust
+                      </button>
+                    </div>
                     <button
                       onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'SUSPEND' })}
                       disabled={resolveMutation.isPending}
