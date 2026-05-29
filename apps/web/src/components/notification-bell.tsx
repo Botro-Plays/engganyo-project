@@ -13,7 +13,14 @@ interface AppNotification {
   type: string;
   title: string;
   body: string;
-  data: { topicId?: string; replyId?: string } | null;
+  data: {
+    topicId?: string;
+    replyId?: string;
+    reportId?: string;
+    targetUserId?: string;
+    targetUsername?: string;
+    replyTopicId?: string;
+  } | null;
   isRead: boolean;
   createdAt: string;
 }
@@ -25,7 +32,32 @@ interface NotificationsResponse {
 
 function notificationIcon(type: string) {
   if (type === 'FORUM_MENTION') return <AtSign className="w-4 h-4 text-indigo-400" />;
+  if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-4 h-4 text-green-400" />;
+  if (type === 'ACCOUNT_WARNING') return <Bell className="w-4 h-4 text-amber-400" />;
+  if (type === 'SECURITY_ALERT') return <Bell className="w-4 h-4 text-red-400" />;
   return <Bell className="w-4 h-4 text-zinc-400" />;
+}
+
+function getNotificationHref(n: AppNotification): string {
+  const data =
+    typeof n.data === 'string'
+      ? (JSON.parse(n.data) as Record<string, string>)
+      : (n.data ?? {});
+
+  // Forum mention or any notification with a topicId → go to the forum topic
+  if (data.topicId) return `/forum/${data.topicId}`;
+
+  // Reply report with derived topicId → go to the forum topic
+  if (data.replyTopicId) return `/forum/${data.replyTopicId}`;
+
+  // User report (no topic/reply) → go to reported user's public profile
+  if (data.targetUsername) return `/users/${data.targetUsername}`;
+
+  // Account warnings / security alerts → user's own profile
+  if (n.type === 'ACCOUNT_WARNING' || n.type === 'SECURITY_ALERT') return '/profile';
+
+  // Fallback
+  return '/dashboard';
 }
 
 export function NotificationBell() {
@@ -112,11 +144,7 @@ export function NotificationBell() {
               </div>
             )}
             {data?.items.map((n) => {
-              const notifData =
-                typeof n.data === 'string'
-                  ? (JSON.parse(n.data) as Record<string, string>)
-                  : (n.data ?? {});
-              const href = notifData.topicId ? `/forum/${notifData.topicId}` : '/forum';
+              const href = getNotificationHref(n);
               return (
                 <Link
                   key={n.id}

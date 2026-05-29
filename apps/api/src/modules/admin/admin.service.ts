@@ -629,13 +629,27 @@ export class AdminService {
       select: {
         status: true,
         targetUserId: true,
+        targetUser: { select: { username: true } },
         submittedById: true,
         reason: true,
+        topicId: true,
+        replyId: true,
+        campaignId: true,
       },
     });
     if (!report) throw new NotFoundException('Report not found');
     if (report.status !== ReportStatus.OPEN && report.status !== ReportStatus.UNDER_REVIEW) {
       throw new BadRequestException('Report is already resolved');
+    }
+
+    // Derive topicId from reply if needed for notification routing
+    let replyTopicId: string | undefined;
+    if (report.replyId && !report.topicId) {
+      const reply = await this.prisma.forumReply.findUnique({
+        where: { id: report.replyId },
+        select: { topicId: true },
+      });
+      replyTopicId = reply?.topicId ?? undefined;
     }
 
     // Execute admin action on reported user if provided
@@ -676,7 +690,15 @@ export class AdminService {
                 : action === 'BAN'
                   ? `Your account has been banned. Reason: ${report.reason}. ${adminNote}`
                   : `Warning: ${adminNote}`,
-          data: { reportId, action },
+          data: {
+            reportId,
+            action,
+            topicId: report.topicId ?? undefined,
+            replyId: report.replyId ?? undefined,
+            replyTopicId: replyTopicId ?? undefined,
+            targetUserId: report.targetUserId ?? undefined,
+            targetUsername: report.targetUser?.username ?? undefined,
+          },
         },
       });
     }
@@ -689,7 +711,16 @@ export class AdminService {
           type: 'REPORT_RESOLVED',
           title: 'Report Resolved',
           body: `Your report (${report.reason}) was ${dto.status.toLowerCase()} by the moderation team.`,
-          data: { reportId, status: dto.status, action },
+          data: {
+            reportId,
+            status: dto.status,
+            action,
+            topicId: report.topicId ?? undefined,
+            replyId: report.replyId ?? undefined,
+            replyTopicId: replyTopicId ?? undefined,
+            targetUserId: report.targetUserId ?? undefined,
+            targetUsername: report.targetUser?.username ?? undefined,
+          },
         },
       });
     }
