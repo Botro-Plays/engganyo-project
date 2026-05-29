@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -21,6 +21,8 @@ import {
   Share2,
   Mail,
   ExternalLink,
+  Upload,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -74,7 +76,7 @@ interface FullProfile {
 const profileSchema = z.object({
   displayName: z.string().max(50).optional().or(z.literal('')),
   bio: z.string().max(300).optional().or(z.literal('')),
-  avatarUrl: z.string().url().optional().or(z.literal('')),
+  avatarUrl: z.string().optional().or(z.literal('')),
   websiteUrl: z.string().url().optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
   allowMentions: z.boolean().optional(),
@@ -198,10 +200,22 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [socialError, setSocialError] = useState<string | null>(null);
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setCanShare(!!navigator.share);
   }, []);
+
+  // Clean up object URL on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (avatarPreview && avatarPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, [avatarPreview]);
 
   // ─── Fetch full profile ────────────────────────────────────
   const { data: profile, isLoading } = useQuery({
@@ -260,6 +274,45 @@ export default function ProfilePage() {
     },
     onError: (err) => setProfileError(getApiErrorMessage(err)),
   });
+
+  // ─── Avatar upload ─────────────────────────────────────────
+  const avatarUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiClient.post<ApiResponse<{ avatarUrl: string }>>('uploads/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      profileForm.setValue('avatarUrl', data.avatarUrl);
+      setAvatarPreview(data.avatarUrl);
+      setAvatarUploadError(null);
+    },
+    onError: (err) => setAvatarUploadError(getApiErrorMessage(err)),
+  });
+
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarUploadError('File too large. Max 5MB.');
+      return;
+    }
+    // Show local preview immediately
+    const objectUrl = URL.createObjectURL(file);
+    setAvatarPreview(objectUrl);
+    avatarUploadMutation.mutate(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    profileForm.setValue('avatarUrl', '');
+    setAvatarPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // ─── Password form ─────────────────────────────────────────
   const passwordForm = useForm<PasswordFormData>({
@@ -361,9 +414,9 @@ export default function ProfilePage() {
       {/* ── Avatar + header ── */}
       <div className="card-glass rounded-xl p-6 flex items-start gap-4 flex-wrap">
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-2xl font-bold shrink-0">
-          {profile?.avatarUrl ? (
+          {avatarPreview || profile?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.avatarUrl} alt={displayName} className="w-16 h-16 rounded-full object-cover" />
+            <img src={avatarPreview || profile?.avatarUrl || ''} alt={displayName} className="w-16 h-16 rounded-full object-cover" />
           ) : (
             initials
           )}
@@ -508,15 +561,55 @@ export default function ProfilePage() {
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Avatar URL</label>
-              <input
-                {...profileForm.register('avatarUrl')}
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                placeholder="https://example.com/avatar.jpg"
-              />
-              {profileForm.formState.errors.avatarUrl && (
-                <p className="text-xs text-red-400 mt-1">{profileForm.formState.errors.avatarUrl.message}</p>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Avatar</label>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+                  {avatarPreview || profileForm.watch('avatarUrl') ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarPreview || profileForm.watch('avatarUrl') || ''} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    initials
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    onChange={handleAvatarSelect}
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={avatarUploadMutation.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-zinc-300 text-xs hover:bg-surface-hover hover:text-white transition-all disabled:opacity-50"
+                    >
+                      {avatarUploadMutation.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Upload className="w-3 h-3" />
+                      )}
+                      Upload
+                    </button>
+                    {(avatarPreview || profileForm.watch('avatarUrl')) && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-zinc-500 hover:text-red-400 text-xs transition-colors"
+                        title="Remove avatar"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {avatarUploadError && (
+                <p className="text-xs text-red-400 mt-1">{avatarUploadError}</p>
               )}
+              <p className="text-[10px] text-zinc-600 mt-1">PNG, JPG, JPEG, WebP. Max 5MB.</p>
             </div>
           </div>
 
