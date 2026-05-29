@@ -335,9 +335,12 @@ jobs:
             docker pull "$API_IMAGE"
             docker pull "$WEB_IMAGE"
 
-            docker compose down
+            docker compose down --remove-orphans
 
-            docker compose up -d
+            # Small delay to let Docker daemon fully clean up container references
+            sleep 3
+
+            docker compose up -d --remove-orphans
 
             # Clean up images made dangling by this deploy (old :latest replaced by new :latest)
             docker image prune -f
