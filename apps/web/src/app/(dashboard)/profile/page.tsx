@@ -20,7 +20,9 @@ import {
   Shield,
   Share2,
   Mail,
+  ExternalLink,
 } from 'lucide-react';
+import Link from 'next/link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -380,6 +382,13 @@ export default function ProfilePage() {
             {profile?.referralCode ?? user?.referralCode ?? '—'}
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
+          <Link
+            href={`/users/${profile?.username ?? user?.username}`}
+            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all"
+          >
+            <ExternalLink className="w-3 h-3" />
+            View Public Profile
+          </Link>
           <div className="flex items-center gap-1.5 mt-2 sm:justify-end">
             <span className="text-xs text-zinc-600">Share:</span>
             <a

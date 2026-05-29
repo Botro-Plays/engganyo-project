@@ -964,6 +964,7 @@ export class AdminService {
     recaptcha_v2_secret_key: { value: '',    description: 'reCAPTCHA v2 Checkbox secret key (server-side verification)', isPublic: false },
     groq_api_key:            { value: '',    description: 'Groq API key for AI chat support', isPublic: false },
     groq_model:              { value: 'llama-3.3-70b-versatile', description: 'Groq model to use for AI chat (e.g., llama-3.3-70b-versatile, llama-3.1-8b-instant)', isPublic: false },
+    trust_score_task_bonus:  { value: 2,     description: 'Flat trust score bonus awarded per completed task (added on top of recalculation)', isPublic: false },
   };
 
   async getServerConfig() {

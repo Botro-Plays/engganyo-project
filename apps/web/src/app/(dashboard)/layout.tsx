@@ -143,25 +143,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NotificationBell />
 
             {user && (
-              <Link href="/profile" className="flex items-center gap-2 group">
-                {user.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.displayName ?? user.username}
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold">
-                    {(user.displayName ?? user.username).charAt(0).toUpperCase()}
+              <>
+                <Link href="/profile" className="flex items-center gap-2 group">
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.displayName ?? user.username}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold">
+                      {(user.displayName ?? user.username).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="hidden sm:block">
+                    <p className="text-sm font-medium text-white leading-none">
+                      {user.displayName ?? user.username}
+                    </p>
+                    <p className="text-xs text-zinc-500">Level {user.level}</p>
                   </div>
-                )}
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-white leading-none">
-                    {user.displayName ?? user.username}
-                  </p>
-                  <p className="text-xs text-zinc-500">Level {user.level}</p>
-                </div>
-              </Link>
+                </Link>
+                <button
+                  onClick={() => logout()}
+                  className="md:hidden flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
+                  title="Sign out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </>
             )}
           </div>
         </header>

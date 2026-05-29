@@ -76,8 +76,12 @@ export class AntiAbuseService {
     const totalBadFlags = criticalFlags * 3 + highFlags;
     const reportCount = user._count.reportsReceived;
 
+    // Configurable task completion bonus
+    const configRow = await this.prisma.platformConfig.findUnique({ where: { key: 'trust_score_task_bonus' } });
+    const taskBonus = typeof configRow?.value === 'number' ? configRow.value : 2;
+
     // Score calculation
-    const completionPts = completionRate * 40;
+    const completionPts = completionRate * 40 + verifiedTasks * taskBonus;
     const agePts = Math.min(accountAgeDays / 365, 1) * 20;
     const socialPts = Math.min(verifiedSocials * 5, 25);
     const flagPts = Math.max(0, (1 - Math.min(totalBadFlags / 5, 1)) * 15);

@@ -83,7 +83,6 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
       <RecaptchaContext.Provider value={recaptchaContextValue}>
         <GoogleReCaptchaProvider reCaptchaKey={v3SiteKey}>
           {children}
-          <ChatWidget />
         </GoogleReCaptchaProvider>
       </RecaptchaContext.Provider>
     );
@@ -92,10 +91,7 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
   // v2 or fallback (no provider needed)
   return (
     <RecaptchaContext.Provider value={recaptchaContextValue}>
-      <>
-        {children}
-        <ChatWidget />
-      </>
+      {children}
     </RecaptchaContext.Provider>
   );
 }

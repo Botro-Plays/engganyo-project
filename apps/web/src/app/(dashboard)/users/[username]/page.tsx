@@ -5,13 +5,18 @@ import { useParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   User, MapPin, Globe, Flag, ArrowLeft, ExternalLink,
-  CheckCircle2, Zap, Star, BarChart2,
+  CheckCircle2, Zap, Star, BarChart2, Shield,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import Link from 'next/link';
 import type { ApiResponse } from '@/types';
+
+interface TrustScoreBrief {
+  score: number;
+  level: string;
+}
 
 interface PublicProfile {
   id: string;
@@ -44,6 +49,7 @@ interface PublicProfile {
     followerCount: number | null;
     isVerified: boolean;
   }[];
+  trustScore: TrustScoreBrief | null;
 }
 
 const REPORT_REASONS: { value: string; label: string }[] = [
@@ -204,12 +210,13 @@ export default function UserProfilePage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-4 gap-3 mt-5 pt-4 border-t border-zinc-700/50">
+        <div className="grid grid-cols-5 gap-3 mt-5 pt-4 border-t border-zinc-700/50">
           {[
             { icon: Zap,         label: 'Level',       value: data.level },
             { icon: Star,        label: 'XP',          value: data.xp.toLocaleString() },
             { icon: CheckCircle2,label: 'Tasks done',  value: data.profile?.totalTasksDone ?? 0 },
             { icon: BarChart2,   label: 'Completion',  value: `${Math.round((data.profile?.completionRate ?? 0) * 100)}%` },
+            { icon: Shield,      label: 'Trust',       value: data.trustScore ? `${Math.round(data.trustScore.score)}` : '—' },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center">
               <Icon className="w-4 h-4 text-indigo-400 mx-auto mb-1" />
@@ -228,10 +235,18 @@ export default function UserProfilePage() {
             {data.socialAccounts.map((s) => {
               const socialUrl = getSocialUrl(s.platform, s.profileUrl, s.platformUsername);
               const label = s.platform.charAt(0) + s.platform.slice(1).toLowerCase();
+              // TODO: Discord profile links — investigate how to generate a public profile URL.
+              // See: https://www.google.com/search?q=how+to+get+discord+profile+link%3F&ie=UTF-8
+              const showAt = s.platform !== 'DISCORD';
+              const displayHandle = s.platformUsername.replace(/^@/, '');
               const content = (
                 <>
                   {label}
-                  {s.platformUsername && <span className="text-zinc-500">@{s.platformUsername.replace(/^@/, '')}</span>}
+                  {s.platformUsername && (
+                    <span className="text-zinc-500">
+                      {showAt ? '@' : ''}{displayHandle}
+                    </span>
+                  )}
                   {s.followerCount != null && (
                     <span className="text-zinc-600">{s.followerCount.toLocaleString()} followers</span>
                   )}

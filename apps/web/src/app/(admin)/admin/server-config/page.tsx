@@ -70,9 +70,10 @@ const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 
   recaptcha_v2_secret_key: { label: 'v2 Checkbox Secret Key',      type: 'password', section: 'reCAPTCHA' },
   groq_api_key:            { label: 'Groq API Key',                 type: 'password', section: 'AI Chat' },
   groq_model:              { label: 'Groq Model',                   type: 'text',     section: 'AI Chat' },
+  trust_score_task_bonus:  { label: 'Trust Score Task Bonus',      type: 'number',   section: 'General' },
 };
 
-const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA', 'AI Chat'];
+const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA', 'AI Chat', 'General'];
 
 const EXPORT_TABLES = [
   { key: 'users',        label: 'Users',             icon: Users,     description: 'All user accounts with role, status, XP, and credits' },
@@ -394,6 +395,7 @@ export default function ServerConfigPage() {
                       {section === 'Platform' && <ToggleLeft className="w-4 h-4 text-amber-400" />}
                       {section === 'Referral' && <Users className="w-4 h-4 text-green-400" />}
                       {section === 'AI Chat' && <MessageSquare className="w-4 h-4 text-brand-400" />}
+                      {section === 'General' && <Settings2 className="w-4 h-4 text-zinc-400" />}
                       {section}
                     </h3>
                     <div className="space-y-4">

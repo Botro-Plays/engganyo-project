@@ -8,6 +8,7 @@ import { CampaignStatus, CompletionStatus, TaskType, TransactionType } from '@pr
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -50,6 +51,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
+    private readonly antiAbuseService: AntiAbuseService,
   ) {}
 
   // ─── Create ────────────────────────────────────────────────
@@ -241,6 +243,7 @@ export class CampaignsService {
         referenceType: 'campaign',
       });
 
+      void this.antiAbuseService.recalculateTrustScore(completion.userId).catch(() => null);
       return { reviewed: true, action: 'approve', creditsAwarded: campaign.creditPerTask };
     } else {
       await this.prisma.$transaction(async (tx) => {

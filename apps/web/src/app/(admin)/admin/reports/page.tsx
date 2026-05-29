@@ -119,15 +119,16 @@ export default function AdminReportsPage() {
                       Warn
                     </button>
                     <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
+                      <select
                         value={deductionAmounts[r.id] ?? 15}
                         onChange={(e) => setDeductionAmounts((d) => ({ ...d, [r.id]: Number(e.target.value) }))}
-                        className="w-10 bg-surface-hover border border-surface-border rounded-md px-1.5 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        className="bg-surface-hover border border-surface-border rounded-md px-1.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                         title="Deduction amount"
-                      />
+                      >
+                        {[5, 10, 15, 20, 25, 30, 40, 50].map((v) => (
+                          <option key={v} value={v}>{v} pts</option>
+                        ))}
+                      </select>
                       <button
                         onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: deductionAmounts[r.id] ?? 15 })}
                         disabled={resolveMutation.isPending}

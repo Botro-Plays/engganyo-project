@@ -137,6 +137,9 @@ export class UsersService {
           select: SOCIAL_SELECT,
           orderBy: { platform: 'asc' },
         },
+        trustScore: {
+          select: { score: true, level: true },
+        },
       },
     });
 
@@ -151,6 +154,7 @@ export class UsersService {
     return {
       ...publicUser,
       socialAccounts: Array.isArray(publicUser.socialAccounts) ? publicUser.socialAccounts : [],
+      trustScore: publicUser.trustScore ?? null,
     };
   }
 
