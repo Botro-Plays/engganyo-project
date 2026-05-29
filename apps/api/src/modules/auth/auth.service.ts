@@ -584,11 +584,16 @@ export class AuthService {
 
   async getPublicConfig() {
     const cfg = await this.getRecaptchaConfig();
+    const enabledPlatforms = await this.prisma.oAuthConfig.findMany({
+      where: { enabled: true },
+      select: { platform: true },
+    });
     return {
       recaptchaEnabled:   cfg.enabled,
       recaptchaVersion:    cfg.version,
       recaptchaV3SiteKey: cfg.v3SiteKey  || null,
       recaptchaV2SiteKey: cfg.v2SiteKey  || null,
+      enabledPlatforms:   enabledPlatforms.map((p) => p.platform),
     };
   }
 

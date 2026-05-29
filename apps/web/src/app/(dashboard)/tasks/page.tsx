@@ -190,6 +190,24 @@ export default function TasksPage() {
     return new Set<string>();
   }, [linkedAccounts]);
 
+  // ─── Enabled platforms (for task gating) ───────────────────
+  const { data: publicConfig } = useQuery({
+    queryKey: ['public-config'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{
+        recaptchaEnabled: boolean;
+        recaptchaVersion: string;
+        recaptchaV3SiteKey: string | null;
+        recaptchaV2SiteKey: string | null;
+        enabledPlatforms: string[];
+      }>>('auth/public-config');
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
+
   // ─── Browse tasks ──────────────────────────────────────────
   const { data: browseData, isLoading: browseLoading } = useQuery({
     queryKey: ['tasks', 'browse', browsePage],
@@ -199,10 +217,17 @@ export default function TasksPage() {
           `tasks?page=${browsePage}&limit=12`,
         );
         const data = res.data.data;
-        // Ensure items is always an array
+        // Ensure items is always an array and filter out disabled platforms
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const filtered = items.filter((task: AvailableTask) => {
+          const platform = TASK_TYPE_TO_PLATFORM[task.taskType];
+          // If config hasn't loaded yet, show everything; otherwise filter by enabled platforms
+          return !platform || enabledPlatforms === null || enabledPlatforms.includes(platform);
+        });
         return {
           ...data,
-          items: Array.isArray(data?.items) ? data.items : [],
+          items: filtered,
+          meta: { ...data.meta, total: filtered.length },
         };
       } catch (err) {
         console.error('Failed to fetch browse tasks:', err);

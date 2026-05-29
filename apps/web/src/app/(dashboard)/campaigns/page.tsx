@@ -15,8 +15,23 @@ import { formatCredits } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
 
+// ─── Task type → platform map ─────────────────────────────────
+const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
+  YOUTUBE_SUBSCRIBE: 'YOUTUBE', YOUTUBE_LIKE: 'YOUTUBE', YOUTUBE_COMMENT: 'YOUTUBE', YOUTUBE_WATCH: 'YOUTUBE',
+  TIKTOK_FOLLOW: 'TIKTOK', TIKTOK_LIKE: 'TIKTOK', TIKTOK_COMMENT: 'TIKTOK',
+  INSTAGRAM_FOLLOW: 'INSTAGRAM', INSTAGRAM_LIKE: 'INSTAGRAM', INSTAGRAM_COMMENT: 'INSTAGRAM',
+  TWITTER_FOLLOW: 'TWITTER', TWITTER_LIKE: 'TWITTER', TWITTER_RETWEET: 'TWITTER', TWITTER_REPLY: 'TWITTER',
+  FACEBOOK_PAGE_LIKE: 'FACEBOOK', FACEBOOK_POST_LIKE: 'FACEBOOK', FACEBOOK_SHARE: 'FACEBOOK',
+  TWITCH_FOLLOW: 'TWITCH',
+  SPOTIFY_FOLLOW: 'SPOTIFY', SPOTIFY_STREAM: 'SPOTIFY',
+  TELEGRAM_JOIN_CHANNEL: 'TELEGRAM', TELEGRAM_JOIN_GROUP: 'TELEGRAM',
+  DISCORD_JOIN_SERVER: 'DISCORD',
+  TRUSTPILOT_REVIEW: 'TRUSTPILOT',
+  GOOGLE_REVIEW: 'GOOGLE',
+};
+
 // ─── Types ────────────────────────────────────────────────────
-const TASK_TYPES = [
+const ALL_TASK_TYPES = [
   { value: 'YOUTUBE_SUBSCRIBE',    label: 'YouTube · Subscribe' },
   { value: 'YOUTUBE_LIKE',         label: 'YouTube · Like' },
   { value: 'YOUTUBE_COMMENT',      label: 'YouTube · Comment' },
@@ -133,6 +148,29 @@ export default function CampaignsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'finished' | 'cancelled'>('all');
   const [reviewingCampaign, setReviewingCampaign] = useState<Campaign | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+
+  // Fetch public config to know which platforms are enabled
+  const { data: publicConfig } = useQuery({
+    queryKey: ['public-config'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{
+        recaptchaEnabled: boolean;
+        recaptchaVersion: string;
+        recaptchaV3SiteKey: string | null;
+        recaptchaV2SiteKey: string | null;
+        enabledPlatforms: string[];
+      }>>('auth/public-config');
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
+  const TASK_TYPES = ALL_TASK_TYPES.filter((t) => {
+    const platform = TASK_TYPE_TO_PLATFORM[t.value];
+    // If config hasn't loaded yet, show everything; otherwise filter by enabled platforms
+    return !platform || enabledPlatforms === null || enabledPlatforms.includes(platform);
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['campaigns', 'my', page],

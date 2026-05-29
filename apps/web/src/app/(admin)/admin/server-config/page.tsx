@@ -18,6 +18,7 @@ interface OAuthConfigEntry {
   clientId: string | null;
   clientSecretSet: boolean;
   enabled: boolean;
+  isOAuth: boolean;
   updatedAt: string | null;
 }
 
@@ -31,13 +32,33 @@ interface ServerConfigEntry {
 }
 
 // ─── OAuth platform meta ──────────────────────────────────────
-const PLATFORM_META: Record<string, { label: string; color: string; bg: string; docsUrl: string; hint: string }> = {
+const PLATFORM_META: Record<string, { label: string; color: string; bg: string; docsUrl?: string; hint?: string }> = {
   YOUTUBE: {
     label: 'YouTube (Google OAuth)',
     color: 'text-red-400',
     bg: 'bg-red-500/10',
     docsUrl: 'https://console.cloud.google.com/apis/credentials',
     hint: 'Create OAuth 2.0 credentials. Scopes: youtube.readonly, openid, profile. Redirect URI: {API_BASE}/social-auth/youtube/callback',
+  },
+  TIKTOK: {
+    label: 'TikTok',
+    color: 'text-white',
+    bg: 'bg-white/10',
+  },
+  INSTAGRAM: {
+    label: 'Instagram',
+    color: 'text-pink-400',
+    bg: 'bg-pink-500/10',
+  },
+  FACEBOOK: {
+    label: 'Facebook',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10',
+  },
+  TWITTER: {
+    label: 'Twitter / X',
+    color: 'text-sky-400',
+    bg: 'bg-sky-500/10',
   },
   TWITCH: {
     label: 'Twitch',
@@ -52,6 +73,16 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
     bg: 'bg-green-500/10',
     docsUrl: 'https://developer.spotify.com/dashboard',
     hint: 'Create an app. Scopes: user-follow-read user-read-private. Redirect URI: {API_BASE}/social-auth/spotify/callback',
+  },
+  TELEGRAM: {
+    label: 'Telegram',
+    color: 'text-cyan-400',
+    bg: 'bg-cyan-500/10',
+  },
+  DISCORD: {
+    label: 'Discord',
+    color: 'text-indigo-400',
+    bg: 'bg-indigo-500/10',
   },
 };
 
@@ -278,8 +309,8 @@ export default function ServerConfigPage() {
       {tab === 'integrations' && (
         <div>
           <p className="text-zinc-400 text-sm mb-5">
-            OAuth client credentials for social platform verification. Stored securely in the database —
-            values here override <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">.env</code> fallbacks.
+            Enable or disable social platforms for tasks. OAuth platforms also show credential fields.
+            Disabling a platform will pause all active campaigns that use it.
           </p>
           {oauthLoading ? (
             <div className="space-y-4">
@@ -303,14 +334,19 @@ export default function ServerConfigPage() {
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-white">{meta.label}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {cfg.clientId
-                              ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 className="w-3 h-3" /> Client ID set</span>
-                              : <span className="text-xs text-zinc-600">No client ID</span>}
-                            {cfg.clientSecretSet
-                              ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 className="w-3 h-3" /> Secret set</span>
-                              : <span className="text-xs text-zinc-600">No secret</span>}
-                          </div>
+                          {cfg.isOAuth && (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {cfg.clientId
+                                ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 className="w-3 h-3" /> Client ID set</span>
+                                : <span className="text-xs text-zinc-600">No client ID</span>}
+                              {cfg.clientSecretSet
+                                ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 className="w-3 h-3" /> Secret set</span>
+                                : <span className="text-xs text-zinc-600">No secret</span>}
+                            </div>
+                          )}
+                          {!cfg.isOAuth && (
+                            <p className="text-xs text-zinc-600 mt-0.5">Manual link only — no OAuth credentials required</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -324,38 +360,44 @@ export default function ServerConfigPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                      <div>
-                        <label className="block text-xs text-zinc-500 mb-1">Client ID</label>
-                        <input
-                          value={edit.clientId}
-                          onChange={(e) => setOauthEdits((p) => ({ ...p, [cfg.platform]: { ...(p[cfg.platform] ?? { clientSecret: '', enabled: cfg.enabled }), clientId: e.target.value } }))}
-                          placeholder="Paste Client ID"
-                          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-zinc-500 mb-1">
-                          Client Secret {cfg.clientSecretSet && <span className="text-green-400">(set — leave blank to keep)</span>}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showSecret[cfg.platform] ? 'text' : 'password'}
-                            value={edit.clientSecret}
-                            onChange={(e) => setOauthEdits((p) => ({ ...p, [cfg.platform]: { ...(p[cfg.platform] ?? { clientId: cfg.clientId ?? '', enabled: cfg.enabled }), clientSecret: e.target.value } }))}
-                            placeholder={cfg.clientSecretSet ? '••••••••••••' : 'Paste Client Secret'}
-                            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 pr-9 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
-                          />
-                          <button type="button" onClick={() => setShowSecret((s) => ({ ...s, [cfg.platform]: !s[cfg.platform] }))} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
-                            {showSecret[cfg.platform] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
+                    {cfg.isOAuth && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                          <div>
+                            <label className="block text-xs text-zinc-500 mb-1">Client ID</label>
+                            <input
+                              value={edit.clientId}
+                              onChange={(e) => setOauthEdits((p) => ({ ...p, [cfg.platform]: { ...(p[cfg.platform] ?? { clientSecret: '', enabled: cfg.enabled }), clientId: e.target.value } }))}
+                              placeholder="Paste Client ID"
+                              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-zinc-500 mb-1">
+                              Client Secret {cfg.clientSecretSet && <span className="text-green-400">(set — leave blank to keep)</span>}
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showSecret[cfg.platform] ? 'text' : 'password'}
+                                value={edit.clientSecret}
+                                onChange={(e) => setOauthEdits((p) => ({ ...p, [cfg.platform]: { ...(p[cfg.platform] ?? { clientId: cfg.clientId ?? '', enabled: cfg.enabled }), clientSecret: e.target.value } }))}
+                                placeholder={cfg.clientSecretSet ? '••••••••••••' : 'Paste Client Secret'}
+                                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 pr-9 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                              />
+                              <button type="button" onClick={() => setShowSecret((s) => ({ ...s, [cfg.platform]: !s[cfg.platform] }))} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                                {showSecret[cfg.platform] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <p className="text-xs text-zinc-600 mb-3">
-                      {meta.hint}{' '}
-                      <a href={meta.docsUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">Open console ↗</a>
-                    </p>
+                        {meta.hint && meta.docsUrl && (
+                          <p className="text-xs text-zinc-600 mb-3">
+                            {meta.hint}{' '}
+                            <a href={meta.docsUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">Open console ↗</a>
+                          </p>
+                        )}
+                      </>
+                    )}
                     {notice && (
                       <div className={`mb-3 text-xs px-3 py-2 rounded-lg ${notice.type === 'success' ? 'bg-green-500/10 border border-green-500/20 text-green-400' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}>
                         {notice.msg}

@@ -14,6 +14,7 @@ interface PublicConfig {
   recaptchaVersion: 'v2' | 'v3';
   recaptchaV3SiteKey: string | null;
   recaptchaV2SiteKey: string | null;
+  enabledPlatforms: string[];
 }
 
 interface RecaptchaContextValue {

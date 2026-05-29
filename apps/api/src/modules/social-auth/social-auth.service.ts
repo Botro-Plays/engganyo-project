@@ -101,6 +101,11 @@ export class SocialAuthService {
   // ─── Manual link (non-OAuth platforms: Twitter, TikTok, Instagram, Facebook) ─
 
   async manualLink(userId: string, platform: SocialPlatform, input: string) {
+    const enabled = await this.isPlatformEnabled(platform);
+    if (!enabled) {
+      throw new BadRequestException(`${platform} tasks are currently disabled.`);
+    }
+
     const oauthPlatforms = [SocialPlatform.YOUTUBE, SocialPlatform.TWITCH, SocialPlatform.SPOTIFY];
     if ((oauthPlatforms as SocialPlatform[]).includes(platform)) {
       throw new BadRequestException(`${platform} requires OAuth — use the Connect button instead.`);
@@ -201,6 +206,11 @@ export class SocialAuthService {
   // ─── Build OAuth authorization URL ─────────────────────────────────────────
 
   async getConnectUrl(userId: string, platform: SocialPlatform): Promise<{ url: string }> {
+    const enabled = await this.isPlatformEnabled(platform);
+    if (!enabled) {
+      throw new BadRequestException(`${platform} tasks are currently disabled.`);
+    }
+
     const cfg = PLATFORM_CONFIGS[platform];
     if (!cfg) {
       throw new BadRequestException(`OAuth not supported for platform: ${platform}`);
@@ -727,5 +737,22 @@ export class SocialAuthService {
   /** Expose the platform→taskType mapping for use in other services */
   static getPlatformForTaskType(taskType: TaskType): SocialPlatform | null {
     return TASK_TYPE_PLATFORM[taskType] ?? null;
+  }
+
+  /** Return all task types that belong to a given platform */
+  static getTaskTypesForPlatform(platform: SocialPlatform): TaskType[] {
+    return (Object.entries(TASK_TYPE_PLATFORM) as [TaskType, SocialPlatform][])  
+      .filter(([, p]) => p === platform)
+      .map(([taskType]) => taskType);
+  }
+
+  /** Check whether a social platform is enabled for tasks */
+  async isPlatformEnabled(platform: SocialPlatform): Promise<boolean> {
+    const cfg = await this.prisma.oAuthConfig.findUnique({
+      where: { platform },
+      select: { enabled: true },
+    });
+    // Default to true if no config row exists (backward compatible)
+    return cfg?.enabled ?? true;
   }
 }

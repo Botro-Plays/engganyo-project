@@ -90,6 +90,13 @@ export class TasksService {
     // ── Require linked social account for the campaign's platform ──────────
     const requiredPlatform = SocialAuthService.getPlatformForTaskType(campaign.taskType as never);
     if (requiredPlatform) {
+      const enabled = await this.socialAuthService.isPlatformEnabled(requiredPlatform);
+      if (!enabled) {
+        const platformLabel = requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase();
+        throw new BadRequestException(
+          `${platformLabel} tasks are currently disabled.`,
+        );
+      }
       const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
       if (!linked) {
         const platformLabel = requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase();

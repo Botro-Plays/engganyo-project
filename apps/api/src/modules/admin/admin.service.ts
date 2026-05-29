@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { CampaignStatus, CompletionStatus, Prisma, ReportStatus, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -8,6 +8,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SocialAuthService } from '../social-auth/social-auth.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -1042,6 +1043,11 @@ export class AdminService {
 
   // ─── OAuth Config (SUPER_ADMIN only) ─────────────────────
 
+  private readonly ALL_SOCIAL_PLATFORMS = [
+    'YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER',
+    'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD',
+  ] as const;
+
   private readonly OAUTH_PLATFORMS = ['YOUTUBE', 'TWITCH', 'SPOTIFY'] as const;
 
   async getOAuthConfigs() {
@@ -1059,13 +1065,15 @@ export class AdminService {
     // Build a map for O(1) lookup
     const configMap = new Map(configs.map((c) => [c.platform, c]));
 
-    return this.OAUTH_PLATFORMS.map((platform) => {
+    return this.ALL_SOCIAL_PLATFORMS.map((platform) => {
       const cfg = configMap.get(platform as never);
+      const isOAuth = (this.OAUTH_PLATFORMS as readonly string[]).includes(platform);
       return {
         platform,
         clientId: cfg?.clientId ?? null,
-        clientSecretSet: !!cfg?.clientSecret,   // never expose the secret itself
-        enabled: cfg?.enabled ?? false,
+        clientSecretSet: !!cfg?.clientSecret,
+        enabled: cfg?.enabled ?? true,
+        isOAuth,
         updatedAt: cfg?.updatedAt ?? null,
       };
     });
@@ -1077,19 +1085,20 @@ export class AdminService {
     dto: { clientId?: string; clientSecret?: string; enabled?: boolean },
   ) {
     const p = platform.toUpperCase() as never;
-    if (!this.OAUTH_PLATFORMS.includes(p)) {
-      throw new BadRequestException(`${platform} does not support OAuth configuration`);
+    if (!this.ALL_SOCIAL_PLATFORMS.includes(p)) {
+      throw new BadRequestException(`Unknown platform: ${platform}`);
     }
 
+    const isOAuth = (this.OAUTH_PLATFORMS as readonly string[]).includes(p);
     const data: {
-      clientId?: string;
-      clientSecret?: string;
+      clientId?: string | null;
+      clientSecret?: string | null;
       enabled?: boolean;
       updatedById: string;
     } = { updatedById: adminId };
 
-    if (dto.clientId !== undefined)     data.clientId     = dto.clientId;
-    if (dto.clientSecret !== undefined) data.clientSecret = dto.clientSecret;
+    if (dto.clientId !== undefined)     data.clientId     = dto.clientId || null;
+    if (dto.clientSecret !== undefined) data.clientSecret = dto.clientSecret || null;
     if (dto.enabled !== undefined)      data.enabled      = dto.enabled;
 
     await this.prisma.oAuthConfig.upsert({
@@ -1098,7 +1107,60 @@ export class AdminService {
       update: data,
     });
 
+    // If platform was disabled, pause all active campaigns that use it
+    if (dto.enabled === false) {
+      await this.pauseCampaignsForPlatform(p, adminId);
+    }
+
+    this.eventsService.emitBroadcast('platform:updated', { platform: p, enabled: dto.enabled });
+
     return { updated: true, platform };
+  }
+
+  private async pauseCampaignsForPlatform(platform: string, adminId: string) {
+    const taskTypes = SocialAuthService.getTaskTypesForPlatform(platform as SocialPlatform);
+    if (!taskTypes.length) return { paused: 0 };
+
+    const campaigns = await this.prisma.campaign.findMany({
+      where: {
+        status: CampaignStatus.ACTIVE,
+        taskType: { in: taskTypes as never },
+      },
+      select: { id: true, userId: true, title: true },
+    });
+
+    if (!campaigns.length) return { paused: 0 };
+
+    await this.prisma.campaign.updateMany({
+      where: {
+        id: { in: campaigns.map((c) => c.id) },
+        status: CampaignStatus.ACTIVE,
+      },
+      data: { status: CampaignStatus.PAUSED },
+    });
+
+    // Notify campaign creators
+    for (const campaign of campaigns) {
+      await this.notificationsService.createNotification(
+        campaign.userId,
+        'SYSTEM_ANNOUNCEMENT',
+        'Campaign Paused — Platform Disabled',
+        `Your campaign "${campaign.title}" was paused because the ${platform} platform has been disabled by an administrator. You may resume it once the platform is re-enabled or change the task type.`,
+        { campaignId: campaign.id, platform, reason: 'PLATFORM_DISABLED' },
+      );
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'campaign.bulk_pause',
+        entityType: 'Campaign',
+        entityId: campaigns.map((c) => c.id).join(','),
+        newValue: { reason: 'PLATFORM_DISABLED', platform, count: campaigns.length },
+      },
+    });
+
+    return { paused: campaigns.length };
   }
 
   // ─── Platform Config (SUPER_ADMIN only) ──────────────────────

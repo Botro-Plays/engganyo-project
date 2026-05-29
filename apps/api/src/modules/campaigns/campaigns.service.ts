@@ -9,6 +9,7 @@ import { CampaignStatus, CompletionStatus, TaskType, TransactionType } from '@pr
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
+import { SocialAuthService } from '../social-auth/social-auth.service';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -52,6 +53,7 @@ export class CampaignsService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly antiAbuseService: AntiAbuseService,
+    private readonly socialAuthService: SocialAuthService,
   ) {}
 
   // ─── Create ────────────────────────────────────────────────
@@ -59,6 +61,17 @@ export class CampaignsService {
   async create(userId: string, userRole: string, dto: CreateCampaignDto) {
     const totalCost = dto.totalSlots * dto.creditPerTask;
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
+    // Check if the platform is enabled
+    const platform = SocialAuthService.getPlatformForTaskType(dto.taskType as TaskType);
+    if (platform) {
+      const enabled = await this.socialAuthService.isPlatformEnabled(platform);
+      if (!enabled) {
+        throw new BadRequestException(
+          `${platform.charAt(0) + platform.slice(1).toLowerCase()} tasks are currently disabled.`,
+        );
+      }
+    }
 
     // Debit the full campaign cost upfront
     await this.walletService.debit(userId, totalCost, {
