@@ -118,7 +118,7 @@ export function SearchBar() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search users, campaigns, forum..."
-            className="w-64 lg:w-80 pl-9 pr-8 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-48 sm:w-64 lg:w-80 pl-9 pr-8 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           {query && (
             <button
@@ -134,7 +134,7 @@ export function SearchBar() {
 
       {/* Dropdown results */}
       {open && query.trim().length >= 2 && (
-        <div className="absolute right-0 top-full mt-2 w-80 lg:w-96 card-glass rounded-xl border border-surface-border shadow-xl overflow-hidden z-50">
+        <div className="fixed inset-x-4 top-[4.5rem] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 lg:w-96 card-glass rounded-xl border border-surface-border shadow-xl overflow-hidden z-50">
           {isFetching ? (
             <div className="p-6 text-center">
               <Loader2 className="w-5 h-5 animate-spin text-zinc-500 mx-auto" />
