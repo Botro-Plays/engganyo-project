@@ -35,11 +35,7 @@ export class AntiAbuseService {
   // ─── Trust score ───────────────────────────────────────────
 
   async getTrustScore(userId: string) {
-    let trust = await this.prisma.trustScore.findUnique({ where: { userId } });
-    if (!trust) {
-      trust = await this.recalculateTrustScore(userId);
-    }
-    return trust;
+    return this.recalculateTrustScore(userId);
   }
 
   async recalculateTrustScore(userId: string) {

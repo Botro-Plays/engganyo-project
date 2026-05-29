@@ -47,6 +47,11 @@ export function NotificationBell() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => apiClient.patch(`notifications/${id}/read`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -107,12 +112,19 @@ export function NotificationBell() {
               </div>
             )}
             {data?.items.map((n) => {
-              const href = n.data?.topicId ? `/forum/${n.data.topicId}` : '/forum';
+              const notifData =
+                typeof n.data === 'string'
+                  ? (JSON.parse(n.data) as Record<string, string>)
+                  : (n.data ?? {});
+              const href = notifData.topicId ? `/forum/${notifData.topicId}` : '/forum';
               return (
                 <Link
                   key={n.id}
                   href={href}
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    if (!n.isRead) markReadMutation.mutate(n.id);
+                  }}
                   className={`flex items-start gap-3 px-4 py-3 border-b border-zinc-800 hover:bg-zinc-800/60 transition-colors ${!n.isRead ? 'bg-indigo-500/5' : ''}`}
                 >
                   <div className="mt-0.5 flex-shrink-0">{notificationIcon(n.type)}</div>

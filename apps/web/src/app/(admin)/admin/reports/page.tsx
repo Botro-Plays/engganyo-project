@@ -150,7 +150,7 @@ export default function AdminReportsPage() {
                           <CheckCircle2 className="w-3.5 h-3.5" /> Resolve <ChevronDown className="w-3 h-3" />
                         </button>
                         {resolveOpen.has(r.id) && (
-                          <div className="absolute top-full right-0 mt-1 z-20 bg-surface border border-surface-border rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+                          <div className="absolute top-full right-0 mt-1 z-20 bg-surface border border-surface-border rounded-lg shadow-xl min-w-[140px]">
                             <button
                               onClick={() => {
                                 setResolveOpen((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
