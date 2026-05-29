@@ -3,6 +3,7 @@ import { AdminService } from './admin.service';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
+import { EventsService } from '../events/events.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
@@ -73,6 +74,12 @@ describe('AdminService', () => {
     invalidateRecaptchaCache: jest.fn(),
   };
 
+  const mockEventsService = {
+    emitToUser: jest.fn(),
+    emitToRoom: jest.fn(),
+    emitBroadcast: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -80,6 +87,7 @@ describe('AdminService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WalletService, useValue: mockWalletService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: EventsService, useValue: mockEventsService },
       ],
     }).compile();
 
