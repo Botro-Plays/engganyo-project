@@ -320,7 +320,6 @@ jobs:
           port: ${{ secrets.VPS_SSH_PORT || 22 }}
           timeout: 120s
           command_timeout: 10m
-          script_stop: true
           envs: GHCR_TOKEN,GITHUB_ACTOR,API_IMAGE,WEB_IMAGE
           script: |
             set -e
@@ -340,30 +339,31 @@ jobs:
             docker pull "$API_IMAGE"
             docker pull "$WEB_IMAGE"
 
-            echo "[5/10] Stopping existing containers..."
-            docker compose down --remove-orphans --timeout 30 || echo "Some containers may have already been removed"
+            echo "[5/10] Stopping app containers..."
+            docker compose stop api web
+            docker compose rm -f api web
 
-            echo "[6/10] Waiting for Docker cleanup..."
-            sleep 3
+            echo "[6/10] Starting updated app containers..."
+            docker compose up -d --no-deps --force-recreate api web
 
-            echo "[7/10] Starting new containers..."
-            docker compose up -d --remove-orphans
-
-            echo "[8/10] Waiting for API health..."
-            for i in $(seq 1 30); do
+            echo "[7/10] Waiting for API health..."
+            for i in $(seq 1 60); do
               if docker compose exec -T api wget -qO- http://localhost:3001/api/health 2>/dev/null | grep -q '"status"'; then
                 echo "API healthy after ${i}s"
                 break
               fi
-              if [ "$i" -eq 30 ]; then
+              if [ "$i" -eq 60 ]; then
                 echo "WARNING: API health check timed out — continuing with migrations..."
               fi
-              echo "  health check $i/30..."
+              echo "  health check $i/60..."
               sleep 2
             done
 
-            echo "[9/10] Running database migrations..."
+            echo "[8/10] Running database migrations..."
             docker compose exec -T api node_modules/.bin/prisma migrate deploy
+
+            echo "[9/10] Reloading nginx..."
+            docker compose exec nginx nginx -s reload || docker compose up -d --no-deps nginx
 
             echo "[10/10] Final cleanup..."
             docker image prune -f || true

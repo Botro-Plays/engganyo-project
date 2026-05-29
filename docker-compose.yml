@@ -14,7 +14,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./infra/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DATABASE_USER:-engganyo} -d ${DATABASE_NAME:-engganyo_db}']
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
       interval: 10s
       timeout: 5s
       retries: 10
