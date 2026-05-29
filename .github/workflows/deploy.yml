@@ -371,8 +371,8 @@ jobs:
             echo "[8/10] Running database migrations..."
             docker compose exec -T api node_modules/.bin/prisma migrate deploy
 
-            echo "[9/10] Reloading nginx..."
-            docker compose exec nginx nginx -s reload || docker compose up -d --no-deps nginx
+            echo "[9/10] Recreating nginx to pick up config changes..."
+            docker compose up -d --no-deps --force-recreate nginx
 
             echo "[10/10] Final cleanup..."
             docker image prune -f || true
