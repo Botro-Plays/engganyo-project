@@ -1201,6 +1201,21 @@ This document should be updated when:
 - **Decision**: Added `docker image prune -af --filter "until=168h"` to `auto-deploy.sh`
 - **Reason**: Unused images accumulate over time and consume disk space on the VPS
 
+### INF-006: Redis Docker Memory Limit Fix
+- **Status**: Fixed
+- **Decision**: Increased Docker memory limit for redis container from 256m to 512m
+- **Reason**: Redis was configured with `--maxmemory 256mb` (data memory) inside a Docker container limited to 256m (total). The container needs headroom for Redis process overhead, AOF persistence, and forked child processes during AOF rewrite. The mismatch caused the container to exit cleanly (code 0) during startup on production data.
+- **Lesson**: Docker memory limits must exceed application `maxmemory` settings to account for process overhead
+
+## Security Infrastructure (2026-05-29)
+
+### SEC-002: SSH Brute-Force Protection with fail2ban
+- **Status**: Implemented
+- **Decision**: Installed fail2ban on the VPS to auto-ban IPs after repeated failed SSH login attempts
+- **Reason**: Auth logs show constant automated brute-force attempts against `root` user from botnets. fail2ban blocks these at the firewall level before they can succeed.
+- **Configuration**: Default sshd jail — 5 failures within 10 minutes triggers 1-hour ban
+- **Status on install**: Already banned 2 attacker IPs (`45.148.10.152`, `45.148.10.141`) within seconds of starting
+
 ## Security Fixes (2026-05-22)
 
 ### SEC-001: Upload Static File Middleware Ordering Bug

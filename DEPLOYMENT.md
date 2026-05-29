@@ -787,6 +787,58 @@ sudo crontab -l | grep -v health-check | sudo crontab -
 
 ---
 
+## Security Hardening
+
+### fail2ban — SSH Brute-Force Protection
+
+Install fail2ban to automatically block IPs that repeatedly fail SSH authentication:
+
+```bash
+# Install
+sudo apt install fail2ban -y
+
+# Enable and start immediately
+sudo systemctl enable fail2ban --now
+
+# Verify it's running
+sudo systemctl status fail2ban
+
+# Check it's watching SSH
+sudo fail2ban-client status sshd
+
+# See currently banned IPs
+sudo fail2ban-client status sshd | grep "Banned IP list"
+```
+
+**Default behavior:** 5 failed SSH login attempts within 10 minutes → IP banned for 1 hour.
+
+**Monitor bans in real-time:**
+```bash
+sudo tail -f /var/log/fail2ban.log
+```
+
+### SSH Hardening Checklist
+
+Verify these settings are in place:
+
+```bash
+# Check password authentication is disabled
+grep -E "^PasswordAuthentication|^PermitRootLogin" /etc/ssh/sshd_config
+```
+
+Expected output:
+```
+PasswordAuthentication no
+PermitRootLogin no
+```
+
+If either shows `yes`, edit `/etc/ssh/sshd_config` and set both to `no`, then restart SSH:
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
 ## Future Recommendations
 
 ### High Priority
