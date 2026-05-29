@@ -701,6 +701,24 @@ export class AdminService {
           },
         },
       });
+    } else if (report.targetUserId) {
+      // No action taken (e.g. dismissed) — notify reported user that no action was taken
+      await this.prisma.notification.create({
+        data: {
+          userId: report.targetUserId,
+          type: 'REPORT_RESOLVED',
+          title: 'Report Dismissed',
+          body: `A report against you was reviewed and dismissed. No action was taken.`,
+          data: {
+            reportId,
+            topicId: report.topicId ?? undefined,
+            replyId: report.replyId ?? undefined,
+            replyTopicId: replyTopicId ?? undefined,
+            targetUserId: report.targetUserId ?? undefined,
+            targetUsername: report.targetUser?.username ?? undefined,
+          },
+        },
+      });
     }
 
     // Notify reporter that their report was resolved
