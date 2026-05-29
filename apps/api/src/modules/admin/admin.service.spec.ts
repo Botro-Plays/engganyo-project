@@ -4,6 +4,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
@@ -80,6 +81,10 @@ describe('AdminService', () => {
     emitBroadcast: jest.fn(),
   };
 
+  const mockNotificationsService = {
+    createNotification: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -88,6 +93,7 @@ describe('AdminService', () => {
         { provide: WalletService, useValue: mockWalletService },
         { provide: AuthService, useValue: mockAuthService },
         { provide: EventsService, useValue: mockEventsService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
@@ -96,6 +102,7 @@ describe('AdminService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    mockNotificationsService.createNotification.mockClear();
   });
 
   describe('deleteUser', () => {

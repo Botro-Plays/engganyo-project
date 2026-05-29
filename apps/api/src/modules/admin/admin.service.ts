@@ -7,6 +7,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -23,6 +24,7 @@ export class AdminService {
     private readonly walletService: WalletService,
     private readonly authService: AuthService,
     private readonly eventsService: EventsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Users ────────────────────────────────────────────────
@@ -381,6 +383,8 @@ export class AdminService {
       select: { id: true, username: true, role: true },
     });
 
+    this.eventsService.emitToUser(userId, 'user:role-changed', { role: dto.role });
+
     await this.prisma.auditLog.create({
       data: {
         userId: adminId,
@@ -679,70 +683,63 @@ export class AdminService {
       }
 
       // Send notification to reported user
-      await this.prisma.notification.create({
-        data: {
-          userId: targetUserId,
-          type: action === 'WARN' ? 'ACCOUNT_WARNING' : 'SECURITY_ALERT',
-          title: action === 'WARN' ? 'Account Warning' : 'Account Action Taken',
-          body:
-            action === 'DEDUCT_TRUST'
-              ? `Your trust score was deducted due to a report: ${report.reason}. ${adminNote}`
-              : action === 'SUSPEND'
-                ? `Your account has been suspended. Reason: ${report.reason}. ${adminNote}`
-                : action === 'BAN'
-                  ? `Your account has been banned. Reason: ${report.reason}. ${adminNote}`
-                  : `Warning: ${adminNote}`,
-          data: {
-            reportId,
-            action,
-            topicId: report.topicId ?? undefined,
-            replyId: report.replyId ?? undefined,
-            replyTopicId: replyTopicId ?? undefined,
-            targetUserId: report.targetUserId ?? undefined,
-            targetUsername: report.targetUser?.username ?? undefined,
-          },
+      await this.notificationsService.createNotification(
+        targetUserId,
+        action === 'WARN' ? 'ACCOUNT_WARNING' : 'SECURITY_ALERT',
+        action === 'WARN' ? 'Account Warning' : 'Account Action Taken',
+        action === 'DEDUCT_TRUST'
+          ? `Your trust score was deducted due to a report: ${report.reason}. ${adminNote}`
+          : action === 'SUSPEND'
+            ? `Your account has been suspended. Reason: ${report.reason}. ${adminNote}`
+            : action === 'BAN'
+              ? `Your account has been banned. Reason: ${report.reason}. ${adminNote}`
+              : `Warning: ${adminNote}`,
+        {
+          reportId,
+          action,
+          topicId: report.topicId ?? undefined,
+          replyId: report.replyId ?? undefined,
+          replyTopicId: replyTopicId ?? undefined,
+          targetUserId: report.targetUserId ?? undefined,
+          targetUsername: report.targetUser?.username ?? undefined,
         },
-      });
+      );
     } else if (report.targetUserId) {
       // No action taken (e.g. dismissed) — notify reported user that no action was taken
-      await this.prisma.notification.create({
-        data: {
-          userId: report.targetUserId,
-          type: 'REPORT_RESOLVED',
-          title: 'Report Dismissed',
-          body: `A report against you was reviewed and dismissed. No action was taken.`,
-          data: {
-            reportId,
-            topicId: report.topicId ?? undefined,
-            replyId: report.replyId ?? undefined,
-            replyTopicId: replyTopicId ?? undefined,
-            targetUserId: report.targetUserId ?? undefined,
-            targetUsername: report.targetUser?.username ?? undefined,
-          },
+      await this.notificationsService.createNotification(
+        report.targetUserId,
+        'REPORT_RESOLVED',
+        'Report Dismissed',
+        `A report against you was reviewed and dismissed. No action was taken.`,
+        {
+          reportId,
+          topicId: report.topicId ?? undefined,
+          replyId: report.replyId ?? undefined,
+          replyTopicId: replyTopicId ?? undefined,
+          targetUserId: report.targetUserId ?? undefined,
+          targetUsername: report.targetUser?.username ?? undefined,
         },
-      });
+      );
     }
 
     // Notify reporter that their report was resolved
     if (report.submittedById) {
-      await this.prisma.notification.create({
-        data: {
-          userId: report.submittedById,
-          type: 'REPORT_RESOLVED',
-          title: 'Report Resolved',
-          body: `Your report (${report.reason}) was ${dto.status.toLowerCase()} by the moderation team.`,
-          data: {
-            reportId,
-            status: dto.status,
-            action,
-            topicId: report.topicId ?? undefined,
-            replyId: report.replyId ?? undefined,
-            replyTopicId: replyTopicId ?? undefined,
-            targetUserId: report.targetUserId ?? undefined,
-            targetUsername: report.targetUser?.username ?? undefined,
-          },
+      await this.notificationsService.createNotification(
+        report.submittedById,
+        'REPORT_RESOLVED',
+        'Report Resolved',
+        `Your report (${report.reason}) was ${dto.status.toLowerCase()} by the moderation team.`,
+        {
+          reportId,
+          status: dto.status,
+          action,
+          topicId: report.topicId ?? undefined,
+          replyId: report.replyId ?? undefined,
+          replyTopicId: replyTopicId ?? undefined,
+          targetUserId: report.targetUserId ?? undefined,
+          targetUsername: report.targetUser?.username ?? undefined,
         },
-      });
+      );
     }
 
     const updated = await this.prisma.report.update({
@@ -842,6 +839,13 @@ export class AdminService {
         referenceType: 'admin',
       });
     }
+
+    const wallet = await this.walletService.getWallet(userId);
+    this.eventsService.emitToUser(userId, 'wallet:updated', {
+      balance: wallet.balance,
+      lifetimeEarned: wallet.lifetimeEarned,
+      lifetimeSpent: wallet.lifetimeSpent,
+    });
 
     await this.prisma.auditLog.create({
       data: {
