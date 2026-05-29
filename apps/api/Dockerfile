@@ -19,7 +19,7 @@ RUN npm run build
 # ─── Production Stage ─────────────────────────────────────────────────────────
 FROM node:24-alpine AS production
 
-RUN apk add --no-cache dumb-init openssl
+RUN apk add --no-cache dumb-init openssl su-exec
 
 ENV NODE_ENV=production
 WORKDIR /app
@@ -28,9 +28,9 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-# Create logs directory with proper permissions
-RUN mkdir -p /app/logs && \
-    chown -R nestjs:nodejs /app/logs
+# Create directories with proper permissions (Docker volumes inherit these on first mount)
+RUN mkdir -p /app/logs /app/uploads && \
+    chown -R nestjs:nodejs /app/logs /app/uploads
 
 # Copy only what's needed
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
@@ -38,10 +38,8 @@ COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
 
-USER nestjs
+COPY --chmod=755 entrypoint.sh /app/entrypoint.sh
 
 EXPOSE 3001
 
-# Use dumb-init for proper signal handling
-ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/main"]
+ENTRYPOINT ["/app/entrypoint.sh"]
