@@ -76,6 +76,7 @@ export default function NotificationsPage() {
       );
       return res.data.data ?? { items: [], unreadCount: 0, meta: { total: 0, page, limit, totalPages: 1 } };
     },
+    refetchInterval: 30_000,
   });
 
   const markReadMutation = useMutation({

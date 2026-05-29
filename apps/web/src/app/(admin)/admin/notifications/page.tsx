@@ -88,6 +88,7 @@ export default function AdminNotificationsPage() {
     mutationFn: (id: string) => apiClient.delete(`admin/notifications/${id}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
       setDeleteConfirm(null);
     },
   });
@@ -100,6 +101,7 @@ export default function AdminNotificationsPage() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 
