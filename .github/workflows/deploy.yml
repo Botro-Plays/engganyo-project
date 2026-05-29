@@ -306,27 +306,22 @@ jobs:
 
     steps:
       - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.10
         timeout-minutes: 15
         env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           API_IMAGE: ${{ env.API_IMAGE }}:latest
           WEB_IMAGE: ${{ env.WEB_IMAGE }}:latest
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no \
-              -o ConnectTimeout=30 \
-              -o ServerAliveInterval=30 \
-              -p "$VPS_SSH_PORT" \
-              "$VPS_USER@$VPS_HOST" \
-              "GHCR_TOKEN='$GHCR_TOKEN' GITHUB_ACTOR='$GITHUB_ACTOR' API_IMAGE='$API_IMAGE' WEB_IMAGE='$WEB_IMAGE' bash -s" <<'REMOTESCRIPT'
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || '22' }}
+          timeout: 120s
+          command_timeout: 10m
+          envs: GHCR_TOKEN,GITHUB_ACTOR,API_IMAGE,WEB_IMAGE
+          script: |
             set -e
             cd /opt/engganyo-project
 
@@ -374,4 +369,3 @@ jobs:
             docker image prune -f || true
 
             echo "Deploy complete!"
-          REMOTESCRIPT
