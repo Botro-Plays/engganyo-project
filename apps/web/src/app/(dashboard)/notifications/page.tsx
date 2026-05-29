@@ -18,6 +18,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
+import { useSocketEvent } from '@/hooks/use-socket';
 
 interface AppNotification {
   id: string;
@@ -77,6 +78,22 @@ export default function NotificationsPage() {
       return res.data.data ?? { items: [], unreadCount: 0, meta: { total: 0, page, limit, totalPages: 1 } };
     },
     refetchInterval: 30_000,
+  });
+
+  useSocketEvent('notification:new', () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  });
+  useSocketEvent('notification:deleted', () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  });
+  useSocketEvent('notification:read', () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  });
+  useSocketEvent('notification:all-read', () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  });
+  useSocketEvent('notification:all-deleted', () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] });
   });
 
   const markReadMutation = useMutation({

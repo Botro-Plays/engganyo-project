@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { EventsService } from '../events/events.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventsService: EventsService,
+  ) {}
 
   async createNotification(
     userId: string,
@@ -13,9 +17,11 @@ export class NotificationsService {
     body: string,
     data?: Prisma.InputJsonValue,
   ) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: { userId, type, title, body, ...(data !== undefined && { data }) },
     });
+    this.eventsService.emitToUser(userId, 'notification:new', notification);
+    return notification;
   }
 
   async getUserNotifications(userId: string, page = 1, limit = 20) {
@@ -48,6 +54,7 @@ export class NotificationsService {
       where: { userId, isRead: false },
       data: { isRead: true, readAt: new Date() },
     });
+    this.eventsService.emitToUser(userId, 'notification:all-read', {});
     return { success: true };
   }
 
@@ -56,6 +63,7 @@ export class NotificationsService {
       where: { id, userId },
       data: { isRead: true, readAt: new Date() },
     });
+    this.eventsService.emitToUser(userId, 'notification:read', { id });
     return { success: true };
   }
 
@@ -63,6 +71,7 @@ export class NotificationsService {
     await this.prisma.notification.deleteMany({
       where: { id, userId },
     });
+    this.eventsService.emitToUser(userId, 'notification:deleted', { id });
     return { success: true };
   }
 
@@ -70,6 +79,7 @@ export class NotificationsService {
     await this.prisma.notification.deleteMany({
       where: { userId },
     });
+    this.eventsService.emitToUser(userId, 'notification:all-deleted', {});
     return { success: true };
   }
 }

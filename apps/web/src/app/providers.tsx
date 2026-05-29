@@ -7,6 +7,7 @@ import React, { useState, createContext, useContext } from 'react';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { ChatWidget } from '@/components/chat/ChatWidget';
+import { SocketProvider } from '@/components/socket-provider';
 
 interface PublicConfig {
   recaptchaEnabled: boolean;
@@ -49,8 +50,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <ChatWidget />
+      <SocketProvider>
+        {children}
+        <ChatWidget />
+      </SocketProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

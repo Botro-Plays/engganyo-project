@@ -30,6 +30,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ForumModule } from './modules/forum/forum.module';
 import { SearchModule } from './modules/search/search.module';
+import { EventsModule } from './modules/events/events.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { SearchModule } from './modules/search/search.module';
     ChatModule,
     ForumModule,
     SearchModule,
+    EventsModule,
   ],
 })
 export class AppModule {}

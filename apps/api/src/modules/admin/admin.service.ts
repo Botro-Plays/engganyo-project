@@ -6,6 +6,7 @@ import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
+import { EventsService } from '../events/events.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -21,6 +22,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly authService: AuthService,
+    private readonly eventsService: EventsService,
   ) {}
 
   // ─── Users ────────────────────────────────────────────────
@@ -799,6 +801,13 @@ export class AdminService {
   }
 
   async deleteNotification(id: string) {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+    if (notification) {
+      this.eventsService.emitToUser(notification.userId, 'notification:deleted', { id });
+    }
     await this.prisma.notification.delete({ where: { id } });
     return { success: true };
   }
@@ -806,6 +815,9 @@ export class AdminService {
   async clearNotifications(userId?: string) {
     const where: Prisma.NotificationWhereInput = userId ? { userId } : {};
     const { count } = await this.prisma.notification.deleteMany({ where });
+    if (userId) {
+      this.eventsService.emitToUser(userId, 'notification:all-deleted', {});
+    }
     return { success: true, deletedCount: count };
   }
 
