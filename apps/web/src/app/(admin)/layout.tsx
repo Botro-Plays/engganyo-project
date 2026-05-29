@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare, Trophy,
-  Menu, X,
+  Menu, X, Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -21,6 +21,7 @@ const navItems = [
   { href: '/admin/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/admin/gamification', icon: Trophy, label: 'Gamification' },
   { href: '/admin/reports', icon: Flag, label: 'Reports' },
+  { href: '/admin/notifications', icon: Bell, label: 'Notifications' },
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ];
 

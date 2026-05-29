@@ -251,6 +251,20 @@ export class AdminController {
     return this.adminService.resolveReport(admin.sub, id, dto);
   }
 
+  // ─── Notifications ────────────────────────────────────────
+
+  @Get('notifications')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all platform notifications (admin view)' })
+  listAllNotifications(
+    @Query('page') page = 1,
+    @Query('limit') limit = 50,
+    @Query('type') type?: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.adminService.listAllNotifications(Number(page), Number(limit), type, userId);
+  }
+
   // ─── Audit log ────────────────────────────────────────────
 
   @Get('audit-log')

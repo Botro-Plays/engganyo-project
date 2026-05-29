@@ -165,6 +165,13 @@ export function NotificationBell() {
                 </Link>
               );
             })}
+            <Link
+              href="/notifications"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-center px-4 py-2.5 border-t border-zinc-800 text-xs text-indigo-400 hover:text-indigo-300 hover:bg-zinc-800/40 transition-colors"
+            >
+              View all notifications
+            </Link>
           </div>
         </div>
       )}

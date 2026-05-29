@@ -18,11 +18,13 @@ export class NotificationsService {
     });
   }
 
-  async getUserNotifications(userId: string, limit = 20) {
-    const [items, unreadCount] = await Promise.all([
+  async getUserNotifications(userId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [items, unreadCount, total] = await Promise.all([
       this.prisma.notification.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
+        skip,
         take: limit,
         select: {
           id: true,
@@ -35,9 +37,10 @@ export class NotificationsService {
         },
       }),
       this.prisma.notification.count({ where: { userId, isRead: false } }),
+      this.prisma.notification.count({ where: { userId } }),
     ]);
 
-    return { items, unreadCount };
+    return { items, unreadCount, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async markAllRead(userId: string) {
@@ -52,6 +55,20 @@ export class NotificationsService {
     await this.prisma.notification.updateMany({
       where: { id, userId },
       data: { isRead: true, readAt: new Date() },
+    });
+    return { success: true };
+  }
+
+  async deleteNotification(id: string, userId: string) {
+    await this.prisma.notification.deleteMany({
+      where: { id, userId },
+    });
+    return { success: true };
+  }
+
+  async clearAllNotifications(userId: string) {
+    await this.prisma.notification.deleteMany({
+      where: { userId },
     });
     return { success: true };
   }

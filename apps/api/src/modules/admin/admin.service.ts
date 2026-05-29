@@ -767,6 +767,37 @@ export class AdminService {
     return updated;
   }
 
+  // ─── Notifications ──────────────────────────────────────
+
+  async listAllNotifications(page = 1, limit = 50, type?: string, userId?: string) {
+    const skip = (page - 1) * limit;
+    const where: Prisma.NotificationWhereInput = {};
+    if (type) where.type = type as Prisma.EnumNotificationTypeFilter;
+    if (userId) where.userId = userId;
+
+    const [items, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          body: true,
+          data: true,
+          isRead: true,
+          createdAt: true,
+          user: { select: { id: true, username: true, displayName: true } },
+        },
+      }),
+      this.prisma.notification.count({ where }),
+    ]);
+
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
   // ─── Credits ──────────────────────────────────────────────
 
   async grantCredits(adminId: string, userId: string, dto: GrantCreditsDto) {

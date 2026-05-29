@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   MessageSquare,
+  Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
+  { href: '/notifications', icon: Bell, label: 'Notifications' },
 ];
 
 const baseMobileNavItems = [
@@ -41,6 +43,7 @@ const baseMobileNavItems = [
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
+  { href: '/notifications', icon: Bell, label: 'Alerts' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
