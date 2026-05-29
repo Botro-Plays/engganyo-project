@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, XCircle, ChevronDown } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
@@ -31,15 +31,19 @@ const REASON_LABELS: Record<string, string> = {
 export default function AdminReportsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>('OPEN');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [deductionAmounts, setDeductionAmounts] = useState<Record<string, number>>({});
+  const [openDropdown, setOpenDropdown] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'reports', page],
+    queryKey: ['admin', 'reports', page, statusFilter],
     queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
       const res = await apiClient.get<ApiResponse<{ items: Report[]; meta: { total: number; totalPages: number } }>>(
-        `admin/reports?page=${page}&limit=20`,
+        `admin/reports?${params}`,
       );
       return res.data.data;
     },
@@ -61,6 +65,25 @@ export default function AdminReportsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Reports Queue</h1>
         <p className="text-zinc-400 text-sm mt-1">Resolve or dismiss user reports.</p>
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex items-center gap-1 mb-4 border-b border-surface-border">
+        {[
+          { key: 'OPEN', label: 'Pending', color: 'text-amber-400 border-amber-500' },
+          { key: 'RESOLVED', label: 'Resolved', color: 'text-green-400 border-green-500' },
+          { key: 'DISMISSED', label: 'Dismissed', color: 'text-zinc-400 border-zinc-500' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => { setStatusFilter(tab.key); setPage(1); }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-all ${
+              statusFilter === tab.key ? `${tab.color}` : 'border-transparent text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {actionError && (
@@ -118,25 +141,38 @@ export default function AdminReportsPage() {
                     >
                       Warn
                     </button>
-                    <div className="flex items-center gap-1">
-                      <select
-                        value={deductionAmounts[r.id] ?? 15}
-                        onChange={(e) => setDeductionAmounts((d) => ({ ...d, [r.id]: Number(e.target.value) }))}
-                        className="bg-surface-hover border border-surface-border rounded-md px-1.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
-                        title="Deduction amount"
-                      >
-                        {[5, 10, 15, 20, 25, 30, 40, 50].map((v) => (
-                          <option key={v} value={v}>{v} pts</option>
-                        ))}
-                      </select>
+                    <div className="relative">
                       <button
-                        onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: deductionAmounts[r.id] ?? 15 })}
+                        onClick={() => setOpenDropdown((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(r.id)) next.delete(r.id);
+                          else next.add(r.id);
+                          return next;
+                        })}
                         disabled={resolveMutation.isPending}
                         className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 text-xs font-medium disabled:opacity-50 transition-all"
                         title="Deduct trust score"
                       >
                         Deduct Trust
+                        <ChevronDown className="w-3 h-3" />
                       </button>
+                      {openDropdown.has(r.id) && (
+                        <div className="absolute top-full left-0 mt-1 z-20 bg-surface border border-surface-border rounded-lg shadow-xl overflow-hidden min-w-[100px]">
+                          {[5, 10, 15, 20, 25, 30, 40, 50].map((v) => (
+                            <button
+                              key={v}
+                              onClick={() => {
+                                setOpenDropdown((prev) => { const next = new Set(prev); next.delete(r.id); return next; });
+                                resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: v });
+                              }}
+                              disabled={resolveMutation.isPending}
+                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-orange-500/20 disabled:opacity-50"
+                            >
+                              {v} pts
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'SUSPEND' })}

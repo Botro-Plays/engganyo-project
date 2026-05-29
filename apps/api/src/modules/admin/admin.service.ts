@@ -11,6 +11,7 @@ import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
 import type { ResolveReportDto } from './dto/resolve-report.dto';
 import type { GrantCreditsDto } from './dto/grant-credits.dto';
+import type { AdjustTrustDto } from './dto/adjust-trust.dto';
 import type { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import type { UpdateUserDetailsDto } from './dto/update-user-details.dto';
 
@@ -595,9 +596,11 @@ export class AdminService {
 
   // ─── Reports ──────────────────────────────────────────────
 
-  async listOpenReports(page = 1, limit = 20) {
+  async listReports(page = 1, limit = 20, status?: string) {
     const skip = (page - 1) * limit;
-    const where = { status: ReportStatus.OPEN };
+    const where: Prisma.ReportWhereInput = status && status !== 'ALL'
+      ? { status: status as ReportStatus }
+      : {};
 
     const [items, total] = await Promise.all([
       this.prisma.report.findMany({
@@ -748,6 +751,49 @@ export class AdminService {
     });
 
     return { success: true, userId, action: dto.action, amount: dto.amount };
+  }
+
+  // ─── Trust Score ──────────────────────────────────────────
+
+  async adjustTrustScore(adminId: string, userId: string, dto: AdjustTrustDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const delta = dto.action === 'add' ? dto.amount : -dto.amount;
+    const trust = await this.prisma.trustScore.upsert({
+      where: { userId },
+      create: {
+        userId,
+        score: Math.max(0, Math.min(100, 50 + delta)),
+        level: 'NEW',
+        completionRate: 0,
+        accountAgeDays: 0,
+        verifiedSocials: 0,
+        reportCount: 0,
+        abuseFlagCount: 0,
+      },
+      update: {
+        score: { increment: delta },
+      },
+    });
+
+    // Clamp after increment
+    const clamped = Math.max(0, Math.min(100, trust.score));
+    if (clamped !== trust.score) {
+      await this.prisma.trustScore.update({ where: { userId }, data: { score: clamped } });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: `trust.admin_${dto.action}`,
+        entityType: 'User',
+        entityId: userId,
+        newValue: { amount: dto.amount, action: dto.action, reason: dto.reason, newScore: clamped },
+      },
+    });
+
+    return { success: true, userId, action: dto.action, amount: dto.amount, newScore: clamped };
   }
 
   async updateUserDetails(userId: string, dto: UpdateUserDetailsDto) {
@@ -964,7 +1010,15 @@ export class AdminService {
     recaptcha_v2_secret_key: { value: '',    description: 'reCAPTCHA v2 Checkbox secret key (server-side verification)', isPublic: false },
     groq_api_key:            { value: '',    description: 'Groq API key for AI chat support', isPublic: false },
     groq_model:              { value: 'llama-3.3-70b-versatile', description: 'Groq model to use for AI chat (e.g., llama-3.3-70b-versatile, llama-3.1-8b-instant)', isPublic: false },
-    trust_score_task_bonus:  { value: 2,     description: 'Flat trust score bonus awarded per completed task (added on top of recalculation)', isPublic: false },
+    trust_score_completion_weight: { value: 40, description: 'Weight multiplier for task completion rate in trust score (0-100)', isPublic: false },
+    trust_score_age_max:         { value: 20, description: 'Maximum points awarded for account age in trust score', isPublic: false },
+    trust_score_social_per:      { value: 5,  description: 'Points per verified social account in trust score', isPublic: false },
+    trust_score_social_max:      { value: 25, description: 'Maximum points cap for verified social accounts', isPublic: false },
+    trust_score_flag_max:        { value: 15, description: 'Maximum points from abuse flag cleanliness in trust score', isPublic: false },
+    trust_score_flag_threshold:  { value: 5,  description: 'Number of bad flags before flag points reach zero', isPublic: false },
+    trust_score_report_max:      { value: 10, description: 'Maximum trust score penalty from received reports', isPublic: false },
+    trust_score_report_threshold:{ value: 10, description: 'Number of reports before full report penalty applies', isPublic: false },
+    trust_score_task_bonus:      { value: 2,  description: 'Flat trust score bonus awarded per verified completed task', isPublic: false },
   };
 
   async getServerConfig() {

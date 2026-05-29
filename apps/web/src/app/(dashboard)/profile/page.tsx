@@ -139,7 +139,7 @@ function TrustScoreCard() {
   const { data, isLoading } = useQuery({
     queryKey: ['trust', 'me'],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<TrustScore>>('trust/me');
+      const res = await apiClient.get<ApiResponse<TrustScore>>('anti-abuse/trust/me');
       return res.data.data;
     },
   });
@@ -377,14 +377,14 @@ export default function ProfilePage() {
           <p className="text-xs text-zinc-500 mb-1">Referral code</p>
           <button
             onClick={copyReferral}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
+            className="flex items-center justify-center sm:justify-start gap-2 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all mx-auto sm:mx-0"
           >
             {profile?.referralCode ?? user?.referralCode ?? '—'}
             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
           </button>
           <Link
             href={`/users/${profile?.username ?? user?.username}`}
-            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all"
+            className="inline-flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all w-full sm:w-auto"
           >
             <ExternalLink className="w-3 h-3" />
             View Public Profile

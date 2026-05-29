@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   User, MapPin, Globe, Flag, ArrowLeft, ExternalLink,
@@ -103,6 +103,7 @@ function getSocialUrl(platform: string, profileUrl: string | null, username: str
 export default function UserProfilePage() {
   const { username } = useParams<{ username: string }>();
   const { user: currentUser } = useAuthStore();
+  const router = useRouter();
   const [showReport, setShowReport] = useState(false);
   const [reportReason, setReportReason] = useState('HARASSMENT');
   const [reportDesc, setReportDesc] = useState('');
@@ -159,13 +160,13 @@ export default function UserProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <Link
-        href="/forum"
+      <button
+        onClick={() => router.back()}
         className="inline-flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors text-sm"
       >
         <ArrowLeft className="w-4 h-4" />
         Back
-      </Link>
+      </button>
 
       {/* ── Profile card ── */}
       <div className="card-glass rounded-xl p-6 mb-4">

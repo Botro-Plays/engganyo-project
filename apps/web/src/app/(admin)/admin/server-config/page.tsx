@@ -70,7 +70,15 @@ const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 
   recaptcha_v2_secret_key: { label: 'v2 Checkbox Secret Key',      type: 'password', section: 'reCAPTCHA' },
   groq_api_key:            { label: 'Groq API Key',                 type: 'password', section: 'AI Chat' },
   groq_model:              { label: 'Groq Model',                   type: 'text',     section: 'AI Chat' },
-  trust_score_task_bonus:  { label: 'Trust Score Task Bonus',      type: 'number',   section: 'General' },
+  trust_score_completion_weight: { label: 'Completion Rate Weight', type: 'number',   section: 'General' },
+  trust_score_age_max:         { label: 'Age Max Points',          type: 'number',   section: 'General' },
+  trust_score_social_per:      { label: 'Social Points Each',      type: 'number',   section: 'General' },
+  trust_score_social_max:      { label: 'Social Max Cap',          type: 'number',   section: 'General' },
+  trust_score_flag_max:        { label: 'Flag Max Points',         type: 'number',   section: 'General' },
+  trust_score_flag_threshold:  { label: 'Flag Threshold',          type: 'number',   section: 'General' },
+  trust_score_report_max:      { label: 'Report Penalty Max',      type: 'number',   section: 'General' },
+  trust_score_report_threshold:{ label: 'Report Threshold',        type: 'number',   section: 'General' },
+  trust_score_task_bonus:      { label: 'Trust Score Task Bonus',  type: 'number',   section: 'General' },
 };
 
 const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA', 'AI Chat', 'General'];

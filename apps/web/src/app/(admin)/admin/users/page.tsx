@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck, Shield, Trash2, AlertTriangle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -58,6 +58,13 @@ const userDetailsSchema = z.object({
 });
 type UserDetailsFormData = z.infer<typeof userDetailsSchema>;
 
+const trustSchema = z.object({
+  action: z.enum(['add', 'subtract']),
+  amount: z.coerce.number().int().min(1).max(50),
+  reason: z.string().min(3).max(300),
+});
+type TrustFormData = z.infer<typeof trustSchema>;
+
 export default function AdminUsersPage() {
   const { user: currentAdmin } = useAuthStore();
   const isSuperAdmin = currentAdmin?.role === 'SUPER_ADMIN';
@@ -76,6 +83,9 @@ export default function AdminUsersPage() {
   const [editSuccess, setEditSuccess] = useState(false);
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [trustUser, setTrustUser] = useState<AdminUser | null>(null);
+  const [trustError, setTrustError] = useState<string | null>(null);
+  const [trustSuccess, setTrustSuccess] = useState(false);
 
   const params = new URLSearchParams({
     page: String(page), limit: '25',
@@ -140,6 +150,17 @@ export default function AdminUsersPage() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: (err) => setDeleteError(getApiErrorMessage(err)),
+  });
+
+  const trustForm = useForm<TrustFormData>({ resolver: zodResolver(trustSchema), defaultValues: { action: 'add' } });
+  const trustMutation = useMutation({
+    mutationFn: (d: TrustFormData) => apiClient.post(`admin/users/${trustUser!.id}/trust-score`, d),
+    onSuccess: () => {
+      setTrustSuccess(true);
+      setTrustError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => setTrustError(getApiErrorMessage(err)),
   });
 
   return (
@@ -249,6 +270,11 @@ export default function AdminUsersPage() {
                           {canAct && (
                             <button onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }} className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors">
                               <Coins className="w-3 h-3" />
+                            </button>
+                          )}
+                          {canAct && (
+                            <button onClick={() => { setTrustUser(u); setTrustSuccess(false); setTrustError(null); trustForm.reset({ action: 'add' }); }} className="px-2 py-1 text-xs rounded bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
+                              <Shield className="w-3 h-3" />
                             </button>
                           )}
                           {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
@@ -410,6 +436,45 @@ export default function AdminUsersPage() {
                   </div>
                   <button type="submit" disabled={userDetailsMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-60">
                     {userDetailsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Adjust trust score modal */}
+      {trustUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white">Adjust Trust Score</h2>
+              <button onClick={() => setTrustUser(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{trustUser.username}</span></p>
+
+            {trustSuccess ? (
+              <div className="py-4 text-center">
+                <p className="text-green-400 font-medium mb-3">Trust score adjusted!</p>
+                <button onClick={() => setTrustUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+              </div>
+            ) : (
+              <>
+                {trustError && <p className="text-xs text-red-400 mb-3">{trustError}</p>}
+                <form onSubmit={trustForm.handleSubmit((d) => trustMutation.mutate(d))} className="space-y-3">
+                  <div className="flex gap-2">
+                    {(['add', 'subtract'] as const).map((a) => (
+                      <button key={a} type="button" onClick={() => trustForm.setValue('action', a)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${trustForm.watch('action') === a ? (a === 'add' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-surface-hover text-zinc-500'}`}>
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                  <input {...trustForm.register('amount')} type="number" min={1} max={50} placeholder="Amount (1-50)" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <input {...trustForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <button type="submit" disabled={trustMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium disabled:opacity-60">
+                    {trustMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
                   </button>
                 </form>
               </>

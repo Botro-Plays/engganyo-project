@@ -128,8 +128,23 @@ export function ChatWidget() {
 
   const onDrag = (clientX: number, clientY: number) => {
     if (!isDragging) return;
-    const newPos = { x: clientX - dragOffset.current.x, y: clientY - dragOffset.current.y };
-    setPos(newPos);
+    const widgetWidth = 384; // sm:w-96 = 24rem = 384px
+    const widgetHeight = 400; // approximate height when open
+    const headerHeight = 56; // approximate header height
+    const fabSize = 64; // button size when closed
+    const pad = 8;
+
+    const maxX = window.innerWidth - (isOpen ? widgetWidth : fabSize) - pad;
+    const maxY = window.innerHeight - (isOpen ? widgetHeight : fabSize) - pad;
+
+    let newX = clientX - dragOffset.current.x;
+    let newY = clientY - dragOffset.current.y;
+
+    // Clamp to viewport
+    newX = Math.max(pad, Math.min(newX, maxX));
+    newY = Math.max(pad, Math.min(newY, maxY));
+
+    setPos({ x: newX, y: newY });
   };
 
   const endDrag = () => {

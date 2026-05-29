@@ -11,6 +11,7 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { ReviewCampaignDto } from './dto/review-campaign.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
 import { GrantCreditsDto } from './dto/grant-credits.dto';
+import { AdjustTrustDto } from './dto/adjust-trust.dto';
 import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
@@ -86,6 +87,17 @@ export class AdminController {
     @Body() dto: GrantCreditsDto,
   ) {
     return this.adminService.grantCredits(admin.sub, id, dto);
+  }
+
+  @Post('users/:id/trust-score')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manually add or subtract trust score' })
+  adjustTrustScore(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: AdjustTrustDto,
+  ) {
+    return this.adminService.adjustTrustScore(admin.sub, id, dto);
   }
 
   @Patch('users/:id/details')
@@ -219,9 +231,13 @@ export class AdminController {
 
   @Get('reports')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Open reports queue' })
-  listOpenReports(@Query('page') page = 1, @Query('limit') limit = 20) {
-    return this.adminService.listOpenReports(Number(page), Number(limit));
+  @ApiOperation({ summary: 'Reports queue with optional status filter' })
+  listOpenReports(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.listReports(Number(page), Number(limit), status);
   }
 
   @Patch('reports/:id')

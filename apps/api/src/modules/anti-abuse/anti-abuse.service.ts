@@ -76,16 +76,31 @@ export class AntiAbuseService {
     const totalBadFlags = criticalFlags * 3 + highFlags;
     const reportCount = user._count.reportsReceived;
 
-    // Configurable task completion bonus
-    const configRow = await this.prisma.platformConfig.findUnique({ where: { key: 'trust_score_task_bonus' } });
-    const taskBonus = typeof configRow?.value === 'number' ? configRow.value : 2;
+    // Load configurable weights
+    const cfg = await this.prisma.platformConfig.findMany({
+      where: { key: { startsWith: 'trust_score_' } },
+    });
+    const c = (k: string, def: number) => {
+      const row = cfg.find((r) => r.key === k);
+      return typeof row?.value === 'number' ? row.value : def;
+    };
+
+    const completionWeight = c('trust_score_completion_weight', 40);
+    const ageMax = c('trust_score_age_max', 20);
+    const socialPer = c('trust_score_social_per', 5);
+    const socialMax = c('trust_score_social_max', 25);
+    const flagMax = c('trust_score_flag_max', 15);
+    const flagThreshold = c('trust_score_flag_threshold', 5);
+    const reportMax = c('trust_score_report_max', 10);
+    const reportThreshold = c('trust_score_report_threshold', 10);
+    const taskBonus = c('trust_score_task_bonus', 2);
 
     // Score calculation
-    const completionPts = completionRate * 40 + verifiedTasks * taskBonus;
-    const agePts = Math.min(accountAgeDays / 365, 1) * 20;
-    const socialPts = Math.min(verifiedSocials * 5, 25);
-    const flagPts = Math.max(0, (1 - Math.min(totalBadFlags / 5, 1)) * 15);
-    const reportPenalty = Math.min(reportCount / 10, 1) * 10;
+    const completionPts = completionRate * completionWeight + verifiedTasks * taskBonus;
+    const agePts = Math.min(accountAgeDays / 365, 1) * ageMax;
+    const socialPts = Math.min(verifiedSocials * socialPer, socialMax);
+    const flagPts = Math.max(0, (1 - Math.min(totalBadFlags / flagThreshold, 1)) * flagMax);
+    const reportPenalty = Math.min(reportCount / reportThreshold, 1) * reportMax;
 
     const score = Math.max(0, Math.min(100, completionPts + agePts + socialPts + flagPts - reportPenalty));
     const level = getTrustLevel(score);
