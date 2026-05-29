@@ -24,9 +24,10 @@ export class UpdateProfileDto {
   @Transform(({ value }: { value: string }) => value?.trim())
   bio?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/avatar.jpg' })
+  @ApiPropertyOptional({ example: '/uploads/avatars/cmp5aua2c0001b0ny2595m4c/a1b2c3d4.jpg' })
   @IsOptional()
-  @IsUrl()
+  @IsString()
+  @MaxLength(500)
   avatarUrl?: string;
 
   @ApiPropertyOptional({ example: 'https://johncreator.com' })
