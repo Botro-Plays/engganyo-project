@@ -9,6 +9,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { formatCredits, getLevelProgress, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -208,19 +209,14 @@ export default function LeaderboardPage() {
                     <div className={`w-7 text-center font-bold text-sm ${rankColor}`}>
                       {entry.rank <= 3 ? <Trophy className="w-4 h-4 mx-auto" /> : entry.rank}
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                      {entry.avatarUrl ? (
-                        <img src={entry.avatarUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        getInitials(entry.displayName ?? entry.username)
-                      )}
-                    </div>
+                    <UserLink
+                      user={entry}
+                      showAvatar
+                      size="md"
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
-                        {entry.displayName ?? entry.username}
-                        {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
-                      </p>
-                      <p className="text-xs text-zinc-500">@{entry.username} · Lvl {entry.level}</p>
+                      {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
+                      <p className="text-xs text-zinc-500">Lvl {entry.level}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-brand-300 flex items-center gap-1">

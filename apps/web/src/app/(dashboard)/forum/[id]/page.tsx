@@ -3,11 +3,13 @@
 import { useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MessageSquare, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight, Flag } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
+import { UserLink } from '@/components/user-link';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { renderContentWithMentions } from '@/lib/render-content';
+import { ReportModal } from '@/components/report-modal';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
 import Link from 'next/link';
@@ -87,6 +89,11 @@ export default function ForumTopicPage() {
   const [editTopicContent, setEditTopicContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; content: string; author: { username: string } } | null>(null);
   const replyFormRef = useRef<HTMLDivElement>(null);
+  const [reportTarget, setReportTarget] = useState<{
+    topicId?: string;
+    replyId?: string;
+    label: string;
+  } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['forum', 'topic', params.id],
@@ -253,9 +260,7 @@ export default function ForumTopicPage() {
       <div className="card-glass rounded-xl p-6 mb-6">
         <div className="flex items-start gap-4 mb-4">
           <div className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-medium text-lg">
-              {data.author.displayName?.[0] || data.author.username[0].toUpperCase()}
-            </div>
+            <UserLink user={data.author} size="md" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -272,7 +277,7 @@ export default function ForumTopicPage() {
               )}
             </div>
             <div className="flex items-center gap-3 text-sm text-zinc-400 mb-3">
-              <span>by @{data.author.username}</span>
+              <UserLink user={data.author} showAvatar={false} />
               <span>·</span>
               <span>{formatRelativeTime(data.createdAt)}</span>
               <span>·</span>
@@ -320,6 +325,15 @@ export default function ForumTopicPage() {
                 </>
               )}
             </div>
+          )}
+          {!isTopicOwner && currentUser && (
+            <button
+              onClick={() => setReportTarget({ topicId: data.id, label: `Topic: ${data.title}` })}
+              className="p-1.5 text-zinc-500 hover:text-red-400 rounded transition-colors flex-shrink-0"
+              title="Report topic"
+            >
+              <Flag className="w-4 h-4" />
+            </button>
           )}
         </div>
 
@@ -398,6 +412,7 @@ export default function ForumTopicPage() {
               onDeleteReply={(id) => deleteReplyMutation.mutate(id)}
               onReact={(replyId, type) => replyReactionMutation.mutate({ replyId, type })}
               onReply={handleReplyTo}
+              onReport={(replyId, label) => setReportTarget({ replyId, label })}
               updatePending={updateReplyMutation.isPending}
             />
             {(reply.childReplies ?? []).length > 0 && (
@@ -417,6 +432,7 @@ export default function ForumTopicPage() {
                     onDeleteReply={(id) => deleteReplyMutation.mutate(id)}
                     onReact={(replyId, type) => replyReactionMutation.mutate({ replyId, type })}
                     onReply={handleReplyTo}
+                    onReport={(replyId, label) => setReportTarget({ replyId, label })}
                     updatePending={updateReplyMutation.isPending}
                     isChild
                     parentReply={{ content: reply.content, author: reply.author }}
@@ -441,7 +457,7 @@ export default function ForumTopicPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-indigo-400 mb-0.5">
                     <CornerDownRight className="w-3 h-3 inline mr-1" />
-                    Replying to @{replyingTo.author.username}
+                    Replying to <UserLink user={replyingTo.author} showAvatar={false} />
                   </p>
                   <p className="text-xs text-zinc-400 line-clamp-1">
                     {replyingTo.content
@@ -487,6 +503,15 @@ export default function ForumTopicPage() {
           </>
         )}
       </div>
+
+      {reportTarget && (
+        <ReportModal
+          topicId={reportTarget.topicId}
+          replyId={reportTarget.replyId}
+          targetLabel={reportTarget.label}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -504,6 +529,7 @@ interface ReplyCardProps {
   onDeleteReply: (id: string) => void;
   onReact: (replyId: string, type: ReactionType) => void;
   onReply: (reply: { id: string; content: string; author: { username: string } }) => void;
+  onReport: (replyId: string, label: string) => void;
   updatePending: boolean;
   isChild?: boolean;
   parentReply?: { content: string; author: { username: string } };
@@ -512,7 +538,7 @@ interface ReplyCardProps {
 function ReplyCard({
   reply, currentUserId, isTopicLocked,
   editingReplyId, editContent, setEditContent, setEditingReplyId,
-  onEditReply, onUpdateReply, onDeleteReply, onReact, onReply,
+  onEditReply, onUpdateReply, onDeleteReply, onReact, onReply, onReport,
   updatePending, isChild = false, parentReply,
 }: ReplyCardProps) {
   const isOwner = currentUserId === reply.author.id;
@@ -527,20 +553,18 @@ function ReplyCard({
     <div className={`card-glass rounded-xl p-4 ${isChild ? 'bg-zinc-900/30' : ''}`}>
       {parentReply && (
         <div className="mb-3 border-l-2 border-zinc-600/50 bg-zinc-900/50 rounded-r-lg px-2.5 py-1.5">
-          <p className="text-xs text-zinc-500 mb-0.5">↩ @{parentReply.author.username}</p>
+          <p className="text-xs text-zinc-500 mb-0.5">↩ <UserLink user={parentReply.author} showAvatar={false} /></p>
           <p className="text-xs text-zinc-500 line-clamp-1">{stripMentions(parentReply.content).substring(0, 120)}</p>
         </div>
       )}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0">
-          <div className={`rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white font-medium ${isChild ? 'w-7 h-7 text-xs' : 'w-8 h-8 text-sm'}`}>
-            {reply.author.displayName?.[0] || reply.author.username[0].toUpperCase()}
-          </div>
+          <UserLink user={reply.author} size={isChild ? 'sm' : 'md'} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-white font-medium text-sm">@{reply.author.username}</span>
+              <UserLink user={reply.author} showAvatar={false} />
               <span className="text-zinc-500 text-xs">{formatRelativeTime(reply.createdAt)}</span>
               {reply.isEdited && <span className="text-zinc-500 text-xs">(edited)</span>}
               {reply.campaign && (
@@ -574,6 +598,15 @@ function ReplyCard({
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
+            )}
+            {!isOwner && currentUserId && !isEditing && (
+              <button
+                onClick={() => onReport(reply.id, `Reply by ${reply.author.username}`)}
+                className="p-1 text-zinc-500 hover:text-red-400 rounded transition-colors flex-shrink-0"
+                title="Report reply"
+              >
+                <Flag className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
 

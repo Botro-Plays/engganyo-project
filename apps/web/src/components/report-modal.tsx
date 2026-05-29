@@ -29,11 +29,13 @@ type FormData = z.infer<typeof schema>;
 interface ReportModalProps {
   targetUserId?: string;
   campaignId?: string;
+  topicId?: string;
+  replyId?: string;
   targetLabel: string;
   onClose: () => void;
 }
 
-export function ReportModal({ targetUserId, campaignId, targetLabel, onClose }: ReportModalProps) {
+export function ReportModal({ targetUserId, campaignId, topicId, replyId, targetLabel, onClose }: ReportModalProps) {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +43,7 @@ export function ReportModal({ targetUserId, campaignId, targetLabel, onClose }: 
 
   const mutation = useMutation({
     mutationFn: (d: FormData) =>
-      apiClient.post('reports', { ...d, targetUserId, campaignId }),
+      apiClient.post('reports', { ...d, targetUserId, campaignId, topicId, replyId }),
     onSuccess: () => { setSuccess(true); setError(null); },
     onError: (err) => setError(getApiErrorMessage(err)),
   });

@@ -24,4 +24,14 @@ export class CreateReportDto {
   @IsOptional()
   @IsString()
   campaignId?: string;
+
+  @ApiPropertyOptional({ example: 'topic_cm123abc' })
+  @IsOptional()
+  @IsString()
+  topicId?: string;
+
+  @ApiPropertyOptional({ example: 'reply_cm123abc' })
+  @IsOptional()
+  @IsString()
+  replyId?: string;
 }

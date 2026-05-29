@@ -118,18 +118,44 @@ export class AntiAbuseService {
   // ─── Reports ───────────────────────────────────────────────
 
   async submitReport(submittedById: string, dto: CreateReportDto) {
-    if (!dto.targetUserId && !dto.campaignId) {
-      throw new BadRequestException('Must provide targetUserId or campaignId');
+    if (!dto.targetUserId && !dto.campaignId && !dto.topicId && !dto.replyId) {
+      throw new BadRequestException('Must provide targetUserId, campaignId, topicId, or replyId');
     }
     if (dto.targetUserId && dto.targetUserId === submittedById) {
+      throw new BadRequestException('Cannot report yourself');
+    }
+
+    let targetUserId = dto.targetUserId;
+
+    // Derive target user from forum post if not explicitly provided
+    if (!targetUserId && dto.topicId) {
+      const topic = await this.prisma.forumTopic.findUnique({
+        where: { id: dto.topicId },
+        select: { authorId: true },
+      });
+      if (!topic) throw new NotFoundException('Topic not found');
+      targetUserId = topic.authorId;
+    }
+    if (!targetUserId && dto.replyId) {
+      const reply = await this.prisma.forumReply.findUnique({
+        where: { id: dto.replyId },
+        select: { authorId: true },
+      });
+      if (!reply) throw new NotFoundException('Reply not found');
+      targetUserId = reply.authorId;
+    }
+
+    if (targetUserId && targetUserId === submittedById) {
       throw new BadRequestException('Cannot report yourself');
     }
 
     const report = await this.prisma.report.create({
       data: {
         submittedById,
-        targetUserId: dto.targetUserId,
+        targetUserId,
         campaignId: dto.campaignId,
+        topicId: dto.topicId,
+        replyId: dto.replyId,
         reason: dto.reason,
         description: dto.description,
       },
@@ -141,6 +167,8 @@ export class AntiAbuseService {
         createdAt: true,
         targetUser: { select: { username: true } },
         campaign: { select: { title: true } },
+        topic: { select: { title: true } },
+        reply: { select: { id: true } },
       },
     });
 
@@ -289,8 +317,28 @@ export class AntiAbuseService {
   // ─── Record IP ─────────────────────────────────────────────
 
   async recordIp(userId: string, ipAddress: string, action: string) {
+    const isPrivate = !ipAddress || ipAddress === '127.0.0.1' || ipAddress.startsWith('192.168.') || ipAddress.startsWith('10.') || ipAddress.startsWith('172.');
+    let geo: { country?: string; region?: string; city?: string; isp?: string } = {};
+
+    if (!isPrivate) {
+      try {
+        const res = await fetch(`http://ip-api.com/json/${ipAddress}?fields=status,country,regionName,city,isp`);
+        const data = await res.json() as { status: string; country?: string; regionName?: string; city?: string; isp?: string };
+        if (data.status === 'success') {
+          geo = {
+            country: data.country,
+            region: data.regionName,
+            city: data.city,
+            isp: data.isp,
+          };
+        }
+      } catch {
+        // ignore geo lookup failures
+      }
+    }
+
     await this.prisma.ipRecord.create({
-      data: { userId, ipAddress, action },
+      data: { userId, ipAddress, action, ...geo },
     }).catch(() => null); // fire-and-forget, don't block request
   }
 }

@@ -12,6 +12,7 @@ import {
 
 import Link from 'next/link';
 import { ReportModal } from '@/components/report-modal';
+import { UserLink } from '@/components/user-link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatRelativeTime } from '@/lib/utils';
@@ -427,7 +428,7 @@ export default function TasksPage() {
                       </a>
                       <div className="flex items-center justify-between text-xs text-zinc-500 mb-3">
                         <span>{available} slots left</span>
-                        <span>by @{task.user.username}</span>
+                        <UserLink user={task.user} showAvatar={false} />
                       </div>
                       <div className="flex gap-1.5">
                         {isOwner && !task.isPlatformTask ? (

@@ -57,6 +57,7 @@ export class AdminService {
           currentStreak: true,
           createdAt: true,
           _count: { select: { completions: true, campaigns: true, abuseFlags: true } },
+          ipRecords: { orderBy: { createdAt: 'desc' }, take: 1, select: { country: true, region: true, ipAddress: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -603,9 +604,11 @@ export class AdminService {
         where,
         select: {
           id: true, reason: true, description: true, status: true, createdAt: true,
-          submittedBy: { select: { username: true } },
-          targetUser: { select: { id: true, username: true } },
+          submittedBy: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+          targetUser: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
           campaign: { select: { id: true, title: true } },
+          topic: { select: { id: true, title: true } },
+          reply: { select: { id: true } },
         },
         orderBy: { createdAt: 'asc' },
         skip,
@@ -620,11 +623,71 @@ export class AdminService {
   async resolveReport(adminId: string, reportId: string, dto: ResolveReportDto) {
     const report = await this.prisma.report.findUnique({
       where: { id: reportId },
-      select: { status: true },
+      select: {
+        status: true,
+        targetUserId: true,
+        submittedById: true,
+        reason: true,
+      },
     });
     if (!report) throw new NotFoundException('Report not found');
     if (report.status !== ReportStatus.OPEN && report.status !== ReportStatus.UNDER_REVIEW) {
       throw new BadRequestException('Report is already resolved');
+    }
+
+    // Execute admin action on reported user if provided
+    const action = dto.action ?? 'NONE';
+    if (action !== 'NONE' && report.targetUserId) {
+      const targetUserId = report.targetUserId;
+      const adminNote = dto.notes ?? `Report resolved with action: ${action}`;
+
+      if (action === 'DEDUCT_TRUST') {
+        await this.prisma.trustScore.updateMany({
+          where: { userId: targetUserId },
+          data: { score: { decrement: 15 } },
+        });
+      } else if (action === 'SUSPEND') {
+        await this.prisma.user.update({
+          where: { id: targetUserId },
+          data: { status: 'SUSPENDED' },
+        });
+      } else if (action === 'BAN') {
+        await this.prisma.user.update({
+          where: { id: targetUserId },
+          data: { status: 'BANNED' },
+        });
+      }
+
+      // Send notification to reported user
+      await this.prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          type: action === 'WARN' ? 'ACCOUNT_WARNING' : 'SECURITY_ALERT',
+          title: action === 'WARN' ? 'Account Warning' : 'Account Action Taken',
+          body:
+            action === 'DEDUCT_TRUST'
+              ? `Your trust score was deducted due to a report: ${report.reason}. ${adminNote}`
+              : action === 'SUSPEND'
+                ? `Your account has been suspended. Reason: ${report.reason}. ${adminNote}`
+                : action === 'BAN'
+                  ? `Your account has been banned. Reason: ${report.reason}. ${adminNote}`
+                  : `Warning: ${adminNote}`,
+          data: { reportId, action },
+        },
+      });
+    }
+
+    // Notify reporter that their report was resolved
+    if (report.submittedById) {
+      await this.prisma.notification.create({
+        data: {
+          userId: report.submittedById,
+          type: 'REPORT_RESOLVED',
+          title: 'Report Resolved',
+          body: `Your report (${report.reason}) was ${dto.status.toLowerCase()} by the moderation team.`,
+          data: { reportId, status: dto.status, action },
+        },
+      });
     }
 
     const updated = await this.prisma.report.update({
@@ -644,7 +707,7 @@ export class AdminService {
         action: `report.${dto.status.toLowerCase()}`,
         entityType: 'Report',
         entityId: reportId,
-        newValue: { status: dto.status, notes: dto.notes },
+        newValue: { status: dto.status, notes: dto.notes, action },
       },
     });
 

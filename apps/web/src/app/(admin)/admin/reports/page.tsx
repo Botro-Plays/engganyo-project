@@ -5,13 +5,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CheckCircle2, XCircle } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
+import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
 
 interface Report {
   id: string; reason: string; description: string; status: string; createdAt: string;
-  submittedBy: { username: string };
-  targetUser: { id: string; username: string } | null;
+  submittedBy: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
+  targetUser: { id: string; username: string; displayName: string | null; avatarUrl: string | null } | null;
   campaign: { id: string; title: string } | null;
+  topic: { id: string; title: string } | null;
+  reply: { id: string } | null;
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -42,8 +45,8 @@ export default function AdminReportsPage() {
   });
 
   const resolveMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: 'RESOLVED' | 'DISMISSED' }) =>
-      apiClient.patch(`admin/reports/${id}`, { status, notes: notes[id] }),
+    mutationFn: ({ id, status, action }: { id: string; status: 'RESOLVED' | 'DISMISSED'; action?: string }) =>
+      apiClient.patch(`admin/reports/${id}`, { status, notes: notes[id], action }),
     onSuccess: () => {
       setActionError(null);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'reports'] });
@@ -85,10 +88,12 @@ export default function AdminReportsPage() {
                     </span>
                     <span className="text-xs text-zinc-600">{formatRelativeTime(r.createdAt)}</span>
                   </div>
-                  <p className="text-xs text-zinc-500">
-                    By <span className="text-zinc-300">@{r.submittedBy.username}</span>
-                    {r.targetUser && <> · Target: <span className="text-zinc-300">@{r.targetUser.username}</span></>}
+                  <p className="text-xs text-zinc-500 flex items-center gap-1 flex-wrap">
+                    By <UserLink user={r.submittedBy} showAvatar={false} />
+                    {r.targetUser && <> · Target: <UserLink user={r.targetUser} showAvatar={false} /></>}
                     {r.campaign && <> · Campaign: <span className="text-zinc-300">{r.campaign.title}</span></>}
+                    {r.topic && <> · Topic: <span className="text-zinc-300">{r.topic.title}</span></>}
+                    {r.reply && <> · Reply</>}
                   </p>
                 </div>
               </div>
@@ -102,6 +107,42 @@ export default function AdminReportsPage() {
                   placeholder="Admin notes (optional)..."
                   className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
                 />
+                {r.targetUser && (
+                  <>
+                    <button
+                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'WARN' })}
+                      disabled={resolveMutation.isPending}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                      title="Warn user"
+                    >
+                      Warn
+                    </button>
+                    <button
+                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST' })}
+                      disabled={resolveMutation.isPending}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                      title="Deduct trust score"
+                    >
+                      Deduct Trust
+                    </button>
+                    <button
+                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'SUSPEND' })}
+                      disabled={resolveMutation.isPending}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                      title="Suspend user"
+                    >
+                      Suspend
+                    </button>
+                    <button
+                      onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'BAN' })}
+                      disabled={resolveMutation.isPending}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                      title="Ban user"
+                    >
+                      Ban
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => resolveMutation.mutate({ id: r.id, status: 'RESOLVED' })}
                   disabled={resolveMutation.isPending}

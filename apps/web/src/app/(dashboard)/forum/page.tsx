@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Plus, ThumbsUp, MessageCircle, Eye, Lock, Pin } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
+import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
 import Link from 'next/link';
 
@@ -128,9 +129,7 @@ export default function ForumPage() {
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-medium">
-                    {topic.author.displayName?.[0] || topic.author.username[0].toUpperCase()}
-                  </div>
+                  <UserLink user={topic.author} size="md" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -140,7 +139,7 @@ export default function ForumPage() {
                   </div>
                   <p className="text-zinc-400 text-sm mb-2 line-clamp-2">{topic.content}</p>
                   <div className="flex items-center gap-4 text-xs text-zinc-500">
-                    <span>by @{topic.author.username}</span>
+                    <UserLink user={topic.author} showAvatar={false} />
                     <span>·</span>
                     <span>{formatRelativeTime(topic.createdAt)}</span>
                     <span>·</span>

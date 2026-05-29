@@ -12,6 +12,7 @@ import {
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits } from '@/lib/utils';
+import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ interface Campaign {
   requiresProof: boolean;
   autoVerify: boolean;
   proofInstructions: string | null;
+  isPlatformTask: boolean;
   createdAt: string;
 }
 
@@ -544,6 +546,15 @@ export default function CampaignsPage() {
                       <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-0.5 rounded-full">
                         {TASK_TYPES.find((t) => t.value === c.taskType)?.label ?? c.taskType}
                       </span>
+                      {c.isPlatformTask ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-300 border border-brand-500/20">
+                          Platform
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-400 border border-zinc-600">
+                          Community
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm font-semibold text-white truncate">{c.title}</p>
                     <a
@@ -663,9 +674,7 @@ export default function CampaignsPage() {
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-white">
-                            @{s.user.username}{s.user.displayName ? ` (${s.user.displayName})` : ''}
-                          </p>
+                          <UserLink user={s.user} />
                           {s.escalated && (
                             <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">Escalated</span>
                           )}

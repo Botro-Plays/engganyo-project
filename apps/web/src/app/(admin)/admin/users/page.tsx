@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatDate } from '@/lib/utils';
+import { UserLink } from '@/components/user-link';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
 
@@ -16,6 +17,7 @@ interface AdminUser {
   role: string; status: string; level: number; creditBalance: number;
   createdAt: string;
   _count: { completions: number; campaigns: number; abuseFlags: number };
+  ipRecords: { country: string | null; region: string | null; ipAddress: string | null }[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -184,6 +186,7 @@ export default function AdminUsersPage() {
               <th className="text-left px-4 py-3">Credits</th>
               <th className="text-left px-4 py-3">Tasks</th>
               <th className="text-left px-4 py-3">Flags</th>
+              <th className="text-left px-4 py-3">Country</th>
               <th className="text-left px-4 py-3">Joined</th>
               <th className="text-left px-4 py-3">Actions</th>
             </tr>
@@ -192,14 +195,14 @@ export default function AdminUsersPage() {
             {isLoading
               ? Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b border-surface-border">
-                  <td colSpan={9} className="px-4 py-3"><div className="h-4 bg-zinc-800 rounded animate-pulse" /></td>
+                  <td colSpan={10} className="px-4 py-3"><div className="h-4 bg-zinc-800 rounded animate-pulse" /></td>
                 </tr>
               ))
               : (data?.items ?? []).map((u) => (
                 <tr key={u.id} className="border-b border-surface-border last:border-0 hover:bg-surface-hover transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-white">{u.username}</p>
-                    <p className="text-xs text-zinc-500">{u.email}</p>
+                    <UserLink user={u} />
+                    <p className="text-xs text-zinc-500 mt-0.5">{u.email}</p>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'text-zinc-400 bg-zinc-500/10'}`}>
@@ -218,6 +221,10 @@ export default function AdminUsersPage() {
                     <span className={u._count.abuseFlags > 0 ? 'text-red-400' : 'text-zinc-600'}>
                       {u._count.abuseFlags}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-zinc-500 text-xs">
+                    {u.ipRecords?.[0]?.country ?? '—'}
+                    {u.ipRecords?.[0]?.region && <span className="text-zinc-600"> · {u.ipRecords[0].region}</span>}
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(u.createdAt)}</td>
                   <td className="px-4 py-3">

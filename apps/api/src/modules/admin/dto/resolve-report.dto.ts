@@ -11,4 +11,9 @@ export class ResolveReportDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @ApiPropertyOptional({ enum: ['NONE', 'DEDUCT_TRUST', 'SUSPEND', 'BAN', 'WARN'] })
+  @IsOptional()
+  @IsIn(['NONE', 'DEDUCT_TRUST', 'SUSPEND', 'BAN', 'WARN'])
+  action?: 'NONE' | 'DEDUCT_TRUST' | 'SUSPEND' | 'BAN' | 'WARN';
 }

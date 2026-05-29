@@ -15,6 +15,7 @@ import { UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { EmailService } from '../email/email.service';
+import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -63,6 +64,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly antiAbuse: AntiAbuseService,
   ) {}
 
   // ─── Register ──────────────────────────────────────────────
@@ -198,6 +200,7 @@ export class AuthService {
       this.checkIpMultiAccount(user.id, registrationIp).catch((err: Error) => {
         this.logger.warn(`IP multi-account check failed for ${user.id}: ${err.message}`);
       });
+      this.antiAbuse.recordIp(user.id, registrationIp, 'register').catch(() => undefined);
     }
 
     return { user: this.sanitizeUser(user), accessToken: tokens.accessToken };
