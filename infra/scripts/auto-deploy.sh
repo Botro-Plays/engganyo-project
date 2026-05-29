@@ -47,17 +47,21 @@ log "Pulling pre-built images from GHCR..."
 docker pull "$API_IMAGE"
 docker pull "$WEB_IMAGE"
 
-# Stop and remove old containers to avoid name conflicts
-log "Stopping and removing old containers..."
-docker compose down
-
-# Start containers using pulled images
-log "Starting containers..."
+# Pull new images and recreate containers (rolling update — no downtime)
+log "Starting containers with new images..."
+docker compose pull
 docker compose up -d
 
 # Wait for API to be ready
 log "Waiting for containers to be healthy..."
 sleep 10
+
+# Verify health endpoint responds before declaring success
+log "Verifying API health endpoint..."
+if ! curl -sf --max-time 15 "http://localhost:3001/api/health" > /dev/null; then
+    log "ERROR: API health check failed after deploy"
+    exit 1
+fi
 
 # Run Prisma migrations
 log "Running Prisma migrations..."
@@ -76,5 +80,9 @@ if [ ! -f "$SEED_SENTINEL" ]; then
 else
     log "Seed already ran, skipping"
 fi
+
+# Clean up old unused images
+log "Cleaning up old Docker images..."
+docker image prune -af --filter "until=168h" > /dev/null 2>&1 || true
 
 log "Deploy completed successfully!"
