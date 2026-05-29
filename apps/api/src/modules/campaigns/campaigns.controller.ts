@@ -23,7 +23,7 @@ export class CampaignsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new campaign (deducts credits upfront)' })
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateCampaignDto) {
-    return this.campaignsService.create(user.sub, dto);
+    return this.campaignsService.create(user.sub, user.role, dto);
   }
 
   @Get()

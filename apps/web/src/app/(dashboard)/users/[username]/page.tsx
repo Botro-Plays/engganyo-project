@@ -69,6 +69,31 @@ const PLATFORM_COLORS: Record<string, string> = {
   DISCORD:   'text-indigo-400',
 };
 
+// Build external platform URL from stored profileUrl or construct from username
+function getSocialUrl(platform: string, profileUrl: string | null, username: string | null): string {
+  if (profileUrl) {
+    // Ensure absolute URL (prevent relative-link fallback to current domain)
+    if (profileUrl.startsWith('http://') || profileUrl.startsWith('https://')) return profileUrl;
+    // If user entered just the domain part, prepend https
+    if (profileUrl.includes('.')) return `https://${profileUrl}`;
+    // Otherwise construct from known platform patterns
+  }
+  const handle = username ?? '';
+  if (!handle) return '#';
+  switch (platform) {
+    case 'YOUTUBE':    return `https://youtube.com/@${handle}`;
+    case 'TIKTOK':     return `https://tiktok.com/@${handle}`;
+    case 'INSTAGRAM':  return `https://instagram.com/${handle}`;
+    case 'TWITTER':    return `https://x.com/${handle}`;
+    case 'FACEBOOK':   return `https://facebook.com/${handle}`;
+    case 'TWITCH':     return `https://twitch.tv/${handle}`;
+    case 'SPOTIFY':    return `https://open.spotify.com/user/${handle}`;
+    case 'TELEGRAM':   return `https://t.me/${handle}`;
+    case 'DISCORD':    return '#'; // Discord has no public profile URL by username alone
+    default:           return '#';
+  }
+}
+
 export default function UserProfilePage() {
   const { username } = useParams<{ username: string }>();
   const { user: currentUser } = useAuthStore();
@@ -203,7 +228,7 @@ export default function UserProfilePage() {
             {data.socialAccounts.map((s) => (
               <a
                 key={s.id}
-                href={s.profileUrl ?? '#'}
+                href={getSocialUrl(s.platform, s.profileUrl, s.platformUsername)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700 text-xs ${PLATFORM_COLORS[s.platform] ?? 'text-zinc-300'} hover:bg-zinc-700/60 transition-colors`}

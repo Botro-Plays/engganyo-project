@@ -54,8 +54,9 @@ export class CampaignsService {
 
   // ─── Create ────────────────────────────────────────────────
 
-  async create(userId: string, dto: CreateCampaignDto) {
+  async create(userId: string, userRole: string, dto: CreateCampaignDto) {
     const totalCost = dto.totalSlots * dto.creditPerTask;
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
     // Debit the full campaign cost upfront
     await this.walletService.debit(userId, totalCost, {
@@ -80,6 +81,8 @@ export class CampaignsService {
         requiresProof: dto.requiresProof ?? true,
         proofInstructions: dto.proofInstructions,
         autoVerify: dto.autoVerify ?? OAUTH_PLATFORMS.has((dto.taskType as string).split('_')[0]),
+        // Auto-mark admin-created campaigns as platform tasks for discover
+        isPlatformTask: isAdmin,
         // Auto-activate for Phase 5 (admin review added in Phase 8)
         status: CampaignStatus.ACTIVE,
       },

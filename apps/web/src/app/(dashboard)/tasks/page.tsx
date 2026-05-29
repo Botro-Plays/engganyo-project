@@ -149,6 +149,7 @@ export default function TasksPage() {
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
   const [browsePage, setBrowsePage] = useState(1);
   const [myPage, setMyPage] = useState(1);
+  const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'done'>('all');
   const [submitting, setSubmitting] = useState<MyTask | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
@@ -510,6 +511,23 @@ export default function TasksPage() {
       {/* ── My Tasks tab ── */}
       {tab === 'mine' && (
         <>
+          {/* Filter buttons */}
+          <div className="flex gap-2 mb-4">
+            {(['all', 'pending', 'done'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setMyFilter(f)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  myFilter === f
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-surface-hover text-zinc-400 hover:text-white border border-surface-border'
+                }`}
+              >
+                {f === 'all' ? 'All' : f === 'pending' ? 'Pending' : 'Done'}
+              </button>
+            ))}
+          </div>
+
           {myLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -524,7 +542,13 @@ export default function TasksPage() {
           ) : (
             <>
               <div className="space-y-2">
-                {myData.items.map((task) => {
+                {myData.items
+                  .filter((task) => {
+                    if (myFilter === 'pending') return ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(task.status);
+                    if (myFilter === 'done') return ['VERIFIED', 'REJECTED'].includes(task.status);
+                    return true;
+                  })
+                  .map((task) => {
                   const st = MY_TASK_STATUS[task.status] ?? { label: task.status, color: 'text-zinc-400' };
                   const platform = getPlatform(task.campaign.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';

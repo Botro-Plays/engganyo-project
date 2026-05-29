@@ -20,6 +20,7 @@ interface Campaign {
   completedSlots: number;
   pendingSlots: number;
   creditPerTask: number;
+  isPlatformTask: boolean;
   user: { username: string; displayName: string | null };
 }
 
@@ -221,16 +222,25 @@ export default function DiscoverPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(campaigns?.items ?? []).map((c) => {
-              const plt = c.taskType.split('_')[0] ?? 'UNKNOWN';
-              const style = PLATFORM_STYLES[plt] ?? { color: 'text-zinc-400', bg: 'bg-zinc-500/10', label: plt };
-              const available = c.totalSlots - c.completedSlots - c.pendingSlots;
-              return (
-                <div key={c.id} className="card-glass rounded-xl p-4 flex flex-col gap-3 border border-surface-border hover:border-brand-500/30 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.color} ${style.bg}`}>
-                      {style.label} · {TASK_ACTION[c.taskType] ?? c.taskType}
-                    </span>
+            {[...(campaigns?.items ?? [])]
+              .sort((a, b) => Number(b.isPlatformTask) - Number(a.isPlatformTask))
+              .map((c) => {
+                const plt = c.taskType.split('_')[0] ?? 'UNKNOWN';
+                const style = PLATFORM_STYLES[plt] ?? { color: 'text-zinc-400', bg: 'bg-zinc-500/10', label: plt };
+                const available = c.totalSlots - c.completedSlots - c.pendingSlots;
+                return (
+                  <div key={c.id} className={`card-glass rounded-xl p-4 flex flex-col gap-3 border hover:border-brand-500/30 transition-colors ${c.isPlatformTask ? 'border-yellow-500/30' : 'border-surface-border'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.color} ${style.bg}`}>
+                          {style.label} · {TASK_ACTION[c.taskType] ?? c.taskType}
+                        </span>
+                        {c.isPlatformTask && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-medium">
+                            Featured
+                          </span>
+                        )}
+                      </div>
                     <a href={c.targetUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-zinc-400 transition-colors">
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>

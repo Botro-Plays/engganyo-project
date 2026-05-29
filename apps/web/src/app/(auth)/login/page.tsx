@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -31,11 +31,18 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, setAccessToken } = useAuthStore();
+  const { setUser, setAccessToken, isAuthenticated } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
-  
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/dashboard');
+    }
+  }, [isAuthenticated, router]);
+
   // v3 hook
   const v3Recaptcha = useGoogleReCaptcha();
   // v2/v3 context

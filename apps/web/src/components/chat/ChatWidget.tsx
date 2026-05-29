@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Minimize2, Maximize2, RefreshCw } from 'lucide-react';
+import { MessageSquare, X, Send, Minimize2, Maximize2, RefreshCw, GripVertical } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -19,6 +19,20 @@ interface ChatResponse {
   status?: string;
 }
 
+const STORAGE_KEY = 'chat-widget-pos';
+
+function loadPos(): { x: number; y: number } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as { x: number; y: number };
+  } catch { /* ignore */ }
+  return { x: 0, y: 0 };
+}
+
+function savePos(pos: { x: number; y: number }) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
+}
+
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -26,7 +40,13 @@ export function ChatWidget() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  
+
+  // ── Draggable position ──
+  const [pos, setPos] = useState<{ x: number; y: number }>(loadPos);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const didDragRef = useRef(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated } = useAuthStore();
 
@@ -99,10 +119,61 @@ export function ChatWidget() {
     }
   };
 
+  // ── Drag handlers ──
+  const startDrag = (clientX: number, clientY: number) => {
+    setIsDragging(true);
+    dragOffset.current = { x: clientX - pos.x, y: clientY - pos.y };
+  };
+
+  const onDrag = (clientX: number, clientY: number) => {
+    if (!isDragging) return;
+    const newPos = { x: clientX - dragOffset.current.x, y: clientY - dragOffset.current.y };
+    setPos(newPos);
+  };
+
+  const endDrag = () => {
+    if (isDragging) {
+      setIsDragging(false);
+      savePos(pos);
+    }
+  };
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => onDrag(e.clientX, e.clientY);
+    const onMouseUp = () => endDrag();
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) onDrag(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onTouchEnd = () => endDrag();
+
+    if (isDragging) {
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
+      window.addEventListener('touchend', onTouchEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isDragging]);
+
+  const dragStyle = { transform: `translate(${pos.x}px, ${pos.y}px)` };
+
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => { if (!didDragRef.current) setIsOpen(true); }}
+        onMouseDown={(e) => { didDragRef.current = false; startDrag(e.clientX, e.clientY); }}
+        onTouchStart={(e) => {
+          didDragRef.current = false;
+          if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        onMouseMove={() => { if (isDragging) didDragRef.current = true; }}
+        onTouchMove={() => { if (isDragging) didDragRef.current = true; }}
+        style={dragStyle}
         className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-white p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105"
         aria-label="Open chat"
       >
@@ -112,10 +183,23 @@ export function ChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-surface-border bg-surface-hover">
+    <div
+      style={dragStyle}
+      className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl"
+    >
+      {/* Header — draggable */}
+      <div
+        className="flex items-center justify-between p-4 border-b border-surface-border bg-surface-hover cursor-grab active:cursor-grabbing select-none"
+        onMouseDown={(e) => { didDragRef.current = false; startDrag(e.clientX, e.clientY); }}
+        onTouchStart={(e) => {
+          didDragRef.current = false;
+          if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        onMouseMove={() => { if (isDragging) didDragRef.current = true; }}
+        onTouchMove={() => { if (isDragging) didDragRef.current = true; }}
+      >
         <div className="flex items-center gap-3">
+          <GripVertical className="w-4 h-4 text-zinc-600" />
           <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center">
             <MessageSquare className="w-4 h-4 text-brand-400" />
           </div>
@@ -129,6 +213,8 @@ export function ChatWidget() {
         <div className="flex items-center gap-2">
           <button
             onClick={startNewConversation}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
             aria-label="New conversation"
             title="New conversation"
@@ -137,6 +223,8 @@ export function ChatWidget() {
           </button>
           <button
             onClick={() => setIsMinimized(!isMinimized)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
             aria-label={isMinimized ? 'Maximize' : 'Minimize'}
           >
@@ -148,6 +236,8 @@ export function ChatWidget() {
           </button>
           <button
             onClick={() => setIsOpen(false)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
             aria-label="Close chat"
           >
