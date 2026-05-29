@@ -798,6 +798,17 @@ export class AdminService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
+  async deleteNotification(id: string) {
+    await this.prisma.notification.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async clearNotifications(userId?: string) {
+    const where: Prisma.NotificationWhereInput = userId ? { userId } : {};
+    const { count } = await this.prisma.notification.deleteMany({ where });
+    return { success: true, deletedCount: count };
+  }
+
   // ─── Credits ──────────────────────────────────────────────
 
   async grantCredits(adminId: string, userId: string, dto: GrantCreditsDto) {

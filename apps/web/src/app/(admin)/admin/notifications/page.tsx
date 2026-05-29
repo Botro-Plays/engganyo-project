@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Bell,
@@ -13,6 +13,7 @@ import {
   Search,
   User,
   X,
+  Trash2,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
@@ -63,7 +64,9 @@ export default function AdminNotificationsPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [userIdFilter, setUserIdFilter] = useState('');
   const [tempUserId, setTempUserId] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const limit = 25;
+  const queryClient = useQueryClient();
 
   const params = new URLSearchParams();
   params.append('page', page.toString());
@@ -78,6 +81,25 @@ export default function AdminNotificationsPage() {
         `admin/notifications?${params.toString()}`,
       );
       return res.data.data ?? { items: [], meta: { total: 0, page, limit, totalPages: 1 } };
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`admin/notifications/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] });
+      setDeleteConfirm(null);
+    },
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: () => {
+      const clearParams = new URLSearchParams();
+      if (userIdFilter) clearParams.append('userId', userIdFilter);
+      return apiClient.delete(`admin/notifications?${clearParams.toString()}`);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'notifications'] });
     },
   });
 
@@ -103,6 +125,23 @@ export default function AdminNotificationsPage() {
             {meta?.total ?? 0} total notification{meta?.total === 1 ? '' : 's'} across all users
           </p>
         </div>
+        {(data?.items.length ?? 0) > 0 && (
+          <button
+            onClick={() => {
+              if (window.confirm(userIdFilter
+                ? `Delete all notifications for user ${userIdFilter}?`
+                : 'Delete ALL notifications across ALL users? This cannot be undone.'
+              )) {
+                clearMutation.mutate();
+              }
+            }}
+            disabled={clearMutation.isPending}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 disabled:opacity-50 transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
+            {userIdFilter ? 'Clear user notifications' : 'Clear all notifications'}
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -162,13 +201,14 @@ export default function AdminNotificationsPage() {
                   <th className="px-4 py-3 font-medium">Title</th>
                   <th className="px-4 py-3 font-medium">User</th>
                   <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium text-right">Time</th>
+                  <th className="px-4 py-3 font-medium">Time</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border">
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-zinc-500">
+                    <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
                       No notifications found.
                     </td>
                   </tr>
@@ -201,8 +241,35 @@ export default function AdminNotificationsPage() {
                         <span className="text-xs text-indigo-400 font-medium">Unread</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right text-xs text-zinc-500">
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-zinc-500">
                       {formatRelativeTime(n.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
+                      {deleteConfirm === n.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => deleteMutation.mutate(n.id)}
+                            disabled={deleteMutation.isPending}
+                            className="px-2 py-1 rounded text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(null)}
+                            className="px-2 py-1 rounded text-xs text-zinc-500 hover:text-zinc-300 transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeleteConfirm(n.id)}
+                          className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                          title="Delete notification"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

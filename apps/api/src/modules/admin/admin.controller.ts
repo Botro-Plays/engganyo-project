@@ -265,6 +265,20 @@ export class AdminController {
     return this.adminService.listAllNotifications(Number(page), Number(limit), type, userId);
   }
 
+  @Delete('notifications/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a notification (admin)' })
+  adminDeleteNotification(@Param('id') id: string) {
+    return this.adminService.deleteNotification(id);
+  }
+
+  @Delete('notifications')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Clear notifications by user (or all if no userId)' })
+  adminClearNotifications(@Query('userId') userId?: string) {
+    return this.adminService.clearNotifications(userId);
+  }
+
   // ─── Audit log ────────────────────────────────────────────
 
   @Get('audit-log')
