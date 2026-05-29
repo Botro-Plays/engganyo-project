@@ -22,7 +22,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 4g
     logging:
       driver: "json-file"
       options:
@@ -39,7 +39,7 @@ services:
     command: >
       redis-server
       --appendonly yes
-      --maxmemory 256mb
+      --maxmemory 512mb
       --maxmemory-policy allkeys-lru
     ports:
       - '${REDIS_PORT:-6379}:6379'
@@ -58,7 +58,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 1g
     networks:
       - engganyo_network
 
@@ -88,7 +88,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 2g
     logging:
       driver: "json-file"
       options:
@@ -120,7 +120,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 1g
     logging:
       driver: "json-file"
       options:
@@ -154,7 +154,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128m
+          memory: 256m
     logging:
       driver: "json-file"
       options:
