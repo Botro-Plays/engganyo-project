@@ -19,7 +19,8 @@ import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
-import type { TwoFactorService, TwoFactorRequiredResult } from './two-factor.service';
+import { TwoFactorService } from './two-factor.service';
+import type { TwoFactorRequiredResult } from './two-factor.service';
 
 // ─── Internal types ────────────────────────────────────────────
 interface TokenPair {
