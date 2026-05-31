@@ -250,6 +250,13 @@ export class AuthService {
     const passwordValid = await argon2.verify(user.passwordHash, dto.password);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
 
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      throw new BadRequestException({
+        message: 'Please verify your email before signing in.',
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email,
+      });
+    }
     if (user.status === UserStatus.BANNED) {
       throw new UnauthorizedException('Account has been banned');
     }

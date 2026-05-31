@@ -12,6 +12,7 @@ import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { useRecaptcha } from '@/app/providers';
 
+import axios from 'axios';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse, User } from '@/types';
@@ -67,6 +68,13 @@ export default function LoginPage() {
       router.push('/dashboard');
     },
     onError: (error) => {
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as { code?: string; email?: string; message?: string } | undefined;
+        if (data?.code === 'EMAIL_NOT_VERIFIED' && data.email) {
+          router.push(`/check-email?email=${encodeURIComponent(data.email)}`);
+          return;
+        }
+      }
       setServerError(getApiErrorMessage(error));
     },
   });
