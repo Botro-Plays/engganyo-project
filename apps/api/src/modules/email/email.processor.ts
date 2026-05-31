@@ -5,6 +5,7 @@ import type { Job } from 'bullmq';
 import * as nodemailer from 'nodemailer';
 
 import { EMAIL_QUEUE, EMAIL_JOBS } from './email.service';
+import { verificationEmailTemplate, passwordResetEmailTemplate } from './email.templates';
 
 interface EmailJobData {
   to: string;
@@ -37,11 +38,12 @@ export class EmailProcessor {
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
     const fromEmail = this.config.get<string>('email.fromEmail', 'noreply@engganyo.com');
 
+    const verifyUrl = `${frontendUrl}/verify-email?token=${token}`;
     await this.mailer.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
       to,
       subject: 'Verify your Engganyo account',
-      html: `<p>Welcome to Engganyo! Click <a href="${frontendUrl}/verify-email?token=${token}">here</a> to verify your email. Expires in 24 hours.</p>`,
+      html: verificationEmailTemplate(verifyUrl),
     });
 
     this.logger.log(`Verification email sent → ${to}`);
@@ -54,11 +56,12 @@ export class EmailProcessor {
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
     const fromEmail = this.config.get<string>('email.fromEmail', 'noreply@engganyo.com');
 
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
     await this.mailer.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
       to,
       subject: 'Reset your Engganyo password',
-      html: `<p>Click <a href="${frontendUrl}/reset-password?token=${token}">here</a> to reset your password. Expires in 1 hour. If you didn't request this, ignore this email.</p>`,
+      html: passwordResetEmailTemplate(resetUrl),
     });
 
     this.logger.log(`Password-reset email sent → ${to}`);
