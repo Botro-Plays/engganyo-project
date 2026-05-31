@@ -111,6 +111,16 @@ export class AdminController {
     return this.adminService.updateUserDetails(id, dto);
   }
 
+  @Delete('users/:id/2fa')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Disable all 2FA for a user (admin support action)' })
+  disableUserTwoFactor(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.disableUserTwoFactor(admin.sub, id);
+  }
+
   @Delete('users/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a user and all related data — SUPER_ADMIN only' })

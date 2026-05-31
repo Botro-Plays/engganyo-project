@@ -62,6 +62,8 @@ export class AdminService {
           creditBalance: true,
           currentStreak: true,
           createdAt: true,
+          twoFactorTotpSecret: true,
+          twoFactorEmailEnabled: true,
           _count: { select: { completions: true, campaigns: true, abuseFlags: true } },
           ipRecords: { orderBy: { createdAt: 'desc' }, take: 1, select: { country: true, region: true, ipAddress: true } },
         },
@@ -72,7 +74,12 @@ export class AdminService {
       this.prisma.user.count({ where }),
     ]);
 
-    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    const mapped = items.map(({ twoFactorTotpSecret, twoFactorEmailEnabled, ...rest }) => ({
+      ...rest,
+      hasTwoFactor: !!twoFactorTotpSecret || twoFactorEmailEnabled,
+    }));
+
+    return { items: mapped, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   async getUser(userId: string) {
@@ -947,6 +954,43 @@ export class AdminService {
     });
 
     return { success: true, user: updated };
+  }
+
+  async disableUserTwoFactor(adminId: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, role: true, twoFactorTotpSecret: true, twoFactorEmailEnabled: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot modify a SUPER_ADMIN account');
+    if (!user.twoFactorTotpSecret && !user.twoFactorEmailEnabled) {
+      throw new BadRequestException('User does not have 2FA enabled');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { twoFactorTotpSecret: null, twoFactorEmailEnabled: false },
+      });
+      await tx.twoFactorCode.deleteMany({ where: { userId } });
+      await tx.twoFactorBackupCode.deleteMany({ where: { userId } });
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'user.2fa.disabled',
+        entityType: 'User',
+        entityId: userId,
+        oldValue: {
+          totpEnabled: !!user.twoFactorTotpSecret,
+          emailEnabled: user.twoFactorEmailEnabled,
+        },
+        newValue: { totpEnabled: false, emailEnabled: false },
+      },
+    });
+
+    return { message: `2FA disabled for @${user.username}.` };
   }
 
   async deleteUser(adminId: string, userId: string) {

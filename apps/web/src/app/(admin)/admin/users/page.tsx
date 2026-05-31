@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck, Shield, Trash2, AlertTriangle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck, Shield, Trash2, AlertTriangle, ShieldOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,7 +15,7 @@ import type { ApiResponse } from '@/types';
 interface AdminUser {
   id: string; username: string; email: string; displayName: string | null;
   role: string; status: string; level: number; creditBalance: number;
-  createdAt: string;
+  createdAt: string; hasTwoFactor: boolean;
   _count: { completions: number; campaigns: number; abuseFlags: number };
   ipRecords: { country: string | null; region: string | null; ipAddress: string | null }[];
 }
@@ -86,6 +86,8 @@ export default function AdminUsersPage() {
   const [trustUser, setTrustUser] = useState<AdminUser | null>(null);
   const [trustError, setTrustError] = useState<string | null>(null);
   const [trustSuccess, setTrustSuccess] = useState(false);
+  const [disable2faUser, setDisable2faUser] = useState<AdminUser | null>(null);
+  const [disable2faError, setDisable2faError] = useState<string | null>(null);
 
   const params = new URLSearchParams({
     page: String(page), limit: '25',
@@ -161,6 +163,16 @@ export default function AdminUsersPage() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: (err) => setTrustError(getApiErrorMessage(err)),
+  });
+
+  const disable2faMutation = useMutation({
+    mutationFn: (userId: string) => apiClient.delete(`admin/users/${userId}/2fa`),
+    onSuccess: () => {
+      setDisable2faUser(null);
+      setDisable2faError(null);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => setDisable2faError(getApiErrorMessage(err)),
   });
 
   return (
@@ -284,6 +296,11 @@ export default function AdminUsersPage() {
                           )}
                           {isSuperAdmin && (
                             <button onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }} className="px-2 py-1 text-xs rounded bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors">Edit</button>
+                          )}
+                          {canAct && !isSelf && u.hasTwoFactor && (
+                            <button onClick={() => { setDisable2faUser(u); setDisable2faError(null); }} className="px-2 py-1 text-xs rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors" title="Disable 2FA">
+                              <ShieldOff className="w-3 h-3" />
+                            </button>
                           )}
                           {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
                             <button onClick={() => { setDeleteUser(u); setDeleteError(null); }} className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
@@ -479,6 +496,40 @@ export default function AdminUsersPage() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Disable 2FA confirmation modal */}
+      {disable2faUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ShieldOff className="w-5 h-5 text-amber-400" />
+                <h2 className="text-base font-semibold text-white">Disable 2FA</h2>
+              </div>
+              <button onClick={() => setDisable2faUser(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-xs text-zinc-400 mb-4">
+              This will disable all two-factor authentication for{' '}
+              <span className="text-white font-medium">@{disable2faUser.username}</span>.
+              The user will be able to log in with their password only.
+            </p>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+              <p className="text-xs text-amber-400">Only use this as a support action when the user has lost access to their 2FA device and cannot log in.</p>
+            </div>
+            {disable2faError && <p className="text-xs text-red-400 mb-3">{disable2faError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setDisable2faUser(null)} className="flex-1 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm font-medium hover:bg-surface-hover/80 transition-colors">Cancel</button>
+              <button
+                onClick={() => disable2faMutation.mutate(disable2faUser.id)}
+                disabled={disable2faMutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium disabled:opacity-60 transition-colors"
+              >
+                {disable2faMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Disable 2FA'}
+              </button>
+            </div>
           </div>
         </div>
       )}
