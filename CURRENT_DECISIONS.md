@@ -1179,6 +1179,33 @@
 
 ---
 
+## EMAIL INFRASTRUCTURE DECISIONS
+
+### EDR-001: Branded HTML Email Templates
+**Status**: Implemented (2026-05-31)
+**Date**: 2026-05-31
+**Context**: Default nodemailer plain-text emails look unprofessional and untrustworthy; users may mark them as spam or phishing
+**Decision**: Create `email.templates.ts` with responsive dark-themed HTML templates matching Engganyo's brand identity
+**Rationale**:
+- Branded emails increase trust and reduce spam-flagging
+- Consistent visual identity across all user touchpoints
+- Dark theme matches the platform's UI aesthetic
+- HTML emails render correctly across major clients (Gmail, Outlook, Apple Mail)
+**Implementation**:
+- `email.templates.ts`: `baseLayout()` wrapper with standard Engganyo dark theme (`#0d1117` bg, `#161b2e` card, gradient accent bars)
+- `verificationEmailTemplate(verifyUrl)` — gradient blue/purple CTA button, 24h expiry warning, fallback text link
+- `passwordResetEmailTemplate(resetUrl)` — gradient amber/red CTA button, 1h expiry warning
+- `twoFactorEmailTemplate(code)` — large monospace code display (`42px`, `letter-spacing: 10px`), 10-min expiry notice
+- `email.processor.ts` updated to import and use templates instead of raw text
+- All templates use table-based layout for email client compatibility, inline CSS, and preview text
+**Tradeoffs**:
+- HTML email size is larger than plain text (~15KB vs ~500B)
+- Requires testing across email clients
+- Logo is hotlinked from `https://engganyo.com/logo-horizontal.svg` — if logo changes, old emails show broken image
+**Alternatives Considered**:
+- Third-party email service (SendGrid, Mailgun templates) — rejected: adds dependency and cost; nodemailer is sufficient
+- MJML framework — rejected: adds build dependency; hand-coded tables are sufficient for 3 templates
+
 ## CODE QUALITY DECISIONS
 
 ### CQD-001: Strict TypeScript Compliance

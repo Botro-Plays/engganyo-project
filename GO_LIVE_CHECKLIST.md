@@ -157,6 +157,7 @@ After revenue is flowing, improve scale and trust.
 |---|---|---|
 | 2026-05-29 | Avatar 404 after deploy | ✅ FIXED — nginx `--force-recreate` needed for bind mount config changes |
 | 2026-05-29 | `avatarUrl` DTO rejected local paths | ✅ FIXED — changed `@IsUrl()` to `@IsString()` |
+| 2026-05-31 | Branded HTML email templates | ✅ DONE — dark-themed templates for verification, password reset, 2FA code via `email.templates.ts` |
 | 2026-05-31 | Admin 2FA disable support action | ✅ DONE — `DELETE /admin/users/:id/2fa` with audit logging |
 | 2026-05-31 | Pre-launch database reset scope | ✅ DONE — `resetDatabase` now wipes forum/chat/activity, preserves only `admin`/`botro` + global config |
 | 2026-05-31 | Admin system stats observability | ✅ DONE — `GET /admin/system/stats` + DB/heap/uptime/upload panel on overview page |

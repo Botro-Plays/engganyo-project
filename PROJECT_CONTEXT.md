@@ -47,6 +47,10 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
   - Frontend: file picker with live preview, upload spinner, remove button
   - Storage: `/uploads/avatars/{userId}/{uuid}{ext}` on Docker volume
   - Serving: public access (no auth), UUID-based filenames for security
+- **Email Templates**: Implemented — branded dark-themed HTML templates for verification, password reset, and 2FA codes
+  - `email.templates.ts` with responsive table-based layout, inline CSS, preview text
+  - BullMQ queue delivery via `email.processor.ts`
+  - Templates match Engganyo UI aesthetic (`#0d1117` bg, gradient accent bars)
 - **Deployment**: Fully automated CI/CD via GitHub Actions → GHCR → VPS SSH
   - Zero-downtime rolling update (no `docker compose down`)
   - Post-deploy health check verification
