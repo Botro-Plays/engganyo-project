@@ -16,6 +16,8 @@ interface ErrorResponse {
   error: string;
   timestamp: string;
   path: string;
+  code?: string;
+  meta?: Record<string, unknown>;
 }
 
 @Catch()
@@ -30,6 +32,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status: number = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let error = 'InternalServerError';
+    let code: string | undefined;
+    let meta: Record<string, unknown> | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -41,6 +45,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         const resp = exceptionResponse as Record<string, unknown>;
         message = (resp['message'] as string | string[]) ?? exception.message;
         error = (resp['error'] as string) ?? exception.name;
+        if (resp['code']) code = resp['code'] as string;
+        const extraKeys = Object.keys(resp).filter(
+          (k) => !['message', 'error', 'code', 'statusCode'].includes(k),
+        );
+        if (extraKeys.length > 0) {
+          meta = Object.fromEntries(extraKeys.map((k) => [k, resp[k]]));
+        }
       }
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       status = this.handlePrismaError(exception);
@@ -61,6 +72,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error,
       timestamp: new Date().toISOString(),
       path: request.url,
+      ...(code ? { code } : {}),
+      ...(meta ? { meta } : {}),
     };
 
     // Log and report server errors

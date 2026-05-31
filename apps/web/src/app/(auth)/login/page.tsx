@@ -69,9 +69,9 @@ export default function LoginPage() {
     },
     onError: (error) => {
       if (axios.isAxiosError(error)) {
-        const data = error.response?.data as { code?: string; email?: string; message?: string } | undefined;
-        if (data?.code === 'EMAIL_NOT_VERIFIED' && data.email) {
-          router.push(`/check-email?email=${encodeURIComponent(data.email)}`);
+        const data = error.response?.data as { code?: string; meta?: { email?: string }; message?: string } | undefined;
+        if (data?.code === 'EMAIL_NOT_VERIFIED' && data.meta?.email) {
+          router.push(`/check-email?email=${encodeURIComponent(data.meta.email)}`);
           return;
         }
       }
