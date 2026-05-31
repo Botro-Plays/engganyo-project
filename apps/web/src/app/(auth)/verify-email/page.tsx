@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
@@ -20,12 +20,8 @@ function VerifyEmailPageInner() {
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
-  const calledRef = useRef(false);
 
   useEffect(() => {
-    if (calledRef.current) return;
-    calledRef.current = true;
-
     if (!token) {
       setStatus('error');
       setErrorMsg('Invalid or missing verification token.');

@@ -422,7 +422,16 @@ export class AuthService {
   async verifyEmail(token: string): Promise<void> {
     const verification = await this.prisma.emailVerification.findUnique({ where: { token } });
 
-    if (!verification || verification.usedAt || verification.expiresAt < new Date()) {
+    if (!verification || verification.expiresAt < new Date()) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    if (verification.usedAt) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: verification.userId },
+        select: { status: true },
+      });
+      if (user?.status === UserStatus.ACTIVE) return;
       throw new BadRequestException('Invalid or expired verification token');
     }
 
