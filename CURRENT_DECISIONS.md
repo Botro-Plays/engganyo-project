@@ -873,6 +873,68 @@
 - Table names in schema may differ from database (e.g., `AuditLog` model → `audit_logs` table via `@@map`)
 - Subqueries in raw SQL are supported and useful for cascade dependencies
 
+### ADR-011: Admin 2FA Disable Support Action
+**Status**: Implemented (2026-05-31)
+**Date**: 2026-05-31
+**Context**: Users lose access to their authenticator app or have 2FA issues and need admin support to regain account access
+**Decision**: SUPER_ADMIN can disable any user's 2FA via `DELETE /admin/users/:id/2fa`
+**Rationale**:
+- Users legitimately lose their 2FA device (phone lost/broken, app deleted)
+- Self-service 2FA recovery is complex and risky (backup codes are the correct path, but users lose them too)
+- Admin support action with full audit trail is safer than automated recovery
+- SUPER_ADMIN can also disable co-SUPER_ADMIN 2FA in emergencies (all passwords can be compromised)
+**Implementation**:
+- `DELETE /admin/users/:id/2fa` endpoint (SUPER_ADMIN only)
+- `AdminService.disableUserTwoFactor(adminId, adminRole, userId)`:
+  - Permission check: non-SUPER_ADMIN cannot modify SUPER_ADMIN accounts
+  - Clears `twoFactorTotpSecret` and `twoFactorEmailEnabled` on user
+  - Deletes all `TwoFactorCode` and `TwoFactorBackupCode` rows for that user
+  - Creates `auditLog` entry with `action: 'admin.disable_2fa'`
+- Frontend: `ShieldOff` icon button in `/admin/users` action column
+  - Confirmation modal with warning about support-only usage
+  - React Query mutation with success/error handling
+  - Invalidates `['admin', 'users']` query on success
+**Tradeoffs**:
+- If admin account is compromised, attacker can disable any 2FA
+  - Mitigated: requires SUPER_ADMIN role; resetDatabase preserves admin accounts
+- Social engineering risk if users claim 2FA loss
+  - Mitigated: requires admin discretion; all actions are audit-logged
+**Alternatives Considered**:
+- Self-service backup code recovery (rejected: users who lose 2FA typically also lose backup codes)
+- Email-based 2FA reset (rejected: email may also be compromised)
+
+### ADR-012: Pre-Launch Database Reset Strategy
+**Status**: Implemented (2026-05-31)
+**Date**: 2026-05-31
+**Context**: Before going public, need to clean all test data while preserving seed accounts and global configuration
+**Decision**: Enhanced `resetDatabase` to explicitly wipe forum/chat/activity data and preserve only `admin` + `botro` by username
+**Rationale**:
+- Seed accounts (`admin`, `botro`) are the only accounts that should survive a pre-launch reset
+- All other accounts (including ADMIN-role moderators) should be wiped
+- Global server settings (`PlatformConfig`) and integrations (`OAuthConfig`) must survive
+- Chat and forum tables have nullable userId / no cascade from user, so they survive user deletion if not explicitly wiped
+- DB `DELETE` does not reclaim disk space (dead tuples remain until autovacuum); this is negligible for pre-launch
+**Implementation**:
+- Preserve logic changed from `WHERE role = SUPER_ADMIN` to `WHERE username IN ('admin', 'botro')`
+- FK-safe deletion order inside `$transaction`:
+  1. `report.deleteMany()` (references users, campaigns, topics, replies)
+  2. `forumReaction` → `forumReply` → `forumTopic` (explicit order even though cascades exist)
+  3. `chatMessage` → `chatConversation` (nullable userId, no cascade)
+  4. `taskCompletion`, `transaction`, `campaign`, `referral`, `abuseFlag`, `ipRecord`
+  5. `xpEvent`, `deviceFingerprint` (orphan cleanup — no user cascade)
+  6. `auditLog`, `analyticsSnapshot`
+  7. `user.deleteMany({ id: { notIn: keptIds } })` (DB cascade handles: wallets, sessions, 2FA tables, etc.)
+  8. Reset kept accounts' stats (xp=0, credits=initial, streaks=0); credentials and 2FA preserved
+  9. Final audit log entry
+**Preserved untouched**: `PlatformConfig`, `OAuthConfig`, `Achievement` definitions, `DailyMission` definitions
+**Tradeoffs**:
+- Does NOT use `TRUNCATE` (Prisma `deleteMany` maps to SQL `DELETE`) — disk space not immediately reclaimed
+  - Mitigated: autovacuum reclaims within minutes; one-time pre-launch wipe, not ongoing maintenance
+- Does NOT reseed sample campaigns or achievements (those must be re-run via `prisma db seed` if desired)
+**Alternatives Considered**:
+- Raw SQL `TRUNCATE` (rejected: would bypass Prisma's cascade and require manual FK order, plus no per-row audit trail)
+- Full database drop + re-migrate + re-seed (rejected: would lose OAuth config and PlatformConfig values)
+
 ---
 
 ## UPLOADS & STORAGE DECISIONS
@@ -1161,8 +1223,8 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-05-29
-**Next Review**: 2026-08-29 (quarterly)
+**Last Updated**: 2026-05-31
+**Next Review**: 2026-08-31 (quarterly)
 
 ---
 

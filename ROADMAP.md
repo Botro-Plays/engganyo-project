@@ -1,6 +1,6 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-29 (Avatar upload, deploy automation, Docker permissions, nginx routing fixes)
+> Last updated: 2026-05-31 (Admin 2FA disable, pre-launch resetDatabase, system stats panel)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 > **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
 
@@ -276,11 +276,14 @@
 
 **API (`/api/v1/admin`)**
 - [x] `GET    /admin/stats` — platform overview (users, campaigns, reports, tasks)
-- [x] `GET    /admin/users` — list all users (search, filter by status/role, paginate)
+- [x] `GET    /admin/system/stats` — database size, per-table breakdown, active connections, Node.js heap/uptime, system memory, load average, upload storage (SUPER_ADMIN only)
+- [x] `GET    /admin/users` — list all users (search, filter by status/role, paginate, 2FA status indicator)
 - [x] `GET    /admin/users/:id` — single user detail with trust score + flags
 - [x] `PATCH  /admin/users/:id/status` — ban, suspend, activate (+ AuditLog)
 - [x] `POST   /admin/users/:id/credits` — grant or deduct credits manually (+ AuditLog)
 - [x] `DELETE /admin/users/:id` — delete user and all related data (SUPER_ADMIN only, raw SQL cascade)
+- [x] `DELETE /admin/users/:id/2fa` — disable all 2FA for a user (SUPER_ADMIN support action, audit logged)
+- [x] `POST   /admin/system/reset` — pre-launch database reset: wipes all data except `admin`/`botro` accounts + preserves `PlatformConfig`/`OAuthConfig` (SUPER_ADMIN only)
 - [x] `GET    /admin/campaigns/pending` — campaigns awaiting review
 - [x] `PATCH  /admin/campaigns/:id/review` — approve / reject campaign (+ AuditLog)
 - [x] `GET    /admin/reports` — open reports queue
@@ -294,7 +297,8 @@
 **Frontend (`/admin`)**
 - [x] Separate `(admin)` route group with admin-only layout (role-gated redirect)
 - [x] `/admin` — overview with 4 stat cards (users, pending campaigns, open reports, verified tasks)
-- [x] `/admin/users` — searchable table, status filter, Suspend/Ban/Activate actions, credits modal, Delete user button with confirmation dialog (SUPER_ADMIN only)
+- [x] `/admin` — System stats panel (SUPER_ADMIN only): DB size, heap memory %, uptime, upload storage, system memory bar + load average, top 10 tables by size with proportional bars; auto-refreshes every 60s
+- [x] `/admin/users` — searchable table with 2FA status column, status filter, Suspend/Ban/Activate actions, credits modal, Disable 2FA button with confirmation modal, Delete user button with confirmation dialog (SUPER_ADMIN only)
 - [x] `/admin/campaigns` — pending review queue, approve/reject with optional notes
 - [x] `/admin/reports` — open reports queue, resolve/dismiss with admin notes
 - [x] `/admin/audit-log` — full log with action filter, colour-coded action badges, JSON payload preview
@@ -649,10 +653,11 @@
 - [🟡] Disposable email detection (block temp-mail.org domains)
 
 **Two-factor authentication (2FA)**
-- [🔴] TOTP 2FA (Google Authenticator / Authy) via `otplib`
-- [🔴] Backup codes (8 single-use codes)
-- [🔴] 2FA enforce option for admin accounts
-- [🟡] Optional 2FA for all users
+- [✅] TOTP 2FA (Google Authenticator / Authy) via `otplib` — `POST /auth/2fa/setup`, `POST /auth/2fa/verify`, `POST /auth/2fa/confirm`
+- [✅] Backup codes (8 single-use codes) — generated on TOTP enable, stored hashed in `TwoFactorBackupCode`
+- [✅] Admin 2FA disable support action — `DELETE /admin/users/:id/2fa` (SUPER_ADMIN can disable any user's 2FA, including co-SUPER_ADMIN, with audit logging)
+- [🔴] 2FA enforce option for admin accounts (login gate still needed)
+- [🟡] Optional 2FA for all users (setup UI exists, not enforced)
 - [🟡] SMS 2FA fallback (Twilio)
 
 **Additional security measures**

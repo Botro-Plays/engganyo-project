@@ -28,13 +28,14 @@ These are **non-negotiable**. Do not implement payments until these are done.
 - **Effort**: 30 min (config change + test)
 
 ### C2. Admin 2FA (TOTP)
-- [ ] Add `otplib` to API dependencies
-- [ ] `POST /admin/2fa/setup` — generate secret, return QR code
-- [ ] `POST /admin/2fa/verify` — confirm token, enable 2FA
+- [x] Add `otplib` to API dependencies (done in prior session)
+- [x] `POST /auth/2fa/setup` — generate secret, return QR code (done)
+- [x] `POST /auth/2fa/verify` — confirm token, enable 2FA (done)
+- [x] `DELETE /admin/users/:id/2fa` — SUPER_ADMIN can disable any user's 2FA as support action (audit logged)
 - [ ] Enforce 2FA on all admin/moderator login (`RolesGuard` + 2FA check)
-- [ ] Generate 8 backup codes
-- [ ] Frontend: QR code display, token input, backup codes download
-- [ ] **Why**: Single password compromise = full platform takeover.
+- [x] Generate 8 backup codes on TOTP enable (done)
+- [x] Frontend: QR code display, token input, backup codes download (done in user settings)
+- [ ] **Why**: Single password compromise = full platform takeover. Login enforcement is the remaining gap.
 - **Effort**: 1–2 days
 
 ### C3. Add Platform Fees (15%)
@@ -156,11 +157,19 @@ After revenue is flowing, improve scale and trust.
 |---|---|---|
 | 2026-05-29 | Avatar 404 after deploy | ✅ FIXED — nginx `--force-recreate` needed for bind mount config changes |
 | 2026-05-29 | `avatarUrl` DTO rejected local paths | ✅ FIXED — changed `@IsUrl()` to `@IsString()` |
+| 2026-05-31 | Admin 2FA disable support action | ✅ DONE — `DELETE /admin/users/:id/2fa` with audit logging |
+| 2026-05-31 | Pre-launch database reset scope | ✅ DONE — `resetDatabase` now wipes forum/chat/activity, preserves only `admin`/`botro` + global config |
+| 2026-05-31 | Admin system stats observability | ✅ DONE — `GET /admin/system/stats` + DB/heap/uptime/upload panel on overview page |
 | | | |
 
 ---
 
 ## Next Session Priority
 
-**If nothing is on fire: Do C1 + C2 (email verification + admin 2FA).**  
-These are the last two security blockers before revenue work can start.
+**C1 (email verification) remains the only unresolved CRITICAL blocker.**  
+C2 (admin 2FA) is mostly done — only the login enforcement gate (`RolesGuard` + 2FA check on admin login) is remaining.
+
+Recommended order:
+1. **C1**: Enable email verification by default in production
+2. **C2 remaining**: Enforce 2FA on admin/moderator login
+3. Then proceed to **C3**: Platform fees on campaign creation
