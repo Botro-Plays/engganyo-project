@@ -118,7 +118,7 @@ export class AdminController {
     @CurrentUser() admin: JwtPayload,
     @Param('id') id: string,
   ) {
-    return this.adminService.disableUserTwoFactor(admin.sub, id);
+    return this.adminService.disableUserTwoFactor(admin.sub, admin.role, id);
   }
 
   @Delete('users/:id')

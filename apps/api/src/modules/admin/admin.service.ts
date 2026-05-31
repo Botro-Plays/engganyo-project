@@ -956,13 +956,15 @@ export class AdminService {
     return { success: true, user: updated };
   }
 
-  async disableUserTwoFactor(adminId: string, userId: string) {
+  async disableUserTwoFactor(adminId: string, adminRole: string, userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, username: true, role: true, twoFactorTotpSecret: true, twoFactorEmailEnabled: true },
     });
     if (!user) throw new NotFoundException('User not found');
-    if (user.role === UserRole.SUPER_ADMIN) throw new ForbiddenException('Cannot modify a SUPER_ADMIN account');
+    if (user.role === UserRole.SUPER_ADMIN && adminRole !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only SUPER_ADMIN can modify another SUPER_ADMIN account');
+    }
     if (!user.twoFactorTotpSecret && !user.twoFactorEmailEnabled) {
       throw new BadRequestException('User does not have 2FA enabled');
     }
