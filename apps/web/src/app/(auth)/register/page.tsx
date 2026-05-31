@@ -86,6 +86,10 @@ function RegisterPageInner() {
       return response.data.data;
     },
     onSuccess: (data) => {
+      if (data.user.status === 'PENDING_VERIFICATION') {
+        router.push(`/check-email?email=${encodeURIComponent(data.user.email)}`);
+        return;
+      }
       setUser(data.user);
       setAccessToken(data.accessToken);
       router.push('/dashboard?welcome=1');

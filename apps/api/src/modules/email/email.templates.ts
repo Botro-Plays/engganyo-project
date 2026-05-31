@@ -34,13 +34,20 @@ function baseLayout(content: string, previewText: string): string {
             <td align="center" style="padding-bottom:32px;">
               <table role="presentation" border="0" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="background:linear-gradient(135deg,#3b62f5,#d946ef);border-radius:12px;padding:2px;">
+                  <td style="background:linear-gradient(135deg,#3b62f5,#d946ef);border-radius:14px;padding:2px;">
                     <table role="presentation" border="0" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="background:#0d1117;border-radius:10px;padding:10px 20px;">
-                          <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">
-                            engg<span style="color:#3b62f5;">a</span>nyo
-                          </span>
+                        <td style="background:#0d1117;border-radius:12px;padding:12px 24px;">
+                          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td style="vertical-align:middle;padding-right:10px;">
+                                <div style="width:28px;height:28px;background:linear-gradient(135deg,#3b62f5,#d946ef);border-radius:8px;text-align:center;line-height:28px;font-size:15px;">&#9889;</div>
+                              </td>
+                              <td style="vertical-align:middle;">
+                                <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">engganyo</span>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                     </table>
@@ -91,24 +98,19 @@ export function verificationEmailTemplate(verifyUrl: string): string {
     <!-- Body content -->
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
       <tr>
-        <td style="padding:40px 40px 12px;">
-          <!-- Icon -->
+        <td style="padding:40px 40px 0;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:#1e2a45;border-radius:12px;padding:12px;margin-bottom:24px;">
-                <img src="https://engganyo.com/favicon.ico" width="32" height="32" alt="" style="display:block;width:32px;height:32px;" onerror="this.style.display='none'" />
+              <td style="background:linear-gradient(135deg,#3b62f5,#2444e8);border-radius:14px;padding:14px;">
+                <div style="font-size:22px;line-height:1;">&#9993;</div>
               </td>
             </tr>
           </table>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:16px 40px 0;">
-          <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
+          <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
             Verify your email address
           </h1>
           <p style="margin:0;font-size:15px;color:#8892a4;line-height:1.6;">
-            Welcome to Engganyo! You're one step away from growing your audience.
+            Welcome to Engganyo! You&rsquo;re one step away from growing your audience.
             Click the button below to verify your email and activate your account.
           </p>
         </td>
@@ -178,19 +180,15 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
     <!-- Body content -->
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
       <tr>
-        <td style="padding:40px 40px 12px;">
+        <td style="padding:40px 40px 0;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:#1e2a45;border-radius:12px;padding:12px;">
-                <img src="https://engganyo.com/favicon.ico" width="32" height="32" alt="" style="display:block;width:32px;height:32px;" onerror="this.style.display='none'" />
+              <td style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:14px;padding:14px;">
+                <div style="font-size:22px;line-height:1;">&#128274;</div>
               </td>
             </tr>
           </table>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:16px 40px 0;">
-          <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
+          <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
             Reset your password
           </h1>
           <p style="margin:0;font-size:15px;color:#8892a4;line-height:1.6;">
