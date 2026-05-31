@@ -41,7 +41,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
 - **Chat System**: Implemented with AI chat support (Groq integration)
 - **Social OAuth**: Partially implemented (YouTube, Twitch, Spotify working; others manual link)
-- **reCAPTCHA**: v2/v3 switch implemented in admin panel with cache invalidation
+- **Email Verification**: Implemented and enabled in production (`ENABLE_EMAIL_VERIFICATION=true`); login blocks unverified users; branded HTML templates; resend with cooldown
 - **Avatar Upload**: Implemented — users upload avatars from device (replaces external URL input)
   - Backend: `POST /uploads/avatar` with multer, JWT, 5MB limit, PNG/JPG/WebP
   - Frontend: file picker with live preview, upload spinner, remove button

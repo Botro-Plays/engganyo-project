@@ -12,7 +12,7 @@
 | **Platform** | ✅ Live at https://engganyo.com |
 | **Core Features** | ✅ Phases 1–10 complete |
 | **Revenue** | ❌ $0 — no platform fees, no payments, no withdrawals |
-| **Security** | 🟡 Partial — reCAPTCHA active, email verification OFF |
+| **Security** | 🟡 Partial — reCAPTCHA active, email verification ON, 2FA implemented (login enforcement pending) |
 
 ---
 
@@ -20,12 +20,13 @@
 
 These are **non-negotiable**. Do not implement payments until these are done.
 
-### C1. Enable Email Verification
-- [ ] Set `ENABLE_EMAIL_VERIFICATION=true` on production VPS
-- [ ] Verify welcome emails are sending (check Mailtrap / SMTP)
-- [ ] Test end-to-end: register → receive email → click link → verified
-- [ ] **Why**: Currently anyone can create unlimited fake accounts. Spam / multi-accounting risk is HIGH.
-- **Effort**: 30 min (config change + test)
+### C1. Enable Email Verification ✅
+- [x] Set `ENABLE_EMAIL_VERIFICATION=true` on production VPS
+- [x] Verify welcome emails are sending (SMTP configured, branded HTML templates)
+- [x] Test end-to-end: register → receive email → click link → verified
+- [x] Login blocks PENDING_VERIFICATION users and redirects to `/check-email` with resend option
+- [x] **Why**: Prevents spam account creation and multi-accounting.
+- **Effort**: ✅ COMPLETED (config + templates + frontend + backend enforcement all done)
 
 ### C2. Admin 2FA (TOTP)
 - [x] Add `otplib` to API dependencies (done in prior session)
@@ -157,6 +158,7 @@ After revenue is flowing, improve scale and trust.
 |---|---|---|
 | 2026-05-29 | Avatar 404 after deploy | ✅ FIXED — nginx `--force-recreate` needed for bind mount config changes |
 | 2026-05-29 | `avatarUrl` DTO rejected local paths | ✅ FIXED — changed `@IsUrl()` to `@IsString()` |
+| 2026-05-31 | Email verification enforcement (C1) | ✅ DONE — `ENABLE_EMAIL_VERIFICATION=true` in prod; branded templates; login blocks PENDING_VERIFICATION |
 | 2026-05-31 | Branded HTML email templates | ✅ DONE — dark-themed templates for verification, password reset, 2FA code via `email.templates.ts` |
 | 2026-05-31 | Admin 2FA disable support action | ✅ DONE — `DELETE /admin/users/:id/2fa` with audit logging |
 | 2026-05-31 | Pre-launch database reset scope | ✅ DONE — `resetDatabase` now wipes forum/chat/activity, preserves only `admin`/`botro` + global config |
@@ -167,10 +169,9 @@ After revenue is flowing, improve scale and trust.
 
 ## Next Session Priority
 
-**C1 (email verification) remains the only unresolved CRITICAL blocker.**  
-C2 (admin 2FA) is mostly done — only the login enforcement gate (`RolesGuard` + 2FA check on admin login) is remaining.
+**C1 is resolved. C2 is partially done. The remaining pre-revenue blocker is C2's login enforcement gate.**
 
 Recommended order:
-1. **C1**: Enable email verification by default in production
-2. **C2 remaining**: Enforce 2FA on admin/moderator login
-3. Then proceed to **C3**: Platform fees on campaign creation
+1. **C2 remaining**: Enforce 2FA on admin/moderator login (`RolesGuard` + 2FA check)
+2. Then proceed to **C3**: Platform fees on campaign creation
+3. Then **revenue launch**

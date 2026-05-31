@@ -581,23 +581,30 @@
 ## AUTHENTICATION DECISIONS
 
 ### AUR-001: Email Verification Strategy
-**Status**: Partially Implemented (Phase 2)
-**Date**: 2026-05-19
+**Status**: Fully Implemented (2026-05-31)
+**Date**: 2026-05-19 (Updated 2026-05-31)
 **Context**: Email verification requirement
-**Decision**: Email verification disabled by default (feature flag)
+**Decision**: Email verification fully implemented with branded templates, enforced at login
 **Rationale**:
-- Faster onboarding during development
-- Testing convenience
-- Can enable later without code changes
+- Faster onboarding during development (previously feature-flagged off)
+- Now enabled in production to prevent spam and multi-accounting
+- Branded HTML templates increase trust and reduce spam-flagging
+- Login enforcement redirects unverified users to /check-email with resend option
+**Implementation**:
+- `AuthService.register()` creates `PENDING_VERIFICATION` status when `ENABLE_EMAIL_VERIFICATION=true`
+- `POST /auth/verify-email` idempotent token verification (prevents double-API-call issues from Suspense)
+- `POST /auth/resend-verification` with 60-second cooldown and rate limiting (3/hour)
+- `AuthService.login()` blocks `PENDING_VERIFICATION` with code `EMAIL_NOT_VERIFIED` + email meta
+- Frontend: `/verify-email` page (auto-verifies on load), `/check-email` page (resend with cooldown)
+- Login page catches `EMAIL_NOT_VERIFIED` and redirects to `/check-email?email=`
+- Branded dark-themed HTML templates via BullMQ queue
 **Tradeoffs**:
-- Spam account creation risk
-- Multi-accounting risk
-- Lower user trust
-**Future Decision**:
-- Enable by default in production (CRITICAL)
-- Block unverified users from earning/spending
-- Add disposable email detection
-- **Status**: NEEDS IMMEDIATE ACTION
+- Adds friction to registration flow
+- Requires working SMTP in production
+- Users may lose verification emails in spam
+**Alternatives Considered**:
+- Keep disabled in production (rejected: spam/multi-accounting risk too high)
+- Use only reCAPTCHA without email verification (rejected: reCAPTCHA alone doesn't prevent multi-accounting)
 
 ### AUR-002: Password Hashing
 **Status**: Implemented (Phase 2)

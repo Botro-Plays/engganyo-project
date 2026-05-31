@@ -645,7 +645,7 @@
 - [🟡] reCAPTCHA v2 fallback for high-risk actions (pending)
 
 **Email flows**
-- [🔴] Registration confirmation email — backend sends via BullMQ queue; feature-flagged (`ENABLE_EMAIL_VERIFICATION`); make it default-on in production
+- [✅] Registration confirmation email — backend sends via BullMQ queue; branded HTML template; `ENABLE_EMAIL_VERIFICATION` enabled in production; login blocks PENDING_VERIFICATION users with redirect to /check-email
 - [✅] Branded HTML email templates — dark-themed (Engganyo `#0d1117` bg, gradient accent bars): verification, password reset, 2FA code
 - [🟡] Welcome email with onboarding tips after first login
 - [🟡] Email for credit transactions above threshold (anti-fraud alert)
