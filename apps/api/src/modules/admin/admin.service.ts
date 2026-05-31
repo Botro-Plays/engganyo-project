@@ -1410,55 +1410,84 @@ export class AdminService {
     const creditRow = await this.prisma.platformConfig.findUnique({ where: { key: 'initial_credits' } });
     const initialCredits: number = typeof creditRow?.value === 'number' ? creditRow.value : 200;
 
-    const superAdmins = await this.prisma.user.findMany({
-      where: { role: UserRole.SUPER_ADMIN },
-      select: { id: true },
+    // Only the two seeded owner accounts are preserved — everyone else is wiped
+    const keptUsers = await this.prisma.user.findMany({
+      where: { username: { in: ['admin', 'botro'] } },
+      select: { id: true, username: true },
     });
-    const saIds = superAdmins.map((u) => u.id);
+    const keptIds = keptUsers.map((u) => u.id);
 
-    if (!saIds.includes(adminId)) {
-      throw new ForbiddenException('Only a SUPER_ADMIN account may reset the database');
+    if (!keptIds.includes(adminId)) {
+      throw new ForbiddenException('Only the seeded admin accounts may reset the database');
     }
 
     await this.prisma.$transaction(
       async (tx) => {
-        // Delete in dependency order to avoid FK violations
-        await tx.taskCompletion.deleteMany({});
-        await tx.transaction.deleteMany({});
+        // ── Reports first (reference users, campaigns, forum topics, forum replies) ──
         await tx.report.deleteMany({});
+
+        // ── Forum (reactions → replies → topics) ──────────────────────────────────
+        await tx.forumReaction.deleteMany({});
+        await tx.forumReply.deleteMany({});
+        await tx.forumTopic.deleteMany({});
+
+        // ── Chat ──────────────────────────────────────────────────────────────────
+        await tx.chatMessage.deleteMany({});
+        await tx.chatConversation.deleteMany({});
+
+        // ── Core activity data ────────────────────────────────────────────────────
+        await tx.taskCompletion.deleteMany({});
+        await tx.transaction.deleteMany({});   // before user delete (wallet cascade would restrict)
         await tx.campaign.deleteMany({});
         await tx.referral.deleteMany({});
         await tx.abuseFlag.deleteMany({});
         await tx.ipRecord.deleteMany({});
+        await tx.xpEvent.deleteMany({});
+        await tx.deviceFingerprint.deleteMany({});
         await tx.auditLog.deleteMany({});
         await tx.analyticsSnapshot.deleteMany({});
-        // Delete all non-SUPER_ADMIN users (cascades: wallet, sessions, notifications, achievements, etc.)
-        await tx.user.deleteMany({ where: { id: { notIn: saIds } } });
-        // Reset SUPER_ADMIN users
-        for (const saId of saIds) {
+
+        // ── Delete all users except kept accounts ──────────────────────────────────
+        // DB cascades: wallets, sessions, email_verifications, password_resets,
+        // social_accounts, notifications, achievements, mission_progress,
+        // trust_scores, profiles, two_factor_codes, two_factor_backup_codes
+        await tx.user.deleteMany({ where: { id: { notIn: keptIds } } });
+
+        // ── Reset kept accounts (stats only — credentials and 2FA are preserved) ──
+        for (const kept of keptUsers) {
           await tx.user.update({
-            where: { id: saId },
-            data: { creditBalance: initialCredits, xp: 0, level: 1, currentStreak: 0, longestStreak: 0, lastActiveAt: null, lastDailyRewardAt: null },
+            where: { id: kept.id },
+            data: {
+              creditBalance: initialCredits,
+              xp: 0, level: 1,
+              currentStreak: 0, longestStreak: 0,
+              lastActiveAt: null, lastDailyRewardAt: null,
+            },
           });
           await tx.wallet.upsert({
-            where: { userId: saId },
-            create: { userId: saId, balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0 },
+            where: { userId: kept.id },
+            create: { userId: kept.id, balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0 },
             update: { balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0, version: 0 },
           });
         }
+
         await tx.auditLog.create({
           data: {
             userId: adminId,
             action: 'system.database_reset',
             entityType: 'System',
-            metadata: { keptSuperAdmins: saIds, initialCredits, timestamp: new Date().toISOString() },
+            metadata: {
+              keptAccounts: keptUsers.map((u) => u.username),
+              initialCredits,
+              timestamp: new Date().toISOString(),
+            },
           },
         });
       },
       { timeout: 60_000 },
     );
 
-    return { reset: true, keptAccounts: saIds.length, initialCredits };
+    return { reset: true, keptAccounts: keptUsers.map((u) => u.username), initialCredits };
   }
 
   // ─── Overview stats ───────────────────────────────────────
