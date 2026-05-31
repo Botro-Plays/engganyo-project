@@ -359,6 +359,14 @@ export class AdminController {
 
   // ─── System Operations (SUPER_ADMIN only) ────────────────────
 
+  @Get('system/stats')
+  @Roles(UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Database, upload storage and server stats (SUPER_ADMIN only)' })
+  getSystemStats() {
+    return this.adminService.getSystemStats();
+  }
+
   @Delete('system/audit-logs')
   @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)

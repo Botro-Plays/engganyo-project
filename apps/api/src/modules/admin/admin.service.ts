@@ -1,4 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { CampaignStatus, CompletionStatus, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
@@ -1488,6 +1491,89 @@ export class AdminService {
     );
 
     return { reset: true, keptAccounts: keptUsers.map((u) => u.username), initialCredits };
+  }
+
+  // ─── System Stats (SUPER_ADMIN) ─────────────────────────
+
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  }
+
+  async getSystemStats() {
+    // ── Database ──────────────────────────────────────────────
+    const [dbSizeRows, tableRows, connRows] = await Promise.all([
+      this.prisma.$queryRaw<{ db_size: string; db_size_bytes: bigint }[]>`
+        SELECT
+          pg_size_pretty(pg_database_size(current_database())) AS db_size,
+          pg_database_size(current_database())                 AS db_size_bytes
+      `,
+      this.prisma.$queryRaw<{ table_name: string; live_rows: bigint; total_size: string; total_size_bytes: bigint }[]>`
+        SELECT
+          relname                                                                AS table_name,
+          n_live_tup                                                             AS live_rows,
+          pg_size_pretty(pg_total_relation_size('"public"."' || relname || '"')) AS total_size,
+          pg_total_relation_size('"public"."' || relname || '"')                AS total_size_bytes
+        FROM pg_stat_user_tables
+        WHERE schemaname = 'public'
+        ORDER BY total_size_bytes DESC
+        LIMIT 20
+      `,
+      this.prisma.$queryRaw<{ active: bigint }[]>`
+        SELECT count(*) AS active
+        FROM pg_stat_activity
+        WHERE datname = current_database() AND state IS NOT NULL
+      `,
+    ]);
+
+    // ── Upload storage ────────────────────────────────────────
+    let uploadSizeBytes = 0;
+    let uploadFileCount = 0;
+    const uploadsRoot = path.join(process.cwd(), 'uploads');
+    const walkDir = (dir: string) => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walkDir(full);
+        else { uploadSizeBytes += fs.statSync(full).size; uploadFileCount++; }
+      }
+    };
+    walkDir(uploadsRoot);
+
+    // ── Server ────────────────────────────────────────────────
+    const mem = process.memoryUsage();
+
+    return {
+      database: {
+        size: dbSizeRows[0]?.db_size ?? '0 B',
+        sizeBytes: Number(dbSizeRows[0]?.db_size_bytes ?? 0),
+        activeConnections: Number(connRows[0]?.active ?? 0),
+        tables: tableRows.map((t) => ({
+          name: t.table_name,
+          liveRows: Number(t.live_rows),
+          size: t.total_size,
+          sizeBytes: Number(t.total_size_bytes),
+        })),
+      },
+      uploads: {
+        sizeBytes: uploadSizeBytes,
+        size: this.formatBytes(uploadSizeBytes),
+        fileCount: uploadFileCount,
+      },
+      server: {
+        uptimeSeconds: Math.floor(process.uptime()),
+        nodeVersion: process.version,
+        heapUsedBytes: mem.heapUsed,
+        heapTotalBytes: mem.heapTotal,
+        rssBytes: mem.rss,
+        systemMemFreeBytes: os.freemem(),
+        systemMemTotalBytes: os.totalmem(),
+        loadAvg: os.loadavg(),
+        platform: os.platform(),
+      },
+    };
   }
 
   // ─── Overview stats ───────────────────────────────────────
