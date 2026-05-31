@@ -431,6 +431,41 @@ export class AuthService {
     });
   }
 
+  // ─── Resend Verification ───────────────────────────────────
+
+  async resendVerification(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, status: true },
+    });
+
+    if (!user) {
+      return; // Silent — don't reveal if email is registered
+    }
+
+    if (user.status === UserStatus.ACTIVE) {
+      throw new BadRequestException('This account is already verified. Please sign in.');
+    }
+
+    await this.prisma.emailVerification.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
+    const token = nanoid(32);
+    await this.prisma.emailVerification.create({
+      data: {
+        userId: user.id,
+        email,
+        token,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    this.emailService.queueVerificationEmail(email, token).catch((err: Error) => {
+      this.logger.warn(`Failed to queue resend verification email: ${err.message}`);
+    });
+  }
+
   // ─── Private helpers ───────────────────────────────────────
 
   private async generateTokens(payload: JwtPayload): Promise<TokenPair> {

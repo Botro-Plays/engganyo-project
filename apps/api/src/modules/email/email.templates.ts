@@ -32,28 +32,13 @@ function baseLayout(content: string, previewText: string): string {
           <!-- Logo header -->
           <tr>
             <td align="center" style="padding-bottom:32px;">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="background:linear-gradient(135deg,#3b62f5,#d946ef);border-radius:14px;padding:2px;">
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="background:#0d1117;border-radius:12px;padding:12px 24px;">
-                          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
-                            <tr>
-                              <td style="vertical-align:middle;padding-right:10px;">
-                                <div style="width:28px;height:28px;background:linear-gradient(135deg,#3b62f5,#d946ef);border-radius:8px;text-align:center;line-height:28px;font-size:15px;">&#9889;</div>
-                              </td>
-                              <td style="vertical-align:middle;">
-                                <span style="font-size:22px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">engganyo</span>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+              <a href="https://engganyo.com" target="_blank" style="display:inline-block;text-decoration:none;">
+                <img src="https://engganyo.com/logo-horizontal.svg"
+                     alt="Engganyo"
+                     width="160"
+                     height="40"
+                     style="display:block;border:0;height:auto;max-width:160px;" />
+              </a>
             </td>
           </tr>
 

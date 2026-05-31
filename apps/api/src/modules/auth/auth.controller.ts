@@ -18,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -121,5 +122,15 @@ export class AuthController {
   async verifyEmail(@Body() dto: VerifyEmailDto) {
     await this.authService.verifyEmail(dto.token);
     return { message: 'Email verified successfully' };
+  }
+
+  @Post('resend-verification')
+  @Public()
+  @UserRateLimit({ limit: 3, ttl: 3600, scope: 'resend-verification' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend email verification link' })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    await this.authService.resendVerification(dto.email);
+    return { message: 'If your account is pending verification, a new link has been sent.' };
   }
 }
