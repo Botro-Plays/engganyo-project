@@ -6,6 +6,7 @@ import { EmailModule } from '../email/email.module';
 import { AntiAbuseModule } from '../anti-abuse/anti-abuse.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { TwoFactorService } from './two-factor.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -16,7 +17,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     AntiAbuseModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [AuthService, TwoFactorService, JwtStrategy],
+  exports: [AuthService, TwoFactorService],
 })
 export class AuthModule {}

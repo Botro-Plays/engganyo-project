@@ -7,6 +7,7 @@ export const EMAIL_QUEUE = 'email';
 export const EMAIL_JOBS = {
   SEND_VERIFICATION: 'send-verification',
   SEND_PASSWORD_RESET: 'send-password-reset',
+  SEND_TWO_FACTOR: 'send-two-factor',
 } as const;
 
 const JOB_OPTIONS = {
@@ -30,5 +31,10 @@ export class EmailService {
   async queuePasswordResetEmail(to: string, token: string): Promise<void> {
     await this.queue.add(EMAIL_JOBS.SEND_PASSWORD_RESET, { to, token }, JOB_OPTIONS);
     this.logger.debug(`Queued password-reset email → ${to}`);
+  }
+
+  async queueTwoFactorEmail(to: string, code: string): Promise<void> {
+    await this.queue.add(EMAIL_JOBS.SEND_TWO_FACTOR, { to, code }, JOB_OPTIONS);
+    this.logger.debug(`Queued 2FA email → ${to}`);
   }
 }

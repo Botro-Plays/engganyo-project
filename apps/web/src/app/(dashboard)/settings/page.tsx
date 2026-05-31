@@ -24,11 +24,11 @@ const SETTING_TILES = [
     available: false,
   },
   {
-    href: '#',
+    href: '/settings/security',
     icon: Shield,
     label: 'Security',
-    description: 'Change password and manage active sessions.',
-    available: false,
+    description: 'Two-factor authentication and account security.',
+    available: true,
   },
 ];
 

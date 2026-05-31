@@ -19,6 +19,7 @@ import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
+import type { TwoFactorService, TwoFactorRequiredResult } from './two-factor.service';
 
 // ─── Internal types ────────────────────────────────────────────
 interface TokenPair {
@@ -50,6 +51,8 @@ export interface AuthResult {
   accessToken: string;
 }
 
+export type LoginResult = AuthResult | TwoFactorRequiredResult;
+
 // ─── Constants ─────────────────────────────────────────────────
 const REFRESH_COOKIE = 'refresh_token';
 const REFERRAL_CODE_LENGTH = 8;
@@ -65,6 +68,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
     private readonly antiAbuse: AntiAbuseService,
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   // ─── Register ──────────────────────────────────────────────
@@ -236,7 +240,7 @@ export class AuthService {
 
   // ─── Login ─────────────────────────────────────────────────
 
-  async login(dto: LoginDto, res: Response): Promise<AuthResult> {
+  async login(dto: LoginDto, res: Response): Promise<LoginResult> {
     // Validate credentials first
     const isEmail = dto.emailOrUsername.includes('@');
     const user = await this.prisma.user.findFirst({
@@ -281,6 +285,54 @@ export class AuthService {
         throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
       }
     }
+
+    const hasTwoFactor = !!(user.twoFactorTotpSecret || user.twoFactorEmailEnabled);
+    if (hasTwoFactor) {
+      const methods: ('totp' | 'email')[] = [];
+      if (user.twoFactorTotpSecret) methods.push('totp');
+      if (user.twoFactorEmailEnabled) methods.push('email');
+      const twoFactorToken = await this.twoFactor.generateTwoFactorToken(user.id);
+      return { requiresTwoFactor: true as const, twoFactorToken, availableMethods: methods };
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastActiveAt: new Date() },
+    });
+
+    const tokens = await this.generateTokens({
+      sub: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role,
+      status: user.status,
+    });
+
+    await this.storeSession(tokens.refreshToken, user.id);
+    this.setRefreshCookie(res, tokens.refreshToken);
+
+    return { user: this.sanitizeUser(user), accessToken: tokens.accessToken };
+  }
+
+  // ─── Complete 2FA Login ────────────────────────────────────
+
+  async completeTwoFactorLogin(
+    twoFactorToken: string,
+    code: string,
+    method: 'totp' | 'email' | 'backup',
+    res: Response,
+  ): Promise<AuthResult> {
+    const userId = await this.twoFactor.validateTwoFactorToken(twoFactorToken);
+
+    const valid = await this.twoFactor.verifyLoginCode(userId, code, method);
+    if (!valid) {
+      throw new BadRequestException('Invalid or expired verification code.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, deletedAt: null },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
 
     await this.prisma.user.update({
       where: { id: user.id },

@@ -243,6 +243,10 @@ model User {
   referralCode String  @unique @map("referral_code")
   referredById String? @map("referred_by_id")
 
+  // Two-Factor Authentication
+  twoFactorTotpSecret   String?  @map("two_factor_totp_secret") // AES-encrypted; null = TOTP not configured
+  twoFactorEmailEnabled Boolean  @default(false) @map("two_factor_email_enabled")
+
   // Timestamps
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -276,6 +280,8 @@ model User {
   forumTopics         ForumTopic[]          @relation("ForumTopics")
   forumReplies        ForumReply[]         @relation("ForumReplies")
   forumReactions      ForumReaction[]      @relation("ForumReactions")
+  twoFactorCodes      TwoFactorCode[]
+  twoFactorBackupCodes TwoFactorBackupCode[]
 
   @@index([email])
   @@index([username])
@@ -368,6 +374,31 @@ model PasswordReset {
   @@index([userId])
   @@index([token])
   @@map("password_resets")
+}
+
+model TwoFactorCode {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String    // argon2-hashed 6-digit code
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("two_factor_codes")
+}
+
+model TwoFactorBackupCode {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String    // argon2-hashed backup code
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("two_factor_backup_codes")
 }
 
 // =============================================================

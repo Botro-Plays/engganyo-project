@@ -13,12 +13,14 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiCookieAuth } from '@nestjs/swa
 import type { Request, Response } from 'express';
 
 import { AuthService } from './auth.service';
+import { TwoFactorService } from './two-factor.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -29,7 +31,10 @@ import type { JwtPayload } from './interfaces/jwt-payload.interface';
 @Controller({ path: 'auth' })
 @UseGuards(JwtAuthGuard)
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
 
   @Get('public-config')
   @Public()
@@ -132,5 +137,101 @@ export class AuthController {
   async resendVerification(@Body() dto: ResendVerificationDto) {
     await this.authService.resendVerification(dto.email);
     return { message: 'If your account is pending verification, a new link has been sent.' };
+  }
+
+  // ─── 2FA ────────────────────────────────────────────────────
+
+  @Get('2fa/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get current 2FA configuration' })
+  async getTwoFactorStatus(@CurrentUser() user: JwtPayload) {
+    return this.twoFactorService.getStatus(user.sub);
+  }
+
+  @Post('2fa/totp/setup')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Generate TOTP secret and QR code' })
+  async setupTotp(@CurrentUser() user: JwtPayload) {
+    return this.twoFactorService.setupTotp(user.sub, user.email);
+  }
+
+  @Post('2fa/totp/enable')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Enable TOTP 2FA by verifying first code (returns backup codes)' })
+  async enableTotp(
+    @CurrentUser() user: JwtPayload,
+    @Body('code') code: string,
+  ) {
+    const backupCodes = await this.twoFactorService.enableTotp(user.sub, code);
+    return { backupCodes, message: 'TOTP 2FA enabled. Save your backup codes.' };
+  }
+
+  @Post('2fa/totp/disable')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Disable TOTP 2FA' })
+  async disableTotp(
+    @CurrentUser() user: JwtPayload,
+    @Body('code') code: string,
+  ) {
+    await this.twoFactorService.disableTotp(user.sub, code);
+    return { message: 'TOTP 2FA disabled.' };
+  }
+
+  @Post('2fa/email/enable')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Enable email OTP 2FA' })
+  async enableEmailTwoFactor(@CurrentUser() user: JwtPayload) {
+    await this.twoFactorService.enableEmailOtp(user.sub);
+    return { message: 'Email OTP 2FA enabled.' };
+  }
+
+  @Post('2fa/email/disable')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Disable email OTP 2FA' })
+  async disableEmailTwoFactor(@CurrentUser() user: JwtPayload) {
+    await this.twoFactorService.disableEmailOtp(user.sub);
+    return { message: 'Email OTP 2FA disabled.' };
+  }
+
+  @Post('2fa/send-email-code')
+  @Public()
+  @UserRateLimit({ limit: 5, ttl: 300, scope: '2fa-email' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send email OTP code (during login 2FA step)' })
+  async sendTwoFactorEmailCode(@Body('twoFactorToken') token: string) {
+    const userId = await this.twoFactorService.validateTwoFactorToken(token);
+    const user = await this.authService.getMe(userId);
+    await this.twoFactorService.sendEmailOtp(userId, user.email);
+    return { message: 'Verification code sent to your email.' };
+  }
+
+  @Post('2fa/verify')
+  @Public()
+  @UserRateLimit({ limit: 10, ttl: 300, scope: '2fa-verify' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Complete login by verifying 2FA code' })
+  async verifyTwoFactor(
+    @Body() dto: VerifyTwoFactorDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.authService.completeTwoFactorLogin(dto.twoFactorToken, dto.code, dto.method, res);
+  }
+
+  @Post('2fa/backup-codes/regenerate')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Regenerate backup codes (requires current TOTP code)' })
+  async regenerateBackupCodes(
+    @CurrentUser() user: JwtPayload,
+    @Body('code') code: string,
+  ) {
+    const backupCodes = await this.twoFactorService.regenerateBackupCodes(user.sub, code);
+    return { backupCodes, message: 'Backup codes regenerated.' };
   }
 }

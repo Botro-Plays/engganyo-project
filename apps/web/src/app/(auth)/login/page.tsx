@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Mail, Smartphone, Key } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import ReCAPTCHA from 'react-google-recaptcha';
@@ -30,12 +30,22 @@ interface LoginResponse {
   accessToken: string;
 }
 
+interface TwoFactorRequired {
+  requiresTwoFactor: true;
+  twoFactorToken: string;
+  availableMethods: ('totp' | 'email')[];
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { setUser, setAccessToken, isAuthenticated } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const [twoFactorState, setTwoFactorState] = useState<TwoFactorRequired | null>(null);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<'totp' | 'email' | 'backup'>('totp');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -62,9 +72,16 @@ export default function LoginPage() {
       const response = await apiClient.post<ApiResponse<LoginResponse>>('auth/login', data);
       return response.data.data;
     },
-    onSuccess: (data) => {
-      setUser(data.user);
-      setAccessToken(data.accessToken);
+    onSuccess: (data: LoginResponse | TwoFactorRequired) => {
+      if ('requiresTwoFactor' in data && data.requiresTwoFactor) {
+        const method = data.availableMethods[0] ?? 'totp';
+        setTwoFactorState(data);
+        setTwoFactorMethod(method);
+        return;
+      }
+      const authData = data as LoginResponse;
+      setUser(authData.user);
+      setAccessToken(authData.accessToken);
       router.push('/dashboard');
     },
     onError: (error) => {
@@ -111,6 +128,125 @@ export default function LoginPage() {
 
     loginMutation.mutate(data);
   };
+
+  const sendEmailCode = async () => {
+    if (!twoFactorState) return;
+    try {
+      await apiClient.post('auth/2fa/send-email-code', { twoFactorToken: twoFactorState.twoFactorToken });
+      setEmailCodeSent(true);
+    } catch (err) {
+      setServerError(getApiErrorMessage(err));
+    }
+  };
+
+  const verifyTwoFactor = useMutation({
+    mutationFn: async () => {
+      if (!twoFactorState) throw new Error('No 2FA state');
+      const res = await apiClient.post<ApiResponse<LoginResponse>>('auth/2fa/verify', {
+        twoFactorToken: twoFactorState.twoFactorToken,
+        code: twoFactorCode,
+        method: twoFactorMethod,
+      });
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      setUser(data.user);
+      setAccessToken(data.accessToken);
+      router.push('/dashboard');
+    },
+    onError: (err) => setServerError(getApiErrorMessage(err)),
+  });
+
+  if (twoFactorState) {
+    const hasBothMethods = twoFactorState.availableMethods.length > 1;
+    return (
+      <div className="w-full max-w-md">
+        <div className="card-glass rounded-2xl p-8">
+          <div className="flex justify-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+              <ShieldCheck className="w-7 h-7 text-brand-400" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-white text-center mb-2">Two-factor authentication</h1>
+          <p className="text-zinc-400 text-sm text-center mb-6">
+            {twoFactorMethod === 'totp' && 'Enter the 6-digit code from your authenticator app.'}
+            {twoFactorMethod === 'email' && (emailCodeSent ? 'Enter the code sent to your email.' : 'Click below to send a code to your email.')}
+            {twoFactorMethod === 'backup' && 'Enter one of your saved backup codes.'}
+          </p>
+
+          {serverError && (
+            <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              {serverError}
+            </div>
+          )}
+
+          {/* Method switcher */}
+          {hasBothMethods && (
+            <div className="flex gap-2 mb-5">
+              {twoFactorState.availableMethods.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setTwoFactorMethod(m); setTwoFactorCode(''); setServerError(null); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium transition-all border ${twoFactorMethod === m ? 'bg-brand-500/20 border-brand-500/50 text-brand-300' : 'border-surface-border text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  {m === 'totp' ? <Smartphone className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
+                  {m === 'totp' ? 'Authenticator' : 'Email'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Email: send code button */}
+          {twoFactorMethod === 'email' && !emailCodeSent && (
+            <button
+              onClick={sendEmailCode}
+              className="w-full mb-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-all"
+            >
+              Send code to my email
+            </button>
+          )}
+
+          {/* Code input */}
+          {(twoFactorMethod !== 'email' || emailCodeSent) && (
+            <>
+              <input
+                type={twoFactorMethod === 'backup' ? 'text' : 'text'}
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') verifyTwoFactor.mutate(); }}
+                placeholder={twoFactorMethod === 'backup' ? 'XXXXXXXXXX' : '000000'}
+                maxLength={twoFactorMethod === 'backup' ? 10 : 6}
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-3 text-white text-center text-xl font-mono tracking-widest placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent mb-4"
+                autoFocus
+              />
+              <button
+                onClick={() => verifyTwoFactor.mutate()}
+                disabled={verifyTwoFactor.isPending || !twoFactorCode}
+                className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-all"
+              >
+                {verifyTwoFactor.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify'}
+              </button>
+            </>
+          )}
+
+          <div className="mt-5 space-y-2 text-center">
+            <button
+              onClick={() => { setTwoFactorMethod('backup'); setTwoFactorCode(''); setServerError(null); }}
+              className="flex items-center gap-1.5 mx-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              <Key className="w-3.5 h-3.5" /> Use a backup code
+            </button>
+            <button
+              onClick={() => { setTwoFactorState(null); setServerError(null); }}
+              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              ← Back to sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md">

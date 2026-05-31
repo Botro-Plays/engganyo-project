@@ -234,3 +234,66 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
 
   return baseLayout(content, 'Reset your Engganyo password. Link expires in 1 hour.');
 }
+
+export function twoFactorEmailTemplate(code: string): string {
+  const content = `
+    <!-- Top accent bar -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="background:linear-gradient(90deg,#3b62f5,#d946ef);height:4px;"></td>
+      </tr>
+    </table>
+
+    <!-- Body content -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="padding:40px 40px 0;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:linear-gradient(135deg,#3b62f5,#2444e8);border-radius:14px;padding:14px;">
+                <div style="font-size:22px;line-height:1;">&#128272;</div>
+              </td>
+            </tr>
+          </table>
+          <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
+            Your sign-in code
+          </h1>
+          <p style="margin:0;font-size:15px;color:#8892a4;line-height:1.6;">
+            Use the code below to complete your sign-in to Engganyo.
+            This code expires in <strong style="color:#c4cad6;">10 minutes</strong>.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:32px 40px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"
+                 style="background:#0a0f1e;border-radius:12px;border:1px solid #1e2a45;">
+            <tr>
+              <td align="center" style="padding:32px 20px;">
+                <p style="margin:0 0 8px;font-size:13px;color:#4b5670;letter-spacing:0.05em;text-transform:uppercase;">Verification code</p>
+                <p style="margin:0;font-size:42px;font-weight:700;color:#ffffff;letter-spacing:10px;font-family:monospace;">${code}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 40px 40px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"
+                 style="background:#0f1826;border-radius:10px;border:1px solid #1e2a45;">
+            <tr>
+              <td style="padding:16px 20px;">
+                <p style="margin:0;font-size:12px;color:#4b5670;line-height:1.6;">
+                  &#128274; If you didn&rsquo;t try to sign in to Engganyo, please ignore this email —
+                  your account remains secure.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return baseLayout(content, `Your Engganyo sign-in code: ${code}. Expires in 10 minutes.`);
+}

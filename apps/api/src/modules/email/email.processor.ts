@@ -5,11 +5,12 @@ import type { Job } from 'bullmq';
 import * as nodemailer from 'nodemailer';
 
 import { EMAIL_QUEUE, EMAIL_JOBS } from './email.service';
-import { verificationEmailTemplate, passwordResetEmailTemplate } from './email.templates';
+import { verificationEmailTemplate, passwordResetEmailTemplate, twoFactorEmailTemplate } from './email.templates';
 
 interface EmailJobData {
   to: string;
-  token: string;
+  token?: string;
+  code?: string;
 }
 
 @Processor(EMAIL_QUEUE)
@@ -65,5 +66,21 @@ export class EmailProcessor {
     });
 
     this.logger.log(`Password-reset email sent → ${to}`);
+  }
+
+  @Process(EMAIL_JOBS.SEND_TWO_FACTOR)
+  async handleTwoFactor(job: Job<EmailJobData>): Promise<void> {
+    const { to, code } = job.data;
+    const fromName = this.config.get<string>('email.fromName', 'Engganyo');
+    const fromEmail = this.config.get<string>('email.fromEmail', 'noreply@engganyo.com');
+
+    await this.mailer.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject: `Your Engganyo sign-in code: ${code ?? ''}`,
+      html: twoFactorEmailTemplate(code ?? ''),
+    });
+
+    this.logger.log(`2FA email sent → ${to}`);
   }
 }
