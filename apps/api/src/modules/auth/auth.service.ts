@@ -692,10 +692,13 @@ export class AuthService {
 
   async getPublicConfig() {
     const cfg = await this.getRecaptchaConfig();
-    const enabledPlatforms = await this.prisma.oAuthConfig.findMany({
-      where: { enabled: true },
-      select: { platform: true },
+    // Fetch all rows (no filter) — platforms with no row default to enabled=true on the backend
+    const ALL_MANAGED_PLATFORMS = ['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD'] as const;
+    const oauthRows = await this.prisma.oAuthConfig.findMany({
+      select: { platform: true, enabled: true },
     });
+    const oauthMap = new Map(oauthRows.map((r) => [r.platform as string, r.enabled]));
+    const enabledPlatformsArr = ALL_MANAGED_PLATFORMS.filter((p) => oauthMap.get(p) ?? true);
 
     // Public fee config (isPublic=true keys from platform config)
     const feeConfigs = await this.prisma.platformConfig.findMany({
@@ -709,7 +712,7 @@ export class AuthService {
       recaptchaVersion:    cfg.version,
       recaptchaV3SiteKey: cfg.v3SiteKey  || null,
       recaptchaV2SiteKey: cfg.v2SiteKey  || null,
-      enabledPlatforms:   enabledPlatforms.map((p) => p.platform),
+      enabledPlatforms:   enabledPlatformsArr,
       feeBaseRate:        typeof feeMap.get('fee_base_rate') === 'number' ? feeMap.get('fee_base_rate') : 0.10,
       feePromoEnabled:    feeMap.get('fee_promo_enabled') === true,
       feePromoRate:       typeof feeMap.get('fee_promo_rate') === 'number' ? feeMap.get('fee_promo_rate') : 0.05,

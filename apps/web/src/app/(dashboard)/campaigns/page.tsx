@@ -173,11 +173,12 @@ export default function CampaignsPage() {
   });
 
   const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
+  // Platforms tracked in oAuthConfig — all others (TRUSTPILOT, GOOGLE, unmapped) are always shown
+  const MANAGED_PLATFORMS = new Set(['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD']);
   const TASK_TYPES = ALL_TASK_TYPES.filter((t) => {
     const platform = TASK_TYPE_TO_PLATFORM[t.value];
-    const isOAuth = OAUTH_PLATFORMS.has(platform);
-    // Non-OAuth platforms (manual proof) are always available; only gate OAuth platforms by admin toggle
-    return !platform || !isOAuth || enabledPlatforms === null || enabledPlatforms.includes(platform);
+    if (!platform || !MANAGED_PLATFORMS.has(platform)) return true; // not managed by oAuthConfig → always show
+    return enabledPlatforms === null || enabledPlatforms.includes(platform);
   });
 
   const { data, isLoading } = useQuery({
