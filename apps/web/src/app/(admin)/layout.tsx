@@ -5,13 +5,14 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare, Trophy,
-  Menu, X, Bell,
+  Menu, X, Bell, Loader2,
 } from 'lucide-react';
-import { useAuthStore } from '@/store/auth.store';
+import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
 import { AdminPinModal } from '@/components/admin-pin-modal';
 import { AuthenticatedProviders } from '@/app/providers';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -26,8 +27,15 @@ const navItems = [
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
 ];
 
+function canAccessAdmin(user: AuthUser | null): boolean {
+  if (!user) return false;
+  if (!['ADMIN', 'MODERATOR', 'SUPER_ADMIN'].includes(user.role)) return false;
+  return user.twoFactorEnabled;
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -39,6 +47,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
+
+  // Redirect admins without 2FA to security settings
+  useEffect(() => {
+    if (user && !canAccessAdmin(user)) {
+      void router.replace('/settings/security?admin_2fa_required=true');
+    }
+  }, [user, router]);
+
+  // If user lacks 2FA, show nothing while redirecting
+  if (user && !canAccessAdmin(user)) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
 
   return (
     <AuthGuard roles={['ADMIN', 'MODERATOR', 'SUPER_ADMIN']}>

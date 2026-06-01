@@ -15,6 +15,7 @@ export interface AuthUser {
   currentStreak: number;
   reputationScore: number;
   referralCode: string | null;
+  twoFactorEnabled: boolean;
 }
 
 interface AuthState {

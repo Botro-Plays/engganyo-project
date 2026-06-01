@@ -16,7 +16,7 @@ import {
   MessageSquare,
   Bell,
 } from 'lucide-react';
-import { useAuthStore } from '@/store/auth.store';
+import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
 import { AuthGuard } from '@/components/auth-guard';
 import { AuthenticatedProviders } from '@/app/providers';
@@ -49,13 +49,19 @@ const baseMobileNavItems = [
 
 const ADMIN_ROLES = ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'];
 
+function canAccessAdmin(user: AuthUser | null): boolean {
+  if (!user) return false;
+  if (!ADMIN_ROLES.includes(user.role)) return false;
+  return user.twoFactorEnabled;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
   const mobileNavItems = [
     ...baseMobileNavItems,
-    ...(user && ADMIN_ROLES.includes(user.role)
+    ...(user && canAccessAdmin(user)
       ? [{ href: '/admin', icon: ShieldAlert, label: 'Admin' }]
       : []),
   ];
@@ -106,7 +112,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Bottom links */}
         <div className="px-3 pb-4 space-y-1 border-t border-surface-border pt-4">
-          {user && ADMIN_ROLES.includes(user.role) && (
+          {user && canAccessAdmin(user) && (
             <Link
               href="/admin"
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"

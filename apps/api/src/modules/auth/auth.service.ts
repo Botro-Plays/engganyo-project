@@ -45,6 +45,7 @@ export interface SafeUser {
   longestStreak: number;
   referralCode: string;
   createdAt: Date;
+  twoFactorEnabled: boolean;
 }
 
 export interface AuthResult {
@@ -602,6 +603,8 @@ export class AuthService {
     longestStreak: number;
     referralCode: string;
     createdAt: Date;
+    twoFactorTotpSecret?: string | null;
+    twoFactorEmailEnabled?: boolean;
   }): SafeUser {
     return {
       id: user.id,
@@ -620,6 +623,7 @@ export class AuthService {
       longestStreak: user.longestStreak,
       referralCode: user.referralCode,
       createdAt: user.createdAt,
+      twoFactorEnabled: !!(user.twoFactorTotpSecret || user.twoFactorEmailEnabled),
     };
   }
 

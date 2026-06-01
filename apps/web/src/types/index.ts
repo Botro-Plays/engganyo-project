@@ -39,6 +39,7 @@ export interface User {
   longestStreak: number;
   referralCode: string;
   createdAt: string;
+  twoFactorEnabled: boolean;
   profile?: UserProfile;
 }
 
