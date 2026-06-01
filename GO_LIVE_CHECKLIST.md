@@ -11,7 +11,7 @@
 |---|---|
 | **Platform** | ✅ Live at https://engganyo.com |
 | **Core Features** | ✅ Phases 1–10 complete |
-| **Revenue** | ❌ $0 — no platform fees, no payments, no withdrawals |
+| **Revenue** | 🟡 Platform fees live (10% base) — revenue tracking active |
 | **Security** | 🟡 Partial — reCAPTCHA active, email verification ON, admin 2FA enforced, admin PIN implemented |
 
 ---
@@ -40,18 +40,12 @@ These are **non-negotiable**. Do not implement payments until these are done.
 - [x] **Why**: Single password compromise = full platform takeover. 2FA + PIN = dual-layer admin protection.
 - **Effort**: ✅ COMPLETED
 
-### C3. Add Platform Fees (15%)
-- [ ] Update `CreateCampaignDto` to include `feeAmount` (calculated server-side)
-- [ ] Modify `CampaignsService.create()`:
-  - `totalCost = slots * creditPerTask` (what completers get)
-  - `feeAmount = totalCost * 0.15` (platform revenue)
-  - `totalDebit = totalCost + feeAmount` (what creator pays)
-- [ ] Update campaign creation modal to show cost breakdown:
-  - "Task budget: 500 credits"
-  - "Platform fee (15%): 75 credits"
-  - "Total cost: 575 credits"
-- [ ] Add `RevenueSnapshot` Prisma model (daily revenue aggregation)
-- [ ] Admin analytics: revenue dashboard
+### C3. Add Platform Fees (10%) ✅ COMPLETED 2026-06-01
+- [x] `Campaign` model includes `feeAmount`, `feeRateAtCreate`, `feeTier` — computed server-side
+- [x] `CampaignsService.create()` debits pool + fee, writes `PlatformRevenue` record
+- [x] Campaign creation modal shows cost breakdown: budget, fee (%), total to deduct
+- [x] `PlatformRevenue` Prisma model with daily aggregation + `GET /admin/revenue` API
+- [x] Admin revenue dashboard at `/admin/revenue` with date range filter
 - [ ] **Why**: Without this, the platform earns $0 on every transaction.
 - **Effort**: 2–3 days
 
@@ -67,9 +61,9 @@ After C1–C3 are complete, proceed here.
 - [ ] C2: Admin 2FA
 - [ ] Test all auth flows end-to-end
 
-### Week 2 — Revenue Foundation
-- [ ] C3: Platform fees on campaign creation
-- [ ] Revenue tracking model + admin dashboard
+### Week 2 — Revenue Foundation ✅ DONE
+- [x] C3: Platform fees on campaign creation
+- [x] Revenue tracking model + admin dashboard
 - [ ] Update terms of service to reflect fees
 - [ ] Test: create campaign → verify fee deducted → verify fee tracked
 
@@ -170,14 +164,16 @@ After revenue is flowing, improve scale and trust.
 | 2026-06-01 | Decouple achievements/missions from leaderboard | ✅ DONE — new `/achievements` and `/missions` routes; `/leaderboard` is public rankings only |
 | 2026-06-01 | Admin inclusion toggle for leaderboards | ✅ DONE — `leaderboard_include_admins` config in `/admin/server-config` |
 | 2026-06-01 | Reset DB clears gamification state | ✅ DONE — `resetDatabase` now wipes `UserAchievement` and `UserMissionProgress` for kept `admin`/`botro` accounts |
+| 2026-06-01 | Platform fees on campaign creation (C3) | ✅ DONE — 10% base fee, PlatformRevenue model, admin dashboard, config-driven |
 | | | |
 
 ---
 
 ## Next Session Priority
 
-**C1 and C2 are resolved. The remaining pre-revenue blocker is C3.**
+**C1, C2, and C3 are resolved. The platform is revenue-ready for platform fees.**
 
 Recommended order:
-1. **C3**: Platform fees on campaign creation
-2. Then **revenue launch**
+1. ~~C3: Platform fees on campaign creation~~ ✅ DONE
+2. **Revenue launch**: Stripe integration for credit purchases
+3. **Withdrawals**: USDT payout with admin approval

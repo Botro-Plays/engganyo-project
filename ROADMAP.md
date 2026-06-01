@@ -679,17 +679,25 @@
 
 ---
 
-## Phase 15 — Payments & Monetisation ⏳
+## Phase 15 — Payments & Monetisation 🟠
 
-> Let users buy credits with real money (fiat + crypto)
+> Platform fees implemented. Credit purchases and withdrawals remain pending.
 
 **Priority**: 🟠 HIGH - Critical for platform sustainability
 **Dependencies**: Phase 0 (Security), Phase 14 (Security Hardening)
 
-**Platform Fees**
-- [🟠] Campaign creation fee (15% of budget, configurable)
-- [🟠] Fee tracking in separate revenue account
-- [🟠] Fee refund on campaign cancellation
+**Platform Fees (C3) — COMPLETED 2026-06-01**
+- [✅] Campaign creation fee (10% base, configurable via /admin/server-config)
+- [✅] Fee tracking in PlatformRevenue model with daily aggregation
+- [✅] Fee retained on campaign cancellation (pool refunded, fee kept)
+- [✅] Creator cancellation blocked if any completions exist
+- [✅] Admin cancellation with reason + audit log
+- [✅] Cost breakdown modal on campaign creation (budget + fee = total)
+- [✅] Campaign cards display fee amount
+- [✅] Promotional fee events support (ee_promo_enabled, ee_promo_rate, ee_promo_until)
+- [✅] Minimum campaign budget enforcement (campaign_min_budget)
+- [✅] Admin revenue dashboard (/admin/revenue)
+- [🟡] Volume discounts based on creator lifetime spend (deferred)
 - [🟠] Fee breakdown display to creators
 - [🟠] Revenue dashboard in admin analytics
 
@@ -824,7 +832,7 @@
 | 12.5 | UX & Onboarding Improvements | 🟠 Partially Done | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
 | 14 | Security & Trust Hardening | 🟡 Mostly Complete | � MEDIUM |
-| 15 | Payments & Monetisation | ⏳ Pending | 🟠 HIGH |
+| 15 | Payments & Monetisation | 🟠 Partially Complete | 🟠 HIGH |
 | 16 | Scalability Improvements | ⏳ Pending | 🟠 HIGH |
 | 17 | Developer Experience Improvements | ⏳ Pending | 🟡 MEDIUM |
 
@@ -843,7 +851,7 @@
 
 ### Priority 3 — UX Polish
 - [�] Re-enable achievement and mission seed functions (currently commented out)
-- [🟡] Campaign creation live cost preview (fee breakdown UI)
+- [✅] Campaign creation live cost preview (fee breakdown UI)
 - [�] Onboarding walkthrough for new users
 
 ### Priority 4 — Verification Expansion

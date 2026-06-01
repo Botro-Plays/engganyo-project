@@ -357,6 +357,32 @@
 
 ## MONETIZATION DECISIONS
 
+### MDR-004: Platform Fees on Campaign Creation
+**Status**: Implemented (2026-06-01)
+**Date**: 2026-06-01
+**Context**: C3 — Revenue blocker for platform sustainability
+**Decision**: 10% base platform fee on campaign creation, deducted upfront from creator wallet alongside the campaign pool budget
+**Rationale**:
+- Aligns platform success with creator success
+- Simple to understand and implement
+- Competitive with similar platforms (Fiverr 20%, Upwork 10–20%)
+- Configurable per environment and promotional events
+**Implementation**:
+- `feeAmount = round(totalCost * feeRate)` computed server-side in `CampaignsService.create()`
+- `Campaign` model stores `feeAmount`, `feeRateAtCreate`, `feeTier` (locked at creation time)
+- `WalletService.debit()` debits `totalCost + feeAmount` in single atomic operation
+- `PlatformRevenue` model tracks daily revenue with `source: "CAMPAIGN_FEE"`
+- Admin dashboard at `/admin/revenue` with date range filter and daily breakdown
+- Promotional events via config: `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`
+- Minimum campaign budget enforced via `campaign_min_budget` config (default: 100 credits)
+**Refund Policy**:
+- Creator can only cancel campaigns with zero completions (blocks rug-pulling)
+- Admin can cancel any campaign with reason; refunds pool to creator, retains fee
+- Fee is non-refundable once any work has been performed
+**Tradeoffs**:
+- Higher fee may drive creators to direct payment (mitigated by trust score volume discounts planned)
+- Need clear cost breakdown UI so creators understand total cost upfront
+
 ### MDR-001: Platform Fee Strategy
 **Status**: Planned (Phase 15)
 **Date**: 2026-05-19
