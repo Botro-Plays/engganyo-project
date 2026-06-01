@@ -256,7 +256,7 @@ Tasks   Campaigns  Tasks   Campaigns
 ### Revenue Strategy
 
 **Short-Term (0-6 months)**
-- Platform fees only (15%)
+- Platform fees only (10% base, configurable via admin panel)
 - Focus on user acquisition and liquidity
 - Test pricing tolerance
 - Build trust and reputation
@@ -363,11 +363,11 @@ Tasks   Campaigns  Tasks   Campaigns
 
 ### Verification Strategy
 
-**Current State (Phase 10)**
-- Screenshot-based proof submission
-- Manual review by campaign creators
-- Auto-verify for some platforms (not implemented)
-- No OAuth integration
+**Current State (Phase 11 Partial)**
+- **OAuth API verification**: YouTube (like, subscribe), Twitch (follow), Spotify (follow) — automated via platform APIs
+- **Manual proof**: TikTok, Instagram, Twitter/X, Facebook, Telegram, Discord, TrustPilot, Google Reviews — screenshot/link submission with creator review
+- All 11 platforms admin-toggleable via `/admin/server-config` (default enabled)
+- Token refresh and rotation implemented for OAuth platforms
 
 **Target State (Phase 11+)**
 - OAuth integration with major platforms
@@ -377,13 +377,17 @@ Tasks   Campaigns  Tasks   Campaigns
 - Proof validation (image analysis, reuse detection)
 
 **Platform Verification Roadmap**
-1. YouTube (Phase 11) - `videos.getRating()`, `subscriptions.list()`
-2. Twitter/X (Phase 11) - API v2 like/follow endpoints
-3. Twitch (Phase 11) - Helix API follow endpoints
-4. Spotify (Phase 11) - Web API follow endpoints
-5. TikTok (Phase 12) - Limited API, manual review fallback
-6. Instagram (Phase 12) - Basic Display API, limited scope
-7. Facebook (Phase 12) - Graph API, strict rate limits
+1. ✅ YouTube (Phase 11) - `videos.getRating()`, `subscriptions.list()` — OAuth API live
+2. ✅ Twitch (Phase 11) - Helix API follow endpoints — OAuth API live
+3. ✅ Spotify (Phase 11) - Web API follow endpoints — OAuth API live
+4. 🟠 Twitter/X (Phase 11+) - API v2 like/follow endpoints — manual proof only pending OAuth
+5. 🟠 TikTok (Phase 11+) - Limited API, manual proof only pending OAuth
+6. 🟠 Instagram (Phase 11+) - Basic Display API, manual proof only pending OAuth
+7. 🟠 Facebook (Phase 11+) - Graph API, manual proof only pending OAuth
+8. ✅ Telegram (Phase 12) - Manual proof (admin toggleable)
+9. ✅ Discord (Phase 12) - Manual proof (admin toggleable)
+10. ✅ TrustPilot (Phase 12) - Manual proof (admin toggleable)
+11. ✅ Google Reviews (Phase 12) - Manual proof (admin toggleable)
 
 ### Moderation Philosophy
 
@@ -561,11 +565,11 @@ Tasks   Campaigns  Tasks   Campaigns
 - **Q1 2028**: Global expansion
 
 ### Platform Expansion
-- **Q2 2026**: YouTube, TikTok verification
-- **Q3 2026**: Twitter, Twitch verification
-- **Q4 2026**: Spotify verification
-- **Q2 2027**: Instagram, Facebook verification
-- **Q4 2027**: Discord, Telegram verification
+- **Q2 2026**: YouTube, Twitch, Spotify OAuth verification live; TikTok, Instagram, Twitter/X, Facebook, Telegram, Discord manual proof live
+- **Q2 2026**: TrustPilot, Google Reviews manual proof added (all 11 platforms admin-toggleable)
+- **Q3 2026**: Twitter/X, TikTok, Instagram, Facebook OAuth verification (pending API access)
+- **Q4 2026**: Spotify verification expansion (playlist streams)
+- **Q2 2027**: Additional niche platforms (Reddit, Pinterest, etc.)
 
 ### Feature Expansion
 - **Q2 2026**: Social verification engine
@@ -695,5 +699,5 @@ This document should be updated when:
 - Risk factors change
 - Success metrics change
 
-**Last Updated**: 2026-06-01
+**Last Updated**: 2026-06-01 (Full MD audit: Verification Strategy corrected to reflect OAuth + manual proof for 11 platforms, revenue corrected to 10% base fee, Platform Expansion timeline updated with all live platforms)
 **Next Review**: 2026-08-31 (quarterly)

@@ -1,6 +1,6 @@
 # ENGGANYO — Go-Live Checklist
 
-> **Living document** — updated after each session. Last updated: 2026-06-01.
+> **Living document** — updated after each session. Last updated: 2026-06-01 (Full MD audit: security status corrected to ✅ Complete, Week 1 marked done, C3 Why checkbox fixed)
 > This is the single source of truth for what needs to happen before the platform generates revenue.
 
 ---
@@ -12,7 +12,7 @@
 | **Platform** | ✅ Live at https://engganyo.com |
 | **Core Features** | ✅ Phases 1–10 complete |
 | **Revenue** | 🟡 Platform fees live (10% base) — revenue tracking active |
-| **Security** | 🟡 Partial — reCAPTCHA active, email verification ON, admin 2FA enforced, admin PIN implemented |
+| **Security** | ✅ Complete — reCAPTCHA active, email verification enforced, admin 2FA + PIN live, rate limiting on all sensitive endpoints |
 
 ---
 
@@ -46,8 +46,8 @@ These are **non-negotiable**. Do not implement payments until these are done.
 - [x] Campaign creation modal shows cost breakdown: budget, fee (%), total to deduct
 - [x] `PlatformRevenue` Prisma model with daily aggregation + `GET /admin/revenue` API
 - [x] Admin revenue dashboard at `/admin/revenue` with date range filter
-- [ ] **Why**: Without this, the platform earns $0 on every transaction.
-- **Effort**: 2–3 days
+- [x] **Why**: Without this, the platform earns $0 on every transaction.
+- **Effort**: ✅ COMPLETED
 
 ---
 
@@ -55,11 +55,11 @@ These are **non-negotiable**. Do not implement payments until these are done.
 
 After C1–C3 are complete, proceed here.
 
-### Week 1 — Security Baseline
+### Week 1 — Security Baseline ✅ DONE
 - [x] Avatar upload implemented
-- [ ] C1: Enable email verification
-- [ ] C2: Admin 2FA
-- [ ] Test all auth flows end-to-end
+- [x] C1: Enable email verification
+- [x] C2: Admin 2FA
+- [x] Test all auth flows end-to-end
 
 ### Week 2 — Revenue Foundation ✅ DONE
 - [x] C3: Platform fees on campaign creation

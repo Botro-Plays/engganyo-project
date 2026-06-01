@@ -1,6 +1,6 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-06-01 (Platform fees live C3 + all 11 platforms admin-toggleable + TrustPilot/Google added)
+> Last updated: 2026-06-01 (Full MD audit + corrections: C3 marked done, trust score async, seeds enabled, fee corrected to 10%, verification strategy updated, duplicate revenue items deduplicated, broken emojis fixed)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 > **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms supported, all admin-toggleable) | Platform Fees Live (C3) | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
 
@@ -48,11 +48,11 @@
   - **Effort**: 8-12 hours (2FA implementation, backup codes, enforcement, PIN gate)
 
 ### Performance (HIGH)
-- [🟠] Move trust score recalculation to BullMQ queue
-  - **Impact**: Currently synchronous, blocks API response on task completion
-  - **Risk**: MEDIUM - slow API responses under load
-  - **Timeline**: Week 1, Day 2
-  - **Effort**: 4-6 hours (queue worker implementation)
+- [✅] Move trust score recalculation to async (non-blocking)
+  - **Impact**: `void this.recalculateTrustScore(userId).catch(() => null)` — fire-and-forget async call
+  - **Risk**: MITIGATED — no longer blocks API response
+  - **Status**: DONE — already async in `AntiAbuseService`
+  - **Note**: Full BullMQ queue migration remains a future scalability improvement (Phase 16)
 - [🟠] Move analytics snapshot generation to BullMQ queue
   - **Impact**: Currently synchronous, blocks cron job, potential timeout
   - **Risk**: MEDIUM - missed analytics snapshots
@@ -81,11 +81,10 @@
     - Operational safety notes (restore testing, integrity verification, off-site recommendations)
 
 ### Technical Debt (MEDIUM)
-- [🟡] Re-enable achievement and mission seed functions
-  - **Impact**: Commented out in gamification service
-  - **Risk**: LOW - achievements/missions not seeded
-  - **Timeline**: Week 1, Day 1
-  - **Effort**: 1 hour (uncomment + test)
+- [✅] Re-enable achievement and mission seed functions
+  - **Impact**: Seeded on `GamificationService.onModuleInit()` — runs automatically on API startup
+  - **Status**: DONE — 14 achievements + 4 daily missions seeded automatically
+  - **Timeline**: Completed (was already enabled in current build)
 - [✅] Add file upload validation for proof screenshots
   - **Impact**: Validation implemented on proof uploads
   - **Risk**: MITIGATED - server-side MIME type validation, file size enforcement
@@ -348,7 +347,7 @@
 - [x] `GET /api/health` — DB + Redis liveness probe (VERSION_NEUTRAL, public, skip-throttle)
 - [x] Unit tests — `WalletService` (credit/debit/optimistic-lock/not-found) · Jest config (`jest.config.ts`)
 - [x] `@types/jest` + `jest` added to API devDependencies
-- [x] CI/CD pipeline — `.github/workflows/ci.yml` (GitHub Actions: lint + unit tests + build for both API and Web; spins up Postgres + Redis services)
+- [x] CI/CD pipeline — `.github/workflows/deploy.yml` (GitHub Actions: lint + unit tests + build + E2E → build & push Docker images → deploy to VPS via SSH)
 - [x] Winston logger — `nest-winston` with colorised console (dev) + rotating JSON files (prod)
 - [x] Per-user Redis rate limiting — `UserRateLimitGuard` + `@UserRateLimit` decorator; applied to `POST /tasks/:id/assign` (10/min) and `POST /tasks/:id/submit` (20/min)
 - [x] `.env.production.example` with connection_limit, Sentry DSN slot, all prod vars
@@ -643,7 +642,7 @@
 
 > reCAPTCHA, 2FA, and email confirmation flows
 
-**Priority**: � MOSTLY COMPLETE - Core security hardening (reCAPTCHA, email verification, admin 2FA + PIN) is live. Remaining items are user-facing enhancements, not critical blockers.
+**Priority**: 🟡 MOSTLY COMPLETE - Core security hardening (reCAPTCHA, email verification, admin 2FA + PIN) is live. Remaining items are user-facing enhancements, not critical blockers.
 **Dependencies**: Phase 0 (Critical Security)
 
 **reCAPTCHA**
@@ -701,8 +700,8 @@
 - [✅] Minimum campaign budget enforcement (campaign_min_budget)
 - [✅] Admin revenue dashboard (/admin/revenue)
 - [🟡] Volume discounts based on creator lifetime spend (deferred)
-- [🟠] Fee breakdown display to creators
-- [🟠] Revenue dashboard in admin analytics
+- [✅] Fee breakdown display to creators — cost breakdown modal on campaign creation
+- [✅] Revenue dashboard in admin analytics — `/admin/revenue` with date range filter and daily breakdown
 
 **Fiat payments**
 - [🟠] Stripe integration — buy credit packs ($5 = 500 credits, $20 = 2200 credits, etc.)
@@ -725,9 +724,7 @@
 - [🟠] Withdrawal history and status tracking
 
 **Revenue tracking**
-- [🟠] Revenue dashboard in admin analytics
-- [🟠] Daily revenue snapshots
-- [🟠] Revenue by source (platform fees, credit purchases, withdrawal fees)
+- [🟠] Revenue by source breakdown (currently only `CAMPAIGN_FEE`; credit purchases + withdrawal fees pending Stripe integration)
 - [🟠] Revenue forecasting
 
 ---
@@ -834,7 +831,7 @@
 | 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
 | 12.5 | UX & Onboarding Improvements | 🟠 Partially Done | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
-| 14 | Security & Trust Hardening | 🟡 Mostly Complete | � MEDIUM |
+| 14 | Security & Trust Hardening | 🟡 Mostly Complete | 🟡 MEDIUM |
 | 15 | Payments & Monetisation | 🟠 Partially Complete | 🟠 HIGH |
 | 16 | Scalability Improvements | ⏳ Pending | 🟠 HIGH |
 | 17 | Developer Experience Improvements | ⏳ Pending | 🟡 MEDIUM |
@@ -843,19 +840,19 @@
 
 ## Immediate Action Items (Next 7 Days)
 
-### Priority 1 — Revenue Blocker (C3)
-- [🔴] **Platform fees on campaign creation** — 15% fee deducted on campaign create, displayed in cost breakdown modal
-- [�] **Revenue tracking model** — `RevenueSnapshot` Prisma model + admin dashboard
+### Priority 1 — Revenue Blocker (C3) ✅ DONE 2026-06-01
+- [✅] ~~Platform fees on campaign creation~~ — 10% base fee, config-driven, `PlatformRevenue` model, admin dashboard at `/admin/revenue`
+- [✅] ~~Revenue tracking model~~ — `PlatformRevenue` model with daily aggregation + `GET /admin/revenue` API
 
 ### Priority 2 — Performance
-- [🟠] Move trust score recalculation to BullMQ queue
 - [🟠] Move analytics snapshot generation to BullMQ queue
 - [🟠] Implement Redis caching strategy (user profiles 1h, campaigns 5m, leaderboard 15m)
+- [🟠] Move trust score recalculation to dedicated BullMQ queue (currently fire-and-forget async)
 
 ### Priority 3 — UX Polish
-- [�] Re-enable achievement and mission seed functions (currently commented out)
+- [🟠] Onboarding walkthrough for new users
 - [✅] Campaign creation live cost preview (fee breakdown UI)
-- [�] Onboarding walkthrough for new users
+- [🟡] "Streak lost" messaging in daily reward UI
 
 ### Priority 4 — Verification Expansion
 - [🟠] Twitter/X OAuth + API verification
@@ -872,11 +869,11 @@
 | No 2FA for admin accounts | CRITICAL | MEDIUM | TOTP + backup codes + enforcement + Access PIN live | ✅ MITIGATED |
 | No rate limiting on sensitive endpoints | HIGH | HIGH | Add @UserRateLimit decorators | ✅ MITIGATED |
 | No CAPTCHA on registration | HIGH | HIGH | reCAPTCHA v2/v3 switch with admin panel + cache invalidation | ✅ MITIGATED |
-| Synchronous trust score calculation | MEDIUM | HIGH | Move to BullMQ queue | 🟠 HIGH |
+| Synchronous trust score calculation | MEDIUM | HIGH | Fire-and-forget async recalculation (BullMQ queue planned for Phase 16) | 🟠 HIGH |
 | No caching strategy | MEDIUM | HIGH | Implement Redis caching | 🟠 HIGH |
 | No backup documentation | HIGH | LOW | Documented in DEPLOYMENT.md with cron jobs, retention, restore | ✅ MITIGATED |
 | No social verification | HIGH | HIGH | Partial: YouTube/Twitch/Spotify OAuth; others manual link | 🟠 HIGH |
-| No monetization | CRITICAL | MEDIUM | Implement Stripe payments | 🟠 HIGH |
+| No monetization | CRITICAL | MEDIUM | Platform fees live (10%); Stripe integration pending | 🟠 HIGH |
 | Single point of failure (VPS) | HIGH | LOW | Plan Kubernetes migration | 🟡 MEDIUM |
 
 ---

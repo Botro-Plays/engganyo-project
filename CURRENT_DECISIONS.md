@@ -277,12 +277,14 @@
 **Tradeoffs**:
 - Limited to GitHub
 - Minutes quota on free tier
-- No built-in CD (deployment is manual)
+- Dependent on GitHub Actions uptime
 **Pipeline Steps**:
 1. Lint (ESLint on API and Web)
 2. Unit tests (Jest with Postgres/Redis services)
 3. Build (nest build + next build)
-4. E2E tests (Playwright for auth + wallet flows)
+4. E2E tests (Playwright for auth, wallet, and forum flows)
+5. Docker build & push to GHCR
+6. Deploy to VPS via SSH (rolling update, health check, migrations)
 
 ---
 
@@ -384,24 +386,26 @@
 - Need clear cost breakdown UI so creators understand total cost upfront
 
 ### MDR-001: Platform Fee Strategy
-**Status**: Planned (Phase 15)
-**Date**: 2026-05-19
+**Status**: Implemented (2026-06-01) — superseded by MDR-004
+**Date**: 2026-05-19 (Updated 2026-06-01)
 **Context**: Platform revenue model
-**Decision**: 15% platform fee on campaign budget
+**Decision**: 10% base platform fee on campaign budget (configurable via `fee_base_rate`)
 **Rationale**:
 - Aligns platform success with creator success
 - Simple to understand and implement
-- Competitive with similar platforms
+- Competitive with similar platforms (Fiverr 20%, Upwork 10–20%)
 - Sustainable revenue model
+- Configurable for promotional events
 **Tradeoffs**:
 - May drive creators to direct payment
 - Resistance from price-sensitive creators
 - Need to demonstrate clear value
 **Implementation**:
-- Deduct 15% on campaign creation
-- Track in separate revenue account
-- Refund on campaign cancellation
-- Display fee breakdown to creators
+- Deduct 10% on campaign creation (configurable via `/admin/server-config`)
+- Track in `PlatformRevenue` model with daily aggregation
+- Fee retained on campaign cancellation (pool refunded, fee kept)
+- Display fee breakdown to creators in campaign creation modal
+- Promotional events via `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`
 
 ### MDR-002: Credit Purchase Pricing
 **Status**: Planned (Phase 15)
@@ -461,12 +465,14 @@
 - Higher trust and accuracy
 - Scalable solution
 - Reduces fraud
-**Current Implementation (2026-05-21)**:
-- **Implemented**: YouTube (subscribe, like), Twitch (follow), Spotify (follow)
+**Current Implementation (2026-06-01)**:
+- **OAuth API verification**: YouTube (subscribe, like), Twitch (follow), Spotify (follow)
+- **Manual proof**: TikTok, Instagram, Twitter/X, Facebook, Telegram, Discord, TrustPilot, Google Reviews
 - **Implemented**: OAuth flow with state JWT (10 min expiry)
 - **Implemented**: Token storage in SocialAccount model (encrypted)
 - **Implemented**: Token refresh logic with automatic rotation
-- **Implemented**: Manual link fallback for Twitter/X, TikTok, Instagram, Facebook
+- **Implemented**: Manual link fallback for all non-OAuth platforms
+- **Implemented**: All 11 platforms admin-toggleable via `oAuthConfig` (default enabled)
 - **Not Yet**: Twitter/X, TikTok, Instagram, Facebook OAuth integration
 - **Not Yet**: BullMQ async verification worker (currently synchronous in submitProof)
 - **Not Yet**: Retry logic for rate limits and token expiration (basic refresh exists)
@@ -771,9 +777,10 @@
 **Migration Path**: Move more operations to queues as scale increases
 
 ### TRD-005: Manual vs Automated Deployment
-**Decision**: Manual deployment (current)
-**Tradeoff**: Full control vs error-prone process
-**Migration Path**: Add automated CD at 5K users
+**Decision**: Fully automated deployment (current)
+**Tradeoff**: Zero manual intervention vs depends on GitHub Actions availability
+**Implementation**: GitHub Actions `deploy.yml` → GHCR → VPS SSH on every push to `main`
+**Migration Path**: Add blue-green deployment when critical; multi-environment (dev/staging/prod)
 
 ---
 
@@ -1351,7 +1358,7 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-06-01
+**Last Updated**: 2026-06-01 (Full MD audit: MDR-001 corrected to 10% fee, TRD-005 updated to automated deploy, IDR-005 reflects full CD pipeline, VDR-001 includes all 11 platforms)
 **Next Review**: 2026-08-31 (quarterly)
 
 ---
