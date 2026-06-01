@@ -11,7 +11,7 @@ import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
 import { AdminPinModal } from '@/components/admin-pin-modal';
 import { AuthenticatedProviders } from '@/app/providers';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const navItems = [
@@ -54,6 +54,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       void router.replace('/settings/security?admin_2fa_required=true');
     }
   }, [user, router]);
+
+  // Clear admin PIN when navigating away from /admin routes
+  const prevPathname = useRef(pathname);
+  useEffect(() => {
+    const wasAdmin = prevPathname.current.startsWith('/admin');
+    const isAdmin = pathname.startsWith('/admin');
+    if (wasAdmin && !isAdmin) {
+      setAdminPin(null);
+    }
+    prevPathname.current = pathname;
+  }, [pathname, setAdminPin]);
 
   // If user lacks 2FA, show nothing while redirecting
   if (user && !canAccessAdmin(user)) {
@@ -115,7 +126,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
           <Link
             href="/dashboard"
-            onClick={() => setAdminPin(null)}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
           >
             <Zap className="w-4 h-4" />
@@ -218,7 +228,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               )}
               <Link
                 href="/dashboard"
-                onClick={() => { setMobileOpen(false); setAdminPin(null); }}
+                onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
               >
                 <Zap className="w-4 h-4" />

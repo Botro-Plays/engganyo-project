@@ -108,63 +108,81 @@ export default function AdminAnalyticsPage() {
       {/* User growth chart */}
       <div className="card-glass rounded-xl p-6">
         <h2 className="text-sm font-semibold text-white mb-4">User Growth &amp; Daily Active Users</h2>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gradDau" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-            <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Area type="monotone" dataKey="New Users" stroke="#6366f1" fill="url(#gradUsers)" strokeWidth={2} />
-            <Area type="monotone" dataKey="DAU" stroke="#22c55e" fill="url(#gradDau)" strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Task volume + Credits */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card-glass rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-white mb-4">Task Volume</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-              <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="Tasks Verified" fill="#22c55e" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="card-glass rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-            <Coins className="w-4 h-4 text-yellow-400" /> Credits Issued Daily
-          </h2>
-          <ResponsiveContainer width="100%" height={200}>
+        {chartData.length === 0 ? (
+          <div className="h-[220px] flex items-center justify-center text-zinc-500 text-sm">
+            No activity data for the selected period
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={chartData}>
               <defs>
-                <linearGradient id="gradCredits" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#eab308" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
+                <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradDau" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
               <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
-              <Area type="monotone" dataKey="Credits Issued" stroke="#eab308" fill="url(#gradCredits)" strokeWidth={2} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Area type="monotone" dataKey="New Users" stroke="#6366f1" fill="url(#gradUsers)" strokeWidth={2} />
+              <Area type="monotone" dataKey="DAU" stroke="#22c55e" fill="url(#gradDau)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Task volume + Credits */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="card-glass rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-white mb-4">Task Volume</h2>
+          {chartData.length === 0 ? (
+            <div className="h-[200px] flex items-center justify-center text-zinc-500 text-sm">
+              No activity data for the selected period
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                <Bar dataKey="Tasks Verified" fill="#22c55e" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="card-glass rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+            <Coins className="w-4 h-4 text-yellow-400" /> Credits Issued Daily
+          </h2>
+          {chartData.length === 0 ? (
+            <div className="h-[200px] flex items-center justify-center text-zinc-500 text-sm">
+              No activity data for the selected period
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="gradCredits" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#eab308" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                <Area type="monotone" dataKey="Credits Issued" stroke="#eab308" fill="url(#gradCredits)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
