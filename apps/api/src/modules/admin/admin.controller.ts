@@ -18,13 +18,15 @@ import { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 import { UpdateUserDetailsDto } from './dto/update-user-details.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { AdminTwoFactorGuard } from '../../common/guards/admin-two-factor.guard';
+import { AdminPinGuard } from '../../common/guards/admin-pin.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @ApiTags('admin')
 @Controller({ path: 'admin' })
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, AdminTwoFactorGuard, AdminPinGuard)
 @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPER_ADMIN)
 @ApiBearerAuth('access-token')
 export class AdminController {

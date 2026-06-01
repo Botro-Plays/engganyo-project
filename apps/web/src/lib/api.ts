@@ -24,13 +24,18 @@ export const apiClient: AxiosInstance = axios.create({
 });
 
 // ─── Request Interceptor ──────────────────────────────────────
-// Attach access token from localStorage on every request
+// Attach access token + admin PIN (for admin routes) on every request
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('access_token');
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      // Attach admin PIN header for admin routes
+      const adminPin = useAuthStore.getState().adminPin;
+      if (adminPin && config.headers && config.url?.startsWith('admin')) {
+        config.headers['x-admin-pin'] = adminPin;
       }
     }
     return config;
@@ -40,10 +45,29 @@ apiClient.interceptors.request.use(
 
 // ─── Response Interceptor ────────────────────────────────────
 // Handle 401 — refresh token or redirect to login
+// Handle 403 ADMIN_2FA_REQUIRED / ADMIN_PIN_REQUIRED
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Handle admin-specific 403 errors
+    if (error.response?.status === 403) {
+      const data = error.response?.data as { code?: string; message?: string } | undefined;
+      if (data?.code === 'ADMIN_2FA_REQUIRED') {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/settings/security?admin2fa=required';
+        }
+        return Promise.reject(error);
+      }
+      if (data?.code === 'ADMIN_PIN_REQUIRED') {
+        // Emit a custom event that the admin layout can listen for
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('admin:pin-required'));
+        }
+        return Promise.reject(error);
+      }
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -67,7 +91,7 @@ apiClient.interceptors.response.use(
         // Refresh failed — clear tokens and redirect to login
         localStorage.removeItem('access_token');
         // Also clear zustand store so UI doesn't show stale authenticated state
-        useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false });
+        useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false, adminPin: null });
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
         }

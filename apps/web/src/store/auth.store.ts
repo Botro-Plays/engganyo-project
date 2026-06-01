@@ -22,6 +22,7 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   hasHydrated: boolean;
+  adminPin: string | null; // ephemeral — not persisted; set after admin PIN verify
 
   // Actions
   setUser: (user: AuthUser) => void;
@@ -30,6 +31,7 @@ interface AuthState {
   updateUser: (updates: Partial<AuthUser>) => void;
   logout: () => void;
   setHasHydrated: (value: boolean) => void;
+  setAdminPin: (pin: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -39,6 +41,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       isAuthenticated: false,
       hasHydrated: false,
+      adminPin: null,
 
       setUser: (user) =>
         set({ user, isAuthenticated: true }),
@@ -64,13 +67,14 @@ export const useAuthStore = create<AuthState>()(
         if (typeof window !== 'undefined') {
           localStorage.removeItem('access_token');
         }
-        set({ user: null, accessToken: null, isAuthenticated: false });
+        set({ user: null, accessToken: null, isAuthenticated: false, adminPin: null });
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
         }
       },
 
       setHasHydrated: (value) => set({ hasHydrated: value }),
+      setAdminPin: (pin) => set({ adminPin: pin }),
     }),
     {
       name: 'engganyo-auth',
@@ -81,6 +85,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
+        // adminPin is intentionally NOT persisted — ephemeral per session
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

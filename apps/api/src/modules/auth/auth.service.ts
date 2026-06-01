@@ -779,4 +779,74 @@ export class AuthService {
     return false;
   }
 
+  // ─── Admin PIN ─────────────────────────────────────────────
+
+  async setAdminPin(userId: string, pin: string, twoFactorCode: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { twoFactorTotpSecret: true, twoFactorEmailEnabled: true, email: true },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    // Require 2FA verification to set/change admin PIN
+    const hasTwoFactor = !!(user.twoFactorTotpSecret || user.twoFactorEmailEnabled);
+    if (!hasTwoFactor) {
+      throw new BadRequestException('Two-factor authentication must be enabled before setting an admin PIN.');
+    }
+
+    const valid = await this.twoFactor.verifyLoginCode(userId, twoFactorCode, 'totp');
+    if (!valid) {
+      // Try email as fallback
+      const emailValid = user.twoFactorEmailEnabled
+        ? await this.twoFactor.verifyLoginCode(userId, twoFactorCode, 'email')
+        : false;
+      if (!emailValid) {
+        throw new BadRequestException('Invalid 2FA code. Please try again.');
+      }
+    }
+
+    if (pin.length < 4 || pin.length > 20) {
+      throw new BadRequestException('Admin PIN must be between 4 and 20 characters.');
+    }
+
+    const hash = await argon2.hash(pin);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { adminPinHash: hash },
+    });
+    this.logger.log(`Admin PIN set for user ${userId}`);
+  }
+
+  async verifyAdminPin(userId: string, pin: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { adminPinHash: true },
+    });
+    if (!user?.adminPinHash) return true; // No PIN set = allow
+    return argon2.verify(user.adminPinHash, pin);
+  }
+
+  async removeAdminPin(userId: string, twoFactorCode: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { twoFactorTotpSecret: true, twoFactorEmailEnabled: true },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const valid = await this.twoFactor.verifyLoginCode(userId, twoFactorCode, 'totp');
+    if (!valid) {
+      const emailValid = user.twoFactorEmailEnabled
+        ? await this.twoFactor.verifyLoginCode(userId, twoFactorCode, 'email')
+        : false;
+      if (!emailValid) {
+        throw new BadRequestException('Invalid 2FA code. Please try again.');
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { adminPinHash: null },
+    });
+    this.logger.log(`Admin PIN removed for user ${userId}`);
+  }
 }

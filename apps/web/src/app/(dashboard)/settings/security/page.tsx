@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, Smartphone, Mail, Key, CheckCircle2, AlertCircle, Copy, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Shield, Smartphone, Mail, Key, Lock, CheckCircle2, AlertCircle, Copy, Loader2, Eye, EyeOff } from 'lucide-react';
 import Image from 'next/image';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
+import { useAuthStore } from '@/store/auth.store';
 
 interface TwoFactorStatus {
   totpEnabled: boolean;
@@ -32,6 +33,14 @@ export default function SecuritySettingsPage() {
   const [showSecret, setShowSecret] = useState(false);
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  // Admin PIN state
+  const { user } = useAuthStore();
+  const isAdmin = user ? ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'].includes(user.role) : false;
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinTwoFactorCode, setPinTwoFactorCode] = useState('');
+  const [showPinForm, setShowPinForm] = useState(false);
 
   const { data: status, isLoading } = useQuery<TwoFactorStatus>({
     queryKey: ['2fa-status'],
@@ -104,6 +113,42 @@ export default function SecuritySettingsPage() {
     onError: (err) => setMsg('error', getApiErrorMessage(err)),
   });
 
+  // Admin PIN queries & mutations
+  const { data: pinStatus } = useQuery({
+    queryKey: ['admin-pin-status'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ hasPin: boolean }>>('auth/admin-pin/status');
+      return res.data.data;
+    },
+    enabled: isAdmin,
+  });
+
+  const setPinMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.post('auth/admin-pin', { pin, twoFactorCode: pinTwoFactorCode });
+    },
+    onSuccess: () => {
+      setMsg('success', 'Admin PIN set successfully.');
+      setPin('');
+      setConfirmPin('');
+      setPinTwoFactorCode('');
+      setShowPinForm(false);
+      void qc.invalidateQueries({ queryKey: ['admin-pin-status'] });
+    },
+    onError: (err) => setMsg('error', getApiErrorMessage(err)),
+  });
+
+  const removePinMutation = useMutation({
+    mutationFn: async (code: string) => {
+      await apiClient.delete('auth/admin-pin', { data: { twoFactorCode: code } });
+    },
+    onSuccess: () => {
+      setMsg('success', 'Admin PIN removed.');
+      void qc.invalidateQueries({ queryKey: ['admin-pin-status'] });
+    },
+    onError: (err) => setMsg('error', getApiErrorMessage(err)),
+  });
+
   const copySecret = () => {
     if (setupData?.secret) {
       void navigator.clipboard.writeText(setupData.secret);
@@ -137,6 +182,20 @@ export default function SecuritySettingsPage() {
         <div className={`mb-6 px-4 py-3 rounded-lg flex items-center gap-2 text-sm ${feedback.type === 'success' ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
           {feedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
           {feedback.msg}
+        </div>
+      )}
+
+      {/* ─── Admin 2FA enforcement banner ─── */}
+      {isAdmin && !status?.totpEnabled && !status?.emailEnabled && (
+        <div className="mb-6 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-400">Admin access requires 2FA</p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Your admin account must have two-factor authentication enabled before you can access the admin panel.
+              Set up TOTP or Email 2FA below.
+            </p>
+          </div>
         </div>
       )}
 
@@ -315,7 +374,7 @@ export default function SecuritySettingsPage() {
 
       {/* ─── Backup codes info ─── */}
       {status?.totpEnabled && (
-        <div className="card-glass rounded-xl p-6">
+        <div className="card-glass rounded-xl p-6 mb-4">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-lg bg-brand-500/10 flex items-center justify-center shrink-0 mt-0.5">
               <Key className="w-4.5 h-4.5 text-brand-400" />
@@ -328,6 +387,121 @@ export default function SecuritySettingsPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Admin Access PIN (admin only) ─── */}
+      {isAdmin && (
+        <div className="card-glass rounded-xl p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Lock className="w-4.5 h-4.5 text-red-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-white text-sm">Admin Access PIN</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Extra password required when accessing the admin panel.</p>
+              </div>
+            </div>
+            <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${pinStatus?.hasPin ? 'bg-green-500/15 text-green-400' : 'bg-zinc-700/40 text-zinc-500'}`}>
+              {pinStatus?.hasPin ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+
+          {!pinStatus?.hasPin && !showPinForm && (
+            <button
+              onClick={() => setShowPinForm(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all"
+            >
+              Set admin PIN
+            </button>
+          )}
+
+          {pinStatus?.hasPin && !showPinForm && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowPinForm(true)}
+                className="flex-1 py-2.5 rounded-lg border border-surface-border text-zinc-300 text-sm hover:border-zinc-500 transition-all"
+              >
+                Change PIN
+              </button>
+              <button
+                onClick={() => {
+                  const code = prompt('Enter your current 2FA code to remove the admin PIN:');
+                  if (code) removePinMutation.mutate(code);
+                }}
+                disabled={removePinMutation.isPending}
+                className="flex-1 py-2.5 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 transition-all disabled:opacity-60"
+              >
+                {removePinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Remove PIN'}
+              </button>
+            </div>
+          )}
+
+          {showPinForm && (
+            <div className="space-y-3">
+              {!status?.totpEnabled && !status?.emailEnabled ? (
+                <div className="px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
+                  You must enable 2FA (TOTP or Email) before setting an admin PIN.
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={20}
+                    placeholder="New PIN (4–20 digits)"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={20}
+                    placeholder="Confirm PIN"
+                    value={confirmPin}
+                    onChange={(e) => setConfirmPin(e.target.value)}
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="Current 2FA code"
+                    value={pinTwoFactorCode}
+                    onChange={(e) => setPinTwoFactorCode(e.target.value)}
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (pin !== confirmPin) {
+                          setMsg('error', 'PINs do not match.');
+                          return;
+                        }
+                        if (pin.length < 4) {
+                          setMsg('error', 'PIN must be at least 4 characters.');
+                          return;
+                        }
+                        setPinMutation.mutate();
+                      }}
+                      disabled={setPinMutation.isPending}
+                      className="flex-1 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-medium transition-all"
+                    >
+                      {setPinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Save PIN'}
+                    </button>
+                    <button
+                      onClick={() => { setShowPinForm(false); setPin(''); setConfirmPin(''); setPinTwoFactorCode(''); }}
+                      className="px-4 py-2.5 rounded-lg border border-surface-border text-zinc-300 text-sm hover:border-zinc-500 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

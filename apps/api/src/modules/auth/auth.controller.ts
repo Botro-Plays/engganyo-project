@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   Req,
   Res,
@@ -233,5 +234,47 @@ export class AuthController {
   ) {
     const backupCodes = await this.twoFactorService.regenerateBackupCodes(user.sub, code);
     return { backupCodes, message: 'Backup codes regenerated.' };
+  }
+
+  // ─── Admin PIN ────────────────────────────────────────────
+
+  @Get('admin-pin/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Check if admin PIN is configured' })
+  async getAdminPinStatus(@CurrentUser() user: JwtPayload) {
+    const dbUser = await this.authService.getMe(user.sub);
+    // We can't expose adminPinHash directly; just whether it's set
+    // Need to query raw since getMe sanitizes
+    const raw = await this.twoFactorService['prisma'].user.findUnique({
+      where: { id: user.sub },
+      select: { adminPinHash: true },
+    });
+    return { hasPin: !!raw?.adminPinHash };
+  }
+
+  @Post('admin-pin')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Set or change admin PIN (requires 2FA code)' })
+  async setAdminPin(
+    @CurrentUser() user: JwtPayload,
+    @Body('pin') pin: string,
+    @Body('twoFactorCode') twoFactorCode: string,
+  ) {
+    await this.authService.setAdminPin(user.sub, pin, twoFactorCode);
+    return { message: 'Admin PIN set successfully.' };
+  }
+
+  @Delete('admin-pin')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Remove admin PIN (requires 2FA code)' })
+  async removeAdminPin(
+    @CurrentUser() user: JwtPayload,
+    @Body('twoFactorCode') twoFactorCode: string,
+  ) {
+    await this.authService.removeAdminPin(user.sub, twoFactorCode);
+    return { message: 'Admin PIN removed.' };
   }
 }

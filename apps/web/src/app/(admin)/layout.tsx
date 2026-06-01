@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
+import { AdminPinModal } from '@/components/admin-pin-modal';
 import { AuthenticatedProviders } from '@/app/providers';
 import { useState, useEffect } from 'react';
 
@@ -209,6 +210,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </>
       )}
+
+      {/* Admin PIN verification modal */}
+      <AdminPinModal />
     </div>
       </AuthenticatedProviders>
     </AuthGuard>
