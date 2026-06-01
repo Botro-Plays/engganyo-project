@@ -175,8 +175,9 @@ export default function CampaignsPage() {
   const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
   const TASK_TYPES = ALL_TASK_TYPES.filter((t) => {
     const platform = TASK_TYPE_TO_PLATFORM[t.value];
-    // If config hasn't loaded yet, show everything; otherwise filter by enabled platforms
-    return !platform || enabledPlatforms === null || enabledPlatforms.includes(platform);
+    const isOAuth = OAUTH_PLATFORMS.has(platform);
+    // Non-OAuth platforms (manual proof) are always available; only gate OAuth platforms by admin toggle
+    return !platform || !isOAuth || enabledPlatforms === null || enabledPlatforms.includes(platform);
   });
 
   const { data, isLoading } = useQuery({
