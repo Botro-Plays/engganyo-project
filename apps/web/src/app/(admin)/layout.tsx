@@ -11,8 +11,9 @@ import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
 import { AdminPinModal } from '@/components/admin-pin-modal';
 import { AuthenticatedProviders } from '@/app/providers';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -36,7 +37,8 @@ function canAccessAdmin(user: AuthUser | null): boolean {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, setAdminPin } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -55,16 +57,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [user, router]);
 
-  // Clear admin PIN when navigating away from /admin routes
-  const prevPathname = useRef(pathname);
+  // Invalidate admin queries when PIN is verified so current page refetches
   useEffect(() => {
-    const wasAdmin = prevPathname.current.startsWith('/admin');
-    const isAdmin = pathname.startsWith('/admin');
-    if (wasAdmin && !isAdmin) {
-      setAdminPin(null);
-    }
-    prevPathname.current = pathname;
-  }, [pathname, setAdminPin]);
+    const handlePinVerified = () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+    };
+    window.addEventListener('admin:pin-verified', handlePinVerified);
+    return () => window.removeEventListener('admin:pin-verified', handlePinVerified);
+  }, [queryClient]);
 
   // If user lacks 2FA, show nothing while redirecting
   if (user && !canAccessAdmin(user)) {

@@ -3,12 +3,13 @@
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
-import React, { useState, createContext, useContext, useEffect } from 'react';
+import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { ChatWidget } from '@/components/chat/ChatWidget';
 import { SocketProvider } from '@/components/socket-provider';
 import { useAuthStore } from '@/store/auth.store';
+import { usePathname } from 'next/navigation';
 
 interface PublicConfig {
   recaptchaEnabled: boolean;
@@ -53,6 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer />
+      <AdminPinRouteGuard />
       <SocketProvider>
         {children}
         <ChatWidget />
@@ -60,6 +62,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
+}
+
+function AdminPinRouteGuard() {
+  const pathname = usePathname();
+  const { setAdminPin } = useAuthStore();
+  const prevPathname = useRef<string | null>(null);
+
+  useEffect(() => {
+    const prev = prevPathname.current;
+    const wasAdmin = prev?.startsWith('/admin') ?? false;
+    const isAdmin = pathname?.startsWith('/admin') ?? false;
+    if (wasAdmin && !isAdmin) {
+      setAdminPin(null);
+    }
+    prevPathname.current = pathname;
+  }, [pathname, setAdminPin]);
+
+  return null;
 }
 
 function AuthInitializer() {

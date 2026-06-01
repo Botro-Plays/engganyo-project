@@ -34,7 +34,9 @@ apiClient.interceptors.request.use(
       }
       // Attach admin PIN header for admin routes
       const adminPin = useAuthStore.getState().adminPin;
-      if (adminPin && config.headers && config.url?.startsWith('admin')) {
+      const url = config.url ?? '';
+      const isAdminRoute = url.startsWith('admin/') || url.startsWith('/admin/');
+      if (adminPin && config.headers && isAdminRoute) {
         config.headers['x-admin-pin'] = adminPin;
       }
     }

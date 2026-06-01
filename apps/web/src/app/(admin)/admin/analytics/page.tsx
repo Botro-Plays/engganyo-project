@@ -47,7 +47,7 @@ export default function AdminAnalyticsPage() {
 
   const { data, isLoading } = useQuery<OverviewData>({
     queryKey: ['admin-analytics-overview', days],
-    queryFn: () => apiClient.get<{ data: OverviewData }>(`/analytics/overview?days=${days}`).then((r) => r.data.data),
+    queryFn: () => apiClient.get<{ data: OverviewData }>(`analytics/overview?days=${days}`).then((r) => r.data.data),
   });
 
   const totals = data?.totals;

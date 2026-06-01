@@ -1476,10 +1476,21 @@ export class AdminService {
               lastActiveAt: null, lastDailyRewardAt: null,
             },
           });
-          await tx.wallet.upsert({
+          const wallet = await tx.wallet.upsert({
             where: { userId: kept.id },
             create: { userId: kept.id, balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0 },
             update: { balance: initialCredits, lifetimeEarned: initialCredits, lifetimeSpent: 0, version: 0 },
+          });
+          await tx.transaction.create({
+            data: {
+              walletId: wallet.id,
+              type: 'EARN_ADMIN_GRANT',
+              status: 'COMPLETED',
+              amount: initialCredits,
+              balanceBefore: 0,
+              balanceAfter: initialCredits,
+              description: 'Database reset — initial credits restored',
+            },
           });
         }
 

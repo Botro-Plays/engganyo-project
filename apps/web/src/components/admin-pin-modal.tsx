@@ -32,8 +32,8 @@ export function AdminPinModal() {
     setOpen(false);
     setPin('');
     setError('');
-    // Trigger a small delay then reload so pending requests retry with the new header
-    setTimeout(() => window.location.reload(), 150);
+    // Notify admin layout to invalidate queries so current page refetches with new PIN header
+    window.dispatchEvent(new CustomEvent('admin:pin-verified'));
   };
 
   const handleClose = () => {
