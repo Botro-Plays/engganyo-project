@@ -13,7 +13,8 @@ import { AdminPinModal } from '@/components/admin-pin-modal';
 import { AuthenticatedProviders } from '@/app/providers';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -38,8 +39,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, logout } = useAuthStore();
+  const { user, logout, adminPin } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Check whether this admin user has a PIN configured on the backend
+  const { data: pinStatus } = useQuery({
+    queryKey: ['admin-pin-status'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { hasPin: boolean } }>('auth/admin-pin/status');
+      return res.data.data;
+    },
+    enabled: !!user && ['ADMIN', 'MODERATOR', 'SUPER_ADMIN'].includes(user.role),
+    staleTime: Infinity,
+  });
 
   useEffect(() => {
     if (mobileOpen) {
@@ -165,7 +177,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">
-          {children}
+          {pinStatus?.hasPin && !adminPin ? (
+            <div className="h-full flex items-center justify-center text-zinc-500 text-sm">
+              Admin access requires PIN verification
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
 

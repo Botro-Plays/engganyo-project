@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/store/auth.store';
-import { Lock, AlertCircle, X } from 'lucide-react';
+import { Lock, AlertCircle } from 'lucide-react';
 
 export function AdminPinModal() {
   const [open, setOpen] = useState(false);
@@ -21,6 +21,19 @@ export function AdminPinModal() {
     return () => window.removeEventListener('admin:pin-required', handleEvent);
   }, [handleEvent]);
 
+  // Block Escape key from dismissing the PIN modal
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [open]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pin.trim()) {
@@ -36,28 +49,18 @@ export function AdminPinModal() {
     window.dispatchEvent(new CustomEvent('admin:pin-verified'));
   };
 
-  const handleClose = () => {
-    setOpen(false);
-    setPin('');
-    setError('');
-  };
-
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70" onClick={handleClose} />
+      {/* Backdrop — no click handler, blocking */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       <div className="relative z-10 w-full max-w-sm mx-4 card-glass rounded-xl p-6 border border-surface-border">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-              <Lock className="w-4 h-4 text-red-400" />
-            </div>
-            <h3 className="font-semibold text-white text-sm">Admin Access PIN</h3>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <Lock className="w-4 h-4 text-red-400" />
           </div>
-          <button onClick={handleClose} className="text-zinc-500 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
+          <h3 className="font-semibold text-white text-sm">Admin Access PIN</h3>
         </div>
 
         <p className="text-sm text-zinc-400 mb-4">
