@@ -3,11 +3,12 @@
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
-import React, { useState, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { ChatWidget } from '@/components/chat/ChatWidget';
 import { SocketProvider } from '@/components/socket-provider';
+import { useAuthStore } from '@/store/auth.store';
 
 interface PublicConfig {
   recaptchaEnabled: boolean;
@@ -51,6 +52,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthInitializer />
       <SocketProvider>
         {children}
         <ChatWidget />
@@ -58,6 +60,29 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
+}
+
+function AuthInitializer() {
+  const { accessToken, hasHydrated, setUser } = useAuthStore();
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (!accessToken) return;
+
+    // Refresh user data from backend to ensure fields like twoFactorEnabled are present
+    apiClient
+      .get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+      .then((res) => {
+        if (res.data.data) {
+          setUser(res.data.data);
+        }
+      })
+      .catch(() => {
+        // Silently fail — AuthGuard will handle unauthenticated state
+      });
+  }, [hasHydrated, accessToken, setUser]);
+
+  return null;
 }
 
 export function AuthenticatedProviders({ children }: { children: React.ReactNode }) {
