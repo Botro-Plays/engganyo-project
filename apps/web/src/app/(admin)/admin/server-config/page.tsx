@@ -84,6 +84,16 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
     color: 'text-indigo-400',
     bg: 'bg-indigo-500/10',
   },
+  TRUSTPILOT: {
+    label: 'Trustpilot Reviews',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
+  },
+  GOOGLE: {
+    label: 'Google Reviews',
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10',
+  },
 };
 
 // ─── Server config meta ──────────────────────────────────────

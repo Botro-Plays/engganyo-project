@@ -15,7 +15,7 @@ interface OAuthConfigEntry {
   updatedAt: string | null;
 }
 
-const PLATFORM_META: Record<string, { label: string; color: string; bg: string; docsUrl: string; hint: string }> = {
+const PLATFORM_META: Record<string, { label: string; color: string; bg: string; docsUrl?: string; hint?: string }> = {
   YOUTUBE: {
     label: 'YouTube (Google OAuth)',
     color: 'text-red-400',
@@ -36,6 +36,16 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
     bg: 'bg-green-500/10',
     docsUrl: 'https://developer.spotify.com/dashboard',
     hint: 'Create an app. Scopes: user-follow-read user-read-private. Redirect URI: {API_BASE}/social-auth/spotify/callback',
+  },
+  TRUSTPILOT: {
+    label: 'Trustpilot Reviews',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
+  },
+  GOOGLE: {
+    label: 'Google Reviews',
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10',
   },
 };
 
