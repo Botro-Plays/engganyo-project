@@ -129,6 +129,7 @@ export default function AdminUsersPage() {
       setCreditSuccess(true);
       setCreditError(null);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     },
     onError: (err) => setCreditError(getApiErrorMessage(err)),
   });

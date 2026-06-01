@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/store/auth.store';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
   CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle,
@@ -208,6 +209,11 @@ export default function CampaignsPage() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      // Refresh user to update nav credit balance
+      apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+        .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+        .catch(() => {/* silent */});
       form.reset({ requiresProof: true, autoVerify: true, creditPerTask: 50, totalSlots: 100 });
       setSelectedCountries([]);
       setShowCountryPicker(false);
@@ -235,6 +241,11 @@ export default function CampaignsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['campaign-submissions', reviewingCampaign?.id] });
       void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      // Refresh user to update nav credit balance for affected parties
+      apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+        .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+        .catch(() => {/* silent */});
       setReviewError(null);
     },
     onError: (err) => setReviewError(getApiErrorMessage(err)),
@@ -248,7 +259,14 @@ export default function CampaignsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`campaigns/${id}`),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['campaigns'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      // Refresh user to update nav credit balance
+      apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+        .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+        .catch(() => {/* silent */});
+    },
   });
 
   return (

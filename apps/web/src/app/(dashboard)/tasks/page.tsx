@@ -298,6 +298,7 @@ export default function TasksPage() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       proofForm.reset();
       setSubmitting(null);
       setSubmitError(null);
@@ -320,6 +321,11 @@ export default function TasksPage() {
     onSuccess: (response) => {
       const payload = response?.data?.data ?? response?.data;
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      // Refresh user to update nav credit balance
+      apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+        .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+        .catch(() => {/* silent */});
       setSubmitError(null);
       setRecheckResult({
         status: payload?.status,

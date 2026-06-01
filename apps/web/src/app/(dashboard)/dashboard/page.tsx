@@ -73,6 +73,11 @@ function DashboardPageInner() {
       setRewardError(null);
       void queryClient.invalidateQueries({ queryKey: ['gamification'] });
       void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      // Refresh user to update nav credit balance
+      apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+        .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+        .catch(() => {/* silent */});
     },
     onError: (err) => setRewardError(getApiErrorMessage(err)),
   });
