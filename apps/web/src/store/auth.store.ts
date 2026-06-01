@@ -86,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
-        // adminPin is intentionally NOT persisted — ephemeral per session
+        adminPin: state.adminPin,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
