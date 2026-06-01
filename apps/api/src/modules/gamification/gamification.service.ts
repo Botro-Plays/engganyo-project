@@ -368,7 +368,7 @@ export class GamificationService implements OnModuleInit {
   async claimDailyReward(userId: string, userTimezone?: string, clientIp?: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { currentStreak: true, longestStreak: true, lastDailyRewardAt: true, lastActiveAt: true },
+      select: { currentStreak: true, longestStreak: true, lastDailyRewardAt: true },
     });
     if (!user) throw new BadRequestException('User not found');
 
@@ -394,7 +394,7 @@ export class GamificationService implements OnModuleInit {
     }
 
     const now = new Date();
-    const streakBroken = this.isStreakBroken(user.lastActiveAt, userTimezone);
+    const streakBroken = this.isStreakBroken(user.lastDailyRewardAt, userTimezone);
     const newStreak = streakBroken ? 1 : user.currentStreak + 1;
     const newLongest = Math.max(newStreak, user.longestStreak);
 
