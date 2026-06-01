@@ -505,6 +505,28 @@
 - Refresh tokens before expiration ✅
 - Revoke on user request ✅
 
+### VDR-003: Unified Platform Toggle via oAuthConfig
+**Status**: Implemented (2026-06-01)
+**Date**: 2026-06-01
+**Context**: All social platforms (both OAuth and manual-proof) need to be enable/disable-able by admins
+**Decision**: Reuse `oAuthConfig` table as the unified enablement store for ALL social platforms, not just OAuth ones
+**Rationale**:
+- Single source of truth for platform availability
+- Admin UI already built around `oAuthConfig` (Integrations tab in `/admin/server-config`)
+- `enabled` boolean is platform-agnostic; `clientId`/`clientSecret` only apply to OAuth platforms
+- Default `enabled = true` when no row exists (graceful fallback for new platforms)
+- Frontend gates campaign creation dropdown using `enabledPlatforms` from `auth/public-config`
+**Implementation**:
+- `ALL_SOCIAL_PLATFORMS` in `AdminService` lists all 11 platforms
+- `getPublicConfig()` in `AuthService` queries all `oAuthConfig` rows, defaults `enabled ?? true`
+- `MANAGED_PLATFORMS` set in frontend campaign page gates all 11 platforms by admin toggle
+- `SocialPlatform` enum expanded to include `TRUSTPILOT` and `GOOGLE`
+- `TASK_TYPE_PLATFORM` map in `SocialAuthService` maps `TRUSTPILOT_REVIEW → TRUSTPILOT`, `GOOGLE_REVIEW → GOOGLE`
+**Tradeoffs**:
+- `oAuthConfig` name is semantically misleading for manual-proof platforms (mitigated: admin UI labels clarify "Manual link only — no OAuth credentials required")
+- Cannot easily have per-task-type toggles (only per-platform)
+- Adding a new platform requires updating enum + backend lists + frontend sets + admin UI meta
+
 ---
 
 ## ANTI-ABUSE STRATEGY

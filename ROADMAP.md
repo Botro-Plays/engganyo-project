@@ -1,8 +1,8 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-06-01 (Admin 2FA enforcement + admin PIN gate)
+> Last updated: 2026-06-01 (Platform fees live C3 + all 11 platforms admin-toggleable + TrustPilot/Google added)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms supported, all admin-toggleable) | Platform Fees Live (C3) | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
 
 ---
 
@@ -410,7 +410,7 @@
 
 **Priority**: 🟠 HIGH - Critical for platform legitimacy and fraud prevention
 **Dependencies**: Phase 0 (Security), OAuth configuration
-**Current Status**: PARTIALLY IMPLEMENTED - OAuth verification working for YouTube, Twitch, Spotify; manual link fallback for Twitter/X, TikTok, Instagram, Facebook
+**Current Status**: PARTIALLY IMPLEMENTED - OAuth verification working for YouTube, Twitch, Spotify; manual proof for TikTok, Instagram, Twitter/X, Facebook, Telegram, Discord, TrustPilot, Google Reviews. All 11 platforms are admin-toggleable via `/admin/server-config` (default enabled).
 
 **Core concept**
 - When a user submits a task ("I liked your YouTube video"), the API calls the social platform using the completer's stored OAuth token to confirm the action happened — no manual review needed.
@@ -443,11 +443,14 @@
 | YouTube | Like video, Subscribe to channel, Watch video (30s+), Comment | ✅ OAuth API (Implemented) |
 | Twitch | Follow account | ✅ OAuth API (Implemented) |
 | Spotify | Follow artist, Follow playlist | ✅ OAuth API (Implemented) |
-| Twitter/X | Follow account, Like tweet, Retweet | ⏳ Manual link only (OAuth not yet) |
-| TikTok | Follow account, Like video | ⏳ Manual link only (OAuth not yet) |
-| Instagram | Follow account, Like post | ⏳ Manual link only (OAuth not yet) |
-| Telegram | Join channel, Join group | ⏳ Not implemented |
-| Facebook | Like page, Follow page, Like post, Share post | ⏳ Manual link only (OAuth not yet) |
+| Twitter/X | Follow account, Like tweet, Retweet | ✅ Manual proof (admin toggleable) |
+| TikTok | Follow account, Like video | ✅ Manual proof (admin toggleable) |
+| Instagram | Follow account, Like post | ✅ Manual proof (admin toggleable) |
+| Facebook | Like page, Follow page, Like post, Share post | ✅ Manual proof (admin toggleable) |
+| Telegram | Join channel, Join group | ✅ Manual proof (admin toggleable) |
+| Discord | Join server | ✅ Manual proof (admin toggleable) |
+| TrustPilot | Write review | ✅ Manual proof (admin toggleable) |
+| Google Reviews | Write review | ✅ Manual proof (admin toggleable) |
 
 **P2P Cross-Platform Exchange**
 - [🟡] Credits are the universal currency — earn by completing *any* task on *any* platform, spend to get *any* task done

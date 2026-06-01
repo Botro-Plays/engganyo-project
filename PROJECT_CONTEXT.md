@@ -33,14 +33,16 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 
 ## BUSINESS MODEL
 
-### Current State (Phase 10 Complete + Avatar Upload)
-- **Revenue**: None (platform is pre-monetization)
-- **Credit System**: Internal-only, no fiat/crypto conversion
-- **Platform Fees**: Not implemented
+### Current State (Phase 10–11 Partial + Platform Fees Live)
+- **Revenue**: Platform fees live — 10% base fee deducted on campaign creation, tracked via `PlatformRevenue` model, admin revenue dashboard at `/admin/revenue`
+- **Credit System**: Internal-only, no fiat/crypto conversion yet (Stripe integration pending)
+- **Platform Fees**: Implemented (2026-06-01) — 10% base, config-driven (`fee_base_rate`, `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`, `campaign_min_budget`)
 - **Withdrawals**: Not available
 - **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
 - **Chat System**: Implemented with AI chat support (Groq integration)
-- **Social OAuth**: Partially implemented (YouTube, Twitch, Spotify working; others manual link)
+- **Social Platforms**: 11 platforms supported — all admin-toggleable via `oAuthConfig` (default enabled):
+  - **OAuth verification**: YouTube, Twitch, Spotify
+  - **Manual proof**: TikTok, Instagram, Twitter/X, Facebook, Telegram, Discord, TrustPilot, Google Reviews
 - **Email Verification**: Implemented and enabled in production (`ENABLE_EMAIL_VERIFICATION=true`); login blocks unverified users; branded HTML templates; resend with cooldown
 - **Avatar Upload**: Implemented — users upload avatars from device (replaces external URL input)
   - Backend: `POST /uploads/avatar` with multer, JWT, 5MB limit, PNG/JPG/WebP
@@ -56,6 +58,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - **Deployment**: Fully automated CI/CD via GitHub Actions → GHCR → VPS SSH
   - Zero-downtime rolling update (no `docker compose down`)
   - Post-deploy health check verification
+  - Container entrypoint runs `prisma migrate deploy` before app start (safety net)
 
 ### Target Monetization Strategy
 

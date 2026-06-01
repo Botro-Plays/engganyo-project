@@ -165,6 +165,9 @@ After revenue is flowing, improve scale and trust.
 | 2026-06-01 | Admin inclusion toggle for leaderboards | ✅ DONE — `leaderboard_include_admins` config in `/admin/server-config` |
 | 2026-06-01 | Reset DB clears gamification state | ✅ DONE — `resetDatabase` now wipes `UserAchievement` and `UserMissionProgress` for kept `admin`/`botro` accounts |
 | 2026-06-01 | Platform fees on campaign creation (C3) | ✅ DONE — 10% base fee, PlatformRevenue model, admin dashboard, config-driven |
+| 2026-06-01 | Non-OAuth platforms invisible in campaign dropdown | ✅ FIXED — `getPublicConfig()` now defaults `enabled ?? true` for all managed platforms; frontend gates all 11 platforms via admin toggle |
+| 2026-06-01 | TrustPilot and Google Reviews not admin-toggleable | ✅ FIXED — added to `SocialPlatform` enum, DB migration, backend lists, frontend filter, and admin UI toggles |
+| 2026-06-01 | Deploy gap: missing auto-migration in container startup | ✅ FIXED — `entrypoint.sh` now runs `prisma migrate deploy` before `node dist/main` |
 | | | |
 
 ---

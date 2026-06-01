@@ -43,7 +43,7 @@ engganyo-project/
 ├── infra/
 │   ├── nginx/nginx.conf      # Reverse proxy, gzip, rate-limit zones
 │   └── scripts/init.sql      # DB init
-├── .github/workflows/ci.yml  # GitHub Actions CI pipeline
+├── .github/workflows/deploy.yml  # GitHub Actions CI → E2E → Build → Deploy pipeline
 ├── .env.example              # Development env template
 ├── .env.production.example   # Production env template
 ├── docker-compose.yml        # Production: postgres + redis + api + web + nginx

@@ -116,11 +116,10 @@ Default admin credentials (from seed):
 
 Deployments are **fully automated** on every push to `main`:
 
-1. **CI** (`ci.yml`) — lint, test, build
-2. **Deploy** (`deploy.yml`) — triggered when CI passes:
-   - Builds Docker images on GitHub's fast servers
-   - Pushes to GitHub Container Registry (GHCR)
+1. **CI + E2E** (`deploy.yml`) — lint, test, build, E2E (Playwright), then build & push Docker images to GHCR
+2. **Deploy** (`deploy.yml` deploy job) — triggered when build succeeds:
    - SSHes into VPS → pulls pre-built images → restarts containers → runs migrations
+   - Container entrypoint also runs `prisma migrate deploy` before app start as a safety net
 
 **No manual action required.** Deploy time: ~3 minutes (down from ~15 min).
 
