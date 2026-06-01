@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Trophy, Flame, Zap, Medal, Target,
+  Trophy, Flame, Zap, Medal, Target, BarChart3,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
@@ -61,9 +61,13 @@ interface GamStats {
 
 const RANK_STYLES = ['text-yellow-400', 'text-zinc-300', 'text-amber-600'];
 
+type MainTab = 'level' | 'achievements' | 'missions';
+type TimeTab = 'alltime' | 'weekly';
+
 export default function LeaderboardPage() {
   const { user: authUser } = useAuthStore();
-  const [tab, setTab] = useState<'alltime' | 'weekly' | 'achievements' | 'missions'>('alltime');
+  const [mainTab, setMainTab] = useState<MainTab>('level');
+  const [timeTab, setTimeTab] = useState<TimeTab>('alltime');
 
   const { data: stats } = useQuery({
     queryKey: ['gamification', 'stats'],
@@ -73,15 +77,16 @@ export default function LeaderboardPage() {
     },
   });
 
+  const levelApiTab: TimeTab = timeTab; // for query key clarity
   const { data: lbData, isLoading: lbLoading } = useQuery({
-    queryKey: ['gamification', 'leaderboard', tab],
+    queryKey: ['gamification', 'leaderboard', levelApiTab],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<LeaderboardEntry[]>>(
-        `gamification/leaderboard?type=${tab}`,
+        `gamification/leaderboard?type=${levelApiTab}`,
       );
       return res.data.data;
     },
-    enabled: tab === 'alltime' || tab === 'weekly',
+    enabled: mainTab === 'level',
   });
 
   const { data: achLbData, isLoading: achLbLoading } = useQuery({
@@ -92,7 +97,7 @@ export default function LeaderboardPage() {
       );
       return res.data.data;
     },
-    enabled: tab === 'achievements',
+    enabled: mainTab === 'achievements',
   });
 
   const { data: missionLbData, isLoading: missionLbLoading } = useQuery({
@@ -103,11 +108,10 @@ export default function LeaderboardPage() {
       );
       return res.data.data;
     },
-    enabled: tab === 'missions',
+    enabled: mainTab === 'missions',
   });
 
   const levelInfo = stats ? getLevelProgress(stats.xp) : null;
-  const isLoading = lbLoading || achLbLoading || missionLbLoading;
 
   const renderRankList = <T extends { rank: number; id: string; username: string; displayName: string | null; avatarUrl: string | null; level: number; currentStreak: number }>(
     entries: T[],
@@ -179,19 +183,18 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-1 mb-6 p-1 bg-surface-hover rounded-lg w-fit">
+      {/* ── Primary tabs ── */}
+      <div className="flex gap-1 mb-4 p-1 bg-surface-hover rounded-lg w-fit">
         {([
-          { key: 'alltime', label: 'All Time', icon: Trophy },
-          { key: 'weekly', label: 'This Week', icon: Zap },
-          { key: 'achievements', label: 'Achievements', icon: Medal },
-          { key: 'missions', label: 'Missions', icon: Target },
-        ] as const).map((t) => (
+          { key: 'level' as MainTab, label: 'Level', icon: BarChart3 },
+          { key: 'achievements' as MainTab, label: 'Achievements', icon: Medal },
+          { key: 'missions' as MainTab, label: 'Missions', icon: Target },
+        ]).map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => setMainTab(t.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              tab === t.key ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'
+              mainTab === t.key ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'
             }`}
           >
             <t.icon className="w-3.5 h-3.5" />
@@ -200,10 +203,31 @@ export default function LeaderboardPage() {
         ))}
       </div>
 
-      {/* ── All Time / Weekly ── */}
-      {(tab === 'alltime' || tab === 'weekly') && (
+      {/* ── Level sub-tabs ── */}
+      {mainTab === 'level' && (
+        <div className="flex gap-1 mb-6 p-1 bg-surface-hover rounded-lg w-fit">
+          {([
+            { key: 'alltime' as TimeTab, label: 'All Time', icon: Trophy },
+            { key: 'weekly' as TimeTab, label: 'This Week', icon: Zap },
+          ]).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTimeTab(t.key)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                timeTab === t.key ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-white'
+              }`}
+            >
+              <t.icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Level rankings ── */}
+      {mainTab === 'level' && (
         <>
-          {isLoading ? (
+          {lbLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-14" />
@@ -214,15 +238,15 @@ export default function LeaderboardPage() {
               <p className="text-zinc-500 text-sm">No data yet. Complete tasks to appear here!</p>
             </div>
           ) : (
-            renderRankList(lbData, (e) => `${formatCredits(tab === 'weekly' ? (e.weeklyXp ?? 0) : e.xp)} XP`)
+            renderRankList(lbData, (e) => `${formatCredits(timeTab === 'weekly' ? (e.weeklyXp ?? 0) : e.xp)} XP`)
           )}
         </>
       )}
 
       {/* ── Achievements leaderboard ── */}
-      {tab === 'achievements' && (
+      {mainTab === 'achievements' && (
         <>
-          {isLoading ? (
+          {achLbLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-14" />
@@ -239,9 +263,9 @@ export default function LeaderboardPage() {
       )}
 
       {/* ── Missions leaderboard ── */}
-      {tab === 'missions' && (
+      {mainTab === 'missions' && (
         <>
-          {isLoading ? (
+          {missionLbLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-14" />
