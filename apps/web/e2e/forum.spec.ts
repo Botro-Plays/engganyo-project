@@ -134,26 +134,14 @@ test.describe('Forum (authenticated)', () => {
 });
 
 test.describe('Forum (admin moderation)', () => {
-  test('admin forum management page loads', async ({ page }) => {
+  test('admin without 2FA is redirected to security settings', async ({ page }) => {
     await page.goto('/admin/forum');
-    await expect(page).toHaveURL(/admin\/forum/);
-    await expect(page.getByRole('heading', { name: /forum/i }).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page).toHaveURL(/settings\/security/);
+    await expect(page.getByText(/admin access requires 2fa/i)).toBeVisible({ timeout: 5_000 });
   });
 
-  test('admin can lock and unlock a topic', async ({ page }) => {
-    await page.goto('/admin/forum');
-    await page.waitForLoadState('networkidle');
-
-    // Find the first OPEN topic row that has a Lock button
-    const lockBtn = page.locator('button[title="Lock"]').first();
-    if (await lockBtn.count() > 0) {
-      await lockBtn.click();
-      await page.waitForLoadState('networkidle');
-      // After locking, an Unlock button should appear
-      const unlockBtn = page.locator('button[title="Unlock"]').first();
-      await expect(unlockBtn).toBeVisible({ timeout: 5_000 });
-      // Clean up: unlock it again
-      await unlockBtn.click();
-    }
+  test('admin without 2FA cannot access admin panel via direct link', async ({ page }) => {
+    await page.goto('/admin');
+    await expect(page).toHaveURL(/settings\/security/);
   });
 });
