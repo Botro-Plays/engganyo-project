@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { useAuthStore } from '@/store/auth.store';
 
 function normalizeApiBaseUrl(input: string): string {
   // Ensure we always end up with .../api (not .../api/v1)
@@ -65,6 +66,8 @@ apiClient.interceptors.response.use(
       } catch {
         // Refresh failed — clear tokens and redirect to login
         localStorage.removeItem('access_token');
+        // Also clear zustand store so UI doesn't show stale authenticated state
+        useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false });
         if (typeof window !== 'undefined') {
           window.location.href = '/login';
         }

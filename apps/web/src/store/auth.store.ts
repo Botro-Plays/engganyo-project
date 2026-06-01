@@ -21,7 +21,7 @@ interface AuthState {
   user: AuthUser | null;
   accessToken: string | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
+  hasHydrated: boolean;
 
   // Actions
   setUser: (user: AuthUser) => void;
@@ -29,6 +29,7 @@ interface AuthState {
   updateCreditBalance: (balance: number) => void;
   updateUser: (updates: Partial<AuthUser>) => void;
   logout: () => void;
+  setHasHydrated: (value: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -37,7 +38,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       accessToken: null,
       isAuthenticated: false,
-      isLoading: false,
+      hasHydrated: false,
 
       setUser: (user) =>
         set({ user, isAuthenticated: true }),
@@ -68,6 +69,8 @@ export const useAuthStore = create<AuthState>()(
           window.location.href = '/login';
         }
       },
+
+      setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
     {
       name: 'engganyo-auth',
@@ -79,6 +82,11 @@ export const useAuthStore = create<AuthState>()(
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.setHasHydrated(true);
+        }
+      },
     },
   ),
 );

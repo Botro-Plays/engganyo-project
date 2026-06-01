@@ -10,11 +10,11 @@ const SETTING_TILES = [
     available: true,
   },
   {
-    href: '#',
+    href: '/profile',
     icon: User,
     label: 'Profile',
-    description: 'Update display name, avatar, and bio.',
-    available: false,
+    description: 'Update display name, avatar, bio, and referral settings.',
+    available: true,
   },
   {
     href: '#',

@@ -426,76 +426,84 @@ export default function ProfilePage() {
           <p className="text-zinc-400 text-sm truncate">@{profile?.username ?? user?.username}</p>
           <p className="text-zinc-500 text-xs truncate">{profile?.email ?? user?.email}</p>
 
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            <Link
-              href={`/users/${profile?.username ?? user?.username}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View Public Profile
-            </Link>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-zinc-600">Share:</span>
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center rounded-md bg-green-500/10 text-green-400 text-[10px] font-bold hover:bg-green-500/20 transition-all"
-                title="Share via WhatsApp"
-              >
-                WA
-              </a>
-              <a
-                href={`https://t.me/share/url?url=${encodeURIComponent(getReferralUrl())}&text=${encodeURIComponent(getShareText())}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center rounded-md bg-sky-500/10 text-sky-400 text-[10px] font-bold hover:bg-sky-500/20 transition-all"
-                title="Share via Telegram"
-              >
-                TG
-              </a>
-              <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-500/10 text-zinc-300 hover:bg-zinc-500/20 transition-all"
-                title="Share via X"
-              >
-                <Twitter className="w-3.5 h-3.5" />
-              </a>
-              <a
-                href={`mailto:?subject=${encodeURIComponent('Join me on Engganyo')}&body=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
-                className="w-7 h-7 flex items-center justify-center rounded-md bg-zinc-500/10 text-zinc-300 hover:bg-zinc-500/20 transition-all"
-                title="Share via Email"
-              >
-                <Mail className="w-3.5 h-3.5" />
-              </a>
-              {canShare && (
-                <button
-                  onClick={() => void handleNativeShare()}
-                  className="w-7 h-7 flex items-center justify-center rounded-md bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-all"
-                  title="Share"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="w-full sm:w-auto sm:text-right sm:flex sm:flex-col sm:items-end">
-          <p className="text-xs text-zinc-500 mb-1">Referral code</p>
-          <button
-            onClick={copyReferral}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
+          <Link
+            href={`/users/${profile?.username ?? user?.username}`}
+            className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all"
           >
-            {profile?.referralCode ?? user?.referralCode ?? '—'}
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-          </button>
+            <ExternalLink className="w-3 h-3" />
+            View Public Profile
+          </Link>
         </div>
       </div>
 
       {/* ── Trust score card ── */}
       <TrustScoreCard />
+
+      {/* ── Refer & Earn ── */}
+      <div className="card-glass rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Share2 className="w-4 h-4 text-brand-400" />
+          <h2 className="font-semibold text-white">Refer & Earn</h2>
+        </div>
+        <p className="text-sm text-zinc-400 mb-4">
+          Invite friends and earn credits when they sign up and complete tasks.
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+          <button
+            onClick={copyReferral}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
+          >
+            {profile?.referralCode ?? user?.referralCode ?? '—'}
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+          <span className="text-xs text-zinc-500">Tap to copy your referral code</span>
+        </div>
+
+        <div className="border-t border-surface-border pt-4">
+          <p className="text-xs text-zinc-500 mb-3">Share your link:</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-500/10 text-green-400 text-xs font-medium hover:bg-green-500/20 transition-all"
+            >
+              <span className="text-sm">WA</span> WhatsApp
+            </a>
+            <a
+              href={`https://t.me/share/url?url=${encodeURIComponent(getReferralUrl())}&text=${encodeURIComponent(getShareText())}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-500/10 text-sky-400 text-xs font-medium hover:bg-sky-500/20 transition-all"
+            >
+              <span className="text-sm">TG</span> Telegram
+            </a>
+            <a
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-500/10 text-zinc-300 text-xs font-medium hover:bg-zinc-500/20 transition-all"
+            >
+              <Twitter className="w-3.5 h-3.5" /> X / Twitter
+            </a>
+            <a
+              href={`mailto:?subject=${encodeURIComponent('Join me on Engganyo')}&body=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-500/10 text-zinc-300 text-xs font-medium hover:bg-zinc-500/20 transition-all"
+            >
+              <Mail className="w-3.5 h-3.5" /> Email
+            </a>
+            {canShare && (
+              <button
+                onClick={() => void handleNativeShare()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-500/10 text-brand-400 text-xs font-medium hover:bg-brand-500/20 transition-all"
+              >
+                <Share2 className="w-3.5 h-3.5" /> More
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* ── Edit profile form ── */}
       <div className="card-glass rounded-xl p-6">
