@@ -174,7 +174,7 @@ export default function CampaignsPage() {
 
   const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
   // Platforms tracked in oAuthConfig — all others (TRUSTPILOT, GOOGLE, unmapped) are always shown
-  const MANAGED_PLATFORMS = new Set(['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD']);
+  const MANAGED_PLATFORMS = new Set(['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE']);
   const TASK_TYPES = ALL_TASK_TYPES.filter((t) => {
     const platform = TASK_TYPE_TO_PLATFORM[t.value];
     if (!platform || !MANAGED_PLATFORMS.has(platform)) return true; // not managed by oAuthConfig → always show

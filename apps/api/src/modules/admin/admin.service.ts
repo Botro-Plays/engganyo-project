@@ -1155,7 +1155,7 @@ export class AdminService {
 
   private readonly ALL_SOCIAL_PLATFORMS = [
     'YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER',
-    'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD',
+    'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE',
   ] as const;
 
   private readonly OAUTH_PLATFORMS = ['YOUTUBE', 'TWITCH', 'SPOTIFY'] as const;

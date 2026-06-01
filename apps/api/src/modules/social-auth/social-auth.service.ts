@@ -75,6 +75,8 @@ const TASK_TYPE_PLATFORM: Partial<Record<TaskType, SocialPlatform>> = {
   [TaskType.TWITCH_FOLLOW]:     SocialPlatform.TWITCH,
   [TaskType.SPOTIFY_FOLLOW]:    SocialPlatform.SPOTIFY,
   [TaskType.SPOTIFY_STREAM]:    SocialPlatform.SPOTIFY,
+  [TaskType.TRUSTPILOT_REVIEW]: SocialPlatform.TRUSTPILOT,
+  [TaskType.GOOGLE_REVIEW]:     SocialPlatform.GOOGLE,
 };
 
 @Injectable()

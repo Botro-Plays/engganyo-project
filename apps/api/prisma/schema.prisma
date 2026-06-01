@@ -120,6 +120,8 @@ enum SocialPlatform {
   SPOTIFY
   TELEGRAM
   DISCORD
+  TRUSTPILOT
+  GOOGLE
 }
 
 enum NotificationType {

@@ -693,7 +693,7 @@ export class AuthService {
   async getPublicConfig() {
     const cfg = await this.getRecaptchaConfig();
     // Fetch all rows (no filter) — platforms with no row default to enabled=true on the backend
-    const ALL_MANAGED_PLATFORMS = ['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD'] as const;
+    const ALL_MANAGED_PLATFORMS = ['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE'] as const;
     const oauthRows = await this.prisma.oAuthConfig.findMany({
       select: { platform: true, enabled: true },
     });
