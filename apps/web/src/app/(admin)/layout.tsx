@@ -69,6 +69,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [user, router]);
 
+  // Proactively prompt for PIN if user has one configured but none in store
+  useEffect(() => {
+    if (pinStatus === undefined) return;
+    if (pinStatus.hasPin && !adminPin) {
+      window.dispatchEvent(new CustomEvent('admin:pin-required'));
+    }
+  }, [pinStatus, adminPin]);
+
   // Invalidate admin queries when PIN is verified so current page refetches
   useEffect(() => {
     const handlePinVerified = () => {
