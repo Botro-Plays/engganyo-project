@@ -372,6 +372,8 @@ jobs:
             docker compose exec -T api node_modules/.bin/prisma migrate deploy
 
             echo "[9/10] Recreating nginx to pick up config changes..."
+            docker compose stop nginx || true
+            docker compose rm -f nginx || true
             docker compose up -d --no-deps --force-recreate nginx
 
             echo "[10/10] Final cleanup..."
