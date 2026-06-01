@@ -15,7 +15,7 @@ import { ReportModal } from '@/components/report-modal';
 import { UserLink } from '@/components/user-link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
-import { formatCredits, formatRelativeTime } from '@/lib/utils';
+import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -445,7 +445,7 @@ export default function TasksPage() {
                           {TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
                         </span>
                         <span className="text-xs font-bold text-green-400 shrink-0">
-                          +{formatCredits(task.creditPerTask)} cr
+                          +{formatCredits(task.creditPerTask)} {creditLabel(task.creditPerTask)}
                         </span>
                       </div>
                       <p className="text-sm font-semibold text-white mb-1 line-clamp-2 flex-1">{task.title}</p>
@@ -597,7 +597,7 @@ export default function TasksPage() {
                         {task.status === 'VERIFIED' ? (
                           <div className="flex items-center gap-1 text-green-400 text-sm font-semibold">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            +{formatCredits(task.creditsEarned)} cr
+                            +{formatCredits(task.creditsEarned)} {creditLabel(task.creditsEarned)}
                           </div>
                         ) : task.status === 'SUBMITTED' ? (
                           <div className="flex items-center gap-1 text-sky-400 text-xs">
@@ -897,7 +897,7 @@ export default function TasksPage() {
                   {submitMutation.isPending ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <>Submit & earn +{formatCredits(submitting.campaign.creditPerTask)} cr</>
+                    <>Submit & earn +{formatCredits(submitting.campaign.creditPerTask)} {creditLabel(submitting.campaign.creditPerTask)}</>
                   )}
                 </button>
               </form>

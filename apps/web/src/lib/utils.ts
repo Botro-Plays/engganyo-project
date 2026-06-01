@@ -9,6 +9,10 @@ export function formatCredits(amount: number): string {
   return new Intl.NumberFormat('en-US').format(amount);
 }
 
+export function creditLabel(amount: number): string {
+  return amount === 1 ? 'credit' : 'credits';
+}
+
 export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',

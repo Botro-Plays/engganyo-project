@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search, User, Megaphone, MessageSquare, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { creditLabel } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import Link from 'next/link';
 
@@ -141,7 +142,7 @@ function SearchContent() {
                   )}
                 </div>
                 <p className="text-xs text-zinc-500">
-                  by {c.user.displayName ?? c.user.username} · {c.completedSlots}/{c.totalSlots} done · {c.creditPerTask} cr/task
+                  by {c.user.displayName ?? c.user.username} · {c.completedSlots}/{c.totalSlots} done · {c.creditPerTask} {creditLabel(c.creditPerTask)}/task
                 </p>
               </Link>
             ))}

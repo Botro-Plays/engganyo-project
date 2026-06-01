@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
-import { formatCredits, formatDate } from '@/lib/utils';
+import { formatCredits, creditLabel, formatDate } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
@@ -384,7 +384,7 @@ export default function AdminUsersPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{selectedUser.username}</span> · Balance: <span className="text-brand-300">{formatCredits(selectedUser.creditBalance)} cr</span></p>
+            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{selectedUser.username}</span> · Balance: <span className="text-brand-300">{formatCredits(selectedUser.creditBalance)} {creditLabel(selectedUser.creditBalance)}</span></p>
 
             {creditSuccess ? (
               <div className="py-4 text-center">

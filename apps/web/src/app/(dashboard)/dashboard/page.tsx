@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
-import { formatCredits, getLevelProgress } from '@/lib/utils';
+import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 
@@ -171,7 +171,7 @@ function DashboardPageInner() {
             </div>
             {rewardResult ? (
               <div className="text-sm text-green-400 font-medium">
-                +{formatCredits(rewardResult.creditReward)} cr · +{rewardResult.xpReward} XP · Day {rewardResult.newStreak}
+                +{formatCredits(rewardResult.creditReward)} {creditLabel(rewardResult.creditReward)} · +{rewardResult.xpReward} XP · Day {rewardResult.newStreak}
               </div>
             ) : (
               <button

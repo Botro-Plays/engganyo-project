@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
-import { formatCredits, formatRelativeTime } from '@/lib/utils';
+import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
 interface Campaign {
@@ -251,7 +251,7 @@ export default function DiscoverPage() {
                   </div>
                   <div className="flex items-center gap-3 text-xs text-zinc-500">
                     <span className="flex items-center gap-1 text-yellow-400 font-semibold">
-                      <Coins className="w-3.5 h-3.5" />{formatCredits(c.creditPerTask)} cr
+                      <Coins className="w-3.5 h-3.5" />{formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)}
                     </span>
                     <span className="flex items-center gap-1">
                       <Users className="w-3.5 h-3.5" />{available.toLocaleString()} left

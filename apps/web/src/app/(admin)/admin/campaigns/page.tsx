@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, XCircle, Plus, X, Loader2 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
-import { formatCredits, formatDate } from '@/lib/utils';
+import { formatCredits, creditLabel, formatDate } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
 interface PendingCampaign {
@@ -277,8 +277,8 @@ export default function AdminCampaignsPage() {
                       <p className="text-xs text-zinc-500 mt-0.5">by @{c.user.username} · {c.taskType.replace(/_/g, ' ')} · {formatDate(c.createdAt)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-medium text-brand-300">{formatCredits(c.totalSlots * c.creditPerTask)} cr total</p>
-                      <p className="text-xs text-zinc-500">{c.totalSlots} slots × {formatCredits(c.creditPerTask)} cr</p>
+                      <p className="text-sm font-medium text-brand-300">{formatCredits(c.totalSlots * c.creditPerTask)} {creditLabel(c.totalSlots * c.creditPerTask)} total</p>
+                      <p className="text-xs text-zinc-500">{c.totalSlots} slots × {formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)}</p>
                     </div>
                   </div>
                   <a href={c.targetUrl} target="_blank" rel="noopener noreferrer"
@@ -337,7 +337,7 @@ export default function AdminCampaignsPage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-white truncate">{t.title}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">
-                        {t.taskType.replace(/_/g, ' ')} · {formatCredits(t.creditPerTask)} cr · {available} / {t.totalSlots} slots available
+                        {t.taskType.replace(/_/g, ' ')} · {formatCredits(t.creditPerTask)} {creditLabel(t.creditPerTask)} · {available} / {t.totalSlots} slots available
                       </p>
                       <a href={t.targetUrl} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-400 mt-1 transition-colors">
@@ -395,10 +395,10 @@ export default function AdminCampaignsPage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-white truncate">{c.title}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">
-                        {c.taskType.replace(/_/g, ' ')} · {formatCredits(c.creditPerTask)} cr · {available} / {c.totalSlots} slots available · by @{c.user.username}
+                        {c.taskType.replace(/_/g, ' ')} · {formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)} · {available} / {c.totalSlots} slots available · by @{c.user.username}
                       </p>
                       <p className="text-xs text-zinc-400 mt-0.5">
-                        Status: {c.status} · Total budget: {formatCredits(c.totalCost)} cr
+                        Status: {c.status} · Total budget: {formatCredits(c.totalCost)} {creditLabel(c.totalCost)}
                       </p>
                       <a href={c.targetUrl} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-400 mt-1 transition-colors">
@@ -448,7 +448,7 @@ export default function AdminCampaignsPage() {
                     <div className="min-w-0">
                       <p className="font-semibold text-white truncate">{s.campaign.title}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">
-                        by @{s.user.username} · {s.campaign.taskType.replace(/_/g, ' ')} · {formatCredits(s.campaign.creditPerTask)} cr · submitted {formatDate(s.submittedAt)}
+                        by @{s.user.username} · {s.campaign.taskType.replace(/_/g, ' ')} · {formatCredits(s.campaign.creditPerTask)} {creditLabel(s.campaign.creditPerTask)} · submitted {formatDate(s.submittedAt)}
                       </p>
                     </div>
                     <a href={s.proofUrl} target="_blank" rel="noopener noreferrer"

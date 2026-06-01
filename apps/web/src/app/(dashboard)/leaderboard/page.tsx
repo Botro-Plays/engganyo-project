@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
-import { formatCredits, getLevelProgress, getInitials } from '@/lib/utils';
+import { formatCredits, creditLabel, getLevelProgress, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
@@ -268,7 +268,7 @@ export default function LeaderboardPage() {
                     <p className="text-sm font-semibold text-white mb-0.5">{a.name}</p>
                     <p className="text-xs text-zinc-500 mb-2">{a.description}</p>
                     <div className="flex items-center gap-3 text-xs text-zinc-600">
-                      {a.creditReward > 0 && <span className="text-green-400">+{formatCredits(a.creditReward)} cr</span>}
+                      {a.creditReward > 0 && <span className="text-green-400">+{formatCredits(a.creditReward)} {creditLabel(a.creditReward)}</span>}
                       {a.xpReward > 0 && <span className="text-brand-400">+{a.xpReward} XP</span>}
                     </div>
                   </div>
@@ -303,7 +303,7 @@ export default function LeaderboardPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-zinc-500 shrink-0">
-                        {m.creditReward > 0 && <span className="text-green-400">+{formatCredits(m.creditReward)} cr</span>}
+                        {m.creditReward > 0 && <span className="text-green-400">+{formatCredits(m.creditReward)} {creditLabel(m.creditReward)}</span>}
                         {m.xpReward > 0 && <span className="text-brand-400">+{m.xpReward} XP</span>}
                       </div>
                     </div>

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
-import { formatCredits } from '@/lib/utils';
+import { formatCredits, creditLabel } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
 
@@ -511,7 +511,7 @@ export default function CampaignsPage() {
                   className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
                 >
                   {createMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Create & pay {formatCredits(totalCost)} cr
+                  Create & pay {formatCredits(totalCost)} {creditLabel(totalCost)}
                 </button>
               </div>
             </form>
@@ -628,7 +628,7 @@ export default function CampaignsPage() {
                   <div className="text-right shrink-0 text-xs text-zinc-500 space-y-0.5">
                     <p><span className="text-white font-medium">{c.completedSlots}</span>/{c.totalSlots} done</p>
                     <p>{available} available</p>
-                    <p className="text-brand-300 font-medium">{formatCredits(c.creditPerTask)} cr/task</p>
+                    <p className="text-brand-300 font-medium">{formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)}/task</p>
                   </div>
                 </div>
 
