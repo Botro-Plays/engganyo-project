@@ -1,6 +1,6 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-05-31 (Admin 2FA disable, pre-launch resetDatabase, system stats panel)
+> Last updated: 2026-06-01 (Admin 2FA enforcement + admin PIN gate)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
 > **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
 
@@ -657,7 +657,8 @@
 - [✅] TOTP 2FA (Google Authenticator / Authy) via `otplib` — `POST /auth/2fa/setup`, `POST /auth/2fa/verify`, `POST /auth/2fa/confirm`
 - [✅] Backup codes (8 single-use codes) — generated on TOTP enable, stored hashed in `TwoFactorBackupCode`
 - [✅] Admin 2FA disable support action — `DELETE /admin/users/:id/2fa` (SUPER_ADMIN can disable any user's 2FA, including co-SUPER_ADMIN, with audit logging)
-- [🔴] 2FA enforce option for admin accounts (login gate still needed)
+- [✅] 2FA enforce for admin accounts — `AdminTwoFactorGuard` blocks `/admin/*` for ADMIN/MODERATOR/SUPER_ADMIN without 2FA enabled
+- [✅] Admin Access PIN — optional extra gate for `/admin/*` routes, requires `x-admin-pin` header when `adminPinHash` is set
 - [🟡] Optional 2FA for all users (setup UI exists, not enforced)
 - [🟡] SMS 2FA fallback (Twilio)
 

@@ -1,6 +1,6 @@
 # ENGGANYO — Go-Live Checklist
 
-> **Living document** — updated after each session. Last updated: 2026-05-31.
+> **Living document** — updated after each session. Last updated: 2026-06-01.
 > This is the single source of truth for what needs to happen before the platform generates revenue.
 
 ---
@@ -12,7 +12,7 @@
 | **Platform** | ✅ Live at https://engganyo.com |
 | **Core Features** | ✅ Phases 1–10 complete |
 | **Revenue** | ❌ $0 — no platform fees, no payments, no withdrawals |
-| **Security** | 🟡 Partial — reCAPTCHA active, email verification ON, 2FA implemented (login enforcement pending) |
+| **Security** | 🟡 Partial — reCAPTCHA active, email verification ON, admin 2FA enforced, admin PIN implemented |
 
 ---
 
@@ -28,16 +28,17 @@ These are **non-negotiable**. Do not implement payments until these are done.
 - [x] **Why**: Prevents spam account creation and multi-accounting.
 - **Effort**: ✅ COMPLETED (config + templates + frontend + backend enforcement all done)
 
-### C2. Admin 2FA (TOTP)
+### C2. Admin 2FA (TOTP) ✅
 - [x] Add `otplib` to API dependencies (done in prior session)
 - [x] `POST /auth/2fa/setup` — generate secret, return QR code (done)
 - [x] `POST /auth/2fa/verify` — confirm token, enable 2FA (done)
 - [x] `DELETE /admin/users/:id/2fa` — SUPER_ADMIN can disable any user's 2FA as support action (audit logged)
-- [ ] Enforce 2FA on all admin/moderator login (`RolesGuard` + 2FA check)
+- [x] Enforce 2FA on all admin/moderator login (`AdminTwoFactorGuard` on `/admin/*` routes)
+- [x] Admin Access PIN — optional extra gate for `/admin/*` (set/change/remove at `/settings/security`)
 - [x] Generate 8 backup codes on TOTP enable (done)
 - [x] Frontend: QR code display, token input, backup codes download (done in user settings)
-- [ ] **Why**: Single password compromise = full platform takeover. Login enforcement is the remaining gap.
-- **Effort**: 1–2 days
+- [x] **Why**: Single password compromise = full platform takeover. 2FA + PIN = dual-layer admin protection.
+- **Effort**: ✅ COMPLETED
 
 ### C3. Add Platform Fees (15%)
 - [ ] Update `CreateCampaignDto` to include `feeAmount` (calculated server-side)
@@ -163,15 +164,16 @@ After revenue is flowing, improve scale and trust.
 | 2026-05-31 | Admin 2FA disable support action | ✅ DONE — `DELETE /admin/users/:id/2fa` with audit logging |
 | 2026-05-31 | Pre-launch database reset scope | ✅ DONE — `resetDatabase` now wipes forum/chat/activity, preserves only `admin`/`botro` + global config |
 | 2026-05-31 | Admin system stats observability | ✅ DONE — `GET /admin/system/stats` + DB/heap/uptime/upload panel on overview page |
+| 2026-06-01 | Admin 2FA login enforcement (C2) | ✅ DONE — `AdminTwoFactorGuard` blocks `/admin/*` for admin roles without 2FA |
+| 2026-06-01 | Admin Access PIN | ✅ DONE — optional extra password gate for `/admin/*`, managed at `/settings/security` |
 | | | |
 
 ---
 
 ## Next Session Priority
 
-**C1 is resolved. C2 is partially done. The remaining pre-revenue blocker is C2's login enforcement gate.**
+**C1 and C2 are resolved. The remaining pre-revenue blocker is C3.**
 
 Recommended order:
-1. **C2 remaining**: Enforce 2FA on admin/moderator login (`RolesGuard` + 2FA check)
-2. Then proceed to **C3**: Platform fees on campaign creation
-3. Then **revenue launch**
+1. **C3**: Platform fees on campaign creation
+2. Then **revenue launch**

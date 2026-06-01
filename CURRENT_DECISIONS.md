@@ -1239,6 +1239,50 @@
 
 ---
 
+## Authentication Decisions (2026-06-01)
+
+### ADR-013: Admin 2FA Route-Level Enforcement
+**Status**: Implemented
+**Date**: 2026-06-01
+**Context**: Admin accounts had 2FA available but not enforced; single password compromise = full platform takeover
+**Decision**: Enforce 2FA at the route level via `AdminTwoFactorGuard` on all `/admin/*` routes, not at login time
+**Rationale**:
+- Login-time enforcement would block admins from accessing settings to enable 2FA
+- Route-level enforcement allows admins to log in, set up 2FA in `/settings/security`, then access admin panel
+- Applies to all admin roles: ADMIN, MODERATOR, SUPER_ADMIN
+- Returns `403 ADMIN_2FA_REQUIRED` with redirect to `/settings/security` for setup
+**Tradeoffs**:
+- Admins can still use non-admin features without 2FA (acceptable — admin actions are the risk)
+- Regular users completely unaffected
+**Implementation**:
+- `AdminTwoFactorGuard` checks `twoFactorTotpSecret` OR `twoFactorEmailEnabled`
+- Applied alongside `JwtAuthGuard` and `RolesGuard` on `AdminController`
+- Frontend shows red banner on `/settings/security` when admin lacks 2FA
+
+### ADR-014: Admin Access PIN as Secondary Gate
+**Status**: Implemented
+**Date**: 2026-06-01
+**Context**: Even with 2FA, admin accounts represent a single point of compromise; wanted extra layer
+**Decision**: Optional per-user admin PIN (`adminPinHash` on User model) checked by `AdminPinGuard` on `/admin/*` routes
+**Rationale**:
+- 2FA prevents remote password attacks but doesn't protect against session hijacking or device compromise
+- Admin PIN is a "sudo" concept — even if attacker has active session, they need the PIN for admin actions
+- Optional by design — not all admin accounts need it, but sensitive ones should use it
+- PIN is verified via `x-admin-pin` header on every admin request (not session-based, no token expiry issues)
+**Tradeoffs**:
+- UX friction: admins with PIN must enter it on first admin page load (stored ephemeral in zustand store)
+- If PIN forgotten, admin must contact SUPER_ADMIN to have 2FA disabled, then reset PIN
+- Not persisted to localStorage — cleared on page refresh (intentional security choice)
+**Implementation**:
+- `POST /auth/admin-pin` — set/change PIN (requires 2FA code)
+- `DELETE /auth/admin-pin` — remove PIN (requires 2FA code)
+- `GET /auth/admin-pin/status` — check if PIN configured
+- `AdminPinGuard` checks `adminPinHash`; if set, verifies `x-admin-pin` header via argon2
+- Frontend: `AdminPinModal` listens for `admin:pin-required` event, stores PIN in zustand (not persisted)
+- Axios interceptor auto-attaches `x-admin-pin` header for `admin/*` routes when PIN is in store
+
+---
+
 ## DECISION RECORD MAINTENANCE
 
 This document should be updated when:
@@ -1257,7 +1301,7 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-05-31
+**Last Updated**: 2026-06-01
 **Next Review**: 2026-08-31 (quarterly)
 
 ---
