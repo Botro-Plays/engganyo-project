@@ -28,6 +28,9 @@ const CAMPAIGN_SELECT = {
   pendingSlots: true,
   creditPerTask: true,
   totalCost: true,
+  feeAmount: true,
+  feeRateAtCreate: true,
+  feeTier: true,
   status: true,
   rejectionReason: true,
   targetCountries: true,
@@ -58,9 +61,53 @@ export class CampaignsService {
 
   // ─── Create ────────────────────────────────────────────────
 
+  // ─── Fee calculation (config-driven) ─────────────────────
+
+  private async getFeeConfig() {
+    const [baseRateRow, promoEnabledRow, promoRateRow, promoUntilRow, minBudgetRow] =
+      await this.prisma.platformConfig.findMany({
+        where: {
+          key: {
+            in: ['fee_base_rate', 'fee_promo_enabled', 'fee_promo_rate', 'fee_promo_until', 'campaign_min_budget'],
+          },
+        },
+        select: { key: true, value: true },
+      });
+
+    const baseRate = typeof baseRateRow?.value === 'number' ? baseRateRow.value : 0.10;
+    const promoEnabled = promoEnabledRow?.value === true;
+    const promoRate = typeof promoRateRow?.value === 'number' ? promoRateRow.value : 0.05;
+    const promoUntil = typeof promoUntilRow?.value === 'string' ? promoUntilRow.value : '';
+    const minBudget = typeof minBudgetRow?.value === 'number' ? minBudgetRow.value : 100;
+
+    const now = new Date();
+    const isPromoActive =
+      promoEnabled && promoUntil && new Date(promoUntil) > now;
+
+    return {
+      rate: isPromoActive ? promoRate : baseRate,
+      minBudget,
+      isPromoActive,
+    };
+  }
+
+  private calculateFee(totalCost: number, rate: number) {
+    return Math.round(totalCost * rate);
+  }
+
   async create(userId: string, userRole: string, dto: CreateCampaignDto) {
     const totalCost = dto.totalSlots * dto.creditPerTask;
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
+    // Load fee config
+    const feeConfig = await this.getFeeConfig();
+    if (totalCost < feeConfig.minBudget) {
+      throw new BadRequestException(
+        `Campaign budget must be at least ${feeConfig.minBudget} credits (current: ${totalCost}).`,
+      );
+    }
+    const feeAmount = this.calculateFee(totalCost, feeConfig.rate);
+    const totalDebit = totalCost + feeAmount;
 
     // Check if the platform is enabled
     const platform = SocialAuthService.getPlatformForTaskType(dto.taskType as TaskType);
@@ -73,34 +120,48 @@ export class CampaignsService {
       }
     }
 
-    // Debit the full campaign cost upfront
-    await this.walletService.debit(userId, totalCost, {
+    // Debit pool + fee upfront
+    await this.walletService.debit(userId, totalDebit, {
       type: TransactionType.SPEND_CAMPAIGN_CREATE,
-      description: `Campaign: ${dto.title}`,
+      description: `Campaign: ${dto.title} (includes ${feeAmount} platform fee)`,
     });
 
-    const campaign = await this.prisma.campaign.create({
-      select: CAMPAIGN_SELECT,
-      data: {
-        userId,
-        title: dto.title,
-        description: dto.description,
-        taskType: dto.taskType,
-        targetUrl: dto.targetUrl,
-        totalSlots: dto.totalSlots,
-        creditPerTask: dto.creditPerTask,
-        totalCost,
-        targetCountries: dto.targetCountries ?? [],
-        targetLanguages: dto.targetLanguages ?? [],
-        cooldownHours: dto.cooldownHours ?? 24,
-        requiresProof: dto.requiresProof ?? true,
-        proofInstructions: dto.proofInstructions,
-        autoVerify: dto.autoVerify ?? OAUTH_PLATFORMS.has((dto.taskType as string).split('_')[0]),
-        // Auto-mark admin-created campaigns as platform tasks for discover
-        isPlatformTask: isAdmin,
-        // Auto-activate for Phase 5 (admin review added in Phase 8)
-        status: CampaignStatus.ACTIVE,
-      },
+    const campaign = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.campaign.create({
+        select: CAMPAIGN_SELECT,
+        data: {
+          userId,
+          title: dto.title,
+          description: dto.description,
+          taskType: dto.taskType,
+          targetUrl: dto.targetUrl,
+          totalSlots: dto.totalSlots,
+          creditPerTask: dto.creditPerTask,
+          totalCost,
+          feeAmount,
+          feeRateAtCreate: feeConfig.rate,
+          feeTier: 'STANDARD',
+          targetCountries: dto.targetCountries ?? [],
+          targetLanguages: dto.targetLanguages ?? [],
+          cooldownHours: dto.cooldownHours ?? 24,
+          requiresProof: dto.requiresProof ?? true,
+          proofInstructions: dto.proofInstructions,
+          autoVerify: dto.autoVerify ?? OAUTH_PLATFORMS.has((dto.taskType as string).split('_')[0]),
+          isPlatformTask: isAdmin,
+          status: CampaignStatus.ACTIVE,
+        },
+      });
+
+      await tx.platformRevenue.create({
+        data: {
+          date: new Date(),
+          source: 'CAMPAIGN_FEE',
+          amount: feeAmount,
+          campaignId: created.id,
+        },
+      });
+
+      return created;
     });
 
     return campaign;
@@ -339,7 +400,17 @@ export class CampaignsService {
       throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
     }
 
-    // Refund uncompleted and non-pending slots
+    // Block cancellation if any completions exist
+    const completionCount = await this.prisma.taskCompletion.count({
+      where: { campaignId },
+    });
+    if (completionCount > 0) {
+      throw new ForbiddenException(
+        'Cannot cancel a campaign that has active or completed tasks. Contact admin for assistance.',
+      );
+    }
+
+    // Refund uncompleted and non-pending slots (pool only, fee is kept)
     const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
     const refundAmount = refundableSlots * campaign.creditPerTask;
 

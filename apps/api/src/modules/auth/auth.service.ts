@@ -696,12 +696,25 @@ export class AuthService {
       where: { enabled: true },
       select: { platform: true },
     });
+
+    // Public fee config (isPublic=true keys from platform config)
+    const feeConfigs = await this.prisma.platformConfig.findMany({
+      where: { key: { in: ['fee_base_rate', 'fee_promo_enabled', 'fee_promo_rate', 'fee_promo_until', 'campaign_min_budget'] } },
+      select: { key: true, value: true },
+    });
+    const feeMap = new Map(feeConfigs.map((c) => [c.key, c.value]));
+
     return {
       recaptchaEnabled:   cfg.enabled,
       recaptchaVersion:    cfg.version,
       recaptchaV3SiteKey: cfg.v3SiteKey  || null,
       recaptchaV2SiteKey: cfg.v2SiteKey  || null,
       enabledPlatforms:   enabledPlatforms.map((p) => p.platform),
+      feeBaseRate:        typeof feeMap.get('fee_base_rate') === 'number' ? feeMap.get('fee_base_rate') : 0.10,
+      feePromoEnabled:    feeMap.get('fee_promo_enabled') === true,
+      feePromoRate:       typeof feeMap.get('fee_promo_rate') === 'number' ? feeMap.get('fee_promo_rate') : 0.05,
+      feePromoUntil:      typeof feeMap.get('fee_promo_until') === 'string' ? feeMap.get('fee_promo_until') : '',
+      campaignMinBudget:  typeof feeMap.get('campaign_min_budget') === 'number' ? feeMap.get('campaign_min_budget') : 100,
     };
   }
 

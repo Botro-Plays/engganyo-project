@@ -306,7 +306,7 @@ export class AdminService {
     return { message: 'Platform task cancelled successfully' };
   }
 
-  async cancelUserCampaign(adminId: string, campaignId: string) {
+  async cancelUserCampaign(adminId: string, campaignId: string, reason?: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
       select: {
@@ -318,6 +318,7 @@ export class AdminService {
         completedSlots: true,
         pendingSlots: true,
         creditPerTask: true,
+        feeAmount: true,
       },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
@@ -332,12 +333,11 @@ export class AdminService {
       throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
     }
 
-    // Calculate refund: only for unused slots (total - completed - pending)
+    // Calculate refund: only for unused pool slots (fee is retained by platform)
     const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
     const refundAmount = refundableSlots * campaign.creditPerTask;
 
     await this.prisma.$transaction(async (tx) => {
-      // Update campaign status
       await tx.campaign.update({
         where: { id: campaignId },
         data: {
@@ -346,7 +346,6 @@ export class AdminService {
         },
       });
 
-      // Refund campaign owner for unused slots
       if (refundAmount > 0) {
         await tx.user.update({
           where: { id: campaign.userId },
@@ -354,7 +353,6 @@ export class AdminService {
         });
       }
 
-      // Create audit log
       await tx.auditLog.create({
         data: {
           userId: adminId,
@@ -366,10 +364,13 @@ export class AdminService {
             status: campaign.status,
             refundableSlots,
             refundAmount,
+            feeRetained: campaign.feeAmount,
+            reason: reason || 'No reason provided',
           },
           newValue: {
             status: CampaignStatus.CANCELLED,
             refunded: refundAmount,
+            feeRetained: campaign.feeAmount,
           },
         },
       });
@@ -379,6 +380,57 @@ export class AdminService {
       message: 'Campaign cancelled successfully',
       refunded: refundAmount,
       refundableSlots,
+      feeRetained: campaign.feeAmount,
+      reason: reason || null,
+    };
+  }
+
+  // ─── Revenue ─────────────────────────────────────────────
+
+  async getRevenueSummary(from?: string, to?: string) {
+    const start = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = to ? new Date(to) : new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const rows = await this.prisma.platformRevenue.findMany({
+      where: {
+        date: { gte: start, lte: end },
+      },
+      orderBy: { date: 'desc' },
+      select: {
+        date: true,
+        source: true,
+        amount: true,
+        campaignId: true,
+      },
+    });
+
+    const daily = new Map<string, { date: string; total: number; campaignFees: number; other: number }>();
+    let grandTotal = 0;
+
+    for (const row of rows) {
+      const dateKey = row.date.toISOString().split('T')[0];
+      if (!daily.has(dateKey)) {
+        daily.set(dateKey, { date: dateKey, total: 0, campaignFees: 0, other: 0 });
+      }
+      const day = daily.get(dateKey)!;
+      day.total += row.amount;
+      grandTotal += row.amount;
+      if (row.source === 'CAMPAIGN_FEE') {
+        day.campaignFees += row.amount;
+      } else {
+        day.other += row.amount;
+      }
+    }
+
+    return {
+      summary: {
+        from: start.toISOString().split('T')[0],
+        to: end.toISOString().split('T')[0],
+        grandTotal,
+        recordCount: rows.length,
+      },
+      daily: Array.from(daily.values()).sort((a, b) => b.date.localeCompare(a.date)),
     };
   }
 
@@ -1247,6 +1299,12 @@ export class AdminService {
     trust_score_report_threshold:{ value: 10, description: 'Number of reports before full report penalty applies', isPublic: false },
     trust_score_task_bonus:      { value: 2,  description: 'Flat trust score bonus awarded per verified completed task', isPublic: false },
     leaderboard_include_admins:  { value: true, description: 'Include admin/moderator/super_admin users in public leaderboards', isPublic: false },
+    // ── Platform Fees (C3) ────────────────────────────────
+    fee_base_rate:               { value: 0.10, description: 'Base platform fee rate on campaign creation (0.10 = 10%)', isPublic: true },
+    fee_promo_enabled:           { value: false, description: 'Enable promotional fee discount event', isPublic: true },
+    fee_promo_rate:              { value: 0.05, description: 'Promotional fee rate when enabled (0.05 = 5%)', isPublic: true },
+    fee_promo_until:             { value: '', description: 'ISO 8601 end date for promotional fee (empty = no promo)', isPublic: true },
+    campaign_min_budget:         { value: 100, description: 'Minimum campaign budget (totalSlots * creditPerTask) in credits', isPublic: true },
   };
 
   async getServerConfig() {

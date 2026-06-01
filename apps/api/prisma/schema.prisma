@@ -46,6 +46,8 @@ enum TransactionType {
   SPEND_CAMPAIGN_BOOST
   SPEND_PREMIUM_FEATURE
   SPEND_ADMIN_DEDUCT
+  // Platform revenue
+  PLATFORM_FEE_CAMPAIGN
   // Neutral
   REFUND_CAMPAIGN_CANCEL
   REFUND_COMPLETION_REJECT
@@ -522,7 +524,12 @@ model Campaign {
   completedSlots Int @default(0) @map("completed_slots")
   pendingSlots   Int @default(0) @map("pending_slots")   // assigned but not verified
   creditPerTask  Int @map("credit_per_task") // credits paid to completer per task
-  totalCost      Int @map("total_cost")      // totalSlots * creditPerTask (pre-paid)
+  totalCost      Int @map("total_cost")      // totalSlots * creditPerTask (pre-paid pool)
+
+  // Platform fee (computed at creation, locked)
+  feeAmount       Int      @default(0) @map("fee_amount")
+  feeRateAtCreate Float    @default(0.10) @map("fee_rate_at_create")
+  feeTier         String   @default("STANDARD") @map("fee_tier") // SIMPLE | STANDARD | COMPLEX | CUSTOM
 
   status          CampaignStatus @default(DRAFT)
   rejectionReason String?        @map("rejection_reason")
@@ -555,6 +562,7 @@ model Campaign {
   reports     Report[]
   forumReplies ForumReply[] @relation("ForumCampaignReplies")
   forumTopics  ForumTopic[]  @relation("ForumCampaignTopics")
+  platformRevenue PlatformRevenue?
 
   @@index([userId])
   @@index([status])
@@ -562,6 +570,20 @@ model Campaign {
   @@index([createdAt])
   @@index([expiresAt])
   @@map("campaigns")
+}
+
+model PlatformRevenue {
+  id         String   @id @default(cuid())
+  date       DateTime @db.Date
+  source     String   // "CAMPAIGN_FEE" | "CREDIT_PURCHASE" | "WITHDRAWAL_FEE"
+  amount     Int
+  campaignId String?  @unique @map("campaign_id")
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([date])
+  @@index([source])
+  @@map("platform_revenue")
 }
 
 model TaskCompletion {

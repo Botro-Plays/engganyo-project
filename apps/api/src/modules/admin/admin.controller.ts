@@ -182,13 +182,27 @@ export class AdminController {
 
   @Delete('campaigns/:id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel a user campaign with refund' })
+  @ApiOperation({ summary: 'Cancel a user campaign with refund (fee retained)' })
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   cancelUserCampaign(
     @CurrentUser() admin: JwtPayload,
     @Param('id') id: string,
+    @Body() body: { reason?: string },
   ) {
-    return this.adminService.cancelUserCampaign(admin.sub, id);
+    return this.adminService.cancelUserCampaign(admin.sub, id, body.reason);
+  }
+
+  // ─── Revenue ─────────────────────────────────────────────
+
+  @Get('revenue')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Platform revenue summary by date range' })
+  @Roles(UserRole.SUPER_ADMIN)
+  getRevenue(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.adminService.getRevenueSummary(from, to);
   }
 
   // ─── Proof Submissions ───────────────────────────────────

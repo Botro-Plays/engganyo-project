@@ -78,6 +78,7 @@ interface Campaign {
   pendingSlots: number;
   creditPerTask: number;
   totalCost: number;
+  feeAmount: number;
   status: string;
   requiresProof: boolean;
   autoVerify: boolean;
@@ -160,6 +161,11 @@ export default function CampaignsPage() {
         recaptchaV3SiteKey: string | null;
         recaptchaV2SiteKey: string | null;
         enabledPlatforms: string[];
+        feeBaseRate: number;
+        feePromoEnabled: boolean;
+        feePromoRate: number;
+        feePromoUntil: string;
+        campaignMinBudget: number;
       }>>('auth/public-config');
       return res.data.data;
     },
@@ -190,7 +196,19 @@ export default function CampaignsPage() {
 
   const watchedTaskType = form.watch('taskType');
   const watchedAutoVerify = form.watch('autoVerify');
-  const totalCost = (form.watch('totalSlots') || 0) * (form.watch('creditPerTask') || 0);
+  const totalSlots = form.watch('totalSlots') || 0;
+  const creditPerTask = form.watch('creditPerTask') || 0;
+  const totalCost = totalSlots * creditPerTask;
+
+  // Fee calculation
+  const feeRate = publicConfig?.feePromoEnabled && publicConfig.feePromoUntil
+    ? new Date(publicConfig.feePromoUntil) > new Date()
+      ? publicConfig.feePromoRate
+      : publicConfig.feeBaseRate
+    : publicConfig?.feeBaseRate ?? 0.10;
+  const feeAmount = Math.round(totalCost * feeRate);
+  const totalDebit = totalCost + feeAmount;
+  const minBudget = publicConfig?.campaignMinBudget ?? 100;
 
   // Auto-set autoVerify when task type changes
   useEffect(() => {
@@ -371,10 +389,28 @@ export default function CampaignsPage() {
                 </div>
               </div>
 
-              {/* Cost preview */}
-              <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-surface-hover border border-surface-border">
-                <span className="text-xs text-zinc-500">Total campaign cost</span>
-                <span className="text-sm font-semibold text-brand-300">{formatCredits(totalCost)} credits</span>
+              {/* Cost breakdown */}
+              <div className="px-4 py-3 rounded-lg bg-surface-hover border border-surface-border space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500">Campaign budget (pool)</span>
+                  <span className="text-sm font-medium text-zinc-300">{formatCredits(totalCost)} {creditLabel(totalCost)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500">
+                    Platform fee ({Math.round(feeRate * 100)}%)
+                    {publicConfig?.feePromoEnabled && new Date(publicConfig.feePromoUntil) > new Date() && (
+                      <span className="ml-1 text-[10px] text-green-400">PROMO</span>
+                    )}
+                  </span>
+                  <span className="text-sm font-medium text-zinc-300">{formatCredits(feeAmount)} {creditLabel(feeAmount)}</span>
+                </div>
+                <div className="border-t border-surface-border pt-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-white">Total to deduct</span>
+                  <span className="text-sm font-bold text-brand-300">{formatCredits(totalDebit)} {creditLabel(totalDebit)}</span>
+                </div>
+                {totalCost > 0 && totalCost < minBudget && (
+                  <p className="text-xs text-red-400">Minimum budget is {minBudget} credits.</p>
+                )}
               </div>
 
               <div>
@@ -507,11 +543,11 @@ export default function CampaignsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || (totalCost > 0 && totalCost < minBudget)}
                   className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
                 >
                   {createMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Create & pay {formatCredits(totalCost)} {creditLabel(totalCost)}
+                  Create & pay {formatCredits(totalDebit)} {creditLabel(totalDebit)}
                 </button>
               </div>
             </form>
@@ -629,6 +665,9 @@ export default function CampaignsPage() {
                     <p><span className="text-white font-medium">{c.completedSlots}</span>/{c.totalSlots} done</p>
                     <p>{available} available</p>
                     <p className="text-brand-300 font-medium">{formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)}/task</p>
+                    {c.feeAmount > 0 && (
+                      <p className="text-zinc-600">Fee: {formatCredits(c.feeAmount)} {creditLabel(c.feeAmount)}</p>
+                    )}
                   </div>
                 </div>
 
