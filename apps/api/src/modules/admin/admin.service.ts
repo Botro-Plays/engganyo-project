@@ -808,15 +808,24 @@ export class AdminService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  async deleteNotification(id: string) {
+  async deleteNotification(adminId: string, id: string) {
     const notification = await this.prisma.notification.findUnique({
       where: { id },
-      select: { userId: true },
+      select: { userId: true, type: true },
     });
     if (notification) {
       this.eventsService.emitToUser(notification.userId, 'notification:deleted', { id });
     }
     await this.prisma.notification.delete({ where: { id } });
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'notification.deleted',
+        entityType: 'Notification',
+        entityId: id,
+        metadata: notification ? { type: notification.type, affectedUserId: notification.userId } : {}
+      },
+    });
     return { success: true };
   }
 

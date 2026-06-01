@@ -278,8 +278,11 @@ export class AdminController {
   @Delete('notifications/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a notification (admin)' })
-  adminDeleteNotification(@Param('id') id: string) {
-    return this.adminService.deleteNotification(id);
+  adminDeleteNotification(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.deleteNotification(admin.sub, id);
   }
 
   @Delete('notifications')
