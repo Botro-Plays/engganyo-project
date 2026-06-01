@@ -36,7 +36,7 @@ function canAccessAdmin(user: AuthUser | null): boolean {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, setAdminPin } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -115,6 +115,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
           <Link
             href="/dashboard"
+            onClick={() => setAdminPin(null)}
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
           >
             <Zap className="w-4 h-4" />
@@ -217,7 +218,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               )}
               <Link
                 href="/dashboard"
-                onClick={() => setMobileOpen(false)}
+                onClick={() => { setMobileOpen(false); setAdminPin(null); }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
               >
                 <Zap className="w-4 h-4" />
