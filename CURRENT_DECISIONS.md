@@ -549,8 +549,8 @@
 - Decorator-based implementation (@UserRateLimit)
 
 ### ABR-005: reCAPTCHA v3 Integration
-**Status**: Partially Implemented (Phase 0) - NOT FUNCTIONING IN PRODUCTION
-**Date**: 2026-05-19
+**Status**: Implemented (Phase 0) - FUNCTIONING IN PRODUCTION
+**Date**: 2026-05-19 (Fixed 2026-05-31)
 **Context**: Bot protection on registration
 **Decision**: Integrate Google reCAPTCHA v3 with conditional feature flag
 **Rationale**:
@@ -559,22 +559,21 @@
 - Improve platform trust
 - Industry-standard protection
 **Implementation**:
-- Frontend: react-google-recaptcha-v3 package
-- Backend: Token validation via Google API
-- Feature flag: ENABLE_RECAPTCHA (disabled by default for dev/test)
-- Optional recaptchaToken in RegisterDto
+- Frontend: react-google-recaptcha-v3 package with `GoogleReCaptchaProvider` mounted in `(auth)/layout.tsx`
+- Backend: Token validation via Google API in `AuthService.register()`
+- Feature flag: `ENABLE_RECAPTCHA` (disabled by default for dev/test)
+- `recaptchaToken` in `RegisterDto` and `LoginDto`
 - Disposable email detection added
+- Admin panel v2/v3 switch with cache invalidation
 **Current Status**:
-- Code implemented and deployed
-- Token generation NOT working in production
-- No requests to Google reCAPTCHA API visible
-- Possible causes: Brave shields, Cloudflare, provider configuration
-- **Requires investigation and debugging**
-**Known Issues**:
-- executeRecaptcha hook may not be available
-- GoogleReCaptchaProvider may not be loading script
-- Site key configuration issues
-- Browser blocking (Brave shields, Cloudflare)
+- ✅ Token generation working in production (root cause was provider not mounted in auth layout)
+- ✅ Register and login fully protected
+- 🟡 `/forgot-password` page not yet implemented (no reCAPTCHA there yet)
+**Known Issues (RESOLVED)**:
+- ~~executeRecaptcha hook not available~~ — fixed by mounting provider in layout
+- ~~GoogleReCaptchaProvider not loading script~~ — fixed by ensuring provider wraps auth pages
+- ~~Site key configuration issues~~ — resolved via `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`
+- ~~Browser blocking~~ — confirmed working on Brave with shields up
 
 ---
 
@@ -622,10 +621,10 @@
 - Not supported by all systems
 
 ### AUR-003: 2FA Strategy
-**Status**: Planned (Phase 14)
-**Date**: 2026-05-19
+**Status**: Implemented (2026-06-01)
+**Date**: 2026-05-19 (Completed 2026-06-01)
 **Context**: Two-factor authentication
-**Decision**: TOTP 2FA for admin accounts (optional for users)
+**Decision**: TOTP 2FA for admin accounts (optional for users) + Admin Access PIN gate
 **Rationale**:
 - Critical security for admin accounts
 - Industry standard for admin access
@@ -635,10 +634,13 @@
 - Recovery complexity
 - Need for backup codes
 **Implementation**:
-- Use `otplib` for TOTP generation
+- `otplib` for TOTP generation; `qrcode` for QR code display
 - Google Authenticator / Authy compatible
-- 8 single-use backup codes
-- 2FA enforcement for admin accounts
+- 8 single-use backup codes, stored hashed in `TwoFactorBackupCode`
+- `POST /auth/2fa/setup`, `POST /auth/2fa/verify`, `POST /auth/2fa/confirm`
+- `AdminTwoFactorGuard` blocks `/admin/*` for ADMIN/MODERATOR/SUPER_ADMIN without 2FA enabled
+- `DELETE /admin/users/:id/2fa` — SUPER_ADMIN support action with audit logging
+- Admin Access PIN — optional `x-admin-pin` header gate, managed at `/settings/security`
 
 ---
 
@@ -730,11 +732,11 @@
 ## TEMPORARY COMPROMISES
 
 ### TMP-001: Email Verification Disabled
-**Status**: Partially Addressed (Feature-Flagged)
-**Compromise**: Disabled for development convenience, now feature-flagged
-**Impact**: Spam accounts, multi-accounting, lower trust (mitigated by rate limiting and reCAPTCHA attempt)
-**Resolution**: Enable by default in production immediately
-**Timeline**: Week 1 (CRITICAL)
+**Status**: Resolved (2026-05-31)
+**Compromise**: Previously disabled for development convenience
+**Impact**: Spam accounts, multi-accounting, lower trust
+**Resolution**: `ENABLE_EMAIL_VERIFICATION=true` in production; login blocks PENDING_VERIFICATION users; branded HTML templates; resend with cooldown
+**Timeline**: Completed 2026-05-31
 
 ### TMP-002: Seed Functions Commented Out
 **Status**: Low Priority
@@ -1425,3 +1427,53 @@ This document should be updated when:
 - **Reason**: Express `useStaticAssets` short-circuits the middleware chain when a file matches; JWT check registered after it would never fire, making uploads publicly accessible without authentication
 - **Impact**: This was a real security bug — any user knowing a file path could access proof uploads without a valid token
 - **Also**: Changed `Cache-Control` from `public` to `private` (correct for auth-gated content)
+
+---
+
+## Gamification Refactor (2026-06-01)
+
+### GAM-001: Decouple Achievements and Missions from Leaderboard
+**Status**: Implemented
+**Date**: 2026-06-01
+**Context**: `/leaderboard` was mixing personal user stats (achievements, missions) with public rankings
+**Decision**: Create dedicated routes `/achievements` and `/missions`; refactor `/leaderboard` to show public rankings only with clearer tab hierarchy
+**Rationale**:
+- Achievements/missions are user-specific data, not public competitive rankings
+- Leaderboard should be strictly for comparing players
+- Separate pages allow richer personal views without cluttering rankings
+**Implementation**:
+- New `/dashboard/achievements/page.tsx` — gallery grid of all achievements with unlock status
+- New `/dashboard/missions/page.tsx` — daily missions with progress bars
+- `/leaderboard` refactored to two-tier tabs: `Level` → `All Time` / `This Week` (by XP), plus `Achievements` and `Missions` as ranking categories
+- New API endpoints: `GET /gamification/leaderboard/achievements`, `GET /gamification/leaderboard/missions`
+- Added `leaderboard_include_admins` toggle in `/admin/server-config`
+**Tradeoffs**:
+- More navigation items in sidebar
+- Users need one more click to see personal achievements from dashboard
+
+### GAM-002: Admin Inclusion Toggle for Public Rankings
+**Status**: Implemented
+**Date**: 2026-06-01
+**Context**: Admin/super-admin accounts (like `botro`) were dominating leaderboards with artificially high stats
+**Decision**: Add `leaderboard_include_admins` platform config key; when false, exclude ADMIN/MODERATOR/SUPER_ADMIN from all leaderboard queries
+**Rationale**:
+- Fair public rankings for real users
+- Admin accounts exist for testing, not competition
+- Configurable per environment
+**Implementation**:
+- `getLeaderboardRoleFilter()` helper in `GamificationService` filters by `role: { notIn: [ADMIN, SUPER_ADMIN, MODERATOR] }` when config is false
+- Applies to XP leaderboard, achievement leaderboard, and mission leaderboard
+- Toggle exposed in `/admin/server-config` UI
+
+### ADM-003: Reset Database Clears Gamification State for Retained Accounts
+**Status**: Implemented
+**Date**: 2026-06-01
+**Context**: "Danger Zone" database reset preserved `admin`/`botro` accounts but left stale `UserAchievement` and `UserMissionProgress` records
+**Decision**: Explicitly delete `UserAchievement` and `UserMissionProgress` for kept accounts during reset transaction
+**Rationale**:
+- Retained admin accounts should be truly clean after reset
+- XP, level, streak, and credits were already reset; achievements/missions were the missing piece
+**Implementation**:
+- `await tx.userAchievement.deleteMany({ where: { userId: { in: keptIds } } })`
+- `await tx.userMissionProgress.deleteMany({ where: { userId: { in: keptIds } } })`
+- Runs inside the same Prisma transaction before resetting user stats and wallet

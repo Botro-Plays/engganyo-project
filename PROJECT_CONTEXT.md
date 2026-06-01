@@ -51,6 +51,8 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
   - `email.templates.ts` with responsive table-based layout, inline CSS, preview text
   - BullMQ queue delivery via `email.processor.ts`
   - Templates match Engganyo UI aesthetic (`#0d1117` bg, gradient accent bars)
+- **Admin 2FA + PIN**: Implemented and enforced (2026-06-01) — TOTP via `otplib`, 8 backup codes, `AdminTwoFactorGuard` blocks `/admin/*` without 2FA, optional Access PIN gate
+- **Gamification Refactor**: Implemented (2026-06-01) — `/achievements` and `/missions` decoupled from `/leaderboard`; leaderboard now shows public rankings only with two-tier tabs (`Level` → `All Time`/`This Week`, `Achievements`, `Missions`); admin inclusion toggle for rankings
 - **Deployment**: Fully automated CI/CD via GitHub Actions → GHCR → VPS SSH
   - Zero-downtime rolling update (no `docker compose down`)
   - Post-deploy health check verification
@@ -690,5 +692,5 @@ This document should be updated when:
 - Risk factors change
 - Success metrics change
 
-**Last Updated**: 2026-05-31
+**Last Updated**: 2026-06-01
 **Next Review**: 2026-08-31 (quarterly)

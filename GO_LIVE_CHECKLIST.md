@@ -166,6 +166,10 @@ After revenue is flowing, improve scale and trust.
 | 2026-05-31 | Admin system stats observability | ✅ DONE — `GET /admin/system/stats` + DB/heap/uptime/upload panel on overview page |
 | 2026-06-01 | Admin 2FA login enforcement (C2) | ✅ DONE — `AdminTwoFactorGuard` blocks `/admin/*` for admin roles without 2FA |
 | 2026-06-01 | Admin Access PIN | ✅ DONE — optional extra password gate for `/admin/*`, managed at `/settings/security` |
+| 2026-06-01 | Leaderboard tab clarity | ✅ DONE — two-tier tabs: `Level` → `All Time`/`This Week`, `Achievements`, `Missions` |
+| 2026-06-01 | Decouple achievements/missions from leaderboard | ✅ DONE — new `/achievements` and `/missions` routes; `/leaderboard` is public rankings only |
+| 2026-06-01 | Admin inclusion toggle for leaderboards | ✅ DONE — `leaderboard_include_admins` config in `/admin/server-config` |
+| 2026-06-01 | Reset DB clears gamification state | ✅ DONE — `resetDatabase` now wipes `UserAchievement` and `UserMissionProgress` for kept `admin`/`botro` accounts |
 | | | |
 
 ---

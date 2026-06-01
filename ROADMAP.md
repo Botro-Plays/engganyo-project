@@ -21,15 +21,15 @@
 
 ---
 
-## Phase 0 — Critical Security & Infrastructure 🔴
+## Phase 0 — Critical Security & Infrastructure ✅
 
-> **IMMEDIATE ACTION REQUIRED** — These items block production safety and must be completed within 1 week
+> **LARGELY COMPLETE** — The critical pre-production security blockers have been resolved. Remaining items are enhancements, not blockers.
 
-### Security (CRITICAL)
-- [🔴] Enable email verification by default in production (`ENABLE_EMAIL_VERIFICATION=true`)
-  - **Impact**: Currently disabled, allows spam account creation
-  - **Risk**: HIGH - multi-accounting, spam, abuse
-  - **Timeline**: Week 1, Day 1
+### Security (CRITICAL) — RESOLVED
+- [✅] Enable email verification by default in production (`ENABLE_EMAIL_VERIFICATION=true`)
+  - **Impact**: Enforced at login; unverified users redirected to `/check-email` with resend option
+  - **Risk**: MITIGATED — spam/multi-accounting significantly reduced
+  - **Timeline**: Completed 2026-05-31
   - **Effort**: 2-3 hours (config change + testing)
 - [✅] Add rate limiting to password reset and email verification endpoints
   - **Impact**: Rate limiting implemented on register, forgot-password, verify-email
@@ -41,11 +41,11 @@
   - **Risk**: MITIGATED
   - **Status**: register + login fully working; forgot-password pending (page not implemented yet)
   - **Effort**: 4-6 hours (Google reCAPTCHA integration) + 2-4 hours (debugging)
-- [🔴] Add 2FA for admin accounts (TOTP via otplib)
-  - **Impact**: Admin accounts have no 2FA, single password compromise = full platform compromise
-  - **Risk**: CRITICAL - admin account takeover
-  - **Timeline**: Week 1, Day 4-5
-  - **Effort**: 8-12 hours (2FA implementation, backup codes)
+- [✅] Add 2FA for admin accounts (TOTP via otplib)
+  - **Impact**: Admin accounts protected with TOTP + 8 backup codes + optional Access PIN
+  - **Risk**: MITIGATED - `AdminTwoFactorGuard` blocks `/admin/*` for admin roles without 2FA
+  - **Timeline**: Completed 2026-06-01
+  - **Effort**: 8-12 hours (2FA implementation, backup codes, enforcement, PIN gate)
 
 ### Performance (HIGH)
 - [🟠] Move trust score recalculation to BullMQ queue
@@ -237,11 +237,19 @@
 - [x] Weekly leaderboard via XpEvent groupBy (last 7 days)
 - [x] XP hooked into TasksService on every verified completion (+50 XP/task)
 
-**Frontend (`/dashboard/leaderboard` → renamed Gamification)**
+**Frontend (`/dashboard/leaderboard`)**
 - [x] Stats row: level + XP progress bar, total XP, streak, daily reward claim button
-- [x] Leaderboard tab: all-time / weekly toggle, rank rows with trophy icons, highlights self
-- [x] Achievements tab: gallery grid, category colour badges, locked/unlocked state
-- [x] Missions tab: daily missions with progress bars, auto-reward feedback
+- [x] Two-tier tab design: `Level` → `All Time` / `This Week` (by XP); `Achievements` (by count); `Missions` (by count)
+- [x] Rank rows with trophy icons, highlights self
+- [x] Admin inclusion toggle in `/admin/server-config` (`leaderboard_include_admins`)
+
+**Frontend (`/dashboard/achievements`) — decoupled 2026-06-01**
+- [x] Gallery grid, category colour badges, locked/unlocked state
+- [x] Dedicated route separate from leaderboard
+
+**Frontend (`/dashboard/missions`) — decoupled 2026-06-01**
+- [x] Daily missions with progress bars, auto-reward feedback
+- [x] Dedicated route separate from leaderboard
 
 ---
 
@@ -628,11 +636,11 @@
 
 ---
 
-## Phase 14 — Security & Trust Hardening ⏳
+## Phase 14 — Security & Trust Hardening 🟡
 
 > reCAPTCHA, 2FA, and email confirmation flows
 
-**Priority**: 🔴 CRITICAL - Security vulnerabilities (partially addressed in Phase 0)
+**Priority**: � MOSTLY COMPLETE - Core security hardening (reCAPTCHA, email verification, admin 2FA + PIN) is live. Remaining items are user-facing enhancements, not critical blockers.
 **Dependencies**: Phase 0 (Critical Security)
 
 **reCAPTCHA**
@@ -799,7 +807,7 @@
 
 | Phase | Name | Status | Priority |
 |-------|------|--------|----------|
-| 0 | Critical Security & Infrastructure | 🔴 CRITICAL | 🔴 CRITICAL |
+| 0 | Critical Security & Infrastructure | ✅ Complete | - |
 | 1 | Architecture & Infrastructure | ✅ Complete | - |
 | 2 | Authentication System | ✅ Complete | - |
 | 3 | User Profile System | ✅ Complete | - |
@@ -813,9 +821,9 @@
 | 11 | Social Verification Engine | 🟠 Partially Implemented | 🟠 HIGH |
 | 11.5 | Anti-Abuse Enhancements | ⏳ Pending | 🟠 HIGH |
 | 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
-| 12.5 | UX & Onboarding Improvements | ⏳ Pending | 🟡 MEDIUM |
+| 12.5 | UX & Onboarding Improvements | 🟠 Partially Done | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
-| 14 | Security & Trust Hardening | ⏳ Pending | 🔴 CRITICAL |
+| 14 | Security & Trust Hardening | 🟡 Mostly Complete | � MEDIUM |
 | 15 | Payments & Monetisation | ⏳ Pending | 🟠 HIGH |
 | 16 | Scalability Improvements | ⏳ Pending | 🟠 HIGH |
 | 17 | Developer Experience Improvements | ⏳ Pending | 🟡 MEDIUM |
@@ -824,26 +832,24 @@
 
 ## Immediate Action Items (Next 7 Days)
 
-### Week 1 - Day 1 (Today)
-- [🔴] Enable email verification by default in production
-- [🟡] Re-enable achievement and mission seed functions
+### Priority 1 — Revenue Blocker (C3)
+- [🔴] **Platform fees on campaign creation** — 15% fee deducted on campaign create, displayed in cost breakdown modal
+- [�] **Revenue tracking model** — `RevenueSnapshot` Prisma model + admin dashboard
 
-### Week 1 - Day 2
-- [✅] Add rate limiting to password reset and email verification endpoints — DONE
+### Priority 2 — Performance
 - [🟠] Move trust score recalculation to BullMQ queue
 - [🟠] Move analytics snapshot generation to BullMQ queue
+- [🟠] Implement Redis caching strategy (user profiles 1h, campaigns 5m, leaderboard 15m)
 
-### Week 1 - Day 3
-- [✅] Add reCAPTCHA v3 on registration and login — DONE; forgot-password pending
+### Priority 3 — UX Polish
+- [�] Re-enable achievement and mission seed functions (currently commented out)
+- [🟡] Campaign creation live cost preview (fee breakdown UI)
+- [�] Onboarding walkthrough for new users
 
-### Week 1 - Day 4-5
-- [🔴] Add 2FA for admin accounts (TOTP via otplib)
-
-### Week 1 - Day 5-6
-- [🟠] Implement Redis caching strategy
-
-### Week 1 - Day 7
-- [✅] Add database backup strategy documentation — DONE (DEPLOYMENT.md)
+### Priority 4 — Verification Expansion
+- [🟠] Twitter/X OAuth + API verification
+- [🟠] TikTok OAuth + API verification
+- [🟠] Instagram OAuth + API verification
 
 ---
 
@@ -851,8 +857,8 @@
 
 | Risk | Impact | Probability | Mitigation | Status |
 |------|--------|-------------|------------|--------|
-| Email verification disabled | HIGH | HIGH | Enable immediately | 🔴 CRITICAL |
-| No 2FA for admin accounts | CRITICAL | MEDIUM | Implement TOTP 2FA | 🔴 CRITICAL |
+| Email verification disabled | HIGH | HIGH | Enabled in production, login blocks PENDING_VERIFICATION | ✅ MITIGATED |
+| No 2FA for admin accounts | CRITICAL | MEDIUM | TOTP + backup codes + enforcement + Access PIN live | ✅ MITIGATED |
 | No rate limiting on sensitive endpoints | HIGH | HIGH | Add @UserRateLimit decorators | ✅ MITIGATED |
 | No CAPTCHA on registration | HIGH | HIGH | reCAPTCHA v2/v3 switch with admin panel + cache invalidation | ✅ MITIGATED |
 | Synchronous trust score calculation | MEDIUM | HIGH | Move to BullMQ queue | 🟠 HIGH |
