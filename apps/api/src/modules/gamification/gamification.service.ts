@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, Logger, BadRequestException } from '@nestjs/common';
-import { AchievementCategory, MissionType, TransactionType } from '@prisma/client';
+import { AchievementCategory, MissionType, TransactionType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -210,14 +210,27 @@ export class GamificationService implements OnModuleInit {
     });
   }
 
+  // ─── Config helper ─────────────────────────────────────────
+
+  private async getLeaderboardRoleFilter() {
+    const config = await this.prisma.platformConfig.findUnique({
+      where: { key: 'leaderboard_include_admins' },
+      select: { value: true },
+    });
+    const includeAdmins = (config?.value as boolean | undefined) ?? true;
+    if (includeAdmins) return undefined;
+    return { role: { notIn: [UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN] } };
+  }
+
   // ─── Leaderboard ───────────────────────────────────────────
 
   async getLeaderboard(type: 'alltime' | 'weekly', page = 1, limit = 50) {
     const skip = (page - 1) * limit;
+    const roleFilter = await this.getLeaderboardRoleFilter();
 
     if (type === 'alltime') {
       const users = await this.prisma.user.findMany({
-        where: { status: 'ACTIVE' },
+        where: { status: 'ACTIVE', ...(roleFilter ?? {}) },
         orderBy: { xp: 'desc' },
         skip,
         take: limit,
@@ -240,9 +253,9 @@ export class GamificationService implements OnModuleInit {
 
     const weekly = await this.prisma.xpEvent.groupBy({
       by: ['userId'],
-      where: { 
+      where: {
         createdAt: { gte: since },
-        source: { not: 'daily_login' }, // Exclude daily claim rewards from leaderboard
+        source: { not: 'daily_login' },
       },
       _sum: { amount: true },
       orderBy: { _sum: { amount: 'desc' } },
@@ -254,16 +267,82 @@ export class GamificationService implements OnModuleInit {
 
     const userIds = weekly.map((w) => w.userId);
     const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: userIds },
+        status: 'ACTIVE',
+        ...(roleFilter ?? {}),
+      },
+      select: { id: true, username: true, displayName: true, avatarUrl: true, level: true, currentStreak: true },
+    });
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return weekly
+      .filter((w) => userMap.has(w.userId))
+      .map((w, i) => ({
+        rank: skip + i + 1,
+        weeklyXp: w._sum?.amount ?? 0,
+        ...userMap.get(w.userId),
+      }));
+  }
+
+  async getAchievementLeaderboard(page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+    const roleFilter = await this.getLeaderboardRoleFilter();
+
+    const agg = await this.prisma.userAchievement.groupBy({
+      by: ['userId'],
+      where: { user: { status: 'ACTIVE', ...(roleFilter ?? {}) } },
+      _count: { achievementId: true },
+      orderBy: { _count: { achievementId: 'desc' } },
+      skip,
+      take: limit,
+    });
+
+    if (!agg.length) return [];
+
+    const userIds = agg.map((a) => a.userId);
+    const users = await this.prisma.user.findMany({
       where: { id: { in: userIds } },
       select: { id: true, username: true, displayName: true, avatarUrl: true, level: true, currentStreak: true },
     });
 
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    return weekly.map((w, i) => ({
+    return agg.map((a, i) => ({
       rank: skip + i + 1,
-      weeklyXp: w._sum.amount ?? 0,
-      ...userMap.get(w.userId),
+      achievementCount: a._count?.achievementId ?? 0,
+      ...userMap.get(a.userId),
+    }));
+  }
+
+  async getMissionLeaderboard(page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+    const roleFilter = await this.getLeaderboardRoleFilter();
+
+    const agg = await this.prisma.userMissionProgress.groupBy({
+      by: ['userId'],
+      where: { isCompleted: true, user: { status: 'ACTIVE', ...(roleFilter ?? {}) } },
+      _count: { missionId: true },
+      orderBy: { _count: { missionId: 'desc' } },
+      skip,
+      take: limit,
+    });
+
+    if (!agg.length) return [];
+
+    const userIds = agg.map((a) => a.userId);
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, displayName: true, avatarUrl: true, level: true, currentStreak: true },
+    });
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return agg.map((a, i) => ({
+      rank: skip + i + 1,
+      missionCount: a._count?.missionId ?? 0,
+      ...userMap.get(a.userId),
     }));
   }
 

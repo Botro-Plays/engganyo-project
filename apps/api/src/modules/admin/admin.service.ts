@@ -1246,6 +1246,7 @@ export class AdminService {
     trust_score_report_max:      { value: 10, description: 'Maximum trust score penalty from received reports', isPublic: false },
     trust_score_report_threshold:{ value: 10, description: 'Number of reports before full report penalty applies', isPublic: false },
     trust_score_task_bonus:      { value: 2,  description: 'Flat trust score bonus awarded per verified completed task', isPublic: false },
+    leaderboard_include_admins:  { value: true, description: 'Include admin/moderator/super_admin users in public leaderboards', isPublic: false },
   };
 
   async getServerConfig() {

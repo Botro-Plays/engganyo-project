@@ -110,6 +110,7 @@ const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 
   trust_score_report_max:      { label: 'Report Penalty Max',      type: 'number',   section: 'General' },
   trust_score_report_threshold:{ label: 'Report Threshold',        type: 'number',   section: 'General' },
   trust_score_task_bonus:      { label: 'Trust Score Task Bonus',  type: 'number',   section: 'General' },
+  leaderboard_include_admins:  { label: 'Include Admins in Leaderboards', type: 'boolean',  section: 'General' },
 };
 
 const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA', 'AI Chat', 'General'];

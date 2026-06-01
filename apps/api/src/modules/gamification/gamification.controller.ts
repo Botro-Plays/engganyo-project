@@ -56,6 +56,22 @@ export class GamificationController {
     return this.gamificationService.getLeaderboard(type, Number(page), 50);
   }
 
+  @Get('leaderboard/achievements')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get public leaderboard by achievements unlocked' })
+  @ApiQuery({ name: 'page', type: Number, required: false })
+  getAchievementLeaderboard(@Query('page') page = 1) {
+    return this.gamificationService.getAchievementLeaderboard(Number(page), 50);
+  }
+
+  @Get('leaderboard/missions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get public leaderboard by missions completed' })
+  @ApiQuery({ name: 'page', type: Number, required: false })
+  getMissionLeaderboard(@Query('page') page = 1) {
+    return this.gamificationService.getMissionLeaderboard(Number(page), 50);
+  }
+
   // ─── Admin: Achievements ─────────────────────────────────
 
   @Get('admin/achievements')
