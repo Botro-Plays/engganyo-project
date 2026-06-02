@@ -37,7 +37,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - **Revenue**: Platform fees live — 10% base fee deducted on campaign creation, tracked via `PlatformRevenue` model, admin revenue dashboard at `/admin/revenue`
 - **Credit System**: Internal-only, no fiat/crypto conversion yet (Stripe integration pending)
 - **Platform Fees**: Implemented (2026-06-01) — 10% base, config-driven (`fee_base_rate`, `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`, `campaign_min_budget`)
-- **Withdrawals**: Not available
+- **Withdrawals**: Not available — credits are internal-only, no fiat/crypto conversion
 - **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
 - **Chat System**: Implemented with AI chat support (Groq integration)
 - **Social Platforms**: 11 platforms supported — all admin-toggleable via `oAuthConfig` (default enabled):
@@ -77,13 +77,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
   - $100 = 13000 credits (30% bonus)
 - **Rationale**: Immediate revenue, enables faster growth for creators
 
-**Phase 3: Withdrawal Fees (6 months post-launch)**
-- 5% fee on credit withdrawals
-- Minimum withdrawal threshold ($10 equivalent)
-- KYC requirements for withdrawals >$100
-- **Rationale**: Revenue from earners, discourages small withdrawals
-
-**Phase 4: Premium Subscriptions (12 months post-launch)**
+**Phase 3: Premium Subscriptions (6 months post-launch)**
 - Reduced platform fees (10% → 5%)
 - Priority campaign placement
 - Advanced analytics
@@ -131,7 +125,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 
 ### Tertiary: Earners (20%)
 - **Profile**: Users looking to earn credits by completing tasks
-- **Goals**: Earn credits to spend on own growth or withdraw
+- **Goals**: Earn credits to spend on own growth or campaigns
 - **Pain Points**: Task availability, verification delays, trust building
 - **Behavior**: Complete tasks consistently, build trust score
 - **Credit Usage**: Earn primarily, spend strategically
@@ -250,7 +244,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Credits are destroyed through:
   - Campaign creation (spent, not destroyed)
   - Platform fees (destroyed)
-  - Withdrawals (removed from system)
+  - (No withdrawals — credits remain internal-only)
 - Net credit creation is controlled by platform fees
 
 ### Revenue Strategy
@@ -263,7 +257,6 @@ Tasks   Campaigns  Tasks   Campaigns
 
 **Medium-Term (6-18 months)**
 - Add credit purchases (Stripe)
-- Add withdrawal system (5% fee)
 - Introduce premium features
 - Expand to more platforms
 
@@ -331,7 +324,6 @@ Tasks   Campaigns  Tasks   Campaigns
 - Limited to 5 tasks/day
 - Cannot create campaigns
 - Must verify email
-- Cannot withdraw credits
 
 **Low Trust (30-50)**
 - Limited to 20 tasks/day
@@ -349,7 +341,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Priority task placement
 - Reduced platform fees (12%)
 - Access to advanced analytics
-- Higher withdrawal limits
+- Access to premium campaign features
 
 **Verified (80-100)**
 - Full platform access
@@ -622,9 +614,9 @@ Tasks   Campaigns  Tasks   Campaigns
 - **Contingency**: Pivot to manual review, focus on permissive platforms
 
 ### Regulatory Risks
-- **Risk**: KYC/AML requirements for withdrawals
-- **Mitigation**: Implement KYC for large withdrawals, use payment processors
-- **Contingency**: Restrict withdrawals to verified users only
+- **Risk**: Regulatory scrutiny on in-platform credit economies
+- **Mitigation**: Clear terms of service, no fiat/crypto conversion, credits are consumable virtual goods
+- **Contingency**: Engage legal counsel if jurisdiction raises concerns
 
 ### Fraud Risks
 - **Risk**: Credit farming, fake completions
@@ -664,7 +656,6 @@ Tasks   Campaigns  Tasks   Campaigns
 ### Revenue Metrics
 - Platform fee revenue
 - Credit purchase revenue
-- Withdrawal fee revenue
 - Premium subscription revenue
 - Average revenue per user (ARPU)
 - Revenue growth rate

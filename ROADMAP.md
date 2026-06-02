@@ -683,7 +683,7 @@
 
 ## Phase 15 — Payments & Monetisation 🟠
 
-> Platform fees implemented. Credit purchases and withdrawals remain pending.
+> Platform fees implemented. Credit purchases remain pending. Credits are internal-only — no fiat/crypto withdrawal.
 
 **Priority**: 🟠 HIGH - Critical for platform sustainability
 **Dependencies**: Phase 0 (Security), Phase 14 (Security Hardening)
@@ -716,15 +716,8 @@
 - [🟡] On-chain confirmation listener — credit wallet after N confirmations
 - [🟡] Or use a payment processor: NOWPayments / CoinGate (simpler, no on-chain code)
 
-**Withdrawal**
-- [🟠] Users can withdraw earned credits as USDT (above minimum threshold)
-- [🟠] Withdrawal request queue — admin approves before transfer
-- [🟠] KYC gate for withdrawals above limit (document upload)
-- [🟠] Withdrawal fee (5% flat)
-- [🟠] Withdrawal history and status tracking
-
 **Revenue tracking**
-- [🟠] Revenue by source breakdown (currently only `CAMPAIGN_FEE`; credit purchases + withdrawal fees pending Stripe integration)
+- [🟠] Revenue by source breakdown (currently only `CAMPAIGN_FEE`; credit purchases pending Stripe integration)
 - [🟠] Revenue forecasting
 
 ---

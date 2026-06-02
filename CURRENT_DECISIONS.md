@@ -431,26 +431,6 @@
 - Credit award on payment confirmation
 - Receipt email after purchase
 
-### MDR-003: Withdrawal Fee Strategy
-**Status**: Planned (Phase 15)
-**Date**: 2026-05-19
-**Context**: Withdrawal fee structure
-**Decision**: 5% fee on credit withdrawals
-**Rationale**:
-- Revenue from earners
-- Discourages small withdrawals
-- Covers payment processing costs
-- Industry-standard fee structure
-**Tradeoffs**:
-- May reduce platform appeal
-- Need for payment processor
-- KYC requirements for large withdrawals
-**Implementation**:
-- Deduct 5% on withdrawal approval
-- Minimum withdrawal threshold ($10)
-- KYC for withdrawals >$100
-- Admin approval workflow
-
 ---
 
 ## VERIFICATION STRATEGY

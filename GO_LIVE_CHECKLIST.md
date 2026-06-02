@@ -77,18 +77,8 @@ After C1–C3 are complete, proceed here.
 - [ ] **Why**: Users need a way to buy credits with real money.
 - **Effort**: 5–7 days
 
-### Week 5 — Withdrawals
-- [ ] Withdrawal request endpoint: `POST /withdrawals` (amount, USDT address)
-- [ ] Admin approval queue in `/admin/withdrawals`
-- [ ] USDT (TRC-20) transfer on approval
-- [ ] Withdrawal fee (5%) deducted
-- [ ] KYC gate for withdrawals > $100 equivalent
-- [ ] Withdrawal history in `/dashboard/wallet`
-- [ ] **Why**: Completers need a way to cash out earned credits.
-- **Effort**: 5–7 days
-
-### Week 6 — Polish & Launch
-- [ ] End-to-end test: buy credits → create campaign → complete task → withdraw earnings
+### Week 5 — Polish & Launch
+- [ ] End-to-end test: buy credits → create campaign → complete task → earn credits
 - [ ] Fix any bugs found
 - [ ] Announce on social media / Discord
 - [ ] **Status: REVENUE LAUNCH**
@@ -137,13 +127,11 @@ After revenue is flowing, improve scale and trust.
 |---|---|---|
 | Campaign: 100 slots × 5 credits | Budget = 500, Fee = 75, Total = 575 | 75 credits |
 | User buys $50 credit pack | $50 → 6,000 credits | ~$50 (minus Stripe fees ~$1.50) |
-| User withdraws $100 worth | 10,000 credits → $95 after 5% fee | $5 fee |
 
 **Conservative projection (1,000 active users):**
 - 100 campaigns/month × avg 500 credits × 15% fee = 7,500 credits/month
 - 50 credit purchases/month × avg $30 = $1,500/month
-- 20 withdrawals/month × avg $50 × 5% = $50/month
-- **Total: ~$1,550/month conservative**
+- **Total: ~$1,500/month conservative**
 
 ---
 
@@ -200,4 +188,3 @@ After revenue is flowing, improve scale and trust.
 
 **After notifications are wired:**
 2. **Revenue launch**: Stripe integration for credit purchases
-3. **Withdrawals**: USDT payout with admin approval
