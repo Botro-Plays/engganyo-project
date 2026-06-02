@@ -24,6 +24,12 @@ async function globalSetup(config: FullConfig) {
   await page.getByRole('button', { name: /login|sign in/i }).click();
   await page.waitForURL(/dashboard/, { timeout: 30_000 });
 
+  // Dismiss cookie consent banner so it doesn't block subsequent tests
+  const acceptAll = page.getByRole('button', { name: /accept all/i });
+  if (await acceptAll.count() > 0) {
+    await acceptAll.click();
+  }
+
   await context.storageState({ path: path.join(authDir, 'user.json') });
   await browser.close();
 }
