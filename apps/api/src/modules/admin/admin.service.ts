@@ -647,7 +647,7 @@ export class AdminService {
     const updated = await this.prisma.campaign.update({
       where: { id: campaignId },
       data: { status: newStatus },
-      select: { id: true, title: true, status: true },
+      select: { id: true, title: true, status: true, userId: true },
     });
 
     await this.prisma.auditLog.create({
@@ -659,6 +659,16 @@ export class AdminService {
         newValue: { status: newStatus, notes: dto.notes },
       },
     });
+
+    void this.notificationsService.createNotification(
+      updated.userId,
+      dto.action === 'approve' ? 'CAMPAIGN_ACTIVE' : 'CAMPAIGN_REJECTED',
+      dto.action === 'approve' ? 'Campaign Approved' : 'Campaign Rejected',
+      dto.action === 'approve'
+        ? `Your campaign "${updated.title}" has been approved and is now live.`
+        : `Your campaign "${updated.title}" was rejected. Reason: ${dto.notes ?? 'Contact support for details.'}`,
+      { campaignId, status: newStatus, notes: dto.notes },
+    ).catch(() => null);
 
     return updated;
   }

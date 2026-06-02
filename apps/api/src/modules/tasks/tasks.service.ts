@@ -12,6 +12,7 @@ import { CampaignsService } from '../campaigns/campaigns.service';
 import { GamificationService, XP_REWARDS } from '../gamification/gamification.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -49,6 +50,7 @@ export class TasksService {
     private readonly gamificationService: GamificationService,
     private readonly antiAbuseService: AntiAbuseService,
     private readonly socialAuthService: SocialAuthService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Browse available tasks ────────────────────────────────
@@ -71,6 +73,7 @@ export class TasksService {
       select: {
         id: true,
         userId: true,
+        title: true,
         status: true,
         taskType: true,
         totalSlots: true,
@@ -150,6 +153,14 @@ export class TasksService {
         data: { pendingSlots: { increment: 1 } },
       }),
     ]);
+
+    void this.notificationsService.createNotification(
+      userId,
+      'TASK_ASSIGNED',
+      'Task Assigned',
+      `You claimed "${campaign.title}". Complete it before ${expiresAt.toLocaleDateString()}.`,
+      { campaignId, completionId: completion.id, expiresAt: expiresAt.toISOString() },
+    ).catch(() => null);
 
     return completion;
   }
@@ -263,6 +274,14 @@ export class TasksService {
       await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
       await this.gamificationService.checkAchievements(userId);
       void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
+
+      void this.notificationsService.createNotification(
+        userId,
+        'TASK_COMPLETED',
+        'Task Verified',
+        `Your task was auto-verified. You earned ${completion.campaign.creditPerTask} credits.`,
+        { campaignId, creditsEarned: completion.campaign.creditPerTask },
+      ).catch(() => null);
 
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
     } else {
@@ -383,6 +402,14 @@ export class TasksService {
       await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
       await this.gamificationService.checkAchievements(userId);
       void this.antiAbuseService.recalculateTrustScore(userId).catch(() => null);
+
+      void this.notificationsService.createNotification(
+        userId,
+        'TASK_COMPLETED',
+        'Task Verified',
+        `Your task was auto-verified on recheck. You earned ${completion.campaign.creditPerTask} credits.`,
+        { campaignId, creditsEarned: completion.campaign.creditPerTask },
+      ).catch(() => null);
 
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED', message: 'Verification successful' };
     } else if (apiVerified === null) {

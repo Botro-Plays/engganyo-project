@@ -14,6 +14,14 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Trophy,
+  TrendingUp,
+  DollarSign,
+  CheckCircle,
+  XCircle,
+  Flame,
+  Megaphone,
+  ClipboardList,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
@@ -48,6 +56,15 @@ function notificationIcon(type: string) {
   if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-5 h-5 text-green-400" />;
   if (type === 'ACCOUNT_WARNING') return <AlertTriangle className="w-5 h-5 text-amber-400" />;
   if (type === 'SECURITY_ALERT') return <AlertTriangle className="w-5 h-5 text-red-400" />;
+  if (type === 'ACHIEVEMENT_UNLOCKED') return <Trophy className="w-5 h-5 text-yellow-400" />;
+  if (type === 'LEVEL_UP') return <TrendingUp className="w-5 h-5 text-emerald-400" />;
+  if (type === 'CREDIT_EARNED') return <DollarSign className="w-5 h-5 text-green-400" />;
+  if (type === 'TASK_COMPLETED') return <CheckCircle className="w-5 h-5 text-green-400" />;
+  if (type === 'TASK_REJECTED') return <XCircle className="w-5 h-5 text-red-400" />;
+  if (type === 'STREAK_BROKEN') return <Flame className="w-5 h-5 text-orange-400" />;
+  if (type === 'CAMPAIGN_ACTIVE' || type === 'CAMPAIGN_COMPLETED') return <Megaphone className="w-5 h-5 text-blue-400" />;
+  if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-5 h-5 text-red-400" />;
+  if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-5 h-5 text-indigo-400" />;
   return <Bell className="w-5 h-5 text-zinc-400" />;
 }
 
@@ -61,6 +78,18 @@ function getNotificationHref(n: AppNotification): string {
   if (data.replyTopicId) return `/forum/${data.replyTopicId}`;
   if (data.targetUsername) return `/users/${data.targetUsername}`;
   if (n.type === 'ACCOUNT_WARNING' || n.type === 'SECURITY_ALERT') return '/profile';
+  if (
+    n.type === 'ACHIEVEMENT_UNLOCKED' ||
+    n.type === 'LEVEL_UP' ||
+    n.type === 'CREDIT_EARNED' ||
+    n.type === 'TASK_COMPLETED' ||
+    n.type === 'TASK_REJECTED' ||
+    n.type === 'STREAK_BROKEN' ||
+    n.type === 'CAMPAIGN_ACTIVE' ||
+    n.type === 'CAMPAIGN_REJECTED' ||
+    n.type === 'CAMPAIGN_COMPLETED' ||
+    n.type === 'TASK_ASSIGNED'
+  ) return '/dashboard';
   return '/dashboard';
 }
 

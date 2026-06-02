@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bell, MessageSquare, AtSign, X } from 'lucide-react';
+import { Bell, MessageSquare, AtSign, X, Trophy, TrendingUp, DollarSign, CheckCircle, XCircle, Flame, Megaphone, ClipboardList } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import Link from 'next/link';
@@ -36,6 +36,15 @@ function notificationIcon(type: string) {
   if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-4 h-4 text-green-400" />;
   if (type === 'ACCOUNT_WARNING') return <Bell className="w-4 h-4 text-amber-400" />;
   if (type === 'SECURITY_ALERT') return <Bell className="w-4 h-4 text-red-400" />;
+  if (type === 'ACHIEVEMENT_UNLOCKED') return <Trophy className="w-4 h-4 text-yellow-400" />;
+  if (type === 'LEVEL_UP') return <TrendingUp className="w-4 h-4 text-emerald-400" />;
+  if (type === 'CREDIT_EARNED') return <DollarSign className="w-4 h-4 text-green-400" />;
+  if (type === 'TASK_COMPLETED') return <CheckCircle className="w-4 h-4 text-green-400" />;
+  if (type === 'TASK_REJECTED') return <XCircle className="w-4 h-4 text-red-400" />;
+  if (type === 'STREAK_BROKEN') return <Flame className="w-4 h-4 text-orange-400" />;
+  if (type === 'CAMPAIGN_ACTIVE' || type === 'CAMPAIGN_COMPLETED') return <Megaphone className="w-4 h-4 text-blue-400" />;
+  if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-4 h-4 text-red-400" />;
+  if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-4 h-4 text-indigo-400" />;
   return <Bell className="w-4 h-4 text-zinc-400" />;
 }
 
@@ -56,6 +65,20 @@ function getNotificationHref(n: AppNotification): string {
 
   // Account warnings / security alerts → user's own profile
   if (n.type === 'ACCOUNT_WARNING' || n.type === 'SECURITY_ALERT') return '/profile';
+
+  // Gamification / task / campaign notifications → dashboard
+  if (
+    n.type === 'ACHIEVEMENT_UNLOCKED' ||
+    n.type === 'LEVEL_UP' ||
+    n.type === 'CREDIT_EARNED' ||
+    n.type === 'TASK_COMPLETED' ||
+    n.type === 'TASK_REJECTED' ||
+    n.type === 'STREAK_BROKEN' ||
+    n.type === 'CAMPAIGN_ACTIVE' ||
+    n.type === 'CAMPAIGN_REJECTED' ||
+    n.type === 'CAMPAIGN_COMPLETED' ||
+    n.type === 'TASK_ASSIGNED'
+  ) return '/dashboard';
 
   // Fallback
   return '/dashboard';

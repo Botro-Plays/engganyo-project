@@ -10,6 +10,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -57,6 +58,7 @@ export class CampaignsService {
     private readonly walletService: WalletService,
     private readonly antiAbuseService: AntiAbuseService,
     private readonly socialAuthService: SocialAuthService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Create ────────────────────────────────────────────────
@@ -283,6 +285,8 @@ export class CampaignsService {
     const now = new Date();
 
     if (dto.action === 'approve') {
+      const willBeFull = campaign.completedSlots + 1 >= campaign.totalSlots;
+
       await this.prisma.$transaction(async (tx) => {
         await tx.taskCompletion.update({
           where: { id: completionId },
@@ -294,13 +298,12 @@ export class CampaignsService {
           },
         });
 
-        const isFull = campaign.completedSlots + 1 >= campaign.totalSlots;
         await tx.campaign.update({
           where: { id: campaignId },
           data: {
             completedSlots: { increment: 1 },
             pendingSlots: { decrement: 1 },
-            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+            ...(willBeFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
           },
         });
 
@@ -316,6 +319,24 @@ export class CampaignsService {
         referenceId: campaignId,
         referenceType: 'campaign',
       });
+
+      void this.notificationsService.createNotification(
+        completion.userId,
+        'TASK_COMPLETED',
+        'Task Approved',
+        `Your task submission was approved. You earned ${campaign.creditPerTask} credits.`,
+        { campaignId, completionId, creditsEarned: campaign.creditPerTask },
+      ).catch(() => null);
+
+      if (willBeFull) {
+        void this.notificationsService.createNotification(
+          campaign.userId,
+          'CAMPAIGN_COMPLETED',
+          'Campaign Completed',
+          'All slots for your campaign have been filled.',
+          { campaignId },
+        ).catch(() => null);
+      }
 
       void this.antiAbuseService.recalculateTrustScore(completion.userId).catch(() => null);
       return { reviewed: true, action: 'approve', creditsAwarded: campaign.creditPerTask };
@@ -335,6 +356,14 @@ export class CampaignsService {
           data: { pendingSlots: { decrement: 1 } },
         });
       });
+
+      void this.notificationsService.createNotification(
+        completion.userId,
+        'TASK_REJECTED',
+        'Task Rejected',
+        `Your task submission was rejected. Reason: ${dto.reason ?? 'Rejected by campaign creator'}`,
+        { campaignId, completionId, reason: dto.reason },
+      ).catch(() => null);
 
       return { reviewed: true, action: 'reject' };
     }

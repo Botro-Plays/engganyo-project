@@ -3,6 +3,7 @@ import { AchievementCategory, MissionType, TransactionType, UserRole } from '@pr
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // ─── Level formula (matches frontend utils.ts) ────────────────
 export const getLevelFromXp = (xp: number) => Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -55,6 +56,7 @@ export class GamificationService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async onModuleInit() {
@@ -114,6 +116,16 @@ export class GamificationService implements OnModuleInit {
     await this.prisma.xpEvent.create({
       data: { userId, amount, source, referenceId, description },
     });
+
+    if (leveledUp) {
+      void this.notificationsService.createNotification(
+        userId,
+        'LEVEL_UP',
+        `Level ${newLevel} reached!`,
+        `You advanced to level ${newLevel}. Keep it up!`,
+        { previousLevel: user.level, newLevel },
+      ).catch(() => null);
+    }
 
     return { newXp, newLevel, leveledUp };
   }
@@ -423,6 +435,16 @@ export class GamificationService implements OnModuleInit {
     // Check streak achievements
     await this.checkStreakAchievements(userId, newStreak);
 
+    if (streakBroken) {
+      void this.notificationsService.createNotification(
+        userId,
+        'STREAK_BROKEN',
+        'Streak Broken',
+        `Your ${user.currentStreak}-day streak was reset. Start a new streak today!`,
+        { previousStreak: user.currentStreak },
+      ).catch(() => null);
+    }
+
     return {
       creditReward,
       xpReward,
@@ -531,6 +553,14 @@ export class GamificationService implements OnModuleInit {
           referenceType: 'mission',
         });
         await this.awardXp(userId, mission.xpReward, 'mission_complete', mission.id, mission.name);
+
+        void this.notificationsService.createNotification(
+          userId,
+          'CREDIT_EARNED',
+          'Mission Complete',
+          `You completed "${mission.name}" and earned ${mission.creditReward} credits`,
+          { missionId: mission.id, missionName: mission.name, creditReward: mission.creditReward, xpReward: mission.xpReward },
+        ).catch(() => null);
       }
     }
   }
@@ -601,7 +631,7 @@ export class GamificationService implements OnModuleInit {
     name: string,
   ) {
     await this.prisma.userAchievement.create({
-      data: { userId, achievementId },
+      data: { userId, achievementId, notified: true },
     });
 
     if (creditReward > 0) {
@@ -616,6 +646,14 @@ export class GamificationService implements OnModuleInit {
     if (xpReward > 0) {
       await this.awardXp(userId, xpReward, 'achievement', achievementId, name);
     }
+
+    void this.notificationsService.createNotification(
+      userId,
+      'ACHIEVEMENT_UNLOCKED',
+      'Achievement Unlocked',
+      `You earned "${name}"${creditReward > 0 ? ` (+${creditReward} credits)` : ''}`,
+      { achievementId, name, creditReward, xpReward },
+    ).catch(() => null);
   }
 
   // ─── Admin: Achievements ──────────────────────────────────
