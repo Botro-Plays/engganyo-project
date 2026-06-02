@@ -592,11 +592,18 @@
 - [✅] Notification center — real-time Socket.IO delivery, 10 notification types wired (Phase 1 & 2), frontend bell + page with icons and routing
 - [🟡] Performance insights
 
-**Mobile Optimization**
-- [🟡] Responsive design improvements
-- [🟡] Mobile-specific UI patterns
-- [🟡] Touch-optimized interactions
-- [🟡] Progressive web app (PWA) features
+**Mobile Optimization & PWA**
+- [🟡] Responsive design improvements — sidebar → bottom nav, tap targets ≥44px, font scaling
+- [🟡] Mobile-specific UI patterns — pull-to-refresh, swipe navigation, bottom sheets, floating action buttons
+- [🟡] Touch-optimized interactions — haptic feedback on task completion, long-press context menus
+- [🟡] PWA foundation:
+  - `manifest.json` — app name, icons, theme color, display mode (standalone)
+  - `next-pwa` or `@ducanh2912/next-pwa` integration
+  - Service worker — offline caching for static assets, API response caching
+  - Standalone mode support — hides browser chrome when installed from home screen
+  - Install prompt banner for eligible browsers
+- [🟡] Push notifications — task reminders, campaign status updates, streak alerts (via Web Push API)
+- [🟡] Mobile-first layout audit — ensure all screens usable on 375px width
 
 ---
 

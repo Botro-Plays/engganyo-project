@@ -1396,6 +1396,32 @@ This document should be updated when:
 - **Reason**: Gradient `absolute inset-0` requires a `relative` positioned ancestor; `overflow-hidden` was cutting off content
 - **Tradeoffs**: None — both issues fixed in single class change
 
+### FUI-005: PWA and Mobile-First Strategy
+- **Status**: Planned (Phase 12.5)
+- **Date**: 2026-06-02
+- **Decision**: Implement PWA via Next.js PWA plugin (`next-pwa` or `@ducanh2912/next-pwa`) rather than building a native mobile app
+- **Reason**:
+  - Single codebase — web + mobile from one Next.js app
+  - No app store gatekeeping (Apple/Google review delays)
+  - Instant deployment — no separate release cycles
+  - Lower cost — no iOS/Android dev teams or Flutter/RN overhead
+  - Users can install from browser and use offline
+- **Implementation**:
+  - `manifest.json` with app metadata, icons, theme color, `display: standalone`
+  - Service worker caching static assets + API responses for offline use
+  - Standalone mode hides browser chrome (address bar, tabs)
+  - Install prompt banner for eligible browsers
+  - Web Push API for push notifications (task reminders, streak alerts)
+  - Mobile-first layout audit — all screens must work on 375px width
+- **Tradeoffs**:
+  - No access to native APIs (contacts, camera without permissions prompt, Bluetooth)
+  - iOS Safari PWA support is limited (no push notifications on iOS <16.4, limited background sync)
+  - Users must discover the "Add to Home Screen" option themselves
+  - Less discoverable than App Store
+- **Future Alternatives**:
+  - Capacitor/Ionic wrapper if native APIs become critical
+  - React Native if we need deep native integration later
+
 ## CI/CD Decisions (2026-05-22)
 
 ### CCD-001: E2E Workflow Node Version Alignment

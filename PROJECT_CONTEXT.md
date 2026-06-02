@@ -442,7 +442,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Third-party integrations
 - Developer marketplace
 - White-label solution
-- Mobile apps
+- PWA enhancements (offline task completion, background sync)
 
 ### Strategic Goals
 
@@ -488,7 +488,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Trust score algorithm
 - Real-time analytics
 - API-first architecture
-- Mobile-responsive design
+- PWA-ready — installable from browser, works offline, no app store gatekeeping
 
 ---
 
@@ -568,7 +568,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - **Q2 2026**: Social verification engine
 - **Q3 2026**: Public profiles and social features
 - **Q4 2026**: Gamification 2.0
-- **Q1 2027**: Mobile apps (iOS, Android)
+- **Q1 2027**: PWA with offline support, push notifications, installable from browser
 - **Q2 2027**: Advanced analytics platform
 - **Q3 2027**: Creator marketplace
 - **Q4 2027**: Public API
