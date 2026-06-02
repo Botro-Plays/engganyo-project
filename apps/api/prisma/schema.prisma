@@ -148,6 +148,7 @@ enum NotificationType {
   SECURITY_ALERT
   ACCOUNT_WARNING
   FORUM_MENTION
+  WELCOME
 }
 
 enum ReportReason {

@@ -16,6 +16,8 @@ import { UserStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { EmailService } from '../email/email.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '@prisma/client';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -71,6 +73,7 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly antiAbuse: AntiAbuseService,
     private readonly twoFactor: TwoFactorService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Register ──────────────────────────────────────────────
@@ -189,6 +192,15 @@ export class AuthService {
         this.logger.warn(`Failed to queue verification email: ${err.message}`);
       });
     }
+
+    // Welcome notification (non-blocking)
+    void this.notificationsService.createNotification(
+      user.id,
+      NotificationType.WELCOME,
+      'Welcome to Engganyo!',
+      'Thanks for joining. Complete tasks, earn credits, and grow your presence. Check out available campaigns to get started!',
+      { href: '/dashboard' },
+    ).catch(() => null);
 
     const tokens = await this.generateTokens({
       sub: user.id,

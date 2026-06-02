@@ -22,6 +22,7 @@ import {
   Flame,
   Megaphone,
   ClipboardList,
+  Sparkles,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
@@ -40,6 +41,7 @@ interface AppNotification {
     targetUserId?: string;
     targetUsername?: string;
     replyTopicId?: string;
+    href?: string;
   } | null;
   isRead: boolean;
   createdAt: string;
@@ -65,6 +67,7 @@ function notificationIcon(type: string) {
   if (type === 'CAMPAIGN_ACTIVE' || type === 'CAMPAIGN_COMPLETED') return <Megaphone className="w-5 h-5 text-blue-400" />;
   if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-5 h-5 text-red-400" />;
   if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-5 h-5 text-indigo-400" />;
+  if (type === 'WELCOME') return <Sparkles className="w-5 h-5 text-brand-400" />;
   return <Bell className="w-5 h-5 text-zinc-400" />;
 }
 
@@ -74,6 +77,7 @@ function getNotificationHref(n: AppNotification): string {
       ? (JSON.parse(n.data) as Record<string, string>)
       : (n.data ?? {});
 
+  if (data.href) return data.href;
   if (data.topicId) return `/forum/${data.topicId}`;
   if (data.replyTopicId) return `/forum/${data.replyTopicId}`;
   if (data.targetUsername) return `/users/${data.targetUsername}`;
@@ -88,7 +92,8 @@ function getNotificationHref(n: AppNotification): string {
     n.type === 'CAMPAIGN_ACTIVE' ||
     n.type === 'CAMPAIGN_REJECTED' ||
     n.type === 'CAMPAIGN_COMPLETED' ||
-    n.type === 'TASK_ASSIGNED'
+    n.type === 'TASK_ASSIGNED' ||
+    n.type === 'WELCOME'
   ) return '/dashboard';
   return '/dashboard';
 }

@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus, CampaignStatus, TaskType } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, CampaignStatus, TaskType, NotificationType } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -42,6 +42,23 @@ async function main(): Promise<void> {
   });
   console.log(`✅ Admin user: ${admin.email}`);
 
+  // ─── Welcome notification for admin ──────────────────────────
+  const adminWelcome = await prisma.notification.findFirst({
+    where: { userId: admin.id, type: NotificationType.WELCOME },
+  });
+  if (!adminWelcome) {
+    await prisma.notification.create({
+      data: {
+        userId: admin.id,
+        type: NotificationType.WELCOME,
+        title: 'Welcome to Engganyo!',
+        body: 'Thanks for joining. Complete tasks, earn credits, and grow your presence. Check out available campaigns to get started!',
+        data: { href: '/dashboard' },
+      },
+    });
+    console.log('✅ Admin welcome notification');
+  }
+
   // ─── Owner / super-admin account ─────────────────────────────
   await prisma.user.updateMany({
     where: {
@@ -55,6 +72,35 @@ async function main(): Promise<void> {
       status: UserStatus.ACTIVE,
     },
   });
+
+  const botro = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: 'aquariusbotro@gmail.com' },
+        { username: 'botro' },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (botro) {
+    const botroWelcome = await prisma.notification.findFirst({
+      where: { userId: botro.id, type: NotificationType.WELCOME },
+    });
+    if (!botroWelcome) {
+      await prisma.notification.create({
+        data: {
+          userId: botro.id,
+          type: NotificationType.WELCOME,
+          title: 'Welcome to Engganyo!',
+          body: 'Thanks for joining. Complete tasks, earn credits, and grow your presence. Check out available campaigns to get started!',
+          data: { href: '/dashboard' },
+        },
+      });
+      console.log('✅ Botro welcome notification');
+    }
+  }
+
   console.log('✅ Owner account (botro) ensured as SUPER_ADMIN');
 
   // ─── Achievements ────────────────────────────────────────────

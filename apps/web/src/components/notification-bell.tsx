@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bell, MessageSquare, AtSign, X, Trophy, TrendingUp, DollarSign, CheckCircle, XCircle, Flame, Megaphone, ClipboardList } from 'lucide-react';
+import { Bell, MessageSquare, AtSign, X, Trophy, TrendingUp, DollarSign, CheckCircle, XCircle, Flame, Megaphone, ClipboardList, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import { playNotificationSound } from '@/lib/sound';
@@ -22,6 +22,7 @@ interface AppNotification {
     targetUserId?: string;
     targetUsername?: string;
     replyTopicId?: string;
+    href?: string;
   } | null;
   isRead: boolean;
   createdAt: string;
@@ -46,6 +47,7 @@ function notificationIcon(type: string) {
   if (type === 'CAMPAIGN_ACTIVE' || type === 'CAMPAIGN_COMPLETED') return <Megaphone className="w-4 h-4 text-blue-400" />;
   if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-4 h-4 text-red-400" />;
   if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-4 h-4 text-indigo-400" />;
+  if (type === 'WELCOME') return <Sparkles className="w-4 h-4 text-brand-400" />;
   return <Bell className="w-4 h-4 text-zinc-400" />;
 }
 
@@ -54,6 +56,9 @@ function getNotificationHref(n: AppNotification): string {
     typeof n.data === 'string'
       ? (JSON.parse(n.data) as Record<string, string>)
       : (n.data ?? {});
+
+  // Notification with explicit href in data payload
+  if (data.href) return data.href;
 
   // Forum mention or any notification with a topicId → go to the forum topic
   if (data.topicId) return `/forum/${data.topicId}`;
@@ -78,7 +83,8 @@ function getNotificationHref(n: AppNotification): string {
     n.type === 'CAMPAIGN_ACTIVE' ||
     n.type === 'CAMPAIGN_REJECTED' ||
     n.type === 'CAMPAIGN_COMPLETED' ||
-    n.type === 'TASK_ASSIGNED'
+    n.type === 'TASK_ASSIGNED' ||
+    n.type === 'WELCOME'
   ) return '/dashboard';
 
   // Fallback
