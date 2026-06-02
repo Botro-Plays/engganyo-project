@@ -37,7 +37,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - **Revenue**: Platform fees live — 10% base fee deducted on campaign creation, tracked via `PlatformRevenue` model, admin revenue dashboard at `/admin/revenue`
 - **Credit System**: Internal-only, no fiat/crypto conversion yet (Stripe integration pending)
 - **Platform Fees**: Implemented (2026-06-01) — 10% base, config-driven (`fee_base_rate`, `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`, `campaign_min_budget`)
-- **Withdrawals**: Not available — credits are internal-only, no fiat/crypto conversion
+- **Credit Redemption**: Not yet implemented — credits are internal-only (no fiat/crypto conversion). Future: prizes/rewards store (gift cards, mobile load, gaming credits, platform perks) where users redeem earned credits for digital goods.
 - **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
 - **Chat System**: Implemented with AI chat support (Groq integration)
 - **Social Platforms**: 11 platforms supported — all admin-toggleable via `oAuthConfig` (default enabled):
@@ -125,7 +125,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 
 ### Tertiary: Earners (20%)
 - **Profile**: Users looking to earn credits by completing tasks
-- **Goals**: Earn credits to spend on own growth or campaigns
+- **Goals**: Earn credits to spend on own growth, create campaigns, or redeem for digital prizes (gift cards, mobile load, gaming credits)
 - **Pain Points**: Task availability, verification delays, trust building
 - **Behavior**: Complete tasks consistently, build trust score
 - **Credit Usage**: Earn primarily, spend strategically
@@ -244,7 +244,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Credits are destroyed through:
   - Campaign creation (spent, not destroyed)
   - Platform fees (destroyed)
-  - (No withdrawals — credits remain internal-only)
+  - Prizes / rewards store redemption (gift cards, mobile load, gaming credits) — planned Phase 13
 - Net credit creation is controlled by platform fees
 
 ### Revenue Strategy
@@ -257,6 +257,7 @@ Tasks   Campaigns  Tasks   Campaigns
 
 **Medium-Term (6-18 months)**
 - Add credit purchases (Stripe)
+- Introduce prizes / rewards store — users redeem earned credits for digital prizes (gift cards, mobile load, gaming credits)
 - Introduce premium features
 - Expand to more platforms
 
@@ -341,12 +342,12 @@ Tasks   Campaigns  Tasks   Campaigns
 - Priority task placement
 - Reduced platform fees (12%)
 - Access to advanced analytics
-- Access to premium campaign features
+- Early access to limited prize drops
 
 **Verified (80-100)**
 - Full platform access
 - Minimum platform fees (10%)
-- Premium features
+- Premium features (exclusive prize tiers, custom profile themes, boosted visibility)
 - Early access to new features
 
 ---
@@ -656,6 +657,7 @@ Tasks   Campaigns  Tasks   Campaigns
 ### Revenue Metrics
 - Platform fee revenue
 - Credit purchase revenue
+- Prizes / rewards store revenue (platform sources prizes at wholesale, users redeem credits)
 - Premium subscription revenue
 - Average revenue per user (ARPU)
 - Revenue growth rate

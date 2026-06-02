@@ -431,6 +431,30 @@
 - Credit award on payment confirmation
 - Receipt email after purchase
 
+### MDR-003: Prizes / Rewards Store (Credit Redemption)
+**Status**: Planned (Phase 13)
+**Date**: 2026-06-02
+**Context**: Users earn credits but cannot withdraw fiat/crypto. Need a destination for earned credits to drive engagement.
+**Decision**: Implement a prizes / rewards store where users redeem earned credits for digital goods (gift cards, mobile load/data, gaming credits, streaming subscriptions, platform perks).
+**Rationale**:
+- Keeps credits internal-only, avoiding KYC/AML, payment processor, and regulatory burden
+- Provides tangible value for completers without cashing out
+- Drives engagement and retention through aspirational rewards
+- Creates a natural credit sink that offsets inflation from task completion
+- Platform sources prizes at wholesale, monetizing the spread or treating it as user acquisition cost
+**Tradeoffs**:
+- Prize fulfillment logistics (digital codes, manual processing initially)
+- Need to source reliable prize suppliers
+- Users may compare credit-to-prize value unfavorably vs direct cash
+- Stock management for digital codes
+**Implementation**:
+- `Prize` model — type, title, description, credit cost, stock, image URL, fulfillment method
+- `PrizeRedemption` model — userId, prizeId, status (PENDING / FULFILLED / CANCELLED), fulfilledAt, fulfillmentDetails
+- Admin panel to manage prize inventory, pricing, and mark redemptions fulfilled
+- `/rewards` page — browse, filter, purchase with credits, view redemption history
+- Deduct credits on redemption request, refund on cancellation
+- Notifications: `PRIZE_REDEMPTION_PENDING`, `PRIZE_REDEMPTION_FULFILLED`
+
 ---
 
 ## VERIFICATION STRATEGY

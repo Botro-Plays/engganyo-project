@@ -617,12 +617,18 @@
 - [🟡] `UserPerk` model — tracks which perks are active per user
 - [🟡] Perk management UI in user settings
 
-**Rewards store**
-- [🟡] `/rewards` page — spend credits on real or virtual rewards
-- [🟡] Reward types: profile customisation, boost visibility, extended campaign duration
-- [🟡] Admin creates/manages reward inventory
-- [🟡] Reward purchase history
-- [🟡] Limited-time reward offers
+**Prizes / Rewards store** (credit sink — credits cannot be withdrawn, only redeemed here)
+- [🟡] `/rewards` page — spend earned credits on digital prizes
+- [🟡] Prize types:
+  - Digital gift cards (Amazon, Apple, Google Play, Steam, etc.)
+  - Mobile load / data top-up
+  - Gaming credits (Robux, V-Bucks, in-game currency)
+  - Streaming subscriptions (Netflix, Spotify, etc.)
+  - Platform-exclusive perks (profile themes, custom badges, boosted visibility, extended campaign duration)
+- [🟡] Admin manages prize inventory, pricing in credits, and stock levels
+- [🟡] Reward purchase history and redemption status
+- [🟡] Limited-time prize drops and seasonal offers
+- [🟡] Prize fulfillment queue — admin processes and marks fulfilled
 
 **Richer achievements**
 - [🟡] 30+ achievements across more categories: Social, Veteran, Whale, Streak Master, Referral King
