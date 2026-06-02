@@ -37,8 +37,8 @@ export function CookieConsentBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#1e2740] bg-[#161b2e] shadow-2xl">
-      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-[#1e2740] bg-[#161b2e] shadow-2xl">
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:pr-20 lg:px-8 lg:pr-24">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" />
