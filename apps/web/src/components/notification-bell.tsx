@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, MessageSquare, AtSign, X, Trophy, TrendingUp, DollarSign, CheckCircle, XCircle, Flame, Megaphone, ClipboardList } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
+import { playNotificationSound } from '@/lib/sound';
 import Link from 'next/link';
 import type { ApiResponse } from '@/types';
 import { useSocketEvent } from '@/hooks/use-socket';
@@ -100,6 +101,7 @@ export function NotificationBell() {
 
   useSocketEvent('notification:new', () => {
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    playNotificationSound();
   });
   useSocketEvent('notification:deleted', () => {
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
