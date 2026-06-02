@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Bell,
   AtSign,
@@ -102,6 +102,7 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const { data, isLoading } = useQuery<NotificationsResponse>({
     queryKey: ['notifications', 'list', page, limit],
@@ -215,30 +216,29 @@ export default function NotificationsPage() {
               return (
                 <div
                   key={n.id}
-                  className={`flex items-start gap-4 px-5 py-4 transition-colors group ${
+                  onClick={() => {
+                    if (!n.isRead) markReadMutation.mutate(n.id);
+                    router.push(href);
+                  }}
+                  className={`flex items-start gap-4 px-5 py-4 transition-colors group cursor-pointer ${
                     !n.isRead ? 'bg-indigo-500/[0.03]' : ''
                   }`}
                 >
                   <div className="mt-0.5 flex-shrink-0">{notificationIcon(n.type)}</div>
                   <div className="flex-1 min-w-0">
-                    <Link
-                      href={href}
-                      className="block"
-                      onClick={() => {
-                        if (!n.isRead) markReadMutation.mutate(n.id);
-                      }}
-                    >
-                      <p className="text-sm font-medium text-white leading-snug hover:text-brand-300 transition-colors">
-                        {n.title}
-                      </p>
-                      <p className="text-sm text-zinc-400 leading-snug mt-0.5">{n.body}</p>
-                      <p className="text-xs text-zinc-600 mt-1.5">{formatRelativeTime(n.createdAt)}</p>
-                    </Link>
+                    <p className="text-sm font-medium text-white leading-snug group-hover:text-brand-300 transition-colors">
+                      {n.title}
+                    </p>
+                    <p className="text-sm text-zinc-400 leading-snug mt-0.5">{n.body}</p>
+                    <p className="text-xs text-zinc-600 mt-1.5">{formatRelativeTime(n.createdAt)}</p>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!n.isRead && (
                       <button
-                        onClick={() => markReadMutation.mutate(n.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markReadMutation.mutate(n.id);
+                        }}
                         disabled={markReadMutation.isPending}
                         className="p-1.5 rounded-md text-zinc-500 hover:text-green-400 hover:bg-green-500/10 transition-all"
                         title="Mark as read"
@@ -247,7 +247,10 @@ export default function NotificationsPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => deleteMutation.mutate(n.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteMutation.mutate(n.id);
+                      }}
                       disabled={deleteMutation.isPending}
                       className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                       title="Delete"

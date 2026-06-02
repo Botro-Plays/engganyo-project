@@ -60,48 +60,57 @@ async function main(): Promise<void> {
   }
 
   // ─── Owner / super-admin account ─────────────────────────────
-  await prisma.user.updateMany({
-    where: {
-      OR: [
-        { email: 'aquariusbotro@gmail.com' },
-        { username: 'botro' },
-      ],
-    },
-    data: {
+  const botroPassword = await argon2.hash(
+    process.env['BOTRO_PASSWORD'] ?? 'Botro@123456',
+  );
+
+  const botro = await prisma.user.upsert({
+    where: { email: 'aquariusbotro@gmail.com' },
+    update: {},
+    create: {
+      email: 'aquariusbotro@gmail.com',
+      username: 'botro',
+      passwordHash: botroPassword,
+      displayName: 'Botro',
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
-    },
-  });
-
-  const botro = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: 'aquariusbotro@gmail.com' },
-        { username: 'botro' },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (botro) {
-    const botroWelcome = await prisma.notification.findFirst({
-      where: { userId: botro.id, type: NotificationType.WELCOME },
-    });
-    if (!botroWelcome) {
-      await prisma.notification.create({
-        data: {
-          userId: botro.id,
-          type: NotificationType.WELCOME,
-          title: 'Welcome to Engganyo!',
-          body: 'Thanks for joining. Complete tasks, earn credits, and grow your presence. Check out available campaigns to get started!',
-          data: { href: '/dashboard' },
+      referralCode: 'BOTRO0001',
+      profile: {
+        create: {
+          isPublic: true,
         },
-      });
-      console.log('✅ Botro welcome notification');
-    }
-  }
+      },
+      wallet: {
+        create: {
+          balance: 0,
+        },
+      },
+      trustScore: {
+        create: {
+          score: 100,
+          level: 'VERIFIED',
+        },
+      },
+    },
+  });
+  console.log(`✅ Owner account (botro) ensured as SUPER_ADMIN`);
 
-  console.log('✅ Owner account (botro) ensured as SUPER_ADMIN');
+  // ─── Welcome notification for botro ──────────────────────────
+  const botroWelcome = await prisma.notification.findFirst({
+    where: { userId: botro.id, type: NotificationType.WELCOME },
+  });
+  if (!botroWelcome) {
+    await prisma.notification.create({
+      data: {
+        userId: botro.id,
+        type: NotificationType.WELCOME,
+        title: 'Welcome to Engganyo!',
+        body: 'Thanks for joining. Complete tasks, earn credits, and grow your presence. Check out available campaigns to get started!',
+        data: { href: '/dashboard' },
+      },
+    });
+    console.log('✅ Botro welcome notification');
+  }
 
   // ─── Achievements ────────────────────────────────────────────
   const achievements = [

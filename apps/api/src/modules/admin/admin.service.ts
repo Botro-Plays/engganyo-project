@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { CampaignStatus, CompletionStatus, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -1564,6 +1564,22 @@ export class AdminService {
               description: 'Database reset — initial credits restored',
             },
           });
+
+          // Ensure welcome notification for preserved accounts
+          const existingWelcome = await tx.notification.findFirst({
+            where: { userId: kept.id, type: NotificationType.WELCOME },
+          });
+          if (!existingWelcome) {
+            await tx.notification.create({
+              data: {
+                userId: kept.id,
+                type: NotificationType.WELCOME,
+                title: 'Welcome to Engganyo!',
+                body: 'Thanks for joining. Complete tasks, earn credits, and grow your presence. Check out available campaigns to get started!',
+                data: { href: '/dashboard' },
+              },
+            });
+          }
         }
 
         await tx.auditLog.create({

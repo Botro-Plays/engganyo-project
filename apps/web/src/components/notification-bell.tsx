@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { Bell, MessageSquare, AtSign, X, Trophy, TrendingUp, DollarSign, CheckCircle, XCircle, Flame, Megaphone, ClipboardList, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
@@ -95,6 +96,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const { data } = useQuery<NotificationsResponse>({
     queryKey: ['notifications'],
@@ -197,9 +199,11 @@ export function NotificationBell() {
                 <Link
                   key={n.id}
                   href={href}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     setOpen(false);
                     if (!n.isRead) markReadMutation.mutate(n.id);
+                    router.push(href);
                   }}
                   className={`flex items-start gap-3 px-4 py-3 border-b border-zinc-800 hover:bg-zinc-800/60 transition-colors ${!n.isRead ? 'bg-indigo-500/5' : ''}`}
                 >
