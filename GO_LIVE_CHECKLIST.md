@@ -1,6 +1,6 @@
 # ENGGANYO — Go-Live Checklist
 
-> **Living document** — updated after each session. Last updated: 2026-06-02 (Added Notification System Wiring phases — Phase 1 & 2 scoped for implementation)
+> **Living document** — updated after each session. Last updated: 2026-06-02 (Notification System Wiring Phase 1 & 2 implemented — subject for testing)
 > This is the single source of truth for what needs to happen before the platform generates revenue.
 
 ---
@@ -177,24 +177,24 @@ After revenue is flowing, improve scale and trust.
 **C1, C2, and C3 are resolved. The platform is revenue-ready for platform fees.**
 
 ### Active: Notification System Wiring (WebSocket/Socket.IO)
-> The notification infrastructure is fully built (`NotificationsService`, `EventsGateway`, `NotificationBell` component, Socket.IO real-time), but triggers are only wired for **forum mentions** and **report resolutions**. The `NotificationType` enum defines 20+ types, and `UserAchievement.notified` field exists but is unused.
+> The notification infrastructure is fully built (`NotificationsService`, `EventsGateway`, `NotificationBell` component, Socket.IO real-time). Triggers are now wired for all Phase 1 & 2 events. `UserAchievement.notified` is set to `true` on unlock. Frontend icons and href routing extended.
+> **Status: Subject for testing** — end-to-end verification pending GitHub Actions E2E run.
 
 **Phase 1 — Core User-Facing Notifications (Must-Have)**
-- [ ] `ACHIEVEMENT_UNLOCKED` — `GamificationService.unlockAchievement()`
-- [ ] `LEVEL_UP` — `GamificationService.awardXp()` when `leveledUp === true`
-- [ ] `MISSION_COMPLETED` — `GamificationService.updateMissionProgress()` when `isCompleted`
-- [ ] `TASK_COMPLETED` — `CampaignsService.reviewSubmission()` approve + `TasksService.verifyTaskViaOAuth()`
-- [ ] `TASK_REJECTED` — `CampaignsService.reviewSubmission()` reject
-- [ ] `CREDIT_EARNED` — after every `WalletService.credit()` call (or caller-side)
-- [ ] Deduplication guard via `UserAchievement.notified` boolean for achievements
+- [x] `ACHIEVEMENT_UNLOCKED` — `GamificationService.unlockAchievement()`
+- [x] `LEVEL_UP` — `GamificationService.awardXp()` when `leveledUp === true`
+- [x] `CREDIT_EARNED` (mission) — `GamificationService.updateMissionProgress()` when `isCompleted`
+- [x] `TASK_COMPLETED` — `CampaignsService.reviewSubmission()` approve + `TasksService.submitProof()` auto-verify + `TasksService.recheckTask()`
+- [x] `TASK_REJECTED` — `CampaignsService.reviewSubmission()` reject
+- [x] Deduplication guard via `UserAchievement.notified` boolean for achievements
 
 **Phase 2 — Creator & Admin Notifications (Nice-to-Have)**
-- [ ] `CAMPAIGN_ACTIVE` — `AdminService.reviewCampaign()` approve
-- [ ] `CAMPAIGN_REJECTED` — `AdminService.reviewCampaign()` reject
-- [ ] `CAMPAIGN_COMPLETED` — `CampaignsService.reviewSubmission()` when last slot fills
-- [ ] `STREAK_BROKEN` — `GamificationService.claimDailyReward()` when `streakBroken === true`
-- [ ] `TASK_ASSIGNED` — `TasksService.assignTask()` confirmation
-- [ ] Frontend: extend `notificationIcon()` switch for new types
+- [x] `CAMPAIGN_ACTIVE` — `AdminService.reviewCampaign()` approve
+- [x] `CAMPAIGN_REJECTED` — `AdminService.reviewCampaign()` reject
+- [x] `CAMPAIGN_COMPLETED` — `CampaignsService.reviewSubmission()` when last slot fills
+- [x] `STREAK_BROKEN` — `GamificationService.claimDailyReward()` when `streakBroken === true`
+- [x] `TASK_ASSIGNED` — `TasksService.assignTask()` confirmation
+- [x] Frontend: extend `notificationIcon()` switch for new types
 
 ---
 

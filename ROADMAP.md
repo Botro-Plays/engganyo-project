@@ -589,7 +589,7 @@
 - [🟡] Personalized dashboard based on user role (earner vs creator)
 - [🟡] Quick actions panel
 - [🟡] Activity feed
-- [🟡] Notification center
+- [✅] Notification center — real-time Socket.IO delivery, 10 notification types wired (Phase 1 & 2), frontend bell + page with icons and routing
 - [🟡] Performance insights
 
 **Mobile Optimization**
@@ -628,7 +628,7 @@
 - [🟡] 30+ achievements across more categories: Social, Veteran, Whale, Streak Master, Referral King
 - [🟡] Tiered achievements (Bronze → Silver → Gold → Platinum)
 - [🟡] Achievement showcase on public profile (user picks 3 to display)
-- [🟡] Achievement notifications and celebration animations
+- [🟡] Achievement notifications and celebration animations — notifications wired (ACHIEVEMENT_UNLOCKED, LEVEL_UP), celebration UI pending
 
 **Seasonal events**
 - [🟡] Weekly challenges with bonus credit rewards
