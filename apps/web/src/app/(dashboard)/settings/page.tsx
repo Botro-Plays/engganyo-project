@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Link2, Bell, Shield, User } from 'lucide-react';
+import { Link2, Bell, Shield, User, Cookie } from 'lucide-react';
+import { CookieConsentSettings } from '@/components/cookie-consent';
 
 const SETTING_TILES = [
   {
@@ -58,6 +59,21 @@ export default function SettingsPage() {
             ? <Link key={tile.label} href={tile.href}>{inner}</Link>
             : <div key={tile.label}>{inner}</div>;
         })}
+      </div>
+
+      <div className="mt-8">
+        <div className="card-glass rounded-xl p-5">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center shrink-0">
+              <Cookie className="w-5 h-5 text-brand-400" />
+            </div>
+            <div>
+              <p className="font-semibold text-white text-sm">Privacy & Cookies</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Manage your cookie consent preferences.</p>
+            </div>
+          </div>
+          <CookieConsentSettings />
+        </div>
       </div>
     </div>
   );
