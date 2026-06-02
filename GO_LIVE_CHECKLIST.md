@@ -1,6 +1,6 @@
 # ENGGANYO — Go-Live Checklist
 
-> **Living document** — updated after each session. Last updated: 2026-06-01 (Full MD audit: security status corrected to ✅ Complete, Week 1 marked done, C3 Why checkbox fixed)
+> **Living document** — updated after each session. Last updated: 2026-06-02 (Added Notification System Wiring phases — Phase 1 & 2 scoped for implementation)
 > This is the single source of truth for what needs to happen before the platform generates revenue.
 
 ---
@@ -176,7 +176,28 @@ After revenue is flowing, improve scale and trust.
 
 **C1, C2, and C3 are resolved. The platform is revenue-ready for platform fees.**
 
-Recommended order:
-1. ~~C3: Platform fees on campaign creation~~ ✅ DONE
+### Active: Notification System Wiring (WebSocket/Socket.IO)
+> The notification infrastructure is fully built (`NotificationsService`, `EventsGateway`, `NotificationBell` component, Socket.IO real-time), but triggers are only wired for **forum mentions** and **report resolutions**. The `NotificationType` enum defines 20+ types, and `UserAchievement.notified` field exists but is unused.
+
+**Phase 1 — Core User-Facing Notifications (Must-Have)**
+- [ ] `ACHIEVEMENT_UNLOCKED` — `GamificationService.unlockAchievement()`
+- [ ] `LEVEL_UP` — `GamificationService.awardXp()` when `leveledUp === true`
+- [ ] `MISSION_COMPLETED` — `GamificationService.updateMissionProgress()` when `isCompleted`
+- [ ] `TASK_COMPLETED` — `CampaignsService.reviewSubmission()` approve + `TasksService.verifyTaskViaOAuth()`
+- [ ] `TASK_REJECTED` — `CampaignsService.reviewSubmission()` reject
+- [ ] `CREDIT_EARNED` — after every `WalletService.credit()` call (or caller-side)
+- [ ] Deduplication guard via `UserAchievement.notified` boolean for achievements
+
+**Phase 2 — Creator & Admin Notifications (Nice-to-Have)**
+- [ ] `CAMPAIGN_ACTIVE` — `AdminService.reviewCampaign()` approve
+- [ ] `CAMPAIGN_REJECTED` — `AdminService.reviewCampaign()` reject
+- [ ] `CAMPAIGN_COMPLETED` — `CampaignsService.reviewSubmission()` when last slot fills
+- [ ] `STREAK_BROKEN` — `GamificationService.claimDailyReward()` when `streakBroken === true`
+- [ ] `TASK_ASSIGNED` — `TasksService.assignTask()` confirmation
+- [ ] Frontend: extend `notificationIcon()` switch for new types
+
+---
+
+**After notifications are wired:**
 2. **Revenue launch**: Stripe integration for credit purchases
 3. **Withdrawals**: USDT payout with admin approval
