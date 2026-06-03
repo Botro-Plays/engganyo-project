@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -91,7 +92,7 @@ export class PayMongoService {
         where: { id: depositId },
         data: {
           paymentRef: linkId,
-          gatewayData: { checkoutUrl },
+          gatewayData: { checkoutUrl, expiredAt: expiredAt.toISOString() },
         },
       });
     } catch (err) {
@@ -267,34 +268,54 @@ export class PayMongoService {
       }
     }
 
-    // qrph.expired — auto-cancel the associated deposit
+    // qrph.expired — QR expiry auto-refreshes on PayMongo's checkout page.
+    // The payment link itself is still valid; do NOT cancel the deposit here.
     if (eventType === 'qrph.expired') {
       const qrAttrs = eventData?.attributes as Record<string, unknown> | undefined;
       const referenceNumber = qrAttrs?.reference_number as string | undefined;
-      this.logger.log(`qrph.expired: reference_number=${referenceNumber}`);
-      this.logger.log(`Full qrph attributes: ${JSON.stringify(qrAttrs)}`);
-
-      // Find PENDING PAYMONGO deposit — QR has no direct depositId; match by paymentRef (link ID)
-      if (referenceNumber) {
-        const deposit = await this.prisma.deposit.findFirst({
-          where: {
-            method: DepositMethod.PAYMONGO,
-            status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
-            paymentRef: referenceNumber,
-          },
-        });
-        if (deposit) {
-          await this.prisma.deposit.update({
-            where: { id: deposit.id },
-            data: { status: DepositStatus.CANCELLED, adminNotes: 'QR code expired' },
-          });
-          this.logger.log(`Deposit ${deposit.id} cancelled due to QR expiry`);
-          return { received: true, action: 'cancelled', depositId: deposit.id };
-        }
-      }
-      return { received: true, action: 'ignored' };
+      this.logger.log(`qrph.expired: reference_number=${referenceNumber} — QR auto-refreshed, payment link still valid`);
+      return { received: true, action: 'ignored', reason: 'qr_auto_refresh' };
     }
 
     return { received: true, action: 'ignored', eventType };
+  }
+
+  /**
+   * Every 5 minutes: find PENDING/PROCESSING PayMongo deposits whose link
+   * has actually expired (gatewayData.expiredAt passed) and cancel them.
+   * QR expiry (qrph.expired) auto-refreshes — we only cancel when the link itself is dead.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async cancelExpiredPayMongoDeposits() {
+    const now = new Date();
+
+    const expiredDeposits = await this.prisma.deposit.findMany({
+      where: {
+        method: DepositMethod.PAYMONGO,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        gatewayData: { path: ['expiredAt'], lt: now.toISOString() },
+      },
+      select: { id: true, paymentRef: true },
+    });
+
+    if (expiredDeposits.length === 0) return;
+
+    this.logger.log(`Found ${expiredDeposits.length} PayMongo deposit(s) with expired links — cancelling`);
+
+    for (const deposit of expiredDeposits) {
+      try {
+        // Archive the PayMongo link so it can't be paid anymore
+        if (deposit.paymentRef) {
+          await this.archiveLink(deposit.paymentRef);
+        }
+        await this.prisma.deposit.update({
+          where: { id: deposit.id },
+          data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayMongo link expired' },
+        });
+        this.logger.log(`Deposit ${deposit.id} auto-cancelled — PayMongo link expired`);
+      } catch (err) {
+        this.logger.error(`Failed to auto-cancel deposit ${deposit.id}: ${String(err)}`);
+      }
+    }
   }
 }
