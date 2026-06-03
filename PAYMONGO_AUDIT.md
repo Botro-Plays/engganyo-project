@@ -1,0 +1,195 @@
+# PayMongo Integration Audit — Critical Issues Found
+
+**Audit Date:** 2026-06-03
+**Audited by:** Cascade
+**Status:** 🔴 5 Critical, 🟠 6 High, 🟡 6 Medium, 🟢 4 Minor — Total: 21 issues
+
+---
+
+## 🔴 Critical Bugs (Fix Immediately)
+
+### 1. Webhook `payment.paid` fallback completes the WRONG deposit
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:241-251`
+**Code:**
+```typescript
+const depositByIntent = await this.prisma.deposit.findFirst({
+  where: { method: DepositMethod.PAYMONGO, status: { in: [PENDING, PROCESSING] } },
+});
+```
+**Problem:** This grabs the *first* pending PayMongo deposit globally and completes it, regardless of whether the `payment_intent_id` matches. If two users have pending PayMongo deposits simultaneously, one user's payment could credit the wrong user.
+**Fix:** Remove this unsafe fallback entirely, or match by `paymentRef` (link ID) against `payment_intent_id` with an exact equality check, not `findFirst`.
+
+### 2. `createPaymentLink` has NO ownership validation
+**File:** `apps/api/src/modules/paymongo/paymongo.controller.ts:33-37`, `paymongo.service.ts:91-98`
+**Code:**
+```typescript
+// Controller — just passes depositId from body, no ownership check
+return this.paymongoService.createPaymentLink(dto.depositId, dto.amountCents, dto.description);
+```
+**Problem:** Any authenticated user can overwrite another user's PayMongo link by passing their deposit ID. The service updates the deposit's `paymentRef` and `gatewayData` without verifying the deposit belongs to the caller.
+**Fix:** Validate `deposit.userId === user.sub` in the controller before calling the service.
+
+### 3. Race condition: cancel vs. webhook completion
+**File:** `apps/api/src/modules/wallet/wallet.service.ts:412-418`, `paymongo.service.ts:204-210`
+**Code:**
+```typescript
+// wallet.service.ts
+await this.payMongoService.archiveLink(deposit.paymentRef);  // Step 1
+return this.prisma.deposit.update({ status: CANCELLED });   // Step 2 (status still PENDING here)
+
+// Meanwhile, webhook arrives:
+if (!deposit || deposit.status === COMPLETED || deposit.status === CANCELLED) {
+  // Still PENDING at this point — webhook proceeds!
+}
+await this.walletService.completeDeposit(depositId, ...);  // User gets credits for "cancelled" deposit
+```
+**Problem:** Between `archiveLink()` and `update(status: CANCELLED)`, a webhook could arrive. The webhook checks `status !== CANCELLED`, but at that moment status is still `PENDING`, so it completes the deposit. Same race exists in the cron job (`paymongo.service.ts:320-328`).
+**Fix:** Use a Prisma transaction to atomically archive + update, or add a `gatewayData` flag `cancelling: true` that the webhook checks.
+
+### 4. `completeDeposit` does not guard against CANCELLED/FAILED deposits
+**File:** `apps/api/src/modules/wallet/wallet.service.ts:428-469`
+**Code:**
+```typescript
+if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
+// Missing: if (deposit.status === CANCELLED || deposit.status === FAILED) throw ...
+```
+**Problem:** If a deposit was cancelled by user/cron, a late-arriving webhook could still mark it COMPLETED and credit the user. This is the second half of the race condition in #3.
+**Fix:** Add guards for `CANCELLED` and `FAILED` at the top of `completeDeposit`.
+
+### 5. `completeDeposit` is not atomic
+**File:** `apps/api/src/modules/wallet/wallet.service.ts:428-469`
+**Problem:** The method does `deposit.update` → `credit()` (which updates wallet + creates transaction) → `createNotification()` in three separate calls. If `credit()` fails after the deposit is marked `COMPLETED`, the deposit is complete but the user never got credits. Partial state = data corruption.
+**Fix:** Wrap all three operations in `prisma.$transaction`.
+
+---
+
+## 🟠 High-Priority Issues
+
+### 6. `createPaymentLink` doesn't validate deposit state
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:33-105`
+**Problem:** It doesn't check if the deposit is already `COMPLETED`, `CANCELLED`, or `FAILED`. A user could create a new PayMongo link for an already-completed deposit.
+**Fix:** Add a state check: `if (deposit.status !== PENDING) throw new BadRequestException(...)`.
+
+### 7. `payment.failed` uses raw string `'FAILED'` instead of enum
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:265`
+**Code:**
+```typescript
+data: { status: 'FAILED', adminNotes: 'PayMongo payment failed' }
+```
+**Problem:** Type safety violation. Prisma schema has `DepositStatus.FAILED` enum.
+**Fix:** Use `DepositStatus.FAILED`.
+
+### 8. `processWebhookEvent` parses JSON before verifying signature
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:162`
+**Code:**
+```typescript
+const payload = JSON.parse(rawBody);  // Line 162
+// ... signature verification on line 182 ...
+```
+**Problem:** Malformed JSON causes an unhandled exception *before* signature verification. An attacker can probe with bad payloads and bypass signature checks entirely (error leaks before `verifyWebhookSignature` runs).
+**Fix:** Move `JSON.parse` inside a try-catch, or wrap the entire signature verification in try-catch and return `400` on any error before proceeding.
+
+### 9. No handler for `link.payment.failed`
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:256-269`
+**Problem:** When a user clicks "Pay" on the checkout page but payment fails (insufficient funds, timeout, etc.), PayMongo sends `link.payment.failed`. The deposit stays `PENDING` forever — no notification, no retry, no failure state.
+**Fix:** Add a handler that marks the deposit `FAILED` and notifies the user.
+
+### 10. Cron doesn't check if payment already happened
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:289-334`
+**Problem:** If a user paid the deposit but the webhook is delayed, the cron could archive the link and cancel the deposit right before the webhook arrives. This creates the race condition in #3 but at a larger scale (batch job).
+**Fix:** Before cancelling, verify the link status via PayMongo API, or check if `paymentRef` has been updated to a payment ID (links start with `link_`, payments with `pay_`).
+
+### 11. Missing idempotency on webhook `link.payment.paid`
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:190-213`
+**Problem:** PayMongo may retry webhooks. The `deposit.status === COMPLETED` check protects against double-completion, but there's a race window between the read and the write.
+**Fix:** Use `prisma.deposit.updateMany({ where: { id, status: PENDING }, data: { status: COMPLETED } })` as an atomic state transition, or wrap in transaction.
+
+---
+
+## 🟡 Medium-Priority Issues
+
+### 12. `createPaymentLink` receives `amountCents` from client
+**File:** `apps/api/src/modules/paymongo/paymongo.controller.ts:35`
+**Problem:** The client sends `amountCents`. A malicious user could send a different amount than the deposit package specifies, creating a PayMongo link for the wrong amount.
+**Fix:** Derive `amountCents` from the deposit/package server-side, not from the request body.
+
+### 13. Frontend `CopyButton` memory leak
+**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:134-147`
+**Code:**
+```typescript
+setTimeout(() => setCopied(false), 2000);  // Not cleared on unmount
+```
+**Problem:** If the component unmounts before 2 seconds, the timeout callback fires on a destroyed component.
+**Fix:** Return a cleanup function from `useEffect` that calls `clearTimeout(id)`.
+
+### 14. Frontend countdown timer `NaN` risk
+**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:150-156`
+**Code:**
+```typescript
+const effectiveExpiredAt = expiredAt
+  ? new Date(expiredAt).getTime()
+  : createdAt
+    ? new Date(createdAt).getTime() + 30 * 60 * 1000
+    : 0;
+```
+**Problem:** If `createdAt` is an invalid string, `new Date(createdAt).getTime()` returns `NaN`. `Math.max(0, NaN - Date.now())` is `NaN`, causing the timer to display `NaN:NaN`.
+**Fix:** Validate the parsed date: `isNaN(effectiveExpiredAt) ? 0 : effectiveExpiredAt`.
+
+### 15. `initiateDeposit` + `createPaymentLink` are two separate API calls
+**File:** `apps/api/src/modules/wallet/wallet.service.ts:300-374`, frontend
+**Problem:** If `initiateDeposit` succeeds but `createPaymentLink` fails, the deposit exists with no `paymentRef` and no `gatewayData`. The user can't pay, and the cron will auto-cancel it after 30 minutes.
+**Fix:** Inline PayMongo link creation into `initiateDeposit` for `method === 'PAYMONGO'`.
+
+### 16. `archiveLink` silently fails, callers don't retry
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:107-132`
+**Problem:** All three callers (user cancel, admin reject, cron) log the failure and continue. If archiving fails due to a transient network error, the link stays active.
+**Fix:** Add a retry loop (e.g., 3 attempts with exponential backoff) or at least alert on failure.
+
+### 17. Admin `reviewDeposit` COMPLETED doesn't archive the link
+**File:** `apps/api/src/modules/admin/admin.service.ts:1803-1808`
+**Problem:** When admin manually marks a PayMongo deposit as COMPLETED, the PayMongo link remains active. A user could still accidentally pay it, creating a duplicate payment on PayMongo's side.
+**Fix:** Archive the link when admin marks COMPLETED (just like FAILED/REFUNDED).
+
+---
+
+## 🟢 Minor Issues
+
+### 18. Frontend `gatewayData!` non-null assertion
+**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:930`
+**Code:**
+```typescript
+window.open(dep.gatewayData!.checkoutUrl as string, ...)
+```
+**Problem:** The `!` assertion assumes `gatewayData` is always present. If backend structure changes, this could crash.
+**Fix:** Use optional chaining: `dep.gatewayData?.checkoutUrl`.
+
+### 19. `verifyWebhookSignature` doesn't validate secret format
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:134-149`
+**Problem:** Should validate that `secret` is a valid hex string before passing to `createHmac`. An empty string or non-hex string produces a predictable HMAC.
+**Fix:** Add length/format validation for the secret.
+
+### 20. PayMongo `linkId` could be empty string stored in DB
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:84`
+**Code:**
+```typescript
+const linkId = (data?.id as string) ?? '';
+```
+**Problem:** If PayMongo returns `data.id` as empty string, `linkId` becomes `''`. The `archiveLink('')` call hits `POST /links//archive`.
+**Fix:** Throw if `!linkId || !checkoutUrl` instead of only checking separately.
+
+---
+
+## Recommended Fix Order
+
+| Priority | Issue | Reason |
+|----------|-------|--------|
+| 1 | #1 — Wrong deposit completed | Funds could go to wrong user |
+| 2 | #2 — No ownership check | Security: any user can overwrite links |
+| 3 | #5 — `completeDeposit` not atomic | Data corruption on partial failure |
+| 4 | #4 — CANCELLED→COMPLETED allowed | Completes cancelled deposits |
+| 5 | #3 — Race condition | Completes after cancel/archive |
+| 6 | #8 — JSON before signature | Signature bypass via malformed payload |
+| 7 | #9 — No `link.payment.failed` | Deposits stuck forever |
+| 8 | #10 — Cron doesn't check payment | Batch race with webhook |
+| 9 | #7 — String literal enum | Type safety |
+| 10 | #12 — Client-controlled amount | Financial integrity |
