@@ -650,6 +650,15 @@ export default function WalletPage() {
                         <div className="px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300/80 leading-relaxed">
                           {depositResult.instructions.message}
                         </div>
+                        {fiatCheckoutUrl && (
+                          <button
+                            onClick={() => window.open(fiatCheckoutUrl, '_blank', 'noopener,noreferrer')}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-medium transition-all w-full justify-center"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            {depositResult.deposit.method === 'PAYMONGO' ? 'Open PayMongo Checkout' : 'Open PayPal Checkout'}
+                          </button>
+                        )}
                       </div>
                     </div>
 

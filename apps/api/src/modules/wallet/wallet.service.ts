@@ -339,9 +339,9 @@ export class WalletService {
     const cryptoCfg = method === 'USDT_BEP20' ? options.usdtBep20 : options.usdtBase;
 
     if (method === 'PAYMONGO') {
-      instructions = { type: 'PAYMENT_LINK', depositId: deposit.id, message: 'PayMongo checkout coming soon. Record your Deposit ID and contact support to complete.' };
+      instructions = { type: 'PAYMENT_LINK', depositId: deposit.id, message: 'Complete your payment in the PayMongo checkout page. The link is available below.' };
     } else if (method === 'PAYPAL') {
-      instructions = { type: 'REDIRECT', depositId: deposit.id, message: 'PayPal checkout coming soon. Record your Deposit ID and contact support to complete.' };
+      instructions = { type: 'REDIRECT', depositId: deposit.id, message: 'Complete your payment in the PayPal checkout page. The link is available below.' };
     } else if (isCrypto) {
       instructions = {
         type: txHash ? 'CRYPTO_SUBMITTED' : 'CRYPTO_ADDRESS',
