@@ -450,7 +450,7 @@ export default function WalletPage() {
           {/* ── Sticky: Resume pending PayMongo payment ── */}
           {(() => {
             const pendingPaymongo = depositHistory?.items.find(
-              (d) => d.method === 'PAYMONGO' && d.status === 'PENDING' && d.gatewayData?.checkoutUrl,
+              (d) => d.method === 'PAYMONGO' && d.status === 'PENDING' && typeof d.gatewayData?.checkoutUrl === 'string',
             );
             if (!pendingPaymongo) return null;
             const checkoutUrl = pendingPaymongo.gatewayData!.checkoutUrl as string;
@@ -867,7 +867,7 @@ export default function WalletPage() {
                             {dep.status === 'COMPLETED' && dep.creditsAwarded > 0 && (
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
                             )}
-                            {dep.method === 'PAYMONGO' && dep.status === 'PENDING' && dep.gatewayData?.checkoutUrl && (
+                            {dep.method === 'PAYMONGO' && dep.status === 'PENDING' && typeof dep.gatewayData?.checkoutUrl === 'string' && (
                               <button
                                 onClick={() => window.open(dep.gatewayData!.checkoutUrl as string, '_blank', 'noopener,noreferrer')}
                                 className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
