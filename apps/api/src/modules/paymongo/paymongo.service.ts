@@ -35,7 +35,8 @@ export class PayMongoService {
     if (!secret) throw new BadRequestException('PayMongo not configured');
 
     const amount = Math.round(amountCents);
-    this.logger.log(`Requesting PayMongo link with amount: ${amount} cents`);
+    const expiredAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
+    this.logger.log(`Requesting PayMongo link with amount: ${amount} cents, expires: ${expiredAt.toISOString()}`);
 
     let res: Response;
     try {
@@ -52,6 +53,7 @@ export class PayMongoService {
               description,
               remarks: `Deposit ${depositId}`,
               external_reference_number: depositId,
+              expired_at: expiredAt.getTime(),
             },
           },
         }),
@@ -95,6 +97,33 @@ export class PayMongoService {
     }
 
     return { linkId, checkoutUrl };
+  }
+
+  async archiveLink(linkId: string) {
+    const secret = await this.getSecretKey();
+    if (!secret) {
+      this.logger.warn('Cannot archive link: PayMongo not configured');
+      return false;
+    }
+    try {
+      const res = await fetch(`${this.baseUrl}/links/${linkId}/archive`, {
+        method: 'POST',
+        headers: {
+          Authorization: this.authHeader(secret),
+          'Content-Type': 'application/json',
+        },
+      });
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (res.ok) {
+        this.logger.log(`PayMongo link ${linkId} archived successfully`);
+        return true;
+      }
+      this.logger.warn(`Failed to archive PayMongo link ${linkId}: ${JSON.stringify(json)}`);
+      return false;
+    } catch (err) {
+      this.logger.error(`Archive link ${linkId} error: ${String(err)}`);
+      return false;
+    }
   }
 
   verifyWebhookSignature(timestamp: string, testMode: boolean, rawBody: string, signatureHeader: string, secret: string): boolean {
@@ -168,8 +197,8 @@ export class PayMongoService {
       }
 
       const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
-      if (!deposit || deposit.status === DepositStatus.COMPLETED) {
-        this.logger.warn(`link.payment.paid: deposit ${depositId} not found or already completed`);
+      if (!deposit || deposit.status === DepositStatus.COMPLETED || deposit.status === DepositStatus.CANCELLED) {
+        this.logger.warn(`link.payment.paid: deposit ${depositId} not found, already completed or cancelled`);
         return { received: true, action: 'ignored' };
       }
 
@@ -196,7 +225,7 @@ export class PayMongoService {
       // Try direct depositId match (external_reference_number should be our depositId for newly created links)
       if (externalRef) {
         const depositById = await this.prisma.deposit.findUnique({ where: { id: externalRef } });
-        if (depositById && depositById.method === DepositMethod.PAYMONGO && depositById.status !== DepositStatus.COMPLETED) {
+        if (depositById && depositById.method === DepositMethod.PAYMONGO && depositById.status !== DepositStatus.COMPLETED && depositById.status !== DepositStatus.CANCELLED) {
           this.logger.log(`Found deposit ${depositById.id} via external_reference_number`);
           await this.walletService.completeDeposit(depositById.id, { paymentRef: paymentId });
           return { received: true, action: 'completed', depositId: depositById.id };
