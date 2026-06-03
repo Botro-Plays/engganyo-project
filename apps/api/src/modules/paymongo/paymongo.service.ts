@@ -90,9 +90,13 @@ export class PayMongoService {
   }
 
   async processWebhookEvent(rawBody: string, signatureHeader: string) {
+    this.logger.log('PayMongo webhook received');
+    this.logger.log(`Signature header: ${signatureHeader}`);
+    this.logger.log(`Raw body (first 500 chars): ${rawBody.substring(0, 500)}`);
+
     const secret = await this.getWebhookSecret();
     if (!secret) {
-      this.logger.warn('PayMongo webhook received but no webhook secret configured');
+      this.logger.error('PayMongo webhook received but no webhook secret configured');
       throw new BadRequestException('Webhook secret not configured');
     }
 
@@ -100,6 +104,9 @@ export class PayMongoService {
     const eventType = payload.data?.attributes?.type as string;
     const eventData = payload.data?.attributes?.data;
     const testMode = payload.data?.attributes?.livemode === false;
+
+    this.logger.log(`Event type: ${eventType}, Test mode: ${testMode}`);
+    this.logger.log(`Event data: ${JSON.stringify(eventData)}`);
 
     const signatureParts = signatureHeader.split(',');
     let timestamp = '';
@@ -111,13 +118,15 @@ export class PayMongoService {
       }
     }
 
+    this.logger.log(`Timestamp: ${timestamp}`);
+
     const isValid = this.verifyWebhookSignature(timestamp, testMode, rawBody, signatureHeader, secret);
     if (!isValid) {
-      this.logger.warn('PayMongo webhook signature verification failed');
+      this.logger.error('PayMongo webhook signature verification failed');
       throw new BadRequestException('Invalid webhook signature');
     }
 
-    this.logger.log(`PayMongo webhook: ${eventType}`);
+    this.logger.log(`PayMongo webhook signature verified: ${eventType}`);
 
     if (eventType === 'payment.paid' || eventType === 'payment.success') {
       const payment = eventData?.attributes;
@@ -125,12 +134,18 @@ export class PayMongoService {
       const depositId = metadata.depositId as string | undefined;
       const paymentId = eventData?.id as string | undefined;
 
+      this.logger.log(`Payment metadata: ${JSON.stringify(metadata)}`);
+      this.logger.log(`Deposit ID from metadata: ${depositId}`);
+      this.logger.log(`Payment ID: ${paymentId}`);
+
       if (!depositId) {
         this.logger.warn('PayMongo webhook missing depositId in metadata');
         return { received: true, action: 'ignored' };
       }
 
+      this.logger.log(`Completing deposit ${depositId} for payment ${paymentId}`);
       await this.walletService.completeDeposit(depositId, { paymentRef: paymentId });
+      this.logger.log(`Deposit ${depositId} completed successfully`);
       return { received: true, action: 'completed', depositId };
     }
 
