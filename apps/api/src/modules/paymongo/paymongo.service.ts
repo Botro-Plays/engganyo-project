@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { createHmac } from 'crypto';
+import { DepositMethod, DepositStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -43,7 +44,7 @@ export class PayMongoService {
             amount: Math.round(amountCents),
             description,
             remarks: `Deposit ${depositId}`,
-            metadata: { depositId },
+            external_reference_number: depositId,
           },
         },
       }),
@@ -130,23 +131,44 @@ export class PayMongoService {
 
     if (eventType === 'payment.paid' || eventType === 'payment.success') {
       const payment = eventData?.attributes;
-      const metadata = payment?.metadata ?? {};
-      const depositId = metadata.depositId as string | undefined;
+      const externalRef = payment?.external_reference_number as string | undefined;
       const paymentId = eventData?.id as string | undefined;
 
-      this.logger.log(`Payment metadata: ${JSON.stringify(metadata)}`);
-      this.logger.log(`Deposit ID from metadata: ${depositId}`);
+      this.logger.log(`External reference number: ${externalRef}`);
       this.logger.log(`Payment ID: ${paymentId}`);
 
-      if (!depositId) {
-        this.logger.warn('PayMongo webhook missing depositId in metadata');
+      if (!externalRef) {
+        this.logger.warn('PayMongo webhook missing external_reference_number');
         return { received: true, action: 'ignored' };
       }
 
-      this.logger.log(`Completing deposit ${depositId} for payment ${paymentId}`);
-      await this.walletService.completeDeposit(depositId, { paymentRef: paymentId });
-      this.logger.log(`Deposit ${depositId} completed successfully`);
-      return { received: true, action: 'completed', depositId };
+      // Find deposit by external_reference_number (which we set to depositId)
+      const deposit = await this.prisma.deposit.findFirst({
+        where: {
+          method: DepositMethod.PAYMONGO,
+          status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+          paymentRef: externalRef, // We stored the link ID, but external_ref should match depositId
+        },
+      });
+
+      if (!deposit) {
+        this.logger.warn(`PayMongo webhook: no pending deposit found for external_ref ${externalRef}`);
+        // Try finding by id directly as fallback
+        const depositById = await this.prisma.deposit.findUnique({
+          where: { id: externalRef },
+        });
+        if (depositById && depositById.status !== DepositStatus.COMPLETED) {
+          this.logger.log(`Found deposit by ID as fallback: ${externalRef}`);
+          await this.walletService.completeDeposit(externalRef, { paymentRef: paymentId });
+          return { received: true, action: 'completed', depositId: externalRef };
+        }
+        return { received: true, action: 'ignored' };
+      }
+
+      this.logger.log(`Found deposit ${deposit.id} for external_ref ${externalRef}`);
+      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
+      this.logger.log(`Deposit ${deposit.id} completed successfully`);
+      return { received: true, action: 'completed', depositId: deposit.id };
     }
 
     if (eventType === 'payment.failed') {
