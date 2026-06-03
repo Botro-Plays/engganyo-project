@@ -37,25 +37,36 @@ export class PayMongoService {
     const amount = Math.round(amountCents);
     this.logger.log(`Requesting PayMongo link with amount: ${amount} cents`);
 
-    const res = await fetch(`${this.baseUrl}/links`, {
-      method: 'POST',
-      headers: {
-        Authorization: this.authHeader(secret),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            amount,
-            description,
-            remarks: `Deposit ${depositId}`,
-            external_reference_number: depositId,
-          },
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/links`, {
+        method: 'POST',
+        headers: {
+          Authorization: this.authHeader(secret),
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              amount,
+              description,
+              remarks: `Deposit ${depositId}`,
+              external_reference_number: depositId,
+            },
+          },
+        }),
+      });
+    } catch (err) {
+      this.logger.error(`PayMongo fetch error: ${String(err)}`);
+      throw new BadRequestException(`Failed to connect to PayMongo: ${String(err)}`);
+    }
 
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    let json: Record<string, unknown>;
+    try {
+      json = (await res.json()) as Record<string, unknown>;
+    } catch {
+      json = {};
+    }
     this.logger.log(`PayMongo response status: ${res.status}`);
     this.logger.log(`PayMongo response body: ${JSON.stringify(json)}`);
 
@@ -73,10 +84,15 @@ export class PayMongoService {
       throw new BadRequestException('PayMongo link response missing required fields');
     }
 
-    await this.prisma.deposit.update({
-      where: { id: depositId },
-      data: { paymentRef: linkId },
-    });
+    try {
+      await this.prisma.deposit.update({
+        where: { id: depositId },
+        data: { paymentRef: linkId },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to update deposit ${depositId} with paymentRef: ${String(err)}`);
+      throw new BadRequestException(`PayMongo link created but failed to update deposit: ${String(err)}`);
+    }
 
     return { linkId, checkoutUrl };
   }
