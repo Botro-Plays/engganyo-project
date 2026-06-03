@@ -1827,6 +1827,7 @@ export class AdminService {
           ...(dto.paymentRef && { paymentRef: dto.paymentRef }),
         },
       });
+      this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId, status: dto.status });
 
       if (dto.status === 'FAILED') {
         await this.notificationsService.createNotification(

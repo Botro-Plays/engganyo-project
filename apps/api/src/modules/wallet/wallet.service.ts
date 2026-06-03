@@ -11,6 +11,7 @@ import { DepositMethod, DepositStatus, TransactionType, TransactionStatus, Notif
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
@@ -44,6 +45,7 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly currency: CurrencyService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventsService: EventsService,
     @Inject(forwardRef(() => PayMongoService))
     private readonly payMongoService: PayMongoService,
   ) {}
@@ -417,10 +419,12 @@ export class WalletService {
       }
     }
 
-    return this.prisma.deposit.update({
+    const updated = await this.prisma.deposit.update({
       where: { id: depositId },
       data: { status: DepositStatus.CANCELLED, adminNotes: 'Cancelled by user' },
     });
+    this.eventsService.emitToUser(userId, 'deposit:updated', { depositId, status: DepositStatus.CANCELLED });
+    return updated;
   }
 
   // ─── Complete a deposit (used by webhooks & admin review) ──
@@ -466,6 +470,16 @@ export class WalletService {
       `Your ${deposit.method} deposit of ${deposit.currency} ${deposit.amountFiat} has been approved. ${deposit.creditsToAward.toLocaleString()} credits added to your wallet.`,
       { depositId, credits: deposit.creditsToAward },
     );
+
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId: deposit.userId } });
+    this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId, status: DepositStatus.COMPLETED });
+    if (wallet) {
+      this.eventsService.emitToUser(deposit.userId, 'wallet:updated', {
+        balance: wallet.balance,
+        lifetimeEarned: wallet.lifetimeEarned,
+        lifetimeSpent: wallet.lifetimeSpent,
+      });
+    }
 
     return this.prisma.deposit.findUnique({ where: { id: depositId } });
   }

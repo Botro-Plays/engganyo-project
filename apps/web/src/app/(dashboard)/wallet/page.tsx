@@ -9,6 +9,7 @@ import {
   ShieldCheck, Send, ExternalLink, AlertTriangle,
 } from 'lucide-react';
 import { useEvmWallet } from '@/hooks/use-evm-wallet';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
@@ -212,6 +213,14 @@ export default function WalletPage() {
     setFiatCheckoutUrl(null);
     evmWallet.reset();
   };
+
+  // Real-time: refresh deposits + wallet on backend events
+  useSocketEvent('deposit:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+  });
+  useSocketEvent('wallet:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+  });
 
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ['wallet', 'me'],
