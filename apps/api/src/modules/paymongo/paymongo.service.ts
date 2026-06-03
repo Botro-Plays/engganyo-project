@@ -153,58 +153,85 @@ export class PayMongoService {
 
     this.logger.log(`PayMongo webhook signature verified: ${eventType}`);
 
+    // link.payment.paid — link object is eventData; external_reference_number = our depositId
+    if (eventType === 'link.payment.paid') {
+      const linkAttrs = eventData?.attributes as Record<string, unknown> | undefined;
+      const depositId = linkAttrs?.external_reference_number as string | undefined;
+      const payments = linkAttrs?.payments as Array<Record<string, unknown>> | undefined;
+      const paymentId = payments?.[0]?.id as string | undefined;
+
+      this.logger.log(`link.payment.paid: depositId=${depositId}, paymentId=${paymentId}`);
+
+      if (!depositId) {
+        this.logger.warn('link.payment.paid: missing external_reference_number (depositId)');
+        return { received: true, action: 'ignored' };
+      }
+
+      const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+      if (!deposit || deposit.status === DepositStatus.COMPLETED) {
+        this.logger.warn(`link.payment.paid: deposit ${depositId} not found or already completed`);
+        return { received: true, action: 'ignored' };
+      }
+
+      await this.walletService.completeDeposit(depositId, { paymentRef: paymentId });
+      this.logger.log(`Deposit ${depositId} completed via link.payment.paid`);
+      return { received: true, action: 'completed', depositId };
+    }
+
+    // payment.paid — payment object is eventData; find deposit by matching link ID stored in paymentRef
     if (eventType === 'payment.paid' || eventType === 'payment.success') {
-      const payment = eventData?.attributes;
-      const externalRef = payment?.external_reference_number as string | undefined;
+      const paymentAttrs = eventData?.attributes as Record<string, unknown> | undefined;
       const paymentId = eventData?.id as string | undefined;
+      const origin = paymentAttrs?.origin as string | undefined;
 
-      this.logger.log(`External reference number: ${externalRef}`);
-      this.logger.log(`Payment ID: ${paymentId}`);
+      this.logger.log(`payment.paid: paymentId=${paymentId}, origin=${origin}`);
+      this.logger.log(`Full payment attributes: ${JSON.stringify(paymentAttrs)}`);
 
-      if (!externalRef) {
-        this.logger.warn('PayMongo webhook missing external_reference_number');
-        return { received: true, action: 'ignored' };
-      }
+      // When paid via a link, find the deposit whose paymentRef is the link ID.
+      // PayMongo does not pass our custom field back; match by payment_intent_id or remarks.
+      // Safest: look for any PENDING PAYMONGO deposit with no completion yet and match amount.
+      const externalRef = paymentAttrs?.external_reference_number as string | undefined;
+      this.logger.log(`external_reference_number from payment: ${externalRef}`);
 
-      // Find deposit by external_reference_number (which we set to depositId)
-      const deposit = await this.prisma.deposit.findFirst({
-        where: {
-          method: DepositMethod.PAYMONGO,
-          status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
-          paymentRef: externalRef, // We stored the link ID, but external_ref should match depositId
-        },
-      });
-
-      if (!deposit) {
-        this.logger.warn(`PayMongo webhook: no pending deposit found for external_ref ${externalRef}`);
-        // Try finding by id directly as fallback
-        const depositById = await this.prisma.deposit.findUnique({
-          where: { id: externalRef },
-        });
-        if (depositById && depositById.status !== DepositStatus.COMPLETED) {
-          this.logger.log(`Found deposit by ID as fallback: ${externalRef}`);
-          await this.walletService.completeDeposit(externalRef, { paymentRef: paymentId });
-          return { received: true, action: 'completed', depositId: externalRef };
+      // Try direct depositId match (external_reference_number should be our depositId for newly created links)
+      if (externalRef) {
+        const depositById = await this.prisma.deposit.findUnique({ where: { id: externalRef } });
+        if (depositById && depositById.method === DepositMethod.PAYMONGO && depositById.status !== DepositStatus.COMPLETED) {
+          this.logger.log(`Found deposit ${depositById.id} via external_reference_number`);
+          await this.walletService.completeDeposit(depositById.id, { paymentRef: paymentId });
+          return { received: true, action: 'completed', depositId: depositById.id };
         }
-        return { received: true, action: 'ignored' };
       }
 
-      this.logger.log(`Found deposit ${deposit.id} for external_ref ${externalRef}`);
-      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
-      this.logger.log(`Deposit ${deposit.id} completed successfully`);
-      return { received: true, action: 'completed', depositId: deposit.id };
+      // Fallback: match by paymentRef (link ID) stored on deposit against payment_intent_id
+      const intentId = paymentAttrs?.payment_intent_id as string | undefined;
+      if (intentId) {
+        const depositByIntent = await this.prisma.deposit.findFirst({
+          where: { method: DepositMethod.PAYMONGO, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
+        });
+        if (depositByIntent) {
+          this.logger.log(`Fallback: completing deposit ${depositByIntent.id} via payment_intent_id ${intentId}`);
+          await this.walletService.completeDeposit(depositByIntent.id, { paymentRef: paymentId });
+          return { received: true, action: 'completed', depositId: depositByIntent.id };
+        }
+      }
+
+      this.logger.warn(`payment.paid: could not match payment ${paymentId} to any pending deposit`);
+      return { received: true, action: 'ignored' };
     }
 
     if (eventType === 'payment.failed') {
-      const payment = eventData?.attributes;
-      const metadata = payment?.metadata ?? {};
-      const depositId = metadata.depositId as string | undefined;
-      if (depositId) {
-        await this.prisma.deposit.update({
-          where: { id: depositId },
-          data: { status: 'FAILED', adminNotes: 'PayMongo payment failed' },
-        });
-        return { received: true, action: 'failed', depositId };
+      const paymentAttrs = eventData?.attributes as Record<string, unknown> | undefined;
+      const externalRef = paymentAttrs?.external_reference_number as string | undefined;
+      if (externalRef) {
+        const deposit = await this.prisma.deposit.findUnique({ where: { id: externalRef } });
+        if (deposit && deposit.status !== DepositStatus.COMPLETED) {
+          await this.prisma.deposit.update({
+            where: { id: externalRef },
+            data: { status: 'FAILED', adminNotes: 'PayMongo payment failed' },
+          });
+          return { received: true, action: 'failed', depositId: externalRef };
+        }
       }
     }
 
