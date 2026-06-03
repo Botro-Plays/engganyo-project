@@ -73,6 +73,7 @@ interface DepositRecord {
   exchangeRate: number | null;
   paymentRef: string | null;
   adminNotes: string | null;
+  gatewayData: Record<string, unknown> | null;
   completedAt: string | null;
   createdAt: string;
   package: { usdAmount: number; label: string | null } | null;
@@ -445,6 +446,34 @@ export default function WalletPage() {
       {/* ── Tab: Deposit Credits ── */}
       {tab === 'deposit' && (
         <div className="space-y-6">
+
+          {/* ── Sticky: Resume pending PayMongo payment ── */}
+          {(() => {
+            const pendingPaymongo = depositHistory?.items.find(
+              (d) => d.method === 'PAYMONGO' && d.status === 'PENDING' && d.gatewayData?.checkoutUrl,
+            );
+            if (!pendingPaymongo) return null;
+            const checkoutUrl = pendingPaymongo.gatewayData!.checkoutUrl as string;
+            return (
+              <div className="card-glass rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+                  <ExternalLink className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Payment in progress</p>
+                  <p className="text-xs text-zinc-400">
+                    {pendingPaymongo.currency} {pendingPaymongo.amountFiat.toFixed(2)} → {pendingPaymongo.creditsToAward.toLocaleString()} credits
+                  </p>
+                </div>
+                <button
+                  onClick={() => window.open(checkoutUrl, '_blank', 'noopener,noreferrer')}
+                  className="shrink-0 flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />Resume Payment
+                </button>
+              </div>
+            );
+          })()}
 
           {/* ── 3-step deposit card ── */}
           <div className="card-glass rounded-xl border border-surface-border">
@@ -837,6 +866,14 @@ export default function WalletPage() {
                             )}
                             {dep.status === 'COMPLETED' && dep.creditsAwarded > 0 && (
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
+                            )}
+                            {dep.method === 'PAYMONGO' && dep.status === 'PENDING' && dep.gatewayData?.checkoutUrl && (
+                              <button
+                                onClick={() => window.open(dep.gatewayData!.checkoutUrl as string, '_blank', 'noopener,noreferrer')}
+                                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />Continue to PayMongo
+                              </button>
                             )}
                           </div>
                           {canCancel && (

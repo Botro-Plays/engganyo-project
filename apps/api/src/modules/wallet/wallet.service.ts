@@ -383,6 +383,7 @@ export class WalletService {
           amountFiat: true, currency: true,
           creditsToAward: true, creditsAwarded: true, bonusCredits: true,
           exchangeRate: true, paymentRef: true, adminNotes: true,
+          gatewayData: true,
           completedAt: true, createdAt: true,
           package: { select: { usdAmount: true, label: true } },
         },

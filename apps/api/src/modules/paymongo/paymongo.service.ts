@@ -89,7 +89,10 @@ export class PayMongoService {
     try {
       await this.prisma.deposit.update({
         where: { id: depositId },
-        data: { paymentRef: linkId },
+        data: {
+          paymentRef: linkId,
+          gatewayData: { checkoutUrl },
+        },
       });
     } catch (err) {
       this.logger.error(`Failed to update deposit ${depositId} with paymentRef: ${String(err)}`);
