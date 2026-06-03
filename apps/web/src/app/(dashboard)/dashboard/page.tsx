@@ -51,6 +51,7 @@ function DashboardPageInner() {
   const { data: stats } = useQuery<MyStats>({
     queryKey: ['my-stats'],
     queryFn: () => apiClient.get<{ data: MyStats }>('/analytics/users/me/stats').then((r) => r.data.data),
+    refetchInterval: 15_000,
   });
 
   const { data: gamStats } = useQuery<GamStats>({
@@ -59,6 +60,7 @@ function DashboardPageInner() {
       const res = await apiClient.get<ApiResponse<GamStats>>('gamification/stats');
       return res.data.data;
     },
+    refetchInterval: 15_000,
   });
 
   const rewardMutation = useMutation({

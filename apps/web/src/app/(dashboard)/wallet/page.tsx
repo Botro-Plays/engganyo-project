@@ -180,12 +180,14 @@ export default function WalletPage() {
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ['wallet', 'me'],
     queryFn: async () => (await apiClient.get<ApiResponse<WalletData>>('wallet/me')).data.data,
+    refetchInterval: 10_000,
   });
 
   const { data: txData, isLoading: txLoading } = useQuery({
     queryKey: ['wallet', 'transactions', txPage],
     queryFn: async () => (await apiClient.get<ApiResponse<TransactionsResponse>>(`wallet/transactions?page=${txPage}&limit=15`)).data.data,
     enabled: tab === 'history',
+    refetchInterval: 15_000,
   });
 
   const { data: packages, isLoading: packagesLoading } = useQuery({
@@ -204,6 +206,7 @@ export default function WalletPage() {
     queryKey: ['wallet', 'deposits', depPage],
     queryFn: async () => (await apiClient.get<ApiResponse<{ items: DepositRecord[]; meta: { total: number; page: number; totalPages: number; hasNext: boolean; hasPrev: boolean } }>>(`wallet/deposits?page=${depPage}&limit=10`)).data.data,
     enabled: tab === 'deposit',
+    refetchInterval: 10_000,
   });
 
   const initiateMutation = useMutation({

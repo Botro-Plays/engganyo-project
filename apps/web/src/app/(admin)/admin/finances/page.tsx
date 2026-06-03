@@ -205,6 +205,7 @@ export default function FinancesPage() {
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['admin', 'finance-stats'],
     queryFn: async () => (await apiClient.get<ApiResponse<FinanceStats>>('admin/finances/stats')).data.data,
+    refetchInterval: 15_000,
   });
 
   const { data: deposits, isLoading: depositsLoading } = useQuery({
@@ -215,6 +216,7 @@ export default function FinancesPage() {
       if (filterMethod) params.set('method', filterMethod);
       return (await apiClient.get<ApiResponse<DepositsResponse>>(`admin/finances/deposits?${params}`)).data.data;
     },
+    refetchInterval: 15_000,
   });
 
   const reviewMutation = useMutation({

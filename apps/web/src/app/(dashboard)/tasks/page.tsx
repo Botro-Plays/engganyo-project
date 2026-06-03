@@ -235,6 +235,7 @@ export default function TasksPage() {
       }
     },
     enabled: tab === 'browse',
+    refetchInterval: 15_000,
   });
 
   // ─── My tasks ──────────────────────────────────────────────
@@ -257,6 +258,7 @@ export default function TasksPage() {
       }
     },
     enabled: tab === 'mine',
+    refetchInterval: 15_000,
   });
 
   // ─── Assign task ───────────────────────────────────────────

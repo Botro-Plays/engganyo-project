@@ -102,6 +102,7 @@ export default function AdminOverviewPage() {
       const res = await apiClient.get<ApiResponse<OverviewStats>>('admin/stats');
       return res.data.data;
     },
+    refetchInterval: 15_000,
   });
 
   const { data: sysStats, isLoading: sysLoading, refetch: refetchSys, isFetching: sysFetching } = useQuery({

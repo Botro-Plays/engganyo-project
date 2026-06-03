@@ -189,6 +189,7 @@ export default function CampaignsPage() {
       );
       return res.data.data;
     },
+    refetchInterval: 15_000,
   });
 
   const form = useForm<CreateFormData>({
