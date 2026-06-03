@@ -9,7 +9,6 @@ import { DepositMethod, DepositStatus, TransactionType, TransactionStatus, Notif
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { PayMongoService } from '../paymongo/paymongo.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -42,7 +41,6 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly currency: CurrencyService,
     private readonly notificationsService: NotificationsService,
-    private readonly paymongoService: PayMongoService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -402,12 +400,6 @@ export class WalletService {
     if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
     if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
       throw new BadRequestException(`Cannot cancel a deposit with status ${deposit.status}`);
-    }
-
-    // For PayMongo: archive the link so the QR becomes invalid
-    if (deposit.method === DepositMethod.PAYMONGO && deposit.paymentRef) {
-      this.logger.log(`Cancelling PayMongo deposit ${depositId}, archiving link ${deposit.paymentRef}`);
-      await this.paymongoService.archiveLink(deposit.paymentRef);
     }
 
     return this.prisma.deposit.update({

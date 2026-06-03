@@ -2,6 +2,7 @@ import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards, HttpCode,
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 import { WalletService } from './wallet.service';
+import { PayMongoService } from '../paymongo/paymongo.service';
 import { GetTransactionsDto } from './dto/get-transactions.dto';
 import { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import { ListDepositsDto } from './dto/list-deposits.dto';
@@ -14,7 +15,10 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly paymongoService: PayMongoService,
+  ) {}
 
   @Get('me')
   @HttpCode(HttpStatus.OK)
@@ -70,7 +74,11 @@ export class WalletController {
   @Delete('deposit/:id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending deposit' })
-  cancelDeposit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
-    return this.walletService.cancelDeposit(user.sub, id);
+  async cancelDeposit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    const deposit = await this.walletService.cancelDeposit(user.sub, id);
+    if ('paymentRef' in deposit && deposit.paymentRef) {
+      await this.paymongoService.archiveLink(deposit.paymentRef as string);
+    }
+    return deposit;
   }
 }

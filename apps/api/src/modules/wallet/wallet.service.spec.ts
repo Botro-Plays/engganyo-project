@@ -6,7 +6,6 @@ import { WalletService, CreditOptions } from './wallet.service';
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { PayMongoService } from '../paymongo/paymongo.service';
 
 const MOCK_WALLET = {
   id: 'wallet-1',
@@ -81,12 +80,6 @@ describe('WalletService', () => {
           provide: NotificationsService,
           useValue: {
             createNotification: jest.fn().mockResolvedValue({}),
-          },
-        },
-        {
-          provide: PayMongoService,
-          useValue: {
-            archiveLink: jest.fn().mockResolvedValue(true),
           },
         },
       ],
