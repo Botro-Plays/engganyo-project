@@ -432,6 +432,8 @@ export class WalletService {
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit) throw new NotFoundException('Deposit not found');
     if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
+    if (deposit.status === DepositStatus.CANCELLED) throw new BadRequestException('Deposit was cancelled');
+    if (deposit.status === DepositStatus.FAILED) throw new BadRequestException('Deposit was failed');
 
     const txType =
       deposit.method === DepositMethod.PAYMONGO ? TransactionType.DEPOSIT_PAYMONGO

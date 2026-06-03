@@ -262,7 +262,7 @@ export class PayMongoService {
         if (deposit && deposit.status !== DepositStatus.COMPLETED) {
           await this.prisma.deposit.update({
             where: { id: externalRef },
-            data: { status: 'FAILED', adminNotes: 'PayMongo payment failed' },
+            data: { status: DepositStatus.FAILED, adminNotes: 'PayMongo payment failed' },
           });
           return { received: true, action: 'failed', depositId: externalRef };
         }
