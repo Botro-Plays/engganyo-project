@@ -113,6 +113,7 @@ const DEPOSIT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: 
   PROCESSING: { label: 'Processing', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20',     icon: RefreshCw },
   COMPLETED:  { label: 'Completed',  color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20',   icon: CheckCircle2 },
   FAILED:     { label: 'Failed',     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20',       icon: XCircle },
+  CANCELLED:  { label: 'Cancelled',  color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: XCircle },
   REFUNDED:   { label: 'Refunded',   color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: AlertCircle },
 };
 
@@ -267,6 +268,15 @@ export default function WalletPage() {
       }
     },
     onError: (err) => setDepositError(getApiErrorMessage(err)),
+  });
+
+  const cancelDepositMutation = useMutation({
+    mutationFn: async (depositId: string) =>
+      (await apiClient.delete<ApiResponse<unknown>>(`wallet/deposit/${depositId}/cancel`)).data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+    },
+    onError: (err) => alert(getApiErrorMessage(err)),
   });
 
   const paypalOrderMutation = useMutation({
@@ -795,26 +805,50 @@ export default function WalletPage() {
                     const meta = METHOD_META[dep.method] ?? { label: dep.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard, currency: '?' };
                     const statusCfg = DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock };
                     const StatusIcon = statusCfg.icon;
+                    const canCancel = dep.status === 'PENDING' || dep.status === 'PROCESSING';
+                    const isCancelling = cancelDepositMutation.isPending && cancelDepositMutation.variables === dep.id;
                     return (
-                      <div key={dep.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-hover transition-colors">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${meta.bg}`}>
-                          <meta.icon className={`w-4 h-4 ${meta.color}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white">{meta.label}</p>
-                          <p className="text-xs text-zinc-500">
-                            {dep.package ? `$${dep.package.usdAmount}` : `${dep.currency} ${dep.amountFiat.toFixed(2)}`}
-                            {' '}→ <span className="text-brand-300 font-medium">{dep.creditsToAward.toLocaleString()} cr</span>
-                            {dep.bonusCredits > 0 && <span className="text-green-400"> +{dep.bonusCredits.toLocaleString()} bonus</span>}
-                            {dep.exchangeRate && <span className="text-zinc-600"> · ₱{dep.exchangeRate.toFixed(2)}/$</span>}
-                          </p>
-                          {dep.adminNotes && <p className="text-xs text-zinc-600 truncate">{dep.adminNotes}</p>}
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`}>
-                            <StatusIcon className="w-3 h-3" />{statusCfg.label}
-                          </span>
-                          <p className="text-xs text-zinc-600">{formatRelativeTime(dep.createdAt)}</p>
+                      <div key={dep.id} className="px-6 py-4 hover:bg-surface-hover transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${meta.bg}`}>
+                            <meta.icon className={`w-4 h-4 ${meta.color}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <p className="text-sm font-medium text-white">{meta.label}</p>
+                              <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`}>
+                                <StatusIcon className="w-3 h-3" />{statusCfg.label}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-500 mt-0.5">
+                              <span className="font-medium text-white">{dep.currency} {dep.amountFiat.toFixed(2)}</span>
+                              {dep.exchangeRate && <span className="text-zinc-600"> (₱{dep.exchangeRate.toFixed(2)}/$)</span>}
+                              {' '}→{' '}
+                              <span className="text-brand-300 font-semibold">{dep.creditsToAward.toLocaleString()} credits</span>
+                              {dep.bonusCredits > 0 && <span className="text-green-400"> (+{dep.bonusCredits.toLocaleString()} bonus)</span>}
+                            </p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                              <p className="text-xs text-zinc-600">Created {formatRelativeTime(dep.createdAt)}</p>
+                              {dep.completedAt && <p className="text-xs text-zinc-600">Completed {formatRelativeTime(dep.completedAt)}</p>}
+                              {dep.paymentRef && <p className="text-xs text-zinc-700 font-mono truncate max-w-[200px]" title={dep.paymentRef}>Ref: {dep.paymentRef}</p>}
+                            </div>
+                            {dep.adminNotes && (
+                              <p className="text-xs text-zinc-500 mt-1 italic">{dep.adminNotes}</p>
+                            )}
+                            {dep.status === 'COMPLETED' && dep.creditsAwarded > 0 && (
+                              <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
+                            )}
+                          </div>
+                          {canCancel && (
+                            <button
+                              onClick={() => { if (confirm('Cancel this deposit?')) cancelDepositMutation.mutate(dep.id); }}
+                              disabled={isCancelling}
+                              className="shrink-0 flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                            >
+                              {isCancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                              Cancel
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

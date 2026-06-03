@@ -392,6 +392,21 @@ export class WalletService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
   }
 
+  // ─── Cancel a deposit (user-initiated or QR expired) ────────
+
+  async cancelDeposit(userId: string, depositId: string) {
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
+    if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
+      throw new BadRequestException(`Cannot cancel a deposit with status ${deposit.status}`);
+    }
+    return this.prisma.deposit.update({
+      where: { id: depositId },
+      data: { status: DepositStatus.CANCELLED, adminNotes: 'Cancelled by user' },
+    });
+  }
+
   // ─── Complete a deposit (used by webhooks & admin review) ──
 
   async completeDeposit(

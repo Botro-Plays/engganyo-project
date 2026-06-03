@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 import { WalletService } from './wallet.service';
@@ -65,5 +65,12 @@ export class WalletController {
   @ApiOperation({ summary: 'Get own deposit history' })
   getDeposits(@CurrentUser() user: JwtPayload, @Query() dto: ListDepositsDto) {
     return this.walletService.getUserDeposits(user.sub, dto);
+  }
+
+  @Delete('deposit/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a pending deposit' })
+  cancelDeposit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.walletService.cancelDeposit(user.sub, id);
   }
 }

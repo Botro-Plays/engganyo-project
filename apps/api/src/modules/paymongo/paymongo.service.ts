@@ -235,6 +235,34 @@ export class PayMongoService {
       }
     }
 
+    // qrph.expired — auto-cancel the associated deposit
+    if (eventType === 'qrph.expired') {
+      const qrAttrs = eventData?.attributes as Record<string, unknown> | undefined;
+      const referenceNumber = qrAttrs?.reference_number as string | undefined;
+      this.logger.log(`qrph.expired: reference_number=${referenceNumber}`);
+      this.logger.log(`Full qrph attributes: ${JSON.stringify(qrAttrs)}`);
+
+      // Find PENDING PAYMONGO deposit — QR has no direct depositId; match by paymentRef (link ID)
+      if (referenceNumber) {
+        const deposit = await this.prisma.deposit.findFirst({
+          where: {
+            method: DepositMethod.PAYMONGO,
+            status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+            paymentRef: referenceNumber,
+          },
+        });
+        if (deposit) {
+          await this.prisma.deposit.update({
+            where: { id: deposit.id },
+            data: { status: DepositStatus.CANCELLED, adminNotes: 'QR code expired' },
+          });
+          this.logger.log(`Deposit ${deposit.id} cancelled due to QR expiry`);
+          return { received: true, action: 'cancelled', depositId: deposit.id };
+        }
+      }
+      return { received: true, action: 'ignored' };
+    }
+
     return { received: true, action: 'ignored', eventType };
   }
 }

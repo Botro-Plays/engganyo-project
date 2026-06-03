@@ -61,7 +61,8 @@ enum DepositStatus {
   PENDING      // Created, waiting for payment confirmation
   PROCESSING   // Payment received, being reviewed
   COMPLETED    // Credits credited to wallet
-  FAILED       // Payment failed or cancelled
+  FAILED       // Payment failed
+  CANCELLED    // Cancelled by user or expired QR
   REFUNDED     // Deposit refunded by admin
 }
 
