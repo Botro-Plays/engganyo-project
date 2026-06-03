@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -11,6 +11,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PayMongoService } from '../paymongo/paymongo.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
@@ -29,6 +30,8 @@ export class AdminService {
     private readonly authService: AuthService,
     private readonly eventsService: EventsService,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => PayMongoService))
+    private readonly payMongoService: PayMongoService,
   ) {}
 
   // ─── Users ────────────────────────────────────────────────
@@ -1804,6 +1807,15 @@ export class AdminService {
         adminNotes: dto.adminNotes,
       });
     } else {
+      // Archive PayMongo link so it can't be paid anymore when admin rejects/refunds
+      if (deposit.method === DepositMethod.PAYMONGO && deposit.paymentRef) {
+        try {
+          await this.payMongoService.archiveLink(deposit.paymentRef);
+        } catch (err) {
+          /* ignore archive errors — link may already be dead */
+        }
+      }
+
       await this.prisma.deposit.update({
         where: { id: depositId },
         data: {
