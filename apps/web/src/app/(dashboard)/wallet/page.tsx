@@ -147,14 +147,21 @@ function CopyButton({ text }: { text: string }) {
 }
 
 // ─── Countdown timer for PayMongo expiry ─────────────────
-function CountdownTimer({ expiredAt }: { expiredAt: string }) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(expiredAt).getTime() - Date.now()));
+function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdAt?: string }) {
+  // Fallback: old deposits without expiredAt expire 30min after creation
+  const effectiveExpiredAt = expiredAt
+    ? new Date(expiredAt).getTime()
+    : createdAt
+      ? new Date(createdAt).getTime() + 30 * 60 * 1000
+      : 0;
+
+  const [left, setLeft] = useState(() => Math.max(0, effectiveExpiredAt - Date.now()));
   useEffect(() => {
     const id = setInterval(() => {
-      setLeft(Math.max(0, new Date(expiredAt).getTime() - Date.now()));
+      setLeft(Math.max(0, effectiveExpiredAt - Date.now()));
     }, 1000);
     return () => clearInterval(id);
-  }, [expiredAt]);
+  }, [effectiveExpiredAt]);
 
   if (left <= 0) return <span className="text-zinc-500">Expired</span>;
 
@@ -495,11 +502,12 @@ export default function WalletPage() {
                   <p className="text-xs text-zinc-400">
                     {pendingPaymongo.currency} {pendingPaymongo.amountFiat.toFixed(2)} → {pendingPaymongo.creditsToAward.toLocaleString()} credits
                   </p>
-                  {typeof pendingPaymongo.gatewayData?.expiredAt === 'string' && (
-                    <div className="mt-0.5">
-                      <CountdownTimer expiredAt={pendingPaymongo.gatewayData.expiredAt as string} />
-                    </div>
-                  )}
+                  <div className="mt-0.5">
+                    <CountdownTimer
+                      expiredAt={typeof pendingPaymongo.gatewayData?.expiredAt === 'string' ? (pendingPaymongo.gatewayData.expiredAt as string) : undefined}
+                      createdAt={pendingPaymongo.createdAt}
+                    />
+                  </div>
                 </div>
                 <button
                   onClick={() => window.open(checkoutUrl, '_blank', 'noopener,noreferrer')}
@@ -914,9 +922,10 @@ export default function WalletPage() {
                             )}
                             {dep.method === 'PAYMONGO' && dep.status === 'PENDING' && typeof dep.gatewayData?.checkoutUrl === 'string' && (
                               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                {typeof dep.gatewayData?.expiredAt === 'string' && (
-                                  <CountdownTimer expiredAt={dep.gatewayData.expiredAt as string} />
-                                )}
+                                <CountdownTimer
+                                  expiredAt={typeof dep.gatewayData?.expiredAt === 'string' ? (dep.gatewayData.expiredAt as string) : undefined}
+                                  createdAt={dep.createdAt}
+                                />
                                 <button
                                   onClick={() => window.open(dep.gatewayData!.checkoutUrl as string, '_blank', 'noopener,noreferrer')}
                                   className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"

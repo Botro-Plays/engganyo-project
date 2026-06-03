@@ -288,8 +288,10 @@ export class PayMongoService {
   @Cron(CronExpression.EVERY_5_MINUTES)
   async cancelExpiredPayMongoDeposits() {
     const now = new Date();
+    const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
 
-    const expiredDeposits = await this.prisma.deposit.findMany({
+    // 1. Deposits with explicit expiredAt in gatewayData
+    const expiredWithData = await this.prisma.deposit.findMany({
       where: {
         method: DepositMethod.PAYMONGO,
         status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
@@ -298,13 +300,24 @@ export class PayMongoService {
       select: { id: true, paymentRef: true },
     });
 
-    if (expiredDeposits.length === 0) return;
+    // 2. Old deposits without expiredAt (created before this feature) — fallback to createdAt + 30min
+    const expiredOld = await this.prisma.deposit.findMany({
+      where: {
+        method: DepositMethod.PAYMONGO,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        createdAt: { lt: thirtyMinAgo },
+        NOT: { gatewayData: { path: ['expiredAt'], string_contains: '' } },
+      },
+      select: { id: true, paymentRef: true },
+    });
 
-    this.logger.log(`Found ${expiredDeposits.length} PayMongo deposit(s) with expired links — cancelling`);
+    const allExpired = [...expiredWithData, ...expiredOld];
+    if (allExpired.length === 0) return;
 
-    for (const deposit of expiredDeposits) {
+    this.logger.log(`Found ${allExpired.length} PayMongo deposit(s) with expired links — cancelling`);
+
+    for (const deposit of allExpired) {
       try {
-        // Archive the PayMongo link so it can't be paid anymore
         if (deposit.paymentRef) {
           await this.archiveLink(deposit.paymentRef);
         }

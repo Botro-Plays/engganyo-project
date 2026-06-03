@@ -3,12 +3,15 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  forwardRef,
+  Inject,
 } from '@nestjs/common';
 import { DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PayMongoService } from '../paymongo/paymongo.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -41,6 +44,8 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly currency: CurrencyService,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => PayMongoService))
+    private readonly payMongoService: PayMongoService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -401,6 +406,15 @@ export class WalletService {
     if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
     if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
       throw new BadRequestException(`Cannot cancel a deposit with status ${deposit.status}`);
+    }
+
+    // Archive PayMongo link so it can't be paid anymore
+    if (deposit.method === DepositMethod.PAYMONGO && deposit.paymentRef) {
+      try {
+        await this.payMongoService.archiveLink(deposit.paymentRef);
+      } catch (err) {
+        this.logger.warn(`Failed to archive PayMongo link ${deposit.paymentRef} during cancel: ${String(err)}`);
+      }
     }
 
     return this.prisma.deposit.update({
