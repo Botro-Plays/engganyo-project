@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus } from '@prisma/client';
@@ -12,6 +12,7 @@ export class PayMongoService {
 
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
   ) {}
 
