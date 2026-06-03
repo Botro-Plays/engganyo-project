@@ -322,6 +322,81 @@ export class AdminController {
     return this.adminService.getAuditLog(Number(page), Number(limit), action, entityType);
   }
 
+  // ─── Finances ─────────────────────────────────────────────
+
+  @Get('finances/stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Deposit finance stats' })
+  getFinanceStats() {
+    return this.adminService.getFinanceStats();
+  }
+
+  @Get('finances/deposits')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all deposits (admin view)' })
+  listDeposits(
+    @Query('page') page = 1,
+    @Query('limit') limit = 25,
+    @Query('status') status?: string,
+    @Query('method') method?: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.adminService.listDeposits(Number(page), Number(limit), status, method, userId);
+  }
+
+  @Patch('finances/deposits/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Review a deposit — approve, fail, or refund' })
+  reviewDeposit(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: { status: 'COMPLETED' | 'FAILED' | 'REFUNDED'; adminNotes?: string; paymentRef?: string },
+  ) {
+    return this.adminService.reviewDeposit(admin.sub, id, body);
+  }
+
+  // ─── Deposit Packages ─────────────────────────────────────
+
+  @Get('finances/packages')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all deposit packages' })
+  listDepositPackages() {
+    return this.adminService.listDepositPackages();
+  }
+
+  @Post('finances/packages')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a deposit package' })
+  createDepositPackage(
+    @Body() body: { usdAmount: number; bonusCredits?: number; label?: string; isPopular?: boolean; sortOrder?: number },
+  ) {
+    return this.adminService.createDepositPackage(body);
+  }
+
+  @Patch('finances/packages/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a deposit package' })
+  updateDepositPackage(
+    @Param('id') id: string,
+    @Body() body: { usdAmount?: number; bonusCredits?: number; label?: string; isPopular?: boolean; isActive?: boolean; sortOrder?: number },
+  ) {
+    return this.adminService.updateDepositPackage(id, body);
+  }
+
+  @Delete('finances/packages/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a deposit package' })
+  deleteDepositPackage(@Param('id') id: string) {
+    return this.adminService.deleteDepositPackage(id);
+  }
+
+  @Post('finances/packages/seed')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Seed default deposit packages (no-op if already exist)' })
+  seedDefaultPackages() {
+    return this.adminService.seedDefaultPackages();
+  }
+
   // ─── OAuth Config (SUPER_ADMIN only) ─────────────────────
 
   @Get('oauth-config')

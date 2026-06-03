@@ -1562,3 +1562,29 @@ This document should be updated when:
 - `await tx.userAchievement.deleteMany({ where: { userId: { in: keptIds } } })`
 - `await tx.userMissionProgress.deleteMany({ where: { userId: { in: keptIds } } })`
 - Runs inside the same Prisma transaction before resetting user stats and wallet
+
+### DEP-001: Deposit System — Manual-Approval First Architecture
+**Status**: Implemented (Phase 12 — initial scaffold)
+**Date**: 2026-06-03
+**Context**: Users need a way to buy credits. PayMongo account is set up; PayPal and USDT are also planned.
+**Decision**: Build a `Deposit` model + admin review workflow first, then wire live gateway SDKs incrementally per method.
+**Rationale**:
+- Reduces integration risk — scaffolded deposit records are auditable from day one
+- Admin can manually approve crypto USDT deposits which have no webhook by nature
+- Gateway-specific SDK wiring (PayMongo checkout link, PayPal Orders API) can be dropped in without schema changes
+- Prevents double-crediting: deposit record status gate (`COMPLETED` check) prevents re-processing
+**Architecture**:
+- `Deposit` model: separate from `Transaction`; tracks fiat amount, method, status, credits-to-award, payment ref
+- `Transaction` is only created when deposit is `COMPLETED` (wallet credit call)
+- `TransactionType` enum extended: `DEPOSIT_PAYMONGO`, `DEPOSIT_PAYPAL`, `DEPOSIT_CRYPTO`
+- Credit pricing and method enable/disable controlled via `PlatformConfig` (stored in DB, editable in `/admin/server-config` → Finances tab)
+- Admin reviews deposits at `/admin/finances` → approve/fail/refund → wallet credited atomically
+- User sees deposit history in `/wallet` → Deposit Credits tab
+**Tradeoffs**:
+- Deposits require admin review until webhook automation is wired — adds operational overhead
+- No live checkout redirect yet (PayMongo/PayPal show a placeholder message)
+**Migration Plan**:
+- Phase 12a (current): Manual review workflow
+- Phase 12b: Wire PayMongo payment link API (create link → redirect user → webhook marks COMPLETED)
+- Phase 12c: Wire PayPal Orders API (create order → redirect → webhook)
+- Phase 12d: Optional on-chain USDT monitoring via moralis/alchemy webhook

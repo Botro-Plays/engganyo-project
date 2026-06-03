@@ -6,7 +6,7 @@ import {
   Loader2, Save, Eye, EyeOff, CheckCircle2, AlertCircle, KeyRound,
   Settings2, Download, AlertTriangle, RotateCcw, Trash2, X,
   ShieldOff, ToggleLeft, Coins, Users, BarChart2, ScrollText,
-  Megaphone, FileText, MessageSquare,
+  Megaphone, FileText, MessageSquare, CreditCard, Wallet, Bitcoin, DollarSign,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -123,6 +123,34 @@ const CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 
   leaderboard_include_admins:  { label: 'Include Admins in Leaderboards', type: 'boolean',  section: 'General' },
 };
 
+const FINANCE_CONFIG_META: Record<string, { label: string; type: 'boolean' | 'number' | 'text' | 'password' | 'select'; section: string; hint?: string; options?: string[] }> = {
+  paymongo_enabled:        { label: 'Enable PayMongo',          type: 'boolean',  section: 'PayMongo' },
+  paymongo_public_key:     { label: 'Public Key',               type: 'text',     section: 'PayMongo', hint: 'Starts with pk_test_ or pk_live_' },
+  paymongo_secret_key:     { label: 'Secret Key',               type: 'password', section: 'PayMongo', hint: 'Starts with sk_test_ or sk_live_' },
+  paymongo_webhook_secret: { label: 'Webhook Secret',           type: 'password', section: 'PayMongo', hint: 'Used to verify webhook signatures' },
+  paypal_enabled:          { label: 'Enable PayPal',            type: 'boolean',  section: 'PayPal' },
+  paypal_client_id:        { label: 'Client ID',                type: 'text',     section: 'PayPal' },
+  paypal_client_secret:    { label: 'Client Secret',            type: 'password', section: 'PayPal' },
+  paypal_mode:             { label: 'Mode',                     type: 'select',   section: 'PayPal', options: ['sandbox', 'live'] },
+  usdt_bep20_enabled:        { label: 'Enable USDT BEP20',          type: 'boolean',  section: 'Crypto' },
+  usdt_bep20_wallet_address: { label: 'BEP20 Receiving Address',     type: 'text',     section: 'Crypto', hint: 'Your BNB Smart Chain (BEP20) wallet address that receives USDT deposits' },
+  usdt_bep20_contract:       { label: 'USDT BEP20 Contract Address', type: 'text',     section: 'Crypto', hint: 'Default: 0x55d398326f99059fF775485246999027B3197955 (BSC USDT). Change only if using a different token.' },
+  usdt_base_enabled:         { label: 'Enable USDT Base',            type: 'boolean',  section: 'Crypto' },
+  usdt_base_wallet_address:  { label: 'Base Receiving Address',      type: 'text',     section: 'Crypto', hint: 'Your Base Network wallet address that receives USDT deposits' },
+  usdt_base_contract:        { label: 'USDT Base Contract Address',  type: 'text',     section: 'Crypto', hint: 'Default: 0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2 (Base USDT). Change only if using a different token.' },
+  credits_per_usd:         { label: 'Credits per $1 (USD)',     type: 'number',   section: 'Pricing', hint: 'Canonical rate. PHP & other currencies auto-derived via live exchange rate. e.g. 5000 → $1 = 5,000 credits' },
+  min_deposit_usd:         { label: 'Min Deposit (USD)',         type: 'number',   section: 'Pricing', hint: 'PHP minimum is auto-derived from live USD/PHP rate' },
+};
+
+const FINANCE_SECTIONS = ['PayMongo', 'PayPal', 'Crypto', 'Pricing'] as const;
+
+const FINANCE_SECTION_META: Record<string, { icon: React.ElementType; color: string; docsUrl?: string }> = {
+  PayMongo: { icon: CreditCard, color: 'text-emerald-400', docsUrl: 'https://dashboard.paymongo.com/developers' },
+  PayPal:   { icon: Wallet,     color: 'text-blue-400',    docsUrl: 'https://developer.paypal.com/dashboard/applications' },
+  Crypto:   { icon: Bitcoin,    color: 'text-orange-400' },
+  Pricing:  { icon: DollarSign, color: 'text-brand-400' },
+};
+
 const SECTIONS = ['Platform', 'Referral', 'reCAPTCHA', 'AI Chat', 'General'];
 
 const EXPORT_TABLES = [
@@ -133,7 +161,7 @@ const EXPORT_TABLES = [
   { key: 'audit_logs',   label: 'Audit Logs',        icon: ScrollText, description: 'Admin action audit trail (latest 50,000 rows)' },
 ];
 
-type Tab = 'integrations' | 'general' | 'export' | 'danger';
+type Tab = 'integrations' | 'general' | 'finances' | 'export' | 'danger';
 
 // ─── Main Component ───────────────────────────────────────────
 export default function ServerConfigPage() {
@@ -142,6 +170,11 @@ export default function ServerConfigPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [tab, setTab] = useState<Tab>('integrations');
+
+  // Finance config state
+  const [financeEdits, setFinanceEdits] = useState<Record<string, unknown>>({});
+  const [showFinanceSecret, setShowFinanceSecret] = useState<Record<string, boolean>>({});
+  const [financeNotice, setFinanceNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   // OAuth state
   const [oauthEdits, setOauthEdits] = useState<Record<string, { clientId: string; clientSecret: string; enabled: boolean }>>({});
@@ -239,6 +272,23 @@ export default function ServerConfigPage() {
     },
   });
 
+  const financeSaveMutation = useMutation({
+    mutationFn: async (edits: Record<string, unknown>) => {
+      await Promise.all(
+        Object.entries(edits).map(([key, value]) =>
+          apiClient.patch(`admin/server-config/${key}`, { value }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-server-config'] });
+      setFinanceEdits({});
+      setFinanceNotice({ type: 'success', msg: 'Finance settings saved.' });
+      setTimeout(() => setFinanceNotice(null), 4000);
+    },
+    onError: (err) => setFinanceNotice({ type: 'error', msg: getApiErrorMessage(err) }),
+  });
+
   // ── Helper: get current value for a config key ───────────────
   const getConfigValue = (key: string): unknown => {
     if (key in configEdits) return configEdits[key];
@@ -276,9 +326,15 @@ export default function ServerConfigPage() {
     );
   }
 
+  const getFinanceValue = (key: string): unknown => {
+    if (key in financeEdits) return financeEdits[key];
+    return serverConfig?.find((c) => c.key === key)?.value ?? undefined;
+  };
+
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'integrations', label: 'Integrations', icon: KeyRound },
     { id: 'general',      label: 'General',       icon: Settings2 },
+    { id: 'finances',     label: 'Finances',      icon: Coins },
     { id: 'export',       label: 'Data Export',   icon: Download },
     { id: 'danger',       label: 'Danger Zone',   icon: ShieldOff },
   ];
@@ -433,6 +489,126 @@ export default function ServerConfigPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Finances ── */}
+      {tab === 'finances' && (
+        <div>
+          <p className="text-zinc-400 text-sm mb-5">
+            Configure payment methods, API credentials, webhook secrets, and credit pricing. Credentials are stored encrypted in the database.
+          </p>
+          {configLoading ? (
+            <div className="space-y-4">{[1,2,3,4].map((i) => <div key={i} className="card-glass rounded-xl p-6 animate-pulse h-36" />)}</div>
+          ) : (
+            <div className="space-y-4">
+              {FINANCE_SECTIONS.map((section) => {
+                const keys = Object.entries(FINANCE_CONFIG_META).filter(([, m]) => m.section === section);
+                const sectionMeta = FINANCE_SECTION_META[section];
+                return (
+                  <div key={section} className="card-glass rounded-xl p-5 border border-surface-border">
+                    <h3 className="text-sm font-semibold text-white mb-4 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <sectionMeta.icon className={`w-4 h-4 ${sectionMeta.color}`} />
+                        {section}
+                      </span>
+                      {sectionMeta.docsUrl && (
+                        <a href={sectionMeta.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-400 hover:underline">Open dashboard ↗</a>
+                      )}
+                    </h3>
+                    <div className="space-y-4">
+                      {keys.map(([key, meta]) => {
+                        const currentVal = getFinanceValue(key);
+                        return (
+                          <div key={key} className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-white font-medium">{meta.label}</p>
+                              {meta.hint && <p className="text-xs text-zinc-500 mt-0.5">{meta.hint}</p>}
+                            </div>
+                            <div className="shrink-0">
+                              {meta.type === 'boolean' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setFinanceEdits((e) => ({ ...e, [key]: !currentVal }))}
+                                  className={`relative w-10 h-5 rounded-full transition-colors ${currentVal ? 'bg-green-500' : 'bg-zinc-600'}`}
+                                >
+                                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${currentVal ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                              ) : meta.type === 'number' ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={String(currentVal ?? '')}
+                                  onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: Number(e.target.value) }))}
+                                  className="w-28 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                />
+                              ) : meta.type === 'password' ? (
+                                <div className="relative w-64">
+                                  <input
+                                    type={showFinanceSecret[key] ? 'text' : 'password'}
+                                    value={String(currentVal ?? '')}
+                                    onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: e.target.value }))}
+                                    placeholder="Enter secret"
+                                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 pr-8 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                  />
+                                  <button type="button" onClick={() => setShowFinanceSecret((s) => ({ ...s, [key]: !s[key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                                    {showFinanceSecret[key] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              ) : meta.type === 'select' ? (
+                                <select
+                                  value={String(currentVal ?? meta.options?.[0])}
+                                  onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: e.target.value }))}
+                                  className="w-32 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                >
+                                  {meta.options?.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={String(currentVal ?? '')}
+                                  onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: e.target.value }))}
+                                  placeholder="Enter value"
+                                  className="w-64 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {financeNotice && (
+                <div className={`px-4 py-2.5 rounded-lg text-sm flex items-center justify-between ${financeNotice.type === 'success' ? 'bg-green-500/10 border border-green-500/20 text-green-400' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}>
+                  {financeNotice.msg}
+                  <button onClick={() => setFinanceNotice(null)}><X className="w-4 h-4" /></button>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => financeSaveMutation.mutate(financeEdits)}
+                  disabled={financeSaveMutation.isPending || Object.keys(financeEdits).length === 0}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                >
+                  {financeSaveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save {Object.keys(financeEdits).length > 0 ? `(${Object.keys(financeEdits).length} changed)` : 'Changes'}
+                </button>
+              </div>
+
+              <div className="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-300/80">
+                  <span className="font-semibold text-amber-300">Security note:</span> Keys are stored in the database. Full gateway integration (webhook handlers, payment links) will be wired in a future update. Users cannot deposit until at least one method is enabled.
+                </p>
+              </div>
             </div>
           )}
         </div>

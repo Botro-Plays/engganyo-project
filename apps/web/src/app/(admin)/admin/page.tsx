@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Users, Megaphone, Flag, CheckCircle2, Database, Server, HardDrive, Wifi, RefreshCw } from 'lucide-react';
+import { Users, Megaphone, Flag, CheckCircle2, Database, Server, HardDrive, Wifi, RefreshCw, Banknote } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
 import { formatCredits } from '@/lib/utils';
@@ -13,6 +13,7 @@ interface OverviewStats {
   campaigns: { total: number; pending: number };
   reports: { open: number };
   tasks: { verified: number };
+  deposits: { pending: number; totalRevenueFiat: number };
 }
 
 interface TableStat { name: string; liveRows: number; size: string; sizeBytes: number }
@@ -80,6 +81,15 @@ const statCards = (s: OverviewStats) => [
     bg: 'bg-green-500/10',
     href: '/admin/users',
   },
+  {
+    label: 'Pending Deposits',
+    value: s.deposits?.pending ?? 0,
+    sub: `₱${(s.deposits?.totalRevenueFiat ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })} total fiat`,
+    icon: Banknote,
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
+    href: '/admin/finances',
+  },
 ];
 
 export default function AdminOverviewPage() {
@@ -119,13 +129,13 @@ export default function AdminOverviewPage() {
 
       {/* Platform stat cards */}
       {isLoading ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-28" />
           ))}
         </div>
       ) : stats ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {statCards(stats).map((card) => (
             <Link key={card.label} href={card.href} className="card-glass rounded-xl p-5 hover:bg-surface-hover transition-colors group">
               <div className="flex items-center justify-between mb-3">
@@ -146,6 +156,7 @@ export default function AdminOverviewPage() {
           { href: '/admin/users', label: 'Manage Users', desc: 'Search, ban, suspend, grant credits' },
           { href: '/admin/campaigns', label: 'Review Campaigns', desc: 'Approve or reject pending campaigns' },
           { href: '/admin/reports', label: 'Resolve Reports', desc: 'Handle open user reports' },
+          { href: '/admin/finances', label: 'Review Deposits', desc: `${stats?.deposits?.pending ?? 0} pending — approve or fail user deposits` },
         ].map((a) => (
           <Link key={a.href} href={a.href} className="card-glass rounded-xl p-4 hover:bg-surface-hover transition-colors">
             <p className="text-sm font-semibold text-white mb-0.5">{a.label}</p>

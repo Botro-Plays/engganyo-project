@@ -41,6 +41,10 @@ enum TransactionType {
   EARN_ACHIEVEMENT
   EARN_MISSION_COMPLETE
   EARN_ADMIN_GRANT
+  // Deposits (fiat / crypto)
+  DEPOSIT_PAYMONGO
+  DEPOSIT_PAYPAL
+  DEPOSIT_CRYPTO
   // Spending
   SPEND_CAMPAIGN_CREATE
   SPEND_CAMPAIGN_BOOST
@@ -51,6 +55,21 @@ enum TransactionType {
   // Neutral
   REFUND_CAMPAIGN_CANCEL
   REFUND_COMPLETION_REJECT
+}
+
+enum DepositStatus {
+  PENDING      // Created, waiting for payment confirmation
+  PROCESSING   // Payment received, being reviewed
+  COMPLETED    // Credits credited to wallet
+  FAILED       // Payment failed or cancelled
+  REFUNDED     // Deposit refunded by admin
+}
+
+enum DepositMethod {
+  PAYMONGO
+  PAYPAL
+  USDT_BEP20
+  USDT_BASE
 }
 
 enum TransactionStatus {
@@ -290,6 +309,7 @@ model User {
   forumReactions      ForumReaction[]      @relation("ForumReactions")
   twoFactorCodes      TwoFactorCode[]
   twoFactorBackupCodes TwoFactorBackupCode[]
+  deposits             Deposit[]
 
   @@index([email])
   @@index([username])
@@ -997,6 +1017,56 @@ model AnalyticsSnapshot {
 }
 
 // =============================================================
+// DEPOSIT SYSTEM
+// =============================================================
+
+model DepositPackage {
+  id           String    @id @default(cuid())
+  usdAmount    Float     @map("usd_amount")      // e.g. 10.00
+  bonusCredits Int       @default(0) @map("bonus_credits")
+  label        String?                            // e.g. "Most Popular"
+  isPopular    Boolean   @default(false) @map("is_popular")
+  isActive     Boolean   @default(true) @map("is_active")
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  deposits     Deposit[]
+
+  @@map("deposit_packages")
+}
+
+model Deposit {
+  id                String          @id @default(cuid())
+  userId            String          @map("user_id")
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageId         String?         @map("package_id")
+  package           DepositPackage? @relation(fields: [packageId], references: [id])
+  method            DepositMethod
+  status            DepositStatus   @default(PENDING)
+  amountFiat        Float           @map("amount_fiat")        // Amount charged in gateway currency
+  currency          String          @default("PHP")             // "PHP", "USD"
+  creditsToAward    Int             @map("credits_to_award")   // Calculated at initiation (base + bonus)
+  creditsAwarded    Int             @default(0) @map("credits_awarded")
+  bonusCredits      Int             @default(0) @map("bonus_credits")  // Bonus portion snapshot
+  exchangeRate      Float?          @map("exchange_rate")       // USD/PHP rate at initiation (null for USD deposits)
+  userWalletAddress String?         @map("user_wallet_address") // EVM wallet address used for crypto payment
+  paymentRef        String?         @unique @map("payment_ref") // Gateway ref / TX hash
+  gatewayData       Json?           @map("gateway_data")        // Raw webhook / gateway payload
+  adminNotes        String?         @map("admin_notes")
+  reviewedBy        String?         @map("reviewed_by")
+  completedAt       DateTime?       @map("completed_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([packageId])
+  @@index([method])
+  @@index([status])
+  @@index([createdAt])
+  @@map("deposits")
+}
+
 // CHAT SYSTEM
 // =============================================================
 

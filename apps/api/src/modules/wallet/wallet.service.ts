@@ -4,10 +4,13 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { TransactionType, TransactionStatus } from '@prisma/client';
+import { DepositMethod, DepositStatus, TransactionType, TransactionStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { CurrencyService } from './currency.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
+import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
+import type { ListDepositsDto } from './dto/list-deposits.dto';
 
 // ─── Internal operation types ──────────────────────────────────
 export interface CreditOptions {
@@ -33,7 +36,10 @@ const MAX_RETRY = 5;
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currency: CurrencyService,
+  ) {}
 
   // ─── Public read operations ────────────────────────────────
 
@@ -211,5 +217,176 @@ export class WalletService {
       }
     }
     throw new BadRequestException('Transaction failed.');
+  }
+
+  // ─── Deposit system ────────────────────────────────────────
+
+  async getDepositOptions() {
+    const keys = [
+      'paymongo_enabled', 'paymongo_public_key',
+      'paypal_enabled', 'paypal_client_id', 'paypal_mode',
+      'usdt_bep20_enabled', 'usdt_bep20_wallet_address', 'usdt_bep20_contract',
+      'usdt_base_enabled',  'usdt_base_wallet_address',  'usdt_base_contract',
+      'credits_per_usd', 'min_deposit_usd',
+    ];
+    const [configs, usdToPhp] = await Promise.all([
+      this.prisma.platformConfig.findMany({ where: { key: { in: keys } } }),
+      this.currency.getUsdToPhp(),
+    ]);
+    const map = Object.fromEntries(configs.map((c) => [c.key, c.value]));
+    const creditsPerUsd = (map['credits_per_usd'] as number) ?? 5000;
+    const minDepositUsd = (map['min_deposit_usd'] as number) ?? 1;
+
+    return {
+      paymongo:  { enabled: Boolean(map['paymongo_enabled'] ?? false),  publicKey: (map['paymongo_public_key'] as string) ?? null },
+      paypal:    { enabled: Boolean(map['paypal_enabled'] ?? false),    clientId: (map['paypal_client_id'] as string) ?? null, mode: (map['paypal_mode'] as string) ?? 'sandbox' },
+      usdtBep20: {
+        enabled: Boolean(map['usdt_bep20_enabled'] ?? false),
+        walletAddress: (map['usdt_bep20_wallet_address'] as string) ?? null,
+        contractAddress: (map['usdt_bep20_contract'] as string) ?? '0x55d398326f99059fF775485246999027B3197955',
+        chainId: 56,
+        network: 'BNB Smart Chain (BEP20)',
+      },
+      usdtBase: {
+        enabled: Boolean(map['usdt_base_enabled'] ?? false),
+        walletAddress: (map['usdt_base_wallet_address'] as string) ?? null,
+        contractAddress: (map['usdt_base_contract'] as string) ?? '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+        chainId: 8453,
+        network: 'Base Network',
+      },
+      pricing: {
+        creditsPerUsd,
+        minDepositUsd,
+        usdToPhp,
+        minDepositPhp: Math.ceil(minDepositUsd * usdToPhp),
+        creditsPerPhp: creditsPerUsd / usdToPhp,
+      },
+      liveRates: { usdToPhp, rateSource: 'frankfurter.app', baseCurrency: 'USD' },
+    };
+  }
+
+  async getPackages() {
+    const [packages, creditsPerUsdConfig] = await Promise.all([
+      this.prisma.depositPackage.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } }),
+      this.prisma.platformConfig.findUnique({ where: { key: 'credits_per_usd' } }),
+    ]);
+    const [creditsPerUsd, usdToPhp] = await Promise.all([
+      Promise.resolve((creditsPerUsdConfig?.value as number) ?? 5000),
+      this.currency.getUsdToPhp(),
+    ]);
+    return packages.map((pkg) => {
+      const creditsBase = Math.floor(pkg.usdAmount * creditsPerUsd);
+      return {
+        id: pkg.id,
+        usdAmount: pkg.usdAmount,
+        bonusCredits: pkg.bonusCredits,
+        creditsBase,
+        creditsTotal: creditsBase + pkg.bonusCredits,
+        label: pkg.label,
+        isPopular: pkg.isPopular,
+        phpEquivalent: Math.ceil(pkg.usdAmount * usdToPhp),
+        usdToPhp,
+      };
+    });
+  }
+
+  async initiateDeposit(userId: string, dto: InitiateDepositDto) {
+    const [options, pkg] = await Promise.all([
+      this.getDepositOptions(),
+      this.prisma.depositPackage.findUnique({ where: { id: dto.packageId } }),
+    ]);
+
+    if (!pkg || !pkg.isActive) throw new BadRequestException('Deposit package not found or unavailable');
+
+    const { method, txHash, userWalletAddress } = dto;
+    const methodConfigs: Record<string, { enabled: boolean; walletAddress?: string | null }> = {
+      PAYMONGO:   options.paymongo,
+      PAYPAL:     options.paypal,
+      USDT_BEP20: options.usdtBep20,
+      USDT_BASE:  options.usdtBase,
+    };
+    const cfg = methodConfigs[method as string];
+    if (!cfg?.enabled) throw new BadRequestException(`${method} deposits are not currently available`);
+
+    const { creditsPerUsd, usdToPhp } = options.pricing;
+    const isPhp = method === 'PAYMONGO';
+    const amountFiat = isPhp ? parseFloat((pkg.usdAmount * usdToPhp).toFixed(2)) : pkg.usdAmount;
+    const currency   = isPhp ? 'PHP' : 'USD';
+    const creditsBase   = Math.floor(pkg.usdAmount * creditsPerUsd);
+    const creditsToAward = creditsBase + pkg.bonusCredits;
+
+    const deposit = await this.prisma.deposit.create({
+      data: {
+        userId,
+        packageId: pkg.id,
+        method: method as DepositMethod,
+        status: txHash ? DepositStatus.PROCESSING : DepositStatus.PENDING,
+        amountFiat,
+        currency,
+        creditsToAward,
+        bonusCredits: pkg.bonusCredits,
+        creditsAwarded: 0,
+        exchangeRate: isPhp ? usdToPhp : null,
+        paymentRef: txHash ?? null,
+        userWalletAddress: userWalletAddress ?? null,
+      },
+    });
+
+    let instructions: Record<string, unknown> = {};
+    const isCrypto = method === 'USDT_BEP20' || method === 'USDT_BASE';
+    const cryptoCfg = method === 'USDT_BEP20' ? options.usdtBep20 : options.usdtBase;
+
+    if (method === 'PAYMONGO') {
+      instructions = { type: 'PAYMENT_LINK', depositId: deposit.id, message: 'PayMongo checkout coming soon. Record your Deposit ID and contact support to complete.' };
+    } else if (method === 'PAYPAL') {
+      instructions = { type: 'REDIRECT', depositId: deposit.id, message: 'PayPal checkout coming soon. Record your Deposit ID and contact support to complete.' };
+    } else if (isCrypto) {
+      instructions = {
+        type: txHash ? 'CRYPTO_SUBMITTED' : 'CRYPTO_ADDRESS',
+        depositId: deposit.id,
+        walletAddress: cryptoCfg.walletAddress ?? null,
+        network: cryptoCfg.network,
+        token: 'USDT',
+        amount: pkg.usdAmount,
+        txHash: txHash ?? null,
+        message: txHash
+          ? `Your transaction has been submitted (${txHash}). Admin will verify and credit your account shortly.`
+          : `Send exactly ${pkg.usdAmount} USDT on ${cryptoCfg.network} to the address above. Submit your TX hash after sending.`,
+      };
+    }
+
+    return {
+      deposit: {
+        id: deposit.id, method: deposit.method, status: deposit.status,
+        amountFiat: deposit.amountFiat, currency: deposit.currency,
+        creditsToAward: deposit.creditsToAward, bonusCredits: deposit.bonusCredits,
+        createdAt: deposit.createdAt,
+      },
+      instructions,
+    };
+  }
+
+  async getUserDeposits(userId: string, dto: ListDepositsDto) {
+    const page  = dto.page  ?? 1;
+    const limit = dto.limit ?? 20;
+    const skip  = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.prisma.deposit.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true, method: true, status: true,
+          amountFiat: true, currency: true,
+          creditsToAward: true, creditsAwarded: true, bonusCredits: true,
+          exchangeRate: true, paymentRef: true, adminNotes: true,
+          completedAt: true, createdAt: true,
+          package: { select: { usdAmount: true, label: true } },
+        },
+      }),
+      this.prisma.deposit.count({ where: { userId } }),
+    ]);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
   }
 }

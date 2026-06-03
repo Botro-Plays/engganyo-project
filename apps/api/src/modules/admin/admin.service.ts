@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { CampaignStatus, CompletionStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, DepositMethod, DepositStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -1517,6 +1517,7 @@ export class AdminService {
         await tx.chatConversation.deleteMany({});
 
         // ── Core activity data ────────────────────────────────────────────────────
+        await tx.deposit.deleteMany({});
         await tx.taskCompletion.deleteMany({});
         await tx.transaction.deleteMany({});   // before user delete (wallet cascade would restrict)
         await tx.campaign.deleteMany({});
@@ -1692,6 +1693,8 @@ export class AdminService {
       totalCampaigns, pendingCampaigns,
       openReports,
       totalTasks,
+      pendingDeposits,
+      completedDepositsAgg,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
@@ -1700,6 +1703,8 @@ export class AdminService {
       this.prisma.campaign.count({ where: { status: CampaignStatus.PENDING_REVIEW } }),
       this.prisma.report.count({ where: { status: ReportStatus.OPEN } }),
       this.prisma.taskCompletion.count({ where: { status: 'VERIFIED' } }),
+      this.prisma.deposit.count({ where: { status: DepositStatus.PENDING } }),
+      this.prisma.deposit.aggregate({ where: { status: DepositStatus.COMPLETED }, _sum: { amountFiat: true } }),
     ]);
 
     return {
@@ -1707,6 +1712,179 @@ export class AdminService {
       campaigns: { total: totalCampaigns, pending: pendingCampaigns },
       reports: { open: openReports },
       tasks: { verified: totalTasks },
+      deposits: { pending: pendingDeposits, totalRevenueFiat: completedDepositsAgg._sum.amountFiat ?? 0 },
     };
+  }
+
+  // ─── Finances (deposits) ──────────────────────────────────
+
+  async getFinanceStats() {
+    const [total, pending, processing, completed, failed, byMethod, totalCredits] = await Promise.all([
+      this.prisma.deposit.count(),
+      this.prisma.deposit.count({ where: { status: DepositStatus.PENDING } }),
+      this.prisma.deposit.count({ where: { status: DepositStatus.PROCESSING } }),
+      this.prisma.deposit.count({ where: { status: DepositStatus.COMPLETED } }),
+      this.prisma.deposit.count({ where: { status: DepositStatus.FAILED } }),
+      this.prisma.deposit.groupBy({
+        by: ['method'],
+        _count: { id: true },
+        _sum: { amountFiat: true, creditsAwarded: true },
+        where: { status: DepositStatus.COMPLETED },
+      }),
+      this.prisma.deposit.aggregate({ where: { status: DepositStatus.COMPLETED }, _sum: { creditsAwarded: true, amountFiat: true } }),
+    ]);
+    return {
+      counts: { total, pending, processing, completed, failed },
+      totals: {
+        creditsDistributed: totalCredits._sum.creditsAwarded ?? 0,
+        revenueFiat: totalCredits._sum.amountFiat ?? 0,
+      },
+      byMethod: byMethod.map((r) => ({ method: r.method, count: r._count.id, amountFiat: r._sum.amountFiat ?? 0, creditsAwarded: r._sum.creditsAwarded ?? 0 })),
+    };
+  }
+
+  async listDeposits(page = 1, limit = 25, status?: string, method?: string, userId?: string) {
+    const where: Prisma.DepositWhereInput = {
+      ...(status && { status: status as DepositStatus }),
+      ...(method && { method: method as DepositMethod }),
+      ...(userId && { userId }),
+    };
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.prisma.deposit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true, method: true, status: true,
+          amountFiat: true, currency: true,
+          creditsToAward: true, creditsAwarded: true, bonusCredits: true,
+          exchangeRate: true, userWalletAddress: true,
+          paymentRef: true, adminNotes: true, reviewedBy: true,
+          completedAt: true, createdAt: true, updatedAt: true,
+          package: { select: { id: true, usdAmount: true, label: true } },
+          user: { select: { id: true, username: true, displayName: true, email: true } },
+        },
+      }),
+      this.prisma.deposit.count({ where }),
+    ]);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
+  }
+
+  async reviewDeposit(adminId: string, depositId: string, dto: { status: 'COMPLETED' | 'FAILED' | 'REFUNDED'; adminNotes?: string; paymentRef?: string }) {
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
+
+    if (dto.status === 'COMPLETED') {
+      const txType = deposit.method === DepositMethod.PAYMONGO ? TransactionType.DEPOSIT_PAYMONGO
+        : deposit.method === DepositMethod.PAYPAL ? TransactionType.DEPOSIT_PAYPAL
+        : TransactionType.DEPOSIT_CRYPTO;
+
+      await this.prisma.deposit.update({
+        where: { id: depositId },
+        data: {
+          status: DepositStatus.COMPLETED,
+          creditsAwarded: deposit.creditsToAward,
+          completedAt: new Date(),
+          reviewedBy: adminId,
+          adminNotes: dto.adminNotes,
+          ...(dto.paymentRef && { paymentRef: dto.paymentRef }),
+        },
+      });
+
+      await this.walletService.credit(deposit.userId, deposit.creditsToAward, {
+        type: txType,
+        description: `Deposit via ${deposit.method} — ${deposit.amountFiat} ${deposit.currency}`,
+        referenceId: depositId,
+        referenceType: 'Deposit',
+      });
+
+      await this.notificationsService.createNotification(
+        deposit.userId,
+        NotificationType.CREDIT_EARNED,
+        'Deposit Approved',
+        `Your ${deposit.method} deposit of ${deposit.currency} ${deposit.amountFiat} has been approved. ${deposit.creditsToAward.toLocaleString()} credits added to your wallet.`,
+        { depositId, credits: deposit.creditsToAward },
+      );
+    } else {
+      await this.prisma.deposit.update({
+        where: { id: depositId },
+        data: {
+          status: dto.status as DepositStatus,
+          reviewedBy: adminId,
+          adminNotes: dto.adminNotes,
+          ...(dto.paymentRef && { paymentRef: dto.paymentRef }),
+        },
+      });
+
+      if (dto.status === 'FAILED') {
+        await this.notificationsService.createNotification(
+          deposit.userId,
+          NotificationType.ACCOUNT_WARNING,
+          'Deposit Failed',
+          `Your ${deposit.method} deposit of ${deposit.currency} ${deposit.amountFiat} could not be processed. Please contact support with deposit ID: ${depositId}.`,
+          { depositId },
+        );
+      }
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: `admin.deposit.${dto.status.toLowerCase()}`,
+        entityType: 'Deposit',
+        entityId: depositId,
+        metadata: { method: deposit.method, creditsToAward: deposit.creditsToAward, adminNotes: dto.adminNotes ?? null },
+      },
+    });
+
+    return this.prisma.deposit.findUnique({ where: { id: depositId } });
+  }
+
+  // ─── Deposit Packages CRUD ────────────────────────────────
+
+  async listDepositPackages() {
+    return this.prisma.depositPackage.findMany({ orderBy: { sortOrder: 'asc' } });
+  }
+
+  async createDepositPackage(dto: { usdAmount: number; bonusCredits?: number; label?: string; isPopular?: boolean; sortOrder?: number }) {
+    return this.prisma.depositPackage.create({
+      data: {
+        usdAmount: dto.usdAmount,
+        bonusCredits: dto.bonusCredits ?? 0,
+        label: dto.label ?? null,
+        isPopular: dto.isPopular ?? false,
+        sortOrder: dto.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async updateDepositPackage(id: string, dto: { usdAmount?: number; bonusCredits?: number; label?: string; isPopular?: boolean; isActive?: boolean; sortOrder?: number }) {
+    const pkg = await this.prisma.depositPackage.findUnique({ where: { id } });
+    if (!pkg) throw new NotFoundException('Package not found');
+    return this.prisma.depositPackage.update({ where: { id }, data: dto });
+  }
+
+  async deleteDepositPackage(id: string) {
+    const pkg = await this.prisma.depositPackage.findUnique({ where: { id } });
+    if (!pkg) throw new NotFoundException('Package not found');
+    return this.prisma.depositPackage.delete({ where: { id } });
+  }
+
+  async seedDefaultPackages() {
+    const existing = await this.prisma.depositPackage.count();
+    if (existing > 0) return { seeded: false, message: 'Packages already exist' };
+    const defaults = [
+      { usdAmount: 1,   bonusCredits: 0,      label: null,           isPopular: false, sortOrder: 0 },
+      { usdAmount: 5,   bonusCredits: 500,    label: null,           isPopular: false, sortOrder: 1 },
+      { usdAmount: 10,  bonusCredits: 1500,   label: null,           isPopular: false, sortOrder: 2 },
+      { usdAmount: 20,  bonusCredits: 4000,   label: 'Most Popular', isPopular: true,  sortOrder: 3 },
+      { usdAmount: 50,  bonusCredits: 12500,  label: 'Best Value',   isPopular: false, sortOrder: 4 },
+      { usdAmount: 100, bonusCredits: 30000,  label: null,           isPopular: false, sortOrder: 5 },
+    ];
+    await this.prisma.depositPackage.createMany({ data: defaults });
+    return { seeded: true, count: defaults.length };
   }
 }
