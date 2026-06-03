@@ -29,8 +29,19 @@ export class PayMongoService {
   }
 
   async createPaymentLink(depositId: string, amountCents: number, description: string) {
+    this.logger.log(`Creating PayMongo link for deposit ${depositId}, amountCents: ${amountCents}`);
+
     const secret = await this.getSecretKey();
     if (!secret) throw new BadRequestException('PayMongo not configured');
+
+    // PayMongo minimum amount is 100 PHP cents (1 PHP)
+    if (amountCents < 100) {
+      this.logger.error(`PayMongo amount too small: ${amountCents} cents (minimum 100 cents)`);
+      throw new BadRequestException('PayMongo minimum deposit is 1 PHP (100 cents)');
+    }
+
+    const amount = Math.round(amountCents);
+    this.logger.log(`Requesting PayMongo link with amount: ${amount} cents`);
 
     const res = await fetch(`${this.baseUrl}/links`, {
       method: 'POST',
@@ -41,7 +52,7 @@ export class PayMongoService {
       body: JSON.stringify({
         data: {
           attributes: {
-            amount: Math.round(amountCents),
+            amount,
             description,
             remarks: `Deposit ${depositId}`,
             external_reference_number: depositId,
@@ -51,9 +62,12 @@ export class PayMongoService {
     });
 
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    this.logger.log(`PayMongo response status: ${res.status}`);
+    this.logger.log(`PayMongo response body: ${JSON.stringify(json)}`);
+
     if (!res.ok) {
       this.logger.error(`PayMongo link creation failed: ${JSON.stringify(json)}`);
-      throw new BadRequestException('Failed to create PayMongo payment link');
+      throw new BadRequestException(`Failed to create PayMongo payment link: ${JSON.stringify(json)}`);
     }
 
     const data = json.data as Record<string, unknown> | undefined;
