@@ -34,12 +34,6 @@ export class PayMongoService {
     const secret = await this.getSecretKey();
     if (!secret) throw new BadRequestException('PayMongo not configured');
 
-    // PayMongo minimum amount is 100 PHP cents (1 PHP)
-    if (amountCents < 100) {
-      this.logger.error(`PayMongo amount too small: ${amountCents} cents (minimum 100 cents)`);
-      throw new BadRequestException('PayMongo minimum deposit is 1 PHP (100 cents)');
-    }
-
     const amount = Math.round(amountCents);
     this.logger.log(`Requesting PayMongo link with amount: ${amount} cents`);
 
