@@ -313,8 +313,11 @@ export default function WalletPage() {
   const cancelDepositMutation = useMutation({
     mutationFn: async (depositId: string) =>
       (await apiClient.delete<ApiResponse<unknown>>(`wallet/deposit/${depositId}/cancel`)).data,
-    onSuccess: () => {
+    onSuccess: (_, depositId) => {
       setCancelConfirmId(null);
+      if (depositResult?.deposit.id === depositId) {
+        resetDeposit();
+      }
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
     },
