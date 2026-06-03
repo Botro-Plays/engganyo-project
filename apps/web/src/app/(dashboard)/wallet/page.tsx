@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight,
@@ -143,6 +143,34 @@ function CopyButton({ text }: { text: string }) {
     <button onClick={copy} className="ml-2 text-zinc-500 hover:text-white transition-colors shrink-0">
       {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
     </button>
+  );
+}
+
+// ─── Countdown timer for PayMongo expiry ─────────────────
+function CountdownTimer({ expiredAt }: { expiredAt: string }) {
+  const [left, setLeft] = useState(() => Math.max(0, new Date(expiredAt).getTime() - Date.now()));
+  useEffect(() => {
+    const id = setInterval(() => {
+      setLeft(Math.max(0, new Date(expiredAt).getTime() - Date.now()));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [expiredAt]);
+
+  if (left <= 0) return <span className="text-zinc-500">Expired</span>;
+
+  const totalSeconds = Math.floor(left / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+
+  const text = h > 0 ? `${h}:${String(mm).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${String(mm).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  const isUrgent = left < 5 * 60 * 1000;
+
+  return (
+    <span className={`font-mono text-xs ${isUrgent ? 'text-red-400 animate-pulse' : 'text-yellow-400'}`}>
+      Expires in {text}
+    </span>
   );
 }
 
@@ -467,6 +495,11 @@ export default function WalletPage() {
                   <p className="text-xs text-zinc-400">
                     {pendingPaymongo.currency} {pendingPaymongo.amountFiat.toFixed(2)} → {pendingPaymongo.creditsToAward.toLocaleString()} credits
                   </p>
+                  {typeof pendingPaymongo.gatewayData?.expiredAt === 'string' && (
+                    <div className="mt-0.5">
+                      <CountdownTimer expiredAt={pendingPaymongo.gatewayData.expiredAt as string} />
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => window.open(checkoutUrl, '_blank', 'noopener,noreferrer')}
@@ -880,12 +913,17 @@ export default function WalletPage() {
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
                             )}
                             {dep.method === 'PAYMONGO' && dep.status === 'PENDING' && typeof dep.gatewayData?.checkoutUrl === 'string' && (
-                              <button
-                                onClick={() => window.open(dep.gatewayData!.checkoutUrl as string, '_blank', 'noopener,noreferrer')}
-                                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />Continue to PayMongo
-                              </button>
+                              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                {typeof dep.gatewayData?.expiredAt === 'string' && (
+                                  <CountdownTimer expiredAt={dep.gatewayData.expiredAt as string} />
+                                )}
+                                <button
+                                  onClick={() => window.open(dep.gatewayData!.checkoutUrl as string, '_blank', 'noopener,noreferrer')}
+                                  className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />Continue to PayMongo
+                                </button>
+                              </div>
                             )}
                           </div>
                           {canCancel && (
