@@ -1315,6 +1315,26 @@ export class AdminService {
     fee_promo_rate:              { value: 0.05, description: 'Promotional fee rate when enabled (0.05 = 5%)', isPublic: true },
     fee_promo_until:             { value: '', description: 'ISO 8601 end date for promotional fee (empty = no promo)', isPublic: true },
     campaign_min_budget:         { value: 100, description: 'Minimum campaign budget (totalSlots * creditPerTask) in credits', isPublic: true },
+    // ── PayMongo ──────────────────────────────────────────
+    paymongo_enabled:            { value: false, description: 'Enable PayMongo payment gateway', isPublic: true },
+    paymongo_public_key:         { value: '',    description: 'PayMongo public key (pk_test_ or pk_live_)', isPublic: false },
+    paymongo_secret_key:         { value: '',    description: 'PayMongo secret key (sk_test_ or sk_live_)', isPublic: false },
+    paymongo_webhook_secret:     { value: '',    description: 'PayMongo webhook secret (whsk_test_ or whsk_live_)', isPublic: false },
+    // ── PayPal ───────────────────────────────────────────
+    paypal_enabled:              { value: false, description: 'Enable PayPal payment gateway', isPublic: true },
+    paypal_client_id:            { value: '',    description: 'PayPal client ID', isPublic: false },
+    paypal_client_secret:        { value: '',    description: 'PayPal client secret', isPublic: false },
+    paypal_mode:                 { value: 'sandbox', description: 'PayPal mode (sandbox or live)', isPublic: false },
+    // ── Crypto ───────────────────────────────────────────
+    usdt_bep20_enabled:          { value: false, description: 'Enable USDT BEP20 (BSC) deposits', isPublic: true },
+    usdt_bep20_wallet_address:   { value: '',    description: 'BSC wallet address for USDT BEP20 deposits', isPublic: true },
+    usdt_bep20_contract:         { value: '0x55d398326f99059fF775485246999027B3197955', description: 'USDT BEP20 contract address (BSC)', isPublic: true },
+    usdt_base_enabled:           { value: false, description: 'Enable USDT Base deposits', isPublic: true },
+    usdt_base_wallet_address:    { value: '',    description: 'Base wallet address for USDT deposits', isPublic: true },
+    usdt_base_contract:          { value: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', description: 'USDT contract address (Base)', isPublic: true },
+    // ── Pricing ───────────────────────────────────────────
+    credits_per_usd:             { value: 5000,  description: 'Credits per $1 USD (canonical rate)', isPublic: true },
+    min_deposit_usd:             { value: 1,     description: 'Minimum deposit amount in USD', isPublic: true },
   };
 
   async getServerConfig() {
