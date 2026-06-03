@@ -5,6 +5,7 @@ import { TransactionType, TransactionStatus } from '@prisma/client';
 import { WalletService, CreditOptions } from './wallet.service';
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const MOCK_WALLET = {
   id: 'wallet-1',
@@ -73,6 +74,12 @@ describe('WalletService', () => {
             getUsdToPhp: jest.fn().mockResolvedValue(56.5),
             getUsdToRate: jest.fn().mockResolvedValue(56.5),
             getRates: jest.fn().mockResolvedValue({ usdToPhp: 56.5, usdToEur: 0.92, usdToSgd: 1.35, usdToGbp: 0.79 }),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue({}),
           },
         },
       ],

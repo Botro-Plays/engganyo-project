@@ -1778,36 +1778,11 @@ export class AdminService {
     if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
 
     if (dto.status === 'COMPLETED') {
-      const txType = deposit.method === DepositMethod.PAYMONGO ? TransactionType.DEPOSIT_PAYMONGO
-        : deposit.method === DepositMethod.PAYPAL ? TransactionType.DEPOSIT_PAYPAL
-        : TransactionType.DEPOSIT_CRYPTO;
-
-      await this.prisma.deposit.update({
-        where: { id: depositId },
-        data: {
-          status: DepositStatus.COMPLETED,
-          creditsAwarded: deposit.creditsToAward,
-          completedAt: new Date(),
-          reviewedBy: adminId,
-          adminNotes: dto.adminNotes,
-          ...(dto.paymentRef && { paymentRef: dto.paymentRef }),
-        },
+      await this.walletService.completeDeposit(depositId, {
+        paymentRef: dto.paymentRef,
+        reviewedBy: adminId,
+        adminNotes: dto.adminNotes,
       });
-
-      await this.walletService.credit(deposit.userId, deposit.creditsToAward, {
-        type: txType,
-        description: `Deposit via ${deposit.method} — ${deposit.amountFiat} ${deposit.currency}`,
-        referenceId: depositId,
-        referenceType: 'Deposit',
-      });
-
-      await this.notificationsService.createNotification(
-        deposit.userId,
-        NotificationType.CREDIT_EARNED,
-        'Deposit Approved',
-        `Your ${deposit.method} deposit of ${deposit.currency} ${deposit.amountFiat} has been approved. ${deposit.creditsToAward.toLocaleString()} credits added to your wallet.`,
-        { depositId, credits: deposit.creditsToAward },
-      );
     } else {
       await this.prisma.deposit.update({
         where: { id: depositId },

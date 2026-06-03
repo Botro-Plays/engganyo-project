@@ -15,6 +15,8 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { PayMongoModule } from './modules/paymongo/paymongo.module';
+import { PayPalModule } from './modules/paypal/paypal.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
@@ -88,6 +90,8 @@ import { EventsModule } from './modules/events/events.module';
     AuthModule,
     UsersModule,
     WalletModule,
+    PayMongoModule,
+    PayPalModule,
     CampaignsModule,
     TasksModule,
     GamificationModule,

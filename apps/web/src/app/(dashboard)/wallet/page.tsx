@@ -6,7 +6,7 @@ import {
   ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight,
   PlusCircle, Copy, Check, Clock, CheckCircle2, XCircle, AlertCircle,
   CreditCard, Wallet, Bitcoin, RefreshCw, Zap, ArrowLeft, LinkIcon,
-  ShieldCheck, Send,
+  ShieldCheck, Send, ExternalLink,
 } from 'lucide-react';
 import { useEvmWallet } from '@/hooks/use-evm-wallet';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -159,6 +159,7 @@ export default function WalletPage() {
   const [manualTxHash, setManualTxHash] = useState('');
   const [depositResult, setDepositResult] = useState<{ deposit: DepositRecord; instructions: DepositInstructions } | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
+  const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
 
   const evmWallet = useEvmWallet();
 
@@ -170,6 +171,7 @@ export default function WalletPage() {
     setManualTxHash('');
     setDepositResult(null);
     setDepositError(null);
+    setFiatCheckoutUrl(null);
     evmWallet.reset();
   };
 
@@ -253,6 +255,75 @@ export default function WalletPage() {
     if (!selectedPackage || !selectedMethod) return;
     setDepositError(null);
     initiateMutation.mutate({ packageId: selectedPackage.id, method: selectedMethod });
+  };
+
+  const paymongoLinkMutation = useMutation({
+    mutationFn: async ({ depositId, amountCents, description }: { depositId: string; amountCents: number; description: string }) =>
+      (await apiClient.post<ApiResponse<{ linkId: string; checkoutUrl: string }>>('paymongo/link', { depositId, amountCents, description })).data.data,
+    onSuccess: (data) => {
+      setFiatCheckoutUrl(data?.checkoutUrl ?? null);
+      if (data?.checkoutUrl) {
+        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
+      }
+    },
+    onError: (err) => setDepositError(getApiErrorMessage(err)),
+  });
+
+  const paypalOrderMutation = useMutation({
+    mutationFn: async ({ depositId, amount, currency }: { depositId: string; amount: number; currency: string }) =>
+      (await apiClient.post<ApiResponse<{ orderId: string; approvalUrl: string }>>('paypal/create-order', { depositId, amount, currency })).data.data,
+    onSuccess: (data) => {
+      setFiatCheckoutUrl(data?.approvalUrl ?? null);
+      if (data?.approvalUrl) {
+        window.open(data.approvalUrl, '_blank', 'noopener,noreferrer');
+      }
+    },
+    onError: (err) => setDepositError(getApiErrorMessage(err)),
+  });
+
+  const handlePayMongoSubmit = () => {
+    if (!selectedPackage) return;
+    setDepositError(null);
+    initiateMutation.mutate(
+      { packageId: selectedPackage.id, method: 'PAYMONGO' },
+      {
+        onSuccess: (data) => {
+          const depositId = data?.deposit?.id;
+          if (!depositId) {
+            setDepositError('Failed to get deposit ID');
+            return;
+          }
+          const amountCents = Math.round((selectedPackage?.phpEquivalent ?? selectedPackage.usdAmount * 56.5) * 100);
+          paymongoLinkMutation.mutate({
+            depositId,
+            amountCents,
+            description: `Engganyo credits — ${selectedPackage.usdAmount} USD`,
+          });
+        },
+      },
+    );
+  };
+
+  const handlePayPalSubmit = () => {
+    if (!selectedPackage) return;
+    setDepositError(null);
+    initiateMutation.mutate(
+      { packageId: selectedPackage.id, method: 'PAYPAL' },
+      {
+        onSuccess: (data) => {
+          const depositId = data?.deposit?.id;
+          if (!depositId) {
+            setDepositError('Failed to get deposit ID');
+            return;
+          }
+          paypalOrderMutation.mutate({
+            depositId,
+            amount: selectedPackage.usdAmount,
+            currency: 'USD',
+          });
+        },
+      },
+    );
   };
 
   return (
@@ -647,21 +718,50 @@ export default function WalletPage() {
                   ) : (
                     /* ── PayMongo / PayPal ── */
                     <div className="space-y-4">
-                      <div className="flex items-center gap-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                        <Clock className="w-5 h-5 text-blue-400 shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-white">{selectedMethod === 'PAYMONGO' ? 'PayMongo' : 'PayPal'} — Coming Soon</p>
-                          <p className="text-xs text-zinc-400">Checkout integration is being set up. Click below to record your deposit request and contact support.</p>
+                      <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-2">
+                        <div className="flex items-center gap-2">
+                          {selectedMethod === 'PAYMONGO' ? (
+                            <CreditCard className="w-4 h-4 text-emerald-400 shrink-0" />
+                          ) : (
+                            <Wallet className="w-4 h-4 text-blue-400 shrink-0" />
+                          )}
+                          <p className="text-sm font-semibold text-white">{selectedMethod === 'PAYMONGO' ? 'PayMongo Checkout' : 'PayPal Checkout'}</p>
+                        </div>
+                        <div className="text-xs text-zinc-400 space-y-1">
+                          <p>Package: <span className="text-white font-medium">{selectedPackage.usdAmount} USD</span></p>
+                          <p>You get: <span className="text-brand-300 font-medium">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
+                          {selectedMethod === 'PAYMONGO' && (
+                            <p>Amount: <span className="text-white">~{selectedPackage.phpEquivalent.toLocaleString()} PHP</span></p>
+                          )}
                         </div>
                       </div>
-                      <button
-                        onClick={handleNonCryptoSubmit}
-                        disabled={initiateMutation.isPending}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
-                      >
-                        {initiateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlusCircle className="w-4 h-4" />}
-                        Record Deposit Request
-                      </button>
+
+                      {fiatCheckoutUrl ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-xs">
+                            <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                            <p className="text-zinc-300">Checkout link opened in a new tab. Complete payment there.</p>
+                          </div>
+                          <button
+                            onClick={() => window.open(fiatCheckoutUrl, '_blank', 'noopener,noreferrer')}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-all w-full justify-center"
+                          >
+                            <ExternalLink className="w-4 h-4" /> Open Checkout Again
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={selectedMethod === 'PAYMONGO' ? handlePayMongoSubmit : handlePayPalSubmit}
+                          disabled={initiateMutation.isPending || paymongoLinkMutation.isPending || paypalOrderMutation.isPending}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all w-full justify-center"
+                        >
+                          {(initiateMutation.isPending || paymongoLinkMutation.isPending || paypalOrderMutation.isPending) ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" />Creating checkout…</>
+                          ) : (
+                            <><ExternalLink className="w-4 h-4" />Proceed to {selectedMethod === 'PAYMONGO' ? 'PayMongo' : 'PayPal'}</>
+                          )}
+                        </button>
+                      )}
                     </div>
                   )}
 

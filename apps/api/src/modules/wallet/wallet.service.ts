@@ -4,10 +4,11 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { DepositMethod, DepositStatus, TransactionType, TransactionStatus } from '@prisma/client';
+import { DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -39,6 +40,7 @@ export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly currency: CurrencyService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -388,5 +390,50 @@ export class WalletService {
       this.prisma.deposit.count({ where: { userId } }),
     ]);
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
+  }
+
+  // ─── Complete a deposit (used by webhooks & admin review) ──
+
+  async completeDeposit(
+    depositId: string,
+    opts: { paymentRef?: string; reviewedBy?: string; adminNotes?: string } = {},
+  ) {
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
+
+    const txType =
+      deposit.method === DepositMethod.PAYMONGO ? TransactionType.DEPOSIT_PAYMONGO
+      : deposit.method === DepositMethod.PAYPAL ? TransactionType.DEPOSIT_PAYPAL
+      : TransactionType.DEPOSIT_CRYPTO;
+
+    await this.prisma.deposit.update({
+      where: { id: depositId },
+      data: {
+        status: DepositStatus.COMPLETED,
+        creditsAwarded: deposit.creditsToAward,
+        completedAt: new Date(),
+        ...(opts.reviewedBy && { reviewedBy: opts.reviewedBy }),
+        ...(opts.adminNotes && { adminNotes: opts.adminNotes }),
+        ...(opts.paymentRef && { paymentRef: opts.paymentRef }),
+      },
+    });
+
+    await this.credit(deposit.userId, deposit.creditsToAward, {
+      type: txType,
+      description: `Deposit via ${deposit.method} — ${deposit.amountFiat} ${deposit.currency}`,
+      referenceId: depositId,
+      referenceType: 'Deposit',
+    });
+
+    await this.notificationsService.createNotification(
+      deposit.userId,
+      NotificationType.CREDIT_EARNED,
+      'Deposit Approved',
+      `Your ${deposit.method} deposit of ${deposit.currency} ${deposit.amountFiat} has been approved. ${deposit.creditsToAward.toLocaleString()} credits added to your wallet.`,
+      { depositId, credits: deposit.creditsToAward },
+    );
+
+    return this.prisma.deposit.findUnique({ where: { id: depositId } });
   }
 }

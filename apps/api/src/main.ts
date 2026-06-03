@@ -21,6 +21,7 @@ async function bootstrap(): Promise<void> {
   const nodeEnvEarly = process.env['NODE_ENV'] ?? 'development';
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger(createWinstonConfig(nodeEnvEarly)),
+    rawBody: true,
   });
 
   const configService = app.get(ConfigService);
