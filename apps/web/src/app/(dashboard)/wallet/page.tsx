@@ -6,7 +6,7 @@ import {
   ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight,
   PlusCircle, Copy, Check, Clock, CheckCircle2, XCircle, AlertCircle,
   CreditCard, Wallet, Bitcoin, RefreshCw, Zap, ArrowLeft, LinkIcon,
-  ShieldCheck, Send, ExternalLink,
+  ShieldCheck, Send, ExternalLink, AlertTriangle,
 } from 'lucide-react';
 import { useEvmWallet } from '@/hooks/use-evm-wallet';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -197,6 +197,7 @@ export default function WalletPage() {
   const [depositResult, setDepositResult] = useState<{ deposit: DepositRecord; instructions: DepositInstructions } | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
 
   const evmWallet = useEvmWallet();
 
@@ -313,9 +314,11 @@ export default function WalletPage() {
     mutationFn: async (depositId: string) =>
       (await apiClient.delete<ApiResponse<unknown>>(`wallet/deposit/${depositId}/cancel`)).data,
     onSuccess: () => {
+      setCancelConfirmId(null);
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
     },
-    onError: (err) => alert(getApiErrorMessage(err)),
+    onError: () => { /* error shown inline in modal */ },
   });
 
   const paypalOrderMutation = useMutation({
@@ -937,7 +940,7 @@ export default function WalletPage() {
                           </div>
                           {canCancel && (
                             <button
-                              onClick={() => { if (confirm('Cancel this deposit?')) cancelDepositMutation.mutate(dep.id); }}
+                              onClick={() => setCancelConfirmId(dep.id)}
                               disabled={isCancelling}
                               className="shrink-0 flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50"
                             >
@@ -963,6 +966,47 @@ export default function WalletPage() {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Cancel confirmation modal */}
+      {cancelConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <h2 className="text-base font-semibold text-white">Cancel Deposit?</h2>
+            </div>
+            <p className="text-sm text-zinc-400 mb-6">
+              Are you sure you want to cancel this pending deposit? This action cannot be undone.
+            </p>
+            {cancelDepositMutation.isError && (
+              <p className="text-sm text-red-400 mb-4">
+                {getApiErrorMessage(cancelDepositMutation.error)}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCancelConfirmId(null)}
+                disabled={cancelDepositMutation.isPending}
+                className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors disabled:opacity-50"
+              >
+                Keep Deposit
+              </button>
+              <button
+                onClick={() => cancelDepositMutation.mutate(cancelConfirmId)}
+                disabled={cancelDepositMutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+              >
+                {cancelDepositMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <XCircle className="w-3.5 h-3.5" />
+                )}
+                Cancel Deposit
+              </button>
+            </div>
           </div>
         </div>
       )}
