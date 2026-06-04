@@ -60,6 +60,6 @@ export class PayMongoController {
     const amountCents = Math.round(Number(deposit.amountFiat) * 100);
     const description = `Engganyo credits — ${deposit.creditsToAward} credits`;
 
-    return this.paymongoService.createPaymentLink(deposit.id, amountCents, description);
+    return this.paymongoService.createPaymentLink(deposit.id, amountCents, description, deposit.currency ?? 'PHP');
   }
 }

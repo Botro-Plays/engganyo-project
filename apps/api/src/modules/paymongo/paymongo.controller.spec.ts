@@ -104,7 +104,12 @@ describe('PayMongoController', () => {
 
     const result = await controller.createLink(user, { depositId: 'dep-1' });
 
-    expect(createPaymentLinkMock).toHaveBeenCalledWith('dep-1', 12345, expect.stringContaining('1500'));
+    expect(createPaymentLinkMock).toHaveBeenCalledWith(
+      'dep-1',
+      12345,
+      expect.stringContaining('1500'),
+      'PHP',
+    );
     expect(result).toEqual({ linkId: 'link-1', checkoutUrl: 'https://paymongo.test/link-1' });
   });
 });

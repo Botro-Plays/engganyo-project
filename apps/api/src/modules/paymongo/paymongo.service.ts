@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus } from '@prisma/client';
@@ -30,34 +30,40 @@ export class PayMongoService {
     return 'Basic ' + Buffer.from(secret + ':').toString('base64');
   }
 
-  async createPaymentLink(depositId: string, amountCents: number, description: string) {
-    this.logger.log(`Creating PayMongo link for deposit ${depositId}, amountCents: ${amountCents}`);
+  async createPaymentLink(depositId: string, amountCents: number, description: string, currency: string) {
+    this.logger.log(
+      `Creating PayMongo link for deposit ${depositId}, amountCents: ${amountCents}, currency: ${currency}`,
+    );
 
     const secret = await this.getSecretKey();
     if (!secret) throw new BadRequestException('PayMongo not configured');
 
     const amount = Math.round(amountCents);
+    if (amount < 100) {
+      throw new BadRequestException('PayMongo payment link amount must be at least PHP 1.00');
+    }
+
+    const normalizedCurrency = currency?.trim().toUpperCase() || 'PHP';
     const expiredAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes from now
-    this.logger.log(`Requesting PayMongo link with amount: ${amount} cents, expires: ${expiredAt.toISOString()}`);
+    this.logger.log(
+      `Requesting PayMongo link with amount: ${amount} cents, currency: ${normalizedCurrency}, expires: ${expiredAt.toISOString()}`,
+    );
 
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl}/links`, {
+      res = await fetch(`${this.baseUrl}/payment_links`, {
         method: 'POST',
         headers: {
           Authorization: this.authHeader(secret),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          data: {
-            attributes: {
-              amount,
-              description,
-              remarks: `Deposit ${depositId}`,
-              external_reference_number: depositId,
-              expired_at: expiredAt.getTime(),
-            },
-          },
+          amount,
+          currency: normalizedCurrency,
+          description,
+          remarks: `Deposit ${depositId}`,
+          reference_number: depositId,
+          metadata: { depositId },
         }),
       });
     } catch (err) {
@@ -80,9 +86,8 @@ export class PayMongoService {
     }
 
     const data = json.data as Record<string, unknown> | undefined;
-    const attrs = data?.attributes as Record<string, unknown> | undefined;
     const linkId = (data?.id as string) ?? '';
-    const checkoutUrl = (attrs?.checkout_url as string) ?? '';
+    const checkoutUrl = (data?.url as string) ?? '';
 
     if (!linkId || !checkoutUrl) {
       throw new BadRequestException('PayMongo link response missing required fields');
@@ -111,12 +116,13 @@ export class PayMongoService {
       return false;
     }
     try {
-      const res = await fetch(`${this.baseUrl}/links/${linkId}/archive`, {
-        method: 'POST',
+      const res = await fetch(`${this.baseUrl}/payment_links/${linkId}`, {
+        method: 'PATCH',
         headers: {
           Authorization: this.authHeader(secret),
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ archive: true }),
       });
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (res.ok) {
