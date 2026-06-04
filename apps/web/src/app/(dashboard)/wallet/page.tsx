@@ -215,7 +215,13 @@ export default function WalletPage() {
   };
 
   // Real-time: refresh deposits + wallet on backend events
-  useSocketEvent('deposit:updated', () => {
+  useSocketEvent('deposit:updated', (payload: { depositId: string; status: string }) => {
+    if (
+      depositResult?.deposit.id === payload.depositId &&
+      (payload.status === 'COMPLETED' || payload.status === 'CANCELLED' || payload.status === 'FAILED')
+    ) {
+      resetDeposit();
+    }
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
   });
