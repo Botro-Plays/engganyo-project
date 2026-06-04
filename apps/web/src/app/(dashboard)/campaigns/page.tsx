@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
@@ -141,6 +142,17 @@ type CreateFormData = z.infer<typeof createSchema>;
 
 export default function CampaignsPage() {
   const queryClient = useQueryClient();
+
+  // Real-time: refresh campaigns + submissions on backend events
+  useSocketEvent('campaign:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+  });
+  useSocketEvent('submission:new', () => {
+    void queryClient.invalidateQueries({ queryKey: ['campaign-submissions'] });
+    void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+  });
+
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
@@ -189,7 +201,7 @@ export default function CampaignsPage() {
       );
       return res.data.data;
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   const form = useForm<CreateFormData>({

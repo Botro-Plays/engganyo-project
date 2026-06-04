@@ -13,6 +13,7 @@ import { GamificationService, XP_REWARDS } from '../gamification/gamification.se
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -51,6 +52,7 @@ export class TasksService {
     private readonly antiAbuseService: AntiAbuseService,
     private readonly socialAuthService: SocialAuthService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventsService: EventsService,
   ) {}
 
   // ─── Browse available tasks ────────────────────────────────
@@ -161,6 +163,8 @@ export class TasksService {
       `You claimed "${campaign.title}". Complete it before ${expiresAt.toLocaleDateString()}.`,
       { campaignId, completionId: completion.id, expiresAt: expiresAt.toISOString() },
     ).catch(() => null);
+
+    this.eventsService.emitToUser(userId, 'task:assigned', { campaignId, completionId: completion.id });
 
     return completion;
   }
@@ -283,6 +287,8 @@ export class TasksService {
         { campaignId, creditsEarned: completion.campaign.creditPerTask },
       ).catch(() => null);
 
+      this.eventsService.emitToUser(userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
+
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
     } else {
       // ── Manual review: hold proof, creator reviews first (48h), then admin ──
@@ -296,6 +302,8 @@ export class TasksService {
           reviewDeadline,
         },
       });
+
+      this.eventsService.emitToUser(completion.campaign.userId, 'submission:new', { campaignId, completionId: completion.id });
 
       return {
         creditsEarned: 0,
@@ -410,6 +418,8 @@ export class TasksService {
         `Your task was auto-verified on recheck. You earned ${completion.campaign.creditPerTask} credits.`,
         { campaignId, creditsEarned: completion.campaign.creditPerTask },
       ).catch(() => null);
+
+      this.eventsService.emitToUser(userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
 
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED', message: 'Verification successful' };
     } else if (apiVerified === null) {

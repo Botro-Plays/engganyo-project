@@ -8,11 +8,12 @@ import { GamificationModule } from '../gamification/gamification.module';
 import { AntiAbuseModule } from '../anti-abuse/anti-abuse.module';
 import { SocialAuthModule } from '../social-auth/social-auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EventsModule } from '../events/events.module';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
 @Module({
-  imports: [DatabaseModule, WalletModule, CampaignsModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule],
+  imports: [DatabaseModule, WalletModule, CampaignsModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule, EventsModule],
   controllers: [TasksController],
   providers: [TasksService, UserRateLimitGuard],
   exports: [TasksService],

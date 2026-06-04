@@ -11,6 +11,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -59,6 +60,7 @@ export class CampaignsService {
     private readonly antiAbuseService: AntiAbuseService,
     private readonly socialAuthService: SocialAuthService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventsService: EventsService,
   ) {}
 
   // ─── Create ────────────────────────────────────────────────
@@ -338,6 +340,11 @@ export class CampaignsService {
         ).catch(() => null);
       }
 
+      this.eventsService.emitToUser(completion.userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
+      if (willBeFull) {
+        this.eventsService.emitToUser(campaign.userId, 'campaign:updated', { campaignId, status: 'COMPLETED' });
+      }
+
       void this.antiAbuseService.recalculateTrustScore(completion.userId).catch(() => null);
       return { reviewed: true, action: 'approve', creditsAwarded: campaign.creditPerTask };
     } else {
@@ -365,6 +372,8 @@ export class CampaignsService {
         { campaignId, completionId, reason: dto.reason },
       ).catch(() => null);
 
+      this.eventsService.emitToUser(completion.userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'REJECTED' });
+
       return { reviewed: true, action: 'reject' };
     }
   }
@@ -388,7 +397,7 @@ export class CampaignsService {
       throw new BadRequestException(`Cannot modify a campaign with status ${campaign.status}`);
     }
 
-    return this.prisma.campaign.update({
+    const updated = await this.prisma.campaign.update({
       where: { id: campaignId },
       select: CAMPAIGN_SELECT,
       data: {
@@ -398,6 +407,10 @@ export class CampaignsService {
         ...(dto.status !== undefined && { status: dto.status }),
       },
     });
+
+    this.eventsService.emitToUser(userId, 'campaign:updated', { campaignId, status: dto.status });
+
+    return updated;
   }
 
   // ─── Cancel + refund ───────────────────────────────────────
@@ -447,6 +460,8 @@ export class CampaignsService {
       where: { id: campaignId },
       data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
     });
+
+    this.eventsService.emitToUser(userId, 'campaign:updated', { campaignId, status: CampaignStatus.CANCELLED });
 
     if (refundAmount > 0) {
       await this.walletService.credit(userId, refundAmount, {

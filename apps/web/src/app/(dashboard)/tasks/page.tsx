@@ -15,6 +15,7 @@ import { ReportModal } from '@/components/report-modal';
 import { UserLink } from '@/components/user-link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
@@ -146,6 +147,16 @@ type ProofFormData = z.infer<typeof proofSchema>;
 export default function TasksPage() {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuthStore();
+
+  // Real-time: refresh tasks on backend events
+  useSocketEvent('task:assigned', () => {
+    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  });
+  useSocketEvent('task:reviewed', () => {
+    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+  });
+
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
   const [browsePage, setBrowsePage] = useState(1);
   const [myPage, setMyPage] = useState(1);
@@ -235,7 +246,7 @@ export default function TasksPage() {
       }
     },
     enabled: tab === 'browse',
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   // ─── My tasks ──────────────────────────────────────────────
@@ -258,7 +269,7 @@ export default function TasksPage() {
       }
     },
     enabled: tab === 'mine',
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   // ─── Assign task ───────────────────────────────────────────
