@@ -13,6 +13,7 @@ import {
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
@@ -142,6 +143,9 @@ type CreateFormData = z.infer<typeof createSchema>;
 
 export default function CampaignsPage() {
   const queryClient = useQueryClient();
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['campaigns'], ['campaign-submissions'], ['public-config']]);
 
   // Real-time: refresh campaigns + submissions on backend events
   useSocketEvent('campaign:updated', () => {

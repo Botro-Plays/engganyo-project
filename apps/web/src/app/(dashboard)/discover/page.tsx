@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
@@ -85,6 +86,8 @@ function SectionHeader({ icon: Icon, title, href, linkLabel }: { icon: React.Ele
 }
 
 export default function DiscoverPage() {
+  useRefetchOnVisible([['discover', 'campaigns'], ['discover', 'topics'], ['discover', 'leaderboard']]);
+
   const { data: campaigns, isLoading: campaignsLoading } = useQuery<{ items: Campaign[] }>({
     queryKey: ['discover', 'campaigns'],
     queryFn: async () => {

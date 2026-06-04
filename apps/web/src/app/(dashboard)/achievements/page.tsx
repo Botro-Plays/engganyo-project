@@ -7,6 +7,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
@@ -47,6 +48,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function AchievementsPage() {
   const queryClient = useQueryClient();
   const { user: authUser } = useAuthStore();
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['gamification', 'stats'], ['gamification', 'achievements']]);
 
   // Real-time: refresh achievements on backend events
   useSocketEvent('achievement:unlocked', () => {

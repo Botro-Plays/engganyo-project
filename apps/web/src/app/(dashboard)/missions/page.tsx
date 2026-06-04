@@ -7,6 +7,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
@@ -38,6 +39,9 @@ interface GamStats {
 export default function MissionsPage() {
   const queryClient = useQueryClient();
   const { user: authUser } = useAuthStore();
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['gamification', 'stats'], ['gamification', 'missions']]);
 
   // Real-time: refresh missions/stats on backend events
   useSocketEvent('mission:completed', () => {

@@ -8,6 +8,7 @@ import {
 
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { UserLink } from '@/components/user-link';
@@ -68,6 +69,9 @@ type TimeTab = 'alltime' | 'weekly';
 export default function LeaderboardPage() {
   const queryClient = useQueryClient();
   const { user: authUser } = useAuthStore();
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['gamification', 'stats'], ['gamification', 'leaderboard'], ['gamification', 'leaderboard', 'achievements'], ['gamification', 'leaderboard', 'missions']]);
 
   // Real-time: refresh leaderboard on backend events
   useSocketEvent('level:up', () => {

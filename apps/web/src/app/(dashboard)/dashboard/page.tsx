@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import type { ApiResponse } from '@/types';
 
 interface MyStats {
@@ -48,6 +49,9 @@ function DashboardPageInner() {
   const isWelcome = searchParams.get('welcome') === '1';
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [rewardResult, setRewardResult] = useState<{ creditReward: number; xpReward: number; newStreak: number } | null>(null);
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['my-stats'], ['gamification', 'stats']]);
 
   // Real-time: refresh gamification stats on backend events
   useSocketEvent('level:up', () => {

@@ -16,6 +16,7 @@ import { UserLink } from '@/components/user-link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
@@ -147,6 +148,9 @@ type ProofFormData = z.infer<typeof proofSchema>;
 export default function TasksPage() {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuthStore();
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['tasks'], ['social-accounts'], ['public-config']]);
 
   // Real-time: refresh tasks on backend events
   useSocketEvent('task:assigned', () => {

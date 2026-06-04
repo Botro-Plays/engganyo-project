@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MessageSquare, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight, Flag } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatRelativeTime } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import { MentionTextarea } from '@/components/mention-textarea';
@@ -81,6 +82,9 @@ export default function ForumTopicPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuthStore();
+
+  // Refetch when tab becomes visible after background
+  useRefetchOnVisible([['forum', 'topic', params.id as string], ['forum', 'topic', params.id as string, 'reactions']]);
 
   // Real-time: refresh current topic on backend events
   useSocketEvent('reply:new', (payload: { topicId: string }) => {
