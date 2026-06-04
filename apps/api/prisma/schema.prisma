@@ -602,7 +602,7 @@ model PlatformRevenue {
   source     String   // "CAMPAIGN_FEE" | "CREDIT_PURCHASE" | "WITHDRAWAL_FEE"
   amount     Int
   campaignId String?  @unique @map("campaign_id")
-  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([date])

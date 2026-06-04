@@ -395,6 +395,7 @@ export class AdminService {
     const end = to ? new Date(to) : new Date();
     end.setHours(23, 59, 59, 999);
 
+    // ── Credit-based revenue (campaign fees) ───────────────────────────────────
     const rows = await this.prisma.platformRevenue.findMany({
       where: {
         date: { gte: start, lte: end },
@@ -426,14 +427,53 @@ export class AdminService {
       }
     }
 
+    // ── Cash flow (completed deposits) ───────────────────────────────────────
+    const deposits = await this.prisma.deposit.findMany({
+      where: {
+        status: DepositStatus.COMPLETED,
+        completedAt: { gte: start, lte: end },
+      },
+      select: {
+        completedAt: true,
+        createdAt: true,
+        amountFiat: true,
+        currency: true,
+        method: true,
+      },
+    });
+
+    const cashFlow = new Map<string, { date: string; total: number; php: number; usd: number; byMethod: Record<string, number> }>();
+    let cashTotal = 0;
+
+    for (const dep of deposits) {
+      const dateKey = (dep.completedAt ?? dep.createdAt ?? new Date()).toISOString().split('T')[0];
+      if (!cashFlow.has(dateKey)) {
+        cashFlow.set(dateKey, { date: dateKey, total: 0, php: 0, usd: 0, byMethod: {} });
+      }
+      const day = cashFlow.get(dateKey)!;
+      const amount = dep.amountFiat ?? 0;
+      day.total += amount;
+      cashTotal += amount;
+      if (dep.currency === 'PHP') {
+        day.php += amount;
+      } else {
+        day.usd += amount;
+      }
+      const method = dep.method;
+      day.byMethod[method] = (day.byMethod[method] ?? 0) + amount;
+    }
+
     return {
       summary: {
         from: start.toISOString().split('T')[0],
         to: end.toISOString().split('T')[0],
         grandTotal,
         recordCount: rows.length,
+        cashTotal: Math.round(cashTotal * 100) / 100,
+        cashRecordCount: deposits.length,
       },
       daily: Array.from(daily.values()).sort((a, b) => b.date.localeCompare(a.date)),
+      cashFlow: Array.from(cashFlow.values()).sort((a, b) => b.date.localeCompare(a.date)),
     };
   }
 
@@ -1540,6 +1580,7 @@ export class AdminService {
         await tx.chatConversation.deleteMany({});
 
         // ── Core activity data ────────────────────────────────────────────────────
+        await tx.platformRevenue.deleteMany({}); // before campaigns (FK to campaign)
         await tx.deposit.deleteMany({});
         await tx.taskCompletion.deleteMany({});
         await tx.transaction.deleteMany({});   // before user delete (wallet cascade would restrict)

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { formatCredits, creditLabel } from '@/lib/utils';
-import { DollarSign, Calendar, TrendingUp, Loader2 } from 'lucide-react';
+import { DollarSign, Calendar, TrendingUp, Loader2, Coins, Banknote } from 'lucide-react';
 import type { ApiResponse } from '@/types';
 
 interface RevenueDay {
@@ -14,14 +14,25 @@ interface RevenueDay {
   other: number;
 }
 
+interface CashFlowDay {
+  date: string;
+  total: number;
+  php: number;
+  usd: number;
+  byMethod: Record<string, number>;
+}
+
 interface RevenueSummary {
   summary: {
     from: string;
     to: string;
     grandTotal: number;
     recordCount: number;
+    cashTotal: number;
+    cashRecordCount: number;
   };
   daily: RevenueDay[];
+  cashFlow: CashFlowDay[];
 }
 
 export default function RevenuePage() {
@@ -42,6 +53,7 @@ export default function RevenuePage() {
   const grandTotal = data?.summary.grandTotal ?? 0;
   const campaignFees = data?.daily.reduce((sum, d) => sum + d.campaignFees, 0) ?? 0;
   const other = data?.daily.reduce((sum, d) => sum + d.other, 0) ?? 0;
+  const cashTotal = data?.summary.cashTotal ?? 0;
 
   return (
     <div className="space-y-6">
@@ -50,8 +62,8 @@ export default function RevenuePage() {
           <DollarSign className="w-5 h-5 text-green-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-white">Revenue</h1>
-          <p className="text-xs text-zinc-500">Platform fee earnings and revenue tracking</p>
+          <h1 className="text-xl font-semibold text-white">Platform Earnings</h1>
+          <p className="text-xs text-zinc-500">Credit-based campaign fees + real cash flow from completed deposits</p>
         </div>
       </div>
 
@@ -86,82 +98,174 @@ export default function RevenuePage() {
         )}
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card-glass rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-green-400" />
-            <span className="text-xs text-zinc-500 uppercase tracking-wider">Grand Total</span>
-          </div>
-          <p className="text-2xl font-bold text-white">{formatCredits(grandTotal)}</p>
-          <p className="text-xs text-zinc-500">{creditLabel(grandTotal)}</p>
+      {/* ── Credit Revenue Section ── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Coins className="w-4 h-4 text-brand-300" />
+          <h2 className="text-sm font-semibold text-white">Credit Revenue (Campaign Fees)</h2>
+          <span className="text-xs text-zinc-600">Earned in platform credits</span>
         </div>
-        <div className="card-glass rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-4 h-4 text-brand-300" />
-            <span className="text-xs text-zinc-500 uppercase tracking-wider">Campaign Fees</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-4 h-4 text-green-400" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">Grand Total</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{formatCredits(grandTotal)}</p>
+            <p className="text-xs text-zinc-500">{creditLabel(grandTotal)}</p>
           </div>
-          <p className="text-2xl font-bold text-white">{formatCredits(campaignFees)}</p>
-          <p className="text-xs text-zinc-500">{creditLabel(campaignFees)}</p>
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-brand-300" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">Campaign Fees</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{formatCredits(campaignFees)}</p>
+            <p className="text-xs text-zinc-500">{creditLabel(campaignFees)}</p>
+          </div>
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-zinc-400" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">Other</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{formatCredits(other)}</p>
+            <p className="text-xs text-zinc-500">{creditLabel(other)}</p>
+          </div>
         </div>
-        <div className="card-glass rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="w-4 h-4 text-zinc-400" />
-            <span className="text-xs text-zinc-500 uppercase tracking-wider">Other</span>
+
+        <div className="card-glass rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-surface-border">
+            <h3 className="text-sm font-semibold text-white">Daily Breakdown</h3>
+            {data && (
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {data.summary.from} → {data.summary.to} · {data.summary.recordCount} records
+              </p>
+            )}
           </div>
-          <p className="text-2xl font-bold text-white">{formatCredits(other)}</p>
-          <p className="text-xs text-zinc-500">{creditLabel(other)}</p>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+            </div>
+          ) : !data?.daily.length ? (
+            <div className="py-12 text-center">
+              <p className="text-zinc-500 text-sm">No credit revenue data for the selected period.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-border text-left">
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase">Date</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Campaign Fees</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Other</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.daily.map((day) => (
+                    <tr key={day.date} className="border-b border-surface-border/50 hover:bg-surface-hover/50">
+                      <td className="px-5 py-3 text-white">{day.date}</td>
+                      <td className="px-5 py-3 text-right text-brand-300">
+                        {formatCredits(day.campaignFees)} {creditLabel(day.campaignFees)}
+                      </td>
+                      <td className="px-5 py-3 text-right text-zinc-400">
+                        {formatCredits(day.other)} {creditLabel(day.other)}
+                      </td>
+                      <td className="px-5 py-3 text-right font-semibold text-white">
+                        {formatCredits(day.total)} {creditLabel(day.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Daily table */}
-      <div className="card-glass rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-surface-border">
-          <h2 className="text-sm font-semibold text-white">Daily Breakdown</h2>
-          {data && (
-            <p className="text-xs text-zinc-500 mt-0.5">
-              {data.summary.from} → {data.summary.to} · {data.summary.recordCount} records
+      {/* ── Cash Flow Section ── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Banknote className="w-4 h-4 text-emerald-400" />
+          <h2 className="text-sm font-semibold text-white">Cash Flow (Completed Deposits)</h2>
+          <span className="text-xs text-zinc-600">Real money from payment gateways</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">Total Cash</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{cashTotal.toFixed(2)}</p>
+            <p className="text-xs text-zinc-500">PHP + USD combined</p>
+          </div>
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-emerald-300" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">PHP Deposits</span>
+            </div>
+            <p className="text-2xl font-bold text-white">
+              {data?.cashFlow.reduce((sum, d) => sum + d.php, 0).toFixed(2) ?? '0.00'}
             </p>
+            <p className="text-xs text-zinc-500">PayMongo (GCash / Cards)</p>
+          </div>
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-emerald-300" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">USD Deposits</span>
+            </div>
+            <p className="text-2xl font-bold text-white">
+              {data?.cashFlow.reduce((sum, d) => sum + d.usd, 0).toFixed(2) ?? '0.00'}
+            </p>
+            <p className="text-xs text-zinc-500">PayPal + Crypto</p>
+          </div>
+        </div>
+
+        <div className="card-glass rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-surface-border">
+            <h3 className="text-sm font-semibold text-white">Daily Cash Breakdown</h3>
+            {data && (
+              <p className="text-xs text-zinc-500 mt-0.5">
+                {data.summary.from} → {data.summary.to} · {data.summary.cashRecordCount} completed deposits
+              </p>
+            )}
+          </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+            </div>
+          ) : !data?.cashFlow.length ? (
+            <div className="py-12 text-center">
+              <p className="text-zinc-500 text-sm">No cash flow data for the selected period.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-surface-border text-left">
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase">Date</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Total</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">PHP</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">USD</th>
+                    <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Methods</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.cashFlow.map((day) => (
+                    <tr key={day.date} className="border-b border-surface-border/50 hover:bg-surface-hover/50">
+                      <td className="px-5 py-3 text-white">{day.date}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-white">{day.total.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-right text-emerald-300">{day.php.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-right text-emerald-400">{day.usd.toFixed(2)}</td>
+                      <td className="px-5 py-3 text-right text-zinc-400 text-xs">
+                        {Object.entries(day.byMethod).map(([m, a]) => `${m}: ${a.toFixed(2)}`).join(', ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
-          </div>
-        ) : !data?.daily.length ? (
-          <div className="py-12 text-center">
-            <p className="text-zinc-500 text-sm">No revenue data for the selected period.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-surface-border text-left">
-                  <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase">Date</th>
-                  <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Campaign Fees</th>
-                  <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Other</th>
-                  <th className="px-5 py-3 text-xs font-medium text-zinc-500 uppercase text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.daily.map((day) => (
-                  <tr key={day.date} className="border-b border-surface-border/50 hover:bg-surface-hover/50">
-                    <td className="px-5 py-3 text-white">{day.date}</td>
-                    <td className="px-5 py-3 text-right text-brand-300">
-                      {formatCredits(day.campaignFees)} {creditLabel(day.campaignFees)}
-                    </td>
-                    <td className="px-5 py-3 text-right text-zinc-400">
-                      {formatCredits(day.other)} {creditLabel(day.other)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-semibold text-white">
-                      {formatCredits(day.total)} {creditLabel(day.total)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );
