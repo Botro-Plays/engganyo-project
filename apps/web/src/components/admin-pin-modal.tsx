@@ -16,10 +16,21 @@ export function AdminPinModal() {
     setError('');
   }, []);
 
+  const handleInvalidEvent = useCallback((e: Event) => {
+    const detail = (e as CustomEvent<{ message: string }>).detail;
+    setOpen(true);
+    setPin('');
+    setError(detail?.message ?? 'Invalid admin PIN.');
+  }, []);
+
   useEffect(() => {
     window.addEventListener('admin:pin-required', handleEvent);
-    return () => window.removeEventListener('admin:pin-required', handleEvent);
-  }, [handleEvent]);
+    window.addEventListener('admin:pin-invalid', handleInvalidEvent);
+    return () => {
+      window.removeEventListener('admin:pin-required', handleEvent);
+      window.removeEventListener('admin:pin-invalid', handleInvalidEvent);
+    };
+  }, [handleEvent, handleInvalidEvent]);
 
   // Block Escape key from dismissing the PIN modal
   useEffect(() => {

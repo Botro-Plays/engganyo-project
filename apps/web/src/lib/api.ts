@@ -69,6 +69,18 @@ apiClient.interceptors.response.use(
         }
         return Promise.reject(error);
       }
+      if (data?.code === 'ADMIN_PIN_INVALID') {
+        // Wrong PIN: clear it from store so the modal re-opens with an error
+        if (typeof window !== 'undefined') {
+          useAuthStore.setState({ adminPin: null });
+          window.dispatchEvent(
+            new CustomEvent('admin:pin-invalid', {
+              detail: { message: data?.message ?? 'Invalid admin PIN.' },
+            }),
+          );
+        }
+        return Promise.reject(error);
+      }
     }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
