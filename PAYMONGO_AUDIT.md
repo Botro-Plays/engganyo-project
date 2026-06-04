@@ -20,14 +20,16 @@ const depositByIntent = await this.prisma.deposit.findFirst({
 **Fix:** Remove this unsafe fallback entirely, or match by `paymentRef` (link ID) against `payment_intent_id` with an exact equality check, not `findFirst`.
 
 ### 2. `createPaymentLink` has NO ownership validation
-**File:** `apps/api/src/modules/paymongo/paymongo.controller.ts:33-37`, `paymongo.service.ts:91-98`
-**Code:**
+**Status:** ✅ Fixed in commits `13b224b`, `6ac0696` (2026-06-04). The controller now loads the deposit for the authenticated user, throws `ForbiddenException` on mismatches, and the spec covers the enforcement.
+**File:** `apps/api/src/modules/paymongo/paymongo.controller.ts:34-67`, `apps/api/src/modules/paymongo/paymongo.controller.spec.ts:75-129`
+**Resolution snippet:**
 ```typescript
-// Controller — just passes depositId from body, no ownership check
-return this.paymongoService.createPaymentLink(dto.depositId, dto.amountCents, dto.description);
+const deposit = await this.walletService.getDepositForUser(user.sub, dto.depositId);
+if (!deposit) {
+  throw new ForbiddenException('Deposit not found for current user');
+}
 ```
-**Problem:** Any authenticated user can overwrite another user's PayMongo link by passing their deposit ID. The service updates the deposit's `paymentRef` and `gatewayData` without verifying the deposit belongs to the caller.
-**Fix:** Validate `deposit.userId === user.sub` in the controller before calling the service.
+**Remaining risk:** None — service only receives verified deposits.
 
 ### 3. Race condition: cancel vs. webhook completion
 **File:** `apps/api/src/modules/wallet/wallet.service.ts:412-418`, `paymongo.service.ts:204-210`
@@ -109,9 +111,17 @@ const payload = JSON.parse(rawBody);  // Line 162
 ## 🟡 Medium-Priority Issues
 
 ### 12. `createPaymentLink` receives `amountCents` from client
-**File:** `apps/api/src/modules/paymongo/paymongo.controller.ts:35`
-**Problem:** The client sends `amountCents`. A malicious user could send a different amount than the deposit package specifies, creating a PayMongo link for the wrong amount.
-**Fix:** Derive `amountCents` from the deposit/package server-side, not from the request body.
+**Status:** ✅ Fixed in commits `13b224b`, `6ac0696` (2026-06-04). `createLink` derives cents from the stored deposit, clamps to the ₱1 minimum, and the service clamps again before calling `/v1/payment_links`.
+**File:** `apps/api/src/modules/paymongo/paymongo.controller.ts:60-67`, `apps/api/src/modules/paymongo/paymongo.service.ts:33-88`
+**Resolution snippet:**
+```typescript
+let amountCents = Math.round(Number(deposit.amountFiat) * 100);
+if (amountCents < 100) {
+  amountCents = 100;
+}
+return this.paymongoService.createPaymentLink(deposit.id, amountCents, description, deposit.currency ?? 'PHP');
+```
+**Remaining risk:** None — amount tampering from the client is no longer possible.
 
 ### 13. Frontend `CopyButton` memory leak
 **File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:134-147`

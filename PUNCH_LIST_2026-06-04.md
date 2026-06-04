@@ -16,7 +16,7 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - E2E proves wrong-user credit cannot occur.
 
 - **[Blocker] Enforce ownership in createLink**
-  - Status: Not implemented — controller still trusts `depositId`/`amountCents` from request without validating ownership. @apps/api/src/modules/paymongo/paymongo.controller.ts#29-38
+  - Status: ✅ Implemented — commits `13b224b`, `6ac0696` (2026-06-04). Ownership is enforced in `createLink`, which now loads the deposit for the authenticated user and rejects mismatches. @apps/api/src/modules/paymongo/paymongo.controller.ts#34-67 @apps/api/src/modules/paymongo/paymongo.controller.spec.ts#75-129
   - Rationale: Any user can create a link for another user’s deposit.
   - Files to touch: `apps/api/src/modules/paymongo/paymongo.controller.ts`
   - Acceptance:
@@ -56,7 +56,7 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Duplicate events logged and ignored.
 
 - **[Blocker] Server-derive `amountCents`**
-  - Status: Not implemented — `createLink` continues to accept client-supplied `amountCents` and forwards it to the service. @apps/api/src/modules/paymongo/paymongo.controller.ts#29-38 @apps/api/src/modules/paymongo/paymongo.service.ts#33-105
+  - Status: ✅ Implemented — commits `13b224b`, `6ac0696` (2026-06-04). The controller derives cents from the stored deposit, clamps to the ₱1 minimum, and the service reconfirms before calling `/v1/payment_links`. @apps/api/src/modules/paymongo/paymongo.controller.ts#60-67 @apps/api/src/modules/paymongo/paymongo.service.ts#33-105
   - Rationale: Prevent client tampering of amounts.
   - Files to touch: `paymongo.controller.ts` (+ derive from deposit/package server-side)
   - Acceptance:
