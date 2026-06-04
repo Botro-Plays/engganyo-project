@@ -25,6 +25,11 @@ import { AuthenticatedProviders } from '@/app/providers';
 import { NotificationBell } from '@/components/notification-bell';
 import { SearchBar } from '@/components/search-bar';
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
+import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
+import type { ApiResponse } from '@/types';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -61,9 +66,34 @@ function canAccessAdmin(user: AuthUser | null): boolean {
   return user.twoFactorEnabled;
 }
 
+interface WalletData {
+  id: string;
+  balance: number;
+  lifetimeEarned: number;
+  lifetimeSpent: number;
+  updatedAt: string;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
+
+  // Real-time credit balance in sidebar
+  const { data: wallet } = useQuery({
+    queryKey: ['wallet', 'me'],
+    queryFn: async () => (await apiClient.get<ApiResponse<WalletData>>('wallet/me')).data.data,
+    refetchInterval: 60_000,
+    enabled: !!user,
+  });
+  useSocketEvent('wallet:updated', () => {
+    void (async () => {
+      const res = await apiClient.get<ApiResponse<WalletData>>('wallet/me');
+      if (res.data.data) {
+        useAuthStore.getState().updateCreditBalance(res.data.data.balance);
+      }
+    })();
+  });
+  useRefetchOnVisible([['wallet', 'me']]);
 
   const mobileNavItems = [
     ...baseMobileNavItems,
@@ -90,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="mx-4 mt-4 px-4 py-3 rounded-xl bg-brand-500/10 border border-brand-500/20">
             <p className="text-xs text-zinc-500 mb-0.5">Credits</p>
             <p className="text-xl font-bold text-brand-300">
-              {formatCredits(user.creditBalance)}
+              {formatCredits(wallet?.balance ?? user.creditBalance)}
             </p>
           </div>
         )}
