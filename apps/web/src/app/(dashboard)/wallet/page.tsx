@@ -354,8 +354,8 @@ export default function WalletPage() {
   };
 
   const paymongoLinkMutation = useMutation({
-    mutationFn: async ({ depositId, amountCents, description }: { depositId: string; amountCents: number; description: string }) =>
-      (await apiClient.post<ApiResponse<{ linkId: string; checkoutUrl: string }>>('paymongo/link', { depositId, amountCents, description })).data.data,
+    mutationFn: async ({ depositId }: { depositId: string }) =>
+      (await apiClient.post<ApiResponse<{ linkId: string; checkoutUrl: string }>>('paymongo/link', { depositId })).data.data,
     onSuccess: (data) => {
       setFiatCheckoutUrl(data?.checkoutUrl ?? null);
       if (data?.checkoutUrl) {
@@ -405,12 +405,7 @@ export default function WalletPage() {
             setDepositError('Failed to get deposit ID');
             return;
           }
-          const amountCents = Math.round((selectedPackage?.phpEquivalent ?? selectedPackage.usdAmount * 56.5) * 100);
-          paymongoLinkMutation.mutate({
-            depositId,
-            amountCents,
-            description: `Engganyo credits — ${selectedPackage.usdAmount} USD`,
-          });
+          paymongoLinkMutation.mutate({ depositId });
         },
       },
     );

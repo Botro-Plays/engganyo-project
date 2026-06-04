@@ -400,6 +400,22 @@ export class WalletService {
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
   }
 
+  async getDepositForUser(userId: string, depositId: string) {
+    return this.prisma.deposit.findFirst({
+      where: { id: depositId, userId },
+      select: {
+        id: true,
+        userId: true,
+        method: true,
+        status: true,
+        amountFiat: true,
+        currency: true,
+        creditsToAward: true,
+        bonusCredits: true,
+      },
+    });
+  }
+
   // ─── Cancel a deposit (user-initiated or QR expired) ────────
 
   async cancelDeposit(userId: string, depositId: string) {
