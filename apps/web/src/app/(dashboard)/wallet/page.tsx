@@ -356,11 +356,13 @@ export default function WalletPage() {
       (await apiClient.delete<ApiResponse<unknown>>(`wallet/deposit/${depositId}/cancel`)).data,
     onSuccess: (_, depositId) => {
       setCancelConfirmId(null);
-      if (depositResult?.deposit.id === depositId) {
-        resetDeposit();
-      }
-      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
-      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+      // Always reset the deposit form on successful cancel — the user is done with this flow.
+      // The conditional check `depositResult?.deposit.id === depositId` was unreliable
+      // because depositResult could be null (after refresh) or stale.
+      resetDeposit();
+      // Force immediate refetch so the history updates right away (not just background stale-while-revalidate)
+      void queryClient.refetchQueries({ queryKey: ['wallet', 'deposits'] });
+      void queryClient.refetchQueries({ queryKey: ['wallet', 'me'] });
     },
     onError: () => { /* error shown inline in modal */ },
   });
