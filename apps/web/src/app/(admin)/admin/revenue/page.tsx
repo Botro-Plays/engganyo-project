@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { formatCredits, creditLabel } from '@/lib/utils';
-import { DollarSign, Calendar, TrendingUp, Loader2, Coins, Banknote } from 'lucide-react';
+import { DollarSign, Calendar, TrendingUp, Loader2, Coins, Banknote, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { ApiResponse } from '@/types';
 
 interface RevenueDay {
@@ -38,6 +38,7 @@ interface RevenueSummary {
 export default function RevenuePage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-revenue', from, to],
@@ -265,6 +266,34 @@ export default function RevenuePage() {
               </table>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Danger Zone ── */}
+      <div className="card-glass rounded-xl p-5 border border-red-500/20">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-red-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white">Data Model Warning</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Credit revenue tracks <span className="text-red-400 font-medium">platform credits</span> earned from campaign creation fees — <span className="text-red-400 font-medium">not actual fiat revenue</span>.
+              Cash flow below shows real money from completed deposits only.
+              Do not use credit totals for tax or accounting purposes.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  void queryClient.invalidateQueries({ queryKey: ['admin-revenue'] });
+                  void queryClient.refetchQueries({ queryKey: ['admin-revenue'] });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover hover:bg-surface-hover/80 border border-surface-border text-zinc-400 text-xs font-medium transition-all"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />Force Refresh
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
