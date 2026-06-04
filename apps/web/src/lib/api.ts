@@ -48,10 +48,36 @@ apiClient.interceptors.request.use(
 // ─── Response Interceptor ────────────────────────────────────
 // Handle 401 — refresh token or redirect to login
 // Handle 403 ADMIN_2FA_REQUIRED / ADMIN_PIN_REQUIRED
+// ─── Retry config ───────────────────────────────────────────
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
+function shouldRetry(error: AxiosError): boolean {
+  // Retry on network errors (no response) or 5xx server errors
+  if (!error.response) return true;
+  const status = error.response.status;
+  return status >= 500 && status < 600;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number };
+
+    // ── Retry network / 5xx errors ───────────────────────────
+    if (originalRequest && shouldRetry(error)) {
+      const retryCount = originalRequest._retryCount ?? 0;
+      if (retryCount < MAX_RETRIES) {
+        originalRequest._retryCount = retryCount + 1;
+        const delay = RETRY_DELAY_MS * (2 ** retryCount);
+        await sleep(delay);
+        return apiClient(originalRequest);
+      }
+    }
 
     // Handle admin-specific 403 errors
     if (error.response?.status === 403) {
