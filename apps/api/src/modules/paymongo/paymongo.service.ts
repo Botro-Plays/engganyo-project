@@ -246,20 +246,16 @@ export class PayMongoService {
         }
       }
 
-      // Fallback: match by paymentRef (link ID) stored on deposit against payment_intent_id
       const intentId = paymentAttrs?.payment_intent_id as string | undefined;
       if (intentId) {
-        const depositByIntent = await this.prisma.deposit.findFirst({
-          where: { method: DepositMethod.PAYMONGO, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
-        });
-        if (depositByIntent) {
-          this.logger.log(`Fallback: completing deposit ${depositByIntent.id} via payment_intent_id ${intentId}`);
-          await this.walletService.completeDeposit(depositByIntent.id, { paymentRef: paymentId });
-          return { received: true, action: 'completed', depositId: depositByIntent.id };
-        }
+        this.logger.warn(
+          `payment.paid: no matching deposit found for payment_intent_id ${intentId} (payment ${paymentId})`,
+        );
       }
 
-      this.logger.warn(`payment.paid: could not match payment ${paymentId} to any pending deposit`);
+      this.logger.warn(
+        `payment.paid: could not match payment ${paymentId} to any pending deposit (external_reference=${externalRef ?? 'none'})`,
+      );
       return { received: true, action: 'ignored' };
     }
 
