@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Trophy, Flame, Zap, Medal, Target, BarChart3,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { UserLink } from '@/components/user-link';
@@ -65,7 +66,17 @@ type MainTab = 'level' | 'achievements' | 'missions';
 type TimeTab = 'alltime' | 'weekly';
 
 export default function LeaderboardPage() {
+  const queryClient = useQueryClient();
   const { user: authUser } = useAuthStore();
+
+  // Real-time: refresh leaderboard on backend events
+  useSocketEvent('level:up', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'leaderboard'] });
+  });
+  useSocketEvent('achievement:unlocked', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'leaderboard', 'achievements'] });
+  });
+
   const [mainTab, setMainTab] = useState<MainTab>('level');
   const [timeTab, setTimeTab] = useState<TimeTab>('alltime');
 

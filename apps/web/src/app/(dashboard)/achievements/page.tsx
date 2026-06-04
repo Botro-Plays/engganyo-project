@@ -1,11 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Trophy, CheckCircle2, Lock, Flame, Zap,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
@@ -44,7 +45,17 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function AchievementsPage() {
+  const queryClient = useQueryClient();
   const { user: authUser } = useAuthStore();
+
+  // Real-time: refresh achievements on backend events
+  useSocketEvent('achievement:unlocked', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'achievements'] });
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'stats'] });
+  });
+  useSocketEvent('level:up', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'stats'] });
+  });
 
   const { data: stats } = useQuery({
     queryKey: ['gamification', 'stats'],

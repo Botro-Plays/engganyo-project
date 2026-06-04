@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { ForumTopicStatus, NotificationType, TrustLevel, UserRole } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 import type { CreateTopicDto } from './dto/create-topic.dto';
 import type { UpdateTopicDto } from './dto/update-topic.dto';
 import type { CreateReplyDto } from './dto/create-reply.dto';
@@ -14,6 +15,7 @@ export class ForumService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private eventsService: EventsService,
   ) {}
 
   // ─── Helper: Send mention notifications ──────────────────────────
@@ -308,6 +310,7 @@ export class ForumService {
     });
 
     void this.sendMentionNotifications(dto.content, userId, topic.id);
+    this.eventsService.emitBroadcast('topic:new', { topicId: topic.id });
 
     return topic;
   }
@@ -341,6 +344,8 @@ export class ForumService {
       },
     });
 
+    this.eventsService.emitBroadcast('topic:updated', { topicId: id });
+
     return updated;
   }
 
@@ -361,6 +366,8 @@ export class ForumService {
     await this.prisma.forumTopic.delete({
       where: { id },
     });
+
+    this.eventsService.emitBroadcast('topic:deleted', { topicId: id });
 
     return { success: true };
   }
@@ -492,6 +499,7 @@ export class ForumService {
     });
 
     void this.sendMentionNotifications(dto.content, userId, topicId, reply.id);
+    this.eventsService.emitBroadcast('reply:new', { topicId, replyId: reply.id });
 
     return reply;
   }
@@ -554,6 +562,8 @@ export class ForumService {
         data: { replyCount: { decrement: 1 } },
       });
     });
+
+    this.eventsService.emitBroadcast('topic:updated', { topicId: reply.topicId });
 
     return { success: true };
   }
@@ -648,6 +658,8 @@ export class ForumService {
       },
     });
 
+    this.eventsService.emitBroadcast('topic:updated', { topicId: id, status: ForumTopicStatus.LOCKED });
+
     return updated;
   }
 
@@ -676,6 +688,8 @@ export class ForumService {
         metadata: { restoredStatus: restoreStatus },
       },
     });
+
+    this.eventsService.emitBroadcast('topic:updated', { topicId: id, status: restoreStatus });
 
     return updated;
   }
@@ -707,6 +721,8 @@ export class ForumService {
       },
     });
 
+    this.eventsService.emitBroadcast('topic:updated', { topicId: id, isPinned: !topic.isPinned });
+
     return updated;
   }
 
@@ -735,6 +751,8 @@ export class ForumService {
         metadata: { previousStatus: topic.status },
       },
     });
+
+    this.eventsService.emitBroadcast('topic:updated', { topicId: id, status: ForumTopicStatus.HIDDEN });
 
     return updated;
   }
@@ -765,6 +783,8 @@ export class ForumService {
       },
     });
 
+    this.eventsService.emitBroadcast('topic:updated', { topicId: id, status: ForumTopicStatus.OPEN });
+
     return updated;
   }
 
@@ -790,6 +810,8 @@ export class ForumService {
         metadata: { status: topic.status },
       },
     });
+
+    this.eventsService.emitBroadcast('topic:deleted', { topicId: id });
 
     return { success: true };
   }
@@ -818,6 +840,8 @@ export class ForumService {
         entityId: id,
       },
     });
+
+    this.eventsService.emitBroadcast('topic:updated', { topicId: reply.topicId });
 
     return { success: true };
   }

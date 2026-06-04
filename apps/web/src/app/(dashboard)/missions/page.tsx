@@ -1,11 +1,12 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Star, CheckCircle2, Flame, Zap,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import type { ApiResponse } from '@/types';
@@ -35,7 +36,21 @@ interface GamStats {
 }
 
 export default function MissionsPage() {
+  const queryClient = useQueryClient();
   const { user: authUser } = useAuthStore();
+
+  // Real-time: refresh missions/stats on backend events
+  useSocketEvent('mission:completed', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'missions'] });
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'stats'] });
+  });
+  useSocketEvent('streak:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'missions'] });
+  });
+  useSocketEvent('level:up', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'stats'] });
+  });
 
   const { data: stats } = useQuery({
     queryKey: ['gamification', 'stats'],

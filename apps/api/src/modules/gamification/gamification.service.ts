@@ -4,6 +4,7 @@ import { AchievementCategory, MissionType, TransactionType, UserRole } from '@pr
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 
 // ─── Level formula (matches frontend utils.ts) ────────────────
 export const getLevelFromXp = (xp: number) => Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -57,6 +58,7 @@ export class GamificationService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly notificationsService: NotificationsService,
+    private readonly eventsService: EventsService,
   ) {}
 
   async onModuleInit() {
@@ -125,6 +127,7 @@ export class GamificationService implements OnModuleInit {
         `You advanced to level ${newLevel}. Keep it up!`,
         { previousLevel: user.level, newLevel },
       ).catch(() => null);
+      this.eventsService.emitToUser(userId, 'level:up', { newLevel, previousLevel: user.level });
     }
 
     return { newXp, newLevel, leveledUp };
@@ -431,6 +434,7 @@ export class GamificationService implements OnModuleInit {
     });
 
     await this.awardXp(userId, xpReward, 'daily_login');
+    this.eventsService.emitToUser(userId, 'streak:updated', { newStreak, streakBroken });
 
     // Check streak achievements
     await this.checkStreakAchievements(userId, newStreak);
@@ -561,6 +565,7 @@ export class GamificationService implements OnModuleInit {
           `You completed "${mission.name}" and earned ${mission.creditReward} credits`,
           { missionId: mission.id, missionName: mission.name, creditReward: mission.creditReward, xpReward: mission.xpReward },
         ).catch(() => null);
+        this.eventsService.emitToUser(userId, 'mission:completed', { missionId: mission.id, missionName: mission.name });
       }
     }
   }
@@ -654,6 +659,7 @@ export class GamificationService implements OnModuleInit {
       `You earned "${name}"${creditReward > 0 ? ` (+${creditReward} credits)` : ''}`,
       { achievementId, name, creditReward, xpReward },
     ).catch(() => null);
+    this.eventsService.emitToUser(userId, 'achievement:unlocked', { achievementId, name });
   }
 
   // ─── Admin: Achievements ──────────────────────────────────

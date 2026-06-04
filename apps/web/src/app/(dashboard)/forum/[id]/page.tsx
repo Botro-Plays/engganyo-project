@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, MessageSquare, Send, Edit2, Trash2, Lock, Pin, Megaphone, CornerDownRight, Flag } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatRelativeTime } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import { MentionTextarea } from '@/components/mention-textarea';
@@ -80,6 +81,26 @@ export default function ForumTopicPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuthStore();
+
+  // Real-time: refresh current topic on backend events
+  useSocketEvent('reply:new', (payload: { topicId: string }) => {
+    if (payload.topicId === params.id) {
+      void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id] });
+      void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id, 'reactions'] });
+    }
+  });
+  useSocketEvent('topic:updated', (payload: { topicId: string }) => {
+    if (payload.topicId === params.id) {
+      void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id] });
+      void queryClient.invalidateQueries({ queryKey: ['forum', 'topics'] });
+    }
+  });
+  useSocketEvent('topic:deleted', (payload: { topicId: string }) => {
+    if (payload.topicId === params.id) {
+      void queryClient.invalidateQueries({ queryKey: ['forum', 'topic', params.id] });
+      void queryClient.invalidateQueries({ queryKey: ['forum', 'topics'] });
+    }
+  });
   const [replyContent, setReplyContent] = useState('');
   const [replyError, setReplyError] = useState<string | null>(null);
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);

@@ -10,6 +10,7 @@ import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2 } from 'lucide-rea
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import type { ApiResponse } from '@/types';
 
 interface MyStats {
@@ -48,10 +49,32 @@ function DashboardPageInner() {
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [rewardResult, setRewardResult] = useState<{ creditReward: number; xpReward: number; newStreak: number } | null>(null);
 
+  // Real-time: refresh gamification stats on backend events
+  useSocketEvent('level:up', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+  });
+  useSocketEvent('achievement:unlocked', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+  });
+  useSocketEvent('streak:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+  });
+  useSocketEvent('mission:completed', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+  });
+
   const { data: stats } = useQuery<MyStats>({
     queryKey: ['my-stats'],
     queryFn: () => apiClient.get<{ data: MyStats }>('/analytics/users/me/stats').then((r) => r.data.data),
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   const { data: gamStats } = useQuery<GamStats>({
@@ -60,7 +83,7 @@ function DashboardPageInner() {
       const res = await apiClient.get<ApiResponse<GamStats>>('gamification/stats');
       return res.data.data;
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   const rewardMutation = useMutation({

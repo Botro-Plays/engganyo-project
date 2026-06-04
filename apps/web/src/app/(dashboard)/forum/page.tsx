@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Plus, ThumbsUp, MessageCircle, Eye, Lock, Pin } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatRelativeTime } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
@@ -33,6 +34,18 @@ interface ForumTopic {
 
 export default function ForumPage() {
   const queryClient = useQueryClient();
+
+  // Real-time: refresh forum topics on backend events
+  useSocketEvent('topic:new', () => {
+    void queryClient.invalidateQueries({ queryKey: ['forum', 'topics'] });
+  });
+  useSocketEvent('topic:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['forum', 'topics'] });
+  });
+  useSocketEvent('topic:deleted', () => {
+    void queryClient.invalidateQueries({ queryKey: ['forum', 'topics'] });
+  });
+
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
 
