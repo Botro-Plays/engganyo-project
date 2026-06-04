@@ -229,6 +229,29 @@ export default function WalletPage() {
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
   });
 
+  // Fallback: when tab becomes visible after being backgrounded (user paid in new tab),
+  // force-refetch deposits and clear depositResult if the deposit is no longer pending.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (depositResult) {
+        void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+        void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [depositResult, queryClient]);
+
+  // Watch depositHistory: if the depositResult deposit is no longer PENDING, clear it.
+  useEffect(() => {
+    if (!depositResult || !depositHistory?.items) return;
+    const match = depositHistory.items.find((d) => d.id === depositResult.deposit.id);
+    if (match && match.status !== 'PENDING' && match.status !== 'PROCESSING') {
+      resetDeposit();
+    }
+  }, [depositHistory, depositResult]);
+
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ['wallet', 'me'],
     queryFn: async () => (await apiClient.get<ApiResponse<WalletData>>('wallet/me')).data.data,
@@ -258,7 +281,9 @@ export default function WalletPage() {
     queryKey: ['wallet', 'deposits', depPage],
     queryFn: async () => (await apiClient.get<ApiResponse<{ items: DepositRecord[]; meta: { total: number; page: number; totalPages: number; hasNext: boolean; hasPrev: boolean } }>>(`wallet/deposits?page=${depPage}&limit=10`)).data.data,
     enabled: tab === 'deposit',
-    refetchInterval: 60_000,
+    refetchInterval: depositResult ? 10_000 : 60_000, // poll faster while a deposit is in progress
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const initiateMutation = useMutation({
