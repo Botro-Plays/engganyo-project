@@ -196,29 +196,55 @@ export class PayMongoService {
 
     this.logger.log(`PayMongo webhook signature verified: ${eventType}`);
 
-    // link.payment.paid — link object is eventData; external_reference_number = our depositId
+    // link.payment.paid — link object is eventData; external_reference_number/reference_number = our depositId
     if (eventType === 'link.payment.paid') {
+      const linkId = (eventData?.id as string | undefined) ?? undefined;
       const linkAttrs = eventData?.attributes as Record<string, unknown> | undefined;
-      const depositId = linkAttrs?.external_reference_number as string | undefined;
+      const metadata = linkAttrs?.metadata as Record<string, unknown> | undefined;
+      const metadataDepositId = metadata?.depositId as string | undefined;
+      const depositId =
+        (linkAttrs?.external_reference_number as string | undefined) ??
+        (linkAttrs?.reference_number as string | undefined) ??
+        metadataDepositId;
       const payments = linkAttrs?.payments as Array<Record<string, unknown>> | undefined;
-      const paymentId = payments?.[0]?.id as string | undefined;
+      const paymentId =
+        (payments?.[0]?.id as string | undefined) ??
+        ((payments?.[0]?.attributes as Record<string, unknown> | undefined)?.payment_intent_id as string | undefined);
 
-      this.logger.log(`link.payment.paid: depositId=${depositId}, paymentId=${paymentId}`);
+      this.logger.log(
+        `link.payment.paid: depositId=${depositId ?? 'none'}, reference=${linkAttrs?.reference_number ?? 'none'}, linkId=${linkId ?? 'none'}, paymentId=${paymentId ?? 'none'}`,
+      );
 
-      if (!depositId) {
-        this.logger.warn('link.payment.paid: missing external_reference_number (depositId)');
+      let deposit = depositId
+        ? await this.prisma.deposit.findUnique({ where: { id: depositId } })
+        : null;
+
+      if (!deposit && linkId) {
+        deposit = await this.prisma.deposit.findFirst({
+          where: {
+            paymentRef: linkId,
+            method: DepositMethod.PAYMONGO,
+            status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+          },
+        });
+        if (deposit) {
+          this.logger.log(`link.payment.paid: matched deposit ${deposit.id} via linkId ${linkId}`);
+        }
+      }
+
+      if (!deposit) {
+        this.logger.warn('link.payment.paid: could not match link event to any pending deposit');
         return { received: true, action: 'ignored' };
       }
 
-      const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
-      if (!deposit || deposit.status === DepositStatus.COMPLETED || deposit.status === DepositStatus.CANCELLED) {
-        this.logger.warn(`link.payment.paid: deposit ${depositId} not found, already completed or cancelled`);
+      if (deposit.status === DepositStatus.COMPLETED || deposit.status === DepositStatus.CANCELLED) {
+        this.logger.warn(`link.payment.paid: deposit ${deposit.id} already ${deposit.status}`);
         return { received: true, action: 'ignored' };
       }
 
-      await this.walletService.completeDeposit(depositId, { paymentRef: paymentId });
-      this.logger.log(`Deposit ${depositId} completed via link.payment.paid`);
-      return { received: true, action: 'completed', depositId };
+      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
+      this.logger.log(`Deposit ${deposit.id} completed via link.payment.paid`);
+      return { received: true, action: 'completed', depositId: deposit.id };
     }
 
     // payment.paid — payment object is eventData; find deposit by matching link ID stored in paymentRef
@@ -233,12 +259,18 @@ export class PayMongoService {
       // When paid via a link, find the deposit whose paymentRef is the link ID.
       // PayMongo does not pass our custom field back; match by payment_intent_id or remarks.
       // Safest: look for any PENDING PAYMONGO deposit with no completion yet and match amount.
+      const metadata = paymentAttrs?.metadata as Record<string, unknown> | undefined;
+      const metadataDepositId = metadata?.depositId as string | undefined;
+      const referenceNumber = paymentAttrs?.reference_number as string | undefined;
       const externalRef = paymentAttrs?.external_reference_number as string | undefined;
-      this.logger.log(`external_reference_number from payment: ${externalRef}`);
+      const candidateDepositId = externalRef ?? metadataDepositId ?? referenceNumber;
+      this.logger.log(
+        `payment.paid identifiers: externalRef=${externalRef ?? 'none'}, reference=${referenceNumber ?? 'none'}, metadata.depositId=${metadataDepositId ?? 'none'}`,
+      );
 
       // Try direct depositId match (external_reference_number should be our depositId for newly created links)
-      if (externalRef) {
-        const depositById = await this.prisma.deposit.findUnique({ where: { id: externalRef } });
+      if (candidateDepositId) {
+        const depositById = await this.prisma.deposit.findUnique({ where: { id: candidateDepositId } });
         if (depositById && depositById.method === DepositMethod.PAYMONGO && depositById.status !== DepositStatus.COMPLETED && depositById.status !== DepositStatus.CANCELLED) {
           this.logger.log(`Found deposit ${depositById.id} via external_reference_number`);
           await this.walletService.completeDeposit(depositById.id, { paymentRef: paymentId });
