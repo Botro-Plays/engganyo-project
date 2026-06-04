@@ -7,13 +7,13 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
 ## Blockers — Before Any Payment Scaling
 
 - **[Blocker] PayMongo: remove unsafe completion fallback**
-  - Status: Not implemented — webhook handler still falls back to `findFirst` on any pending PayMongo deposit when matching `payment_intent_id`. @apps/api/src/modules/paymongo/paymongo.service.ts#215-251
+  - Status: ✅ Implemented — commit `aa881fd` (2026-06-04) removes the `findFirst` fallback and adds strict matching + unit tests. @apps/api/src/modules/paymongo/paymongo.service.ts#199-278 @apps/api/src/modules/paymongo/paymongo.service.spec.ts#32-187
   - Rationale: Current `findFirst` fallback can credit the wrong user on `payment.paid`.
   - Files to touch: `apps/api/src/modules/paymongo/paymongo.service.ts` (payment webhooks section)
   - Acceptance:
     - No “first pending deposit” fallback exists.
     - Completion matches only by strong keys: `external_reference_number` (depositId) or exact stored id.
-    - E2E proves wrong-user credit cannot occur.
+    - Unit coverage proves wrong-user credit cannot occur.
 
 - **[Blocker] Enforce ownership in createLink**
   - Status: ✅ Implemented — commits `13b224b`, `6ac0696` (2026-06-04). Ownership is enforced in `createLink`, which now loads the deposit for the authenticated user and rejects mismatches. @apps/api/src/modules/paymongo/paymongo.controller.ts#34-67 @apps/api/src/modules/paymongo/paymongo.controller.spec.ts#75-129
@@ -75,7 +75,8 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
   - Rationale: Avoid canceling a deposit that actually got paid.
   - Files to touch: `paymongo.service.ts#cancelExpiredPayMongoDeposits`
   - Acceptance:
-    - Verify link/payment status (or recent completion) before cancel.
+    - Query PayMongo for the link/payment status before deciding to cancel.
+    - Skip cancellation and trigger completion if PayMongo reports the link paid/closed.
     - No cancellations of already-paid deposits.
 
 ---
@@ -96,6 +97,15 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
   - Acceptance:
     - 3 attempts with exponential backoff; warn on final failure.
 
+- **[High] Verify reset clears notifications**
+  - Status: Needs verification — `adminService.resetDatabase` deletes notifications for kept admins and relies on cascade for removed users. @apps/api/src/modules/admin/admin.service.ts#1549-1668
+  - Rationale: Ensure no stale notifications remain after `Reset Database` runs.
+  - Files to touch: `apps/api/src/modules/admin/admin.service.ts`
+  - Acceptance:
+    - Automated or documented verification that notifications are cleared for all users post-reset.
+    - Any gaps patched so retained admins/users start with zero notifications.
+    - Preserve the intentional welcome notification for the reset `admin`/`botro` accounts (they behave like fresh users with 200 credits).
+
 - **[High] Webhook secret format validation**
   - Status: Not implemented — service imports do not validate webhook secret format before hashing. @apps/api/src/modules/paymongo/paymongo.service.ts#1-188
   - Rationale: Harden HMAC usage against weak/malformed secrets.
@@ -114,12 +124,36 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
   - Acceptance:
     - Timeout cleared on unmount; no setState after unmount.
 
+- **[Medium] Expand admin deposit details**
+  - Status: Not implemented — admin finances page shows limited deposit info compared to the user view. @apps/web/src/app/(admin)/finances/page.tsx
+  - Rationale: Support needs to see the same detail users see when diagnosing deposit reports.
+  - Files to touch: `apps/web/src/app/(admin)/finances/*`
+  - Acceptance:
+    - Each deposit row can expand to reveal full details (amounts, timestamps, link status, notes).
+    - Works for all gateways without breaking layout or pagination.
+
 - **[Medium] Countdown NaN guard**
   - Status: Not implemented — countdown timer does not guard against invalid dates before computing expiry. @apps/web/src/app/(dashboard)/wallet/page.tsx#164-195
   - Rationale: Invalid date strings can render `NaN:NaN`.
   - Files to touch: `wallet/page.tsx` (CountdownTimer)
   - Acceptance:
     - Defensive parsing; UI never shows NaN.
+
+- **[Medium] Clear expired deposit banner without reload**
+  - Status: Not implemented — expired PayMongo banner persists until the user refreshes or changes tabs. @apps/web/src/app/(dashboard)/wallet/page.tsx
+  - Rationale: Avoid confusion after an expired attempt.
+  - Files to touch: `apps/web/src/app/(dashboard)/wallet/page.tsx`
+  - Acceptance:
+    - Expired banner dismisses automatically once the refreshed deposit state is loaded.
+    - Manual dismiss button works without requiring a full page refresh.
+
+- **[Medium] Persistent pending-deposit reminder**
+  - Status: Not implemented — users with pending deposits receive no global reminder outside `/wallet`.
+  - Rationale: Ensure users don’t forget pending payments while browsing other dashboard sections.
+  - Files to touch: `apps/web/src/app/(dashboard)/**/*` (global layout/banner logic)
+  - Acceptance:
+    - A theme-consistent, non-intrusive sticky note/banner appears on dashboard sub-pages (excluding `/wallet`) when a pending PayMongo deposit exists.
+    - Reminder hides automatically once all deposits resolve; respects responsive layouts.
 
 - **[Medium] Remove `gatewayData!` assertions**
   - Status: Not implemented — PayMongo UI branches continue to assert non-null `gatewayData`. @apps/web/src/app/(dashboard)/wallet/page.tsx#551-558 @apps/web/src/app/(dashboard)/wallet/page.tsx#998-1004
