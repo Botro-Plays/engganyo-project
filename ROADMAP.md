@@ -590,6 +590,7 @@
 - [🟡] Quick actions panel
 - [🟡] Activity feed
 - [✅] Notification center — real-time Socket.IO delivery, 10 notification types wired (Phase 1 & 2), frontend bell + page with icons and routing
+- [✅] Event-driven cache invalidation — all 3 phases of `REALTIME_ROADMAP` complete (wallet, tasks/campaigns, forum/gamification), `refetchInterval` extended to 60s fallback
 - [🟡] Performance insights
 
 **Mobile Optimization & PWA**

@@ -34,10 +34,12 @@ The platform already has production-ready WebSocket infrastructure via Socket.IO
 | `/tasks` browse | 15s | `task:assigned`, `task:completed`, `task:reviewed` |
 | `/tasks` mine | 15s | Same as above |
 | `/campaigns` | 15s | `campaign:updated`, `submission:new` |
-| `/forum` | None (stale) | `topic:new`, `reply:new`, `topic:updated` |
+| `/forum` | 60s (socket-backed) | `topic:new`, `reply:new`, `topic:updated`, `topic:deleted` |
+| `/leaderboard` | 60s (socket-backed) | `level:up`, `achievement:unlocked` |
+| `/achievements` | 60s (socket-backed) | `achievement:unlocked`, `level:up` |
+| `/missions` | 60s (socket-backed) | `mission:completed`, `streak:updated`, `level:up` |
+| `/dashboard` | 60s (socket-backed) | `level:up`, `achievement:unlocked`, `streak:updated`, `mission:completed` |
 | `/discover` | None (60s stale) | `campaign:published`, `leaderboard:updated` |
-| `/leaderboard` | None | `leaderboard:updated` |
-| `/achievements` | None | `achievement:unlocked`, `level:up` |
 | `/notifications` page | None | Page doesn't listen to socket events |
 
 ---
@@ -87,10 +89,10 @@ This keeps the frontend data layer intact (React Query handles caching, deduping
   - Listen to `wallet:updated` → invalidate `['wallet', 'me']`
 
 **Acceptance criteria:**
-- [ ] PayMongo deposit completes via webhook → sticky banner and deposit list update within 1 second
-- [ ] Admin marks deposit COMPLETED in `/admin/finances` → user's wallet balance updates instantly
-- [ ] User cancels deposit → banner disappears without manual refresh
-- [ ] Remove or extend `refetchInterval` for wallet queries once sockets are reliable
+- [x] PayMongo deposit completes via webhook → sticky banner and deposit list update within 1 second
+- [x] Admin marks deposit COMPLETED in `/admin/finances` → user's wallet balance updates instantly
+- [x] User cancels deposit → banner disappears without manual refresh
+- [x] Remove or extend `refetchInterval` for wallet queries once sockets are reliable (extended to 60s)
 
 ---
 
@@ -114,9 +116,10 @@ This keeps the frontend data layer intact (React Query handles caching, deduping
 - `/campaigns` (my campaigns) — listen to `campaign:updated`, `submission:new`
 
 **Acceptance criteria:**
-- [ ] User submits proof → task status changes to "Under review" without refresh
-- [ ] Admin approves → both campaign owner and worker see updated state instantly
-- [ ] New task posted → appears in browse tab within 1 second
+- [x] User submits proof → task status changes to "Under review" without refresh
+- [x] Admin approves → both campaign owner and worker see updated state instantly
+- [x] New task posted → appears in browse tab within 1 second
+- [x] `refetchInterval` extended to 60s for tasks and campaigns queries
 
 ---
 
@@ -137,27 +140,35 @@ This keeps the frontend data layer intact (React Query handles caching, deduping
 - `apps/api/src/modules/gamification/gamification.service.ts`
 
 **Frontend pages:**
-- `/forum` — listen to `topic:new`, `reply:new`
-- `/forum/[id]` — listen to `reply:new`
-- `/leaderboard` — listen to `leaderboard:updated`
+- `/forum` — listen to `topic:new`, `topic:updated`, `topic:deleted`
+- `/forum/[id]` — listen to `reply:new`, `topic:updated`, `topic:deleted`
+- `/leaderboard` — listen to `level:up`, `achievement:unlocked`
 - `/achievements` — listen to `achievement:unlocked`, `level:up`
-- `/dashboard` — listen to `gamification:updated`
+- `/missions` — listen to `mission:completed`, `streak:updated`, `level:up`
+- `/dashboard` — listen to `level:up`, `achievement:unlocked`, `streak:updated`, `mission:completed`
 
 **Acceptance criteria:**
-- [ ] New forum topic → appears in list without refresh
-- [ ] Reply posted → visible in topic thread within 1 second
-- [ ] User claims daily reward → streak and XP update instantly
-- [ ] Leaderboard position change → reflected in real time
+- [x] New forum topic → appears in list without refresh
+- [x] Reply posted → visible in topic thread within 1 second
+- [x] User claims daily reward → streak and XP update instantly
+- [x] Leaderboard position change → reflected in real time
+- [x] `refetchInterval` extended to 60s for all socket-backed queries
 
 ---
 
 ## Cleanup After Completion
 
-Once all phases are implemented and tested:
+All phases are now implemented and in production. Cleanup status:
 
-1. **Remove aggressive polling intervals** — increase `refetchInterval` to `60_000` (1 min) or remove entirely for socket-backed queries
-2. **Add fallback reconnection UI** — show "Reconnecting..." when socket is disconnected for >5s
-3. **Consider event payload size** — emit only IDs + minimal metadata, let React Query fetch fresh data via invalidation (already the pattern in `notification:*` events)
+1. [x] **Remove aggressive polling intervals** — `refetchInterval` increased to `60_000` (1 min) for all socket-backed queries (wallet, tasks, campaigns, dashboard, forum, leaderboard, achievements, missions)
+2. [ ] **Add fallback reconnection UI** — show "Reconnecting..." when socket is disconnected for >5s
+3. [x] **Event payload size** — emit only IDs + minimal metadata, let React Query fetch fresh data via invalidation (follows the `notification:*` pattern)
+
+## Progress Log
+
+- **2026-05-31** — Phase 1 complete: wallet deposits, `deposit:updated` + `wallet:updated` wired, `refetchInterval` 10s → 60s
+- **2026-06-02** — Phase 2 complete: tasks (`task:assigned`, `task:reviewed`) + campaigns (`campaign:updated`, `submission:new`) wired, polling reduced
+- **2026-06-04** — Phase 3 complete: forum (`topic:new`, `reply:new`, `topic:updated`, `topic:deleted`) + gamification (`level:up`, `achievement:unlocked`, `streak:updated`, `mission:completed`) wired, all pages event-driven, polling at 60s fallback
 
 ---
 

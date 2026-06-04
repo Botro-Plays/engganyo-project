@@ -156,6 +156,7 @@ After revenue is flowing, improve scale and trust.
 | 2026-06-01 | Non-OAuth platforms invisible in campaign dropdown | ✅ FIXED — `getPublicConfig()` now defaults `enabled ?? true` for all managed platforms; frontend gates all 11 platforms via admin toggle |
 | 2026-06-01 | TrustPilot and Google Reviews not admin-toggleable | ✅ FIXED — added to `SocialPlatform` enum, DB migration, backend lists, frontend filter, and admin UI toggles |
 | 2026-06-01 | Deploy gap: missing auto-migration in container startup | ✅ FIXED — `entrypoint.sh` now runs `prisma migrate deploy` before `node dist/main` |
+| 2026-06-04 | Real-time event-driven architecture (Phases 1–3) | ✅ DONE — all 3 phases wired, polling extended to 60s fallback, lint clean |
 | | | |
 
 ---
@@ -164,9 +165,15 @@ After revenue is flowing, improve scale and trust.
 
 **C1, C2, and C3 are resolved. The platform is revenue-ready for platform fees.**
 
-### Active: Notification System Wiring (WebSocket/Socket.IO)
-> The notification infrastructure is fully built (`NotificationsService`, `EventsGateway`, `NotificationBell` component, Socket.IO real-time). Triggers are now wired for all Phase 1 & 2 events. `UserAchievement.notified` is set to `true` on unlock. Frontend icons and href routing extended.
-> **Status: Subject for testing** — end-to-end verification pending GitHub Actions E2E run.
+### Completed: Real-Time Frontend Architecture (All 3 Phases)
+> All WebSocket/Socket.IO real-time updates are now wired across the platform. Backend emits events after DB commits; frontend pages listen and invalidate React Query caches. Polling intervals extended to 60s as a graceful fallback.
+> **Status: DONE** — deployed to production via `main` branch (`7354ad2`).
+>
+> - **Phase 1** — Wallet + Deposits (`deposit:updated`, `wallet:updated`)
+> - **Phase 2** — Tasks + Campaigns (`task:assigned`, `task:reviewed`, `campaign:updated`, `submission:new`)
+> - **Phase 3** — Forum + Gamification (`topic:new`, `reply:new`, `topic:updated`, `topic:deleted`, `level:up`, `achievement:unlocked`, `streak:updated`, `mission:completed`)
+>
+> Notification system (Phase 1 & 2) was also completed alongside this work — `UserAchievement.notified` wired, frontend bell + page with icons and routing.
 
 **Phase 1 — Core User-Facing Notifications (Must-Have)**
 - [x] `ACHIEVEMENT_UNLOCKED` — `GamificationService.unlockAchievement()`
