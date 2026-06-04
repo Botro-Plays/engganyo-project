@@ -16,6 +16,7 @@ import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
+import { PlatformSelect } from '@/components/platform-select';
 import type { ApiResponse } from '@/types';
 
 // ─── Task type → platform map ─────────────────────────────────
@@ -31,14 +32,6 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   DISCORD_JOIN_SERVER: 'DISCORD',
   TRUSTPILOT_REVIEW: 'TRUSTPILOT',
   GOOGLE_REVIEW: 'GOOGLE',
-};
-
-// ─── Types ────────────────────────────────────────────────────
-const PLATFORM_ICON: Record<string, string> = {
-  YOUTUBE: '🎬', TIKTOK: '🎵', INSTAGRAM: '📸',
-  TWITTER: '🐦', FACEBOOK: '👍', TWITCH: '🎮',
-  SPOTIFY: '🎧', TELEGRAM: '✈️', DISCORD: '💬',
-  TRUSTPILOT: '⭐', GOOGLE: '🔍',
 };
 
 const ALL_TASK_TYPES = [
@@ -362,19 +355,17 @@ export default function CampaignsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-zinc-400 mb-1.5">Task type</label>
-                  <select
-                    {...form.register('taskType')}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  >
-                    <option value="">Select type</option>
-                    {TASK_TYPES.map((t) => {
-                      const platform = TASK_TYPE_TO_PLATFORM[t.value];
-                      const icon = platform ? PLATFORM_ICON[platform] ?? '' : '';
-                      return (
-                        <option key={t.value} value={t.value}>{icon} {t.label}</option>
-                      );
-                    })}
-                  </select>
+                  <PlatformSelect
+                    id="taskType"
+                    options={TASK_TYPES.map((t) => ({
+                      value: t.value,
+                      label: t.label,
+                      platform: TASK_TYPE_TO_PLATFORM[t.value],
+                    }))}
+                    value={form.watch('taskType')}
+                    onChange={(v) => form.setValue('taskType', v, { shouldValidate: true })}
+                    placeholder="Select type"
+                  />
                   {form.formState.errors.taskType && (
                     <p className="text-xs text-red-400 mt-1">{form.formState.errors.taskType.message}</p>
                   )}
