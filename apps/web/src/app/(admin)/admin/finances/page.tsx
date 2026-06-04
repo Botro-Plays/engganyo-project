@@ -481,7 +481,7 @@ export default function FinancesPage() {
                     const mCfg = METHOD_CFG[dep.method] ?? { label: dep.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: DollarSign };
                     const sCfg = STATUS_CFG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock };
                     const StatusIcon = sCfg.icon;
-                    const canReview = dep.status !== 'COMPLETED' && dep.status !== 'REFUNDED';
+                    const canReview = dep.status === 'PENDING' || dep.status === 'PROCESSING';
                     return (
                       <tr key={dep.id} className="hover:bg-surface-hover transition-colors">
                         <td className="px-4 py-3">
@@ -515,13 +515,15 @@ export default function FinancesPage() {
                           {formatRelativeTime(dep.createdAt)}
                         </td>
                         <td className="px-4 py-3">
-                          {canReview && (
+                          {canReview ? (
                             <button
                               onClick={() => setReviewing(dep)}
                               className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-xs font-medium transition-all"
                             >
                               Review
                             </button>
+                          ) : (
+                            <span className="text-xs text-zinc-600">—</span>
                           )}
                         </td>
                       </tr>
