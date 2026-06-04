@@ -38,9 +38,12 @@ export class PayMongoService {
     const secret = await this.getSecretKey();
     if (!secret) throw new BadRequestException('PayMongo not configured');
 
-    const amount = Math.round(amountCents);
+    let amount = Math.round(amountCents);
     if (amount < 100) {
-      throw new BadRequestException('PayMongo payment link amount must be at least PHP 1.00');
+      this.logger.warn(
+        `Requested PayMongo amount below minimum (received ${amount} cents). Clamping to PHP 1.00 for deposit ${depositId}.`,
+      );
+      amount = 100;
     }
 
     const normalizedCurrency = currency?.trim().toUpperCase() || 'PHP';

@@ -57,7 +57,10 @@ export class PayMongoController {
       throw new BadRequestException('Deposit is no longer awaiting payment');
     }
 
-    const amountCents = Math.round(Number(deposit.amountFiat) * 100);
+    let amountCents = Math.round(Number(deposit.amountFiat) * 100);
+    if (amountCents < 100) {
+      amountCents = 100;
+    }
     const description = `Engganyo credits — ${deposit.creditsToAward} credits`;
 
     return this.paymongoService.createPaymentLink(deposit.id, amountCents, description, deposit.currency ?? 'PHP');

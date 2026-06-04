@@ -319,7 +319,8 @@ export class WalletService {
 
     const { creditsPerUsd, usdToPhp } = options.pricing;
     const isPhp = method === 'PAYMONGO';
-    const amountFiat = isPhp ? parseFloat((pkg.usdAmount * usdToPhp).toFixed(2)) : pkg.usdAmount;
+    const rawAmountPhp = parseFloat((pkg.usdAmount * usdToPhp).toFixed(2));
+    const amountFiat = isPhp ? Math.max(1, rawAmountPhp) : pkg.usdAmount;
     const currency   = isPhp ? 'PHP' : 'USD';
     const creditsBase   = Math.floor(pkg.usdAmount * creditsPerUsd);
     const creditsToAward = creditsBase + pkg.bonusCredits;

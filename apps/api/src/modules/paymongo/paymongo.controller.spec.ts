@@ -112,4 +112,20 @@ describe('PayMongoController', () => {
     );
     expect(result).toEqual({ linkId: 'link-1', checkoutUrl: 'https://paymongo.test/link-1' });
   });
+
+  it('uses PHP 1.00 minimum when derived amount is below PayMongo threshold', async () => {
+    getDepositForUserMock.mockResolvedValue(makeDeposit({ id: 'dep-min', amountFiat: 0.75, creditsToAward: 50 }));
+
+    createPaymentLinkMock.mockResolvedValue({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
+
+    const result = await controller.createLink(user, { depositId: 'dep-min' });
+
+    expect(createPaymentLinkMock).toHaveBeenCalledWith(
+      'dep-min',
+      100,
+      expect.stringContaining('50'),
+      'PHP',
+    );
+    expect(result).toEqual({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
+  });
 });
