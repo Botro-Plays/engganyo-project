@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight,
+  ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   PlusCircle, Copy, Check, Clock, CheckCircle2, XCircle, AlertCircle,
   CreditCard, Wallet, Bitcoin, RefreshCw, Zap, ArrowLeft, LinkIcon,
   ShieldCheck, Send, ExternalLink, AlertTriangle,
@@ -147,6 +147,19 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+// ─── Detail item for expanded deposit view ──────────────
+function DetailItem({ label, value, copyable }: { label: string; value: string; copyable?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 bg-black/10 rounded-lg px-3 py-2">
+      <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">{label}</span>
+      <div className="flex items-center min-w-0">
+        <span className="text-xs text-zinc-300 font-mono truncate" title={value}>{value}</span>
+        {copyable && <CopyButton text={value} />}
+      </div>
+    </div>
+  );
+}
+
 // ─── Countdown timer for PayMongo expiry ─────────────────
 function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdAt?: string }) {
   // Fallback: old deposits without expiredAt expire 30min after creation
@@ -199,6 +212,7 @@ export default function WalletPage() {
   const [depositError, setDepositError] = useState<string | null>(null);
   const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
 
   const evmWallet = useEvmWallet();
 
@@ -938,6 +952,7 @@ export default function WalletPage() {
                     const StatusIcon = statusCfg.icon;
                     const canCancel = dep.status === 'PENDING' || dep.status === 'PROCESSING';
                     const isCancelling = cancelDepositMutation.isPending && cancelDepositMutation.variables === dep.id;
+                    const isExpanded = expandedDepositId === dep.id;
                     return (
                       <div key={dep.id} className="px-6 py-4 hover:bg-surface-hover transition-colors">
                         <div className="flex items-start gap-4">
@@ -946,7 +961,16 @@ export default function WalletPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <p className="text-sm font-medium text-white">{meta.label}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white">{meta.label}</p>
+                                <button
+                                  onClick={() => setExpandedDepositId(isExpanded ? null : dep.id)}
+                                  className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                                  title={isExpanded ? 'Collapse details' : 'Expand details'}
+                                >
+                                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
                               <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`}>
                                 <StatusIcon className="w-3 h-3" />{statusCfg.label}
                               </span>
@@ -961,7 +985,6 @@ export default function WalletPage() {
                             <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
                               <p className="text-xs text-zinc-600">Created {formatRelativeTime(dep.createdAt)}</p>
                               {dep.completedAt && <p className="text-xs text-zinc-600">Completed {formatRelativeTime(dep.completedAt)}</p>}
-                              {dep.paymentRef && <p className="text-xs text-zinc-700 font-mono truncate max-w-[200px]" title={dep.paymentRef}>Ref: {dep.paymentRef}</p>}
                             </div>
                             {dep.adminNotes && (
                               <p className="text-xs text-zinc-500 mt-1 italic">{dep.adminNotes}</p>
@@ -995,6 +1018,43 @@ export default function WalletPage() {
                             </button>
                           )}
                         </div>
+
+                        {/* Expanded detail panel */}
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-surface-border/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <DetailItem label="Deposit ID" value={dep.id} copyable />
+                            {dep.paymentRef && (
+                              <DetailItem label="Payment Reference" value={dep.paymentRef} copyable />
+                            )}
+                            <DetailItem label="Status" value={dep.status} />
+                            <DetailItem label="Method" value={dep.method} />
+                            <DetailItem label="Currency" value={dep.currency} />
+                            <DetailItem label="Amount (Fiat)" value={`${dep.currency} ${dep.amountFiat.toFixed(2)}`} />
+                            {dep.exchangeRate && (
+                              <DetailItem label="Exchange Rate" value={`₱${dep.exchangeRate.toFixed(2)} / USD`} />
+                            )}
+                            <DetailItem label="Credits To Award" value={dep.creditsToAward.toLocaleString()} />
+                            <DetailItem label="Credits Awarded" value={dep.creditsAwarded.toLocaleString()} />
+                            {dep.bonusCredits > 0 && (
+                              <DetailItem label="Bonus Credits" value={dep.bonusCredits.toLocaleString()} />
+                            )}
+                            <DetailItem label="Created At" value={new Date(dep.createdAt).toLocaleString()} />
+                            {dep.completedAt && (
+                              <DetailItem label="Completed At" value={new Date(dep.completedAt).toLocaleString()} />
+                            )}
+                            {dep.package && (
+                              <DetailItem label="Package" value={`${dep.package.label ?? 'Standard'} ($${dep.package.usdAmount})`} />
+                            )}
+                            {dep.gatewayData && Object.keys(dep.gatewayData).length > 0 && (
+                              <div className="sm:col-span-2">
+                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Gateway Data</p>
+                                <pre className="text-[11px] text-zinc-400 bg-black/20 rounded-lg p-2.5 overflow-x-auto font-mono">
+                                  {JSON.stringify(dep.gatewayData, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
