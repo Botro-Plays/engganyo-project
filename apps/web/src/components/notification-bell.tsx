@@ -24,6 +24,7 @@ interface AppNotification {
     targetUsername?: string;
     replyTopicId?: string;
     href?: string;
+    depositId?: string;
   } | null;
   isRead: boolean;
   createdAt: string;
@@ -70,14 +71,19 @@ function getNotificationHref(n: AppNotification): string {
   // User report (no topic/reply) → go to reported user's public profile
   if (data.targetUsername) return `/users/${data.targetUsername}`;
 
-  // Account warnings / security alerts → user's own profile
+  // Deposit / credit notifications → wallet
+  if (n.type === 'CREDIT_EARNED' || n.type === 'CREDIT_SPENT') return '/wallet';
+
+  // Account warnings / security alerts with deposit context → wallet
+  if ((n.type === 'ACCOUNT_WARNING' || n.type === 'SECURITY_ALERT') && data.depositId) return '/wallet';
+
+  // Account warnings / security alerts (general) → user's own profile
   if (n.type === 'ACCOUNT_WARNING' || n.type === 'SECURITY_ALERT') return '/profile';
 
   // Gamification / task / campaign notifications → dashboard
   if (
     n.type === 'ACHIEVEMENT_UNLOCKED' ||
     n.type === 'LEVEL_UP' ||
-    n.type === 'CREDIT_EARNED' ||
     n.type === 'TASK_COMPLETED' ||
     n.type === 'TASK_REJECTED' ||
     n.type === 'STREAK_BROKEN' ||
