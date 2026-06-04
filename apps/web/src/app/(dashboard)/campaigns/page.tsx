@@ -34,6 +34,13 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
 };
 
 // ─── Types ────────────────────────────────────────────────────
+const PLATFORM_ICON: Record<string, string> = {
+  YOUTUBE: '🎬', TIKTOK: '🎵', INSTAGRAM: '📸',
+  TWITTER: '🐦', FACEBOOK: '👍', TWITCH: '🎮',
+  SPOTIFY: '🎧', TELEGRAM: '✈️', DISCORD: '💬',
+  TRUSTPILOT: '⭐', GOOGLE: '🔍',
+};
+
 const ALL_TASK_TYPES = [
   { value: 'YOUTUBE_SUBSCRIBE',    label: 'YouTube · Subscribe' },
   { value: 'YOUTUBE_LIKE',         label: 'YouTube · Like' },
@@ -360,9 +367,13 @@ export default function CampaignsPage() {
                     className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
                   >
                     <option value="">Select type</option>
-                    {TASK_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
+                    {TASK_TYPES.map((t) => {
+                      const platform = TASK_TYPE_TO_PLATFORM[t.value];
+                      const icon = platform ? PLATFORM_ICON[platform] ?? '' : '';
+                      return (
+                        <option key={t.value} value={t.value}>{icon} {t.label}</option>
+                      );
+                    })}
                   </select>
                   {form.formState.errors.taskType && (
                     <p className="text-xs text-red-400 mt-1">{form.formState.errors.taskType.message}</p>
