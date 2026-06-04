@@ -7,5 +7,5 @@ export default registerAs('email', () => ({
   user: process.env['SMTP_USER'] ?? '',
   pass: process.env['SMTP_PASS'] ?? '',
   fromName: process.env['SMTP_FROM_NAME'] ?? 'Engganyo',
-  fromEmail: process.env['SMTP_FROM_EMAIL'] ?? 'noreply@engganyo.com',
+  fromEmail: process.env['SMTP_FROM_EMAIL'] ?? 'no-reply@engganyo.com',
 }));

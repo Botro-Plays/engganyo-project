@@ -1600,6 +1600,7 @@ export class AdminService {
         await tx.user.deleteMany({ where: { id: { notIn: keptIds } } });
 
         // ── Reset kept accounts (stats only — credentials and 2FA are preserved) ──
+        await tx.notification.deleteMany({ where: { userId: { in: keptIds } } });
         await tx.userAchievement.deleteMany({ where: { userId: { in: keptIds } } });
         await tx.userMissionProgress.deleteMany({ where: { userId: { in: keptIds } } });
 
