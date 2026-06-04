@@ -202,7 +202,7 @@ export default function WalletPage() {
 
   const evmWallet = useEvmWallet();
 
-  const resetDeposit = () => {
+  const resetDeposit = useCallback(() => {
     setDepositStep(1);
     setSelectedPackage(null);
     setSelectedMethod(null);
@@ -212,7 +212,7 @@ export default function WalletPage() {
     setDepositError(null);
     setFiatCheckoutUrl(null);
     evmWallet.reset();
-  };
+  }, [evmWallet]);
 
   // Real-time: refresh deposits + wallet on backend events
   useSocketEvent('deposit:updated', (payload: { depositId: string; status: string }) => {
@@ -242,15 +242,6 @@ export default function WalletPage() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [depositResult, queryClient]);
-
-  // Watch depositHistory: if the depositResult deposit is no longer PENDING, clear it.
-  useEffect(() => {
-    if (!depositResult || !depositHistory?.items) return;
-    const match = depositHistory.items.find((d) => d.id === depositResult.deposit.id);
-    if (match && match.status !== 'PENDING' && match.status !== 'PROCESSING') {
-      resetDeposit();
-    }
-  }, [depositHistory, depositResult]);
 
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ['wallet', 'me'],
@@ -285,6 +276,15 @@ export default function WalletPage() {
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
+
+  // Watch depositHistory: if the depositResult deposit is no longer PENDING, clear it.
+  useEffect(() => {
+    if (!depositResult || !depositHistory?.items) return;
+    const match = depositHistory.items.find((d) => d.id === depositResult.deposit.id);
+    if (match && match.status !== 'PENDING' && match.status !== 'PROCESSING') {
+      resetDeposit();
+    }
+  }, [depositHistory, depositResult, resetDeposit]);
 
   const initiateMutation = useMutation({
     mutationFn: async (body: { packageId: string; method: string; txHash?: string; userWalletAddress?: string }) =>
