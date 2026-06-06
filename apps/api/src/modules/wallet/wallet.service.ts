@@ -450,45 +450,78 @@ export class WalletService {
     depositId: string,
     opts: { paymentRef?: string; reviewedBy?: string; adminNotes?: string } = {},
   ) {
-    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
-    if (!deposit) throw new NotFoundException('Deposit not found');
-    if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
-    if (deposit.status === DepositStatus.CANCELLED) throw new BadRequestException('Deposit was cancelled');
-    if (deposit.status === DepositStatus.FAILED) throw new BadRequestException('Deposit was failed');
+    const { deposit, wallet, notification } = await this.prisma.withTransaction(async (tx) => {
+      const existing = await tx.deposit.findUnique({ where: { id: depositId } });
+      if (!existing) throw new NotFoundException('Deposit not found');
+      if (existing.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
+      if (existing.status === DepositStatus.CANCELLED) throw new BadRequestException('Deposit was cancelled');
+      if (existing.status === DepositStatus.FAILED) throw new BadRequestException('Deposit was failed');
 
-    const txType =
-      deposit.method === DepositMethod.PAYMONGO ? TransactionType.DEPOSIT_PAYMONGO
-      : deposit.method === DepositMethod.PAYPAL ? TransactionType.DEPOSIT_PAYPAL
-      : TransactionType.DEPOSIT_CRYPTO;
+      const txType =
+        existing.method === DepositMethod.PAYMONGO ? TransactionType.DEPOSIT_PAYMONGO
+        : existing.method === DepositMethod.PAYPAL ? TransactionType.DEPOSIT_PAYPAL
+        : TransactionType.DEPOSIT_CRYPTO;
 
-    await this.prisma.deposit.update({
-      where: { id: depositId },
-      data: {
-        status: DepositStatus.COMPLETED,
-        creditsAwarded: deposit.creditsToAward,
-        completedAt: new Date(),
-        ...(opts.reviewedBy && { reviewedBy: opts.reviewedBy }),
-        ...(opts.adminNotes && { adminNotes: opts.adminNotes }),
-        ...(opts.paymentRef && { paymentRef: opts.paymentRef }),
-      },
+      const walletRecord = await tx.wallet.findUnique({ where: { userId: existing.userId } });
+      if (!walletRecord) throw new NotFoundException('Wallet not found');
+
+      const amount = existing.creditsToAward;
+      const balanceBefore = walletRecord.balance;
+      const balanceAfter = balanceBefore + amount;
+
+      const updatedDeposit = await tx.deposit.update({
+        where: { id: depositId },
+        data: {
+          status: DepositStatus.COMPLETED,
+          creditsAwarded: existing.creditsToAward,
+          completedAt: new Date(),
+          ...(opts.reviewedBy && { reviewedBy: opts.reviewedBy }),
+          ...(opts.adminNotes && { adminNotes: opts.adminNotes }),
+          ...(opts.paymentRef && { paymentRef: opts.paymentRef }),
+        },
+      });
+
+      const updatedWallet = await tx.wallet.update({
+        where: { id: walletRecord.id },
+        data: {
+          balance: balanceAfter,
+          lifetimeEarned: { increment: amount },
+          version: { increment: 1 },
+        },
+      });
+
+      await tx.transaction.create({
+        data: {
+          walletId: walletRecord.id,
+          type: txType,
+          status: TransactionStatus.COMPLETED,
+          amount,
+          balanceBefore,
+          balanceAfter,
+          description: `Deposit via ${existing.method} — ${existing.amountFiat} ${existing.currency}`,
+          referenceId: depositId,
+          referenceType: 'Deposit',
+        },
+      });
+
+      await tx.user.update({
+        where: { id: existing.userId },
+        data: { creditBalance: balanceAfter },
+      });
+
+      const newNotification = await tx.notification.create({
+        data: {
+          userId: existing.userId,
+          type: NotificationType.CREDIT_EARNED,
+          title: 'Deposit Approved',
+          body: `Your ${existing.method} deposit of ${existing.currency} ${existing.amountFiat} has been approved. ${existing.creditsToAward.toLocaleString()} credits added to your wallet.`,
+          data: { depositId, credits: existing.creditsToAward },
+        },
+      });
+
+      return { deposit: updatedDeposit, wallet: updatedWallet, notification: newNotification };
     });
 
-    await this.credit(deposit.userId, deposit.creditsToAward, {
-      type: txType,
-      description: `Deposit via ${deposit.method} — ${deposit.amountFiat} ${deposit.currency}`,
-      referenceId: depositId,
-      referenceType: 'Deposit',
-    });
-
-    await this.notificationsService.createNotification(
-      deposit.userId,
-      NotificationType.CREDIT_EARNED,
-      'Deposit Approved',
-      `Your ${deposit.method} deposit of ${deposit.currency} ${deposit.amountFiat} has been approved. ${deposit.creditsToAward.toLocaleString()} credits added to your wallet.`,
-      { depositId, credits: deposit.creditsToAward },
-    );
-
-    const wallet = await this.prisma.wallet.findUnique({ where: { userId: deposit.userId } });
     this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId, status: DepositStatus.COMPLETED });
     if (wallet) {
       this.eventsService.emitToUser(deposit.userId, 'wallet:updated', {
@@ -498,6 +531,10 @@ export class WalletService {
       });
     }
 
-    return this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (notification) {
+      this.eventsService.emitToUser(deposit.userId, 'notification:new', notification);
+    }
+
+    return deposit;
   }
 }

@@ -7,7 +7,7 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
 ## Blockers — Before Any Payment Scaling
 
 - **[Blocker] PayMongo: remove unsafe completion fallback**
-  - Status: ✅ Implemented — commit `aa881fd` (2026-06-04) removes the `findFirst` fallback and adds strict matching + unit tests. @apps/api/src/modules/paymongo/paymongo.service.ts#199-278 @apps/api/src/modules/paymongo/paymongo.service.spec.ts#32-187
+  - Status: ✅ Verified — commit `aa881fd` (2026-06-04) removes the `findFirst` fallback and adds strict matching + unit tests. @apps/api/src/modules/paymongo/paymongo.service.ts#199-292 @apps/api/src/modules/paymongo/paymongo.service.spec.ts#130-204
   - Rationale: Current `findFirst` fallback can credit the wrong user on `payment.paid`.
   - Files to touch: `apps/api/src/modules/paymongo/paymongo.service.ts` (payment webhooks section)
   - Acceptance:
@@ -24,7 +24,7 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Returns 403 on mismatch; happy path unchanged.
 
 - **[Blocker] Make deposit completion atomic**
-  - Status: Not implemented — `walletService.completeDeposit` performs multiple writes/notifications without a transaction. @apps/api/src/modules/wallet/wallet.service.ts#432-485
+  - Status: ✅ Implemented — `walletService.completeDeposit` now runs inside `prisma.withTransaction`, updating the deposit, wallet, transaction log, user balance, and notification atomically. @apps/api/src/modules/wallet/wallet.service.ts#449-538
   - Rationale: Avoid partial completion where wallet isn’t credited but status is COMPLETED.
   - Files to touch: `apps/api/src/modules/wallet/wallet.service.ts#completeDeposit`
   - Acceptance:
@@ -98,7 +98,7 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - 3 attempts with exponential backoff; warn on final failure.
 
 - **[High] Verify reset clears notifications**
-  - Status: Needs verification — `adminService.resetDatabase` deletes notifications for kept admins and relies on cascade for removed users. @apps/api/src/modules/admin/admin.service.ts#1549-1668
+  - Status: ✅ Verified — reset transaction already wipes notifications for preserved admins and cascades others, restoring only the intentional welcome ping. @apps/api/src/modules/admin/admin.service.ts#1597-1647
   - Rationale: Ensure no stale notifications remain after `Reset Database` runs.
   - Files to touch: `apps/api/src/modules/admin/admin.service.ts`
   - Acceptance:
@@ -163,7 +163,7 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Optional chaining used throughout; safe behavior when `gatewayData` missing.
 
 - **[Medium] Markdown encoding cleanup**
-  - Status: Not implemented — session notes and other docs still contain mojibake characters (`â€”`). @SESSION_2026-06-04.md#1-176
+  - Status: Not implemented — session notes still contain mojibake characters (`â€”`). @SESSION_2026-06-04.md#1-179
   - Rationale: Mojibake (e.g., `â€”`) in docs.
   - Files to touch: `SESSION_2026-06-04.md` and any others with artifacts
   - Acceptance:

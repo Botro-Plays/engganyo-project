@@ -9,15 +9,8 @@
 ## 🔴 Critical Bugs (Fix Immediately)
 
 ### 1. Webhook `payment.paid` fallback completes the WRONG deposit
-**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:241-251`
-**Code:**
-```typescript
-const depositByIntent = await this.prisma.deposit.findFirst({
-  where: { method: DepositMethod.PAYMONGO, status: { in: [PENDING, PROCESSING] } },
-});
-```
-**Problem:** This grabs the *first* pending PayMongo deposit globally and completes it, regardless of whether the `payment_intent_id` matches. If two users have pending PayMongo deposits simultaneously, one user's payment could credit the wrong user.
-**Fix:** Remove this unsafe fallback entirely, or match by `paymentRef` (link ID) against `payment_intent_id` with an exact equality check, not `findFirst`.
+**Status:** ✅ Fixed in commit `aa881fd` (2026-06-04) — strict matching only. @apps/api/src/modules/paymongo/paymongo.service.ts#199-292 @apps/api/src/modules/paymongo/paymongo.service.spec.ts#130-204
+**Summary:** The unsafe `findFirst` fallback has been removed. Webhook processing now resolves deposits only by strong identifiers (`external_reference_number`, metadata `depositId`, or stored link/payment IDs) and returns `ignored` when no match is found. Unit tests cover all matching paths and confirm no fallback remains.
 
 ### 2. `createPaymentLink` has NO ownership validation
 **Status:** ✅ Fixed in commits `13b224b`, `6ac0696` (2026-06-04). The controller now loads the deposit for the authenticated user, throws `ForbiddenException` on mismatches, and the spec covers the enforcement.
@@ -49,19 +42,12 @@ await this.walletService.completeDeposit(depositId, ...);  // User gets credits 
 **Fix:** Use a Prisma transaction to atomically archive + update, or add a `gatewayData` flag `cancelling: true` that the webhook checks.
 
 ### 4. `completeDeposit` does not guard against CANCELLED/FAILED deposits
-**File:** `apps/api/src/modules/wallet/wallet.service.ts:428-469`
-**Code:**
-```typescript
-if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
-// Missing: if (deposit.status === CANCELLED || deposit.status === FAILED) throw ...
-```
-**Problem:** If a deposit was cancelled by user/cron, a late-arriving webhook could still mark it COMPLETED and credit the user. This is the second half of the race condition in #3.
-**Fix:** Add guards for `CANCELLED` and `FAILED` at the top of `completeDeposit`.
+**Status:** ✅ Fixed — guard clauses for CANCELLED/FAILED now prevent completion. @apps/api/src/modules/wallet/wallet.service.ts#449-458
+**Summary:** `completeDeposit` throws when a deposit is `CANCELLED` or `FAILED`, blocking late webhooks from crediting cancelled flows. Remaining race risk is tracked separately in Issue #3 (atomicity/transaction gap).
 
 ### 5. `completeDeposit` is not atomic
-**File:** `apps/api/src/modules/wallet/wallet.service.ts:428-469`
-**Problem:** The method does `deposit.update` → `credit()` (which updates wallet + creates transaction) → `createNotification()` in three separate calls. If `credit()` fails after the deposit is marked `COMPLETED`, the deposit is complete but the user never got credits. Partial state = data corruption.
-**Fix:** Wrap all three operations in `prisma.$transaction`.
+**Status:** ✅ Fixed in commit `TBD` (2026-06-06) — now wrapped in a single transaction. @apps/api/src/modules/wallet/wallet.service.ts#449-538
+**Summary:** Deposit completion now runs inside `prisma.withTransaction`, updating the deposit, wallet balance, transaction log, denormalized credit balance, and notification atomically. Socket events emit after the transaction commits, preventing partial completion states.
 
 ---
 
@@ -73,13 +59,8 @@ if (deposit.status === DepositStatus.COMPLETED) throw new BadRequestException('D
 **Fix:** Add a state check: `if (deposit.status !== PENDING) throw new BadRequestException(...)`.
 
 ### 7. `payment.failed` uses raw string `'FAILED'` instead of enum
-**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:265`
-**Code:**
-```typescript
-data: { status: 'FAILED', adminNotes: 'PayMongo payment failed' }
-```
-**Problem:** Type safety violation. Prisma schema has `DepositStatus.FAILED` enum.
-**Fix:** Use `DepositStatus.FAILED`.
+**Status:** ✅ Fixed — enum now used. @apps/api/src/modules/paymongo/paymongo.service.ts#294-304
+**Summary:** The webhook handler updates deposits with `DepositStatus.FAILED`, satisfying Prisma enum requirements and linting for type safety.
 
 ### 8. `processWebhookEvent` parses JSON before verifying signature
 **File:** `apps/api/src/modules/paymongo/paymongo.service.ts:162`
