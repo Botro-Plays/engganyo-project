@@ -6,7 +6,7 @@ import {
   forwardRef,
   Inject,
 } from '@nestjs/common';
-import { DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
+import { Prisma, DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
@@ -420,14 +420,37 @@ export class WalletService {
   // ─── Cancel a deposit (user-initiated or QR expired) ────────
 
   async cancelDeposit(userId: string, depositId: string) {
-    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
-    if (!deposit) throw new NotFoundException('Deposit not found');
-    if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
-    if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
-      throw new BadRequestException(`Cannot cancel a deposit with status ${deposit.status}`);
-    }
+    const { deposit } = await this.prisma.withTransaction(async (tx) => {
+      const existing = await tx.deposit.findUnique({ where: { id: depositId } });
+      if (!existing) throw new NotFoundException('Deposit not found');
+      if (existing.userId !== userId) throw new BadRequestException('Not your deposit');
+      if (existing.status !== DepositStatus.PENDING && existing.status !== DepositStatus.PROCESSING) {
+        throw new BadRequestException(`Cannot cancel a deposit with status ${existing.status}`);
+      }
 
-    // Archive PayMongo link so it can't be paid anymore
+      const baseGatewayData =
+        existing.gatewayData && typeof existing.gatewayData === 'object' && !Array.isArray(existing.gatewayData)
+          ? (existing.gatewayData as Prisma.JsonObject)
+          : ({} as Prisma.JsonObject);
+      const updatedGatewayData: Prisma.JsonObject = {
+        ...baseGatewayData,
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: userId,
+      };
+
+      const updatedDeposit = await tx.deposit.update({
+        where: { id: depositId },
+        data: {
+          status: DepositStatus.CANCELLED,
+          adminNotes: 'Cancelled by user',
+          gatewayData: updatedGatewayData,
+        },
+      });
+
+      return { deposit: updatedDeposit };
+    });
+
+    // Archive PayMongo link so it can't be paid anymore (best-effort, after status flip)
     if (deposit.method === DepositMethod.PAYMONGO && deposit.paymentRef) {
       try {
         await this.payMongoService.archiveLink(deposit.paymentRef);
@@ -436,12 +459,8 @@ export class WalletService {
       }
     }
 
-    const updated = await this.prisma.deposit.update({
-      where: { id: depositId },
-      data: { status: DepositStatus.CANCELLED, adminNotes: 'Cancelled by user' },
-    });
     this.eventsService.emitToUser(userId, 'deposit:updated', { depositId, status: DepositStatus.CANCELLED });
-    return updated;
+    return deposit;
   }
 
   // ─── Complete a deposit (used by webhooks & admin review) ──
@@ -469,8 +488,11 @@ export class WalletService {
       const balanceBefore = walletRecord.balance;
       const balanceAfter = balanceBefore + amount;
 
-      const updatedDeposit = await tx.deposit.update({
-        where: { id: depositId },
+      const updatedCount = await tx.deposit.updateMany({
+        where: {
+          id: depositId,
+          status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        },
         data: {
           status: DepositStatus.COMPLETED,
           creditsAwarded: existing.creditsToAward,
@@ -480,6 +502,13 @@ export class WalletService {
           ...(opts.paymentRef && { paymentRef: opts.paymentRef }),
         },
       });
+
+      if (updatedCount.count === 0) {
+        throw new BadRequestException('Deposit is no longer pending');
+      }
+
+      const updatedDeposit = await tx.deposit.findUnique({ where: { id: depositId } });
+      if (!updatedDeposit) throw new NotFoundException('Deposit disappeared');
 
       const updatedWallet = await tx.wallet.update({
         where: { id: walletRecord.id },

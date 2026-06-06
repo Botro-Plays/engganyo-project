@@ -32,12 +32,12 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - If any step fails, none are applied.
 
 - **[Blocker] Cancel vs webhook race**
-  - Status: Not implemented — cancel flow archives link before setting status, while webhook still permits completion during the gap. @apps/api/src/modules/wallet/wallet.service.ts#405-427 @apps/api/src/modules/paymongo/paymongo.service.ts#215-251
+  - Status: ✅ Implemented — cancel flow now flips status inside `prisma.withTransaction` before archiving, and webhook completion treats concurrent cancel errors as ignored. @apps/api/src/modules/wallet/wallet.service.ts#422-461 @apps/api/src/modules/paymongo/paymongo.service.ts#235-299
   - Rationale: Webhook can complete right after cancel starts (archive then status update window).
   - Files to touch: `wallet.service.ts#cancelDeposit`, `paymongo.service.ts#processWebhookEvent`
   - Acceptance:
-    - Either atomic cancel+archive, or write a `cancelling` flag that webhook checks.
-    - Webhook ignores deposits in cancelling/cancelled states.
+    - Deposit status changes to CANCELLED within the transaction that writes cancellation metadata.
+    - Webhook completion ignores deposits once cancellation wins the race.
 
 - **[Blocker] Verify signature before JSON parse**
   - Status: Not implemented — raw body is still parsed before signature validation. @apps/api/src/modules/paymongo/paymongo.service.ts#151-188

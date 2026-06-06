@@ -25,21 +25,8 @@ if (!deposit) {
 **Remaining risk:** None — service only receives verified deposits.
 
 ### 3. Race condition: cancel vs. webhook completion
-**File:** `apps/api/src/modules/wallet/wallet.service.ts:412-418`, `paymongo.service.ts:204-210`
-**Code:**
-```typescript
-// wallet.service.ts
-await this.payMongoService.archiveLink(deposit.paymentRef);  // Step 1
-return this.prisma.deposit.update({ status: CANCELLED });   // Step 2 (status still PENDING here)
-
-// Meanwhile, webhook arrives:
-if (!deposit || deposit.status === COMPLETED || deposit.status === CANCELLED) {
-  // Still PENDING at this point — webhook proceeds!
-}
-await this.walletService.completeDeposit(depositId, ...);  // User gets credits for "cancelled" deposit
-```
-**Problem:** Between `archiveLink()` and `update(status: CANCELLED)`, a webhook could arrive. The webhook checks `status !== CANCELLED`, but at that moment status is still `PENDING`, so it completes the deposit. Same race exists in the cron job (`paymongo.service.ts:320-328`).
-**Fix:** Use a Prisma transaction to atomically archive + update, or add a `gatewayData` flag `cancelling: true` that the webhook checks.
+**Status:** ✅ Fixed in commit `TBD` (2026-06-06) — cancel is transactional and webhook treats late completions as ignored. @apps/api/src/modules/wallet/wallet.service.ts#422-461 @apps/api/src/modules/paymongo/paymongo.service.ts#235-299
+**Summary:** `cancelDeposit` now runs inside `prisma.withTransaction`, writing cancellation metadata and flipping the status before we attempt to archive the PayMongo link. When a webhook arrives after cancellation, the completion call throws `BadRequestException`/`NotFoundException`; the handler now catches those and logs then ignores the event, so a cancelled deposit can’t be completed inadvertently.
 
 ### 4. `completeDeposit` does not guard against CANCELLED/FAILED deposits
 **Status:** ✅ Fixed — guard clauses for CANCELLED/FAILED now prevent completion. @apps/api/src/modules/wallet/wallet.service.ts#449-458

@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus } from '@prisma/client';
@@ -242,9 +242,19 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
 
-      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
-      this.logger.log(`Deposit ${deposit.id} completed via link.payment.paid`);
-      return { received: true, action: 'completed', depositId: deposit.id };
+      try {
+        await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
+        this.logger.log(`Deposit ${deposit.id} completed via link.payment.paid`);
+        return { received: true, action: 'completed', depositId: deposit.id };
+      } catch (err) {
+        if (err instanceof BadRequestException || err instanceof NotFoundException) {
+          this.logger.warn(
+            `link.payment.paid: deposit ${deposit.id} could not be completed (${err.message}). Treating as ignored.`,
+          );
+          return { received: true, action: 'ignored' };
+        }
+        throw err;
+      }
     }
 
     // payment.paid — payment object is eventData; find deposit by matching link ID stored in paymentRef
@@ -273,8 +283,18 @@ export class PayMongoService {
         const depositById = await this.prisma.deposit.findUnique({ where: { id: candidateDepositId } });
         if (depositById && depositById.method === DepositMethod.PAYMONGO && depositById.status !== DepositStatus.COMPLETED && depositById.status !== DepositStatus.CANCELLED) {
           this.logger.log(`Found deposit ${depositById.id} via external_reference_number`);
-          await this.walletService.completeDeposit(depositById.id, { paymentRef: paymentId });
-          return { received: true, action: 'completed', depositId: depositById.id };
+          try {
+            await this.walletService.completeDeposit(depositById.id, { paymentRef: paymentId });
+            return { received: true, action: 'completed', depositId: depositById.id };
+          } catch (err) {
+            if (err instanceof BadRequestException || err instanceof NotFoundException) {
+              this.logger.warn(
+                `payment.paid: deposit ${depositById.id} could not be completed (${err.message}). Treating as ignored.`,
+              );
+              return { received: true, action: 'ignored' };
+            }
+            throw err;
+          }
         }
       }
 

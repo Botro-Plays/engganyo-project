@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DepositMethod, DepositStatus } from '@prisma/client';
 
 import { PayMongoService } from './paymongo.service';
@@ -191,6 +192,23 @@ describe('PayMongoService', () => {
     expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_123' });
   });
 
+  it('ignores link.payment.paid when completion rejects with BadRequestException', async () => {
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
+      id: 'dep-123',
+      method: DepositMethod.PAYMONGO,
+      status: DepositStatus.PENDING,
+    });
+
+    (walletServiceMock.completeDeposit as jest.Mock).mockRejectedValueOnce(new BadRequestException('cancelled'));
+
+    const rawBody = makeLinkPaymentPaidEvent();
+
+    const result = await service.processWebhookEvent(rawBody, 't=789,li=signature');
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_123' });
+  });
+
   it('ignores payment when deposit cannot be found and does not call fallback', async () => {
     const depositFindUniqueMock = prismaMock.deposit.findUnique as jest.Mock;
     depositFindUniqueMock.mockResolvedValueOnce(null);
@@ -202,5 +220,22 @@ describe('PayMongoService', () => {
     expect(result).toEqual({ received: true, action: 'ignored' });
     expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
     expect(depositFindUniqueMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores payment.paid when completion rejects with NotFoundException', async () => {
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
+      id: 'dep-123',
+      method: DepositMethod.PAYMONGO,
+      status: DepositStatus.PENDING,
+    });
+
+    (walletServiceMock.completeDeposit as jest.Mock).mockRejectedValueOnce(new NotFoundException('missing'));
+
+    const rawBody = makePaymentPaidEvent();
+
+    const result = await service.processWebhookEvent(rawBody, 't=901,li=signature');
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_123' });
   });
 });

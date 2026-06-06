@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { TransactionType, TransactionStatus } from '@prisma/client';
+import { DepositMethod, DepositStatus, TransactionType, TransactionStatus } from '@prisma/client';
 
 import { WalletService, CreditOptions } from './wallet.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -37,6 +37,10 @@ const CREDIT_OPTS: CreditOptions = {
   description: 'Test credit',
 };
 
+const paymongoServiceMock = {
+  archiveLink: jest.fn().mockResolvedValue(true),
+};
+
 describe('WalletService', () => {
   let service: WalletService;
   let prisma: jest.Mocked<PrismaService>;
@@ -44,6 +48,11 @@ describe('WalletService', () => {
   const prismaWalletMock = {
     findUnique: jest.fn(),
     updateMany: jest.fn(),
+  };
+
+  const prismaDepositMock = {
+    findUnique: jest.fn(),
+    update: jest.fn(),
   };
 
   const prismaTransactionMock = {
@@ -65,6 +74,7 @@ describe('WalletService', () => {
           provide: PrismaService,
           useValue: {
             wallet: prismaWalletMock,
+            deposit: prismaDepositMock,
             transaction: prismaTransactionMock,
             user: prismaUserMock,
             withTransaction: jest.fn(),
@@ -94,9 +104,7 @@ describe('WalletService', () => {
         },
         {
           provide: PayMongoService,
-          useValue: {
-            archiveLink: jest.fn().mockResolvedValue(true),
-          },
+          useValue: paymongoServiceMock,
         },
       ],
     }).compile();
@@ -190,6 +198,47 @@ describe('WalletService', () => {
       await expect(
         service.debit('user-1', 200, { type: TransactionType.SPEND_CAMPAIGN_CREATE }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('cancelDeposit', () => {
+    it('cancels deposit inside transaction and archives link', async () => {
+      const existing = {
+        id: 'dep-1',
+        userId: 'user-1',
+        status: DepositStatus.PENDING,
+        method: DepositMethod.PAYMONGO,
+        paymentRef: 'plink_123',
+        gatewayData: { foo: 'bar' },
+      };
+
+      const updated = {
+        ...existing,
+        status: DepositStatus.CANCELLED,
+        gatewayData: { foo: 'bar', cancelledAt: '2026-06-06T00:00:00.000Z', cancelledBy: 'user-1' },
+      };
+
+      prismaDepositMock.findUnique.mockResolvedValue(existing);
+      prismaDepositMock.update.mockResolvedValue(updated);
+
+      (prisma.withTransaction as jest.Mock).mockImplementation(async (cb: (tx: Partial<PrismaService>) => Promise<unknown>) =>
+        cb({
+          deposit: {
+            findUnique: prismaDepositMock.findUnique,
+            update: prismaDepositMock.update,
+          },
+        } as unknown as PrismaService),
+      );
+
+      const result = await service.cancelDeposit('user-1', 'dep-1');
+
+      expect(result).toBe(updated);
+      expect(prismaDepositMock.update).toHaveBeenCalledWith({
+        where: { id: 'dep-1' },
+        data: expect.objectContaining({ status: DepositStatus.CANCELLED }),
+      });
+      expect(paymongoServiceMock.archiveLink).toHaveBeenCalledWith('plink_123');
+      expect(prisma.withTransaction).toHaveBeenCalled();
     });
   });
 });
