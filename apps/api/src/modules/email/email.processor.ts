@@ -37,7 +37,7 @@ export class EmailProcessor {
     const { to, token } = job.data;
     const frontendUrl = this.config.get<string>('app.frontendUrl', 'http://localhost:3000');
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
-    const fromEmail = this.config.get<string>('email.fromEmail', 'noreply@engganyo.com');
+    const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
 
     const verifyUrl = `${frontendUrl}/verify-email?token=${token}`;
     await this.mailer.sendMail({
@@ -55,7 +55,7 @@ export class EmailProcessor {
     const { to, token } = job.data;
     const frontendUrl = this.config.get<string>('app.frontendUrl', 'http://localhost:3000');
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
-    const fromEmail = this.config.get<string>('email.fromEmail', 'noreply@engganyo.com');
+    const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
 
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
     await this.mailer.sendMail({
@@ -72,7 +72,7 @@ export class EmailProcessor {
   async handleTwoFactor(job: Job<EmailJobData>): Promise<void> {
     const { to, code } = job.data;
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
-    const fromEmail = this.config.get<string>('email.fromEmail', 'noreply@engganyo.com');
+    const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
 
     await this.mailer.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
