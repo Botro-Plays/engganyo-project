@@ -7,6 +7,7 @@ import {
 import { CampaignStatus, CompletionStatus, TaskType, TransactionType, TrustLevel } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
@@ -56,6 +57,7 @@ const CAMPAIGN_SELECT = {
 export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     private readonly walletService: WalletService,
     private readonly antiAbuseService: AntiAbuseService,
     private readonly socialAuthService: SocialAuthService,
@@ -504,6 +506,17 @@ export class CampaignsService {
     const limit = filters.limit ?? 20;
     const skip = (page - 1) * limit;
 
+    // ── Cache-aside: build cache key from user + filter params ──────────
+    const cacheKey = `campaigns:browse:${excludeUserId}:${filters.taskType ?? '_'}:${filters.platformPrefix ?? '_'}:${filters.country ?? '_'}:${page}:${limit}`;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        /* parse fail — fall through to DB */
+      }
+    }
+
     // Exclude campaigns the user already has a completion for
     const alreadyAssigned = await this.prisma.taskCompletion.findMany({
       where: { userId: excludeUserId },
@@ -552,9 +565,13 @@ export class CampaignsService {
       this.prisma.campaign.count({ where }),
     ]);
 
-    return {
+    const result = {
       items,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
+
+    // Write to cache with 5-minute TTL
+    await this.redisService.set(cacheKey, JSON.stringify(result), 300);
+    return result;
   }
 }

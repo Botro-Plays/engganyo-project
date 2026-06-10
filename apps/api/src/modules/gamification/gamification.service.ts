@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Logger, BadRequestException } from '@nestjs/c
 import { AchievementCategory, MissionType, TransactionType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
@@ -56,6 +57,7 @@ export class GamificationService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     private readonly walletService: WalletService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
@@ -240,6 +242,12 @@ export class GamificationService implements OnModuleInit {
   // ─── Leaderboard ───────────────────────────────────────────
 
   async getLeaderboard(type: 'alltime' | 'weekly', page = 1, limit = 50) {
+    const cacheKey = `leaderboard:${type}:${page}:${limit}`;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      try { return JSON.parse(cached); } catch { /* fall through */ }
+    }
+
     const skip = (page - 1) * limit;
     const roleFilter = await this.getLeaderboardRoleFilter();
 
@@ -260,7 +268,9 @@ export class GamificationService implements OnModuleInit {
         },
       });
 
-      return users.map((u, i) => ({ rank: skip + i + 1, ...u }));
+      const alltimeResult = users.map((u, i) => ({ rank: skip + i + 1, ...u }));
+    await this.redisService.set(cacheKey, JSON.stringify(alltimeResult), 900); // 15 min TTL
+    return alltimeResult;
     }
 
     // Weekly: sum XP events in last 7 days (exclude daily_login rewards)
@@ -292,13 +302,15 @@ export class GamificationService implements OnModuleInit {
 
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    return weekly
+    const weeklyResult = weekly
       .filter((w) => userMap.has(w.userId))
       .map((w, i) => ({
         rank: skip + i + 1,
         weeklyXp: w._sum?.amount ?? 0,
         ...userMap.get(w.userId),
       }));
+    await this.redisService.set(cacheKey, JSON.stringify(weeklyResult), 900);
+    return weeklyResult;
   }
 
   async getAchievementLeaderboard(page = 1, limit = 50) {

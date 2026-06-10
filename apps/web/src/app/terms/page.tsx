@@ -70,7 +70,20 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">5. Content & Intellectual Property</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">5. Platform Fees</h2>
+            <p className="mb-2">
+              Engganyo charges a platform fee on all campaigns created through the service. The fee is calculated as a percentage of the total campaign budget (total slots × credits per task) and is deducted at the time of campaign creation.
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>The current platform fee rate is displayed during campaign creation.</li>
+              <li>Fees are non-refundable once a campaign has been published.</li>
+              <li>Fee rates may vary based on promotions, trust level, or lifetime spend tiers.</li>
+              <li>All fees are denominated in platform credits.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-white mb-3">6. Content & Intellectual Property</h2>
             <p>
               You retain ownership of content you submit. By using our service, you grant us a license 
               to use your content for the purpose of providing our services. You agree not to submit 
@@ -79,31 +92,31 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">6. Termination</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">7. Termination</h2>
             <p>
-              We reserve the right to suspend or terminate accounts that violate these terms. 
+              We reserve the right to suspend or terminate accounts that violate these terms.
               You may also terminate your account at any time through your account settings.
             </p>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">7. Limitation of Liability</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">8. Limitation of Liability</h2>
             <p>
-              Engganyo is provided &quot;as is&quot; without warranties of any kind. We shall not be liable 
+              Engganyo is provided &quot;as is&quot; without warranties of any kind. We shall not be liable
               for any indirect, incidental, or consequential damages arising from use of our service.
             </p>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">8. Changes to Terms</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">9. Changes to Terms</h2>
             <p>
-              We may update these terms from time to time. Continued use of the service after 
+              We may update these terms from time to time. Continued use of the service after
               changes constitutes acceptance of the new terms.
             </p>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">9. Contact Us</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">10. Contact Us</h2>
             <p>
               For questions about these terms, please{' '}
               <Link href="/contact" className="text-brand-400 hover:underline">contact us</Link>.

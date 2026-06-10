@@ -4,6 +4,7 @@ import {
 import { ReportReason, TrustLevel, UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import type { CreateReportDto } from './dto/create-report.dto';
 
 // ─── Trust score weights ──────────────────────────────────────
@@ -30,11 +31,19 @@ const AUTO_SUSPEND_HIGH_FLAGS = 6;
 export class AntiAbuseService {
   private readonly logger = new Logger(AntiAbuseService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   // ─── Trust score ───────────────────────────────────────────
 
   async getTrustScore(userId: string) {
+    const cacheKey = `trustscore:${userId}`;
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) {
+      try { return JSON.parse(cached); } catch { /* fall through to recalc */ }
+    }
     return this.recalculateTrustScore(userId);
   }
 
@@ -127,6 +136,10 @@ export class AntiAbuseService {
     });
 
     this.logger.debug(`TrustScore recalculated for ${userId}: ${score.toFixed(1)} (${level})`);
+
+    // Cache recalculated score for 1 hour to reduce DB load
+    await this.redisService.set(`trustscore:${userId}`, JSON.stringify(trust), 3600);
+
     return trust;
   }
 
