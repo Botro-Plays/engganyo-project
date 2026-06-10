@@ -482,10 +482,31 @@ export class AdminController {
 
   // ─── Email / Communications ───────────────────────────────
 
+  @Get('email/digest-preview')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Preview your own weekly digest data (real stats)' })
+  getDigestPreview(@CurrentUser() admin: JwtPayload) {
+    return this.adminService.getDigestPreview(admin.sub);
+  }
+
+  @Get('email/digest-stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get weekly digest recipient statistics' })
+  getDigestStats() {
+    return this.adminService.getDigestStats();
+  }
+
   @Post('email/test-digest')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send a test weekly digest email to yourself' })
+  @ApiOperation({ summary: 'Send a test weekly digest email to yourself using real stats' })
   sendTestDigest(@CurrentUser() admin: JwtPayload) {
     return this.adminService.sendTestDigest(admin.sub);
+  }
+
+  @Post('email/trigger-digest')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Manually trigger weekly digest for all opted-in users' })
+  triggerDigest() {
+    return this.adminService.triggerWeeklyDigest();
   }
 }

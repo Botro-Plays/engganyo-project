@@ -10,6 +10,6 @@ import { WeeklyDigestService } from './weekly-digest.service';
     BullModule.registerQueue({ name: EMAIL_QUEUE }),
   ],
   providers: [EmailService, EmailProcessor, WeeklyDigestService],
-  exports: [EmailService],
+  exports: [EmailService, WeeklyDigestService],
 })
 export class EmailModule {}

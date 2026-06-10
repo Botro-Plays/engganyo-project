@@ -49,6 +49,13 @@ export class EmailService {
       newCampaigns: number;
       weekStart: string;
       weekEnd: string;
+      xpEarned?: number;
+      tasksInProgress?: number;
+      tasksPending?: number;
+      totalTasksCompleted?: number;
+      weeklyRank?: number;
+      allTimeRank?: number;
+      streak?: number;
     },
   ): Promise<void> {
     await this.queue.add(EMAIL_JOBS.SEND_WEEKLY_DIGEST, { to, ...data }, JOB_OPTIONS);

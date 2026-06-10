@@ -14,6 +14,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { EmailService } from '../email/email.service';
+import { WeeklyDigestService } from '../email/weekly-digest.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -32,6 +33,7 @@ export class AdminService {
     private readonly eventsService: EventsService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
+    private readonly weeklyDigestService: WeeklyDigestService,
     @Inject(forwardRef(() => PayMongoService))
     private readonly payMongoService: PayMongoService,
   ) {}
@@ -1961,19 +1963,54 @@ export class AdminService {
     const now = new Date();
     const weekStart = new Date(now);
     weekStart.setUTCDate(now.getUTCDate() - 7);
-    const weekEnd = now;
-    const dateFmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const weekEnd = new Date(now);
+    weekEnd.setUTCHours(0, 0, 0, 0);
 
-    await this.emailService.queueWeeklyDigestEmail(admin.email, {
-      username: admin.displayName ?? admin.username,
-      tasksCompleted: 12,
-      creditsEarned: 3450,
-      currentBalance: 12800,
-      newCampaigns: 8,
-      weekStart: dateFmt(weekStart),
-      weekEnd: dateFmt(weekEnd),
+    const data = await this.weeklyDigestService.getUserDigestData(adminId, admin.email, weekStart, weekEnd);
+    if (!data) throw new NotFoundException('Could not compute digest data');
+
+    await this.emailService.queueWeeklyDigestEmail(admin.email, data);
+    return { sent: true, to: admin.email };
+  }
+
+  async getDigestPreview(adminId: string): Promise<Record<string, unknown>> {
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminId },
+      select: { email: true },
+    });
+    if (!admin?.email) throw new NotFoundException('Admin email not found');
+
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setUTCDate(now.getUTCDate() - 7);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const weekEnd = new Date(now);
+    weekEnd.setUTCHours(0, 0, 0, 0);
+
+    const data = await this.weeklyDigestService.getUserDigestData(adminId, admin.email, weekStart, weekEnd);
+    if (!data) throw new NotFoundException('Could not compute digest data');
+    return data as unknown as Record<string, unknown>;
+  }
+
+  async getDigestStats() {
+    const totalActive = await this.prisma.user.count({
+      where: { deletedAt: null, status: 'ACTIVE' },
     });
 
-    return { sent: true, to: admin.email };
+    const enabledResult = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL AND status = 'ACTIVE' AND weekly_digest_enabled = true
+    `;
+    const enabled = Number(enabledResult[0]?.count ?? 0);
+
+    return {
+      totalUsers: totalActive,
+      weeklyDigestEnabled: enabled,
+      weeklyDigestDisabled: totalActive - enabled,
+    };
+  }
+
+  async triggerWeeklyDigest() {
+    return this.weeklyDigestService.triggerWeeklyDigests();
   }
 }

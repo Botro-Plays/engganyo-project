@@ -6,6 +6,7 @@ import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PayMongoService } from '../paymongo/paymongo.service';
@@ -95,6 +96,26 @@ describe('AdminService', () => {
     archiveLink: jest.fn().mockResolvedValue(true),
   };
 
+  const mockWeeklyDigestService = {
+    getUserDigestData: jest.fn().mockResolvedValue({
+      username: 'Admin',
+      tasksCompleted: 5,
+      creditsEarned: 1000,
+      currentBalance: 5000,
+      newCampaigns: 3,
+      weekStart: 'Jun 1',
+      weekEnd: 'Jun 8',
+      xpEarned: 250,
+      tasksInProgress: 2,
+      tasksPending: 1,
+      totalTasksCompleted: 42,
+      weeklyRank: 3,
+      allTimeRank: 12,
+      streak: 7,
+    }),
+    triggerWeeklyDigests: jest.fn().mockResolvedValue({ queued: 10, total: 50 }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -105,6 +126,7 @@ describe('AdminService', () => {
         { provide: EventsService, useValue: mockEventsService },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: EmailService, useValue: mockEmailService },
+        { provide: WeeklyDigestService, useValue: mockWeeklyDigestService },
         { provide: PayMongoService, useValue: mockPayMongoService },
       ],
     }).compile();

@@ -243,8 +243,93 @@ export function weeklyDigestEmailTemplate(data: {
   newCampaigns: number;
   weekStart: string;
   weekEnd: string;
+  xpEarned?: number;
+  tasksInProgress?: number;
+  tasksPending?: number;
+  totalTasksCompleted?: number;
+  weeklyRank?: number;
+  allTimeRank?: number;
+  streak?: number;
 }): string {
   const { username, tasksCompleted, creditsEarned, currentBalance, newCampaigns, weekStart, weekEnd } = data;
+  const xpEarned = data.xpEarned ?? 0;
+  const tasksInProgress = data.tasksInProgress ?? 0;
+  const tasksPending = data.tasksPending ?? 0;
+  const totalTasksCompleted = data.totalTasksCompleted ?? 0;
+  const weeklyRank = data.weeklyRank ?? 0;
+  const allTimeRank = data.allTimeRank ?? 0;
+  const streak = data.streak ?? 0;
+
+  const extraStatsRow1 = (tasksInProgress > 0 || tasksPending > 0 || xpEarned > 0)
+    ? `<tr>
+      <td width="50%" style="padding-right:8px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+          <tr><td style="padding:20px;">
+            <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">XP Earned</p>
+            <p style="margin:0;font-size:28px;font-weight:700;color:#8b5cf6;">${xpEarned}</p>
+          </td></tr>
+        </table>
+      </td>
+      <td width="50%" style="padding-left:8px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+          <tr><td style="padding:20px;">
+            <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">In Progress</p>
+            <p style="margin:0;font-size:28px;font-weight:700;color:#06b6d4;">${tasksInProgress}</p>
+          </td></tr>
+        </table>
+      </td>
+    </tr>
+    <tr><td colspan="2" style="height:16px;"></td></tr>`
+    : '';
+
+  const extraStatsRow2 = (totalTasksCompleted > 0 || weeklyRank > 0 || allTimeRank > 0 || streak > 0)
+    ? `<tr>
+      <td width="50%" style="padding-right:8px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+          <tr><td style="padding:20px;">
+            <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">Total Completed</p>
+            <p style="margin:0;font-size:28px;font-weight:700;color:#ec4899;">${totalTasksCompleted}</p>
+          </td></tr>
+        </table>
+      </td>
+      <td width="50%" style="padding-left:8px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+          <tr><td style="padding:20px;">
+            <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">Current Streak</p>
+            <p style="margin:0;font-size:28px;font-weight:700;color:#f97316;">${streak}d</p>
+          </td></tr>
+        </table>
+      </td>
+    </tr>
+    <tr><td colspan="2" style="height:16px;"></td></tr>`
+    : '';
+
+  const rankSection = (weeklyRank > 0 || allTimeRank > 0)
+    ? `<tr>
+      <td style="padding:0 40px 24px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0 0 8px;font-size:13px;color:#8892a4;line-height:1.5;">Leaderboard Rankings</p>
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="50%" style="padding-right:8px;">
+                    <p style="margin:0 0 2px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">Weekly</p>
+                    <p style="margin:0;font-size:20px;font-weight:700;color:#10b981;">#${weeklyRank}</p>
+                  </td>
+                  <td width="50%" style="padding-left:8px;">
+                    <p style="margin:0 0 2px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">All-Time</p>
+                    <p style="margin:0;font-size:20px;font-weight:700;color:#3b62f5;">#${allTimeRank}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`
+    : '';
+
   const content = `
     <!-- Top accent bar -->
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -313,9 +398,13 @@ export function weeklyDigestEmailTemplate(data: {
                 </table>
               </td>
             </tr>
+            <tr><td colspan="2" style="height:16px;"></td></tr>
+            ${extraStatsRow1}
+            ${extraStatsRow2}
           </table>
         </td>
       </tr>
+      ${rankSection}
       <tr>
         <td style="padding:0 40px 32px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0d1117;border-radius:10px;border:1px solid #1e2a45;">
