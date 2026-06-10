@@ -2173,7 +2173,7 @@ export class AdminService {
     }
 
     const theme = dto.theme ?? 'blue';
-    await this.emailService.queueAnnouncementEmail(admin.email, {
+    await this.emailService.sendAnnouncementEmailDirect(admin.email, {
       subject,
       title,
       bodyHtml,

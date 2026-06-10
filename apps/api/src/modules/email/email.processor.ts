@@ -1,4 +1,4 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, Process, OnQueueFailed } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Job } from 'bullmq';
@@ -119,13 +119,27 @@ export class EmailProcessor {
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
     const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
 
-    await this.mailer.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to,
-      subject,
-      html: announcementEmailTemplate(data),
-    });
+    try {
+      const info = await this.mailer.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html: announcementEmailTemplate(data),
+      });
 
-    this.logger.log(`Announcement sent → ${to}`);
+      this.logger.log(`Announcement sent → ${to} | response: ${info.response}`);
+    } catch (err) {
+      this.logger.error(
+        `Announcement send FAILED → ${to} | subject: "${subject}" | error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw err; // Let BullMQ retry
+    }
+  }
+
+  @OnQueueFailed()
+  onQueueFailed(job: Job, err: Error) {
+    this.logger.error(
+      `Queue job FAILED — id: ${job.id}, name: ${job.name}, to: ${(job.data as { to?: string })?.to ?? 'unknown'} | error: ${err.message}`,
+    );
   }
 }
