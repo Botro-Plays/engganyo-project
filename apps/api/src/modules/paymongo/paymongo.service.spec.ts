@@ -5,6 +5,7 @@ import { DepositMethod, DepositStatus } from '@prisma/client';
 import { PayMongoService } from './paymongo.service';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('PayMongoService', () => {
   let service: PayMongoService;
@@ -15,12 +16,17 @@ describe('PayMongoService', () => {
     deposit: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   } as unknown as PrismaService;
 
   const walletServiceMock = {
     completeDeposit: jest.fn(),
   } as unknown as WalletService;
+
+  const notificationsServiceMock = {
+    createNotification: jest.fn().mockResolvedValue(undefined),
+  } as unknown as NotificationsService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -34,6 +40,7 @@ describe('PayMongoService', () => {
         PayMongoService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: WalletService, useValue: walletServiceMock },
+        { provide: NotificationsService, useValue: notificationsServiceMock },
       ],
     }).compile();
 
