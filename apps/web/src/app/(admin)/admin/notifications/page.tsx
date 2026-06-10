@@ -18,6 +18,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 interface AdminNotification {
   id: string;
@@ -65,6 +66,7 @@ export default function AdminNotificationsPage() {
   const [userIdFilter, setUserIdFilter] = useState('');
   const [tempUserId, setTempUserId] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const limit = 25;
   const queryClient = useQueryClient();
 
@@ -129,14 +131,7 @@ export default function AdminNotificationsPage() {
         </div>
         {(data?.items.length ?? 0) > 0 && (
           <button
-            onClick={() => {
-              if (window.confirm(userIdFilter
-                ? `Delete all notifications for user ${userIdFilter}?`
-                : 'Delete ALL notifications across ALL users? This cannot be undone.'
-              )) {
-                clearMutation.mutate();
-              }
-            }}
+            onClick={() => setConfirmClear(true)}
             disabled={clearMutation.isPending}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 text-sm hover:bg-red-500/20 disabled:opacity-50 transition-all"
           >
@@ -303,6 +298,22 @@ export default function AdminNotificationsPage() {
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="Clear Notifications"
+        danger
+        description={
+          userIdFilter
+            ? `Delete all notifications for user ${userIdFilter}?`
+            : 'Delete ALL notifications across ALL users? This cannot be undone.'
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isLoading={clearMutation.isPending}
+        onConfirm={() => clearMutation.mutate()}
+        onCancel={() => setConfirmClear(false)}
+      />
     </div>
   );
 }

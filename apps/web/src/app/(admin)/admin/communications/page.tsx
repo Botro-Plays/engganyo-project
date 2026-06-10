@@ -9,6 +9,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 interface DigestPreview {
   username: string;
@@ -67,6 +68,7 @@ const KNOWN_ROUTES = [
 
 export default function CommunicationsPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null; message: string } | null>(null);
+  const [confirmTrigger, setConfirmTrigger] = useState(false);
 
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ['admin', 'digest-preview'],
@@ -247,11 +249,7 @@ export default function CommunicationsPage() {
           </button>
 
           <button
-            onClick={() => {
-              if (window.confirm('Trigger weekly digest for all opted-in users now?')) {
-                triggerMutation.mutate();
-              }
-            }}
+            onClick={() => setConfirmTrigger(true)}
             disabled={triggerMutation.isPending}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500/20 text-sm font-medium transition-all disabled:opacity-50"
           >
@@ -277,6 +275,16 @@ export default function CommunicationsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmTrigger}
+        title="Trigger Weekly Digest"
+        description="This will immediately queue the weekly digest email for all opted-in users. Are you sure?"
+        confirmLabel="Trigger"
+        isLoading={triggerMutation.isPending}
+        onConfirm={() => triggerMutation.mutate()}
+        onCancel={() => setConfirmTrigger(false)}
+      />
     </div>
   );
 }
@@ -306,6 +314,7 @@ function AnnouncementComposer({
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [templateValues, setTemplateValues] = useState<Record<string, string>>({});
   const [showPreview, setShowPreview] = useState(false);
+  const [confirmSend, setConfirmSend] = useState(false);
 
   const templatesQuery = useQuery({
     queryKey: ['admin', 'announcement-templates'],
@@ -676,9 +685,7 @@ function AnnouncementComposer({
               onStatus({ type: 'error', message: 'Please fill in all template variables before sending.' });
               return;
             }
-            if (window.confirm(`Send this announcement to all ${recipientType === 'ALL_ACTIVE' ? 'active' : 'digest-enabled'} users?`)) {
-              sendMutation.mutate();
-            }
+            setConfirmSend(true);
           }}
           disabled={!canSend || sendMutation.isPending || testMutation.isPending}
           className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 ${
@@ -715,6 +722,17 @@ function AnnouncementComposer({
           <p className="text-xs text-rose-500">⚠ Fill in all template variables before sending.</p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmSend}
+        title="Send Announcement"
+        description={`This will send the announcement to all ${recipientType === 'ALL_ACTIVE' ? 'active' : 'digest-enabled'} users. This action cannot be undone.`}
+        confirmLabel="Send"
+        cancelLabel="Cancel"
+        isLoading={sendMutation.isPending}
+        onConfirm={() => sendMutation.mutate()}
+        onCancel={() => setConfirmSend(false)}
+      />
     </div>
   );
 }

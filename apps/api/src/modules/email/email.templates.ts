@@ -552,7 +552,7 @@ export function announcementEmailTemplate(data: {
             <tr>
               <td style="padding:16px 20px;">
                 <p style="margin:0;font-size:12px;color:#4b5670;line-height:1.6;">
-                  This is an official announcement from Engganyo. If you have questions, reply to this email or contact support.
+                  This is a system-generated email from Engganyo. Do not reply to this address. For assistance, visit our Help Center or contact support through the platform.
                 </p>
               </td>
             </tr>
