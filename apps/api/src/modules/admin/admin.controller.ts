@@ -4,6 +4,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Prisma, UserRole } from '@prisma/client';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bullmq';
 
 import { AdminService } from './admin.service';
 import { ListUsersDto } from './dto/list-users.dto';
@@ -31,7 +33,12 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPER_ADMIN)
 @ApiBearerAuth('access-token')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    @InjectQueue('email') private readonly emailQueue: Queue,
+    @InjectQueue('analytics') private readonly analyticsQueue: Queue,
+    @InjectQueue('trust-score') private readonly trustScoreQueue: Queue,
+  ) {}
 
   // ─── Overview ─────────────────────────────────────────────
 
@@ -530,5 +537,52 @@ export class AdminController {
   @ApiOperation({ summary: 'Send a test announcement email to yourself' })
   sendTestAnnouncement(@CurrentUser() admin: JwtPayload, @Body() dto: SendAnnouncementDto) {
     return this.adminService.sendTestAnnouncement(admin.sub, dto);
+  }
+
+  @Get('queues')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get BullMQ queue stats' })
+  async getQueueStats() {
+    const queues = [
+      { name: 'email', queue: this.emailQueue },
+      { name: 'analytics', queue: this.analyticsQueue },
+      { name: 'trust-score', queue: this.trustScoreQueue },
+    ];
+
+    const results = await Promise.all(
+      queues.map(async ({ name, queue }) => {
+        const [waiting, active, completed, failed, delayed] = await Promise.all([
+          queue.getWaitingCount(),
+          queue.getActiveCount(),
+          queue.getCompletedCount(),
+          queue.getFailedCount(),
+          queue.getDelayedCount(),
+        ]);
+
+        const recentFailed = await queue.getFailed(0, 10);
+        const recentCompleted = await queue.getCompleted(0, 10);
+
+        return {
+          name,
+          counts: { waiting, active, completed, failed, delayed },
+          recentFailed: recentFailed.map((job) => ({
+            id: job.id,
+            name: job.name,
+            failedReason: job.failedReason,
+            attemptsMade: job.attemptsMade,
+            timestamp: job.timestamp,
+          })),
+          recentCompleted: recentCompleted.map((job) => ({
+            id: job.id,
+            name: job.name,
+            attemptsMade: job.attemptsMade,
+            finishedOn: job.finishedOn,
+            timestamp: job.timestamp,
+          })),
+        };
+      }),
+    );
+
+    return results;
   }
 }
