@@ -205,14 +205,16 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 6. **Headers**: Helmet.js security headers
 7. **Passwords**: Argon2id hashing (12 rounds)
 8. **Secrets**: Environment-only, never in code
-9. **Email Verification**: Feature-flagged, currently disabled (CRITICAL - see ROADMAP.md Phase 0)
-10. **CAPTCHA**: reCAPTCHA v3 implemented on registration (conditional via ENABLE_RECAPTCHA flag) - NOT FUNCTIONING IN PRODUCTION (token generation not working, no requests to Google reCAPTCHA API - requires investigation)
-11. **2FA**: Not yet implemented for admin accounts (CRITICAL - see ROADMAP.md Phase 0)
+9. **Email Verification**: Enforced in production (`ENABLE_EMAIL_VERIFICATION=true`). Branded HTML templates with resend cooldown. PENDING_VERIFICATION users blocked from login.
+10. **CAPTCHA**: reCAPTCHA v3 on registration + login, configurable per-admin toggle. Functional in production with Google API integration.
+11. **2FA**: TOTP-based 2FA + backup codes for admin accounts. Enforced on all admin logins. PIN-protected sensitive actions.
+12. **Anti-Abuse**: Disposable email detection, progressive trust gates, task timing analysis, rapid-completion bot pattern detection, automated abuse flagging with auto-suspension.
+13. **Redis Caching**: Campaign browse (5m TTL), leaderboard (15m TTL), trust scores (1h TTL) via `ioredis`.
+14. **BullMQ Queues**: Email delivery, analytics snapshots, trust score recalculation — all async via Redis-backed queues.
 
-**Security Gaps (See ROADMAP.md Phase 0 for immediate actions)**:
-- Email verification disabled by default
-- reCAPTCHA v3 implemented but NOT FUNCTIONING in production (token generation not working, requires investigation)
-- No 2FA for admin accounts
+**Security Gaps (See COMPREHENSIVE_AUDIT_2026-06-10.md for current status)**:
+- Anti-abuse: social graph analysis and image proof analysis pending
+- Mobile responsiveness pass incomplete
 
 ---
 

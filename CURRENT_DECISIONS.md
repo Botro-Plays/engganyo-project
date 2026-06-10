@@ -798,11 +798,11 @@
 **Timeline**: Completed 2026-05-31
 
 ### TMP-002: Seed Functions Commented Out
-**Status**: Low Priority
+**Status**: ✅ Resolved (2026-06-01)
 **Compromise**: Disabled to run migrations first
 **Impact**: Achievements and missions not seeded
-**Resolution**: Re-enable after migration confirmation
-**Timeline**: Week 2 (LOW)
+**Resolution**: `seedAchievements()` and `seedMissions()` re-enabled in `GamificationService.onModuleInit()`. Upsert pattern ensures idempotent re-runs.
+**Timeline**: Completed 2026-06-01
 
 ### TMP-003: Auto-Verify for Campaigns
 **Status**: Medium Priority
@@ -812,18 +812,18 @@
 **Timeline**: Phase 8 (already implemented, but review gating needed)
 
 ### TMP-004: Synchronous Trust Score Calculation
-**Status**: Medium Priority
+**Status**: ✅ Resolved (2026-06-10)
 **Compromise**: Trust score calculated synchronously
 **Impact**: Blocks API response on task completion
-**Resolution**: Move to BullMQ queue
-**Timeline**: Week 3 (HIGH)
+**Resolution**: `AntiAbuseService.queueRecalculate()` enqueues jobs to `trust-score` BullMQ queue. `TrustScoreProcessor` handles async recalculation. Redis caching (1h TTL) on `getTrustScore()`.
+**Timeline**: Completed 2026-06-10
 
 ### TMP-005: Synchronous Analytics Snapshots
-**Status**: Medium Priority
+**Status**: ✅ Resolved (2026-06-10)
 **Compromise**: Analytics snapshots calculated synchronously
 **Impact**: Blocks cron job, potential timeout
-**Resolution**: Move to BullMQ queue
-**Timeline**: Week 3 (HIGH)
+**Resolution**: `AnalyticsService.takeDailySnapshot()` enqueues `DAILY_SNAPSHOT` jobs to `analytics` BullMQ queue. `AnalyticsProcessor` handles async snapshot computation and upsert.
+**Timeline**: Completed 2026-06-10
 
 ---
 
