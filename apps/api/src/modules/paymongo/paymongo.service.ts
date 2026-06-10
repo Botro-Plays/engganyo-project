@@ -120,29 +120,52 @@ export class PayMongoService {
       this.logger.warn('Cannot archive link: PayMongo not configured');
       return false;
     }
-    try {
-      const res = await fetch(`${this.baseUrl}/payment_links/${linkId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: this.authHeader(secret),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ archive: true }),
-      });
-      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      if (res.ok) {
-        this.logger.log(`PayMongo link ${linkId} archived successfully`);
-        return true;
+
+    const MAX_RETRIES = 3;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(`${this.baseUrl}/payment_links/${linkId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: this.authHeader(secret),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ archive: true }),
+        });
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (res.ok) {
+          this.logger.log(`PayMongo link ${linkId} archived successfully`);
+          return true;
+        }
+        // 4xx client errors — don't retry, link may already be archived or invalid
+        if (res.status >= 400 && res.status < 500) {
+          this.logger.warn(`Failed to archive PayMongo link ${linkId} (4xx): ${JSON.stringify(json)}`);
+          return false;
+        }
+        // 5xx server errors — retry with backoff
+        this.logger.warn(`Archive attempt ${attempt}/${MAX_RETRIES} failed for ${linkId}: ${res.status} ${JSON.stringify(json)}`);
+        if (attempt < MAX_RETRIES) {
+          const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      } catch (err) {
+        this.logger.error(`Archive link ${linkId} error (attempt ${attempt}/${MAX_RETRIES}): ${String(err)}`);
+        if (attempt < MAX_RETRIES) {
+          const delay = 1000 * Math.pow(2, attempt - 1);
+          await new Promise((r) => setTimeout(r, delay));
+        }
       }
-      this.logger.warn(`Failed to archive PayMongo link ${linkId}: ${JSON.stringify(json)}`);
-      return false;
-    } catch (err) {
-      this.logger.error(`Archive link ${linkId} error: ${String(err)}`);
-      return false;
     }
+    this.logger.error(`Archive link ${linkId} exhausted all ${MAX_RETRIES} retries`);
+    return false;
   }
 
   verifyWebhookSignature(timestamp: string, testMode: boolean, rawBody: string, signatureHeader: string, secret: string): boolean {
+    // Validate secret format before passing to crypto — prevents runtime TypeError on malformed secrets
+    if (!secret || secret.length < 16) {
+      this.logger.error('PayMongo webhook secret is missing or too short (< 16 chars)');
+      return false;
+    }
     const payload = `${timestamp}.${rawBody}`;
     const hmac = createHmac('sha256', secret).update(payload).digest('hex');
 
