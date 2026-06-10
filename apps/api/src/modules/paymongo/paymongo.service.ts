@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef,
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus, NotificationType } from '@prisma/client';
+import * as Sentry from '@sentry/nestjs';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -190,6 +191,7 @@ export class PayMongoService {
     const secret = await this.getWebhookSecret();
     if (!secret) {
       this.logger.error('PayMongo webhook received but no webhook secret configured');
+      Sentry.captureMessage('PayMongo webhook secret not configured', 'fatal');
       throw new BadRequestException('Webhook secret not configured');
     }
 
@@ -208,6 +210,7 @@ export class PayMongoService {
     const isValid = this.verifyWebhookSignature(timestamp, testMode, rawBody, signatureHeader, secret);
     if (!isValid) {
       this.logger.error('PayMongo webhook signature verification failed');
+      Sentry.captureMessage('PayMongo webhook signature verification failed', 'error');
       throw new BadRequestException('Invalid webhook signature');
     }
 
@@ -215,8 +218,11 @@ export class PayMongoService {
     let payload: ReturnType<typeof JSON.parse>;
     try {
       payload = JSON.parse(rawBody);
-    } catch {
+    } catch (err) {
       this.logger.error('PayMongo webhook: invalid JSON body after signature verification');
+      Sentry.captureException(err instanceof Error ? err : new Error('Invalid JSON in PayMongo webhook'), {
+        extra: { rawBodyPreview: rawBody.substring(0, 200) },
+      });
       throw new BadRequestException('Invalid webhook payload');
     }
 
@@ -293,6 +299,9 @@ export class PayMongoService {
           );
           return { received: true, action: 'ignored' };
         }
+        Sentry.captureException(err instanceof Error ? err : new Error('Unexpected error in link.payment.paid'), {
+          extra: { depositId: deposit.id, eventType, paymentId },
+        });
         throw err;
       }
     }
@@ -333,6 +342,9 @@ export class PayMongoService {
               );
               return { received: true, action: 'ignored' };
             }
+            Sentry.captureException(err instanceof Error ? err : new Error('Unexpected error in payment.paid'), {
+              extra: { depositId: depositById.id, eventType, paymentId },
+            });
             throw err;
           }
         }
