@@ -1405,6 +1405,25 @@
   5. If the GitHub workflow or deployment encounters any issue, STOP and report to the user. Do NOT assume the deployment is fine — wait for user confirmation or explicit instruction to investigate
 - **Enforcement**: This protocol overrides any speed pressure. Cascade must never skip it.
 - **Consequences of skipping**: Broken builds, failed deployments, production regressions, loss of user trust
+- **Local Commands Reference**:
+  ```
+  # API checks
+  cd apps/api && npx eslint "{src,test}/**/*.ts"
+  cd apps/api && npx tsc --noEmit
+  cd apps/api && npx jest --passWithNoTests --silent
+
+  # Web checks
+  cd apps/web && npx next lint
+  cd apps/web && npx tsc --noEmit
+  cd apps/web && npx next build
+
+  # Root-level (runs all workspaces)
+  npm run lint        # turbo runs lint in both apps
+  npm run build       # turbo runs build in both apps
+
+  # E2E (when available)
+  cd apps/web && npx playwright test
+  ```
 
 ---
 
