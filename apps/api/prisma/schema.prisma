@@ -272,6 +272,9 @@ model User {
   twoFactorTotpSecret   String?  @map("two_factor_totp_secret") // AES-encrypted; null = TOTP not configured
   twoFactorEmailEnabled Boolean  @default(false) @map("two_factor_email_enabled")
 
+  // Email preferences
+  weeklyDigestEnabled Boolean @default(true) @map("weekly_digest_enabled")
+
   // Admin Access PIN (hashed with argon2; optional extra gate for /admin routes)
   adminPinHash String? @map("admin_pin_hash")
 

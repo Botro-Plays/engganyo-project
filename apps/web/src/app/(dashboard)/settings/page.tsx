@@ -18,11 +18,11 @@ const SETTING_TILES = [
     available: true,
   },
   {
-    href: '#',
+    href: '/settings/notifications',
     icon: Bell,
     label: 'Notifications',
     description: 'Control email and in-app notification preferences.',
-    available: false,
+    available: true,
   },
   {
     href: '/settings/security',

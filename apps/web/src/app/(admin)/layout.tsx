@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare, Trophy, DollarSign, Banknote,
-  Menu, X, Bell, Loader2,
+  Menu, X, Bell, Loader2, Mail,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -29,6 +29,7 @@ const navItems = [
   { href: '/admin/reports', icon: Flag, label: 'Reports' },
   { href: '/admin/notifications', icon: Bell, label: 'Notifications' },
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
+  { href: '/admin/communications', icon: Mail, label: 'Communications' },
 ];
 
 function canAccessAdmin(user: AuthUser | null): boolean {

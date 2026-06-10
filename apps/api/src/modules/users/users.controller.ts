@@ -95,4 +95,18 @@ export class UsersController {
   getPublicProfile(@Param('username') username: string) {
     return this.usersService.getPublicProfile(username);
   }
+
+  @Get('me/preferences')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get email/notification preferences' })
+  getPreferences(@CurrentUser() user: JwtPayload) {
+    return this.usersService.getEmailPreferences(user.sub);
+  }
+
+  @Patch('me/preferences')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update email/notification preferences' })
+  updatePreferences(@CurrentUser() user: JwtPayload, @Body() dto: { weeklyDigestEnabled?: boolean }) {
+    return this.usersService.updateEmailPreferences(user.sub, dto);
+  }
 }

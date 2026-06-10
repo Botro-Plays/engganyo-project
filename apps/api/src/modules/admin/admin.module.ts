@@ -5,11 +5,12 @@ import { PayMongoModule } from '../paymongo/paymongo.module';
 import { AuthModule } from '../auth/auth.module';
 import { EventsModule } from '../events/events.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailModule } from '../email/email.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
-  imports: [WalletModule, forwardRef(() => PayMongoModule), AuthModule, EventsModule, NotificationsModule],
+  imports: [WalletModule, forwardRef(() => PayMongoModule), AuthModule, EventsModule, NotificationsModule, EmailModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

@@ -34,6 +34,7 @@ export class WeeklyDigestService {
       where: {
         deletedAt: null,
         status: 'ACTIVE',
+        weeklyDigestEnabled: true,
       },
       select: {
         id: true,

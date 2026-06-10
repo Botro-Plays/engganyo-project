@@ -5,6 +5,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PayMongoService } from '../paymongo/paymongo.service';
@@ -86,6 +87,10 @@ describe('AdminService', () => {
     createNotification: jest.fn(),
   };
 
+  const mockEmailService = {
+    queueWeeklyDigestEmail: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mockPayMongoService = {
     archiveLink: jest.fn().mockResolvedValue(true),
   };
@@ -99,6 +104,7 @@ describe('AdminService', () => {
         { provide: AuthService, useValue: mockAuthService },
         { provide: EventsService, useValue: mockEventsService },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: EmailService, useValue: mockEmailService },
         { provide: PayMongoService, useValue: mockPayMongoService },
       ],
     }).compile();

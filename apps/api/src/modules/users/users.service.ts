@@ -272,4 +272,29 @@ export class UsersService {
 
     return users.filter((user) => isAdmin || user.profile?.allowMentions !== false);
   }
+
+  async getEmailPreferences(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { weeklyDigestEnabled: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async updateEmailPreferences(userId: string, dto: { weeklyDigestEnabled?: boolean }) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const data: Record<string, boolean> = {};
+    if (dto.weeklyDigestEnabled !== undefined) {
+      data.weeklyDigestEnabled = dto.weeklyDigestEnabled;
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: { weeklyDigestEnabled: true },
+    });
+  }
 }

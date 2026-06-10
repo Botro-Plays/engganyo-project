@@ -479,4 +479,13 @@ export class AdminController {
   ) {
     return this.adminService.resetDatabase(admin.sub, body.confirmToken);
   }
+
+  // ─── Email / Communications ───────────────────────────────
+
+  @Post('email/test-digest')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a test weekly digest email to yourself' })
+  sendTestDigest(@CurrentUser() admin: JwtPayload) {
+    return this.adminService.sendTestDigest(admin.sub);
+  }
 }

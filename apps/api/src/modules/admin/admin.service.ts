@@ -13,6 +13,7 @@ import { EventsService } from '../events/events.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
+import { EmailService } from '../email/email.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -30,6 +31,7 @@ export class AdminService {
     private readonly authService: AuthService,
     private readonly eventsService: EventsService,
     private readonly notificationsService: NotificationsService,
+    private readonly emailService: EmailService,
     @Inject(forwardRef(() => PayMongoService))
     private readonly payMongoService: PayMongoService,
   ) {}
@@ -1945,5 +1947,33 @@ export class AdminService {
     ];
     await this.prisma.depositPackage.createMany({ data: defaults });
     return { seeded: true, count: defaults.length };
+  }
+
+  // ─── Email / Communications ───────────────────────────────
+
+  async sendTestDigest(adminId: string) {
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminId },
+      select: { email: true, username: true, displayName: true },
+    });
+    if (!admin?.email) throw new NotFoundException('Admin email not found');
+
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setUTCDate(now.getUTCDate() - 7);
+    const weekEnd = now;
+    const dateFmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    await this.emailService.queueWeeklyDigestEmail(admin.email, {
+      username: admin.displayName ?? admin.username,
+      tasksCompleted: 12,
+      creditsEarned: 3450,
+      currentBalance: 12800,
+      newCampaigns: 8,
+      weekStart: dateFmt(weekStart),
+      weekEnd: dateFmt(weekEnd),
+    });
+
+    return { sent: true, to: admin.email };
   }
 }
