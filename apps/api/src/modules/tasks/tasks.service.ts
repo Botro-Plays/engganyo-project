@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -44,6 +45,8 @@ const COMPLETION_SELECT = {
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
@@ -208,6 +211,7 @@ export class TasksService {
       select: {
         id: true,
         status: true,
+        assignedAt: true,
         expiresAt: true,
         campaign: {
           select: {
@@ -250,6 +254,46 @@ export class TasksService {
     }
 
     const now = new Date();
+
+    // ── Anti-abuse: task timing analysis ──────────────────────
+    const completionTimeMs = now.getTime() - completion.assignedAt.getTime();
+    const SUSPICIOUS_THRESHOLD_MS = 5_000; // 5 seconds
+    const RAPID_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+    const RAPID_COUNT_THRESHOLD = 3;
+
+    if (completionTimeMs < SUSPICIOUS_THRESHOLD_MS) {
+      this.logger.warn(`Suspicious timing: user ${userId} completed task ${completion.id} in ${completionTimeMs}ms`);
+      void this.antiAbuseService.flagUser(
+        userId,
+        'suspicious_timing',
+        'medium',
+        `Task completed in ${completionTimeMs}ms (threshold: ${SUSPICIOUS_THRESHOLD_MS}ms)`,
+        { completionTimeMs, campaignId, thresholdMs: SUSPICIOUS_THRESHOLD_MS, completionId: completion.id },
+      ).catch(() => null);
+    }
+
+    // Check for rapid-fire completions in the last hour (consistent interval bot pattern)
+    void this.prisma.taskCompletion
+      .count({
+        where: {
+          userId,
+          status: CompletionStatus.VERIFIED,
+          assignedAt: { gte: new Date(now.getTime() - RAPID_WINDOW_MS) },
+        },
+      })
+      .then((recentCount) => {
+        if (recentCount >= RAPID_COUNT_THRESHOLD) {
+          this.logger.warn(`Rapid completions detected: user ${userId} completed ${recentCount} tasks in the last hour`);
+          void this.antiAbuseService.flagUser(
+            userId,
+            'bot_pattern',
+            'high',
+            `${recentCount} tasks completed within 1 hour (threshold: ${RAPID_COUNT_THRESHOLD})`,
+            { recentCount, windowMs: RAPID_WINDOW_MS, threshold: RAPID_COUNT_THRESHOLD },
+          ).catch(() => null);
+        }
+      })
+      .catch(() => null);
 
     // ── API verification for supported platforms ──────────────
     // If the user has a linked social account, verify via platform API.
