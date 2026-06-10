@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DollarSign, Loader2, Clock, CheckCircle2, XCircle, AlertCircle,
-  RefreshCw, CreditCard, Wallet, Bitcoin, ChevronLeft, ChevronRight,
+  RefreshCw, CreditCard, Wallet, Bitcoin, ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Save, X, Filter, Plus, Pencil, Trash2, Package, Zap,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -155,6 +155,7 @@ export default function FinancesPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterMethod, setFilterMethod] = useState('');
   const [reviewing, setReviewing] = useState<DepositItem | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   // Package management
@@ -482,51 +483,133 @@ export default function FinancesPage() {
                     const sCfg = STATUS_CFG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock };
                     const StatusIcon = sCfg.icon;
                     const canReview = dep.status === 'PENDING' || dep.status === 'PROCESSING';
+                    const isExpanded = expandedId === dep.id;
                     return (
-                      <tr key={dep.id} className="hover:bg-surface-hover transition-colors">
-                        <td className="px-4 py-3">
-                          <p className="text-white font-medium">{dep.user.username}</p>
-                          <p className="text-xs text-zinc-500">{dep.user.email}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`flex items-center gap-1.5 text-xs ${mCfg.color}`}>
-                            <mCfg.icon className="w-3.5 h-3.5" />{mCfg.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-white font-medium">{dep.currency} {dep.amountFiat.toFixed(2)}</p>
-                          {dep.exchangeRate && (
-                            <p className="text-xs text-zinc-500">at ₱{dep.exchangeRate.toFixed(2)}/$1</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-brand-300 font-medium">{dep.creditsToAward.toLocaleString()}</p>
-                          {dep.creditsAwarded > 0 && dep.creditsAwarded !== dep.creditsToAward && (
-                            <p className="text-xs text-zinc-500">awarded: {dep.creditsAwarded.toLocaleString()}</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${sCfg.bg} ${sCfg.color}`}>
-                            <StatusIcon className="w-3 h-3" />{sCfg.label}
-                          </span>
-                          {dep.adminNotes && <p className="text-xs text-zinc-600 mt-0.5 max-w-[120px] truncate">{dep.adminNotes}</p>}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-zinc-500">
-                          {formatRelativeTime(dep.createdAt)}
-                        </td>
-                        <td className="px-4 py-3">
-                          {canReview ? (
-                            <button
-                              onClick={() => setReviewing(dep)}
-                              className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-xs font-medium transition-all"
-                            >
-                              Review
-                            </button>
-                          ) : (
-                            <span className="text-xs text-zinc-600">—</span>
-                          )}
-                        </td>
-                      </tr>
+                      <>
+                        <tr
+                          key={dep.id}
+                          className="hover:bg-surface-hover transition-colors cursor-pointer"
+                          onClick={() => setExpandedId(isExpanded ? null : dep.id)}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-zinc-500" /> : <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />}
+                              <div>
+                                <p className="text-white font-medium">{dep.user.username}</p>
+                                <p className="text-xs text-zinc-500">{dep.user.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`flex items-center gap-1.5 text-xs ${mCfg.color}`}>
+                              <mCfg.icon className="w-3.5 h-3.5" />{mCfg.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-white font-medium">{dep.currency} {dep.amountFiat.toFixed(2)}</p>
+                            {dep.exchangeRate && (
+                              <p className="text-xs text-zinc-500">at ₱{dep.exchangeRate.toFixed(2)}/$1</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-brand-300 font-medium">{dep.creditsToAward.toLocaleString()}</p>
+                            {dep.creditsAwarded > 0 && dep.creditsAwarded !== dep.creditsToAward && (
+                              <p className="text-xs text-zinc-500">awarded: {dep.creditsAwarded.toLocaleString()}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${sCfg.bg} ${sCfg.color}`}>
+                              <StatusIcon className="w-3 h-3" />{sCfg.label}
+                            </span>
+                            {dep.adminNotes && <p className="text-xs text-zinc-600 mt-0.5 max-w-[120px] truncate">{dep.adminNotes}</p>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-zinc-500">
+                            {formatRelativeTime(dep.createdAt)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {canReview ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setReviewing(dep); }}
+                                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-xs font-medium transition-all"
+                              >
+                                Review
+                              </button>
+                            ) : (
+                              <span className="text-xs text-zinc-600">—</span>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${dep.id}-detail`}>
+                            <td colSpan={7} className="px-4 py-3 bg-surface-hover/50 border-b border-surface-border">
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+                                <div>
+                                  <p className="text-zinc-500 mb-0.5">Deposit ID</p>
+                                  <p className="text-zinc-300 font-mono truncate" title={dep.id}>{dep.id}</p>
+                                </div>
+                                <div>
+                                  <p className="text-zinc-500 mb-0.5">User ID</p>
+                                  <p className="text-zinc-300 font-mono truncate" title={dep.user.id}>{dep.user.id}</p>
+                                </div>
+                                {dep.paymentRef && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Payment Ref</p>
+                                    <p className="text-zinc-300 font-mono truncate" title={dep.paymentRef}>{dep.paymentRef}</p>
+                                  </div>
+                                )}
+                                {dep.package && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Package</p>
+                                    <p className="text-zinc-300">{dep.package.label ?? 'Standard'} (${dep.package.usdAmount})</p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-zinc-500 mb-0.5">Credits to Award</p>
+                                  <p className="text-brand-300">{dep.creditsToAward.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                  <p className="text-zinc-500 mb-0.5">Credits Awarded</p>
+                                  <p className="text-zinc-300">{dep.creditsAwarded.toLocaleString()}</p>
+                                </div>
+                                {dep.bonusCredits > 0 && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Bonus Credits</p>
+                                    <p className="text-green-400">+{dep.bonusCredits.toLocaleString()}</p>
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="text-zinc-500 mb-0.5">Created</p>
+                                  <p className="text-zinc-300">{new Date(dep.createdAt).toLocaleString()}</p>
+                                </div>
+                                {dep.completedAt && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Completed</p>
+                                    <p className="text-zinc-300">{new Date(dep.completedAt).toLocaleString()}</p>
+                                  </div>
+                                )}
+                                {dep.updatedAt !== dep.createdAt && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Updated</p>
+                                    <p className="text-zinc-300">{new Date(dep.updatedAt).toLocaleString()}</p>
+                                  </div>
+                                )}
+                                {dep.reviewedBy && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Reviewed By</p>
+                                    <p className="text-zinc-300 font-mono truncate">{dep.reviewedBy}</p>
+                                  </div>
+                                )}
+                                {dep.adminNotes && (
+                                  <div className="col-span-2 md:col-span-3 lg:col-span-4">
+                                    <p className="text-zinc-500 mb-0.5">Admin Notes</p>
+                                    <p className="text-zinc-300 bg-black/20 rounded px-2 py-1">{dep.adminNotes}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     );
                   })}
                 </tbody>
