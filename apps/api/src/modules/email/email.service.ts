@@ -112,13 +112,21 @@ export class EmailService {
     const fromName = this.config.get<string>('email.fromName', 'Engganyo');
     const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
 
-    const info = await mailer.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to,
-      subject: data.subject,
-      html: announcementEmailTemplate(data),
-    });
+    try {
+      const info = await mailer.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject: data.subject,
+        html: announcementEmailTemplate(data),
+      });
 
-    this.logger.log(`Direct announcement sent → ${to} | response: ${info.response}`);
+      this.logger.log(`Direct announcement sent → ${to} | response: ${info.response}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Direct announcement FAILED → ${to} | subject: "${data.subject}" | SMTP host: ${this.config.get<string>('email.host')} | error: ${msg}`,
+      );
+      throw new Error(`Email send failed: ${msg}`);
+    }
   }
 }
