@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 
 import { WalletModule } from '../wallet/wallet.module';
 import { PayMongoModule } from '../paymongo/paymongo.module';
@@ -10,7 +11,19 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
-  imports: [WalletModule, forwardRef(() => PayMongoModule), AuthModule, EventsModule, NotificationsModule, EmailModule],
+  imports: [
+    WalletModule,
+    forwardRef(() => PayMongoModule),
+    AuthModule,
+    EventsModule,
+    NotificationsModule,
+    EmailModule,
+    BullModule.registerQueue(
+      { name: 'email' },
+      { name: 'analytics' },
+      { name: 'trust-score' },
+    ),
+  ],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],
