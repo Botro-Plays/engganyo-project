@@ -7,11 +7,12 @@ import { EventsModule } from '../events/events.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
 import { AdminController } from './admin.controller';
+import { BullBoardController } from './bull-board.controller';
 import { AdminService } from './admin.service';
 
 @Module({
   imports: [WalletModule, forwardRef(() => PayMongoModule), AuthModule, EventsModule, NotificationsModule, EmailModule],
-  controllers: [AdminController],
+  controllers: [AdminController, BullBoardController],
   providers: [AdminService],
   exports: [AdminService],
 })
