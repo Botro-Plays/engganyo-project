@@ -1391,6 +1391,23 @@
 
 ---
 
+## Engineering Process Decisions
+
+### EPD-001: Mandatory CI/Deployment Protocol (2026-06-10)
+- **Status**: Active
+- **Decision**: Before every commit/push, the following protocol MUST be followed
+- **Rationale**: Prevents broken code from reaching production; enforces root-cause debugging over workarounds; ensures deployment pipeline integrity
+- **Protocol**:
+  1. Run CI lint and tests for web (`next lint`, `tsc --noEmit`, `next build`), API (`eslint`, `tsc --noEmit`, `jest`), and E2E (Playwright, if available)
+  2. All checks MUST pass cleanly — no errors. Warnings are acceptable only if pre-existing (not introduced by the current change). NO hacking around failures, NO guessing fixes, NO shortcuts (e.g., `@ts-ignore`, `any`, disabling rules without root-cause analysis)
+  3. If there is ANY error, review the relevant code, identify the REAL root cause, and fix it properly. Do NOT paper over failures
+  4. Once verified and all checks pass, commit with a descriptive message and push to `origin main` so GitHub Actions runs and auto-deploys
+  5. If the GitHub workflow or deployment encounters any issue, STOP and report to the user. Do NOT assume the deployment is fine — wait for user confirmation or explicit instruction to investigate
+- **Enforcement**: This protocol overrides any speed pressure. Cascade must never skip it.
+- **Consequences of skipping**: Broken builds, failed deployments, production regressions, loss of user trust
+
+---
+
 ## DECISION RECORD MAINTENANCE
 
 This document should be updated when:
@@ -1409,7 +1426,7 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-06-10 (ADR-024, ADR-025, ADR-026 added; MDR-002 updated: deposit system live, Stripe deferred; trust score + analytics BullMQ TMP-004/005 resolved; full markdown audit completed)
+**Last Updated**: 2026-06-10 (EPD-001 mandatory CI protocol added; ADR-024, ADR-025, ADR-026 added; MDR-002 updated: deposit system live, Stripe deferred; trust score + analytics BullMQ TMP-004/005 resolved; full markdown audit completed)
 **Previously**: 2026-06-01 (Full MD audit: MDR-001 corrected to 10% fee, TRD-005 updated to automated deploy, IDR-005 reflects full CD pipeline, VDR-001 includes all 11 platforms)
 **Next Review**: 2026-08-31 (quarterly)
 
