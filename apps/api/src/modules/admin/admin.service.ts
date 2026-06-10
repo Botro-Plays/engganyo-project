@@ -23,6 +23,7 @@ import type { GrantCreditsDto } from './dto/grant-credits.dto';
 import type { AdjustTrustDto } from './dto/adjust-trust.dto';
 import type { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import type { UpdateUserDetailsDto } from './dto/update-user-details.dto';
+import type { SendAnnouncementDto } from './dto/send-announcement.dto';
 
 @Injectable()
 export class AdminService {
@@ -2012,5 +2013,77 @@ export class AdminService {
 
   async triggerWeeklyDigest() {
     return this.weeklyDigestService.triggerWeeklyDigests();
+  }
+
+  getAnnouncementTemplates() {
+    return [
+      {
+        id: 'maintenance',
+        name: 'Scheduled Maintenance',
+        subject: 'Scheduled Maintenance on {{date}}',
+        title: 'Scheduled Maintenance',
+        bodyHtml: '<p>We will be performing scheduled maintenance on <strong>{{date}}</strong> from <strong>{{time}}</strong>.</p><p>During this window, some features may be temporarily unavailable. We expect the maintenance to last approximately <strong>{{duration}}</strong>.</p><p>Thank you for your patience as we improve the platform.</p>',
+        theme: 'amber' as const,
+      },
+      {
+        id: 'feature',
+        name: 'New Feature Launch',
+        subject: 'New Feature: {{featureName}}',
+        title: 'New Feature Launch',
+        bodyHtml: '<p>We are excited to announce the launch of <strong>{{featureName}}</strong>!</p><p>{{description}}</p><p>Try it out today and let us know what you think.</p>',
+        theme: 'blue' as const,
+      },
+      {
+        id: 'update',
+        name: 'Important Platform Update',
+        subject: 'Important Platform Update',
+        title: 'Important Platform Update',
+        bodyHtml: '<p>We are making some changes to improve your experience on Engganyo.</p><p>{{details}}</p><p>If you have any questions, please reach out to our support team.</p>',
+        theme: 'blue' as const,
+      },
+      {
+        id: 'notice',
+        name: 'System Notice',
+        subject: 'System Notice from Engganyo',
+        title: 'System Notice',
+        bodyHtml: '<p>{{message}}</p>',
+        theme: 'rose' as const,
+      },
+    ];
+  }
+
+  async sendAnnouncement(dto: SendAnnouncementDto): Promise<{ queued: number }> {
+    const where = dto.recipientType === 'DIGEST_ENABLED'
+      ? { deletedAt: null, status: 'ACTIVE' as const }
+      : { deletedAt: null, status: 'ACTIVE' as const };
+
+    // Since weeklyDigestEnabled may not be typed, use raw query for DIGEST_ENABLED
+    let emails: string[] = [];
+    if (dto.recipientType === 'DIGEST_ENABLED') {
+      const result = await this.prisma.$queryRaw<Array<{ email: string }>>`
+        SELECT email FROM users WHERE deleted_at IS NULL AND status = 'ACTIVE' AND weekly_digest_enabled = true
+      `;
+      emails = result.map((r) => r.email);
+    } else {
+      const users = await this.prisma.user.findMany({
+        where,
+        select: { email: true },
+      });
+      emails = users.map((u) => u.email).filter(Boolean) as string[];
+    }
+
+    const theme = dto.theme ?? 'blue';
+    for (const email of emails) {
+      await this.emailService.queueAnnouncementEmail(email, {
+        subject: dto.subject,
+        title: dto.title,
+        bodyHtml: dto.bodyHtml,
+        theme,
+        ctaLabel: dto.ctaLabel,
+        ctaUrl: dto.ctaUrl,
+      });
+    }
+
+    return { queued: emails.length };
   }
 }

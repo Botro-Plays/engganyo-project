@@ -16,6 +16,7 @@ import { ChangeUserRoleDto } from './dto/change-user-role.dto';
 import { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 import { UpdateUserDetailsDto } from './dto/update-user-details.dto';
+import { SendAnnouncementDto } from './dto/send-announcement.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { AdminTwoFactorGuard } from '../../common/guards/admin-two-factor.guard';
@@ -508,5 +509,19 @@ export class AdminController {
   @ApiOperation({ summary: 'Manually trigger weekly digest for all opted-in users' })
   triggerDigest() {
     return this.adminService.triggerWeeklyDigest();
+  }
+
+  @Get('email/announcement-templates')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get pre-made announcement email templates' })
+  getAnnouncementTemplates() {
+    return { data: this.adminService.getAnnouncementTemplates() };
+  }
+
+  @Post('email/announcement')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send an announcement email to selected recipients' })
+  sendAnnouncement(@Body() dto: SendAnnouncementDto) {
+    return this.adminService.sendAnnouncement(dto);
   }
 }

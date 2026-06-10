@@ -486,3 +486,81 @@ export function twoFactorEmailTemplate(code: string): string {
 
   return baseLayout(content, `Your Engganyo sign-in code: ${code}. Expires in 10 minutes.`);
 }
+
+export function announcementEmailTemplate(data: {
+  title: string;
+  bodyHtml: string;
+  theme: 'blue' | 'amber' | 'rose';
+  ctaLabel?: string;
+  ctaUrl?: string;
+}): string {
+  const { title, bodyHtml, theme, ctaLabel, ctaUrl } = data;
+
+  const themeColors: Record<string, { gradient: string; solid: string; light: string }> = {
+    blue:   { gradient: 'linear-gradient(135deg,#3b62f5,#2444e8)', solid: '#3b62f5', light: '#3b62f5/10' },
+    amber:  { gradient: 'linear-gradient(135deg,#f59e0b,#d97706)', solid: '#f59e0b', light: '#f59e0b/10' },
+    rose:   { gradient: 'linear-gradient(135deg,#f43f5e,#e11d48)', solid: '#f43f5e', light: '#f43f5e/10' },
+  };
+
+  const t = themeColors[theme] ?? themeColors.blue;
+  const ctaBlock = ctaLabel && ctaUrl
+    ? `<tr>
+        <td align="center" style="padding:0 40px 32px;">
+          <a href="${ctaUrl}" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;background:${t.gradient};">
+            ${ctaLabel}
+          </a>
+        </td>
+      </tr>`
+    : '';
+
+  const content = `
+    <!-- Top accent bar -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="background:${t.gradient};height:4px;"></td>
+      </tr>
+    </table>
+
+    <!-- Body content -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="padding:40px 40px 24px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:${t.gradient};border-radius:14px;padding:14px;">
+                <div style="font-size:22px;line-height:1;">&#128232;</div>
+              </td>
+            </tr>
+          </table>
+          <h1 style="margin:20px 0 12px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
+            ${title}
+          </h1>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 40px 32px;">
+          <div style="font-size:15px;color:#8892a4;line-height:1.7;">
+            ${bodyHtml}
+          </div>
+        </td>
+      </tr>
+      ${ctaBlock}
+      <tr>
+        <td style="padding:0 40px 40px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"
+                 style="background:#0f1826;border-radius:10px;border:1px solid #1e2a45;">
+            <tr>
+              <td style="padding:16px 20px;">
+                <p style="margin:0;font-size:12px;color:#4b5670;line-height:1.6;">
+                  This is an official announcement from Engganyo. If you have questions, reply to this email or contact support.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return baseLayout(content, title);
+}

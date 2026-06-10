@@ -5,7 +5,7 @@ import type { Job } from 'bullmq';
 import * as nodemailer from 'nodemailer';
 
 import { EMAIL_QUEUE, EMAIL_JOBS } from './email.service';
-import { verificationEmailTemplate, passwordResetEmailTemplate, twoFactorEmailTemplate, weeklyDigestEmailTemplate } from './email.templates';
+import { verificationEmailTemplate, passwordResetEmailTemplate, twoFactorEmailTemplate, weeklyDigestEmailTemplate, announcementEmailTemplate } from './email.templates';
 
 interface EmailJobData {
   to: string;
@@ -103,5 +103,29 @@ export class EmailProcessor {
     });
 
     this.logger.log(`Weekly digest sent → ${to}`);
+  }
+
+  @Process(EMAIL_JOBS.SEND_ANNOUNCEMENT)
+  async handleAnnouncement(job: Job<{
+    to: string;
+    subject: string;
+    title: string;
+    bodyHtml: string;
+    theme: 'blue' | 'amber' | 'rose';
+    ctaLabel?: string;
+    ctaUrl?: string;
+  }>): Promise<void> {
+    const { to, subject, ...data } = job.data;
+    const fromName = this.config.get<string>('email.fromName', 'Engganyo');
+    const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
+
+    await this.mailer.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject,
+      html: announcementEmailTemplate(data),
+    });
+
+    this.logger.log(`Announcement sent → ${to}`);
   }
 }
