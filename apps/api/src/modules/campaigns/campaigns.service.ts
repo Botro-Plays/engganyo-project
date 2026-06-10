@@ -366,7 +366,7 @@ export class CampaignsService {
         this.eventsService.emitToUser(campaign.userId, 'campaign:updated', { campaignId, status: 'COMPLETED' });
       }
 
-      void this.antiAbuseService.recalculateTrustScore(completion.userId).catch(() => null);
+      void this.antiAbuseService.queueRecalculate(completion.userId);
       return { reviewed: true, action: 'approve', creditsAwarded: campaign.creditPerTask };
     } else {
       await this.prisma.$transaction(async (tx) => {

@@ -1,14 +1,20 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bullmq';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CompletionStatus, CampaignStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { ANALYTICS_QUEUE, ANALYTICS_JOBS } from './analytics.processor';
 
 @Injectable()
 export class AnalyticsService {
   private readonly logger = new Logger(AnalyticsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue(ANALYTICS_QUEUE) private readonly queue: Queue,
+  ) {}
 
   // ─── Platform overview (admin) ──────────────────────────────────────────────
 
@@ -214,64 +220,12 @@ export class AnalyticsService {
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async takeDailySnapshot() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-
-    const last30 = new Date(today);
-    last30.setDate(today.getDate() - 30);
-
-    try {
-      const [
-        totalUsers,
-        newUsers,
-        dau,
-        mau,
-        tasksAssigned,
-        tasksSubmitted,
-        tasksVerified,
-        tasksRejected,
-        campaignsCreated,
-        campaignsCompleted,
-        creditsIssued,
-        creditsSpent,
-      ] = await Promise.all([
-        this.prisma.user.count(),
-        this.prisma.user.count({ where: { createdAt: { gte: yesterday, lt: today } } }),
-        this.prisma.userSession.groupBy({ by: ['userId'], where: { createdAt: { gte: yesterday, lt: today } } }).then((r) => r.length),
-        this.prisma.userSession.groupBy({ by: ['userId'], where: { createdAt: { gte: last30, lt: today } } }).then((r) => r.length),
-        this.prisma.taskCompletion.count({ where: { assignedAt: { gte: yesterday, lt: today } } }),
-        this.prisma.taskCompletion.count({ where: { submittedAt: { gte: yesterday, lt: today } } }),
-        this.prisma.taskCompletion.count({ where: { status: CompletionStatus.VERIFIED, verifiedAt: { gte: yesterday, lt: today } } }),
-        this.prisma.taskCompletion.count({ where: { status: CompletionStatus.REJECTED, updatedAt: { gte: yesterday, lt: today } } }),
-        this.prisma.campaign.count({ where: { createdAt: { gte: yesterday, lt: today } } }),
-        this.prisma.campaign.count({ where: { completedAt: { gte: yesterday, lt: today } } }),
-        this.prisma.transaction.aggregate({ where: { type: 'EARN_TASK_COMPLETION', createdAt: { gte: yesterday, lt: today } }, _sum: { amount: true } }).then((r) => r._sum.amount ?? 0),
-        this.prisma.transaction.aggregate({ where: { type: 'SPEND_CAMPAIGN_CREATE', createdAt: { gte: yesterday, lt: today } }, _sum: { amount: true } }).then((r) => Math.abs(r._sum.amount ?? 0)),
-      ]);
-
-      await this.prisma.analyticsSnapshot.upsert({
-        where: { date: yesterday },
-        update: {
-          totalUsers, newUsers, dailyActive: dau, monthlyActive: mau,
-          tasksAssigned, tasksSubmitted, tasksVerified, tasksRejected,
-          campaignsCreated, campaignsCompleted,
-          creditsIssued: Number(creditsIssued), creditsSpent: Number(creditsSpent),
-        },
-        create: {
-          date: yesterday,
-          totalUsers, newUsers, dailyActive: dau, monthlyActive: mau,
-          tasksAssigned, tasksSubmitted, tasksVerified, tasksRejected,
-          campaignsCreated, campaignsCompleted,
-          creditsIssued: Number(creditsIssued), creditsSpent: Number(creditsSpent),
-        },
-      });
-
-      this.logger.log(`Daily snapshot saved for ${yesterday.toISOString().slice(0, 10)}`);
-    } catch (err) {
-      this.logger.error('Failed to take daily snapshot', err);
-    }
+    this.logger.log('Enqueuing daily analytics snapshot job');
+    await this.queue.add(ANALYTICS_JOBS.DAILY_SNAPSHOT, {}, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5_000 },
+      removeOnComplete: 10,
+      removeOnFail: 5,
+    });
   }
 }

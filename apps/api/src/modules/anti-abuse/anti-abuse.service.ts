@@ -5,6 +5,9 @@ import { ReportReason, TrustLevel, UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bullmq';
+import { TRUST_SCORE_QUEUE, TRUST_SCORE_JOBS } from './anti-abuse.processor';
 import type { CreateReportDto } from './dto/create-report.dto';
 
 // ─── Trust score weights ──────────────────────────────────────
@@ -34,9 +37,19 @@ export class AntiAbuseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    @InjectQueue(TRUST_SCORE_QUEUE) private readonly queue: Queue,
   ) {}
 
   // ─── Trust score ───────────────────────────────────────────
+
+  async queueRecalculate(userId: string): Promise<void> {
+    await this.queue.add(TRUST_SCORE_JOBS.RECALCULATE, { userId }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5_000 },
+      removeOnComplete: 50,
+      removeOnFail: 20,
+    });
+  }
 
   async getTrustScore(userId: string) {
     const cacheKey = `trustscore:${userId}`;
