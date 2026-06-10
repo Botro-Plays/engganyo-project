@@ -1,9 +1,10 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
-import { DepositMethod, DepositStatus } from '@prisma/client';
+import { DepositMethod, DepositStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PayMongoService {
@@ -14,6 +15,7 @@ export class PayMongoService {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private async getSecretKey(): Promise<string | null> {
@@ -168,33 +170,38 @@ export class PayMongoService {
       throw new BadRequestException('Webhook secret not configured');
     }
 
-    const payload = JSON.parse(rawBody);
-    const eventType = payload.data?.attributes?.type as string;
-    const eventData = payload.data?.attributes?.data;
-    const testMode = payload.data?.attributes?.livemode === false;
-
-    this.logger.log(`Event type: ${eventType}, Test mode: ${testMode}`);
-    this.logger.log(`Event data: ${JSON.stringify(eventData)}`);
-
+    // ── Step 1: Extract timestamp + mode from signature header (no body parsing needed) ──
     const signatureParts = signatureHeader.split(',');
     let timestamp = '';
+    let testMode = false;
     for (const part of signatureParts) {
       const [key, val] = part.split('=');
-      if (key.trim() === 't') {
-        timestamp = val.trim();
-        break;
-      }
+      if (key?.trim() === 't') timestamp = val?.trim() ?? '';
+      if (key?.trim() === 'te') testMode = true;
     }
+    this.logger.log(`Timestamp: ${timestamp}, TestMode: ${testMode}`);
 
-    this.logger.log(`Timestamp: ${timestamp}`);
-
+    // ── Step 2: Verify signature BEFORE parsing body (prevents malformed-JSON attacks) ──
     const isValid = this.verifyWebhookSignature(timestamp, testMode, rawBody, signatureHeader, secret);
     if (!isValid) {
       this.logger.error('PayMongo webhook signature verification failed');
       throw new BadRequestException('Invalid webhook signature');
     }
 
+    // ── Step 3: Parse body only after signature is verified ───────────────────
+    let payload: ReturnType<typeof JSON.parse>;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      this.logger.error('PayMongo webhook: invalid JSON body after signature verification');
+      throw new BadRequestException('Invalid webhook payload');
+    }
+
+    const eventType = payload.data?.attributes?.type as string;
+    const eventData = payload.data?.attributes?.data;
+
     this.logger.log(`PayMongo webhook signature verified: ${eventType}`);
+    this.logger.log(`Event data: ${JSON.stringify(eventData)}`);
 
     // link.payment.paid — link object is eventData; external_reference_number/reference_number = our depositId
     if (eventType === 'link.payment.paid') {
@@ -239,6 +246,16 @@ export class PayMongoService {
 
       if (deposit.status === DepositStatus.COMPLETED || deposit.status === DepositStatus.CANCELLED) {
         this.logger.warn(`link.payment.paid: deposit ${deposit.id} already ${deposit.status}`);
+        return { received: true, action: 'ignored' };
+      }
+
+      // Atomic claim — prevents double-processing on concurrent webhook deliveries
+      const claimed = await this.prisma.deposit.updateMany({
+        where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
+        data: { status: DepositStatus.PROCESSING },
+      });
+      if (claimed.count === 0) {
+        this.logger.warn(`link.payment.paid: deposit ${deposit.id} already claimed by concurrent request`);
         return { received: true, action: 'ignored' };
       }
 
@@ -326,6 +343,51 @@ export class PayMongoService {
       }
     }
 
+    // link.payment.failed — a payment attempt on a link failed (declined card, etc.).
+    // The link is still active; notify user to retry. Deposit stays PENDING until link expires.
+    if (eventType === 'link.payment.failed') {
+      const lfLinkId = (eventData?.id as string | undefined) ?? undefined;
+      const lfAttrs = eventData?.attributes as Record<string, unknown> | undefined;
+      const lfMeta = lfAttrs?.metadata as Record<string, unknown> | undefined;
+      const lfMetaDepositId = lfMeta?.depositId as string | undefined;
+      const lfDepositId =
+        (lfAttrs?.external_reference_number as string | undefined) ??
+        (lfAttrs?.reference_number as string | undefined) ??
+        lfMetaDepositId;
+
+      this.logger.log(`link.payment.failed: depositId=${lfDepositId ?? 'none'}, linkId=${lfLinkId ?? 'none'}`);
+
+      let failedDeposit = lfDepositId
+        ? await this.prisma.deposit.findUnique({ where: { id: lfDepositId } })
+        : null;
+
+      if (!failedDeposit && lfLinkId) {
+        failedDeposit = await this.prisma.deposit.findFirst({
+          where: {
+            paymentRef: lfLinkId,
+            method: DepositMethod.PAYMONGO,
+            status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+          },
+        });
+      }
+
+      if (!failedDeposit || (failedDeposit.status !== DepositStatus.PENDING && failedDeposit.status !== DepositStatus.PROCESSING)) {
+        this.logger.warn(`link.payment.failed: deposit ${failedDeposit?.id ?? 'unknown'} not actionable`);
+        return { received: true, action: 'ignored' };
+      }
+
+      await this.notificationsService.createNotification(
+        failedDeposit.userId,
+        NotificationType.ACCOUNT_WARNING,
+        'Payment Attempt Failed',
+        `Your payment attempt for your ${failedDeposit.currency ?? 'PHP'} ${failedDeposit.amountFiat} deposit failed. You can try again using the same payment link, or cancel and start a new deposit.`,
+        { depositId: failedDeposit.id },
+      );
+
+      this.logger.log(`link.payment.failed: notified user ${failedDeposit.userId} for deposit ${failedDeposit.id}`);
+      return { received: true, action: 'notified', depositId: failedDeposit.id };
+    }
+
     // qrph.expired — QR expiry auto-refreshes on PayMongo's checkout page.
     // The payment link itself is still valid; do NOT cancel the deposit here.
     if (eventType === 'qrph.expired') {
@@ -379,11 +441,19 @@ export class PayMongoService {
         if (deposit.paymentRef) {
           await this.archiveLink(deposit.paymentRef);
         }
-        await this.prisma.deposit.update({
-          where: { id: deposit.id },
+        // Atomic status update — skip if a webhook completed this deposit after our findMany
+        const cancelled = await this.prisma.deposit.updateMany({
+          where: {
+            id: deposit.id,
+            status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+          },
           data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayMongo link expired' },
         });
-        this.logger.log(`Deposit ${deposit.id} auto-cancelled — PayMongo link expired`);
+        if (cancelled.count === 0) {
+          this.logger.log(`Deposit ${deposit.id} already processed — skipping auto-cancel`);
+        } else {
+          this.logger.log(`Deposit ${deposit.id} auto-cancelled — PayMongo link expired`);
+        }
       } catch (err) {
         this.logger.error(`Failed to auto-cancel deposit ${deposit.id}: ${String(err)}`);
       }

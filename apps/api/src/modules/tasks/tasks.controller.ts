@@ -39,7 +39,7 @@ export class TasksController {
   @UserRateLimit({ limit: 10, ttl: 60, scope: 'task_assign' })
   @ApiOperation({ summary: 'Claim a task slot from a campaign' })
   assign(@CurrentUser() user: JwtPayload, @Param('campaignId') campaignId: string) {
-    return this.tasksService.assignTask(user.sub, campaignId);
+    return this.tasksService.assignTask(user.sub, campaignId, user.role);
   }
 
   @Post(':campaignId/submit')

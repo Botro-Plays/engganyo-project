@@ -1845,6 +1845,13 @@ export class AdminService {
     if (deposit.status === DepositStatus.FAILED) throw new BadRequestException('Deposit was failed');
 
     if (dto.status === 'COMPLETED') {
+      if (deposit.method === DepositMethod.PAYMONGO && deposit.paymentRef) {
+        try {
+          await this.payMongoService.archiveLink(deposit.paymentRef);
+        } catch (err) {
+          /* ignore archive errors — link may already be expired */
+        }
+      }
       await this.walletService.completeDeposit(depositId, {
         paymentRef: dto.paymentRef,
         reviewedBy: adminId,

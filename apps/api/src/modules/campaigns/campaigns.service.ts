@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { CampaignStatus, CompletionStatus, TaskType, TransactionType } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, TaskType, TransactionType, TrustLevel } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -120,6 +120,25 @@ export class CampaignsService {
       if (!enabled) {
         throw new BadRequestException(
           `${platform.charAt(0) + platform.slice(1).toLowerCase()} tasks are currently disabled.`,
+        );
+      }
+    }
+
+    // ── Trust gate: enforce per-tier campaign restrictions ─────────────────
+    if (!isAdmin) {
+      const trustRecord = await this.prisma.trustScore.findUnique({
+        where: { userId },
+        select: { level: true },
+      });
+      const trustLevel = trustRecord?.level ?? TrustLevel.NEW;
+      if (trustLevel === TrustLevel.NEW) {
+        throw new BadRequestException(
+          'Your trust score is too low to create campaigns. Complete tasks and verify social accounts to reach trust level LOW or higher.',
+        );
+      }
+      if (trustLevel === TrustLevel.LOW && totalCost > 100) {
+        throw new BadRequestException(
+          `At trust level LOW, campaign budgets are limited to 100 credits. Increase your trust score to unlock larger campaigns. (Current budget: ${totalCost} credits)`,
         );
       }
     }

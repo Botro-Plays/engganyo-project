@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { CompletionStatus, CampaignStatus, TransactionType } from '@prisma/client';
+import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -69,7 +69,7 @@ export class TasksService {
 
   // ─── Assign task ───────────────────────────────────────────
 
-  async assignTask(userId: string, campaignId: string) {
+  async assignTask(userId: string, campaignId: string, userRole?: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
       select: {
@@ -119,6 +119,37 @@ export class TasksService {
 
     if (campaign.expiresAt && campaign.expiresAt < new Date()) {
       throw new BadRequestException('Campaign has expired');
+    }
+
+    // ── Trust gate: enforce per-tier daily task limits ──────────────────────
+    const isAdminUser = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MODERATOR';
+    if (!isAdminUser) {
+      const trustRecord = await this.prisma.trustScore.findUnique({
+        where: { userId },
+        select: { level: true },
+      });
+      const trustLevel = trustRecord?.level ?? TrustLevel.NEW;
+      const DAILY_LIMITS: Partial<Record<TrustLevel, number>> = {
+        [TrustLevel.NEW]: 5,
+        [TrustLevel.LOW]: 20,
+      };
+      const dailyLimit = DAILY_LIMITS[trustLevel];
+      if (dailyLimit !== undefined) {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayCount = await this.prisma.taskCompletion.count({
+          where: {
+            userId,
+            assignedAt: { gte: todayStart },
+            status: { not: CompletionStatus.EXPIRED },
+          },
+        });
+        if (todayCount >= dailyLimit) {
+          throw new BadRequestException(
+            `Daily task limit reached (${dailyLimit} tasks/day for trust level ${trustLevel}). Complete more tasks and link social accounts to increase your trust score.`,
+          );
+        }
+      }
     }
 
     // Check if already assigned or completed
