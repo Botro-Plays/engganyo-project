@@ -69,32 +69,61 @@ export class CampaignsService {
 
   // ─── Fee calculation (config-driven) ─────────────────────
 
-  private async getFeeConfig() {
-    const [baseRateRow, promoEnabledRow, promoRateRow, promoUntilRow, minBudgetRow] =
-      await this.prisma.platformConfig.findMany({
-        where: {
-          key: {
-            in: ['fee_base_rate', 'fee_promo_enabled', 'fee_promo_rate', 'fee_promo_until', 'campaign_min_budget'],
-          },
+  private async getFeeConfig(userId?: string) {
+    const configRows = await this.prisma.platformConfig.findMany({
+      where: {
+        key: {
+          in: [
+            'fee_base_rate', 'fee_promo_enabled', 'fee_promo_rate', 'fee_promo_until',
+            'campaign_min_budget',
+            'fee_volume_t1_threshold', 'fee_volume_t1_rate',
+            'fee_volume_t2_threshold', 'fee_volume_t2_rate',
+            'fee_volume_t3_threshold', 'fee_volume_t3_rate',
+          ],
         },
-        select: { key: true, value: true },
-      });
+      },
+      select: { key: true, value: true },
+    });
+    const cfg = (k: string, def: number | boolean | string) => {
+      const row = configRows.find((r) => r.key === k);
+      if (typeof def === 'boolean') return row?.value === true;
+      if (typeof def === 'string') return typeof row?.value === 'string' ? row.value : def;
+      return typeof row?.value === 'number' ? row.value : def;
+    };
 
-    const baseRate = typeof baseRateRow?.value === 'number' ? baseRateRow.value : 0.10;
-    const promoEnabled = promoEnabledRow?.value === true;
-    const promoRate = typeof promoRateRow?.value === 'number' ? promoRateRow.value : 0.05;
-    const promoUntil = typeof promoUntilRow?.value === 'string' ? promoUntilRow.value : '';
-    const minBudget = typeof minBudgetRow?.value === 'number' ? minBudgetRow.value : 100;
+    const baseRate = cfg('fee_base_rate', 0.10) as number;
+    const promoEnabled = cfg('fee_promo_enabled', false) as boolean;
+    const promoRate = cfg('fee_promo_rate', 0.05) as number;
+    const promoUntil = cfg('fee_promo_until', '') as string;
+    const minBudget = cfg('campaign_min_budget', 100) as number;
 
     const now = new Date();
-    const isPromoActive =
-      promoEnabled && promoUntil && new Date(promoUntil) > now;
+    const isPromoActive = promoEnabled && promoUntil && new Date(promoUntil) > now;
+    let rate = isPromoActive ? promoRate : baseRate;
 
-    return {
-      rate: isPromoActive ? promoRate : baseRate,
-      minBudget,
-      isPromoActive,
-    };
+    // Volume discounts based on lifetime campaign spend
+    if (userId) {
+      const wallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { lifetimeSpent: true },
+      });
+      const lifetimeSpent = wallet?.lifetimeSpent ?? 0;
+
+      const tiers = [
+        { threshold: cfg('fee_volume_t3_threshold', 5000) as number, rate: cfg('fee_volume_t3_rate', 0.05) as number },
+        { threshold: cfg('fee_volume_t2_threshold', 2000) as number, rate: cfg('fee_volume_t2_rate', 0.06) as number },
+        { threshold: cfg('fee_volume_t1_threshold', 500) as number, rate: cfg('fee_volume_t1_rate', 0.08) as number },
+      ];
+
+      for (const tier of tiers) {
+        if (lifetimeSpent >= tier.threshold && tier.rate < rate) {
+          rate = tier.rate;
+          break; // tiers ordered highest-first, first match is the best
+        }
+      }
+    }
+
+    return { rate, minBudget, isPromoActive };
   }
 
   private calculateFee(totalCost: number, rate: number) {
@@ -105,8 +134,8 @@ export class CampaignsService {
     const totalCost = dto.totalSlots * dto.creditPerTask;
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
-    // Load fee config
-    const feeConfig = await this.getFeeConfig();
+    // Load fee config (with volume discount based on lifetime spend)
+    const feeConfig = await this.getFeeConfig(userId);
     if (totalCost < feeConfig.minBudget) {
       throw new BadRequestException(
         `Campaign budget must be at least ${feeConfig.minBudget} credits (current: ${totalCost}).`,
