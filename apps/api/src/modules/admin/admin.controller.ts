@@ -507,8 +507,8 @@ export class AdminController {
   @Post('email/trigger-digest')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Manually trigger weekly digest for all opted-in users' })
-  triggerDigest() {
-    return this.adminService.triggerWeeklyDigest();
+  triggerDigest(@CurrentUser() admin: JwtPayload) {
+    return this.adminService.triggerWeeklyDigest(admin.sub);
   }
 
   @Get('email/announcement-templates')
@@ -521,7 +521,7 @@ export class AdminController {
   @Post('email/announcement')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send an announcement email to selected recipients' })
-  sendAnnouncement(@Body() dto: SendAnnouncementDto) {
-    return this.adminService.sendAnnouncement(dto);
+  sendAnnouncement(@CurrentUser() admin: JwtPayload, @Body() dto: SendAnnouncementDto) {
+    return this.adminService.sendAnnouncement(admin.sub, dto);
   }
 }

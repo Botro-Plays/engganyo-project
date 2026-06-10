@@ -1972,6 +1972,17 @@ export class AdminService {
     if (!data) throw new NotFoundException('Could not compute digest data');
 
     await this.emailService.queueWeeklyDigestEmail(admin.email, data);
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'email.test_digest_sent',
+        entityType: 'User',
+        entityId: adminId,
+        metadata: { to: admin.email },
+      },
+    });
+
     return { sent: true, to: admin.email };
   }
 
@@ -2011,8 +2022,19 @@ export class AdminService {
     };
   }
 
-  async triggerWeeklyDigest() {
-    return this.weeklyDigestService.triggerWeeklyDigests();
+  async triggerWeeklyDigest(adminId: string) {
+    const result = await this.weeklyDigestService.triggerWeeklyDigests();
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'email.digest_triggered',
+        entityType: 'System',
+        metadata: { queued: result.queued, total: result.total },
+      },
+    });
+
+    return result;
   }
 
   getAnnouncementTemplates() {
@@ -2052,7 +2074,7 @@ export class AdminService {
     ];
   }
 
-  async sendAnnouncement(dto: SendAnnouncementDto): Promise<{ queued: number }> {
+  async sendAnnouncement(adminId: string, dto: SendAnnouncementDto): Promise<{ queued: number }> {
     const where = dto.recipientType === 'DIGEST_ENABLED'
       ? { deletedAt: null, status: 'ACTIVE' as const }
       : { deletedAt: null, status: 'ACTIVE' as const };
@@ -2083,6 +2105,23 @@ export class AdminService {
         ctaUrl: dto.ctaUrl,
       });
     }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'email.announcement_sent',
+        entityType: 'System',
+        metadata: {
+          subject: dto.subject,
+          title: dto.title,
+          theme: dto.theme ?? 'blue',
+          recipientType: dto.recipientType,
+          queued: emails.length,
+          ctaLabel: dto.ctaLabel,
+          ctaUrl: dto.ctaUrl,
+        },
+      },
+    });
 
     return { queued: emails.length };
   }
