@@ -1,8 +1,8 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-06-01 (Full MD audit + corrections: C3 marked done, trust score async, seeds enabled, fee corrected to 10%, verification strategy updated, duplicate revenue items deduplicated, broken emojis fixed)
+> Last updated: 2026-06-10 (BullMQ queue migration done, trust gates implemented, Stripe deferred, deposit system live, admin communications + weekly digest + announcement emailer implemented, all markdown docs updated)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms supported, all admin-toggleable) | Platform Fees Live (C3) | Forum & Chat Implemented | Avatar Upload Implemented | Phases 11.5-15 Pending
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms, 3 OAuth auto-verified) | Platform Fees Live | Deposit System Live (PayMongo/PayPal/USDT) | Real-Time Events (all 3 phases) | Admin Communications + Weekly Digest + Trust Gates Implemented | Phase 11.5 (Trust Gates ✅) | Phase 15 Partially Complete (PayMongo/USDT live, Stripe ⛔ deferred)
 
 ---
 
@@ -39,7 +39,7 @@
 - [✅] Add reCAPTCHA v3 on registration and login -- FIXED
   - **Impact**: RESOLVED - token generation now working via GoogleReCaptchaProvider in auth layout
   - **Risk**: MITIGATED
-  - **Status**: register + login fully working; forgot-password pending (page not implemented yet)
+  - **Status**: register + login + forgot-password fully working
   - **Effort**: 4-6 hours (Google reCAPTCHA integration) + 2-4 hours (debugging)
 - [✅] Add 2FA for admin accounts (TOTP via otplib)
   - **Impact**: Admin accounts protected with TOTP + 8 backup codes + optional Access PIN
@@ -48,24 +48,21 @@
   - **Effort**: 8-12 hours (2FA implementation, backup codes, enforcement, PIN gate)
 
 ### Performance (HIGH)
-- [✅] Move trust score recalculation to async (non-blocking)
-  - **Impact**: `void this.recalculateTrustScore(userId).catch(() => null)` — fire-and-forget async call
-  - **Risk**: MITIGATED — no longer blocks API response
-  - **Status**: DONE — already async in `AntiAbuseService`
-  - **Note**: Full BullMQ queue migration remains a future scalability improvement (Phase 16)
-- [🟠] Move analytics snapshot generation to BullMQ queue
-  - **Impact**: Currently synchronous, blocks cron job, potential timeout
-  - **Risk**: MEDIUM - missed analytics snapshots
-  - **Timeline**: Week 1, Day 2
-  - **Effort**: 3-4 hours (queue worker implementation)
+- [✅] Move trust score recalculation to BullMQ queue
+  - **Impact**: `AntiAbuseService.queueRecalculate()` enqueues to `trust-score` BullMQ queue; `TrustScoreProcessor` handles async recalculation + 1h Redis cache
+  - **Risk**: MITIGATED — crash-safe, non-blocking, cached
+  - **Status**: DONE — fully queued 2026-06-10
+- [✅] Move analytics snapshot generation to BullMQ queue — **DONE 2026-06-10**
+  - **Impact**: `AnalyticsService.takeDailySnapshot()` now enqueues to `analytics` BullMQ queue; `AnalyticsProcessor` handles async computation
+  - **Risk**: MITIGATED — no longer synchronous; cron crash-safe
+  - **Timeline**: Completed 2026-06-10
 
 ### Infrastructure (HIGH)
-- [🟠] Implement Redis caching strategy
-  - **Impact**: No caching, unnecessary database load
-  - **Risk**: MEDIUM - database bottleneck at scale
-  - **Timeline**: Week 1, Day 5-6
-  - **Effort**: 8-12 hours (cache layer implementation)
-  - **Scope**: User profiles (1h TTL), campaign listings (5m TTL), leaderboard (15m TTL), trust scores (1h TTL)
+- [🟠] Implement Redis caching strategy — **PARTIALLY DONE**
+  - **Implemented**: Campaign browse (5m TTL), leaderboard (15m TTL), trust scores (1h TTL) via ioredis
+  - **Remaining**: User profile caching (1h TTL), CurrencyService (currently in-memory, lost on restart)
+  - **Risk**: LOW — partial caching reduces DB load; user profiles still hit DB every request
+  - **Effort**: 2-3 hours (user profile cache + CurrencyService Redis migration)
 - [✅] Add database backup strategy documentation
   - **Impact**: Backup/disaster recovery process documented in DEPLOYMENT.md
   - **Risk**: MITIGATED - backup strategy documented with retention policy, cron jobs, restore procedures
@@ -495,13 +492,13 @@
 - [🟡] Flag suspicious proof patterns (identical images across users)
 - [🟡] EXIF data analysis for proof images
 
-**Progressive Trust Gates**
-- [🟡] Implement trust score-based access restrictions
-- [🟡] New users (<30 trust): 5 tasks/day, no campaigns, must verify email
-- [🟡] Low trust (30-50): 20 tasks/day, campaigns up to 100 credits
-- [🟡] Medium trust (50-70): Full access
-- [🟡] High trust (70-80): Priority access, reduced fees (12%)
-- [🟡] Verified (80-100): Full trust, premium features, minimum fees (10%)
+**Progressive Trust Gates ✅ IMPLEMENTED 2026-06-10**
+- [✅] Trust score-based access restrictions enforced in `TasksService.assignTask()` and `CampaignsService.create()`
+- [✅] NEW (0–20): 5 tasks/day, no campaigns, email verification required
+- [✅] LOW (21–40): 20 tasks/day, campaigns up to 100 credits
+- [✅] MEDIUM (41–60): Full access
+- [✅] HIGH (61–80): Priority access, reduced fees
+- [✅] VERIFIED (81–100): Full trust, premium features, minimum fees
 
 **Machine Learning Fraud Detection**
 - [🟢] Train model on historical data (legitimate vs fraudulent users)
@@ -665,7 +662,7 @@
 - [✅] reCAPTCHA v3 on `/login` -- added `useGoogleReCaptcha` hook + `LoginDto.recaptchaToken` + backend validation
 - [✅] reCAPTCHA v2/v3 switch in admin panel with cache invalidation
 - [✅] Score threshold 0.5; gated by `ENABLE_RECAPTCHA=true` + `RECAPTCHA_SECRET` env vars
-- [🟡] reCAPTCHA v3 on `/forgot-password` (pending -- page not yet implemented)
+- [✅] reCAPTCHA on `/forgot-password` -- frontend v2/v3 wiring + backend validation in `AuthService.forgotPassword()`
 - [🟡] reCAPTCHA v2 fallback for high-risk actions (pending)
 
 **Email flows**
@@ -673,9 +670,9 @@
 - [✅] Branded HTML email templates — dark-themed (Engganyo `#0d1117` bg, gradient accent bars): verification, password reset, 2FA code
 - [🟡] Welcome email with onboarding tips after first login
 - [🟡] Email for credit transactions above threshold (anti-fraud alert)
-- [🟡] Weekly digest email (tasks completed, credits earned, streak)
-- [🟡] Unsubscribe / notification preferences in settings
-- [🟡] Disposable email detection (block temp-mail.org domains)
+- [✅] Weekly digest email (tasks completed, credits earned, streak) — **DONE** via `WeeklyDigestService`, BullMQ-queued, admin trigger + test endpoints, user opt-out via `weeklyDigestEnabled`
+- [🟡] Unsubscribe / notification preferences in settings (partially done — `weeklyDigestEnabled` pref exists)
+- [✅] Disposable email detection (block temp-mail.org domains) — **DONE** in `AuthService.register()` per ABR-005
 
 **Two-factor authentication (2FA)**
 - [✅] TOTP 2FA (Google Authenticator / Authy) via `otplib` — `POST /auth/2fa/setup`, `POST /auth/2fa/verify`, `POST /auth/2fa/confirm`
@@ -718,11 +715,22 @@
 - [✅] Revenue dashboard in admin analytics — `/admin/revenue` with date range filter and daily breakdown
 
 **Fiat payments**
-- [🟠] Stripe integration — buy credit packs ($5 = 500 credits, $20 = 2200 credits, etc.)
-- [🟠] Stripe webhook handler — credit wallet on `payment_intent.succeeded`
-- [🟠] Invoice / receipt email after purchase
-- [🟠] Admin configurable credit pack pricing
-- [🟠] Payment failure handling and retry logic
+- [⛔] Stripe integration — **DEFERRED 2026-06-10** (not yet applicable/available). Will re-evaluate when Stripe account is approved.
+- [⛔] Stripe webhook handler — DEFERRED
+- [�] Invoice / receipt email after purchase — pending Stripe undefer
+- [�] Admin configurable credit pack pricing — pending Stripe undefer
+- [�] Payment failure handling and retry logic — pending Stripe undefer
+
+**Deposit System (PayMongo / PayPal / USDT) ✅ IMPLEMENTED (Phase 12d)**
+- [✅] `DepositPackage` model: id, usdAmount, bonusCredits, label, isPopular, isActive, sortOrder
+- [✅] `GET /wallet/deposit/packages` — active packages with creditsBase, creditsTotal, phpEquivalent
+- [✅] `POST /wallet/deposit/initiate` — initiates deposit with packageId, method, optional txHash
+- [✅] PayMongo payment links — create link, webhook (paid/failed), auto-cancel cron, retry/backoff
+- [✅] PayPal Orders API — create order, capture, webhook
+- [✅] USDT auto-deposit (BSC + Base) — EVM wallet connect, sign tx, auto-submit
+- [✅] USDT manual deposit — address + txHash submission
+- [✅] Admin deposit management at `/admin/finances`
+- [✅] Deposit package CRUD + seed at `/admin/finances`
 
 **Crypto payments (USDT)**
 - [🟡] USDT payment via Tron (TRC-20) or Ethereum (ERC-20)
@@ -834,12 +842,12 @@
 | 9 | Analytics | ✅ Complete | - |
 | 10 | Production Hardening | ✅ Complete | - |
 | 11 | Social Verification Engine | 🟠 Partially Implemented | 🟠 HIGH |
-| 11.5 | Anti-Abuse Enhancements | ⏳ Pending | 🟠 HIGH |
+| 11.5 | Anti-Abuse Enhancements | 🟠 Partially Done (trust gates ✅) | 🟠 HIGH |
 | 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
 | 12.5 | UX & Onboarding Improvements | 🟠 Partially Done | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
-| 14 | Security & Trust Hardening | 🟡 Mostly Complete | 🟡 MEDIUM |
-| 15 | Payments & Monetisation | 🟠 Partially Complete | 🟠 HIGH |
+| 14 | Security & Trust Hardening | 🟡 Mostly Complete (weekly digest ✅, disposable email ✅) | 🟡 MEDIUM |
+| 15 | Payments & Monetisation | 🟠 Partially Complete (deposits ✅, Stripe ⛔ deferred) | 🟠 HIGH |
 | 16 | Scalability Improvements | ⏳ Pending | 🟠 HIGH |
 | 17 | Developer Experience Improvements | ⏳ Pending | 🟡 MEDIUM |
 
@@ -851,10 +859,10 @@
 - [✅] ~~Platform fees on campaign creation~~ — 10% base fee, config-driven, `PlatformRevenue` model, admin dashboard at `/admin/revenue`
 - [✅] ~~Revenue tracking model~~ — `PlatformRevenue` model with daily aggregation + `GET /admin/revenue` API
 
-### Priority 2 — Performance
-- [🟠] Move analytics snapshot generation to BullMQ queue
-- [🟠] Implement Redis caching strategy (user profiles 1h, campaigns 5m, leaderboard 15m)
-- [🟠] Move trust score recalculation to dedicated BullMQ queue (currently fire-and-forget async)
+### Priority 2 — Performance ✅ MOSTLY DONE 2026-06-10
+- [✅] Move analytics snapshot generation to BullMQ queue — DONE 2026-06-10
+- [✅] Move trust score recalculation to dedicated BullMQ queue — DONE 2026-06-10
+- [🟠] Redis caching: user profiles (1h) — campaign/leaderboard/trust score caching already implemented; user profiles pending
 
 ### Priority 3 — UX Polish
 - [🟠] Onboarding walkthrough for new users
@@ -876,11 +884,12 @@
 | No 2FA for admin accounts | CRITICAL | MEDIUM | TOTP + backup codes + enforcement + Access PIN live | ✅ MITIGATED |
 | No rate limiting on sensitive endpoints | HIGH | HIGH | Add @UserRateLimit decorators | ✅ MITIGATED |
 | No CAPTCHA on registration | HIGH | HIGH | reCAPTCHA v2/v3 switch with admin panel + cache invalidation | ✅ MITIGATED |
-| Synchronous trust score calculation | MEDIUM | HIGH | Fire-and-forget async recalculation (BullMQ queue planned for Phase 16) | 🟠 HIGH |
-| No caching strategy | MEDIUM | HIGH | Implement Redis caching | 🟠 HIGH |
+| Trust score calculation | MEDIUM | HIGH | BullMQ queue + 1h Redis cache | ✅ MITIGATED (2026-06-10) |
+| Analytics snapshot sync | MEDIUM | HIGH | BullMQ queue via AnalyticsProcessor | ✅ MITIGATED (2026-06-10) |
+| No full caching strategy | MEDIUM | MEDIUM | Campaign/leaderboard/trust score cached; user profiles pending | 🟠 PARTIAL |
 | No backup documentation | HIGH | LOW | Documented in DEPLOYMENT.md with cron jobs, retention, restore | ✅ MITIGATED |
 | No social verification | HIGH | HIGH | Partial: YouTube/Twitch/Spotify OAuth; others manual link | 🟠 HIGH |
-| No monetization | CRITICAL | MEDIUM | Platform fees live (10%); Stripe integration pending | 🟠 HIGH |
+| No monetization | HIGH | MEDIUM | Platform fees live (10%); deposit system live (PayMongo/USDT); Stripe deferred | 🟠 PARTIAL |
 | Single point of failure (VPS) | HIGH | LOW | Plan Kubernetes migration | 🟡 MEDIUM |
 
 ---

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Mail, Send, Loader2, CheckCircle2, AlertTriangle,
   Play, Users, Eye, XCircle, Activity,
   Megaphone, Palette, FileText, Type, MousePointerClick,
+  Calendar,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 
@@ -32,6 +33,13 @@ interface DigestStats {
   weeklyDigestDisabled: number;
 }
 
+interface TemplatePlaceholder {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'date';
+  example: string;
+}
+
 interface AnnouncementTemplate {
   id: string;
   name: string;
@@ -39,7 +47,23 @@ interface AnnouncementTemplate {
   title: string;
   bodyHtml: string;
   theme: 'blue' | 'amber' | 'rose';
+  placeholders: TemplatePlaceholder[];
 }
+
+const KNOWN_ROUTES = [
+  { label: 'Dashboard', value: 'https://engganyo.com/dashboard' },
+  { label: 'Wallet', value: 'https://engganyo.com/wallet' },
+  { label: 'Tasks', value: 'https://engganyo.com/tasks' },
+  { label: 'Campaigns', value: 'https://engganyo.com/campaigns' },
+  { label: 'Leaderboard', value: 'https://engganyo.com/leaderboard' },
+  { label: 'Achievements', value: 'https://engganyo.com/achievements' },
+  { label: 'Missions', value: 'https://engganyo.com/missions' },
+  { label: 'Forum', value: 'https://engganyo.com/forum' },
+  { label: 'Settings', value: 'https://engganyo.com/settings' },
+  { label: 'Profile', value: 'https://engganyo.com/profile' },
+  { label: 'Discover', value: 'https://engganyo.com/discover' },
+  { label: 'Custom URL', value: 'custom' },
+];
 
 export default function CommunicationsPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null; message: string } | null>(null);
@@ -278,7 +302,10 @@ function AnnouncementComposer({
   const [recipientType, setRecipientType] = useState<'ALL_ACTIVE' | 'DIGEST_ENABLED'>('ALL_ACTIVE');
   const [ctaLabel, setCtaLabel] = useState('');
   const [ctaUrl, setCtaUrl] = useState('');
+  const [ctaRoute, setCtaRoute] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [templateValues, setTemplateValues] = useState<Record<string, string>>({});
+  const [showPreview, setShowPreview] = useState(false);
 
   const templatesQuery = useQuery({
     queryKey: ['admin', 'announcement-templates'],
@@ -287,6 +314,8 @@ function AnnouncementComposer({
       return res.data.data;
     },
   });
+
+  const currentTemplate = templatesQuery.data?.find((t) => t.id === selectedTemplate);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -298,11 +327,13 @@ function AnnouncementComposer({
         theme,
         ctaLabel: ctaLabel || undefined,
         ctaUrl: ctaUrl || undefined,
+        templateValues: Object.keys(templateValues).length > 0 ? templateValues : undefined,
       });
       return res.data.data;
     },
     onSuccess: (data) => {
       onStatus({ type: 'success', message: `Announcement queued for ${data.queued} users` });
+      setShowPreview(false);
     },
     onError: (err) => {
       onStatus({ type: 'error', message: getApiErrorMessage(err) });
@@ -311,12 +342,25 @@ function AnnouncementComposer({
 
   const applyTemplate = (id: string) => {
     const tmpl = templatesQuery.data?.find((t) => t.id === id);
-    if (!tmpl) return;
+    if (!tmpl) {
+      // Clear all fields when switching to Custom
+      setSubject('');
+      setTitle('');
+      setBody('');
+      setTheme('blue');
+      setTemplateValues({});
+      setSelectedTemplate('');
+      return;
+    }
     setSubject(tmpl.subject);
     setTitle(tmpl.title);
     setBody(tmpl.bodyHtml);
     setTheme(tmpl.theme);
     setSelectedTemplate(id);
+    // Pre-fill templateValues with empty strings for each placeholder
+    const initialValues: Record<string, string> = {};
+    tmpl.placeholders.forEach((p) => { initialValues[p.key] = ''; });
+    setTemplateValues(initialValues);
   };
 
   const themeActive = {
@@ -325,8 +369,83 @@ function AnnouncementComposer({
     rose: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
   };
 
+  // Compute preview text with placeholders replaced
+  const previewSubject = useMemo(() => {
+    let s = subject;
+    if (templateValues) {
+      for (const [key, value] of Object.entries(templateValues)) {
+        s = s.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g'), value || `{{${key}}}`);
+      }
+    }
+    return s;
+  }, [subject, templateValues]);
+
+  const previewTitle = useMemo(() => {
+    let s = title;
+    if (templateValues) {
+      for (const [key, value] of Object.entries(templateValues)) {
+        s = s.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g'), value || `{{${key}}}`);
+      }
+    }
+    return s;
+  }, [title, templateValues]);
+
   const canSend = subject.trim() && title.trim() && body.trim();
-  const hasUnfilledPlaceholders = /\{\{[^}]+\}\}/.test(subject) || /\{\{[^}]+\}\}/.test(title) || /\{\{[^}]+\}\}/.test(body);
+  const hasUnfilledPlaceholders = currentTemplate
+    ? currentTemplate.placeholders.some((p) => !templateValues[p.key]?.trim())
+    : /\{\{[^}]+\}\}/.test(subject) || /\{\{[^}]+\}\}/.test(title) || /\{\{[^}]+\}\}/.test(body);
+
+  const renderPlaceholderInput = (p: TemplatePlaceholder) => {
+    const value = templateValues[p.key] ?? '';
+    const setValue = (v: string) => setTemplateValues((prev) => ({ ...prev, [p.key]: v }));
+
+    if (p.type === 'date') {
+      return (
+        <div key={p.key}>
+          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <Calendar className="w-3 h-3" /> {p.label}
+          </label>
+          <input
+            type="date"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/50 [color-scheme:dark]"
+          />
+          <p className="text-[10px] text-zinc-600 mt-1">Example: {p.example}</p>
+        </div>
+      );
+    }
+    if (p.type === 'textarea') {
+      return (
+        <div key={p.key}>
+          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <FileText className="w-3 h-3" /> {p.label}
+          </label>
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            rows={3}
+            placeholder={p.example}
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 leading-relaxed"
+          />
+        </div>
+      );
+    }
+    return (
+      <div key={p.key}>
+        <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <Type className="w-3 h-3" /> {p.label}
+        </label>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={p.example}
+          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="card-glass rounded-xl p-6 mb-6">
@@ -397,7 +516,19 @@ function AnnouncementComposer({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      {/* Placeholder input fields */}
+      {currentTemplate && currentTemplate.placeholders.length > 0 && (
+        <div className="mb-4 p-4 rounded-lg bg-surface-hover/50 border border-surface-border/50">
+          <h3 className="text-xs font-medium text-zinc-400 mb-3 flex items-center gap-1.5">
+            <Type className="w-3 h-3" /> Template variables
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {currentTemplate.placeholders.map((p) => renderPlaceholderInput(p))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
             <Palette className="w-3 h-3" /> Theme
@@ -430,6 +561,9 @@ function AnnouncementComposer({
             <option value="DIGEST_ENABLED">Digest-enabled only</option>
           </select>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
             <MousePointerClick className="w-3 h-3" /> CTA button label
@@ -441,12 +575,37 @@ function AnnouncementComposer({
             className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           />
         </div>
+        {ctaLabel && (
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+              <MousePointerClick className="w-3 h-3" /> CTA destination
+            </label>
+            <select
+              value={ctaRoute}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCtaRoute(val);
+                if (val === 'custom') {
+                  setCtaUrl('');
+                } else {
+                  setCtaUrl(val);
+                }
+              }}
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+            >
+              <option value="">Select a page…</option>
+              {KNOWN_ROUTES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      {ctaLabel && (
+      {ctaRoute === 'custom' && (
         <div className="mb-4">
           <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
-            <MousePointerClick className="w-3 h-3" /> CTA button URL
+            <MousePointerClick className="w-3 h-3" /> Custom URL
           </label>
           <input
             value={ctaUrl}
@@ -457,11 +616,51 @@ function AnnouncementComposer({
         </div>
       )}
 
+      {/* Preview toggle */}
+      {canSend && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setShowPreview((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+          >
+            <Eye className="w-3 h-3" />
+            {showPreview ? 'Hide preview' : 'Show preview'}
+          </button>
+
+          {showPreview && (
+            <div className="mt-3 p-4 rounded-lg bg-surface-hover border border-surface-border/50 space-y-2">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider">Preview</p>
+              <p className="text-sm font-medium text-white">{previewSubject}</p>
+              <p className="text-sm font-semibold text-white">{previewTitle}</p>
+              <div
+                className="text-sm text-zinc-400 leading-relaxed [&_a]:text-brand-400 [&_a]:underline [&_strong]:text-white"
+                dangerouslySetInnerHTML={{ __html: body.replace(/\{\{[^}]+\}\}/g, (m) => {
+                  const key = m.replace(/[{}]/g, '').trim();
+                  return templateValues[key] || m;
+                }) }}
+              />
+              {ctaLabel && ctaUrl && (
+                <div className="pt-2">
+                  <span className="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white bg-brand-500/80">
+                    {ctaLabel} →
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-3 pt-1">
         <button
           type="button"
           onClick={() => {
             if (!canSend) return;
+            if (hasUnfilledPlaceholders) {
+              onStatus({ type: 'error', message: 'Please fill in all template variables before sending.' });
+              return;
+            }
             if (window.confirm(`Send this announcement to all ${recipientType === 'ALL_ACTIVE' ? 'active' : 'digest-enabled'} users?`)) {
               sendMutation.mutate();
             }
@@ -480,7 +679,7 @@ function AnnouncementComposer({
           <p className="text-xs text-zinc-600">Subject, title and body are required.</p>
         )}
         {canSend && hasUnfilledPlaceholders && (
-          <p className="text-xs text-rose-500">⚠ Replace all <code className="bg-rose-500/10 px-1 rounded">&#123;&#123;placeholder&#125;&#125;</code> values before sending.</p>
+          <p className="text-xs text-rose-500">⚠ Fill in all template variables before sending.</p>
         )}
       </div>
     </div>

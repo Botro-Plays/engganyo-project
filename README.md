@@ -127,6 +127,16 @@ npm test --workspace=apps/api -- --coverage
 | `/admin/reports` | Report resolution queue | Admin+ |
 | `/admin/audit-log` | Full audit trail | Admin+ |
 | `/admin/analytics` | Platform-wide analytics dashboard | Admin+ |
+| `/admin/revenue` | Platform earnings (campaign fees + daily breakdown) | Admin+ |
+| `/admin/server-config` | Platform config toggles (fees, reCAPTCHA, leaderboard, crypto) | Admin+ |
+| `/admin/finances` | Deposit management + package CRUD | Admin+ |
+| `/admin/communications` | Announcement emails + weekly digest triggers | Admin+ |
+| `/forum` | Community forum (topics, replies, reactions) | Auth |
+| `/forum/[id]` | Topic detail with threaded replies | Auth |
+| `/forum/new` | Create new topic | Auth |
+| `/notifications` | Notification center | Auth |
+| `/achievements` | Achievement gallery | Auth |
+| `/missions` | Daily missions | Auth |
 
 > Auth = requires login · Admin+ = requires `ADMIN`, `MODERATOR`, or `SUPER_ADMIN` role
 
@@ -142,8 +152,17 @@ npm test --workspace=apps/api -- --coverage
 | `/gamification` | XP, levels, achievements, daily missions |
 | `/referrals` | Referral codes, reward tracking |
 | `/anti-abuse` | Reports, trust score |
-| `/admin` | User mgmt, campaign moderation, credits, audit log |
+| `/admin` | User mgmt, campaign moderation, credits, audit log, analytics, revenue, server-config |
+| `/admin/email` | Announcement emails, weekly digest trigger/test, email templates |
+| `/admin/finances` | Deposit review + package CRUD |
 | `/analytics` | Platform overview, campaign funnel, personal stats |
+| `/wallet/deposit` | Deposit packages, initiate deposit |
+| `/paymongo` | PayMongo payment link create + webhook |
+| `/paypal` | PayPal order create + capture + webhook |
+| `/events` | WebSocket-backed real-time event gateway |
+| `/forum` | Forum topics + replies + reactions |
+| `/chat` | AI-powered chat support + human escalation |
+| `/uploads` | Avatar + proof screenshot uploads (multer, JWT-protected) |
 | `/health` | DB + Redis liveness probe (no auth) |
 
 Full endpoint reference: **http://localhost:3001/api/docs**
@@ -186,6 +205,15 @@ Copy `.env.example` → `.env` for development, `.env.production.example` → `.
 | `ENCRYPTION_KEY` | 32-byte hex key for field encryption |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Seed admin credentials |
 | `SENTRY_DSN` | *(Production)* Sentry error tracking DSN |
+| `PAYMONGO_SECRET_KEY` | PayMongo secret key (e.g. `sk_live_...`) |
+| `PAYMONGO_WEBHOOK_SECRET` | PayMongo webhook verification secret |
+| `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | PayPal Orders API credentials |
+| `PAYPAL_WEBHOOK_ID` | PayPal webhook ID for event verification |
+| `GROQ_API_KEY` | Groq API key for AI chat support |
+| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | Google reCAPTCHA v3 site key (frontend) |
+| `RECAPTCHA_SECRET` | Google reCAPTCHA v3 secret key (backend) |
+| `ENABLE_RECAPTCHA` | Enable reCAPTCHA validation (`true`/`false`) |
+| `ENABLE_EMAIL_VERIFICATION` | Require email verification on login (`true` in prod) |
 
 Generate secrets with: `openssl rand -hex 64`
 
@@ -217,6 +245,18 @@ See `.github/workflows/ci.yml`.
 - [x] **Phase 10+** — Daily reward refactor (moved to dashboard)
 - [x] **Phase 10+** — React Query auth-aware hydration (social accounts)
 - [x] **Phase 10+** — Strict TypeScript compliance (no any types, no eslint-disable)
+- [x] **Phase 10.5** — Forum system (ForumTopic/Reply/Reaction, threaded replies, reactions, moderation, campaign-linked topics)
+- [x] **Phase 10.5** — AI Chat support (Groq API, ChatConversation/Message, human escalation, anonymous support)
+- [x] **Phase 10.5** — Real-time events (all 3 phases: wallet/deposits, tasks/campaigns, forum/gamification) via Socket.IO + Redis adapter; `refetchInterval` extended to 60s fallback
+- [x] **Phase 11** — Social verification: YouTube, Twitch, Spotify (OAuth + API); Twitter/X, TikTok, Instagram, Facebook, Telegram, Discord, TrustPilot, Google Reviews (manual proof); all 11 platforms admin-toggleable
+- [x] **Phase 11.5** — Progressive trust gates enforced in `TasksService` + `CampaignsService` (5 trust levels: NEW/LOW/MEDIUM/HIGH/VERIFIED)
+- [x] **Phase 12d** — Deposit system (PayMongo GCash/card, PayPal, USDT BEP-20, USDT Base, manual USDT); `DepositPackage` model; 3-step deposit UI; admin finances page
+- [x] **Phase 14+** — Weekly digest email (BullMQ-queued, admin trigger + test, user opt-out via `weeklyDigestEnabled`)
+- [x] **Phase 14+** — Announcement emailer (themes: blue/amber/rose, recipients: all/digest-enabled, placeholder guard, audit logged)
+- [x] **Phase 14+** — Disposable email detection on registration
+- [x] **Phase 14+** — Forgot-password frontend page
+- [x] **Phase 15** — Platform fees (10% base, configurable, `PlatformRevenue` model, `/admin/revenue` dashboard)
+- [x] **Phase 16 partial** — BullMQ queues for trust score recalculation + analytics snapshots; partial Redis caching (campaigns 5m, leaderboard 15m, trust scores 1h)
 
 ## License
 

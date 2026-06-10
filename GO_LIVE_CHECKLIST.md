@@ -1,6 +1,6 @@
 # ENGGANYO — Go-Live Checklist
 
-> **Living document** — updated after each session. Last updated: 2026-06-02 (Notification System Wiring Phase 1 & 2 implemented — subject for testing)
+> **Living document** — updated after each session. Last updated: 2026-06-10 (Markdown audit + BullMQ queue migration done + trust gates implemented + Stripe deferred)
 > This is the single source of truth for what needs to happen before the platform generates revenue.
 
 ---
@@ -68,6 +68,7 @@ After C1–C3 are complete, proceed here.
 - [ ] Test: create campaign → verify fee deducted → verify fee tracked
 
 ### Week 3–4 — Stripe Integration
+- **Status: ⛔ DEFERRED** — Stripe is not yet applicable/available for this platform (2026-06-10). Will re-evaluate when Stripe account is approved. Deposit system (PayMongo, PayPal, USDT) is live as the current revenue channel.
 - [ ] Add `@stripe/stripe-js` to web, `stripe` to API
 - [ ] Stripe account setup (production keys)
 - [ ] `POST /payments/stripe/session` — create checkout session for credit packs
@@ -75,7 +76,7 @@ After C1–C3 are complete, proceed here.
 - [ ] Credit packs UI: $5 (500), $20 (2200), $50 (6000), $100 (13000)
 - [ ] Purchase history in `/dashboard/wallet`
 - [ ] **Why**: Users need a way to buy credits with real money.
-- **Effort**: 5–7 days
+- **Effort**: 5–7 days (when undeferred)
 
 ### Week 5 — Polish & Launch
 - [ ] End-to-end test: buy credits → create campaign → complete task → earn credits
@@ -94,24 +95,22 @@ After revenue is flowing, improve scale and trust.
 - [ ] TikTok OAuth + API verification
 - [ ] Instagram OAuth + API verification
 - [ ] Facebook OAuth + API verification
-- [ ] **Why**: 5/8 platforms are manual-only = easy to fake completions.
+- [ ] **Why**: 4/11 platforms are manual-only = easy to fake completions.
 - **Effort**: 7–10 days (mostly OAuth app registration + API testing)
 
 ### Week 8 — Performance
-- [ ] Move trust score recalculation to BullMQ queue
-- [ ] Move analytics snapshot to BullMQ queue
-- [ ] Redis caching: user profiles (1h), campaigns (5m), leaderboard (15m)
-- [ ] **Why**: Synchronous trust score blocks API response.
-- **Effort**: 3–4 days
+- [x] Move trust score recalculation to BullMQ queue — **✅ DONE 2026-06-10** (`trust-score` BullMQ queue + `TrustScoreProcessor` + 1h Redis cache)
+- [x] Move analytics snapshot to BullMQ queue — **✅ DONE 2026-06-10** (`analytics` BullMQ queue + `AnalyticsProcessor`)
+- [ ] Redis caching: user profiles (1h) — campaign/leaderboard/trust score caching already done; user profiles pending
+- **Status: ✅ MOSTLY DONE** — BullMQ migration complete; full profile caching is the remaining item
 
 ### Week 9 — Trust Gates
-- [ ] New users (<30 trust): 5 tasks/day, no campaigns, email verification required
-- [ ] Low trust (30–50): 20 tasks/day, campaigns up to 100 credits
-- [ ] Medium trust (50–70): full access
-- [ ] High trust (70–80): reduced fees (12%)
-- [ ] Verified (80–100): minimum fees (10%), premium features
-- [ ] **Why**: Prevents abuse by restricting untrusted users.
-- **Effort**: 3–4 days
+- [x] New users (0–20 trust): 5 tasks/day, no campaigns — **✅ DONE 2026-06-10**
+- [x] Low trust (21–40): 20 tasks/day, campaigns up to 100 credits — **✅ DONE 2026-06-10**
+- [x] Medium trust (41–60): full access — **✅ DONE 2026-06-10**
+- [x] High trust (61–80): priority access, reduced fees — **✅ DONE 2026-06-10**
+- [x] Verified (81–100): full trust, premium features — **✅ DONE 2026-06-10**
+- **Status: ✅ COMPLETED** — trust-level gates enforced in `TasksService.assignTask()` and `CampaignsService.create()`
 
 ### Week 10 — Final Polish
 - [ ] Onboarding walkthrough for new users
@@ -194,4 +193,5 @@ After revenue is flowing, improve scale and trust.
 ---
 
 **After notifications are wired:**
-2. **Revenue launch**: Stripe integration for credit purchases
+2. **Revenue launch**: PayMongo/PayPal/USDT deposits live. Stripe deferred (not yet applicable). 
+3. **Next priorities**: Onboarding walkthrough, rewards store, ToS fee disclosure, social verification expansion (Twitter/X, TikTok, Instagram, Facebook)

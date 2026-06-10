@@ -234,7 +234,7 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 | Phase | Scope | Status | Priority |
 |---|---|---|---|
-| 0 | Critical Security & Infrastructure | 🔴 CRITICAL | 🔴 CRITICAL |
+| 0 | Critical Security & Infrastructure | ✅ Complete | - |
 | 1 | Architecture · Infra · DB Schema | ✅ Complete | - |
 | 2 | Authentication System | ✅ Complete | - |
 | 3 | User Profile System | ✅ Complete | - |
@@ -245,13 +245,13 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 | 8 | Admin Dashboard | ✅ Complete | - |
 | 9 | Analytics | ✅ Complete | - |
 | 10 | Production hardening | ✅ Complete | - |
-| 11 | Social Verification Engine | ⏳ Pending | 🟠 HIGH |
-| 11.5 | Anti-Abuse Enhancements | ⏳ Pending | 🟠 HIGH |
+| 11 | Social Verification Engine | 🟠 Partially Done (YouTube/Twitch/Spotify ✅) | 🟠 HIGH |
+| 11.5 | Anti-Abuse Enhancements | 🟠 Partially Done (trust gates ✅) | 🟠 HIGH |
 | 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
-| 12.5 | UX & Onboarding Improvements | ⏳ Pending | 🟡 MEDIUM |
+| 12.5 | UX & Onboarding Improvements | 🟠 Partially Done (notifications ✅, realtime ✅) | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
-| 14 | Security & Trust Hardening | ⏳ Pending | 🔴 CRITICAL |
-| 15 | Payments & Monetisation | ⏳ Pending | 🟠 HIGH |
+| 14 | Security & Trust Hardening | 🟡 Mostly Complete (weekly digest ✅, disposable email ✅) | � MEDIUM |
+| 15 | Payments & Monetisation | 🟠 Partially Complete (deposits ✅, Stripe ⛔ deferred) | 🟠 HIGH |
 | 16 | Scalability Improvements | ⏳ Pending | 🟠 HIGH |
 | 17 | Developer Experience Improvements | ⏳ Pending | 🟡 MEDIUM |
 
@@ -287,24 +287,24 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - ✅ Nginx `/uploads/` proxy route (avatars → public, proofs → JWT-protected)
 - ✅ Docker privilege-dropping entrypoint for volume permissions
 
-### Critical Gaps (Phase 0 - Immediate Action Required)
-- 🔴 Email verification disabled by default
-- 🔴 No 2FA for admin accounts
-- ✅ reCAPTCHA v2/v3 on registration and login (admin-panel switchable, cache invalidation)
-- 🟠 Synchronous trust score calculation (blocks API)
-- 🟠 Synchronous analytics snapshots (blocks cron)
-- 🟠 No caching strategy
+### Completed Gaps (Phase 0 - All Resolved)
+- ✅ Email verification enforced in production (`ENABLE_EMAIL_VERIFICATION=true`, login blocks PENDING_VERIFICATION)
+- ✅ 2FA for admin accounts (TOTP + backup codes + `AdminTwoFactorGuard` + optional Access PIN)
+- ✅ reCAPTCHA v2/v3 on registration + login (admin-panel switchable, cache invalidation)
+- ✅ Trust score recalculation → BullMQ queue (`trust-score` queue + `TrustScoreProcessor` + 1h Redis cache, 2026-06-10)
+- ✅ Analytics snapshots → BullMQ queue (`analytics` queue + `AnalyticsProcessor`, 2026-06-10)
+- ✅ Partial caching: campaign browse (5m), leaderboard (15m), trust scores (1h) — user profiles still uncached
 - ✅ Database backup strategy documented (DEPLOYMENT.md: retention policy, cron jobs, restore procedures)
 
 ### Pending (Phases 11-17)
 - Social verification via OAuth APIs (PARTIALLY IMPLEMENTED: YouTube, Twitch, Spotify working; Twitter/X, TikTok, Instagram, Facebook manual link only)
-- Enhanced anti-abuse with behavioral analysis
-- Community and social features
-- UX and onboarding improvements
+- Enhanced anti-abuse with behavioral analysis (task timing, social graph, image proof analysis)
+- Community and social features (follow/unfollow, campaign reviews, user profiles)
+- UX and onboarding improvements (onboarding walkthrough, PWA, mobile responsiveness)
 - Gamification 2.0 with perks and rewards store
-- Security hardening with 2FA and CAPTCHA
-- Payments and monetization with Stripe
-- Scalability improvements with caching and read replicas
+- Security hardening additions (user-facing 2FA enforcement, SMS 2FA)
+- Payments and monetization: deposit system (PayMongo/PayPal/USDT) live; Stripe ⛔ DEFERRED (not yet applicable/available)
+- Scalability improvements (user profile caching, read replicas, PgBouncer)
 - Developer experience improvements
 
 ---
@@ -315,9 +315,10 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - Single VPS with Docker Compose
 - Single PostgreSQL instance
 - Single Redis instance
-- No caching layer
+- Partial caching (campaigns 5m, leaderboard 15m, trust scores 1h; user profiles uncached)
+- BullMQ for email, analytics snapshots, trust score recalculation
 - No read replicas
-- Manual deployment
+- Fully automated CI/CD deployment (GitHub Actions → GHCR → VPS SSH)
 
 ### Scale Triggers
 
@@ -394,11 +395,21 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 ## Last Updated
 
-**Last Updated**: 2026-05-29
-**Next Review**: 2026-08-29 (quarterly)
+**Last Updated**: 2026-06-10
+**Next Review**: 2026-08-31 (quarterly)
 **Reviewed By**: Project Architect (Cascade)
 
-**Changes in this update**:
+**Changes in this update (2026-06-10)**:
+- Updated Security Layers #12 (anti-abuse): added disposable email, trust gates, task timing reference
+- Updated Security Layers #13 (Redis caching): campaign/leaderboard/trust score caching noted as live
+- Updated Security Layers #14 (BullMQ): analytics + trust score queues noted as live
+- Updated Security Gaps: removed stale items (email verification, 2FA, reCAPTCHA all resolved)
+- Updated Phase 0 Critical Gaps: all resolved
+- Updated Pending (Phases 11-17): Stripe noted as deferred
+- Updated Development Phases table: Phase 0 ✅, Phases 11/11.5/12.5/14/15 updated
+- Updated Scalability Strategy: current scale now notes partial caching + BullMQ + automated CI/CD
+
+**Changes in previous update (2026-05-29)**:
 - Added avatar upload feature to completed features
 - Updated deployment section: fully automated GitHub Actions → GHCR → VPS
 - Updated static assets: avatars public, proofs JWT-protected, nginx `/uploads/` proxy route

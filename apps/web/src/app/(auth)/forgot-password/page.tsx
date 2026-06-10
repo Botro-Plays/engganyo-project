@@ -7,11 +7,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2, Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import ReCAPTCHA from 'react-google-recaptcha';
+import { useRecaptcha } from '@/app/providers';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 
 const forgotSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
+  recaptchaToken: z.string().optional(),
 });
 
 type ForgotFormData = z.infer<typeof forgotSchema>;
@@ -19,6 +23,12 @@ type ForgotFormData = z.infer<typeof forgotSchema>;
 export default function ForgotPasswordPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+
+  // v3 hook
+  const v3Recaptcha = useGoogleReCaptcha();
+  // v2/v3 context
+  const { enabled, version, v2SiteKey } = useRecaptcha();
 
   const {
     register,
@@ -42,8 +52,34 @@ export default function ForgotPasswordPage() {
     },
   });
 
-  const onSubmit = (data: ForgotFormData) => {
+  const onSubmit = async (data: ForgotFormData) => {
     setServerError(null);
+
+    // Generate reCAPTCHA token based on version and enabled status
+    if (enabled) {
+      if (version === 'v2') {
+        if (!recaptchaToken) {
+          setServerError('Please complete the reCAPTCHA checkbox');
+          return;
+        }
+        data.recaptchaToken = recaptchaToken;
+      } else if (version === 'v3') {
+        if (v3Recaptcha?.executeRecaptcha) {
+          try {
+            const token = await v3Recaptcha.executeRecaptcha('forgot_password');
+            if (!token) {
+              setServerError('reCAPTCHA verification failed. Please try again.');
+              return;
+            }
+            data.recaptchaToken = token;
+          } catch (error) {
+            setServerError('reCAPTCHA verification failed. Please try again.');
+            return;
+          }
+        }
+      }
+    }
+
     mutation.mutate(data);
   };
 
@@ -110,6 +146,17 @@ export default function ForgotPasswordPage() {
               <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>
             )}
           </div>
+
+          {/* reCAPTCHA v2 checkbox */}
+          {enabled && version === 'v2' && v2SiteKey && (
+            <div className="flex justify-center mb-4">
+              <ReCAPTCHA
+                sitekey={v2SiteKey}
+                onChange={(token: string | null) => setRecaptchaToken(token)}
+                onExpired={() => setRecaptchaToken(null)}
+              />
+            </div>
+          )}
 
           <button
             type="submit"

@@ -408,11 +408,13 @@
 - Promotional events via `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`
 
 ### MDR-002: Credit Purchase Pricing
-**Status**: Planned (Phase 15)
-**Date**: 2026-05-19
+**Status**: Partially Implemented (deposit system live; Stripe ⛔ DEFERRED)
+**Date**: 2026-05-19 | Updated: 2026-06-10
 **Context**: Credit purchase pricing tiers
-**Decision**: Tiered pricing with volume bonuses
+**Decision**: Tiered pricing with volume bonuses via `DepositPackage` model
+- $1 = 100 credits (base rate for small deposits)
 - $5 = 500 credits (1:100 baseline)
+- $10 = 1050 credits (5% bonus)
 - $20 = 2200 credits (10% bonus)
 - $50 = 6000 credits (20% bonus)
 - $100 = 13000 credits (30% bonus)
@@ -425,11 +427,17 @@
 - Complexity in pricing logic
 - Need for payment processor
 - Chargeback risk
-**Implementation**:
-- Stripe Checkout integration
-- Webhook handler for payment success
-- Credit award on payment confirmation
-- Receipt email after purchase
+**Current Implementation (Phase 12d)**:
+- `DepositPackage` model with usdAmount, bonusCredits, label, isPopular, isActive, sortOrder
+- `GET /wallet/deposit/packages` — active packages with creditsBase, creditsTotal, phpEquivalent
+- `POST /wallet/deposit/initiate` — initiates deposit with packageId + method
+- PayMongo (GCash/card) — payment links with webhook + auto-cancel cron
+- PayPal Orders API — create + capture + webhook
+- USDT BEP-20 (BSC) + USDT Base (Base L2) — EVM wallet auto-deposit + manual txHash
+- Admin package CRUD at `/admin/finances`
+**Deferred (Stripe)**:
+- Stripe Checkout integration ⛔ DEFERRED 2026-06-10 — not yet applicable/available for this platform
+- Will re-evaluate when Stripe account is approved. No Stripe code exists in the codebase.
 
 ### MDR-003: Prizes / Rewards Store (Credit Redemption)
 **Status**: Planned (Phase 13)
@@ -1344,6 +1352,45 @@
 
 ---
 
+## Authentication Decisions (2026-06-10)
+
+### ADR-024: reCAPTCHA on Forgot-Password Endpoint
+- **Status**: Implemented
+- **Decision**: Extend existing reCAPTCHA validation (v2/v3, config-driven) to `POST /auth/forgot-password`
+- **Rationale**: Forgot-password is an email-sending endpoint vulnerable to abuse; it was the only auth flow missing reCAPTCHA protection
+- **Implementation**:
+  - `ForgotPasswordDto` gains optional `recaptchaToken` field
+  - `AuthService.forgotPassword()` validates token identically to `register()` and `login()` (enabled check → presence → score ≥ 0.5)
+  - Frontend: imports `useGoogleReCaptcha` + `ReCAPTCHA` + `useRecaptcha`; v3 generates token on submit, v2 renders checkbox before submit button
+- **Tradeoffs**: None — follows existing pattern exactly; no new dependencies
+- **Files touched**: `apps/api/src/modules/auth/dto/forgot-password.dto.ts`, `apps/api/src/modules/auth/auth.controller.ts`, `apps/api/src/modules/auth/auth.service.ts`, `apps/web/src/app/(auth)/forgot-password/page.tsx`
+
+---
+
+## Admin / Communications Decisions (2026-06-10)
+
+### ADR-025: Announcement Template Placeholder System
+- **Status**: Implemented
+- **Decision**: Add structured placeholder metadata to announcement templates and dynamic replacement in `sendAnnouncement()`
+- **Rationale**: Templates contained `{{date}}`, `{{featureName}}`, etc. but the UI had no input fields for them; admins had to manually edit raw HTML
+- **Implementation**:
+  - Each template declares `placeholders: [{ key, label, type: 'text'|'textarea'|'date', example }]`
+  - `SendAnnouncementDto` gains optional `templateValues: Record<string, string>`
+  - Backend `sendAnnouncement()` regex-replaces `{{key}}` in `subject`, `title`, and `bodyHtml` before queueing emails
+  - Frontend: `AnnouncementComposer` auto-generates input fields (date picker, textarea, text) based on selected template; live preview with replaced placeholders
+- **Tradeoffs**: Slightly more complex template definition; vastly better UX for admins
+- **Files touched**: `apps/api/src/modules/admin/dto/send-announcement.dto.ts`, `apps/api/src/modules/admin/admin.service.ts`, `apps/web/src/app/(admin)/admin/communications/page.tsx`
+
+### ADR-026: CTA Route Dropdown for Announcements
+- **Status**: Implemented
+- **Decision**: Replace free-text CTA URL input with a dropdown of known user-facing routes + "Custom URL" option
+- **Rationale**: Prevent broken links from typos; ensure CTA buttons route to valid platform pages
+- **Implementation**: `KNOWN_ROUTES` constant lists 12 destinations (Dashboard, Wallet, Tasks, Campaigns, Leaderboard, Achievements, Missions, Forum, Settings, Profile, Discover, Custom); selecting "Custom" reveals a free-text URL field
+- **Tradeoffs**: Less flexible for external URLs; Custom option preserves full flexibility
+- **Files touched**: `apps/web/src/app/(admin)/admin/communications/page.tsx`
+
+---
+
 ## DECISION RECORD MAINTENANCE
 
 This document should be updated when:
@@ -1362,7 +1409,8 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-06-01 (Full MD audit: MDR-001 corrected to 10% fee, TRD-005 updated to automated deploy, IDR-005 reflects full CD pipeline, VDR-001 includes all 11 platforms)
+**Last Updated**: 2026-06-10 (ADR-024, ADR-025, ADR-026 added; MDR-002 updated: deposit system live, Stripe deferred; trust score + analytics BullMQ TMP-004/005 resolved; full markdown audit completed)
+**Previously**: 2026-06-01 (Full MD audit: MDR-001 corrected to 10% fee, TRD-005 updated to automated deploy, IDR-005 reflects full CD pipeline, VDR-001 includes all 11 platforms)
 **Next Review**: 2026-08-31 (quarterly)
 
 ---

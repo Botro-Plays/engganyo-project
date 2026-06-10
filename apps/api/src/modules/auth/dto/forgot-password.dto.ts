@@ -1,5 +1,5 @@
-import { IsEmail } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 export class ForgotPasswordDto {
@@ -7,4 +7,9 @@ export class ForgotPasswordDto {
   @IsEmail()
   @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
   email!: string;
+
+  @ApiPropertyOptional({ example: '03AGdBq24...' })
+  @IsOptional()
+  @IsString()
+  recaptchaToken?: string;
 }

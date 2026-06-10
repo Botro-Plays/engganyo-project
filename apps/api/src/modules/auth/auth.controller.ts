@@ -107,7 +107,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset email' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    await this.authService.forgotPassword(dto.email);
+    await this.authService.forgotPassword(dto);
     return { message: 'If that email exists, a reset link has been sent' };
   }
 

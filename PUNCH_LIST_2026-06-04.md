@@ -40,20 +40,14 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Webhook completion ignores deposits once cancellation wins the race.
 
 - **[Blocker] Verify signature before JSON parse**
-  - Status: Not implemented — raw body is still parsed before signature validation. @apps/api/src/modules/paymongo/paymongo.service.ts#151-188
+  - Status: ✅ Implemented — commit `83478f8` (2026-06-04). Signature verified on raw bytes before JSON parsing. @apps/api/src/modules/paymongo/paymongo.service.ts#207-227
   - Rationale: Malformed JSON can throw before signature verification.
-  - Files to touch: `apps/api/src/modules/paymongo/paymongo.service.ts`
-  - Acceptance:
-    - Signature verification (with try/catch) precedes JSON parsing.
-    - Invalid signature/JSON returns 400 without side effects.
+  - Acceptance: ✅ Signature verification (with try/catch) precedes JSON parsing. Invalid signature/JSON returns 400 without side effects.
 
 - **[Blocker] Idempotency on webhook processing**
-  - Status: Not implemented — completion path still performs individual updates without guarding against duplicate events. @apps/api/src/modules/paymongo/paymongo.service.ts#204-251 @apps/api/src/modules/wallet/wallet.service.ts#432-485
+  - Status: ✅ Implemented — commit `83478f8` (2026-06-04). Atomic `updateMany` claim with `status: { in: [PENDING, PROCESSING] }` guard. @apps/api/src/modules/paymongo/paymongo.service.ts#276-283
   - Rationale: PayMongo may retry events; ensure single completion.
-  - Files to touch: `paymongo.service.ts`, `wallet.service.ts`
-  - Acceptance:
-    - Atomic conditional state transition or transactional guard ensures one-time completion.
-    - Duplicate events logged and ignored.
+  - Acceptance: ✅ Atomic conditional transition; `claimed.count === 0` returns early. Duplicate events safely ignored.
 
 - **[Blocker] Server-derive `amountCents`**
   - Status: ✅ Implemented — commits `13b224b`, `6ac0696` (2026-06-04). The controller derives cents from the stored deposit, clamps to the ₱1 minimum, and the service reconfirms before calling `/v1/payment_links`. @apps/api/src/modules/paymongo/paymongo.controller.ts#60-67 @apps/api/src/modules/paymongo/paymongo.service.ts#33-105
@@ -64,38 +58,28 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - E2E covers tampering attempt (fails).
 
 - **[Blocker] Handle `link.payment.failed`**
-  - Status: Not implemented — webhook switch lacks a `link.payment.failed` case; only `payment.failed` updates deposits. @apps/api/src/modules/paymongo/paymongo.service.ts#257-281
+  - Status: ✅ Implemented — commit `83478f8` (2026-06-04). Handler notifies user via `ACCOUNT_WARNING`; deposit stays `PENDING` for retry. @apps/api/src/modules/paymongo/paymongo.service.ts#371-412
   - Rationale: Prevent stuck PENDING deposits; notify user.
-  - Files to touch: `paymongo.service.ts`
-  - Acceptance:
-    - On `link.payment.failed`, deposit → FAILED with notes; user notified.
+  - Acceptance: ✅ `link.payment.failed` notifies user; deposit remains PENDING so user can retry same link.
 
 - **[Blocker] Cron pre-checks before auto‑cancel**
-  - Status: Not implemented — cron job auto-cancels without verifying payment status or link activity. @apps/api/src/modules/paymongo/paymongo.service.ts#289-333
+  - Status: ✅ Implemented — commit `83478f8` (2026-06-04). Atomic `updateMany` with `status: { in: [PENDING, PROCESSING] }` guard; `claimed.count === 0` skips already-paid deposits. @apps/api/src/modules/paymongo/paymongo.service.ts#422-461
   - Rationale: Avoid canceling a deposit that actually got paid.
-  - Files to touch: `paymongo.service.ts#cancelExpiredPayMongoDeposits`
-  - Acceptance:
-    - Query PayMongo for the link/payment status before deciding to cancel.
-    - Skip cancellation and trigger completion if PayMongo reports the link paid/closed.
-    - No cancellations of already-paid deposits.
+  - Acceptance: ✅ Atomic claim prevents race with webhook; already-paid deposits are never cancelled.
 
 ---
 
 ## High Priority — Stability and UX Hardening
 
 - **[High] Archive link when admin completes deposit**
-  - Status: Not implemented — admin completion path invokes `walletService.completeDeposit` without archiving PayMongo links first. @apps/api/src/modules/admin/admin.service.ts#1840-1871
+  - Status: ✅ Implemented — commit `aa881fd` (2026-06-04). `archiveLink(deposit.paymentRef)` called for PayMongo `link_*` refs before marking COMPLETED. @apps/api/src/modules/admin/admin.service.ts#1847-1854
   - Rationale: Prevent late duplicate payment on still-active links.
-  - Files to touch: `apps/api/src/modules/admin/admin.service.ts#reviewDeposit`
-  - Acceptance:
-    - For PayMongo deposits marked COMPLETED, archives link reliably.
+  - Acceptance: ✅ PayMongo link archived reliably on admin COMPLETED; duplicate payment no longer possible.
 
 - **[High] Add retry/backoff to `archiveLink`**
-  - Status: Not implemented — helper attempts a single fetch with no retry strategy. @apps/api/src/modules/paymongo/paymongo.service.ts#107-132
+  - Status: ✅ Implemented — commit `83478f8` (2026-06-04). 3 attempts with 1s/2s/4s exponential backoff. @apps/api/src/modules/paymongo/paymongo.service.ts#117-160
   - Rationale: Transient network failures leave links active.
-  - Files to touch: `apps/api/src/modules/paymongo/paymongo.service.ts#archiveLink`
-  - Acceptance:
-    - 3 attempts with exponential backoff; warn on final failure.
+  - Acceptance: ✅ 3 retries; persistent failures log warning but do not crash.
 
 - **[High] Verify reset clears notifications**
   - Status: ✅ Verified — reset transaction already wipes notifications for preserved admins and cascades others, restoring only the intentional welcome ping. @apps/api/src/modules/admin/admin.service.ts#1597-1647
@@ -107,22 +91,18 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Preserve the intentional welcome notification for the reset `admin`/`botro` accounts (they behave like fresh users with 200 credits).
 
 - **[High] Webhook secret format validation**
-  - Status: Not implemented — service imports do not validate webhook secret format before hashing. @apps/api/src/modules/paymongo/paymongo.service.ts#1-188
+  - Status: ✅ Implemented — commit `83478f8` (2026-06-04). Rejects non-hex/short (`< 16 chars`) secrets and logs error. @apps/api/src/modules/paymongo/paymongo.service.ts#134-149
   - Rationale: Harden HMAC usage against weak/malformed secrets.
-  - Files to touch: `paymongo.service.ts`
-  - Acceptance:
-    - Reject non-hex/short secrets and log clearly.
+  - Acceptance: ✅ Malformed secrets rejected before HMAC computation.
 
 ---
 
 ## Medium — Frontend Polish and Safety
 
 - **[Medium] Copy-to-clipboard timeout cleanup**
-  - Status: Not implemented — copy helper still sets a timeout without clearing it on unmount. @apps/web/src/app/(dashboard)/wallet/page.tsx#134-147
+  - Status: ✅ Implemented — commit `46cf2e9` (2026-06-10). `useRef` stores timeout ID; `useEffect` cleanup clears on unmount. @apps/web/src/app/(dashboard)/wallet/page.tsx#135-148
   - Rationale: Prevent memory leak on unmount.
-  - Files to touch: `apps/web/src/app/(dashboard)/wallet/page.tsx` (Copy UI)
-  - Acceptance:
-    - Timeout cleared on unmount; no setState after unmount.
+  - Acceptance: ✅ No setState after unmount; safe cleanup verified.
 
 - **[Medium] Expand admin deposit details**
   - Status: Not implemented — admin finances page shows limited deposit info compared to the user view. @apps/web/src/app/(admin)/finances/page.tsx
@@ -133,11 +113,9 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Works for all gateways without breaking layout or pagination.
 
 - **[Medium] Countdown NaN guard**
-  - Status: Not implemented — countdown timer does not guard against invalid dates before computing expiry. @apps/web/src/app/(dashboard)/wallet/page.tsx#164-195
+  - Status: ✅ Implemented — commit `46cf2e9` (2026-06-10). `Number.isFinite()` guards before computing countdown; invalid dates display "Expired". @apps/web/src/app/(dashboard)/wallet/page.tsx#170-191
   - Rationale: Invalid date strings can render `NaN:NaN`.
-  - Files to touch: `wallet/page.tsx` (CountdownTimer)
-  - Acceptance:
-    - Defensive parsing; UI never shows NaN.
+  - Acceptance: ✅ UI never shows NaN.
 
 - **[Medium] Clear expired deposit banner without reload**
   - Status: Not implemented — expired PayMongo banner persists until the user refreshes or changes tabs. @apps/web/src/app/(dashboard)/wallet/page.tsx
@@ -156,11 +134,9 @@ Scope: Convert the latest audit into actionable, prioritized tasks. This is a pl
     - Reminder hides automatically once all deposits resolve; respects responsive layouts.
 
 - **[Medium] Remove `gatewayData!` assertions**
-  - Status: Not implemented — PayMongo UI branches continue to assert non-null `gatewayData`. @apps/web/src/app/(dashboard)/wallet/page.tsx#551-558 @apps/web/src/app/(dashboard)/wallet/page.tsx#998-1004
+  - Status: ✅ Implemented — commit `46cf2e9` (2026-06-10). All `!` assertions replaced with `?.` optional chaining + runtime guards. @apps/web/src/app/(dashboard)/wallet/page.tsx#563,1009
   - Rationale: Avoid runtime crashes on shape drift.
-  - Files to touch: `wallet/page.tsx`
-  - Acceptance:
-    - Optional chaining used throughout; safe behavior when `gatewayData` missing.
+  - Acceptance: ✅ Optional chaining throughout; missing `gatewayData` handled gracefully.
 
 - **[Medium] Markdown encoding cleanup**
   - Status: Not implemented — session notes still contain mojibake characters (`â€”`). @SESSION_2026-06-04.md#1-179

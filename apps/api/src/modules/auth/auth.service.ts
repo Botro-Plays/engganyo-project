@@ -20,6 +20,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '@prisma/client';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
+import type { ForgotPasswordDto } from './dto/forgot-password.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { TwoFactorService } from './two-factor.service';
 import type { TwoFactorRequiredResult } from './two-factor.service';
@@ -435,7 +436,24 @@ export class AuthService {
 
   // ─── Forgot Password ───────────────────────────────────────
 
-  async forgotPassword(email: string): Promise<void> {
+  async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
+    const { email } = dto;
+
+    // Validate reCAPTCHA if enabled
+    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
+    if (recaptchaEnabled) {
+      if (!dto.recaptchaToken) {
+        this.logger.warn('Forgot-password attempt without reCAPTCHA token');
+        throw new BadRequestException('reCAPTCHA token is required');
+      }
+      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
+      this.logger.debug(`Forgot-password reCAPTCHA score: ${recaptchaScore}`);
+      if (recaptchaScore < 0.5) {
+        this.logger.warn(`Forgot-password reCAPTCHA failed: ${recaptchaScore}`);
+        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
+      }
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { email },
       select: { id: true, email: true },

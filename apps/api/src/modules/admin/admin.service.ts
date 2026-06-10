@@ -2046,6 +2046,11 @@ export class AdminService {
         title: 'Scheduled Maintenance',
         bodyHtml: '<p>We will be performing scheduled maintenance on <strong>{{date}}</strong> from <strong>{{time}}</strong>.</p><p>During this window, some features may be temporarily unavailable. We expect the maintenance to last approximately <strong>{{duration}}</strong>.</p><p>Thank you for your patience as we improve the platform.</p>',
         theme: 'amber' as const,
+        placeholders: [
+          { key: 'date', label: 'Maintenance date', type: 'date' as const, example: 'June 15, 2026' },
+          { key: 'time', label: 'Start time', type: 'text' as const, example: '02:00 UTC' },
+          { key: 'duration', label: 'Expected duration', type: 'text' as const, example: '2 hours' },
+        ],
       },
       {
         id: 'feature',
@@ -2054,6 +2059,10 @@ export class AdminService {
         title: 'New Feature Launch',
         bodyHtml: '<p>We are excited to announce the launch of <strong>{{featureName}}</strong>!</p><p>{{description}}</p><p>Try it out today and let us know what you think.</p>',
         theme: 'blue' as const,
+        placeholders: [
+          { key: 'featureName', label: 'Feature name', type: 'text' as const, example: 'Dark Mode' },
+          { key: 'description', label: 'Feature description', type: 'textarea' as const, example: 'A sleek new dark theme for your dashboard.' },
+        ],
       },
       {
         id: 'update',
@@ -2062,6 +2071,9 @@ export class AdminService {
         title: 'Important Platform Update',
         bodyHtml: '<p>We are making some changes to improve your experience on Engganyo.</p><p>{{details}}</p><p>If you have any questions, please reach out to our support team.</p>',
         theme: 'blue' as const,
+        placeholders: [
+          { key: 'details', label: 'Update details', type: 'textarea' as const, example: 'We have updated our verification process to support more platforms.' },
+        ],
       },
       {
         id: 'notice',
@@ -2070,6 +2082,9 @@ export class AdminService {
         title: 'System Notice',
         bodyHtml: '<p>{{message}}</p>',
         theme: 'rose' as const,
+        placeholders: [
+          { key: 'message', label: 'Notice message', type: 'textarea' as const, example: 'Due to unexpected load, some services may be slower than usual.' },
+        ],
       },
     ];
   }
@@ -2089,13 +2104,26 @@ export class AdminService {
       emails = users.map((u) => u.email).filter(Boolean) as string[];
     }
 
+    // Replace placeholders in subject, title, bodyHtml
+    let subject = dto.subject;
+    let title = dto.title;
+    let bodyHtml = dto.bodyHtml;
+    if (dto.templateValues) {
+      for (const [key, value] of Object.entries(dto.templateValues)) {
+        const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
+        subject = subject.replace(regex, value);
+        title = title.replace(regex, value);
+        bodyHtml = bodyHtml.replace(regex, value);
+      }
+    }
+
     const theme = dto.theme ?? 'blue';
     await Promise.all(
       emails.map((email) =>
         this.emailService.queueAnnouncementEmail(email, {
-          subject: dto.subject,
-          title: dto.title,
-          bodyHtml: dto.bodyHtml,
+          subject,
+          title,
+          bodyHtml,
           theme,
           ctaLabel: dto.ctaLabel,
           ctaUrl: dto.ctaUrl,
@@ -2116,6 +2144,7 @@ export class AdminService {
           queued: emails.length,
           ctaLabel: dto.ctaLabel,
           ctaUrl: dto.ctaUrl,
+          templateValues: dto.templateValues,
         },
       },
     });

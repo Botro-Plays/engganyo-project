@@ -33,9 +33,9 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 
 ## BUSINESS MODEL
 
-### Current State (Phase 10–11 Partial + Platform Fees Live)
+### Current State (Phase 10–12d + Platform Fees Live + Deposit System Live)
 - **Revenue**: Platform fees live — 10% base fee deducted on campaign creation, tracked via `PlatformRevenue` model, admin revenue dashboard at `/admin/revenue`
-- **Credit System**: Internal-only, no fiat/crypto conversion yet (Stripe integration pending)
+- **Credit System**: Internal-only, no fiat/crypto conversion. Deposits: users buy credit packages via PayMongo (GCash/card), PayPal, or USDT (BEP-20/Base). Stripe ⛔ DEFERRED — not yet applicable/available.
 - **Platform Fees**: Implemented (2026-06-01) — 10% base, config-driven (`fee_base_rate`, `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`, `campaign_min_budget`)
 - **Credit Redemption**: Not yet implemented — credits are internal-only (no fiat/crypto conversion). Future: prizes/rewards store (gift cards, mobile load, gaming credits, platform perks) where users redeem earned credits for digital goods.
 - **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
@@ -68,9 +68,10 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 - Refunded on campaign cancellation
 - **Rationale**: Aligns platform success with creator success, simple to implement
 
-**Phase 2: Credit Purchases (3 months post-launch)**
-- Stripe integration for fiat credit purchases
-- Pricing tiers with volume bonuses:
+**Phase 2: Credit Purchases (Implemented via Deposit System)**
+- Deposit system live — PayMongo (GCash/card), PayPal, USDT BEP-20 (BSC), USDT Base (Base L2)
+- Stripe ⛔ DEFERRED — not yet applicable/available; will re-evaluate when Stripe account is approved
+- Pricing tiers with volume bonuses (via `DepositPackage` model):
   - $5 = 500 credits (1:100 baseline)
   - $20 = 2200 credits (10% bonus)
   - $50 = 6000 credits (20% bonus)
@@ -256,7 +257,7 @@ Tasks   Campaigns  Tasks   Campaigns
 - Build trust and reputation
 
 **Medium-Term (6-18 months)**
-- Add credit purchases (Stripe)
+- Expand deposit methods (Stripe when available, GCrypto when demand warrants)
 - Introduce prizes / rewards store — users redeem earned credits for digital prizes (gift cards, mobile load, gaming credits)
 - Introduce premium features
 - Expand to more platforms
@@ -692,5 +693,6 @@ This document should be updated when:
 - Risk factors change
 - Success metrics change
 
-**Last Updated**: 2026-06-01 (Full MD audit: Verification Strategy corrected to reflect OAuth + manual proof for 11 platforms, revenue corrected to 10% base fee, Platform Expansion timeline updated with all live platforms)
+**Last Updated**: 2026-06-10 (Stripe deferred; deposit system live — PayMongo/PayPal/USDT; trust gates implemented; BullMQ queue migration done; weekly digest + announcement emailer implemented; forgot-password reCAPTCHA wired; announcement editor enhanced with placeholder inputs + CTA route dropdown; full markdown audit)
+**Previously**: 2026-06-01 (Full MD audit: Verification Strategy corrected to reflect OAuth + manual proof for 11 platforms, revenue corrected to 10% base fee, Platform Expansion timeline updated with all live platforms)
 **Next Review**: 2026-08-31 (quarterly)

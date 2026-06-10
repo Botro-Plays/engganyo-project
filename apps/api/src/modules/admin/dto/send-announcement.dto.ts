@@ -6,4 +6,6 @@ export class SendAnnouncementDto {
   theme?: 'blue' | 'amber' | 'rose';
   ctaLabel?: string;
   ctaUrl?: string;
+  /** Key-value pairs to replace {{placeholder}} in subject, title, bodyHtml */
+  templateValues?: Record<string, string>;
 }
