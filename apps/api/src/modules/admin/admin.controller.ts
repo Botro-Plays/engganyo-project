@@ -515,7 +515,7 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get pre-made announcement email templates' })
   getAnnouncementTemplates() {
-    return { data: this.adminService.getAnnouncementTemplates() };
+    return this.adminService.getAnnouncementTemplates();
   }
 
   @Post('email/announcement')
