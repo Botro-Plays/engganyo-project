@@ -329,6 +329,17 @@ export default function TasksPage() {
 
   const [recheckResult, setRecheckResult] = useState<{ status: string; message?: string } | null>(null);
 
+  // ─── Defensive mapping: which browse campaigns are already in my tasks ───
+  const myTaskStatusMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (myData?.items) {
+      for (const t of myData.items) {
+        map.set(t.campaign.id, t.status);
+      }
+    }
+    return map;
+  }, [myData]);
+
   // ─── Recheck task (for YouTube subscribe) ───────────────────────
   const recheckMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/recheck`),
@@ -500,6 +511,19 @@ export default function TasksPage() {
                               >
                                 Link {PLATFORM_LABEL[reqPlatform]} to accept
                               </Link>
+                            );
+                          }
+                          const myStatus = myTaskStatusMap.get(task.id);
+                          if (myStatus) {
+                            const isDone = myStatus === 'VERIFIED' || myStatus === 'REJECTED';
+                            return (
+                              <div className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium ${
+                                isDone
+                                  ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                              }`}>
+                                {isDone ? 'Task done' : 'Task accepted'}
+                              </div>
                             );
                           }
                           return (

@@ -8,6 +8,7 @@ import {
 import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { GamificationService, XP_REWARDS } from '../gamification/gamification.service';
@@ -49,6 +50,7 @@ export class TasksService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     private readonly walletService: WalletService,
     private readonly campaignsService: CampaignsService,
     private readonly gamificationService: GamificationService,
@@ -189,6 +191,9 @@ export class TasksService {
         data: { pendingSlots: { increment: 1 } },
       }),
     ]);
+
+    // Invalidate browse cache so the task disappears from the user's browse list immediately
+    void this.redisService.delByPattern(`campaigns:browse:${userId}:*`).catch(() => null);
 
     void this.notificationsService.createNotification(
       userId,
@@ -361,6 +366,9 @@ export class TasksService {
         `Your task was auto-verified. You earned ${completion.campaign.creditPerTask} credits.`,
         { campaignId, creditsEarned: completion.campaign.creditPerTask },
       ).catch(() => null);
+
+      // Clear browse caches for all users since slot counts changed
+      void this.redisService.delByPattern('campaigns:browse:*').catch(() => null);
 
       this.eventsService.emitToUser(userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
 
