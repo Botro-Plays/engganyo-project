@@ -2075,11 +2075,6 @@ export class AdminService {
   }
 
   async sendAnnouncement(adminId: string, dto: SendAnnouncementDto): Promise<{ queued: number }> {
-    const where = dto.recipientType === 'DIGEST_ENABLED'
-      ? { deletedAt: null, status: 'ACTIVE' as const }
-      : { deletedAt: null, status: 'ACTIVE' as const };
-
-    // Since weeklyDigestEnabled may not be typed, use raw query for DIGEST_ENABLED
     let emails: string[] = [];
     if (dto.recipientType === 'DIGEST_ENABLED') {
       const result = await this.prisma.$queryRaw<Array<{ email: string }>>`
@@ -2088,23 +2083,25 @@ export class AdminService {
       emails = result.map((r) => r.email);
     } else {
       const users = await this.prisma.user.findMany({
-        where,
+        where: { deletedAt: null, status: 'ACTIVE' },
         select: { email: true },
       });
       emails = users.map((u) => u.email).filter(Boolean) as string[];
     }
 
     const theme = dto.theme ?? 'blue';
-    for (const email of emails) {
-      await this.emailService.queueAnnouncementEmail(email, {
-        subject: dto.subject,
-        title: dto.title,
-        bodyHtml: dto.bodyHtml,
-        theme,
-        ctaLabel: dto.ctaLabel,
-        ctaUrl: dto.ctaUrl,
-      });
-    }
+    await Promise.all(
+      emails.map((email) =>
+        this.emailService.queueAnnouncementEmail(email, {
+          subject: dto.subject,
+          title: dto.title,
+          bodyHtml: dto.bodyHtml,
+          theme,
+          ctaLabel: dto.ctaLabel,
+          ctaUrl: dto.ctaUrl,
+        }),
+      ),
+    );
 
     await this.prisma.auditLog.create({
       data: {

@@ -290,7 +290,7 @@ function AnnouncementComposer({
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiClient.post<{ queued: number }>('admin/email/announcement', {
+      const res = await apiClient.post<{ data: { queued: number } }>('admin/email/announcement', {
         subject,
         title,
         bodyHtml: body,
@@ -299,7 +299,7 @@ function AnnouncementComposer({
         ctaLabel: ctaLabel || undefined,
         ctaUrl: ctaUrl || undefined,
       });
-      return res.data;
+      return res.data.data;
     },
     onSuccess: (data) => {
       onStatus({ type: 'success', message: `Announcement queued for ${data.queued} users` });
@@ -326,6 +326,7 @@ function AnnouncementComposer({
   };
 
   const canSend = subject.trim() && title.trim() && body.trim();
+  const hasUnfilledPlaceholders = /\{\{[^}]+\}\}/.test(subject) || /\{\{[^}]+\}\}/.test(title) || /\{\{[^}]+\}\}/.test(body);
 
   return (
     <div className="card-glass rounded-xl p-6 mb-6">
@@ -466,13 +467,20 @@ function AnnouncementComposer({
             }
           }}
           disabled={!canSend || sendMutation.isPending}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500/20 text-sm font-medium transition-all disabled:opacity-40"
+          className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 ${
+            hasUnfilledPlaceholders
+              ? 'bg-rose-500/10 border border-rose-500/20 text-rose-300 hover:bg-rose-500/20'
+              : 'bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500/20'
+          }`}
         >
           {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           Send announcement
         </button>
         {!canSend && (
           <p className="text-xs text-zinc-600">Subject, title and body are required.</p>
+        )}
+        {canSend && hasUnfilledPlaceholders && (
+          <p className="text-xs text-rose-500">⚠ Replace all <code className="bg-rose-500/10 px-1 rounded">&#123;&#123;placeholder&#125;&#125;</code> values before sending.</p>
         )}
       </div>
     </div>
