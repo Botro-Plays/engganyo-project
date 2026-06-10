@@ -317,23 +317,38 @@ function AnnouncementComposer({
 
   const currentTemplate = templatesQuery.data?.find((t) => t.id === selectedTemplate);
 
+  const buildPayload = () => ({
+    subject,
+    title,
+    bodyHtml: body,
+    recipientType,
+    theme,
+    ctaLabel: ctaLabel || undefined,
+    ctaUrl: ctaUrl || undefined,
+    templateValues: Object.keys(templateValues).length > 0 ? templateValues : undefined,
+  });
+
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiClient.post<{ data: { queued: number } }>('admin/email/announcement', {
-        subject,
-        title,
-        bodyHtml: body,
-        recipientType,
-        theme,
-        ctaLabel: ctaLabel || undefined,
-        ctaUrl: ctaUrl || undefined,
-        templateValues: Object.keys(templateValues).length > 0 ? templateValues : undefined,
-      });
+      const res = await apiClient.post<{ data: { queued: number } }>('admin/email/announcement', buildPayload());
       return res.data.data;
     },
     onSuccess: (data) => {
       onStatus({ type: 'success', message: `Announcement queued for ${data.queued} users` });
       setShowPreview(false);
+    },
+    onError: (err) => {
+      onStatus({ type: 'error', message: getApiErrorMessage(err) });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post<{ data: { sent: boolean; to: string } }>('admin/email/test-announcement', buildPayload());
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      onStatus({ type: 'success', message: `Test announcement queued to ${data.to}` });
     },
     onError: (err) => {
       onStatus({ type: 'error', message: getApiErrorMessage(err) });
@@ -652,7 +667,7 @@ function AnnouncementComposer({
         </div>
       )}
 
-      <div className="flex items-center gap-3 pt-1">
+      <div className="flex flex-wrap items-center gap-3 pt-1">
         <button
           type="button"
           onClick={() => {
@@ -665,7 +680,7 @@ function AnnouncementComposer({
               sendMutation.mutate();
             }
           }}
-          disabled={!canSend || sendMutation.isPending}
+          disabled={!canSend || sendMutation.isPending || testMutation.isPending}
           className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 ${
             hasUnfilledPlaceholders
               ? 'bg-rose-500/10 border border-rose-500/20 text-rose-300 hover:bg-rose-500/20'
@@ -675,6 +690,24 @@ function AnnouncementComposer({
           {sendMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           Send announcement
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (!canSend) return;
+            if (hasUnfilledPlaceholders) {
+              onStatus({ type: 'error', message: 'Please fill in all template variables before sending.' });
+              return;
+            }
+            testMutation.mutate();
+          }}
+          disabled={!canSend || sendMutation.isPending || testMutation.isPending}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-sm font-medium transition-all disabled:opacity-40"
+        >
+          {testMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+          Send test to me
+        </button>
+
         {!canSend && (
           <p className="text-xs text-zinc-600">Subject, title and body are required.</p>
         )}

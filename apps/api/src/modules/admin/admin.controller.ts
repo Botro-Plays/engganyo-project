@@ -524,4 +524,11 @@ export class AdminController {
   sendAnnouncement(@CurrentUser() admin: JwtPayload, @Body() dto: SendAnnouncementDto) {
     return this.adminService.sendAnnouncement(admin.sub, dto);
   }
+
+  @Post('email/test-announcement')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a test announcement email to yourself' })
+  sendTestAnnouncement(@CurrentUser() admin: JwtPayload, @Body() dto: SendAnnouncementDto) {
+    return this.adminService.sendTestAnnouncement(admin.sub, dto);
+  }
 }

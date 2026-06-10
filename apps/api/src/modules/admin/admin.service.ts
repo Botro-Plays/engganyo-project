@@ -2151,4 +2151,55 @@ export class AdminService {
 
     return { queued: emails.length };
   }
+
+  async sendTestAnnouncement(adminId: string, dto: SendAnnouncementDto): Promise<{ sent: boolean; to: string }> {
+    const admin = await this.prisma.user.findUnique({
+      where: { id: adminId },
+      select: { email: true },
+    });
+    if (!admin?.email) throw new NotFoundException('Admin email not found');
+
+    // Replace placeholders
+    let subject = dto.subject;
+    let title = dto.title;
+    let bodyHtml = dto.bodyHtml;
+    if (dto.templateValues) {
+      for (const [key, value] of Object.entries(dto.templateValues)) {
+        const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
+        subject = subject.replace(regex, value);
+        title = title.replace(regex, value);
+        bodyHtml = bodyHtml.replace(regex, value);
+      }
+    }
+
+    const theme = dto.theme ?? 'blue';
+    await this.emailService.queueAnnouncementEmail(admin.email, {
+      subject,
+      title,
+      bodyHtml,
+      theme,
+      ctaLabel: dto.ctaLabel,
+      ctaUrl: dto.ctaUrl,
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'email.test_announcement_sent',
+        entityType: 'User',
+        entityId: adminId,
+        metadata: {
+          to: admin.email,
+          subject: dto.subject,
+          title: dto.title,
+          theme,
+          ctaLabel: dto.ctaLabel,
+          ctaUrl: dto.ctaUrl,
+          templateValues: dto.templateValues,
+        },
+      },
+    });
+
+    return { sent: true, to: admin.email };
+  }
 }
