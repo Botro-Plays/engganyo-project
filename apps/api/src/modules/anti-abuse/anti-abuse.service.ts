@@ -7,8 +7,12 @@ import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
-import { TRUST_SCORE_QUEUE, TRUST_SCORE_JOBS } from './anti-abuse.processor';
 import type { CreateReportDto } from './dto/create-report.dto';
+
+export const TRUST_SCORE_QUEUE = 'trust-score';
+export const TRUST_SCORE_JOBS = {
+  RECALCULATE: 'recalculate',
+} as const;
 
 // ─── Trust score weights ──────────────────────────────────────
 // Max 100 pts:

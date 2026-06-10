@@ -4,11 +4,7 @@ import { Job } from 'bullmq';
 import { CompletionStatus, CampaignStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
-
-export const ANALYTICS_QUEUE = 'analytics';
-export const ANALYTICS_JOBS = {
-  DAILY_SNAPSHOT: 'daily-snapshot',
-} as const;
+import { ANALYTICS_QUEUE, ANALYTICS_JOBS } from './analytics.service';
 
 @Processor(ANALYTICS_QUEUE)
 export class AnalyticsProcessor {

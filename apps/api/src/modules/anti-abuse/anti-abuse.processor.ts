@@ -3,11 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 
 import { AntiAbuseService } from './anti-abuse.service';
-
-export const TRUST_SCORE_QUEUE = 'trust-score';
-export const TRUST_SCORE_JOBS = {
-  RECALCULATE: 'recalculate',
-} as const;
+import { TRUST_SCORE_QUEUE, TRUST_SCORE_JOBS } from './anti-abuse.service';
 
 @Processor(TRUST_SCORE_QUEUE)
 export class TrustScoreProcessor {

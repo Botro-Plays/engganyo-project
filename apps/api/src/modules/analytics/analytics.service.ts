@@ -5,7 +5,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { CompletionStatus, CampaignStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
-import { ANALYTICS_QUEUE, ANALYTICS_JOBS } from './analytics.processor';
+
+export const ANALYTICS_QUEUE = 'analytics';
+export const ANALYTICS_JOBS = {
+  DAILY_SNAPSHOT: 'daily-snapshot',
+} as const;
 
 @Injectable()
 export class AnalyticsService {
