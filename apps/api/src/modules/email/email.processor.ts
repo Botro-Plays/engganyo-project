@@ -5,7 +5,7 @@ import type { Job } from 'bullmq';
 import * as nodemailer from 'nodemailer';
 
 import { EMAIL_QUEUE, EMAIL_JOBS } from './email.service';
-import { verificationEmailTemplate, passwordResetEmailTemplate, twoFactorEmailTemplate } from './email.templates';
+import { verificationEmailTemplate, passwordResetEmailTemplate, twoFactorEmailTemplate, weeklyDigestEmailTemplate } from './email.templates';
 
 interface EmailJobData {
   to: string;
@@ -82,5 +82,21 @@ export class EmailProcessor {
     });
 
     this.logger.log(`2FA email sent → ${to}`);
+  }
+
+  @Process(EMAIL_JOBS.SEND_WEEKLY_DIGEST)
+  async handleWeeklyDigest(job: Job<EmailJobData & { username: string; tasksCompleted: number; creditsEarned: number; currentBalance: number; newCampaigns: number; weekStart: string; weekEnd: string }>): Promise<void> {
+    const { to, ...data } = job.data;
+    const fromName = this.config.get<string>('email.fromName', 'Engganyo');
+    const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
+
+    await this.mailer.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject: `Your Engganyo Weekly Digest — ${data.weekStart} to ${data.weekEnd}`,
+      html: weeklyDigestEmailTemplate(data),
+    });
+
+    this.logger.log(`Weekly digest sent → ${to}`);
   }
 }

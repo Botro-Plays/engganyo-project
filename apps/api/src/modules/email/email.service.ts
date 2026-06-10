@@ -8,6 +8,7 @@ export const EMAIL_JOBS = {
   SEND_VERIFICATION: 'send-verification',
   SEND_PASSWORD_RESET: 'send-password-reset',
   SEND_TWO_FACTOR: 'send-two-factor',
+  SEND_WEEKLY_DIGEST: 'send-weekly-digest',
 } as const;
 
 const JOB_OPTIONS = {
@@ -36,5 +37,21 @@ export class EmailService {
   async queueTwoFactorEmail(to: string, code: string): Promise<void> {
     await this.queue.add(EMAIL_JOBS.SEND_TWO_FACTOR, { to, code }, JOB_OPTIONS);
     this.logger.debug(`Queued 2FA email → ${to}`);
+  }
+
+  async queueWeeklyDigestEmail(
+    to: string,
+    data: {
+      username: string;
+      tasksCompleted: number;
+      creditsEarned: number;
+      currentBalance: number;
+      newCampaigns: number;
+      weekStart: string;
+      weekEnd: string;
+    },
+  ): Promise<void> {
+    await this.queue.add(EMAIL_JOBS.SEND_WEEKLY_DIGEST, { to, ...data }, JOB_OPTIONS);
+    this.logger.debug(`Queued weekly digest → ${to}`);
   }
 }

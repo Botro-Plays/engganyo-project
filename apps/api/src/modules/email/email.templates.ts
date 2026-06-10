@@ -235,6 +235,106 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
   return baseLayout(content, 'Reset your Engganyo password. Link expires in 1 hour.');
 }
 
+export function weeklyDigestEmailTemplate(data: {
+  username: string;
+  tasksCompleted: number;
+  creditsEarned: number;
+  currentBalance: number;
+  newCampaigns: number;
+  weekStart: string;
+  weekEnd: string;
+}): string {
+  const { username, tasksCompleted, creditsEarned, currentBalance, newCampaigns, weekStart, weekEnd } = data;
+  const content = `
+    <!-- Top accent bar -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="background:linear-gradient(90deg,#3b62f5,#10b981);height:4px;"></td>
+      </tr>
+    </table>
+
+    <!-- Body content -->
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="padding:40px 40px 0;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:linear-gradient(135deg,#3b62f5,#10b981);border-radius:14px;padding:14px;">
+                <div style="font-size:22px;line-height:1;">&#128197;</div>
+              </td>
+            </tr>
+          </table>
+          <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
+            Your Weekly Digest
+          </h1>
+          <p style="margin:0;font-size:15px;color:#8892a4;line-height:1.6;">
+            Hi ${username}, here&rsquo;s what happened on Engganyo this week (${weekStart} &ndash; ${weekEnd}).
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:32px 40px;">
+          <!-- Stats grid -->
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td width="50%" style="padding-right:8px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+                  <tr><td style="padding:20px;">
+                    <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">Tasks Completed</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#10b981;">${tasksCompleted}</p>
+                  </td></tr>
+                </table>
+              </td>
+              <td width="50%" style="padding-left:8px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+                  <tr><td style="padding:20px;">
+                    <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">Credits Earned</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#3b62f5;">${creditsEarned}</p>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+            <tr><td colspan="2" style="height:16px;"></td></tr>
+            <tr>
+              <td width="50%" style="padding-right:8px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+                  <tr><td style="padding:20px;">
+                    <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">Current Balance</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#d946ef;">${currentBalance}</p>
+                  </td></tr>
+                </table>
+              </td>
+              <td width="50%" style="padding-left:8px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #1e2a45;">
+                  <tr><td style="padding:20px;">
+                    <p style="margin:0 0 4px;font-size:12px;color:#4b5670;text-transform:uppercase;letter-spacing:0.05em;">New Campaigns</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#f59e0b;">${newCampaigns}</p>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 40px 32px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0d1117;border-radius:10px;border:1px solid #1e2a45;">
+            <tr>
+              <td align="center" style="padding:20px;">
+                <a href="https://engganyo.com/dashboard" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;background:linear-gradient(135deg,#3b62f5,#2444e8);">
+                  Go to Dashboard
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  return baseLayout(content, `Your Engganyo weekly digest: ${tasksCompleted} tasks, ${creditsEarned} credits earned.`);
+}
+
 export function twoFactorEmailTemplate(code: string): string {
   const content = `
     <!-- Top accent bar -->
