@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
@@ -134,10 +134,16 @@ const isCredit = (amount: number) => amount > 0;
 // ─── Copy-to-clipboard mini component ─────────────────────
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
   const copy = () => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     });
   };
   return (
@@ -163,11 +169,16 @@ function DetailItem({ label, value, copyable }: { label: string; value: string; 
 // ─── Countdown timer for PayMongo expiry ─────────────────
 function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdAt?: string }) {
   // Fallback: old deposits without expiredAt expire 30min after creation
-  const effectiveExpiredAt = expiredAt
-    ? new Date(expiredAt).getTime()
-    : createdAt
-      ? new Date(createdAt).getTime() + 30 * 60 * 1000
-      : 0;
+  const rawExpired = expiredAt ? new Date(expiredAt).getTime() : NaN;
+  const rawCreated = createdAt ? new Date(createdAt).getTime() : NaN;
+
+  // Guard against NaN from invalid date strings
+  let effectiveExpiredAt = 0;
+  if (Number.isFinite(rawExpired)) {
+    effectiveExpiredAt = rawExpired;
+  } else if (Number.isFinite(rawCreated)) {
+    effectiveExpiredAt = rawCreated + 30 * 60 * 1000;
+  }
 
   const [left, setLeft] = useState(() => Math.max(0, effectiveExpiredAt - Date.now()));
   useEffect(() => {
@@ -177,7 +188,7 @@ function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdA
     return () => clearInterval(id);
   }, [effectiveExpiredAt]);
 
-  if (left <= 0) return <span className="text-zinc-500">Expired</span>;
+  if (effectiveExpiredAt === 0 || left <= 0) return <span className="text-zinc-500">Expired</span>;
 
   const totalSeconds = Math.floor(left / 1000);
   const m = Math.floor(totalSeconds / 60);
@@ -549,7 +560,8 @@ export default function WalletPage() {
               (d) => d.method === 'PAYMONGO' && d.status === 'PENDING' && typeof d.gatewayData?.checkoutUrl === 'string',
             );
             if (!pendingPaymongo) return null;
-            const checkoutUrl = pendingPaymongo.gatewayData!.checkoutUrl as string;
+            const checkoutUrl = pendingPaymongo.gatewayData?.checkoutUrl as string | undefined;
+            if (!checkoutUrl) return null;
             return (
               <div className="card-glass rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
@@ -994,7 +1006,10 @@ export default function WalletPage() {
                                   createdAt={dep.createdAt}
                                 />
                                 <button
-                                  onClick={() => window.open(dep.gatewayData!.checkoutUrl as string, '_blank', 'noopener,noreferrer')}
+                                  onClick={() => {
+                                    const url = dep.gatewayData?.checkoutUrl as string | undefined;
+                                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                  }}
                                   className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5" />Continue to PayMongo
