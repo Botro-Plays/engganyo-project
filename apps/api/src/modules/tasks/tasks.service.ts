@@ -74,7 +74,7 @@ export class TasksService {
 
   // ─── Assign task ───────────────────────────────────────────
 
-  async assignTask(userId: string, campaignId: string, userRole?: string) {
+  async assignTask(userId: string, campaignId: string, userRole?: string, clientIp?: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
       select: {
@@ -174,28 +174,67 @@ export class TasksService {
       }
     }
 
-    // ── Anti-abuse: creator restriction ────────────────────────
-    // Prevent users from farming the same creator's campaigns
-    const CREATOR_WINDOW_DAYS = 7;
-    const CREATOR_MAX_PER_WINDOW = 5;
-    const creatorWindowStart = new Date(Date.now() - CREATOR_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const creatorCompletions = await this.prisma.taskCompletion.count({
+    // ── Anti-abuse: alt-account self-farming detection ────────
+    // Block if the assignee shares a recent IP with the campaign creator
+    if (clientIp) {
+      const creatorSharedIp = await this.prisma.userSession.findFirst({
+        where: {
+          userId: campaign.userId,
+          ipAddress: clientIp,
+          lastUsedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          isRevoked: false,
+        },
+        select: { id: true },
+      });
+      if (creatorSharedIp) {
+        this.logger.warn(`Alt-account self-farming blocked: user ${userId} shares IP ${clientIp} with creator ${campaign.userId}`);
+        void this.antiAbuseService.flagUser(
+          userId,
+          'alt_account_self_farm',
+          'critical',
+          `Shared IP ${clientIp} with campaign creator ${campaign.userId}`,
+          { clientIp, creatorId: campaign.userId, campaignId },
+        ).catch(() => null);
+        throw new BadRequestException(
+          'This assignment is restricted due to potential account abuse. Contact support if you believe this is an error.',
+        );
+      }
+    }
+
+    // ── Anti-abuse: bidirectional farming detection ───────────
+    // Block if the campaign creator has also completed tasks from the assignee's campaigns
+    const bidirectional = await this.prisma.taskCompletion.findFirst({
       where: {
-        userId,
-        campaign: { userId: campaign.userId },
+        userId: campaign.userId,
+        campaign: { userId },
         status: { in: [CompletionStatus.VERIFIED, CompletionStatus.SUBMITTED] },
-        assignedAt: { gte: creatorWindowStart },
       },
+      select: { id: true },
     });
-    if (creatorCompletions >= CREATOR_MAX_PER_WINDOW) {
+    if (bidirectional) {
+      this.logger.warn(`Bidirectional farming blocked: user ${userId} and creator ${campaign.userId} are farming each other's campaigns`);
+      void this.antiAbuseService.flagUser(
+        userId,
+        'bidirectional_farm',
+        'high',
+        `User and creator ${campaign.userId} are completing each other's campaigns`,
+        { creatorId: campaign.userId, campaignId },
+      ).catch(() => null);
       throw new BadRequestException(
-        `You have reached the limit for completing tasks from this creator (${CREATOR_MAX_PER_WINDOW} per ${CREATOR_WINDOW_DAYS} days). Try campaigns from other creators.`,
+        'This assignment is restricted due to potential collusion. Contact support if you believe this is an error.',
       );
     }
 
     // ── Anti-abuse: social graph concentration ─────────────────
-    // Flag users whose verified completions are heavily concentrated on one creator
+    // Flag (don't block) users whose verified completions are heavily concentrated on one creator
     if (!isAdminUser) {
+      const creatorCompletions = await this.prisma.taskCompletion.count({
+        where: {
+          userId,
+          campaign: { userId: campaign.userId },
+          status: CompletionStatus.VERIFIED,
+        },
+      });
       const totalVerified = await this.prisma.taskCompletion.count({
         where: { userId, status: CompletionStatus.VERIFIED },
       });

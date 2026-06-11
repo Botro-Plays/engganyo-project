@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Body, Param, Query,
-  UseGuards, HttpCode, HttpStatus,
+  UseGuards, HttpCode, HttpStatus, Ip,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -38,8 +38,12 @@ export class TasksController {
   @UseGuards(UserRateLimitGuard)
   @UserRateLimit({ limit: 10, ttl: 60, scope: 'task_assign' })
   @ApiOperation({ summary: 'Claim a task slot from a campaign' })
-  assign(@CurrentUser() user: JwtPayload, @Param('campaignId') campaignId: string) {
-    return this.tasksService.assignTask(user.sub, campaignId, user.role);
+  assign(
+    @CurrentUser() user: JwtPayload,
+    @Param('campaignId') campaignId: string,
+    @Ip() clientIp?: string,
+  ) {
+    return this.tasksService.assignTask(user.sub, campaignId, user.role, clientIp);
   }
 
   @Post(':campaignId/submit')
