@@ -26,6 +26,7 @@ const navItems = [
   { href: '/admin/chats', icon: MessageSquare, label: 'Chats' },
   { href: '/admin/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/admin/gamification', icon: Trophy, label: 'Gamification' },
+  { href: '/admin/abuse', icon: ShieldAlert, label: 'Abuse' },
   { href: '/admin/reports', icon: Flag, label: 'Reports' },
   { href: '/admin/notifications', icon: Bell, label: 'Notifications' },
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },

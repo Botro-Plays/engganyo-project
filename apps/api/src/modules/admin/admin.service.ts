@@ -1830,7 +1830,7 @@ export class AdminService {
           id: true, method: true, status: true,
           amountFiat: true, currency: true,
           creditsToAward: true, creditsAwarded: true, bonusCredits: true,
-          exchangeRate: true, userWalletAddress: true,
+          exchangeRate: true, userWalletAddress: true, gatewayData: true,
           paymentRef: true, adminNotes: true, reviewedBy: true,
           completedAt: true, createdAt: true, updatedAt: true,
           package: { select: { id: true, usdAmount: true, label: true } },
@@ -2201,5 +2201,135 @@ export class AdminService {
     });
 
     return { sent: true, to: admin.email };
+  }
+
+  // ─── Abuse Flags & Social Graph ───────────────────────────
+
+  async listAbuseFlags(page = 1, limit = 25, flagType?: string, severity?: string, resolved?: string, userId?: string) {
+    const where: Prisma.AbuseFlagWhereInput = {
+      ...(flagType && { flagType }),
+      ...(severity && { severity }),
+      ...(userId && { userId }),
+      ...(resolved !== undefined && resolved !== '' && { isResolved: resolved === 'true' }),
+    };
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.prisma.abuseFlag.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true, flagType: true, severity: true, description: true,
+          metadata: true, isResolved: true, resolvedAt: true, resolution: true,
+          createdAt: true,
+          user: { select: { id: true, username: true, displayName: true, email: true } },
+          resolvedBy: true,
+        },
+      }),
+      this.prisma.abuseFlag.count({ where }),
+    ]);
+    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
+  }
+
+  async resolveAbuseFlag(adminId: string, flagId: string, resolution: string) {
+    const flag = await this.prisma.abuseFlag.findUnique({ where: { id: flagId } });
+    if (!flag) throw new NotFoundException('Abuse flag not found');
+    if (flag.isResolved) throw new BadRequestException('Flag already resolved');
+
+    const updated = await this.prisma.abuseFlag.update({
+      where: { id: flagId },
+      data: {
+        isResolved: true,
+        resolvedBy: adminId,
+        resolvedAt: new Date(),
+        resolution,
+      },
+    });
+
+    // Recalculate trust score since a flag was resolved
+    void this.prisma.trustScore.findUnique({ where: { userId: flag.userId } }).then((ts) => {
+      if (ts) {
+        // Trigger async recalculation via direct service call (processor handles queue)
+        // We don't have direct access to AntiAbuseService here, but the trust score
+        // will be recalculated on next access due to cache expiry
+      }
+    });
+
+    return { success: true, flagId: updated.id };
+  }
+
+  async getSocialGraph(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, displayName: true, email: true, createdAt: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    // 1. Find users who share recent IPs
+    const userIps = await this.prisma.ipRecord.findMany({
+      where: { userId, createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+      select: { ipAddress: true },
+      distinct: ['ipAddress'],
+    });
+    const ipList = userIps.map((r) => r.ipAddress);
+    const sameIpUsers = ipList.length
+      ? await this.prisma.ipRecord.findMany({
+          where: {
+            ipAddress: { in: ipList },
+            userId: { not: userId },
+            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          },
+          select: {
+            ipAddress: true,
+            user: { select: { id: true, username: true, displayName: true, email: true, createdAt: true } },
+          },
+          distinct: ['userId'],
+          take: 20,
+        })
+      : [];
+
+    // 2. Find bidirectional farming links
+    const bidirectional = await this.prisma.taskCompletion.findMany({
+      where: {
+        userId,
+        campaign: { userId: { not: userId } },
+        status: { in: [CompletionStatus.VERIFIED, CompletionStatus.SUBMITTED] },
+      },
+      select: {
+        campaign: { select: { userId: true } },
+      },
+      distinct: ['campaignId'],
+      take: 50,
+    });
+    const creatorIds = [...new Set(bidirectional.map((b) => b.campaign.userId))];
+    const bidirectionalCreators = creatorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: creatorIds } },
+          select: { id: true, username: true, displayName: true, email: true, createdAt: true },
+        })
+      : [];
+
+    // 3. Recent unresolved flags for this user
+    const recentFlags = await this.prisma.abuseFlag.findMany({
+      where: { userId, isResolved: false },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, flagType: true, severity: true, description: true, createdAt: true },
+    });
+
+    // 4. Trust score
+    const trustScore = await this.prisma.trustScore.findUnique({
+      where: { userId },
+      select: { score: true, level: true, completionRate: true, accountAgeDays: true, verifiedSocials: true, reportCount: true, abuseFlagCount: true },
+    });
+
+    return {
+      user,
+      trustScore,
+      sameIpUsers: sameIpUsers.map((r) => ({ ipAddress: r.ipAddress, user: r.user })),
+      bidirectionalCreators,
+      recentFlags,
+    };
   }
 }

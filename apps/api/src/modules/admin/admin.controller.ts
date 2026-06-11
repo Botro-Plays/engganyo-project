@@ -539,6 +539,40 @@ export class AdminController {
     return this.adminService.sendTestAnnouncement(admin.sub, dto);
   }
 
+  // ─── Abuse Flags & Social Graph ───────────────────────────
+
+  @Get('abuse/flags')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all abuse flags with filtering' })
+  listAbuseFlags(
+    @Query('page') page = 1,
+    @Query('limit') limit = 25,
+    @Query('flagType') flagType?: string,
+    @Query('severity') severity?: string,
+    @Query('resolved') resolved?: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.adminService.listAbuseFlags(Number(page), Number(limit), flagType, severity, resolved, userId);
+  }
+
+  @Post('abuse/flags/:id/resolve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resolve an abuse flag' })
+  resolveAbuseFlag(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: { resolution: string },
+  ) {
+    return this.adminService.resolveAbuseFlag(admin.sub, id, body.resolution);
+  }
+
+  @Get('abuse/social-graph/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get social graph for a user (shared IPs, bidirectional farming, flags, trust score)' })
+  getSocialGraph(@Param('userId') userId: string) {
+    return this.adminService.getSocialGraph(userId);
+  }
+
   @Get('queues')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get BullMQ queue stats' })

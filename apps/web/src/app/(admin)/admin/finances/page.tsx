@@ -39,7 +39,9 @@ interface DepositItem {
   creditsAwarded: number;
   bonusCredits: number;
   exchangeRate: number | null;
+  userWalletAddress: string | null;
   paymentRef: string | null;
+  gatewayData: Record<string, unknown> | null;
   adminNotes: string | null;
   reviewedBy: string | null;
   completedAt: string | null;
@@ -551,6 +553,12 @@ export default function FinancesPage() {
                                   <p className="text-zinc-500 mb-0.5">User ID</p>
                                   <p className="text-zinc-300 font-mono truncate" title={dep.user.id}>{dep.user.id}</p>
                                 </div>
+                                {dep.userWalletAddress && (
+                                  <div>
+                                    <p className="text-zinc-500 mb-0.5">Wallet Address</p>
+                                    <p className="text-zinc-300 font-mono truncate" title={dep.userWalletAddress}>{dep.userWalletAddress}</p>
+                                  </div>
+                                )}
                                 {dep.paymentRef && (
                                   <div>
                                     <p className="text-zinc-500 mb-0.5">Payment Ref</p>
@@ -597,6 +605,12 @@ export default function FinancesPage() {
                                   <div>
                                     <p className="text-zinc-500 mb-0.5">Reviewed By</p>
                                     <p className="text-zinc-300 font-mono truncate">{dep.reviewedBy}</p>
+                                  </div>
+                                )}
+                                {dep.gatewayData && (
+                                  <div className="col-span-2 md:col-span-3 lg:col-span-4">
+                                    <p className="text-zinc-500 mb-0.5">Gateway Data</p>
+                                    <pre className="text-zinc-300 bg-black/20 rounded px-2 py-1 overflow-x-auto max-h-40 text-[10px] font-mono">{JSON.stringify(dep.gatewayData, null, 2)}</pre>
                                   </div>
                                 )}
                                 {dep.adminNotes && (
