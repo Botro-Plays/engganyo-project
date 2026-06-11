@@ -11,6 +11,12 @@ export class SubmitProofDto {
   )
   proofUrl?: string;
 
+  @ApiPropertyOptional({ example: 'SHA256 hash of the uploaded proof file for duplicate detection.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  proofHash?: string;
+
   @ApiPropertyOptional({ example: 'Additional notes about the completion.' })
   @IsOptional()
   @IsString()

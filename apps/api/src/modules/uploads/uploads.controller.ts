@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UploadsService } from './uploads.service';
@@ -90,12 +91,20 @@ export class UploadsController {
 
     const relativePath = `/uploads/proofs/${userId}/${taskId}/${file.filename}`;
 
+    // Compute SHA256 hash for duplicate detection
+    let proofHash: string | null = null;
+    if (fs.existsSync(finalPath)) {
+      const fileBuffer = fs.readFileSync(finalPath);
+      proofHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    }
+
     return {
       proofUrl: relativePath,
       filename: file.filename,
       originalName: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
+      proofHash,
     };
   }
 

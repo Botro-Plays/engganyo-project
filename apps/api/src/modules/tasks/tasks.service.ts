@@ -174,6 +174,45 @@ export class TasksService {
       }
     }
 
+    // ── Anti-abuse: creator restriction ────────────────────────
+    // Prevent users from farming the same creator's campaigns
+    const CREATOR_WINDOW_DAYS = 7;
+    const CREATOR_MAX_PER_WINDOW = 5;
+    const creatorWindowStart = new Date(Date.now() - CREATOR_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const creatorCompletions = await this.prisma.taskCompletion.count({
+      where: {
+        userId,
+        campaign: { userId: campaign.userId },
+        status: { in: [CompletionStatus.VERIFIED, CompletionStatus.SUBMITTED] },
+        assignedAt: { gte: creatorWindowStart },
+      },
+    });
+    if (creatorCompletions >= CREATOR_MAX_PER_WINDOW) {
+      throw new BadRequestException(
+        `You have reached the limit for completing tasks from this creator (${CREATOR_MAX_PER_WINDOW} per ${CREATOR_WINDOW_DAYS} days). Try campaigns from other creators.`,
+      );
+    }
+
+    // ── Anti-abuse: social graph concentration ─────────────────
+    // Flag users whose verified completions are heavily concentrated on one creator
+    if (!isAdminUser) {
+      const totalVerified = await this.prisma.taskCompletion.count({
+        where: { userId, status: CompletionStatus.VERIFIED },
+      });
+      if (totalVerified >= 10) {
+        const concentration = creatorCompletions / totalVerified;
+        if (concentration > 0.6) {
+          void this.antiAbuseService.flagUser(
+            userId,
+            'creator_concentration',
+            'high',
+            `${(concentration * 100).toFixed(0)}% of verified tasks from creator ${campaign.userId} (${creatorCompletions}/${totalVerified})`,
+            { concentration, creatorId: campaign.userId, totalVerified, creatorCompletions },
+          ).catch(() => null);
+        }
+      }
+    }
+
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h to complete
 
     const [completion] = await Promise.all([
@@ -300,6 +339,28 @@ export class TasksService {
       })
       .catch(() => null);
 
+    // ── Anti-abuse: duplicate proof detection ─────────────────
+    if (dto.proofHash) {
+      const duplicate = await this.prisma.taskCompletion.findFirst({
+        where: {
+          proofHash: dto.proofHash,
+          userId: { not: userId },
+          status: { in: [CompletionStatus.VERIFIED, CompletionStatus.SUBMITTED] },
+        },
+        select: { id: true, userId: true, campaignId: true },
+      });
+      if (duplicate) {
+        this.logger.warn(`Duplicate proof detected: user ${userId} reused hash ${dto.proofHash} from completion ${duplicate.id}`);
+        void this.antiAbuseService.flagUser(
+          userId,
+          'duplicate_proof',
+          'high',
+          `Proof hash matches another user's submission (completion ${duplicate.id})`,
+          { proofHash: dto.proofHash, duplicateCompletionId: duplicate.id, duplicateUserId: duplicate.userId },
+        ).catch(() => null);
+      }
+    }
+
     // ── API verification for supported platforms ──────────────
     // If the user has a linked social account, verify via platform API.
     // This overrides screenshot-only proof for supported platforms.
@@ -322,6 +383,7 @@ export class TasksService {
           data: {
             status: CompletionStatus.VERIFIED,
             proofUrl: dto.proofUrl,
+            proofHash: dto.proofHash,
             submittedAt: now,
             verifiedAt: now,
             verifiedBy: 'system',
@@ -381,6 +443,7 @@ export class TasksService {
         data: {
           status: CompletionStatus.SUBMITTED,
           proofUrl: dto.proofUrl,
+          proofHash: dto.proofHash,
           submittedAt: now,
           reviewDeadline,
         },

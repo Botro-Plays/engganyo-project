@@ -75,9 +75,16 @@ export default function TermsPage() {
               Engganyo charges a platform fee on all campaigns created through the service. The fee is calculated as a percentage of the total campaign budget (total slots × credits per task) and is deducted at the time of campaign creation.
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>The current platform fee rate is displayed during campaign creation.</li>
+              <li>Base platform fee: 10% of the total campaign budget.</li>
+              <li>Volume discounts apply based on your lifetime campaign spend:
+                <ul className="list-disc list-inside ml-6 mt-1">
+                  <li>₱500+ lifetime spend: 8% fee</li>
+                  <li>₱2,000+ lifetime spend: 6% fee</li>
+                  <li>₱5,000+ lifetime spend: 5% fee</li>
+                </ul>
+              </li>
+              <li>Promotional fee rates may be offered periodically and will be displayed during campaign creation.</li>
               <li>Fees are non-refundable once a campaign has been published.</li>
-              <li>Fee rates may vary based on promotions, trust level, or lifetime spend tiers.</li>
               <li>All fees are denominated in platform credits.</li>
             </ul>
           </section>

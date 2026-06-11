@@ -173,6 +173,7 @@ export default function TasksPage() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedProofUrl, setUploadedProofUrl] = useState<string | null>(null);
+  const [uploadedProofHash, setUploadedProofHash] = useState<string | null>(null);
 
   // ─── Connected social accounts (for task gating) ──────────
   const { data: linkedAccounts } = useQuery({
@@ -295,13 +296,14 @@ export default function TasksPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('taskId', submitting?.id || '');
-      const res = await apiClient.post<ApiResponse<{ proofUrl: string }>>('uploads/proof', formData, {
+      const res = await apiClient.post<ApiResponse<{ proofUrl: string; proofHash?: string }>>('uploads/proof', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       return res.data.data;
     },
     onSuccess: (data) => {
       setUploadedProofUrl(data.proofUrl);
+      setUploadedProofHash(data.proofHash ?? null);
       setUploadError(null);
     },
     onError: (err) => setUploadError(getApiErrorMessage(err)),
@@ -311,6 +313,7 @@ export default function TasksPage() {
     mutationFn: ({ campaignId, data }: { campaignId: string; data: ProofFormData }) =>
       apiClient.post(`tasks/${campaignId}/submit`, {
         proofUrl: uploadedProofUrl || data.proofUrl || undefined,
+        proofHash: uploadedProofHash || undefined,
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
@@ -322,6 +325,7 @@ export default function TasksPage() {
       setSelectedFile(null);
       setFilePreview(null);
       setUploadedProofUrl(null);
+      setUploadedProofHash(null);
       setUploadError(null);
     },
     onError: (err) => setSubmitError(getApiErrorMessage(err)),
@@ -392,6 +396,7 @@ export default function TasksPage() {
     setSelectedFile(file);
     setUploadError(null);
     setUploadedProofUrl(null);
+    setUploadedProofHash(null);
 
     // Create preview
     const reader = new FileReader();
@@ -886,6 +891,7 @@ export default function TasksPage() {
                               setSelectedFile(null);
                               setFilePreview(null);
                               setUploadedProofUrl(null);
+                              setUploadedProofHash(null);
                               setUploadError(null);
                             }}
                             className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-colors"

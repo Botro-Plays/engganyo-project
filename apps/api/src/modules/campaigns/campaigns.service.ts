@@ -100,6 +100,7 @@ export class CampaignsService {
     const now = new Date();
     const isPromoActive = promoEnabled && promoUntil && new Date(promoUntil) > now;
     let rate = isPromoActive ? promoRate : baseRate;
+    let feeTier = isPromoActive ? 'PROMO' : 'STANDARD';
 
     // Volume discounts based on lifetime campaign spend
     if (userId) {
@@ -110,20 +111,21 @@ export class CampaignsService {
       const lifetimeSpent = wallet?.lifetimeSpent ?? 0;
 
       const tiers = [
-        { threshold: cfg('fee_volume_t3_threshold', 5000) as number, rate: cfg('fee_volume_t3_rate', 0.05) as number },
-        { threshold: cfg('fee_volume_t2_threshold', 2000) as number, rate: cfg('fee_volume_t2_rate', 0.06) as number },
-        { threshold: cfg('fee_volume_t1_threshold', 500) as number, rate: cfg('fee_volume_t1_rate', 0.08) as number },
+        { threshold: cfg('fee_volume_t3_threshold', 5000) as number, rate: cfg('fee_volume_t3_rate', 0.05) as number, label: 'VOLUME_T3' as const },
+        { threshold: cfg('fee_volume_t2_threshold', 2000) as number, rate: cfg('fee_volume_t2_rate', 0.06) as number, label: 'VOLUME_T2' as const },
+        { threshold: cfg('fee_volume_t1_threshold', 500) as number, rate: cfg('fee_volume_t1_rate', 0.08) as number, label: 'VOLUME_T1' as const },
       ];
 
       for (const tier of tiers) {
         if (lifetimeSpent >= tier.threshold && tier.rate < rate) {
           rate = tier.rate;
+          feeTier = tier.label;
           break; // tiers ordered highest-first, first match is the best
         }
       }
     }
 
-    return { rate, minBudget, isPromoActive };
+    return { rate, minBudget, isPromoActive, feeTier };
   }
 
   private calculateFee(totalCost: number, rate: number) {
@@ -194,7 +196,7 @@ export class CampaignsService {
           totalCost,
           feeAmount,
           feeRateAtCreate: feeConfig.rate,
-          feeTier: 'STANDARD',
+          feeTier: feeConfig.feeTier,
           targetCountries: dto.targetCountries ?? [],
           targetLanguages: dto.targetLanguages ?? [],
           cooldownHours: dto.cooldownHours ?? 24,

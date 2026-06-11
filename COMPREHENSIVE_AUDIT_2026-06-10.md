@@ -118,11 +118,11 @@
 **Status:** ✅ IMPLEMENTED. `/forgot-password` page exists with email input form, API call to `POST /auth/forgot-password`, and success state. Backend endpoint was already present.  
 **Resolution:** Users can now self-serve password reset from the frontend.
 
-### 15. Volume Discounts on Platform Fees Not Implemented
+### 15. Volume Discounts on Platform Fees — IMPLEMENTED with minor label bug
 **Source:** `ROADMAP.md` Phase 15  
-**Status:** NOT IMPLEMENTED  
-**Planned:** Reduced fees based on creator lifetime spend (e.g., 15% → 12% → 10% → 8%)  
-**Impact:** All creators pay the same flat fee regardless of loyalty/spend.
+**Status:** ✅ IMPLEMENTED — commit `9ec0255` (2026-06-11). `getFeeConfig()` applies 3 tiers based on `wallet.lifetimeSpent`: VOLUME_T3 (₱5,000+ → 5%), VOLUME_T2 (₱2,000+ → 6%), VOLUME_T1 (₱500+ → 8%). Promo rate overrides when active.  
+**Bug fixed:** `feeTier` was hardcoded to `'STANDARD'` in `Campaign.create()`. Now correctly stores the applied tier label (`STANDARD`, `PROMO`, `VOLUME_T1`, `VOLUME_T2`, `VOLUME_T3`). `@apps/api/src/modules/campaigns/campaigns.service.ts:103-128,199`  
+**Impact:** Fee rate calculation works correctly; `feeTier` label now accurately reflects the discount tier for audit and analytics.
 
 ### 16. Terms of Service Not Updated for Fees
 **Source:** `GO_LIVE_CHECKLIST.md` Week 2  
@@ -370,6 +370,7 @@
 | Synchronous analytics cron timeout | MEDIUM | MEDIUM | Fix #9 | ✅ FIXED (2026-06-10) |
 | 4/11 platforms manual-only = fraud risk | MEDIUM | HIGH | Fix #11 | 🟠 OPEN |
 | No forgot-password page | MEDIUM | MEDIUM | Fix #14 | ✅ FIXED |
+| Volume discounts not applied | HIGH | N/A | Fix #15 | ✅ FIXED (2026-06-11) |
 | No rewards store = credit sink missing | MEDIUM | LOW | Fix #17 | 🟡 OPEN |
 | No PWA = missed mobile engagement | MEDIUM | MEDIUM | Fix #18 | 🟡 OPEN |
 | Outdated architecture docs | LOW | LOW | Fix #32-33 | 🟢 IN PROGRESS (this session) |

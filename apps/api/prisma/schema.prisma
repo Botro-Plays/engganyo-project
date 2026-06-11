@@ -627,6 +627,7 @@ model TaskCompletion {
   proofUrl        String? @map("proof_url")
   proofScreenshot String? @map("proof_screenshot")
   proofData       Json?   @map("proof_data") // flexible proof metadata
+  proofHash       String? @map("proof_hash") // SHA256 of uploaded file for duplicate detection
 
   // Verification tracking
   verifiedAt      DateTime? @map("verified_at")
@@ -653,6 +654,7 @@ model TaskCompletion {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([proofHash])
   @@map("task_completions")
 }
 
