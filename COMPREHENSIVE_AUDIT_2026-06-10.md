@@ -126,9 +126,9 @@
 
 ### 16. Terms of Service Not Updated for Fees
 **Source:** `GO_LIVE_CHECKLIST.md` Week 2  
-**Status:** NOT IMPLEMENTED  
-**Evidence:** No terms page content mentioning platform fees. `/terms` page likely has placeholder text.
-**Impact:** Legal exposure. Charging fees without clear ToS disclosure is risky.
+**Status:** ✅ IMPLEMENTED (2026-06-11)  
+**Evidence:** `/terms` now includes Section 5 "Platform Fees" (base 10%, volume discounts, non-refundable) and Section 6 "Anti-Abuse & Fraud Prevention" (monitoring, trust score, prohibited abuse, data collection, appeals). `@apps/web/src/app/terms/page.tsx`
+**Impact:** Legal disclosure complete.
 
 ---
 
@@ -359,11 +359,10 @@
 **Still Pending (next sprint priorities):**
 1. **Onboarding walkthrough** — new user guidance reduces churn
 2. **Rewards store** (Phase 13) — credit sink needed
-3. **Terms of service update** — disclose fees (legal exposure)
-4. **Social verification expansion** — Twitter/X, TikTok, Instagram, Facebook OAuth
-5. **E2E coverage for deposit flows**
-6. **Mobile responsiveness audit + PWA foundation**
-7. **Redis caching expansion** — user profiles (1h), CurrencyService (currently in-memory)
+3. **Social verification expansion** — Twitter/X, TikTok, Instagram, Facebook OAuth
+4. **E2E coverage for deposit flows**
+5. **Mobile responsiveness audit + PWA foundation**
+6. **Redis caching expansion** — user profiles (1h), CurrencyService (currently in-memory)
 
 ---
 
