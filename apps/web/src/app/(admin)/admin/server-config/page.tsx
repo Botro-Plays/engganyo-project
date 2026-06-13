@@ -132,6 +132,7 @@ const FINANCE_CONFIG_META: Record<string, { label: string; type: 'boolean' | 'nu
   paypal_client_id:        { label: 'Client ID',                type: 'text',     section: 'PayPal' },
   paypal_client_secret:    { label: 'Client Secret',            type: 'password', section: 'PayPal' },
   paypal_mode:             { label: 'Mode',                     type: 'select',   section: 'PayPal', options: ['sandbox', 'live'] },
+  paypal_webhook_id:       { label: 'Webhook ID',               type: 'text',     section: 'PayPal', hint: 'From PayPal Developer → Webhooks. Required for async payment notifications.' },
   usdt_bep20_enabled:        { label: 'Enable USDT BEP20',          type: 'boolean',  section: 'Crypto' },
   usdt_bep20_wallet_address: { label: 'BEP20 Receiving Address',     type: 'text',     section: 'Crypto', hint: 'Your BNB Smart Chain (BEP20) wallet address that receives USDT deposits' },
   usdt_bep20_contract:       { label: 'USDT BEP20 Contract Address', type: 'text',     section: 'Crypto', hint: 'Default: 0x55d398326f99059fF775485246999027B3197955 (BSC USDT). Change only if using a different token.' },
