@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { PayPalController, PayPalWebhookController } from './paypal.controller';
+import { PayPalController } from './paypal.controller';
 import { PayPalService } from './paypal.service';
 import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [WalletModule],
-  controllers: [PayPalController, PayPalWebhookController],
+  controllers: [PayPalController],
   providers: [PayPalService],
   exports: [PayPalService],
 })

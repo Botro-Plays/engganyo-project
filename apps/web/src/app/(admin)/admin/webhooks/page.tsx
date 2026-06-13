@@ -40,7 +40,7 @@ function getApiBaseUrl(): string {
 const WEBHOOKS: WebhookEndpoint[] = [
   {
     label: 'PayPal',
-    path: '/webhooks/paypal',
+    path: '/paypal/webhook',
     icon: Wallet,
     color: 'text-blue-400',
     docsUrl: 'https://developer.paypal.com/developer/applications/',

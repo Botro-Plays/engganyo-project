@@ -34,14 +34,8 @@ export class PayPalController {
   ) {
     return this.paypalService.captureOrder(orderId);
   }
-}
 
-@ApiTags('webhooks')
-@Controller({ path: 'webhooks' })
-export class PayPalWebhookController {
-  constructor(private readonly paypalService: PayPalService) {}
-
-  @Post('paypal')
+  @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Receive PayPal webhook events (public — no auth)' })
   async handleWebhook(
