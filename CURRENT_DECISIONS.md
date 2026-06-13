@@ -634,7 +634,7 @@
 **Current Status**:
 - ✅ Token generation working in production (root cause was provider not mounted in auth layout)
 - ✅ Register and login fully protected
-- 🟡 `/forgot-password` page not yet implemented (no reCAPTCHA there yet)
+- ✅ `/forgot-password` reCAPTCHA fully implemented (v2 + v3) — `AuthService.forgotPassword()` validates token server-side. Page uses `react-google-recaptcha` + `react-google-recaptcha-v3` with custom `useRecaptcha` hook.
 **Known Issues (RESOLVED)**:
 - ~~executeRecaptcha hook not available~~ — fixed by mounting provider in layout
 - ~~GoogleReCaptchaProvider not loading script~~ — fixed by ensuring provider wraps auth pages

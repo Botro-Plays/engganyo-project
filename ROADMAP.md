@@ -467,7 +467,7 @@
 **Dependencies**: Phase 0 (Security), Phase 7 (Anti-Abuse)
 
 **Behavioral Analysis**
-- [🟠] Task timing analysis — flag completions that are too fast (<5 seconds for YouTube like)
+- [✅] Task timing analysis — flag completions that are too fast (<5 seconds). Implemented in `TasksService.submitProof()` with `SUSPICIOUS_THRESHOLD_MS = 5_000` and rapid-fire detection.
 - [🟠] Consistent interval detection — flag completions at consistent intervals (bot pattern)
 - [🟠] Anomaly detection — statistical analysis of user behavior patterns
 - [🟠] Completion time distribution tracking per user
@@ -475,7 +475,7 @@
 **Social Graph Analysis**
 - [🟠] Build user relationship graph (referrals, same IP, same device)
 - [🟠] Detect clusters of suspicious users (abuse rings)
-- [🟠] Flag rings of users who only complete each other's campaigns
+- [✅] Flag rings of users who only complete each other's campaigns — bidirectional farming detection implemented in `TasksService.assignTask()`.
 - [🟠] Implement graph algorithms for community detection
 - [🟠] Analyze referral quality (average trust of referred users)
 
@@ -489,7 +489,7 @@
 **Proof Validation**
 - [🟡] Image analysis for screenshots (detect editing, reused images)
 - [🟡] Cross-reference proof with campaign requirements
-- [🟡] Flag suspicious proof patterns (identical images across users)
+- [✅] Flag suspicious proof patterns (identical images across users) — SHA256 proof hash deduplication implemented in `TasksService.submitProof()` and `UploadsController`.
 - [🟡] EXIF data analysis for proof images
 
 **Progressive Trust Gates ✅ IMPLEMENTED 2026-06-10**
@@ -710,7 +710,7 @@
 - [✅] Promotional fee events support (ee_promo_enabled, ee_promo_rate, ee_promo_until)
 - [✅] Minimum campaign budget enforcement (campaign_min_budget)
 - [✅] Admin revenue dashboard (/admin/revenue)
-- [🟡] Volume discounts based on creator lifetime spend (deferred)
+- [✅] Volume discounts based on creator lifetime spend — implemented in commit `9ec0255` (2026-06-11). Tiers: VOLUME_T3 (₱5,000+ → 5%), VOLUME_T2 (₱2,000+ → 6%), VOLUME_T1 (₱500+ → 8%).
 - [✅] Fee breakdown display to creators — cost breakdown modal on campaign creation
 - [✅] Revenue dashboard in admin analytics — `/admin/revenue` with date range filter and daily breakdown
 

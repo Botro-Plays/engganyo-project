@@ -36,7 +36,7 @@ ENGGANYO is a **collaborative creator-growth SaaS platform** where creators grow
 ### Current State (Phase 10–12d + Platform Fees Live + Deposit System Live)
 - **Revenue**: Platform fees live — 10% base fee deducted on campaign creation, tracked via `PlatformRevenue` model, admin revenue dashboard at `/admin/revenue`
 - **Credit System**: Internal-only, no fiat/crypto conversion. Deposits: users buy credit packages via PayMongo (GCash/card), PayPal, or USDT (BEP-20/Base). Stripe ⛔ DEFERRED — not yet applicable/available.
-- **Platform Fees**: Implemented (2026-06-01) — 10% base, config-driven (`fee_base_rate`, `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`, `campaign_min_budget`)
+- **Platform Fees**: Implemented (2026-06-01) — 10% base, config-driven (`fee_base_rate`, `fee_promo_enabled`, `fee_promo_rate`, `fee_promo_until`, `campaign_min_budget`). Volume discounts live: VOLUME_T1 (₱500+ lifetime spend → 8%), VOLUME_T2 (₱2,000+ → 6%), VOLUME_T3 (₱5,000+ → 5%).
 - **Credit Redemption**: Not yet implemented — credits are internal-only (no fiat/crypto conversion). Future: prizes/rewards store (gift cards, mobile load, gaming credits, platform perks) where users redeem earned credits for digital goods.
 - **Forum System**: Implemented with topics, replies, reactions, moderation (logged-in only)
 - **Chat System**: Implemented with AI chat support (Groq integration)
@@ -341,15 +341,15 @@ Tasks   Campaigns  Tasks   Campaigns
 
 **High Trust (70-80)**
 - Priority task placement
-- Reduced platform fees (12%)
 - Access to advanced analytics
 - Early access to limited prize drops
+- *(Planned: reduced platform fees based on trust level — currently only volume discounts by lifetime spend are live)*
 
 **Verified (80-100)**
 - Full platform access
-- Minimum platform fees (10%)
 - Premium features (exclusive prize tiers, custom profile themes, boosted visibility)
 - Early access to new features
+- *(Planned: minimum platform fees based on trust level — currently only volume discounts by lifetime spend are live)*
 
 ---
 

@@ -213,8 +213,9 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 14. **BullMQ Queues**: Email delivery, analytics snapshots, trust score recalculation — all async via Redis-backed queues.
 
 **Security Gaps (See COMPREHENSIVE_AUDIT_2026-06-10.md for current status)**:
-- Anti-abuse: social graph analysis and image proof analysis pending
+- Anti-abuse IP tracking broken: `UserSession.ipAddress` never populated; `@Ip()` decorator returns proxy IP instead of real client IP
 - Mobile responsiveness pass incomplete
+- OAuth verification for Twitter/X, TikTok, Instagram, Facebook still manual-only
 
 ---
 

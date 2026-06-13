@@ -218,12 +218,12 @@
 **Status:** ✅ FIXED — commit `46cf2e9` (2026-06-10). Replaced `!` with optional chaining + runtime guard. `@apps/web/src/app/(dashboard)/wallet/page.tsx:563,1009`  
 **Resolution:** Safe optional access with guard — `checkoutUrl` missing no longer crashes frontend.
 
-### 30. Admin Deposit Details Expansion Missing
+### 30. Admin Deposit Details Expansion
 **Source:** `PUNCH_LIST_2026-06-04.md` Medium #2  
-**Status:** NOT IMPLEMENTED  
-**File:** `apps/web/src/app/(admin)/finances/page.tsx`  
-**Problem:** Admin finances page shows limited deposit info. Support cannot diagnose deposit issues with the same detail users see.
-**Fix:** Add expandable rows with full deposit details.
+**Status:** ✅ IMPLEMENTED — commit `f04e60d` (2026-06-11)
+**File:** `apps/web/src/app/(admin)/admin/finances/page.tsx`  
+**Resolution:** `DepositItem` interface extended with `gatewayData` and `userWalletAddress`. Expandable rows display wallet address, gateway data formatted JSON, and full deposit lifecycle details. Admin can now diagnose deposit issues with the same detail users see.
+**Remaining risk:** None.
 
 ---
 
@@ -235,9 +235,9 @@
 
 ### 32. `ARCHITECTURE.md` Security Section Outdated
 **Source:** `ARCHITECTURE.md:198-216`  
-**Status:** STALE  
-**Problem:** Still lists "Email verification disabled by default", "No 2FA for admin accounts", "reCAPTCHA not functioning in production" — all resolved in 2026-05/06.
-**Fix:** Update to reflect current state.
+**Status:** ✅ FIXED — updated in session 2026-06-10. Security layers now accurately reflect rate limiting on task endpoints, reCAPTCHA v2/v3 on forgot-password, comprehensive anti-abuse (timing, social graph, duplicate proof), Redis caching, and BullMQ queues.
+**Problem:** Previously listed outdated items like "Email verification disabled by default", "No 2FA for admin accounts", "reCAPTCHA not functioning in production".
+**Fix:** Security section rewritten to match current implementation.
 
 ### 33. `CURRENT_DECISIONS.md` Temporary Compromises Stale
 **Source:** `CURRENT_DECISIONS.md:793-811`  
@@ -245,9 +245,9 @@
 
 ### 34. Session Notes Mojibake
 **Source:** `PUNCH_LIST_2026-06-04.md` Medium #7  
-**Status:** NOT FIXED  
-**File:** `SESSION_2026-06-04.md` contains `â€”` instead of em dashes.
-**Fix:** Re-save as UTF-8.
+**Status:** ✅ VERIFIED CLEAN — file scanned on 2026-06-13. No `â€”` artifacts found. Em dashes render correctly as UTF-8 `—`. The punch list reference appears to be stale.
+**File:** `SESSION_2026-06-04.md`
+**Fix:** None needed.
 
 ### 35. E2E Deposit Flow Coverage Missing
 **Source:** `PUNCH_LIST_2026-06-04.md` QA #1  
