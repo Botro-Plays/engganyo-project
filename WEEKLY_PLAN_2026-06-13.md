@@ -114,23 +114,27 @@
 
 ---
 
-## Phase 4 — Next Major Feature: PayPal Deposit Implementation (Days 5–7)
+## Phase 4 — PayPal Deposit Implementation (Days 5–6)
 
 > **Phase 1 complete. Phase 3 deferred. Proceed with deposit method expansion.**
+> **Discovery (2026-06-13):** PayPal integration is ~70% already built. Backend service, controller, and frontend UI all exist. See `PHASE4_PAYPAL_SCOPE.md` for detailed gap analysis.
 
 ### 4.1 PayPal Deposit Integration
 
 - **Business Impact:** HIGH — opens deposits to global users without GCash/card access
-- **Effort Estimate:** 2–3 days
+- **Effort Estimate:** 1 day (down from 2–3 days — existing code covers createOrder, captureOrder, frontend UI)
 - **Dependencies:** PayPal Business account + REST API credentials
-- **Deliverables:**
-  - `POST /wallet/deposit/paypal/create-order` — creates PayPal order, returns approval URL
-  - `POST /wallet/deposit/paypal/capture` — captures approved order, credits wallet
-  - Webhook handler `POST /webhooks/paypal` for async payment notifications
-  - Update `initiateDeposit()` to support PayPal method with inline order creation
-  - Frontend PayPal checkout flow (redirect + capture on return)
-  - Admin deposit review support for PayPal transactions
-- **Acceptance:** User can deposit via PayPal, wallet credited, transaction logged in `PlatformRevenue`.
+- **Already Built ✅:**
+  - `POST /paypal/create-order` — creates PayPal order, stores order ID in `deposit.paymentRef`
+  - `POST /paypal/capture/:orderId` — captures order, calls `walletService.completeDeposit()`
+  - Frontend: method selection, order creation, checkout button, redirect to PayPal
+  - Schema: `DepositMethod.PAYPAL`, `TransactionType.DEPOSIT_PAYPAL` already exist
+- **Remaining Gaps 🔧:**
+  1. **Frontend return handler** — `/wallet?paypal=success&token=ORDER_ID` not processed; never calls capture
+  2. **Webhook endpoint** — `POST /webhooks/paypal` missing; users who don't return to site leave deposit PENDING
+  3. **Idempotency guard** — `captureOrder` not safe to call twice (no `ORDER_ALREADY_CAPTURED` handling)
+  4. **Cancel UX** — `/wallet?paypal=cancel` not handled
+- **Acceptance:** User can deposit via PayPal, wallet credited, transaction logged in `PlatformRevenue`. Webhook completes deposit even if user never returns to site.
 
 ---
 
