@@ -15,7 +15,7 @@ import type { ApiResponse } from '@/types';
 interface FinanceStats {
   counts: { total: number; pending: number; processing: number; completed: number; failed: number };
   totals: { creditsDistributed: number; revenueFiat: number };
-  byMethod: { method: string; count: number; amountFiat: number; creditsAwarded: number }[];
+  byMethod: { method: string; count: number; amountFiat: number; creditsAwarded: number; currency: string }[];
 }
 
 interface DepositPackage {
@@ -405,10 +405,28 @@ export default function FinancesPage() {
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="card-glass rounded-xl p-5 border border-surface-border">
             <p className="text-xs text-zinc-500 mb-3">Fiat Revenue (Completed)</p>
-            <p className="text-3xl font-bold text-green-400">
-              ₱{stats.totals.revenueFiat.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-xs text-zinc-600 mt-1">{stats.totals.creditsDistributed.toLocaleString()} credits distributed</p>
+            <div className="space-y-1">
+              {/* Group revenue by currency */}
+              {(() => {
+                const byCurrency = new Map<string, number>();
+                for (const m of stats.byMethod) {
+                  byCurrency.set(m.currency, (byCurrency.get(m.currency) ?? 0) + m.amountFiat);
+                }
+                if (byCurrency.size === 0) {
+                  return <p className="text-3xl font-bold text-green-400">—</p>;
+                }
+                return Array.from(byCurrency.entries()).map(([currency, amount]) => {
+                  const symbol = currency === 'USD' ? '$' : currency === 'PHP' ? '₱' : currency;
+                  return (
+                    <p key={currency} className="text-2xl font-bold text-green-400">
+                      {symbol}{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="text-xs font-normal text-zinc-500 ml-1">{currency}</span>
+                    </p>
+                  );
+                });
+              })()}
+            </div>
+            <p className="text-xs text-zinc-600 mt-2">{stats.totals.creditsDistributed.toLocaleString()} credits distributed</p>
           </div>
           <div className="card-glass rounded-xl p-5 border border-surface-border">
             <p className="text-xs text-zinc-500 mb-3">By Payment Method</p>
@@ -419,11 +437,11 @@ export default function FinancesPage() {
                 {stats.byMethod.map((m) => {
                   const cfg = METHOD_CFG[m.method] ?? { label: m.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: DollarSign };
                   return (
-                    <div key={m.method} className="flex items-center justify-between text-xs">
+                    <div key={`${m.method}-${m.currency}`} className="flex items-center justify-between text-xs">
                       <span className={`flex items-center gap-1.5 ${cfg.color}`}>
                         <cfg.icon className="w-3 h-3" />{cfg.label}
                       </span>
-                      <span className="text-zinc-400">{m.count} · ₱{m.amountFiat.toFixed(2)}</span>
+                      <span className="text-zinc-400">{m.count} · {m.currency === 'USD' ? '$' : m.currency === 'PHP' ? '₱' : m.currency}{m.amountFiat.toFixed(2)}</span>
                     </div>
                   );
                 })}

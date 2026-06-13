@@ -1797,7 +1797,7 @@ export class AdminService {
       this.prisma.deposit.count({ where: { status: DepositStatus.COMPLETED } }),
       this.prisma.deposit.count({ where: { status: DepositStatus.FAILED } }),
       this.prisma.deposit.groupBy({
-        by: ['method'],
+        by: ['method', 'currency'],
         _count: { id: true },
         _sum: { amountFiat: true, creditsAwarded: true },
         where: { status: DepositStatus.COMPLETED },
@@ -1810,7 +1810,7 @@ export class AdminService {
         creditsDistributed: totalCredits._sum.creditsAwarded ?? 0,
         revenueFiat: totalCredits._sum.amountFiat ?? 0,
       },
-      byMethod: byMethod.map((r) => ({ method: r.method, count: r._count.id, amountFiat: r._sum.amountFiat ?? 0, creditsAwarded: r._sum.creditsAwarded ?? 0 })),
+      byMethod: byMethod.map((r) => ({ method: r.method, count: r._count.id, amountFiat: r._sum.amountFiat ?? 0, creditsAwarded: r._sum.creditsAwarded ?? 0, currency: r.currency })),
     };
   }
 
