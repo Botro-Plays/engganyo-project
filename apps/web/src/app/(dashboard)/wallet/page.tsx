@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDownLeft, ArrowUpRight, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
@@ -403,6 +404,41 @@ export default function WalletPage() {
     },
     onError: (err) => setDepositError(getApiErrorMessage(err)),
   });
+
+  const paypalCaptureMutation = useMutation({
+    mutationFn: async (orderId: string) =>
+      (await apiClient.post<ApiResponse<{ depositId: string; orderId: string; status: string }>>(`paypal/capture/${orderId}`)).data.data,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+    },
+    onError: (err) => setDepositError(getApiErrorMessage(err)),
+  });
+
+  // ── PayPal return handler: auto-capture when user returns from PayPal approval ──
+  const searchParams = useSearchParams();
+  const paypalHandledRef = useRef(false);
+  useEffect(() => {
+    if (paypalHandledRef.current) return;
+    const paypalParam = searchParams.get('paypal');
+    const token = searchParams.get('token');
+    if (!paypalParam) return;
+
+    paypalHandledRef.current = true;
+
+    if (paypalParam === 'success' && token) {
+      paypalCaptureMutation.mutate(token);
+    } else if (paypalParam === 'cancel') {
+      setDepositError('PayPal checkout was cancelled. No charge was made.');
+    }
+
+    // Clean URL params without reload
+    const url = new URL(window.location.href);
+    url.searchParams.delete('paypal');
+    url.searchParams.delete('token');
+    url.searchParams.delete('PayerID');
+    window.history.replaceState({}, '', url.toString());
+  }, [searchParams, paypalCaptureMutation]);
 
   const handlePayMongoSubmit = () => {
     if (!selectedPackage) return;
