@@ -74,6 +74,16 @@ function DashboardPageInner() {
     void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet'] });
   });
+  useSocketEvent('wallet:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+  });
+  useSocketEvent('deposit:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+  });
 
   const { data: stats } = useQuery<MyStats>({
     queryKey: ['my-stats'],

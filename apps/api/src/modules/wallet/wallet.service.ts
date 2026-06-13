@@ -342,10 +342,10 @@ export class WalletService {
       },
     });
 
-    let instructions: Record<string, unknown> = {};
     const isCrypto = method === 'USDT_BEP20' || method === 'USDT_BASE';
     const cryptoCfg = method === 'USDT_BEP20' ? options.usdtBep20 : options.usdtBase;
 
+    let instructions: Record<string, unknown> = {};
     if (method === 'PAYMONGO') {
       instructions = { type: 'PAYMENT_LINK', depositId: deposit.id, message: 'Complete your payment in the PayMongo checkout page. The link is available below.' };
     } else if (method === 'PAYPAL') {
@@ -363,6 +363,11 @@ export class WalletService {
           ? `Your transaction has been submitted (${txHash}). Admin will verify and credit your account shortly.`
           : `Send exactly ${pkg.usdAmount} USDT on ${cryptoCfg.network} to the address above. Submit your TX hash after sending.`,
       };
+      // Persist crypto instructions so they survive page refresh
+      await this.prisma.deposit.update({
+        where: { id: deposit.id },
+        data: { gatewayData: instructions as Prisma.InputJsonValue },
+      });
     }
 
     return {

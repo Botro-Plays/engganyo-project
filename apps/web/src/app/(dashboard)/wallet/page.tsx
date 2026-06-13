@@ -249,10 +249,12 @@ export default function WalletPage() {
       resetDeposit();
     }
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
   });
   useSocketEvent('wallet:updated', () => {
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
   });
 
   // Fallback: when tab becomes visible after being backgrounded (user paid in new tab),
@@ -260,9 +262,11 @@ export default function WalletPage() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
       if (depositResult) {
-        void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
-        void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+        void queryClient.refetchQueries({ queryKey: ['wallet', 'deposits'] });
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -382,10 +386,13 @@ export default function WalletPage() {
       (await apiClient.delete<ApiResponse<unknown>>(`wallet/deposit/${depositId}/cancel`)).data,
     onSuccess: (_, depositId) => {
       setCancelConfirmId(null);
-      // Always reset the deposit form on successful cancel — the user is done with this flow.
-      // The conditional check `depositResult?.deposit.id === depositId` was unreliable
-      // because depositResult could be null (after refresh) or stale.
-      resetDeposit();
+      // Only reset the deposit form if we are canceling the deposit the user
+      // is currently in the middle of (depositResult matches). If depositResult
+      // is null (page was refreshed) we do NOT reset — the user may be
+      // creating a new deposit and we must not destroy that state.
+      if (depositResult?.deposit.id === depositId) {
+        resetDeposit();
+      }
       // Force immediate refetch so the history updates right away (not just background stale-while-revalidate)
       void queryClient.refetchQueries({ queryKey: ['wallet', 'deposits'] });
       void queryClient.refetchQueries({ queryKey: ['wallet', 'me'] });
@@ -596,37 +603,77 @@ export default function WalletPage() {
       {tab === 'deposit' && (
         <div className="space-y-6">
 
-          {/* ── Sticky: Resume pending PayMongo payment ── */}
+          {/* ── Sticky: Resume any pending deposit ── */}
           {(() => {
-            const pendingPaymongo = depositHistory?.items.find(
-              (d) => d.method === 'PAYMONGO' && d.status === 'PENDING' && typeof d.gatewayData?.checkoutUrl === 'string',
-            );
-            if (!pendingPaymongo) return null;
-            const checkoutUrl = pendingPaymongo.gatewayData?.checkoutUrl as string | undefined;
-            if (!checkoutUrl) return null;
+            // Find most recent pending/processing deposit that has resumable data
+            const pending = depositHistory?.items.find((d) => {
+              if (d.status !== 'PENDING' && d.status !== 'PROCESSING') return false;
+              if (d.method === 'PAYMONGO') return typeof d.gatewayData?.checkoutUrl === 'string';
+              if (d.method === 'PAYPAL') return typeof d.gatewayData?.approvalUrl === 'string';
+              if (d.method === 'USDT_BEP20' || d.method === 'USDT_BASE') return d.status === 'PENDING';
+              return false;
+            });
+            if (!pending) return null;
+
+            const meta = METHOD_META[pending.method] ?? { label: pending.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard };
+            const isPaymongo = pending.method === 'PAYMONGO';
+            const isPaypal = pending.method === 'PAYPAL';
+            const isCrypto = pending.method === 'USDT_BEP20' || pending.method === 'USDT_BASE';
+            const checkoutUrl = isPaymongo ? (pending.gatewayData?.checkoutUrl as string | undefined) : undefined;
+            const approvalUrl = isPaypal ? (pending.gatewayData?.approvalUrl as string | undefined) : undefined;
+
             return (
-              <div className="card-glass rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
-                  <ExternalLink className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">Payment in progress</p>
-                  <p className="text-xs text-zinc-400">
-                    {pendingPaymongo.currency} {pendingPaymongo.amountFiat.toFixed(2)} → {pendingPaymongo.creditsToAward.toLocaleString()} credits
-                  </p>
-                  <div className="mt-0.5">
-                    <CountdownTimer
-                      expiredAt={typeof pendingPaymongo.gatewayData?.expiredAt === 'string' ? (pendingPaymongo.gatewayData.expiredAt as string) : undefined}
-                      createdAt={pendingPaymongo.createdAt}
-                    />
+              <div className="card-glass rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${meta.bg}`}>
+                    <meta.icon className={`w-5 h-5 ${meta.color}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">{meta.label} payment in progress</p>
+                    <p className="text-xs text-zinc-400">
+                      {pending.currency} {pending.amountFiat.toFixed(2)} → {pending.creditsToAward.toLocaleString()} credits
+                    </p>
+                    {isPaymongo && (
+                      <div className="mt-0.5">
+                        <CountdownTimer
+                          expiredAt={typeof pending.gatewayData?.expiredAt === 'string' ? (pending.gatewayData.expiredAt as string) : undefined}
+                          createdAt={pending.createdAt}
+                        />
+                      </div>
+                    )}
+                    {isCrypto && pending.gatewayData && (
+                      <div className="mt-1 text-xs text-zinc-500">
+                        Send {pending.gatewayData.amount as number} USDT on {pending.gatewayData.network as string} to{' '}
+                        <code className="text-zinc-300 font-mono">{(pending.gatewayData.walletAddress as string)?.slice(0, 12)}…</code>
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    {(checkoutUrl || approvalUrl) && (
+                      <button
+                        onClick={() => window.open((checkoutUrl || approvalUrl)!, '_blank', 'noopener,noreferrer')}
+                        className="flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />Resume Payment
+                      </button>
+                    )}
+                    {isCrypto && (
+                      <button
+                        onClick={() => setExpandedDepositId(pending.id)}
+                        className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />View Details
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setCancelConfirmId(pending.id)}
+                      className="flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-2"
+                      title="Cancel this pending deposit"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => window.open(checkoutUrl, '_blank', 'noopener,noreferrer')}
-                  className="shrink-0 flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg transition-colors"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />Resume Payment
-                </button>
               </div>
             );
           })()}
@@ -1041,22 +1088,51 @@ export default function WalletPage() {
                             {dep.status === 'COMPLETED' && dep.creditsAwarded > 0 && (
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
                             )}
-                            {dep.method === 'PAYMONGO' && dep.status === 'PENDING' && typeof dep.gatewayData?.checkoutUrl === 'string' && (
-                              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <CountdownTimer
-                                  expiredAt={typeof dep.gatewayData?.expiredAt === 'string' ? (dep.gatewayData.expiredAt as string) : undefined}
-                                  createdAt={dep.createdAt}
-                                />
-                                <button
-                                  onClick={() => {
-                                    const url = dep.gatewayData?.checkoutUrl as string | undefined;
-                                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                                  }}
-                                  className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />Continue to PayMongo
-                                </button>
-                              </div>
+                            {/* Continue/Resume links for pending deposits */}
+                            {dep.status === 'PENDING' && (
+                              <>
+                                {dep.method === 'PAYMONGO' && typeof dep.gatewayData?.checkoutUrl === 'string' && (
+                                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <CountdownTimer
+                                      expiredAt={typeof dep.gatewayData?.expiredAt === 'string' ? (dep.gatewayData.expiredAt as string) : undefined}
+                                      createdAt={dep.createdAt}
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const url = dep.gatewayData?.checkoutUrl as string | undefined;
+                                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                      }}
+                                      className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />Continue to PayMongo
+                                    </button>
+                                  </div>
+                                )}
+                                {dep.method === 'PAYPAL' && typeof dep.gatewayData?.approvalUrl === 'string' && (
+                                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <button
+                                      onClick={() => {
+                                        const url = dep.gatewayData?.approvalUrl as string | undefined;
+                                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                      }}
+                                      className="flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />Continue to PayPal
+                                    </button>
+                                  </div>
+                                )}
+                                {(dep.method === 'USDT_BEP20' || dep.method === 'USDT_BASE') && dep.gatewayData && (
+                                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <button
+                                      onClick={() => setExpandedDepositId(isExpanded ? null : dep.id)}
+                                      className="flex items-center gap-1.5 text-xs font-medium text-orange-400 hover:text-orange-300 transition-colors"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      {isExpanded ? 'Hide Instructions' : 'View Payment Instructions'}
+                                    </button>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                           {canCancel && (

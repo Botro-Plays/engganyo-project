@@ -109,7 +109,10 @@ export class PayPalService {
 
     await this.prisma.deposit.update({
       where: { id: depositId },
-      data: { paymentRef: orderId },
+      data: {
+        paymentRef: orderId,
+        gatewayData: { approvalUrl, mode: cfg.mode, createdAt: new Date().toISOString() },
+      },
     });
 
     return { orderId, approvalUrl };
