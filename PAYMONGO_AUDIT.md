@@ -153,9 +153,10 @@ if (effectiveExpiredAt === 0 || left <= 0) return <span>Expired</span>;
 **Remaining risk:** None — invalid dates fall back to "Expired".
 
 ### 15. `initiateDeposit` + `createPaymentLink` are two separate API calls
+**Status:** ⛔ DEFERRED — accepted risk. Cron cleanup handles orphaned deposits.
 **File:** `apps/api/src/modules/wallet/wallet.service.ts:300-374`, frontend
 **Problem:** If `initiateDeposit` succeeds but `createPaymentLink` fails, the deposit exists with no `paymentRef` and no `gatewayData`. The user can't pay, and the cron will auto-cancel it after 30 minutes.
-**Fix:** Inline PayMongo link creation into `initiateDeposit` for `method === 'PAYMONGO'`.
+**Rationale for deferral:** Inlining the PayMongo API call into `initiateDeposit` would change the endpoint from a fast local DB write (~50ms) to a network-dependent call (~500-2000ms), risk frontend timeouts, and require frontend changes to a currently working flow. The 30-minute cron cleanup is an acceptable safety net. Revisit if orphaned deposit volume becomes significant.
 
 ### 16. `archiveLink` silently fails, callers don't retry
 **Status:** ✅ Fixed in commit `83478f8` (2026-06-04). Exponential backoff retry (3 attempts, 1s/2s/4s) added.
@@ -210,13 +211,19 @@ if (!secret || secret.length < 16 || !/^[a-f0-9]+$/i.test(secret)) {
 **Remaining risk:** None — malformed secrets rejected before HMAC computation.
 
 ### 20. PayMongo `linkId` could be empty string stored in DB
-**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:84`
+**Status:** ✅ ALREADY FIXED — validation at line 98 already catches empty strings.
+**File:** `apps/api/src/modules/paymongo/paymongo.service.ts:94-99`
 **Code:**
 ```typescript
 const linkId = (data?.id as string) ?? '';
+const checkoutUrl = (data?.url as string) ?? '';
+
+if (!linkId || !checkoutUrl) {
+  throw new BadRequestException('PayMongo link response missing required fields');
+}
 ```
-**Problem:** If PayMongo returns `data.id` as empty string, `linkId` becomes `''`. The `archiveLink('')` call hits `POST /links//archive`.
-**Fix:** Throw if `!linkId || !checkoutUrl` instead of only checking separately.
+**Analysis:** The `?? ''` fallback is redundant but harmless. Empty string is falsy, so `!linkId` evaluates to `true` and throws before the value is ever stored or used. The audit item was stale.
+**Remaining risk:** None.
 
 ---
 
