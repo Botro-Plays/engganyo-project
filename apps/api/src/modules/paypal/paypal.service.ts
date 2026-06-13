@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { EventsService } from '../events/events.service';
 import { DepositStatus } from '@prisma/client';
 
 interface PayPalConfig {
@@ -17,6 +18,7 @@ export class PayPalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
+    private readonly eventsService: EventsService,
   ) {}
 
   private async getConfig(): Promise<PayPalConfig | null> {
@@ -299,6 +301,21 @@ export class PayPalService {
       return { received: true, action: 'completed', depositId: deposit.id };
     }
 
+    // ── PAYMENT.CAPTURE.PENDING → mark deposit processing ──
+    if (eventType === 'PAYMENT.CAPTURE.PENDING') {
+      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
+      if (!deposit) return { received: true, action: 'ignored_no_deposit' };
+      if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
+      if (deposit.status === DepositStatus.PROCESSING) return { received: true, action: 'already_processing', depositId: deposit.id };
+
+      await this.prisma.deposit.update({
+        where: { id: deposit.id },
+        data: { status: DepositStatus.PROCESSING },
+      });
+      this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.PROCESSING });
+      return { received: true, action: 'marked_processing', depositId: deposit.id };
+    }
+
     // ── PAYMENT.CAPTURE.DENIED → mark deposit failed ──
     if (eventType === 'PAYMENT.CAPTURE.DENIED') {
       const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
@@ -309,7 +326,23 @@ export class PayPalService {
         where: { id: deposit.id },
         data: { status: DepositStatus.FAILED },
       });
+      this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.FAILED });
       return { received: true, action: 'marked_failed', depositId: deposit.id };
+    }
+
+    // ── CHECKOUT.ORDER.VOIDED → mark deposit cancelled ──
+    if (eventType === 'CHECKOUT.ORDER.VOIDED') {
+      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
+      if (!deposit) return { received: true, action: 'ignored_no_deposit' };
+      if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
+      if (deposit.status === DepositStatus.CANCELLED) return { received: true, action: 'already_cancelled', depositId: deposit.id };
+
+      await this.prisma.deposit.update({
+        where: { id: deposit.id },
+        data: { status: DepositStatus.CANCELLED, adminNotes: 'PayPal order voided' },
+      });
+      this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.CANCELLED });
+      return { received: true, action: 'marked_cancelled', depositId: deposit.id };
     }
 
     return { received: true, action: 'ignored_unsupported_event' };

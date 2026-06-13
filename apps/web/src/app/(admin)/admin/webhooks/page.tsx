@@ -44,7 +44,7 @@ const WEBHOOKS: WebhookEndpoint[] = [
     icon: Wallet,
     color: 'text-blue-400',
     docsUrl: 'https://developer.paypal.com/developer/applications/',
-    description: 'Receives CHECKOUT.ORDER.APPROVED, PAYMENT.CAPTURE.COMPLETED, and PAYMENT.CAPTURE.DENIED events.',
+    description: 'Receives CHECKOUT.ORDER.APPROVED, CHECKOUT.ORDER.VOIDED, PAYMENT.CAPTURE.COMPLETED, PAYMENT.CAPTURE.PENDING, and PAYMENT.CAPTURE.DENIED events.',
     secretKey: 'paypal_webhook_id',
   },
   {
