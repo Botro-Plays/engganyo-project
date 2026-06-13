@@ -114,26 +114,26 @@
 
 ---
 
-## Phase 4 — PayPal Deposit Implementation (Days 5–6)
+## Phase 4 — PayPal Deposit Implementation (Days 5–6) ✅ COMPLETE
 
 > **Phase 1 complete. Phase 3 deferred. Proceed with deposit method expansion.**
-> **Discovery (2026-06-13):** PayPal integration is ~70% already built. Backend service, controller, and frontend UI all exist. See `PHASE4_PAYPAL_SCOPE.md` for detailed gap analysis.
+> **Completed 2026-06-13.** See `PHASE4_PAYPAL_SCOPE.md` for detailed gap analysis and implementation notes.
 
 ### 4.1 PayPal Deposit Integration
 
 - **Business Impact:** HIGH — opens deposits to global users without GCash/card access
-- **Effort Estimate:** 1 day (down from 2–3 days — existing code covers createOrder, captureOrder, frontend UI)
+- **Effort Estimate:** 1 day | **Actual:** ~4 hours
 - **Dependencies:** PayPal Business account + REST API credentials
 - **Already Built ✅:**
   - `POST /paypal/create-order` — creates PayPal order, stores order ID in `deposit.paymentRef`
   - `POST /paypal/capture/:orderId` — captures order, calls `walletService.completeDeposit()`
   - Frontend: method selection, order creation, checkout button, redirect to PayPal
   - Schema: `DepositMethod.PAYPAL`, `TransactionType.DEPOSIT_PAYPAL` already exist
-- **Remaining Gaps 🔧:**
-  1. **Frontend return handler** — `/wallet?paypal=success&token=ORDER_ID` not processed; never calls capture
-  2. **Webhook endpoint** — `POST /webhooks/paypal` missing; users who don't return to site leave deposit PENDING
-  3. **Idempotency guard** — `captureOrder` not safe to call twice (no `ORDER_ALREADY_CAPTURED` handling)
-  4. **Cancel UX** — `/wallet?paypal=cancel` not handled
+- **Implemented 🔧:**
+  1. ✅ **Frontend return handler** — `/wallet?paypal=success&token=ORDER_ID` auto-calls capture; cleans URL params
+  2. ✅ **Webhook endpoint** — `POST /webhooks/paypal` with signature verification via PayPal API
+  3. ✅ **Idempotency guard** — `captureOrder` skips if COMPLETED; handles `ORDER_ALREADY_CAPTURED`
+  4. ✅ **Cancel UX** — `/wallet?paypal=cancel&depositId=...` calls cancel endpoint; deposit marked CANCELLED
 - **Acceptance:** User can deposit via PayPal, wallet credited, transaction logged in `PlatformRevenue`. Webhook completes deposit even if user never returns to site.
 
 ---
@@ -185,7 +185,7 @@
 
 1. All 5 critical bugs in Phase 1 are fixed and CI passes. ✅
 2. All 6 documentation files in Phase 2 are updated and accurate. ✅
-3. PayPal deposit integration is implemented and tested.
+3. PayPal deposit integration is implemented and tested. ✅
 4. EVM wallet (MetaMask) deposit integration is implemented and tested.
 5. No shortcuts, no guessing, no papering over failures.
 

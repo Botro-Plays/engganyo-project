@@ -429,7 +429,12 @@ export default function WalletPage() {
     if (paypalParam === 'success' && token) {
       paypalCaptureMutation.mutate(token);
     } else if (paypalParam === 'cancel') {
-      setDepositError('PayPal checkout was cancelled. No charge was made.');
+      const depositId = searchParams.get('depositId');
+      if (depositId) {
+        cancelDepositMutation.mutate(depositId);
+      } else {
+        setDepositError('PayPal checkout was cancelled. No charge was made.');
+      }
     }
 
     // Clean URL params without reload
@@ -437,8 +442,9 @@ export default function WalletPage() {
     url.searchParams.delete('paypal');
     url.searchParams.delete('token');
     url.searchParams.delete('PayerID');
+    url.searchParams.delete('depositId');
     window.history.replaceState({}, '', url.toString());
-  }, [searchParams, paypalCaptureMutation]);
+  }, [searchParams, paypalCaptureMutation, cancelDepositMutation]);
 
   const handlePayMongoSubmit = () => {
     if (!selectedPackage) return;

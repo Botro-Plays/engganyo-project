@@ -85,7 +85,7 @@ export class PayPalService {
         }],
         application_context: {
           return_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/wallet?paypal=success`,
-          cancel_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/wallet?paypal=cancel`,
+          cancel_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/wallet?paypal=cancel&depositId=${depositId}`,
           brand_name: 'Engganyo',
         },
       }),

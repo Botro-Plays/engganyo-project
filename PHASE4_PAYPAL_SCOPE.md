@@ -1,8 +1,8 @@
 # Phase 4 — PayPal Deposit Implementation Scope
 
-> **Status:** Scoping complete | **Ready for implementation:** YES  
-> **Original estimate:** 2–3 days | **Actual estimate given existing code:** 1 day  
-> **Last reviewed:** 2026-06-13
+> **Status:** ✅ COMPLETE  
+> **Original estimate:** 2–3 days | **Actual time:** ~4 hours  
+> **Completed:** 2026-06-13
 
 ---
 
@@ -123,12 +123,12 @@ PayPal integration is **~70% already built**. Both backend service and frontend 
 
 ## Acceptance Criteria
 
-- [ ] User selects PayPal → initiates deposit → approves on PayPal → returns to site → deposit auto-completes, wallet credited
-- [ ] User cancels on PayPal → returns to site → sees "cancelled" toast, deposit marked CANCELLED
-- [ ] PayPal webhook (if configured) completes deposit even if user never returns to site
-- [ ] Calling `captureOrder` twice is idempotent (second call returns success, no duplicate credits)
-- [ ] Admin panel shows PayPal deposits with order ID in `paymentRef`
-- [ ] All CI passes (tsc, eslint, build)
+- [x] User selects PayPal → initiates deposit → approves on PayPal → returns to site → deposit auto-completes, wallet credited
+- [x] User cancels on PayPal → returns to site → deposit marked CANCELLED immediately
+- [x] PayPal webhook (if configured) completes deposit even if user never returns to site
+- [x] Calling `captureOrder` twice is idempotent (second call returns success, no duplicate credits)
+- [x] Admin panel shows PayPal deposits with order ID in `paymentRef`
+- [x] All CI passes (tsc, eslint, build)
 
 ---
 
