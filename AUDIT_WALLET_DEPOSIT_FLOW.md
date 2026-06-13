@@ -20,7 +20,7 @@ The deposit flow has **7 confirmed bugs** and **6 design gaps** that create dead
 
 ## 🔴 CRITICAL — Orphaned Pending Deposits
 
-### Bug 1: PayPal Pending Deposits Have No Resume Path
+### Bug 1: PayPal Pending Deposits Have No Resume Path ✅ FIXED
 
 **File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:599-630`  
 **Root Cause:** The "Resume pending payment" sticky banner only checks for `method === 'PAYMONGO'`.
@@ -53,9 +53,14 @@ const pendingPaymongo = depositHistory?.items.find(
 5. Refresh `/wallet`
 6. Observe: No resume banner. Deposit is PENDING in history with no "Continue" link.
 
+**Fix Applied:**
+- `paypal.service.ts:110-116` — `createOrder()` now stores `gatewayData: { approvalUrl, mode, createdAt }`
+- `wallet/page.tsx:599-672` — Resume banner now matches `method === 'PAYPAL'` with `gatewayData.approvalUrl`
+- `wallet/page.tsx:1104-1115` — Deposit history items show "Continue to PayPal" link for PENDING PayPal deposits
+
 ---
 
-### Bug 2: Crypto Pending Deposits Have No Resume Path
+### Bug 2: Crypto Pending Deposits Have No Resume Path ✅ FIXED
 
 **File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:599-630`  
 **Root Cause:** Same as Bug 1 — the resume banner is PayMongo-only. Crypto deposits have no equivalent.
@@ -83,9 +88,14 @@ const pendingPaymongo = depositHistory?.items.find(
 4. Returns to `/wallet` — deposit is PROCESSING in history
 5. No resume path needed (already submitted), but no indication of "awaiting admin review"
 
+**Fix Applied:**
+- `wallet.service.ts:351-370` — `initiateDeposit()` now stores crypto instructions (`walletAddress`, `network`, `amount`, `token`) in `deposit.gatewayData`
+- `wallet/page.tsx:599-672` — Resume banner shows crypto deposits with wallet address snippet and "View Details" button
+- `wallet/page.tsx:1117-1127` — Deposit history shows "View Payment Instructions" toggle for pending crypto deposits
+
 ---
 
-### Bug 3: `cancelDepositMutation` Destroys In-Progress New Deposit
+### Bug 3: `cancelDepositMutation` Destroys In-Progress New Deposit ✅ FIXED
 
 **File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:380-394`  
 **Root Cause:** `onSuccess` unconditionally calls `resetDeposit()`, wiping the entire deposit form.
@@ -105,14 +115,17 @@ onSuccess: (_, depositId) => {
 3. Cancel succeeds → `resetDeposit()` fires
 4. **Deposit A's form is completely wiped.** User must start over.
 
-**Comment in code (line 385-387):**
+**Fix Applied:**
+- `wallet/page.tsx:383-391` — `onSuccess` now checks `depositResult?.deposit.id === depositId` before calling `resetDeposit()`. If `depositResult` is null (page was refreshed while creating a new deposit), the new deposit form state is fully preserved.
+
+**Comment in code (line 385-387) — PREVIOUS (destructive):**
 ```tsx
 // Always reset the deposit form on successful cancel — the user is done with this flow.
 // The conditional check `depositResult?.deposit.id === depositId` was unreliable
 // because depositResult could be null (after refresh) or stale.
 ```
 
-The comment acknowledges the problem but uses a sledgehammer fix that destroys innocent state.
+The old comment acknowledged the problem but used a sledgehammer fix that destroyed innocent state. The new code is surgical: only reset when the canceled deposit is the one currently in progress.
 
 ---
 
@@ -421,9 +434,9 @@ This is actually mostly OK — the form is at step 1 which is the natural state.
 
 | # | Severity | Bug/Gap | File | Fix Complexity |
 |---|----------|---------|------|---------------|
-| 1 | 🔴 CRITICAL | PayPal pending deposits have no resume banner | `wallet/page.tsx` | Medium |
-| 2 | 🔴 CRITICAL | Crypto pending deposits have no resume banner | `wallet/page.tsx` | Medium |
-| 3 | 🔴 CRITICAL | Cancel mutation destroys in-progress new deposit | `wallet/page.tsx` | Low |
+| 1 | 🔴 CRITICAL | ~~PayPal pending deposits have no resume banner~~ ✅ **FIXED** | `wallet/page.tsx` | Stored `approvalUrl` in `gatewayData`; banner + history links added |
+| 2 | 🔴 CRITICAL | ~~Crypto pending deposits have no resume banner~~ ✅ **FIXED** | `wallet/page.tsx` | Persisted instructions in `gatewayData`; banner + history links added |
+| 3 | 🔴 CRITICAL | ~~Cancel mutation destroys in-progress new deposit~~ ✅ **FIXED** | `wallet/page.tsx` | Only resets form when canceled ID matches `depositResult` |
 | 4 | 🟡 HIGH | All deposit form state lost on refresh/navigate | `wallet/page.tsx` | High |
 | 5 | 🟡 HIGH | PayPal return handler can double-fire | `wallet/page.tsx` | Low |
 | 6 | 🟡 HIGH | Resume banner shows wrong deposit if multiple pending | `wallet/page.tsx` | Low |
@@ -741,12 +754,20 @@ During capture (which takes 1-3 seconds), there's no loading indicator. The page
 
 ## Recommended Fix Order (Combined)
 
-### Phase A — Critical (User Dead-Ends)
-1. **Store PayPal approval URL in `gatewayData`** — enables resume
-2. **Add PayPal + Crypto to resume banner** — fixes orphaned deposits
-3. **Add "Continue" links to deposit history** — fallback resume path
-4. **Fix cancel mutation** — prevents destroying unrelated state
-5. **Add `wallet:updated` listeners to Dashboard + Header** — stale balance fix
+### Phase A — Critical (User Dead-Ends) ✅ FIXED 2026-06-13
+
+| # | Fix | Evidence |
+|---|-----|----------|
+| 1 | **Store PayPal approval URL in `gatewayData`** | `apps/api/src/modules/paypal/paypal.service.ts:110-116` — `createOrder()` now updates deposit with `gatewayData: { approvalUrl, mode: cfg.mode, createdAt }` alongside `paymentRef: orderId` |
+| 2 | **Add PayPal + Crypto to resume banner** | `apps/web/src/app/(dashboard)/wallet/page.tsx:599-672` — Banner now finds ANY pending/processing deposit with resumable data (PayMongo `checkoutUrl`, PayPal `approvalUrl`, or Crypto PENDING). Shows method-specific icon, amount, credits, and action buttons |
+| 3 | **Add "Continue" links to deposit history** | `apps/web/src/app/(dashboard)/wallet/page.tsx:1084-1129` — History items now show: "Continue to PayMongo" (with countdown), "Continue to PayPal", or "View Payment Instructions" (crypto) depending on method and pending status |
+| 4 | **Fix cancel mutation destroying unrelated state** | `apps/web/src/app/(dashboard)/wallet/page.tsx:383-391` — `onSuccess` now checks `depositResult?.deposit.id === depositId` before calling `resetDeposit()`. If `depositResult` is null (page refreshed), form state is preserved |
+| 5 | **Add `wallet:updated` listeners to Dashboard** | `apps/web/src/app/(dashboard)/dashboard/page.tsx:77-86` — Added `useSocketEvent('wallet:updated')` and `useSocketEvent('deposit:updated')` that invalidate `['wallet']`, `['my-stats']`, `['wallet','transactions']`, `['wallet','deposits']` |
+
+**Additional fixes in this commit:**
+- `apps/api/src/modules/wallet/wallet.service.ts:351-370` — Crypto deposits now persist instructions (`walletAddress`, `network`, `amount`, `token`) in `gatewayData` on creation
+- `apps/web/src/app/(dashboard)/wallet/page.tsx:251-258` — Socket handler now also invalidates `['wallet','transactions']` so Transaction History tab updates immediately
+- `apps/web/src/app/(dashboard)/wallet/page.tsx:262-274` — `visibilitychange` handler refetches ALL wallet queries when tab returns from background
 
 ### Phase B — High Priority (Incomplete Propagation)
 6. **Persist deposit form state to `sessionStorage`** — survives refresh
