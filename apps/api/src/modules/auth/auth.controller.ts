@@ -55,8 +55,8 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? '';
-    return this.authService.register(dto, res, ip);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    return this.authService.register(dto, res, ip, req.headers['user-agent'] ?? '');
   }
 
   @Post('login')
@@ -65,9 +65,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email/username and password' })
   async login(
     @Body() dto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.login(dto, res);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    return this.authService.login(dto, res, ip, req.headers['user-agent'] ?? '');
   }
 
   @Post('logout')
@@ -219,9 +221,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Complete login by verifying 2FA code' })
   async verifyTwoFactor(
     @Body() dto: VerifyTwoFactorDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.completeTwoFactorLogin(dto.twoFactorToken, dto.code, dto.method, res);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    return this.authService.completeTwoFactorLogin(dto.twoFactorToken, dto.code, dto.method, res, ip, req.headers['user-agent'] ?? '');
   }
 
   @Post('2fa/backup-codes/regenerate')

@@ -79,7 +79,7 @@ export class AuthService {
 
   // ─── Register ──────────────────────────────────────────────
 
-  async register(dto: RegisterDto, res: Response, registrationIp?: string): Promise<AuthResult> {
+  async register(dto: RegisterDto, res: Response, registrationIp?: string, userAgent?: string): Promise<AuthResult> {
     // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
     const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
     if (recaptchaEnabled) {
@@ -211,7 +211,7 @@ export class AuthService {
       status: user.status,
     });
 
-    await this.storeSession(tokens.refreshToken, user.id);
+    await this.storeSession(tokens.refreshToken, user.id, registrationIp, userAgent);
     this.setRefreshCookie(res, tokens.refreshToken);
 
     // Async IP-based multi-account check (non-blocking)
@@ -255,7 +255,7 @@ export class AuthService {
 
   // ─── Login ─────────────────────────────────────────────────
 
-  async login(dto: LoginDto, res: Response): Promise<LoginResult> {
+  async login(dto: LoginDto, res: Response, ip?: string, userAgent?: string): Promise<LoginResult> {
     // Validate credentials first
     const isEmail = dto.emailOrUsername.includes('@');
     const user = await this.prisma.user.findFirst({
@@ -323,8 +323,12 @@ export class AuthService {
       status: user.status,
     });
 
-    await this.storeSession(tokens.refreshToken, user.id);
+    await this.storeSession(tokens.refreshToken, user.id, ip, userAgent);
     this.setRefreshCookie(res, tokens.refreshToken);
+
+    if (ip) {
+      void this.antiAbuse.recordIp(user.id, ip, 'login').catch(() => null);
+    }
 
     return { user: this.sanitizeUser(user), accessToken: tokens.accessToken };
   }
@@ -336,6 +340,8 @@ export class AuthService {
     code: string,
     method: 'totp' | 'email' | 'backup',
     res: Response,
+    ip?: string,
+    userAgent?: string,
   ): Promise<AuthResult> {
     const userId = await this.twoFactor.validateTwoFactorToken(twoFactorToken);
 
@@ -362,8 +368,12 @@ export class AuthService {
       status: user.status,
     });
 
-    await this.storeSession(tokens.refreshToken, user.id);
+    await this.storeSession(tokens.refreshToken, user.id, ip, userAgent);
     this.setRefreshCookie(res, tokens.refreshToken);
+
+    if (ip) {
+      void this.antiAbuse.recordIp(user.id, ip, 'login_2fa').catch(() => null);
+    }
 
     return { user: this.sanitizeUser(user), accessToken: tokens.accessToken };
   }
@@ -418,8 +428,14 @@ export class AuthService {
       status: user.status,
     });
 
-    await this.storeSession(tokens.refreshToken, user.id);
+    const forwarded = req.headers['x-forwarded-for'] as string | undefined;
+    const ip = forwarded?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    await this.storeSession(tokens.refreshToken, user.id, ip, req.headers['user-agent'] ?? '');
     this.setRefreshCookie(res, tokens.refreshToken);
+
+    if (ip) {
+      void this.antiAbuse.recordIp(user.id, ip, 'refresh').catch(() => null);
+    }
 
     return { accessToken: tokens.accessToken };
   }
@@ -582,10 +598,24 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  private async storeSession(refreshToken: string, userId: string): Promise<void> {
+  private async storeSession(
+    refreshToken: string,
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<void> {
     const refreshExpiresIn = this.configService.get<string>('jwt.refreshExpiresIn', '7d');
     const expiresAt = new Date(Date.now() + this.parseDuration(refreshExpiresIn));
-    await this.prisma.userSession.create({ data: { userId, refreshToken, expiresAt } });
+    await this.prisma.userSession.create({
+      data: {
+        userId,
+        refreshToken,
+        expiresAt,
+        ...(ipAddress && { ipAddress }),
+        ...(userAgent && { userAgent }),
+        lastUsedAt: new Date(),
+      },
+    });
   }
 
   private async revokeSession(refreshToken: string): Promise<void> {

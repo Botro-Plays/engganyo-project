@@ -283,12 +283,16 @@ export class TasksService {
 
     this.eventsService.emitToUser(userId, 'task:assigned', { campaignId, completionId: completion.id });
 
+    if (clientIp) {
+      void this.antiAbuseService.recordIp(userId, clientIp, 'task_assign').catch(() => null);
+    }
+
     return completion;
   }
 
   // ─── Submit proof (+ auto-verify for Phase 5) ──────────────
 
-  async submitProof(userId: string, campaignId: string, dto: SubmitProofDto) {
+  async submitProof(userId: string, campaignId: string, dto: SubmitProofDto, clientIp?: string, userAgent?: string) {
     const completion = await this.prisma.taskCompletion.findUnique({
       where: { campaignId_userId: { campaignId, userId } },
       select: {
@@ -340,6 +344,7 @@ export class TasksService {
 
     // ── Anti-abuse: task timing analysis ──────────────────────
     const completionTimeMs = now.getTime() - completion.assignedAt.getTime();
+    const completionSeconds = Math.round(completionTimeMs / 1000);
     const SUSPICIOUS_THRESHOLD_MS = 5_000; // 5 seconds
     const RAPID_WINDOW_MS = 60 * 60 * 1000; // 1 hour
     const RAPID_COUNT_THRESHOLD = 3;
@@ -427,6 +432,9 @@ export class TasksService {
             verifiedAt: now,
             verifiedBy: 'system',
             creditsEarned: completion.campaign.creditPerTask,
+            ...(clientIp && { ipAddress: clientIp }),
+            ...(userAgent && { deviceFingerprint: userAgent }),
+            completionSeconds,
           },
         });
 
@@ -485,6 +493,9 @@ export class TasksService {
           proofHash: dto.proofHash,
           submittedAt: now,
           reviewDeadline,
+          ...(clientIp && { ipAddress: clientIp }),
+          ...(userAgent && { deviceFingerprint: userAgent }),
+          completionSeconds,
         },
       });
 

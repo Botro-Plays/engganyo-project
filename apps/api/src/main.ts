@@ -24,6 +24,9 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
   });
 
+  // Trust proxy headers from Nginx + Cloudflare
+  app.set('trust proxy', true);
+
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port', 3001);
   const frontendUrl = configService.get<string>('app.frontendUrl', 'http://localhost:3000');

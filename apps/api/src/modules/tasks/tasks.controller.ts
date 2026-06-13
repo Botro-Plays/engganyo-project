@@ -1,7 +1,8 @@
 import {
   Controller, Get, Post, Body, Param, Query,
-  UseGuards, HttpCode, HttpStatus, Ip,
+  UseGuards, HttpCode, HttpStatus, Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 import { TasksService } from './tasks.service';
@@ -41,9 +42,10 @@ export class TasksController {
   assign(
     @CurrentUser() user: JwtPayload,
     @Param('campaignId') campaignId: string,
-    @Ip() clientIp?: string,
+    @Req() req: Request,
   ) {
-    return this.tasksService.assignTask(user.sub, campaignId, user.role, clientIp);
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    return this.tasksService.assignTask(user.sub, campaignId, user.role, clientIp || undefined);
   }
 
   @Post(':campaignId/submit')
@@ -55,8 +57,10 @@ export class TasksController {
     @CurrentUser() user: JwtPayload,
     @Param('campaignId') campaignId: string,
     @Body() dto: SubmitProofDto,
+    @Req() req: Request,
   ) {
-    return this.tasksService.submitProof(user.sub, campaignId, dto);
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    return this.tasksService.submitProof(user.sub, campaignId, dto, ip, req.headers['user-agent'] ?? '');
   }
 
   @Post(':campaignId/recheck')
