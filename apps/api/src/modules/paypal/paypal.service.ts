@@ -276,6 +276,14 @@ export class PayPalService {
 
     // ── CHECKOUT.ORDER.APPROVED → capture the order ──
     if (eventType === 'CHECKOUT.ORDER.APPROVED') {
+      // Pre-check: skip capture if deposit already completed by frontend return handler
+      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
+      if (deposit?.status === DepositStatus.COMPLETED) {
+        return { received: true, action: 'already_completed', depositId: deposit.id };
+      }
+      if (deposit?.status === DepositStatus.CANCELLED || deposit?.status === DepositStatus.FAILED) {
+        return { received: true, action: 'ignored_wrong_status', depositId: deposit.id };
+      }
       try {
         const result = await this.captureOrder(orderId);
         return { received: true, action: 'captured', depositId: result.depositId };
