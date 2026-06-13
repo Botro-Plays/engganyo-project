@@ -1373,6 +1373,7 @@ export class AdminService {
     paypal_client_id:            { value: '',    description: 'PayPal client ID', isPublic: false },
     paypal_client_secret:        { value: '',    description: 'PayPal client secret', isPublic: false },
     paypal_mode:                 { value: 'sandbox', description: 'PayPal mode (sandbox or live)', isPublic: false },
+    paypal_webhook_id:           { value: '',    description: 'PayPal webhook ID for signature verification', isPublic: false },
     // ── Crypto ───────────────────────────────────────────
     usdt_bep20_enabled:          { value: false, description: 'Enable USDT BEP20 (BSC) deposits', isPublic: true },
     usdt_bep20_wallet_address:   { value: '',    description: 'BSC wallet address for USDT BEP20 deposits', isPublic: true },
