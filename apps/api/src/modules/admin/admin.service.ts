@@ -449,6 +449,8 @@ export class AdminService {
 
     const cashFlow = new Map<string, { date: string; total: number; php: number; usd: number; byMethod: Record<string, number> }>();
     let cashTotal = 0;
+    let cashTotalPHP = 0;
+    let cashTotalUSD = 0;
 
     for (const dep of deposits) {
       const dateKey = (dep.completedAt ?? dep.createdAt ?? new Date()).toISOString().split('T')[0];
@@ -461,8 +463,10 @@ export class AdminService {
       cashTotal += amount;
       if (dep.currency === 'PHP') {
         day.php += amount;
+        cashTotalPHP += amount;
       } else {
         day.usd += amount;
+        cashTotalUSD += amount;
       }
       const method = dep.method;
       day.byMethod[method] = (day.byMethod[method] ?? 0) + amount;
@@ -475,6 +479,8 @@ export class AdminService {
         grandTotal,
         recordCount: rows.length,
         cashTotal: Math.round(cashTotal * 100) / 100,
+        cashTotalPHP: Math.round(cashTotalPHP * 100) / 100,
+        cashTotalUSD: Math.round(cashTotalUSD * 100) / 100,
         cashRecordCount: deposits.length,
       },
       daily: Array.from(daily.values()).sort((a, b) => b.date.localeCompare(a.date)),

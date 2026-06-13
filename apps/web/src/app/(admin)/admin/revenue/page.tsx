@@ -29,6 +29,8 @@ interface RevenueSummary {
     grandTotal: number;
     recordCount: number;
     cashTotal: number;
+    cashTotalPHP: number;
+    cashTotalUSD: number;
     cashRecordCount: number;
   };
   daily: RevenueDay[];
@@ -54,7 +56,8 @@ export default function RevenuePage() {
   const grandTotal = data?.summary.grandTotal ?? 0;
   const campaignFees = data?.daily.reduce((sum, d) => sum + d.campaignFees, 0) ?? 0;
   const other = data?.daily.reduce((sum, d) => sum + d.other, 0) ?? 0;
-  const cashTotal = data?.summary.cashTotal ?? 0;
+  const cashTotalPHP = data?.summary.cashTotalPHP ?? 0;
+  const cashTotalUSD = data?.summary.cashTotalUSD ?? 0;
 
   return (
     <div className="space-y-6">
@@ -196,8 +199,18 @@ export default function RevenuePage() {
               <TrendingUp className="w-4 h-4 text-emerald-400" />
               <span className="text-xs text-zinc-500 uppercase tracking-wider">Total Cash</span>
             </div>
-            <p className="text-2xl font-bold text-white">{cashTotal.toFixed(2)}</p>
-            <p className="text-xs text-zinc-500">PHP + USD combined</p>
+            <div className="space-y-1">
+              {cashTotalPHP > 0 && (
+                <p className="text-xl font-bold text-white">₱{cashTotalPHP.toFixed(2)} <span className="text-xs font-normal text-zinc-500">PHP</span></p>
+              )}
+              {cashTotalUSD > 0 && (
+                <p className="text-xl font-bold text-white">${cashTotalUSD.toFixed(2)} <span className="text-xs font-normal text-zinc-500">USD</span></p>
+              )}
+              {cashTotalPHP === 0 && cashTotalUSD === 0 && (
+                <p className="text-2xl font-bold text-white">—</p>
+              )}
+            </div>
+            <p className="text-xs text-zinc-500 mt-1">mixed currencies, not directly comparable</p>
           </div>
           <div className="card-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-2">
@@ -205,7 +218,7 @@ export default function RevenuePage() {
               <span className="text-xs text-zinc-500 uppercase tracking-wider">PHP Deposits</span>
             </div>
             <p className="text-2xl font-bold text-white">
-              {data?.cashFlow.reduce((sum, d) => sum + d.php, 0).toFixed(2) ?? '0.00'}
+              ₱{cashTotalPHP.toFixed(2)}
             </p>
             <p className="text-xs text-zinc-500">PayMongo (GCash / Cards)</p>
           </div>
@@ -215,9 +228,9 @@ export default function RevenuePage() {
               <span className="text-xs text-zinc-500 uppercase tracking-wider">USD Deposits</span>
             </div>
             <p className="text-2xl font-bold text-white">
-              {data?.cashFlow.reduce((sum, d) => sum + d.usd, 0).toFixed(2) ?? '0.00'}
+              ${cashTotalUSD.toFixed(2)}
             </p>
-            <p className="text-xs text-zinc-500">PayPal + Crypto</p>
+            <p className="text-xs text-zinc-500">PayPal</p>
           </div>
         </div>
 
@@ -258,7 +271,11 @@ export default function RevenuePage() {
                       <td className="px-5 py-3 text-right text-emerald-300">{day.php.toFixed(2)}</td>
                       <td className="px-5 py-3 text-right text-emerald-400">{day.usd.toFixed(2)}</td>
                       <td className="px-5 py-3 text-right text-zinc-400 text-xs">
-                        {Object.entries(day.byMethod).map(([m, a]) => `${m}: ${a.toFixed(2)}`).join(', ')}
+                        {Object.entries(day.byMethod).map(([m, a]) => {
+                          const label = m === 'PAYPAL' ? 'PayPal' : m === 'PAYMONGO' ? 'PayMongo' : m === 'USDT_BEP20' ? 'USDT BEP20' : m === 'USDT_BASE' ? 'USDT Base' : m;
+                          const symbol = day.usd > 0 && day.php === 0 ? '$' : day.php > 0 && day.usd === 0 ? '₱' : '';
+                          return `${label}: ${symbol}${a.toFixed(2)}`;
+                        }).join(', ')}
                       </td>
                     </tr>
                   ))}
