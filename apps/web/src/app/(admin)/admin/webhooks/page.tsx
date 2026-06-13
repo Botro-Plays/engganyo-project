@@ -32,9 +32,9 @@ interface WebhookEndpoint {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────
-function getWebhookBaseUrl(): string {
+function getApiBaseUrl(): string {
   const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/api';
-  return apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+  return apiUrl.replace(/\/+$/, '');
 }
 
 const WEBHOOKS: WebhookEndpoint[] = [
@@ -49,7 +49,7 @@ const WEBHOOKS: WebhookEndpoint[] = [
   },
   {
     label: 'PayMongo',
-    path: '/webhooks/paymongo',
+    path: '/paymongo/webhook',
     icon: CreditCard,
     color: 'text-emerald-400',
     docsUrl: 'https://dashboard.paymongo.com/developers',
@@ -62,7 +62,7 @@ const WEBHOOKS: WebhookEndpoint[] = [
 export default function WebhooksPage() {
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const baseUrl = getWebhookBaseUrl();
+  const baseUrl = getApiBaseUrl();
   const [copied, setCopied] = useState<string | null>(null);
 
   const { data: serverConfig, isLoading } = useQuery({
