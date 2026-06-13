@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { EventsService } from '../events/events.service';
@@ -17,6 +17,7 @@ export class PayPalService {
 
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
     private readonly eventsService: EventsService,
   ) {}

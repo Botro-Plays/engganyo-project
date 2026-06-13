@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PayPalController } from './paypal.controller';
 import { PayPalService } from './paypal.service';
 import { WalletModule } from '../wallet/wallet.module';
 import { EventsModule } from '../events/events.module';
 
 @Module({
-  imports: [WalletModule, EventsModule],
+  imports: [forwardRef(() => WalletModule), EventsModule],
   controllers: [PayPalController],
   providers: [PayPalService],
   exports: [PayPalService],
