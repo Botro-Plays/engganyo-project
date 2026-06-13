@@ -6,9 +6,10 @@ import { CurrencyService } from './currency.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
 import { PayMongoModule } from '../paymongo/paymongo.module';
+import { PayPalModule } from '../paypal/paypal.module';
 
 @Module({
-  imports: [NotificationsModule, EventsModule, forwardRef(() => PayMongoModule)],
+  imports: [NotificationsModule, EventsModule, forwardRef(() => PayMongoModule), forwardRef(() => PayPalModule)],
   controllers: [WalletController],
   providers: [WalletService, CurrencyService],
   exports: [WalletService, CurrencyService],

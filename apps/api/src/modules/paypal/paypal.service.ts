@@ -217,6 +217,47 @@ export class PayPalService {
     return { depositId: referenceId, orderId, status };
   }
 
+  // ─── Cancel / Void an order (best-effort) ───────────────────
+
+  async cancelOrder(orderId: string) {
+    const cfg = await this.getConfig();
+    if (!cfg) {
+      this.logger.warn('PayPal not configured — cannot cancel order');
+      return;
+    }
+
+    const accessToken = await this.getAccessToken(cfg);
+
+    // 1. Fetch current order status
+    const getRes = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${orderId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!getRes.ok) {
+      this.logger.warn(`Could not fetch PayPal order ${orderId} for cancel: ${getRes.status}`);
+      return;
+    }
+    const order = (await getRes.json()) as { status?: string };
+    const status = order.status ?? 'UNKNOWN';
+
+    // PayPal v2 checkout orders (intent=CAPTURE) have no programmatic cancel endpoint.
+    // CREATED orders auto-expire after 3 hours. APPROVED orders can only be captured.
+    if (status === 'CREATED') {
+      this.logger.log(`PayPal order ${orderId} is CREATED — will auto-expire, no action needed`);
+      return;
+    }
+    if (status === 'APPROVED') {
+      this.logger.warn(
+        `PayPal order ${orderId} is APPROVED — cannot cancel programmatically. Buyer may still complete payment. Deposit is marked CANCELLED locally; any capture will be rejected.`,
+      );
+      return;
+    }
+    if (status === 'COMPLETED') {
+      this.logger.warn(`PayPal order ${orderId} is already COMPLETED — too late to cancel`);
+      return;
+    }
+    this.logger.log(`PayPal order ${orderId} status: ${status} — no cancel action needed`);
+  }
+
   // ─── Webhook Verification ───────────────────────────────────
 
   private async verifyWebhookSignature(

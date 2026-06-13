@@ -13,6 +13,7 @@ import { CurrencyService } from './currency.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
+import { PayPalService } from '../paypal/paypal.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -48,6 +49,8 @@ export class WalletService {
     private readonly eventsService: EventsService,
     @Inject(forwardRef(() => PayMongoService))
     private readonly payMongoService: PayMongoService,
+    @Inject(forwardRef(() => PayPalService))
+    private readonly payPalService: PayPalService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -300,6 +303,20 @@ export class WalletService {
   }
 
   async initiateDeposit(userId: string, dto: InitiateDepositDto) {
+    // ── Guard: one pending/processing deposit at a time ──
+    const existingPending = await this.prisma.deposit.findFirst({
+      where: {
+        userId,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+      },
+      select: { id: true, method: true, status: true },
+    });
+    if (existingPending) {
+      throw new BadRequestException(
+        `You already have a ${existingPending.status.toLowerCase()} ${existingPending.method} deposit. Please complete or cancel it before creating a new one.`,
+      );
+    }
+
     const [options, pkg] = await Promise.all([
       this.getDepositOptions(),
       this.prisma.depositPackage.findUnique({ where: { id: dto.packageId } }),
@@ -461,6 +478,15 @@ export class WalletService {
         await this.payMongoService.archiveLink(deposit.paymentRef);
       } catch (err) {
         this.logger.warn(`Failed to archive PayMongo link ${deposit.paymentRef} during cancel: ${String(err)}`);
+      }
+    }
+
+    // Best-effort: notify PayPal to void/cancel the order (prevents buyer from paying a cancelled deposit)
+    if (deposit.method === DepositMethod.PAYPAL && deposit.paymentRef) {
+      try {
+        await this.payPalService.cancelOrder(deposit.paymentRef);
+      } catch (err) {
+        this.logger.warn(`Failed to cancel PayPal order ${deposit.paymentRef}: ${String(err)}`);
       }
     }
 

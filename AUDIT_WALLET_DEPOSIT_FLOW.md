@@ -202,30 +202,18 @@ Backend idempotency handles this, but:
 
 ---
 
-### Bug 6: Resume Banner Shows Wrong Deposit When Multiple Pending
+### Bug 6: Resume Banner Shows Wrong Deposit When Multiple Pending ✅ FIXED
 
 **File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:601-603`  
 **Root Cause:** Uses `find()` which returns the first match, not the most recent.
 
-```tsx
-const pendingPaymongo = depositHistory?.items.find(
-  (d) => d.method === 'PAYMONGO' && d.status === 'PENDING' && typeof d.gatewayData?.checkoutUrl === 'string',
-);
-```
-
-`depositHistory` is ordered by `createdAt: 'desc'` (backend `getUserDeposits`). So `find()` returns the NEWEST pending deposit. This is probably intentional, but what if:
-1. User creates Deposit A (newest)
-2. User creates Deposit B (even newer)
-3. Banner shows Deposit B
-4. But Deposit A's checkout URL is also still valid
-5. User clicks "Resume Payment" — goes to Deposit B's checkout
-6. User pays for Deposit B — Deposit A is forgotten and will eventually expire
-
-This is arguably correct behavior (resume the newest), but it's not explicit. The UI doesn't indicate WHICH deposit is being resumed.
+**Fix Applied:**
+- `wallet.service.ts:305-318` — `initiateDeposit()` now blocks new deposits if the user already has ANY deposit with status `PENDING` or `PROCESSING`. This eliminates the "multiple pending deposits" scenario entirely — there can only ever be one pending deposit at a time per user.
+- `wallet/page.tsx:533-605` — Resume banner is now global (above tabs), so it's visible regardless of which tab the user is on. The `depositHistory` query is enabled unconditionally (`enabled` removed) so the banner always has data.
 
 ---
 
-### Bug 7: Deposit History Query Disabled on Non-Deposit Tab
+### Bug 7: Deposit History Query Disabled on Non-Deposit Tab ✅ FIXED
 
 **File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:297-304`  
 **Root Cause:**
@@ -239,10 +227,8 @@ const { data: depositHistory, ... } = useQuery({
 });
 ```
 
-**Impact:**
-- User on "Transaction History" tab → `depositHistory` is stale or undefined
-- The "Resume pending PayMongo payment" banner is inside `tab === 'deposit'` block anyway, so this is moot for the banner
-- BUT: If we add a global banner (not tied to deposit tab), it would need `depositHistory` to be fetched regardless of tab
+**Fix Applied:**
+- `wallet/page.tsx:301-308` — Removed `enabled: tab === 'deposit'` from the `depositHistory` query. Now fetches unconditionally with `refetchInterval: depositResult ? 10_000 : 60_000`. The resume banner at line 533 is rendered BEFORE the tab switcher, so it appears on both "Transaction History" and "Deposit Credits" tabs.
 
 ---
 
@@ -445,15 +431,15 @@ This is actually mostly OK — the form is at step 1 which is the natural state.
 | 3 | 🔴 CRITICAL | ~~Cancel mutation destroys in-progress new deposit~~ ✅ **FIXED** | `wallet/page.tsx` | Only resets form when canceled ID matches `depositResult` |
 | 4 | 🟡 HIGH | All deposit form state lost on refresh/navigate | `wallet/page.tsx` | High |
 | 5 | 🟡 HIGH | ~~PayPal return handler can double-fire~~ ✅ **FIXED** | `wallet/page.tsx` + `paypal.service.ts` | Atomic `PENDING→PROCESSING` claim + webhook pre-check + defense-in-depth completion |
-| 6 | 🟡 HIGH | Resume banner shows wrong deposit if multiple pending | `wallet/page.tsx` | Low |
-| 7 | 🟡 HIGH | Deposit history query disabled on non-deposit tab | `wallet/page.tsx` | Low |
-| 8 | 🟢 MEDIUM | PayPal history item has no "Continue" link | `wallet/page.tsx` | Medium |
-| 9 | 🟢 MEDIUM | Crypto history item has no "View Instructions" | `wallet/page.tsx` | Medium |
+| 6 | 🟡 HIGH | ~~Resume banner shows wrong deposit if multiple pending~~ ✅ **FIXED** | `wallet/page.tsx` + `wallet.service.ts` | Global banner + backend guard prevents multiple pending deposits entirely |
+| 7 | 🟡 HIGH | ~~Deposit history query disabled on non-deposit tab~~ ✅ **FIXED** | `wallet/page.tsx` | Removed `enabled: tab === 'deposit'` so banner is visible on Transaction History tab |
+| 8 | 🟢 MEDIUM | ~~PayPal history item has no "Continue" link~~ ✅ **FIXED** | `wallet/page.tsx` | "Continue to PayPal" button shown for PENDING PayPal deposits with `approvalUrl` |
+| 9 | 🟢 MEDIUM | ~~Crypto history item has no "View Instructions"~~ ✅ **FIXED** | `wallet/page.tsx` | "View Payment Instructions" toggle shown for PENDING crypto deposits |
 | 10 | 🟢 MEDIUM | CountdownTimer hardcodes 30min fallback | `wallet/page.tsx` | Low |
 | 11 | 🟢 MEDIUM | No PayPal order expiry handling | `paypal.service.ts` | Medium |
 | 12 | 🟢 MEDIUM | Cancel/complete race condition | `wallet.service.ts` | Low |
-| 13 | 🟢 MEDIUM | Cancel doesn't void PayPal orders | `wallet.service.ts` | Medium |
-| 14 | 🟢 MEDIUM | No warning for multiple pending deposits | `wallet/page.tsx` | Low |
+| 13 | 🟢 MEDIUM | ~~Cancel doesn't void PayPal orders~~ ✅ **FIXED** | `wallet.service.ts` + `paypal.service.ts` | `cancelOrder()` fetches status + logs; backend rejects capture for CANCELLED deposits |
+| 14 | 🟢 MEDIUM | ~~No warning for multiple pending deposits~~ ✅ **FIXED** | `wallet.service.ts` | `initiateDeposit()` blocks new deposits if any PENDING/PROCESSING exists |
 | 15 | 🟢 MEDIUM | WebSocket state mismatch on refresh | `wallet/page.tsx` | Low |
 
 ---
@@ -765,30 +751,33 @@ During capture (which takes 1-3 seconds), there's no loading indicator. The page
 | # | Fix | Evidence |
 |---|-----|----------|
 | 1 | **Store PayPal approval URL in `gatewayData`** | `apps/api/src/modules/paypal/paypal.service.ts:110-116` — `createOrder()` now updates deposit with `gatewayData: { approvalUrl, mode: cfg.mode, createdAt }` alongside `paymentRef: orderId` |
-| 2 | **Add PayPal + Crypto to resume banner** | `apps/web/src/app/(dashboard)/wallet/page.tsx:599-672` — Banner now finds ANY pending/processing deposit with resumable data (PayMongo `checkoutUrl`, PayPal `approvalUrl`, or Crypto PENDING). Shows method-specific icon, amount, credits, and action buttons |
+| 2 | **Add PayPal + Crypto to resume banner** | `apps/web/src/app/(dashboard)/wallet/page.tsx:533-605` — Banner now finds ANY pending/processing deposit with resumable data (PayMongo `checkoutUrl`, PayPal `approvalUrl`, or Crypto PENDING). Rendered ABOVE tabs so it's visible on both "Transaction History" and "Deposit Credits" tabs |
 | 3 | **Add "Continue" links to deposit history** | `apps/web/src/app/(dashboard)/wallet/page.tsx:1084-1129` — History items now show: "Continue to PayMongo" (with countdown), "Continue to PayPal", or "View Payment Instructions" (crypto) depending on method and pending status |
 | 4 | **Fix cancel mutation destroying unrelated state** | `apps/web/src/app/(dashboard)/wallet/page.tsx:383-391` — `onSuccess` now checks `depositResult?.deposit.id === depositId` before calling `resetDeposit()`. If `depositResult` is null (page refreshed), form state is preserved |
 | 5 | **Add `wallet:updated` listeners to Dashboard** | `apps/web/src/app/(dashboard)/dashboard/page.tsx:77-86` — Added `useSocketEvent('wallet:updated')` and `useSocketEvent('deposit:updated')` that invalidate `['wallet']`, `['my-stats']`, `['wallet','transactions']`, `['wallet','deposits']` |
+| 6 | **Global resume banner (visible on both tabs)** | `apps/web/src/app/(dashboard)/wallet/page.tsx:301-308` — `depositHistory` query no longer has `enabled: tab === 'deposit'`; fetches unconditionally. Banner is rendered above the tab switcher so it's visible regardless of active tab |
+| 7 | **Block duplicate pending deposits** | `apps/api/src/modules/wallet/wallet.service.ts:305-318` — `initiateDeposit()` rejects if user already has ANY `PENDING` or `PROCESSING` deposit. Eliminates the "multiple pending deposits" problem entirely |
+| 8 | **PayPal cancel: best-effort void + backend rejection** | `apps/api/src/modules/paypal/paypal.service.ts:220-259` — `cancelOrder()` fetches PayPal order status and logs it. `apps/api/src/modules/wallet/wallet.service.ts:484-491` — `cancelDeposit()` calls `cancelOrder()` for PayPal deposits. `captureOrder()` already rejects CANCELLED deposits at line 133-135 |
 
 **Additional fixes in this commit:**
 - `apps/api/src/modules/wallet/wallet.service.ts:351-370` — Crypto deposits now persist instructions (`walletAddress`, `network`, `amount`, `token`) in `gatewayData` on creation
 - `apps/web/src/app/(dashboard)/wallet/page.tsx:251-258` — Socket handler now also invalidates `['wallet','transactions']` so Transaction History tab updates immediately
 - `apps/web/src/app/(dashboard)/wallet/page.tsx:262-274` — `visibilitychange` handler refetches ALL wallet queries when tab returns from background
+- `apps/api/src/modules/paypal/paypal.service.ts:137-158` — Atomic `PENDING→PROCESSING` claim prevents `ORDER_ALREADY_CAPTURED` race condition
 
 ### Phase B — High Priority (Incomplete Propagation)
-6. **Persist deposit form state to `sessionStorage`** — survives refresh
-7. **Protect PayPal return handler** — prevents double-fire
-8. **Emit `wallet:updated` from ALL balance mutations** — full coverage
-9. **Add `['wallet', 'transactions']` invalidation** — history tab updates
-10. **Enable deposit history query on both tabs** — supports global banner
+1. **Persist deposit form state to `sessionStorage`** — survives refresh
+2. ~~**Protect PayPal return handler**~~ ✅ Done — atomic backend claim handles this
+3. **Emit `wallet:updated` from ALL balance mutations** — full coverage
+4. ~~**Add `['wallet', 'transactions']` invalidation**~~ ✅ Done in Phase A
+5. ~~**Enable deposit history query on both tabs**~~ ✅ Done in Phase A
 
 ### Phase C — Polish & Hardening
-11. **Add PayPal order expiry cron** — auto-cancel stale orders
-12. **Fix cancel race with `updateMany`** — prevents credit leaks
-13. **Void PayPal orders on cancel** — prevents late payments
-14. **Add toast notifications** — completion/failure feedback
-15. **Add loading states** — capture/processing indicators
-16. **Warn before duplicate pending deposits** — reduces clutter
+1. **Add PayPal order expiry cron** — auto-cancel stale orders
+2. **Fix cancel race with `updateMany`** — prevents credit leaks
+3. ~~**Void PayPal orders on cancel**~~ ✅ Done — `cancelOrder()` logs status; backend rejects capture for CANCELLED
+4. **Add toast notifications** — completion/failure feedback
+5. **Add loading states** — capture/processing indicators
 
 ---
 

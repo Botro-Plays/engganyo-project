@@ -301,7 +301,7 @@ export default function WalletPage() {
   const { data: depositHistory, isLoading: depositsLoading } = useQuery({
     queryKey: ['wallet', 'deposits', depPage],
     queryFn: async () => (await apiClient.get<ApiResponse<{ items: DepositRecord[]; meta: { total: number; page: number; totalPages: number; hasNext: boolean; hasPrev: boolean } }>>(`wallet/deposits?page=${depPage}&limit=10`)).data.data,
-    enabled: tab === 'deposit',
+    // Always enabled so the resume banner is visible on BOTH tabs
     refetchInterval: depositResult ? 10_000 : 60_000, // poll faster while a deposit is in progress
     refetchOnWindowFocus: true,
     staleTime: 0,
@@ -530,6 +530,80 @@ export default function WalletPage() {
         )}
       </div>
 
+      {/* ── Global: Resume any pending deposit (visible on ALL tabs) ── */}
+      {(() => {
+        const pending = depositHistory?.items.find((d) => {
+          if (d.status !== 'PENDING' && d.status !== 'PROCESSING') return false;
+          if (d.method === 'PAYMONGO') return typeof d.gatewayData?.checkoutUrl === 'string';
+          if (d.method === 'PAYPAL') return typeof d.gatewayData?.approvalUrl === 'string';
+          if (d.method === 'USDT_BEP20' || d.method === 'USDT_BASE') return d.status === 'PENDING';
+          return false;
+        });
+        if (!pending) return null;
+
+        const meta = METHOD_META[pending.method] ?? { label: pending.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard };
+        const isPaymongo = pending.method === 'PAYMONGO';
+        const isPaypal = pending.method === 'PAYPAL';
+        const isCrypto = pending.method === 'USDT_BEP20' || pending.method === 'USDT_BASE';
+        const checkoutUrl = isPaymongo ? (pending.gatewayData?.checkoutUrl as string | undefined) : undefined;
+        const approvalUrl = isPaypal ? (pending.gatewayData?.approvalUrl as string | undefined) : undefined;
+
+        return (
+          <div className="card-glass rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 mb-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${meta.bg}`}>
+                <meta.icon className={`w-5 h-5 ${meta.color}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{meta.label} payment in progress</p>
+                <p className="text-xs text-zinc-400">
+                  {pending.currency} {pending.amountFiat.toFixed(2)} → {pending.creditsToAward.toLocaleString()} credits
+                </p>
+                {isPaymongo && (
+                  <div className="mt-0.5">
+                    <CountdownTimer
+                      expiredAt={typeof pending.gatewayData?.expiredAt === 'string' ? (pending.gatewayData.expiredAt as string) : undefined}
+                      createdAt={pending.createdAt}
+                    />
+                  </div>
+                )}
+                {isCrypto && pending.gatewayData && (
+                  <div className="mt-1 text-xs text-zinc-500">
+                    Send {pending.gatewayData.amount as number} USDT on {pending.gatewayData.network as string} to{' '}
+                    <code className="text-zinc-300 font-mono">{(pending.gatewayData.walletAddress as string)?.slice(0, 12)}…</code>
+                  </div>
+                )}
+              </div>
+              <div className="shrink-0 flex items-center gap-2">
+                {(checkoutUrl || approvalUrl) && (
+                  <button
+                    onClick={() => window.open((checkoutUrl || approvalUrl)!, '_blank', 'noopener,noreferrer')}
+                    className="flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />Resume Payment
+                  </button>
+                )}
+                {isCrypto && (
+                  <button
+                    onClick={() => setExpandedDepositId(pending.id)}
+                    className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />View Details
+                  </button>
+                )}
+                <button
+                  onClick={() => setCancelConfirmId(pending.id)}
+                  className="flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-2"
+                  title="Cancel this pending deposit"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Tabs ── */}
       <div className="flex gap-1 mb-6 border-b border-surface-border">
         {([['history', 'Transaction History'], ['deposit', 'Deposit Credits']] as const).map(([id, label]) => (
@@ -602,81 +676,6 @@ export default function WalletPage() {
       {/* ── Tab: Deposit Credits ── */}
       {tab === 'deposit' && (
         <div className="space-y-6">
-
-          {/* ── Sticky: Resume any pending deposit ── */}
-          {(() => {
-            // Find most recent pending/processing deposit that has resumable data
-            const pending = depositHistory?.items.find((d) => {
-              if (d.status !== 'PENDING' && d.status !== 'PROCESSING') return false;
-              if (d.method === 'PAYMONGO') return typeof d.gatewayData?.checkoutUrl === 'string';
-              if (d.method === 'PAYPAL') return typeof d.gatewayData?.approvalUrl === 'string';
-              if (d.method === 'USDT_BEP20' || d.method === 'USDT_BASE') return d.status === 'PENDING';
-              return false;
-            });
-            if (!pending) return null;
-
-            const meta = METHOD_META[pending.method] ?? { label: pending.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard };
-            const isPaymongo = pending.method === 'PAYMONGO';
-            const isPaypal = pending.method === 'PAYPAL';
-            const isCrypto = pending.method === 'USDT_BEP20' || pending.method === 'USDT_BASE';
-            const checkoutUrl = isPaymongo ? (pending.gatewayData?.checkoutUrl as string | undefined) : undefined;
-            const approvalUrl = isPaypal ? (pending.gatewayData?.approvalUrl as string | undefined) : undefined;
-
-            return (
-              <div className="card-glass rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${meta.bg}`}>
-                    <meta.icon className={`w-5 h-5 ${meta.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">{meta.label} payment in progress</p>
-                    <p className="text-xs text-zinc-400">
-                      {pending.currency} {pending.amountFiat.toFixed(2)} → {pending.creditsToAward.toLocaleString()} credits
-                    </p>
-                    {isPaymongo && (
-                      <div className="mt-0.5">
-                        <CountdownTimer
-                          expiredAt={typeof pending.gatewayData?.expiredAt === 'string' ? (pending.gatewayData.expiredAt as string) : undefined}
-                          createdAt={pending.createdAt}
-                        />
-                      </div>
-                    )}
-                    {isCrypto && pending.gatewayData && (
-                      <div className="mt-1 text-xs text-zinc-500">
-                        Send {pending.gatewayData.amount as number} USDT on {pending.gatewayData.network as string} to{' '}
-                        <code className="text-zinc-300 font-mono">{(pending.gatewayData.walletAddress as string)?.slice(0, 12)}…</code>
-                      </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    {(checkoutUrl || approvalUrl) && (
-                      <button
-                        onClick={() => window.open((checkoutUrl || approvalUrl)!, '_blank', 'noopener,noreferrer')}
-                        className="flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />Resume Payment
-                      </button>
-                    )}
-                    {isCrypto && (
-                      <button
-                        onClick={() => setExpandedDepositId(pending.id)}
-                        className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />View Details
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setCancelConfirmId(pending.id)}
-                      className="flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-2"
-                      title="Cancel this pending deposit"
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* ── 3-step deposit card ── */}
           <div className="card-glass rounded-xl border border-surface-border">
