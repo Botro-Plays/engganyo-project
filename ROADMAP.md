@@ -727,8 +727,8 @@
 - [✅] `POST /wallet/deposit/initiate` — initiates deposit with packageId, method, optional txHash
 - [✅] PayMongo payment links — create link, webhook (paid/failed), auto-cancel cron, retry/backoff
 - [✅] PayPal Orders API — create order, capture, webhook
-- [✅] USDT auto-deposit (BSC + Base) — EVM wallet connect, sign tx, auto-submit
-- [✅] USDT manual deposit — address + txHash submission
+- [🟠] USDT deposit (BSC + Base) — manual placeholder; EVM wallet connect + send OR manual txHash submission, then **requires admin manual review** to credit
+- [⏳] USDT auto-deposit (full automation) — wallet detection modal → branded selection → auto-sign → on-chain confirmation → auto-credit (NOT implemented)
 - [✅] Admin deposit management at `/admin/finances`
 - [✅] Deposit package CRUD + seed at `/admin/finances`
 
@@ -742,11 +742,13 @@
 - [🟠] **Phase B (form persistence)** — `sessionStorage` for deposit form state across refresh (planned)
 - [⏳] **Phase C (cron expiry + toast UX)** — PayPal order expiry cron, toast notifications, loading states (planned)
 
-**Crypto payments (USDT)**
-- [🟡] USDT payment via Tron (TRC-20) or Ethereum (ERC-20)
-- [🟡] Wallet address generation per user per order (HD wallet or payment processor)
-- [🟡] On-chain confirmation listener — credit wallet after N confirmations
-- [🟡] Or use a payment processor: NOWPayments / CoinGate (simpler, no on-chain code)
+**Crypto payments (USDT) — FULL AUTOMATION NOT IMPLEMENTED**
+- [⏳] Wallet detection modal — detect installed extensions, show branded list (MetaMask, etc.), fallback to install links
+- [⏳] On-chain confirmation listener — monitor BSC/Base for incoming USDT transfers, auto-credit after N confirmations
+- [⏳] Auto-complete deposit flow — no admin review required for confirmed on-chain txs
+- [🟡] USDT payment via Tron (TRC-20) or Ethereum (ERC-20) — deferred
+- [🟡] Wallet address generation per user per order (HD wallet or payment processor) — deferred
+- [🟡] Or use a payment processor: NOWPayments / CoinGate — deferred
 
 **Revenue tracking**
 - [🟠] Revenue by source breakdown (currently only `CAMPAIGN_FEE`; credit purchases pending Stripe integration)

@@ -1671,10 +1671,11 @@ This document should be updated when:
 - Phase 12a: Manual review workflow ✅ DONE
 - Phase 12b: Wire PayMongo payment link API (create link → redirect user → webhook marks COMPLETED) ✅ DONE
 - Phase 12c: Wire PayPal Orders API (create order → redirect → webhook) ✅ DONE
-- Phase 12d: Wire USDT auto-deposit + manual txHash ✅ DONE
+- Phase 12d: Wire USDT deposit scaffold (manual placeholder — EVM wallet connect + send, then admin review) 🟠 DONE (not automated)
 - Phase A (hardening): Global resume banner, duplicate-pending guard, PayPal cancel fix, atomic capture race guard, socket cleanup ✅ DONE 2026-06-13
 - Phase B (persistence): sessionStorage for deposit form state across refresh ⏳ PLANNED
 - Phase C (polish): PayPal order expiry cron, toast notifications, loading states ⏳ PLANNED
+- Phase D (USDT automation): Wallet detection modal → branded selection → on-chain confirmation listener → auto-credit without admin review ⏳ PLANNED
 
 ### ADR-027: Symmetric forwardRef for NestJS Circular Dependencies
 **Status**: Implemented (2026-06-13)
