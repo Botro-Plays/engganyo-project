@@ -194,6 +194,12 @@ Backend idempotency handles this, but:
 - If deposit is already COMPLETED: backend returns `already captured`, frontend `paypalCaptureMutation.onError` shows error message
 - User sees: "Deposit already completed" or similar confusing message
 
+**Fix Applied:**
+- `paypal.service.ts:137-158` — `captureOrder()` now atomically claims the deposit via `updateMany({ where: { id, status: PENDING }, data: { status: PROCESSING } })`. If another request already claimed it, the update returns 0 and we skip the PayPal API call entirely — no `ORDER_ALREADY_CAPTURED` errors.
+- `paypal.service.ts:317-318` — Webhook `CHECKOUT.ORDER.APPROVED` handler now pre-checks `deposit.status === PROCESSING` and returns `already_capturing` without calling PayPal.
+- `paypal.service.ts:180-188` — In the `ORDER_ALREADY_CAPTURED` fallback (defense-in-depth), we now re-fetch the deposit and call `completeDeposit()` if it's still PENDING/PROCESSING, ensuring the user gets credited even if the first caller failed mid-way.
+- `paypal.service.ts:167` — Added `PayPal-Request-Id` header for idempotent retries on PayPal's side.
+
 ---
 
 ### Bug 6: Resume Banner Shows Wrong Deposit When Multiple Pending
@@ -438,7 +444,7 @@ This is actually mostly OK — the form is at step 1 which is the natural state.
 | 2 | 🔴 CRITICAL | ~~Crypto pending deposits have no resume banner~~ ✅ **FIXED** | `wallet/page.tsx` | Persisted instructions in `gatewayData`; banner + history links added |
 | 3 | 🔴 CRITICAL | ~~Cancel mutation destroys in-progress new deposit~~ ✅ **FIXED** | `wallet/page.tsx` | Only resets form when canceled ID matches `depositResult` |
 | 4 | 🟡 HIGH | All deposit form state lost on refresh/navigate | `wallet/page.tsx` | High |
-| 5 | 🟡 HIGH | PayPal return handler can double-fire | `wallet/page.tsx` | Low |
+| 5 | 🟡 HIGH | ~~PayPal return handler can double-fire~~ ✅ **FIXED** | `wallet/page.tsx` + `paypal.service.ts` | Atomic `PENDING→PROCESSING` claim + webhook pre-check + defense-in-depth completion |
 | 6 | 🟡 HIGH | Resume banner shows wrong deposit if multiple pending | `wallet/page.tsx` | Low |
 | 7 | 🟡 HIGH | Deposit history query disabled on non-deposit tab | `wallet/page.tsx` | Low |
 | 8 | 🟢 MEDIUM | PayPal history item has no "Continue" link | `wallet/page.tsx` | Medium |

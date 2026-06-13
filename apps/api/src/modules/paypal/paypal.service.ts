@@ -123,7 +123,7 @@ export class PayPalService {
     if (!cfg) throw new BadRequestException('PayPal not configured');
 
     // ── Idempotency: find deposit first, skip if already completed ──
-    const deposit = await this.prisma.deposit.findUnique({
+    let deposit = await this.prisma.deposit.findUnique({
       where: { paymentRef: orderId },
     });
     if (deposit?.status === DepositStatus.COMPLETED) {
@@ -134,6 +134,29 @@ export class PayPalService {
       throw new BadRequestException(`Deposit was ${deposit.status.toLowerCase()}`);
     }
 
+    // ── Race-condition guard: atomically claim the deposit ──
+    // If another request (webhook or frontend) is already capturing,
+    // this updateMany will return 0 and we skip the PayPal API call.
+    if (deposit?.status === DepositStatus.PENDING) {
+      const claimed = await this.prisma.deposit.updateMany({
+        where: { id: deposit.id, status: DepositStatus.PENDING },
+        data: { status: DepositStatus.PROCESSING },
+      });
+      if (claimed.count === 0) {
+        deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
+        if (deposit?.status === DepositStatus.COMPLETED) {
+          return { depositId: deposit.id, orderId, status: 'COMPLETED' };
+        }
+        if (deposit?.status === DepositStatus.PROCESSING) {
+          this.logger.log(`PayPal order ${orderId} already being captured by another request — skipping`);
+          return { depositId: deposit.id, orderId, status: 'PROCESSING' };
+        }
+      }
+    } else if (deposit?.status === DepositStatus.PROCESSING) {
+      this.logger.log(`PayPal order ${orderId} already in PROCESSING — skipping duplicate capture`);
+      return { depositId: deposit.id, orderId, status: 'PROCESSING' };
+    }
+
     const accessToken = await this.getAccessToken(cfg);
 
     const res = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${orderId}/capture`, {
@@ -141,6 +164,7 @@ export class PayPalService {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
+        'PayPal-Request-Id': `capture-${orderId}-${Date.now()}`,
       },
     });
 
@@ -154,7 +178,13 @@ export class PayPalService {
         name === 'UNPROCESSABLE_ENTITY' &&
         details.some((d) => d.issue === 'ORDER_ALREADY_CAPTURED');
       if (isAlreadyCaptured && deposit) {
-        this.logger.log(`PayPal order ${orderId} already captured at gateway — returning success`);
+        this.logger.log(`PayPal order ${orderId} already captured at gateway — completing deposit`);
+        const freshDeposit = await this.prisma.deposit.findUnique({
+          where: { paymentRef: orderId },
+        });
+        if (freshDeposit && (freshDeposit.status === DepositStatus.PENDING || freshDeposit.status === DepositStatus.PROCESSING)) {
+          await this.walletService.completeDeposit(freshDeposit.id, { paymentRef: orderId });
+        }
         return { depositId: deposit.id, orderId, status: 'COMPLETED' };
       }
       this.logger.error(`PayPal capture failed: ${JSON.stringify(json)}`);
@@ -279,10 +309,13 @@ export class PayPalService {
 
     // ── CHECKOUT.ORDER.APPROVED → capture the order ──
     if (eventType === 'CHECKOUT.ORDER.APPROVED') {
-      // Pre-check: skip capture if deposit already completed by frontend return handler
+      // Pre-check: skip capture if deposit already completed or being captured
       const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
       if (deposit?.status === DepositStatus.COMPLETED) {
         return { received: true, action: 'already_completed', depositId: deposit.id };
+      }
+      if (deposit?.status === DepositStatus.PROCESSING) {
+        return { received: true, action: 'already_capturing', depositId: deposit.id };
       }
       if (deposit?.status === DepositStatus.CANCELLED || deposit?.status === DepositStatus.FAILED) {
         return { received: true, action: 'ignored_wrong_status', depositId: deposit.id };
