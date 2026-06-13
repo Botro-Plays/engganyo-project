@@ -42,7 +42,7 @@ export default function RevenuePage() {
   const [to, setTo] = useState('');
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['admin-revenue', from, to],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -302,12 +302,13 @@ export default function RevenuePage() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => {
-                  void queryClient.invalidateQueries({ queryKey: ['admin-revenue'] });
                   void queryClient.refetchQueries({ queryKey: ['admin-revenue'] });
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover hover:bg-surface-hover/80 border border-surface-border text-zinc-400 text-xs font-medium transition-all"
+                disabled={isFetching}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover hover:bg-surface-hover/80 border border-surface-border text-zinc-400 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className="w-3.5 h-3.5" />Force Refresh
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                {isFetching ? 'Refreshing…' : 'Force Refresh'}
               </button>
             </div>
           </div>
