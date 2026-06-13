@@ -92,10 +92,11 @@
 
 ---
 
-## Phase 3 — High-Priority Gaps (Days 3–4)
+## Phase 3 — High-Priority Gaps (Days 3–4) ⛔ DEFERRED
 
 ### 3.1 Sentry Coverage for PayMongo Webhooks
 
+- **Status:** ⛔ DEFERRED — existing logging is sufficient for current volume.
 - **Severity:** HIGH
 - **File:** `apps/api/src/modules/paymongo/paymongo.service.ts`
 - **Problem:** Webhook failures are not explicitly captured by Sentry with event context.
@@ -104,6 +105,7 @@
 
 ### 3.2 E2E Deposit Flow Coverage
 
+- **Status:** ⛔ DEFERRED — manual QA sufficient for current phase.
 - **Severity:** MEDIUM-HIGH
 - **File:** `apps/web/e2e/wallet.spec.ts`
 - **Problem:** Only basic page load tested. No deposit lifecycle coverage.
@@ -112,45 +114,49 @@
 
 ---
 
-## Phase 4 — Next Major Feature Selection (Day 5)
+## Phase 4 — Next Major Feature: PayPal Deposit Implementation (Days 5–7)
 
-> **Do not begin implementation until Phases 1–3 are complete and CI passes.**
+> **Phase 1 complete. Phase 3 deferred. Proceed with deposit method expansion.**
 
-### Candidate A: Rewards / Prizes Store (Phase 13)
+### 4.1 PayPal Deposit Integration
 
-- **Business Impact:** HIGH — creates credit sink, improves retention, monetization sustainability
-- **Effort Estimate:** 5–7 days
-- **Dependencies:** None
-- **Deliverables:**
-  - `Prize` model (name, description, creditCost, stock, imageUrl, isActive)
-  - `PrizeRedemption` model (userId, prizeId, status, shippingAddress)
-  - `POST /prizes/redeem` endpoint with credit debit
-  - Admin prize management page (`/admin/prizes`)
-  - Frontend store page (`/rewards`)
-
-### Candidate B: OAuth Expansion (Twitter/X, TikTok, Instagram, Facebook)
-
-- **Business Impact:** HIGH — reduces fraud on 4 major platforms
-- **Effort Estimate:** 3–5 days
-- **Dependencies:** OAuth app registrations for each platform
-- **Deliverables:**
-  - OAuth flows for 4 platforms
-  - Token refresh logic
-  - API verification integration in task auto-verify pipeline
-
-### Candidate C: Onboarding Walkthrough
-
-- **Business Impact:** MEDIUM — reduces churn, improves activation
+- **Business Impact:** HIGH — opens deposits to global users without GCash/card access
 - **Effort Estimate:** 2–3 days
-- **Dependencies:** None
+- **Dependencies:** PayPal Business account + REST API credentials
 - **Deliverables:**
-  - First-time user tour (driver.js or custom)
-  - Step-by-step: verify email, connect social, complete first task
-  - Persist `hasCompletedOnboarding` flag
+  - `POST /wallet/deposit/paypal/create-order` — creates PayPal order, returns approval URL
+  - `POST /wallet/deposit/paypal/capture` — captures approved order, credits wallet
+  - Webhook handler `POST /webhooks/paypal` for async payment notifications
+  - Update `initiateDeposit()` to support PayPal method with inline order creation
+  - Frontend PayPal checkout flow (redirect + capture on return)
+  - Admin deposit review support for PayPal transactions
+- **Acceptance:** User can deposit via PayPal, wallet credited, transaction logged in `PlatformRevenue`.
 
-### Recommendation
+---
 
-**Proceed with Candidate A (Rewards Store)** after critical bugs are fixed. It has the highest business impact, no external dependencies, and directly improves platform sustainability by giving credits real utility.
+## Phase 5 — EVM Crypto Wallet Integration (Days 8–12)
+
+### 5.1 MetaMask / EVM Wallet Deposits
+
+- **Business Impact:** HIGH — opens deposits to crypto-native users, lower fees, faster settlement
+- **Effort Estimate:** 4–5 days
+- **Dependencies:** None (self-custodial wallet connection)
+- **Deliverables:**
+  - Frontend wallet connection via `ethers.js` + MetaMask (or WalletConnect for broader support)
+  - `POST /wallet/deposit/evm/initiate` — accepts `chainId`, `tokenAddress` (USDC/USDT), `amount`
+  - On-chain payment verification via RPC (BSC, Base, Ethereum)
+  - `POST /wallet/deposit/evm/verify` — user submits txHash, backend verifies on-chain transfer to platform wallet
+  - Admin panel: platform wallet address config per chain, deposit verification
+  - Update `initiateDeposit()` to support EVM methods with txHash submission flow
+- **Acceptance:** User connects MetaMask, sends USDC/USDT on BSC/Base, backend verifies on-chain, wallet credited.
+
+---
+
+### Deferred Candidates (Post-Phase 5)
+
+- **Rewards / Prizes Store (Phase 13)** — credit sink, retention. Revisit after deposit methods are complete.
+- **OAuth Expansion (Twitter/X, TikTok, Instagram, Facebook)** — fraud reduction. Revisit after core monetization stable.
+- **Onboarding Walkthrough** — churn reduction. Revisit after deposit UX is polished.
 
 ---
 
@@ -173,10 +179,10 @@
 
 ## Definition of Done for This Sprint
 
-1. All 5 critical bugs in Phase 1 are fixed and CI passes.
-2. All 6 documentation files in Phase 2 are updated and accurate.
-3. Sentry webhook coverage is implemented.
-4. Next major feature is selected and scoped in a follow-up plan.
+1. All 5 critical bugs in Phase 1 are fixed and CI passes. ✅
+2. All 6 documentation files in Phase 2 are updated and accurate. ✅
+3. PayPal deposit integration is implemented and tested.
+4. EVM wallet (MetaMask) deposit integration is implemented and tested.
 5. No shortcuts, no guessing, no papering over failures.
 
 ---
