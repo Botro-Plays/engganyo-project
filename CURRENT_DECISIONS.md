@@ -1445,7 +1445,7 @@ This document should be updated when:
 - Frontend architecture decisions are made
 - Code quality decisions are made
 
-**Last Updated**: 2026-06-10 (EPD-001 mandatory CI protocol added; ADR-024, ADR-025, ADR-026 added; MDR-002 updated: deposit system live, Stripe deferred; trust score + analytics BullMQ TMP-004/005 resolved; full markdown audit completed)
+**Last Updated**: 2026-06-13 (ADR-027: symmetric forwardRef for NestJS circular deps; DEP-001 updated: Phase A deposit hardening complete — global resume banner, duplicate-pending guard, PayPal cancel fix, atomic capture race guard, socket cleanup; DEP-001 Phase B/C planned; ROADMAP Phase 15 deposit hardening section added)
 **Previously**: 2026-06-01 (Full MD audit: MDR-001 corrected to 10% fee, TRD-005 updated to automated deploy, IDR-005 reflects full CD pipeline, VDR-001 includes all 11 platforms)
 **Next Review**: 2026-08-31 (quarterly)
 
@@ -1668,7 +1668,35 @@ This document should be updated when:
 - Deposits require admin review until webhook automation is wired — adds operational overhead
 - No live checkout redirect yet (PayMongo/PayPal show a placeholder message)
 **Migration Plan**:
-- Phase 12a (current): Manual review workflow
-- Phase 12b: Wire PayMongo payment link API (create link → redirect user → webhook marks COMPLETED)
-- Phase 12c: Wire PayPal Orders API (create order → redirect → webhook)
-- Phase 12d: Optional on-chain USDT monitoring via moralis/alchemy webhook
+- Phase 12a: Manual review workflow ✅ DONE
+- Phase 12b: Wire PayMongo payment link API (create link → redirect user → webhook marks COMPLETED) ✅ DONE
+- Phase 12c: Wire PayPal Orders API (create order → redirect → webhook) ✅ DONE
+- Phase 12d: Wire USDT auto-deposit + manual txHash ✅ DONE
+- Phase A (hardening): Global resume banner, duplicate-pending guard, PayPal cancel fix, atomic capture race guard, socket cleanup ✅ DONE 2026-06-13
+- Phase B (persistence): sessionStorage for deposit form state across refresh ⏳ PLANNED
+- Phase C (polish): PayPal order expiry cron, toast notifications, loading states ⏳ PLANNED
+
+### ADR-027: Symmetric forwardRef for NestJS Circular Dependencies
+**Status**: Implemented (2026-06-13)
+**Date**: 2026-06-13
+**Context**: `PayPalService` needed to call `cancelOrder()` from `WalletService.cancelDeposit()`. `PayPalService` already injected `WalletService` (for `completeDeposit()`). Adding `PayPalService` to `WalletService` created a circular dependency.
+**Decision**: Use NestJS `forwardRef()` on **both sides** — both modules AND both service injections.
+**Rationale**:
+- NestJS DI container cannot resolve asymmetric circular dependencies (one side `forwardRef`, other side direct import)
+- Asymmetric circular deps cause the application to **hang at startup** with no clear error — E2E tests timeout waiting for `/api/health`
+- `forwardRef` on both sides lets NestJS defer resolution until all modules/providers are registered
+**Implementation**:
+- `WalletModule` imports `PayPalModule` via `forwardRef(() => PayPalModule)`
+- `PayPalModule` imports `WalletModule` via `forwardRef(() => WalletModule)` ← was missing
+- `WalletService` injects `PayPalService` via `@Inject(forwardRef(() => PayPalService))`
+- `PayPalService` injects `WalletService` via `@Inject(forwardRef(() => WalletService))` ← was missing
+**Lesson Learned**:
+- Any cross-module service dependency addition MUST be checked in both directions
+- If Service A already depends on Service B, and we add B → A, it's a circular dependency
+- Both module imports AND both constructor injections need `forwardRef`
+- Verification: run `nest start` or E2E test — unit tests alone do NOT catch this
+**Tradeoffs**:
+- `forwardRef` adds a small runtime overhead (lazy resolution)
+- Less type-safe at compile time (NestJS resolves at runtime)
+**Alternative Considered**:
+- Move cross-service call to controller instead — rejected because `cancelDeposit` is a domain operation that belongs in the service layer; controller-level orchestration is acceptable but doesn't eliminate the need for `forwardRef` in other places (e.g. `PayPalService.captureOrder()` calls `walletService.completeDeposit()`))

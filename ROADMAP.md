@@ -1,8 +1,8 @@
 ﻿# ENGGANYO — Development Roadmap
 
-> Last updated: 2026-06-10 (BullMQ queue migration done, trust gates implemented, Stripe deferred, deposit system live, admin communications + weekly digest + announcement emailer implemented, all markdown docs updated)
+> Last updated: 2026-06-13 (Phase A deposit hardening complete: global resume banner, duplicate-pending guard, PayPal cancel fix, symmetric forwardRef for circular deps)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms, 3 OAuth auto-verified) | Platform Fees Live | Deposit System Live (PayMongo/PayPal/USDT) | Real-Time Events (all 3 phases) | Admin Communications + Weekly Digest + Trust Gates Implemented | Phase 11.5 (Trust Gates ✅) | Phase 15 Partially Complete (PayMongo/USDT live, Stripe ⛔ deferred)
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms, 3 OAuth auto-verified) | Platform Fees Live | Deposit System Live (PayMongo/PayPal/USDT) + Phase A Hardening ✅ | Real-Time Events (all 3 phases) | Admin Communications + Weekly Digest + Trust Gates Implemented | Phase 11.5 (Trust Gates ✅) | Phase 15 Partially Complete (PayMongo/USDT live, Stripe ⛔ deferred)
 
 ---
 
@@ -731,6 +731,16 @@
 - [✅] USDT manual deposit — address + txHash submission
 - [✅] Admin deposit management at `/admin/finances`
 - [✅] Deposit package CRUD + seed at `/admin/finances`
+
+**Deposit Flow Hardening — Phase A ✅ COMPLETED 2026-06-13**
+- [✅] **Global resume banner** — visible on both Transaction History and Deposit Credits tabs; fetches deposit history unconditionally
+- [✅] **Duplicate-pending guard** — `initiateDeposit()` blocks if any PENDING/PROCESSING deposit exists (per user, all methods)
+- [✅] **PayPal cancel fix** — `cancelDeposit()` calls PayPal `cancelOrder()` best-effort; backend `captureOrder()` rejects CANCELLED deposits
+- [✅] **Atomic race-condition guard** — PayPal `captureOrder()` atomically claims deposit as `PROCESSING` before calling PayPal API
+- [✅] **WebSocket state cleanup** — `depositResult` cleared when `depositHistory` shows non-pending status (via unconditional query + useEffect)
+- [✅] **Symmetric forwardRef** — `WalletModule` ↔ `PayPalModule` circular dependency resolved with `forwardRef` on both sides
+- [🟠] **Phase B (form persistence)** — `sessionStorage` for deposit form state across refresh (planned)
+- [⏳] **Phase C (cron expiry + toast UX)** — PayPal order expiry cron, toast notifications, loading states (planned)
 
 **Crypto payments (USDT)**
 - [🟡] USDT payment via Tron (TRC-20) or Ethereum (ERC-20)
