@@ -5,11 +5,11 @@
 
 ---
 
-## Phase 1 — Critical Bug Fixes (Days 1–2)
+## Phase 1 — Critical Bug Fixes (Days 1–2) ✅ COMPLETE
 
 > **These bugs render the anti-abuse system partially or completely ineffective. Fix before any new features.**
 
-### 1.1 `@Ip()` Decorator Returns Proxy IP in Production
+### 1.1 `@Ip()` Decorator Returns Proxy IP in Production ✅ FIXED
 
 - **Severity:** CRITICAL
 - **File:** `apps/api/src/modules/tasks/tasks.controller.ts:44`
@@ -17,39 +17,39 @@
 - **Fix:** Replace `@Ip()` with manual `X-Forwarded-For` extraction (match pattern used in `AuthController.register()` and `GamificationController.claimDailyReward()`).
 - **Acceptance:** `clientIp` in `assignTask()` reflects the actual user's public IP in production.
 
-### 1.2 `UserSession.ipAddress` Never Populated
+### 1.2 `UserSession.ipAddress` Never Populated ✅ FIXED
 
 - **Severity:** CRITICAL
-- **Files:** `apps/api/src/modules/auth/auth.service.ts:585-588` (storeSession)
-- **Problem:** `storeSession()` creates `UserSession` records with only `userId`, `refreshToken`, and `expiresAt`. The `ipAddress`, `userAgent`, `deviceInfo`, and `lastUsedAt` columns are always NULL.
-- **Impact:** Alt-account self-farming detection in `TasksService.assignTask()` queries `UserSession.ipAddress` and will **never find matches**.
-- **Fix:** Capture `ipAddress`, `userAgent`, and `lastUsedAt` during login, register, and token refresh in `storeSession()`.
+- **Files:** `apps/api/src/modules/auth/auth.service.ts:589-607` (storeSession)
+- **Problem:** `storeSession()` created `UserSession` records with only `userId`, `refreshToken`, and `expiresAt`. The `ipAddress`, `userAgent`, and `lastUsedAt` columns were always NULL.
+- **Impact:** Alt-account self-farming detection in `TasksService.assignTask()` queried `UserSession.ipAddress` and never found matches.
+- **Fix:** Updated `storeSession()` to accept `ipAddress` and `userAgent` parameters and persist them with `lastUsedAt: new Date()`. Updated all 4 callers: `register()`, `login()`, `completeTwoFactorLogin()`, `refresh()`.
 - **Acceptance:** New `UserSession` records contain real IP data. Alt-account query returns results when IPs match.
 
-### 1.3 `IpRecord` Model Is Never Written To
+### 1.3 `IpRecord` Model Is Never Written To ✅ FIXED
 
 - **Severity:** CRITICAL
-- **Files:** `apps/api/src/modules/anti-abuse/anti-abuse.service.ts:385-387` (logIpRecord), callers
-- **Problem:** `logIpRecord()` exists but is **never called** from any controller or service. The `IpRecord` table is empty.
-- **Impact:** Admin social graph analysis (`GET /admin/abuse/social-graph/:userId`) queries `IpRecord` for shared IPs and always returns empty results.
-- **Fix:** Wire `logIpRecord()` calls into `AuthService.register()`, `AuthService.login()`, and `TasksService.assignTask()`.
-- **Acceptance:** `IpRecord` table has data. Admin social graph endpoint returns real shared-IP users.
+- **Files:** `apps/api/src/modules/anti-abuse/anti-abuse.service.ts:364-388` (recordIp)
+- **Problem:** `recordIp()` was only called from `register()`. Login, 2FA login, refresh, and task assignment never recorded IPs. The `IpRecord` table had minimal data.
+- **Impact:** Admin social graph analysis (`GET /admin/abuse/social-graph/:userId`) queried `IpRecord` and returned sparse results.
+- **Fix:** Wired `recordIp()` calls into `AuthService.login()` (action: 'login'), `completeTwoFactorLogin()` (action: 'login_2fa'), `refresh()` (action: 'refresh'), and `TasksService.assignTask()` (action: 'task_assign').
+- **Acceptance:** `IpRecord` table has data for all key user actions. Admin social graph endpoint returns real shared-IP users.
 
-### 1.4 `TaskCompletion` Anti-Abuse Fields Never Persisted
+### 1.4 `TaskCompletion` Anti-Abuse Fields Never Persisted ✅ FIXED
 
 - **Severity:** CRITICAL
-- **Files:** `apps/api/prisma/schema.prisma:638-640`, `apps/api/src/modules/tasks/tasks.service.ts` (submitProof)
-- **Problem:** `TaskCompletion.ipAddress`, `deviceFingerprint`, and `completionSeconds` exist in schema but are never written during assignment or submission.
-- **Impact:** Historical timing and device data is lost. Cannot analyze bot patterns retroactively.
-- **Fix:** Persist `ipAddress`, `deviceFingerprint` (from request headers), and `completionSeconds` (computed from `assignedAt`) in `submitProof()`.
-- **Acceptance:** Submitted task completions contain IP, device, and timing data.
+- **Files:** `apps/api/src/modules/tasks/tasks.controller.ts:56-63`, `apps/api/src/modules/tasks/tasks.service.ts:295,431-433,491-493`
+- **Problem:** `TaskCompletion.ipAddress`, `deviceFingerprint`, and `completionSeconds` existed in schema but were never written during submission.
+- **Impact:** Historical timing and device data was lost. Could not analyze bot patterns retroactively.
+- **Fix:** `TasksController.submit()` now extracts `clientIp` and `userAgent` from `req` and passes them to `TasksService.submitProof()`. The service computes `completionSeconds` from `assignedAt` and persists all three fields in both auto-verify and manual-review update paths.
+- **Acceptance:** Submitted task completions now contain IP, device, and timing data.
 
-### 1.5 Missing `trust proxy` in `main.ts`
+### 1.5 Missing `trust proxy` in `main.ts` ✅ FIXED
 
 - **Severity:** HIGH
-- **File:** `apps/api/src/main.ts:19-140`
-- **Problem:** No `app.set('trust proxy', true)` configured. Affects `@Ip()`, rate limiting, and any future IP-based logic.
-- **Fix:** Add `app.set('trust proxy', true)` (or equivalent NestJS configuration) in bootstrap.
+- **File:** `apps/api/src/main.ts:27-28`
+- **Problem:** No `app.set('trust proxy', true)` configured. Affected `@Ip()`, rate limiting, and any future IP-based logic.
+- **Fix:** Added `app.set('trust proxy', true)` immediately after NestFactory.create() in bootstrap.
 - **Acceptance:** Behind-proxy IPs are resolved correctly from `X-Forwarded-For`.
 
 ---
