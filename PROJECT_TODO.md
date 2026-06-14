@@ -66,7 +66,7 @@
 | B3 | Persist `manualTxHash` input to `sessionStorage` | `wallet/page.tsx` | 🔴 | Crypto manual mode ✅ |
 | B4 | Restore all persisted state on page mount with validation | `wallet/page.tsx` | 🔴 | Validates package exists, method enabled, step valid; 30-min stale guard ✅ |
 | B5 | Clear `sessionStorage` on successful deposit completion or explicit cancel | `wallet/page.tsx` | 🟡 | `clearPersistedForm()` called in `resetDeposit()` and `initiateMutation.onSuccess` ✅ |
-| B6 | WebSocket `deposit:updated` handler: `depositResult` is null after refresh — need fallback logic | `wallet/page.tsx` | 🟡 | Gap 15 from AUDIT — **still open** |
+| B6 | WebSocket `deposit:updated` handler: `depositResult` is null after refresh — need fallback logic | `wallet/page.tsx` | 🟡 | Gap 15 from AUDIT — ✅ DONE 2026-06-14: fallback checks `depositHistory` for matching deposit when `depositResult` is null |
 
 **Acceptance Criteria:**
 - User selects package → method → reaches step 3 → presses F5 → form is restored to step 3 with same selections
@@ -75,19 +75,19 @@
 
 ---
 
-# Phase C — PayPal Polish & Cron
+# Phase C — PayPal Polish & Cron ✅ COMPLETE 2026-06-14
 
-**Status:** ⏳ PLANNED
+**Status:** ✅ COMPLETE (C1–C3 done; C4–C5 remain as deferred polish)
 **Scope:** Clean up PayMongo/PayPal edge cases, add expiry handling, improve UX.
 **Priority:** 🟡 MEDIUM-HIGH
 
 | # | Item | File | Severity | Notes |
 |---|------|------|----------|-------|
-| C1 | PayPal order expiry cron — auto-cancel PENDING PayPal deposits >3 hours old | `paypal.service.ts` | 🟡 | Gap 11 from AUDIT |
-| C2 | PayMongo cancel race condition — `cancelDeposit` should use `updateMany` with status precondition | `wallet.service.ts` | 🟡 | Gap 12 from AUDIT |
-| C3 | CountdownTimer hardcodes 30-minute fallback — should read `expiredAt` from `gatewayData` | `wallet/page.tsx` | 🟢 | Gap 10 from AUDIT |
-| C4 | Toast notifications for deposit state transitions | `wallet/page.tsx` | 🟢 | UX polish |
-| C5 | Loading states during PayPal order creation / capture | `wallet/page.tsx` | 🟢 | UX polish |
+| C1 | PayPal order expiry cron — auto-cancel PENDING PayPal deposits >3 hours old | `paypal.service.ts` | 🟡 | ✅ DONE 2026-06-14 — `@Cron(EVERY_5_MINUTES)`: finds PENDING PayPal deposits >3h old, calls `cancelOrder` best-effort, atomic `updateMany` status guard, emits `deposit:updated` |
+| C2 | PayMongo cancel race condition — `cancelDeposit` should use `updateMany` with status precondition | `wallet.service.ts` | 🟡 | ✅ DONE 2026-06-14 — `updateMany` with `{ id, status: { in: [PENDING, PROCESSING] } }` atomic guard; aborts with error if count=0; test added for race guard |
+| C3 | CountdownTimer hardcodes 30-minute fallback — should read `expiredAt` from `gatewayData` | `wallet/page.tsx` | 🟢 | ✅ DONE 2026-06-14 — removed hardcoded fallback; shows "Expires soon" when `expiredAt` missing; backend cron handles old deposits |
+| C4 | Toast notifications for deposit state transitions | `wallet/page.tsx` | 🟢 | ⏳ Deferred — nice-to-have polish |
+| C5 | Loading states during PayPal order creation / capture | `wallet/page.tsx` | 🟢 | ⏳ Deferred — nice-to-have polish |
 
 ---
 
@@ -180,7 +180,13 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - User must explicitly select wallet (prevents random auto-connect)
   - Legacy fallback: generic "Connect Wallet" button for non-EIP-6963 wallets
   - Crypto resume across tabs: already handled by resume banner + `sessionStorage`
-- **Next:** Phase C — PayPal polish & cron (Gap 10, 11, 12) or B6 (WebSocket gap 15)
+- ✅ **B6 (WebSocket Gap 15) fixed** (2026-06-14)
+  - Socket `deposit:updated` handler now has fallback: when `depositResult` is null (after refresh), checks `depositHistory` for a matching deposit before calling `resetDeposit()`
+- ✅ **Phase C — PayPal polish & cron completed** (2026-06-14)
+  - **C1 (Gap 11):** PayPal expiry cron — `@Cron(EVERY_5_MINUTES)` auto-cancels PENDING PayPal deposits >3h old, atomic `updateMany` guard, emits socket event
+  - **C2 (Gap 12):** PayMongo cancel race — `cancelDeposit()` now uses `updateMany` with `{ id, status: { in: [PENDING, PROCESSING] } }` atomic guard; test added for race guard
+  - **C3 (Gap 10):** CountdownTimer — removed hardcoded 30-minute fallback; shows "Expires soon" when `expiredAt` is missing from `gatewayData`
+- **Next:** Phase D crypto backend automation (on-chain verification + auto-credit) or deferred polish (C4–C5)
 
 ---
 

@@ -169,27 +169,23 @@ function DetailItem({ label, value, copyable }: { label: string; value: string; 
 
 // ─── Countdown timer for PayMongo expiry ─────────────────
 function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdAt?: string }) {
-  // Fallback: old deposits without expiredAt expire 30min after creation
   const rawExpired = expiredAt ? new Date(expiredAt).getTime() : NaN;
-  const rawCreated = createdAt ? new Date(createdAt).getTime() : NaN;
 
-  // Guard against NaN from invalid date strings
-  let effectiveExpiredAt = 0;
-  if (Number.isFinite(rawExpired)) {
-    effectiveExpiredAt = rawExpired;
-  } else if (Number.isFinite(rawCreated)) {
-    effectiveExpiredAt = rawCreated + 30 * 60 * 1000;
-  }
+  // No hardcoded fallback — if expiredAt is missing, we don't know the exact expiry.
+  // Old deposits are handled by backend cron; frontend just shows "Expires soon".
+  const effectiveExpiredAt = Number.isFinite(rawExpired) ? rawExpired : 0;
 
   const [left, setLeft] = useState(() => Math.max(0, effectiveExpiredAt - Date.now()));
   useEffect(() => {
+    if (effectiveExpiredAt === 0) return;
     const id = setInterval(() => {
       setLeft(Math.max(0, effectiveExpiredAt - Date.now()));
     }, 1000);
     return () => clearInterval(id);
   }, [effectiveExpiredAt]);
 
-  if (effectiveExpiredAt === 0 || left <= 0) return <span className="text-zinc-500">Expired</span>;
+  if (effectiveExpiredAt === 0) return <span className="text-zinc-500">Expires soon</span>;
+  if (left <= 0) return <span className="text-zinc-500">Expired</span>;
 
   const totalSeconds = Math.floor(left / 1000);
   const m = Math.floor(totalSeconds / 60);
@@ -287,11 +283,17 @@ export default function WalletPage() {
 
   // Real-time: refresh deposits + wallet on backend events
   useSocketEvent('deposit:updated', (payload: { depositId: string; status: string }) => {
-    if (
-      depositResult?.deposit.id === payload.depositId &&
-      (payload.status === 'COMPLETED' || payload.status === 'CANCELLED' || payload.status === 'FAILED')
-    ) {
+    const isTerminal = payload.status === 'COMPLETED' || payload.status === 'CANCELLED' || payload.status === 'FAILED';
+    if (depositResult?.deposit.id === payload.depositId && isTerminal) {
+      // Deposit we are actively tracking has finished → clear the form
       resetDeposit();
+    } else if (!depositResult && isTerminal && depositStep === 3 && selectedMethod) {
+      // After refresh depositResult is null, but a deposit for our current method just finished.
+      // Check history to confirm this is our deposit before clearing form.
+      const match = depositHistory?.items.find((d) => d.id === payload.depositId);
+      if (match && match.method === selectedMethod) {
+        resetDeposit();
+      }
     }
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });

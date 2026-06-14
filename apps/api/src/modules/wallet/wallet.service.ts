@@ -442,34 +442,43 @@ export class WalletService {
   // ─── Cancel a deposit (user-initiated or QR expired) ────────
 
   async cancelDeposit(userId: string, depositId: string) {
-    const { deposit } = await this.prisma.withTransaction(async (tx) => {
-      const existing = await tx.deposit.findUnique({ where: { id: depositId } });
-      if (!existing) throw new NotFoundException('Deposit not found');
-      if (existing.userId !== userId) throw new BadRequestException('Not your deposit');
-      if (existing.status !== DepositStatus.PENDING && existing.status !== DepositStatus.PROCESSING) {
-        throw new BadRequestException(`Cannot cancel a deposit with status ${existing.status}`);
-      }
+    const existing = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!existing) throw new NotFoundException('Deposit not found');
+    if (existing.userId !== userId) throw new BadRequestException('Not your deposit');
+    if (existing.status !== DepositStatus.PENDING && existing.status !== DepositStatus.PROCESSING) {
+      throw new BadRequestException(`Cannot cancel a deposit with status ${existing.status}`);
+    }
 
-      const baseGatewayData =
-        existing.gatewayData && typeof existing.gatewayData === 'object' && !Array.isArray(existing.gatewayData)
-          ? (existing.gatewayData as Prisma.JsonObject)
-          : ({} as Prisma.JsonObject);
-      const updatedGatewayData: Prisma.JsonObject = {
-        ...baseGatewayData,
-        cancelledAt: new Date().toISOString(),
-        cancelledBy: userId,
-      };
+    // Atomic status guard: only cancel if still PENDING/PROCESSING at this exact moment.
+    // Prevents race condition where webhook completes deposit while user clicks Cancel.
+    const claimed = await this.prisma.deposit.updateMany({
+      where: {
+        id: depositId,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+      },
+      data: { status: DepositStatus.CANCELLED },
+    });
 
-      const updatedDeposit = await tx.deposit.update({
-        where: { id: depositId },
-        data: {
-          status: DepositStatus.CANCELLED,
-          adminNotes: 'Cancelled by user',
-          gatewayData: updatedGatewayData,
-        },
-      });
+    if (claimed.count === 0) {
+      this.logger.warn(`cancelDeposit race: deposit ${depositId} was already processed, skipping cancel`);
+      const fresh = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+      throw new BadRequestException(
+        `Deposit was already ${fresh?.status?.toLowerCase() ?? 'processed'}. Cancel aborted.`,
+      );
+    }
 
-      return { deposit: updatedDeposit };
+    const deposit = await this.prisma.deposit.update({
+      where: { id: depositId },
+      data: {
+        adminNotes: 'Cancelled by user',
+        gatewayData: {
+          ...(existing.gatewayData && typeof existing.gatewayData === 'object' && !Array.isArray(existing.gatewayData)
+            ? (existing.gatewayData as Prisma.JsonObject)
+            : {}),
+          cancelledAt: new Date().toISOString(),
+          cancelledBy: userId,
+        } as Prisma.InputJsonValue,
+      },
     });
 
     // Archive PayMongo link so it can't be paid anymore (best-effort, after status flip)

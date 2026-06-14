@@ -54,6 +54,7 @@ describe('WalletService', () => {
   const prismaDepositMock = {
     findUnique: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   };
 
   const prismaTransactionMock = {
@@ -207,7 +208,7 @@ describe('WalletService', () => {
   });
 
   describe('cancelDeposit', () => {
-    it('cancels deposit inside transaction and archives link', async () => {
+    it('atomically cancels deposit with status guard and archives link', async () => {
       const existing = {
         id: 'dep-1',
         userId: 'user-1',
@@ -220,30 +221,56 @@ describe('WalletService', () => {
       const updated = {
         ...existing,
         status: DepositStatus.CANCELLED,
+        adminNotes: 'Cancelled by user',
         gatewayData: { foo: 'bar', cancelledAt: '2026-06-06T00:00:00.000Z', cancelledBy: 'user-1' },
       };
 
       prismaDepositMock.findUnique.mockResolvedValue(existing);
+      prismaDepositMock.updateMany.mockResolvedValue({ count: 1 });
       prismaDepositMock.update.mockResolvedValue(updated);
-
-      (prisma.withTransaction as jest.Mock).mockImplementation(async (cb: (tx: Partial<PrismaService>) => Promise<unknown>) =>
-        cb({
-          deposit: {
-            findUnique: prismaDepositMock.findUnique,
-            update: prismaDepositMock.update,
-          },
-        } as unknown as PrismaService),
-      );
 
       const result = await service.cancelDeposit('user-1', 'dep-1');
 
       expect(result).toBe(updated);
+      // Step 1: atomic status guard
+      expect(prismaDepositMock.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'dep-1',
+          status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        },
+        data: { status: DepositStatus.CANCELLED },
+      });
+      // Step 2: update metadata
       expect(prismaDepositMock.update).toHaveBeenCalledWith({
         where: { id: 'dep-1' },
-        data: expect.objectContaining({ status: DepositStatus.CANCELLED }),
+        data: expect.objectContaining({
+          adminNotes: 'Cancelled by user',
+          gatewayData: expect.objectContaining({
+            cancelledAt: expect.any(String),
+            cancelledBy: 'user-1',
+          }),
+        }),
       });
       expect(paymongoServiceMock.archiveLink).toHaveBeenCalledWith('plink_123');
-      expect(prisma.withTransaction).toHaveBeenCalled();
+    });
+
+    it('aborts cancel when deposit was already processed (race guard)', async () => {
+      const existing = {
+        id: 'dep-1',
+        userId: 'user-1',
+        status: DepositStatus.PENDING,
+        method: DepositMethod.PAYMONGO,
+        paymentRef: 'plink_123',
+        gatewayData: {},
+      };
+
+      prismaDepositMock.findUnique.mockResolvedValue(existing);
+      prismaDepositMock.updateMany.mockResolvedValue({ count: 0 });
+      // Simulate webhook completed the deposit right before our cancel
+      prismaDepositMock.findUnique.mockResolvedValueOnce(existing).mockResolvedValueOnce({ ...existing, status: DepositStatus.COMPLETED });
+
+      await expect(service.cancelDeposit('user-1', 'dep-1')).rejects.toThrow(BadRequestException);
+      expect(prismaDepositMock.update).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,8 +1,9 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException, forwardRef, Inject } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { EventsService } from '../events/events.service';
-import { DepositStatus } from '@prisma/client';
+import { DepositStatus, DepositMethod } from '@prisma/client';
 
 interface PayPalConfig {
   clientId: string;
@@ -432,5 +433,60 @@ export class PayPalService {
     }
 
     return { received: true, action: 'ignored_unsupported_event' };
+  }
+
+  // ─── Cron: auto-cancel PENDING PayPal deposits > 3 hours old ─────
+  // PayPal orders expire after 3 hours by default. Prevent dead-ended resumes.
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async cancelExpiredPayPalDeposits() {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+
+    const expired = await this.prisma.deposit.findMany({
+      where: {
+        method: DepositMethod.PAYPAL,
+        status: DepositStatus.PENDING,
+        createdAt: { lt: threeHoursAgo },
+      },
+      select: { id: true, paymentRef: true, userId: true },
+    });
+
+    if (expired.length === 0) return;
+
+    this.logger.log(`Found ${expired.length} PayPal deposit(s) older than 3h — auto-cancelling`);
+
+    for (const deposit of expired) {
+      try {
+        // Best-effort: notify PayPal to void the order (mostly no-op for CREATED orders)
+        if (deposit.paymentRef) {
+          try {
+            await this.cancelOrder(deposit.paymentRef);
+          } catch {
+            /* ignore — order may already be expired at PayPal */
+          }
+        }
+
+        // Atomic status guard: skip if already processed by webhook/user
+        const cancelled = await this.prisma.deposit.updateMany({
+          where: {
+            id: deposit.id,
+            status: DepositStatus.PENDING,
+          },
+          data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayPal order expired' },
+        });
+
+        if (cancelled.count === 0) {
+          this.logger.log(`Deposit ${deposit.id} already processed — skipping auto-cancel`);
+          continue;
+        }
+
+        this.logger.log(`Deposit ${deposit.id} auto-cancelled — PayPal order expired`);
+        this.eventsService.emitToUser(deposit.userId, 'deposit:updated', {
+          depositId: deposit.id,
+          status: DepositStatus.CANCELLED,
+        });
+      } catch (err) {
+        this.logger.error(`Failed to auto-cancel PayPal deposit ${deposit.id}: ${String(err)}`);
+      }
+    }
   }
 }
