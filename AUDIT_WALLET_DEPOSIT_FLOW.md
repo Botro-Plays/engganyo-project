@@ -10,13 +10,15 @@
 
 ## Executive Summary
 
-The deposit flow has **7 confirmed bugs** and **6 design gaps** that create dead-ends for users who navigate away during payment. The most critical issue: **PayPal and Crypto pending deposits become orphaned — the user has no UI path to resume them after leaving `/wallet`.**
+**All confirmed bugs and design gaps have been fixed.** This audit is now a historical reference.
 
-| Severity | Count | Description |
-|----------|-------|-------------|
-| 🔴 CRITICAL | 3 | Orphaned pending deposits, lost payment URLs, destructive cancel UX |
-| 🟡 HIGH | 4 | Race conditions, stale state, wrong deposit shown |
-| 🟢 MEDIUM | 6 | Missing labels, misleading UI, unhandled edge cases |
+The deposit flow previously had **7 confirmed bugs** and **6 design gaps** that created dead-ends for users who navigated away during payment. All items in the Summary Table below are now marked **✅ FIXED**.
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| 🔴 CRITICAL | 3 | ✅ All fixed |
+| 🟡 HIGH | 4 | ✅ All fixed |
+| 🟢 MEDIUM | 6 | ✅ All fixed |
 
 ---
 
@@ -278,9 +280,9 @@ Currently, the user must expand the deposit detail panel and scroll through raw 
 
 ---
 
-### Gap 10: CountdownTimer Hardcodes 30-Minute Fallback
+### Gap 10: CountdownTimer Hardcodes 30-Minute Fallback ✅ FIXED
 
-**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:171-182`  
+**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:171-189`  
 **Root Cause:**
 
 ```tsx
@@ -294,13 +296,23 @@ if (Number.isFinite(rawExpired)) {
 
 If PayMongo changes their link expiry to 1 hour, this countdown will show "Expired" early. The `expiredAt` from gatewayData should be the single source of truth.
 
-**Also:** The fallback is used when `gatewayData` exists but `expiredAt` is missing. This happens for old deposits created before `expiredAt` was added.
+**Fix Applied:**
+- Removed the `rawCreated + 30min` hardcoded fallback entirely.
+- If `expiredAt` is present → exact countdown.
+- If `expiredAt` is missing → shows `"Expires soon"` (no guess).
+- Old deposits without `expiredAt` are handled by backend cron (PayMongo link archive + PayPal expiry cron).
+
+**Code:**
+```tsx
+const effectiveExpiredAt = Number.isFinite(rawExpired) ? rawExpired : 0;
+if (effectiveExpiredAt === 0) return <span className="text-zinc-500">Expires soon</span>;
+```
 
 ---
 
-### Gap 11: No Handling for PayPal Order Expiry
+### Gap 11: No Handling for PayPal Order Expiry ✅ FIXED
 
-**File:** `apps/api/src/modules/paypal/paypal.service.ts:66-116`  
+**File:** `apps/api/src/modules/paypal/paypal.service.ts:438-486`  
 **Root Cause:** PayPal orders expire after **3 hours** (PayPal default). No cron job or status check marks these as expired.
 
 **User Impact:**
@@ -310,13 +322,38 @@ If PayMongo changes their link expiry to 1 hour, this countdown will show "Expir
 4. Deposit remains PENDING in our database forever (until user cancels or admin intervenes)
 5. User tries to resume — PayPal shows "This order has expired"
 
-**We need:** A cron job similar to PayMongo's `archiveLink` cron that finds PENDING PayPal deposits older than 3 hours and cancels them.
+**Fix Applied:**
+- Added `@Cron(CronExpression.EVERY_5_MINUTES) cancelExpiredPayPalDeposits()` in `paypal.service.ts`.
+- Finds all PENDING PayPal deposits older than 3 hours.
+- Best-effort calls `cancelOrder()` on the PayPal order (no-op for already-expired CREATED orders).
+- Atomic `updateMany` with `{ id, status: DepositStatus.PENDING }` guard → only cancels if still PENDING.
+- Emits `deposit:updated` socket event so the user's UI updates immediately.
+- Logs every auto-cancel for audit trail.
+
+**Code:**
+```ts
+@Cron(CronExpression.EVERY_5_MINUTES)
+async cancelExpiredPayPalDeposits() {
+  const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const expired = await this.prisma.deposit.findMany({
+    where: { method: DepositMethod.PAYPAL, status: DepositStatus.PENDING, createdAt: { lt: threeHoursAgo } },
+  });
+  for (const deposit of expired) {
+    if (deposit.paymentRef) { try { await this.cancelOrder(deposit.paymentRef); } catch { /* ignore */ } }
+    const cancelled = await this.prisma.deposit.updateMany({
+      where: { id: deposit.id, status: DepositStatus.PENDING },
+      data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayPal order expired' },
+    });
+    if (cancelled.count > 0) this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.CANCELLED });
+  }
+}
+```
 
 ---
 
-### Gap 12: PayMongo Cancel Race Condition
+### Gap 12: PayMongo Cancel Race Condition ✅ FIXED
 
-**File:** `apps/api/src/modules/wallet/wallet.service.ts:424-428`  
+**File:** `apps/api/src/modules/wallet/wallet.service.ts:456-480`  
 **Root Cause:**
 
 ```tsx
@@ -341,17 +378,25 @@ await tx.deposit.updateMany({
 });
 ```
 
-But `cancelDeposit` uses `update` (not `updateMany`) with no status precondition:
-```tsx
-const updatedDeposit = await tx.deposit.update({
-  where: { id: depositId },
-  data: { status: DepositStatus.CANCELLED, ... },
+But `cancelDeposit` used `update` (not `updateMany`) with no status precondition — last write wins.
+
+**Fix Applied:**
+- `cancelDeposit()` now uses `updateMany` with `{ id, status: { in: [PENDING, PROCESSING] } }` atomic guard.
+- If `claimed.count === 0`, throws `BadRequestException("Deposit was already processed. Cancel aborted.")`.
+- Logs race condition for monitoring.
+- Applied same pattern to PayPal `cancelOrder()` in `paypal.service.ts`.
+
+**Code:**
+```ts
+const claimed = await this.prisma.deposit.updateMany({
+  where: { id: depositId, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
+  data: { status: DepositStatus.CANCELLED },
 });
+if (claimed.count === 0) {
+  this.logger.warn(`cancelDeposit race: deposit ${depositId} was already processed, skipping cancel`);
+  throw new BadRequestException(`Deposit was already processed. Cancel aborted.`);
+}
 ```
-
-If the webhook and cancel happen in parallel, the last write wins.
-
-**Fix:** Change `cancelDeposit` to use `updateMany` with status precondition, similar to `completeDeposit`.
 
 ---
 
@@ -393,9 +438,9 @@ if (deposit.method === DepositMethod.PAYMONGO && deposit.paymentRef) {
 
 ---
 
-### Gap 15: WebSocket Race on Page Load
+### Gap 15: WebSocket Race on Page Load ✅ FIXED
 
-**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:244-253`  
+**File:** `apps/web/src/app/(dashboard)/wallet/page.tsx:287-315`  
 **Root Cause:**
 
 ```tsx
@@ -418,9 +463,13 @@ useSocketEvent('deposit:updated', (payload) => {
 7. The deposit shows as COMPLETED in history
 8. The deposit form is still at step 1 (because `resetDeposit` wasn't called from the socket handler)
 
-This is actually mostly OK — the form is at step 1 which is the natural state. But if the user was in the middle of creating a NEW deposit, the socket event from the OLD deposit doesn't affect them. The `depositResult` null check prevents cross-talk.
+**Fix Applied:**
+- **Fallback in socket handler (line 304-309):** When `depositResult` is null but `depositStep === 3` and `selectedMethod` is set, checks `depositHistory` for a deposit matching the payload's `depositId` and `method`. If found, calls `resetDeposit()`.
+- **Auto-reconstruction from history (line 385-423):** A `useEffect` watches `depositResult`, `packages`, and `depositHistory`. When `depositResult` is null but a PENDING/PROCESSING deposit exists in history, automatically reconstructs the full form state (package, method, step 3, instructions, checkout URL).
+- **sessionStorage persistence (line 425-449):** As a second layer, form state is persisted to `sessionStorage` with a 30-minute TTL. On mount, if no `depositResult` exists but `sessionStorage` has valid state, restores step/method/package/cryptoMode/txHash.
+- **Visibility-change refetch (line 321-369):** When the tab becomes visible after being backgrounded, force-refetches deposits and auto-reconstructs if a pending deposit is found.
 
-**But:** If user is on step 3 of a NEW deposit and the OLD deposit's webhook arrives, `depositResult` is null (new deposit hasn't been initiated yet), so nothing happens. OK.
+**Result:** After refresh, the deposit form is restored to step 3 with all selections intact. When the WebSocket event arrives, the form is properly cleared.
 
 ---
 
@@ -437,12 +486,12 @@ This is actually mostly OK — the form is at step 1 which is the natural state.
 | 7 | 🟡 HIGH | ~~Deposit history query disabled on non-deposit tab~~ ✅ **FIXED** | `wallet/page.tsx` | Removed `enabled: tab === 'deposit'` so banner is visible on Transaction History tab |
 | 8 | 🟢 MEDIUM | ~~PayPal history item has no "Continue" link~~ ✅ **FIXED** | `wallet/page.tsx` | "Continue to PayPal" button shown for PENDING PayPal deposits with `approvalUrl` |
 | 9 | 🟢 MEDIUM | ~~Crypto history item has no "View Instructions"~~ ✅ **FIXED** | `wallet/page.tsx` | "View Payment Instructions" toggle shown for PENDING crypto deposits |
-| 10 | 🟢 MEDIUM | CountdownTimer hardcodes 30min fallback | `wallet/page.tsx` | Low |
-| 11 | 🟢 MEDIUM | No PayPal order expiry handling | `paypal.service.ts` | Medium |
-| 12 | 🟢 MEDIUM | Cancel/complete race condition | `wallet.service.ts` | Low |
+| 10 | 🟢 MEDIUM | ~~CountdownTimer hardcodes 30min fallback~~ ✅ **FIXED** | `wallet/page.tsx` | Removed hardcoded fallback; shows "Expires soon" when `expiredAt` missing |
+| 11 | 🟢 MEDIUM | ~~No PayPal order expiry handling~~ ✅ **FIXED** | `paypal.service.ts` | `@Cron(EVERY_5_MINUTES)` auto-cancels PENDING PayPal deposits >3h old |
+| 12 | 🟢 MEDIUM | ~~Cancel/complete race condition~~ ✅ **FIXED** | `wallet.service.ts` | `cancelDeposit()` uses `updateMany` with status precondition; aborts if already processed |
 | 13 | 🟢 MEDIUM | ~~Cancel doesn't void PayPal orders~~ ✅ **FIXED** | `wallet.service.ts` + `paypal.service.ts` | `cancelOrder()` fetches status + logs; backend rejects capture for CANCELLED deposits |
 | 14 | 🟢 MEDIUM | ~~No warning for multiple pending deposits~~ ✅ **FIXED** | `wallet.service.ts` | `initiateDeposit()` blocks new deposits if any PENDING/PROCESSING exists |
-| 15 | 🟢 MEDIUM | WebSocket state mismatch on refresh | `wallet/page.tsx` | Low |
+| 15 | 🟢 MEDIUM | ~~WebSocket state mismatch on refresh~~ ✅ **FIXED** | `wallet/page.tsx` | Socket fallback checks `depositHistory` when `depositResult` is null; sessionStorage persistence; auto-reconstruction from history |
 
 ---
 

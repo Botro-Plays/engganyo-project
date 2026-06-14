@@ -2,9 +2,9 @@
 
 # ENGGANYO — Development Roadmap
 
-> Last updated: 2026-06-13 (Phase A deposit hardening complete: global resume banner, duplicate-pending guard, PayPal cancel fix, symmetric forwardRef for circular deps)
+> Last updated: 2026-06-14 (Crypto full automation ✅ | Phase B form persistence ✅ | Phase C PayPal cron + toasts + loading states ✅ | Minimum deposit config wired)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
-> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms, 3 OAuth auto-verified) | Platform Fees Live | Deposit System Live (PayMongo/PayPal/USDT) + Phase A Hardening ✅ | Real-Time Events (all 3 phases) | Admin Communications + Weekly Digest + Trust Gates Implemented | Phase 11.5 (Trust Gates ✅) | Phase 15 Partially Complete (PayMongo/USDT live, Stripe ⛔ deferred)
+> **Status**: Live at https://engganyo.com | Phases 1-10 Complete | Phase 11 Partially Implemented (11 platforms, 3 OAuth auto-verified) | Platform Fees Live | Deposit System Live (PayMongo/PayPal/USDT) + Phases A–D Hardening ✅ | Real-Time Events (all 3 phases) | Admin Communications + Weekly Digest + Trust Gates Implemented | Phase 11.5 (Trust Gates ✅, Social Graph ✅, IP Tracking ✅) | Phase 15 Complete (PayMongo/PayPal/USDT auto, Stripe ⛔ deferred)
 
 ---
 
@@ -729,8 +729,8 @@
 - [✅] `POST /wallet/deposit/initiate` — initiates deposit with packageId, method, optional txHash
 - [✅] PayMongo payment links — create link, webhook (paid/failed), auto-cancel cron, retry/backoff
 - [✅] PayPal Orders API — create order, capture, webhook
-- [🟠] USDT deposit (BSC + Base) — manual placeholder; EVM wallet connect + send OR manual txHash submission, then **requires admin manual review** to credit
-- [⏳] USDT auto-deposit (full automation) — wallet detection modal → branded selection → auto-sign → on-chain confirmation → auto-credit (NOT implemented)
+- [✅] USDT deposit (BSC + Base) — fully automated. EVM wallet connect + auto-send OR manual txHash submission. On-chain verification via `CryptoVerificationService` + cron auto-completes. No admin review required.
+- [✅] USDT auto-deposit (full automation) — `CryptoVerificationService` verifies tx receipts + ERC-20 logs on BSC/Base; `@Cron(EVERY_MINUTE)` auto-completes valid deposits; frontend `waitForTransaction` polls for near-instant feedback
 - [✅] Admin deposit management at `/admin/finances`
 - [✅] Deposit package CRUD + seed at `/admin/finances`
 
@@ -741,14 +741,14 @@
 - [✅] **Atomic race-condition guard** — PayPal `captureOrder()` atomically claims deposit as `PROCESSING` before calling PayPal API
 - [✅] **WebSocket state cleanup** — `depositResult` cleared when `depositHistory` shows non-pending status (via unconditional query + useEffect)
 - [✅] **Symmetric forwardRef** — `WalletModule` ↔ `PayPalModule` circular dependency resolved with `forwardRef` on both sides
-- [🟠] **Phase B (form persistence)** — `sessionStorage` for deposit form state across refresh (planned)
-- [⏳] **Phase C (cron expiry + toast UX)** — PayPal order expiry cron, toast notifications, loading states (planned)
+- [✅] **Phase B (form persistence)** — `sessionStorage` persists deposit form state (package, method, step, cryptoMode, txHash) across refresh/navigation; 30-min TTL; validated on restore
+- [✅] **Phase C (cron expiry + toast UX)** — PayPal order expiry cron (`@Cron(EVERY_5_MINUTES)`), toast notifications via `ToastProvider`, loading states on all payment buttons
 
-**Crypto payments (USDT) — FULL AUTOMATION NOT IMPLEMENTED**
-- [🟠] Wallet detection — EIP-6963 provider discovery + legacy fallback implemented in `useEvmWallet.ts` (2026-06-14). Branded selection modal UI still pending.
+**Crypto payments (USDT) — ✅ FULLY AUTOMATED**
+- [✅] Wallet detection — EIP-6963 provider discovery + legacy fallback in `useEvmWallet.ts`. Branded selection grid UI in wallet page.
   - **Bug fixed (2026-06-14):** `isAvailable` was static, broke MetaMask popup. Now reactive with EIP-6963 + polling + event listeners.
-- [⏳] On-chain confirmation listener — monitor BSC/Base for incoming USDT transfers, auto-credit after N confirmations
-- [⏳] Auto-complete deposit flow — no admin review required for confirmed on-chain txs
+- [✅] On-chain confirmation listener — `CryptoVerificationService` queries BSC/Base RPC for tx receipts, parses ERC-20 Transfer logs, verifies recipient + amount + ≥12 confirmations
+- [✅] Auto-complete deposit flow — `@Cron(EVERY_MINUTE)` auto-verifies PROCESSING crypto deposits; frontend `waitForTransaction` polls for confirmations then triggers backend verify; "Verify Now" button for manual retries
 - [🟡] USDT payment via Tron (TRC-20) or Ethereum (ERC-20) — deferred
 - [🟡] Wallet address generation per user per order (HD wallet or payment processor) — deferred
 - [🟡] Or use a payment processor: NOWPayments / CoinGate — deferred
@@ -857,12 +857,12 @@
 | 9 | Analytics | ✅ Complete | - |
 | 10 | Production Hardening | ✅ Complete | - |
 | 11 | Social Verification Engine | 🟠 Partially Implemented | 🟠 HIGH |
-| 11.5 | Anti-Abuse Enhancements | 🟠 Partially Done (trust gates ✅) | 🟠 HIGH |
+| 11.5 | Anti-Abuse Enhancements | � Mostly Complete (trust gates ✅, social graph ✅, IP tracking ✅, task timing ✅, duplicate proof ✅) | 🟠 HIGH |
 | 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
 | 12.5 | UX & Onboarding Improvements | 🟠 Partially Done | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
 | 14 | Security & Trust Hardening | 🟡 Mostly Complete (weekly digest ✅, disposable email ✅) | 🟡 MEDIUM |
-| 15 | Payments & Monetisation | 🟠 Partially Complete (deposits ✅, Stripe ⛔ deferred) | 🟠 HIGH |
+| 15 | Payments & Monetisation | � Mostly Complete (PayMongo/PayPal/USDT auto ✅, Stripe ⛔ deferred) | 🟠 HIGH |
 | 16 | Scalability Improvements | ⏳ Pending | 🟠 HIGH |
 | 17 | Developer Experience Improvements | ⏳ Pending | 🟡 MEDIUM |
 
