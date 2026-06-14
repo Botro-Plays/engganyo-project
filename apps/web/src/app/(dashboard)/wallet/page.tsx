@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -529,6 +529,16 @@ export default function WalletPage() {
       }).filter(([, v]) => v).map(([k]) => k)
     : [];
 
+  const methodAvailable = useMemo(() => {
+    if (!depositOptions || !selectedPackage) return () => true;
+    const minUsd = depositOptions.pricing.minDepositUsd ?? 1;
+    const minPhp = depositOptions.pricing.minDepositPhp ?? 50;
+    return (method: string) => {
+      if (method === 'PAYMONGO') return selectedPackage.phpEquivalent >= minPhp;
+      return selectedPackage.usdAmount >= minUsd;
+    };
+  }, [depositOptions, selectedPackage]);
+
   const isCrypto = selectedMethod === 'USDT_BEP20' || selectedMethod === 'USDT_BASE';
   const cryptoCfg = selectedMethod === 'USDT_BEP20' ? depositOptions?.usdtBep20 : depositOptions?.usdtBase;
 
@@ -1037,22 +1047,31 @@ export default function WalletPage() {
                         const displayAmount = isPhp
                           ? `₱${selectedPackage.phpEquivalent.toLocaleString()}`
                           : `$${selectedPackage.usdAmount} USDT`;
+                        const available = methodAvailable(key);
+                        const minLabel = isPhp
+                          ? `Min ₱${depositOptions?.pricing.minDepositPhp ?? 50}`
+                          : `Min $${depositOptions?.pricing.minDepositUsd ?? 1}`;
                         return (
                           <button
                             key={key}
+                            disabled={!available}
                             onClick={() => { setSelectedMethod(key); setDepositStep(3); setDepositError(null); evmWallet.reset(); }}
-                            className="w-full flex items-center gap-4 p-4 rounded-xl border border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left"
+                            className={`w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all ${
+                              available
+                                ? 'border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 cursor-pointer'
+                                : 'border-zinc-800 bg-zinc-800/30 opacity-60 cursor-not-allowed'
+                            }`}
                           >
-                            <div className={`w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center shrink-0`}>
+                            <div className={`w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center shrink-0 ${!available ? 'opacity-50' : ''}`}>
                               <meta.icon className={`w-5 h-5 ${meta.color}`} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white">{meta.label}</p>
+                              <p className={`text-sm font-medium ${available ? 'text-white' : 'text-zinc-500'}`}>{meta.label}</p>
                               <p className="text-xs text-zinc-500">{key === 'USDT_BEP20' ? 'BNB Smart Chain' : key === 'USDT_BASE' ? 'Base Network' : key === 'PAYPAL' ? 'PayPal checkout' : 'GCash / Cards'}</p>
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="text-sm font-semibold text-white">{displayAmount}</p>
-                              <p className="text-xs text-zinc-500">you pay</p>
+                              <p className={`text-sm font-semibold ${available ? 'text-white' : 'text-zinc-600'}`}>{displayAmount}</p>
+                              <p className={`text-xs ${available ? 'text-zinc-500' : 'text-red-400'}`}>{available ? 'you pay' : minLabel}</p>
                             </div>
                           </button>
                         );
