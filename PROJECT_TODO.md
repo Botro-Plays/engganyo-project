@@ -279,7 +279,17 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - Updated `AUDIT_WALLET_DEPOSIT_FLOW.md`: gaps 10, 11, 12, 15 marked ✅ FIXED with fix details
   - Updated executive summary: all bugs/gaps fixed
 
-- **Next:** Phase F infrastructure (F2 Sentry for PayMongo webhooks, or F3 E2E tests)
+- ✅ **Sentry Coverage for PayMongo** (2026-06-14)
+  - Added `Sentry.captureException` / `captureMessage` to 8 silent failure paths in `paymongo.service.ts`
+  - Covers: link creation errors, archive retry exhaustion, payment.failed orphans, unknown webhook types, cron errors
+  - ⚠️ **Action required:** Configure Sentry alert rules (Project → Alerts) to send email for `level:error` and `level:warning` in `paymongo.service.ts`
+    - Without alert rules, errors sit in the Issues dashboard only — no automatic email
+- ✅ **Admin Alert for Failed Crypto Deposits** (2026-06-14)
+  - `EventsGateway`: admin users (ADMIN/SUPER_ADMIN/MODERATOR) auto-join `admin` socket room on connection
+  - `EventsService.emitToAdmins()`: broadcasts to `admin` room
+  - `wallet.service.ts` cron (`verifyCryptoDeposits`): when deposit marked FAILED, emits `admin:deposit-failed` + creates `SYSTEM_ANNOUNCEMENT` notification for every admin
+  - Admin layout (`(admin)/layout.tsx`): listens for `admin:deposit-failed`, shows error toast + invalidates finances queries
+- **Next:** E2E tests (F3)
 
 ---
 

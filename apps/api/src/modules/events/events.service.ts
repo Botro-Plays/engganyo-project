@@ -23,4 +23,9 @@ export class EventsService {
     if (!this.server) return;
     this.server.emit(event, payload);
   }
+
+  emitToAdmins(event: string, payload: unknown) {
+    if (!this.server) return;
+    this.server.to('admin').emit(event, payload);
+  }
 }

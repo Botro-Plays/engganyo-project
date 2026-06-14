@@ -83,7 +83,15 @@ export class EventsGateway
 
       client.data.userId = userId;
       await client.join(`user:${userId}`);
-      this.logger.debug(`Socket connected: ${client.id} for user ${userId}`);
+
+      // Join admin room for real-time admin alerts
+      const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR'];
+      if (adminRoles.includes(payload.role)) {
+        await client.join('admin');
+        this.logger.debug(`Socket connected: ${client.id} for user ${userId} (admin room joined)`);
+      } else {
+        this.logger.debug(`Socket connected: ${client.id} for user ${userId}`);
+      }
     } catch (err) {
       this.logger.warn(`Socket connection rejected: ${(err as Error).message}`);
       client.disconnect(true);

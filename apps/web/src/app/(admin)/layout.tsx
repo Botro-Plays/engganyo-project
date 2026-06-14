@@ -15,6 +15,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
+import { useToast } from '@/components/toast-provider';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -90,6 +92,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.addEventListener('admin:pin-verified', handlePinVerified);
     return () => window.removeEventListener('admin:pin-verified', handlePinVerified);
   }, [queryClient]);
+
+  // Real-time admin alert: crypto deposit failed auto-verification
+  const { addToast } = useToast();
+  useSocketEvent<{
+    depositId: string;
+    userId: string;
+    method: string;
+    amount: number;
+    currency: string;
+    reason: string;
+    txHash: string;
+  }>('admin:deposit-failed', (payload) => {
+    addToast(
+      `${payload.method} deposit ${payload.depositId.slice(0, 8)}… failed: ${payload.reason}. Check Finances.`,
+      'error',
+      10_000,
+    );
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'finances'] });
+  });
 
   // If user lacks 2FA, show nothing while redirecting
   if (user && !canAccessAdmin(user)) {

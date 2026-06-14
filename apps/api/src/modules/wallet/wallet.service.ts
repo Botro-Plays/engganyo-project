@@ -7,7 +7,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Prisma, DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
+import { Prisma, DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { CurrencyService } from './currency.service';
@@ -779,14 +779,45 @@ export class WalletService {
           if (result.error?.includes('Transaction failed on-chain') ||
               result.error?.includes('No USDT transfer to platform wallet') ||
               result.error?.includes('Amount mismatch')) {
-            await this.prisma.deposit.updateMany({
+            const updateResult = await this.prisma.deposit.updateMany({
               where: { id: deposit.id, status: DepositStatus.PROCESSING },
               data: {
                 status: DepositStatus.FAILED,
                 adminNotes: `Auto-verification failed: ${result.error}`,
               },
             });
-            this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.FAILED });
+            if (updateResult.count > 0) {
+              this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.FAILED });
+
+              // Real-time admin alert + notifications
+              const adminAlertPayload = {
+                depositId: deposit.id,
+                userId: deposit.userId,
+                method: deposit.method,
+                amount: deposit.amountFiat,
+                currency: deposit.currency,
+                txHash: deposit.paymentRef,
+                reason: result.error,
+                adminNotes: `Auto-verification failed: ${result.error}`,
+                failedAt: new Date().toISOString(),
+              };
+              this.eventsService.emitToAdmins('admin:deposit-failed', adminAlertPayload);
+
+              // Create in-app notifications for all admins
+              const admins = await this.prisma.user.findMany({
+                where: { role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.MODERATOR] } },
+                select: { id: true },
+              });
+              for (const admin of admins) {
+                void this.notificationsService.createNotification(
+                  admin.id,
+                  NotificationType.SYSTEM_ANNOUNCEMENT,
+                  'Crypto Deposit Failed — Review Needed',
+                  `Deposit ${deposit.id} (${deposit.method}) for ${deposit.currency} ${deposit.amountFiat} failed verification: ${result.error}. Check /admin/finances.`,
+                  adminAlertPayload,
+                ).catch(() => null);
+              }
+            }
           }
         }
       } catch (err) {
