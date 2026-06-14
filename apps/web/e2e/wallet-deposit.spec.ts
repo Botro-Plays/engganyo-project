@@ -76,6 +76,8 @@ async function mockInitiateDeposit(page: import('@playwright/test').Page, method
   await page.route('**/api/wallet/deposit/initiate', async (route) => {
     const request = route.request();
     const postData = JSON.parse((await request.postData()) ?? '{}');
+    const hasTxHash = typeof postData.txHash === 'string' && postData.txHash.trim().length > 0;
+    const normalizedTxHash = hasTxHash ? postData.txHash.trim() : undefined;
     await route.fulfill({
       status: 201,
       headers: CORS_HEADERS,
@@ -86,25 +88,27 @@ async function mockInitiateDeposit(page: import('@playwright/test').Page, method
           userId: 'user-e2e',
           packageId: postData.packageId,
           method: postData.method,
-          status: 'PENDING',
+          status: hasTxHash ? 'PROCESSING' : 'PENDING',
           amountFiat: method === 'PAYMONGO' ? 290 : 5,
           currency: method === 'PAYMONGO' ? 'PHP' : 'USD',
           creditsToAward: 500,
-          paymentRef: postData.txHash ?? null,
+          paymentRef: normalizedTxHash ?? null,
           gatewayData: {},
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
         instructions: {
-          type: postData.method,
+          type: hasTxHash ? 'CRYPTO_SUBMITTED' : postData.method,
           depositId: MOCK_DEPOSIT_ID,
           message:
             postData.method === 'PAYMONGO'
               ? 'Complete your payment in the PayMongo checkout page. The link is available below.'
               : postData.method === 'PAYPAL'
                 ? 'Complete your payment in the PayPal checkout page. The link is available below.'
-                : 'Send exactly $5 USDT on BSC to the platform wallet. Submit your TX hash after sending.',
-          ...(postData.txHash ? { txHash: postData.txHash } : {}),
+                : hasTxHash
+                  ? 'Your crypto deposit is being verified on-chain. You will be notified when it completes.'
+                  : 'Send exactly $5 USDT on BSC to the platform wallet. Submit your TX hash after sending.',
+          ...(hasTxHash ? { txHash: normalizedTxHash } : {}),
         },
       }),
     });
