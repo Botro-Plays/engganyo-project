@@ -53,20 +53,20 @@
 
 ---
 
-# Phase B — Deposit Form Persistence (NEXT)
+## Phase B — Deposit Form Persistence ✅ COMPLETE 2026-06-14
 
-**Status:** ⏳ PLANNED
+**Status:** ✅ COMPLETE
 **Scope:** Prevent users from losing deposit form progress on refresh/navigation.
 **Priority:** 🔴 HIGH — directly affects user conversion
 
 | # | Item | File | Severity | Notes |
 |---|------|------|----------|-------|
-| B1 | Persist `selectedPackage`, `selectedMethod`, `depositStep` to `sessionStorage` | `wallet/page.tsx` | 🔴 | Core of Phase B |
-| B2 | Persist `cryptoMode` ('auto'/'manual') to `sessionStorage` | `wallet/page.tsx` | 🔴 | Crypto-specific |
-| B3 | Persist `manualTxHash` input to `sessionStorage` | `wallet/page.tsx` | 🔴 | Crypto manual mode |
-| B4 | Restore all persisted state on page mount | `wallet/page.tsx` | 🔴 | Must handle stale data gracefully |
-| B5 | Clear `sessionStorage` on successful deposit completion or explicit cancel | `wallet/page.tsx` | 🟡 | Prevent stale resume |
-| B6 | WebSocket `deposit:updated` handler: `depositResult` is null after refresh — need fallback logic | `wallet/page.tsx` | 🟡 | Gap 15 from AUDIT |
+| B1 | Persist `selectedPackage`, `selectedMethod`, `depositStep` to `sessionStorage` | `wallet/page.tsx` | 🔴 | Core of Phase B ✅ |
+| B2 | Persist `cryptoMode` ('auto'/'manual') to `sessionStorage` | `wallet/page.tsx` | 🔴 | Crypto-specific ✅ |
+| B3 | Persist `manualTxHash` input to `sessionStorage` | `wallet/page.tsx` | 🔴 | Crypto manual mode ✅ |
+| B4 | Restore all persisted state on page mount with validation | `wallet/page.tsx` | 🔴 | Validates package exists, method enabled, step valid; 30-min stale guard ✅ |
+| B5 | Clear `sessionStorage` on successful deposit completion or explicit cancel | `wallet/page.tsx` | 🟡 | `clearPersistedForm()` called in `resetDeposit()` and `initiateMutation.onSuccess` ✅ |
+| B6 | WebSocket `deposit:updated` handler: `depositResult` is null after refresh — need fallback logic | `wallet/page.tsx` | 🟡 | Gap 15 from AUDIT — **still open** |
 
 **Acceptance Criteria:**
 - User selects package → method → reaches step 3 → presses F5 → form is restored to step 3 with same selections
@@ -170,7 +170,12 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
 - Fixed `isAvailable` detection bug in `useEvmWallet.ts` (EIP-6963 + legacy fallback + active provider tracking)
 - Updated 4 markdowns with bug documentation
 - All web checks pass: `tsc` 0 errors, `lint` 0 new warnings, `build` success
-- **Next:** Phase B — deposit form persistence via `sessionStorage`
+- ✅ **Phase B — deposit form persistence via `sessionStorage` implemented**
+  - `PersistedDepositForm` interface with `step`, `packageId`, `method`, `cryptoMode`, `manualTxHash`, `timestamp`
+  - 30-minute stale guard on restore
+  - Validation: package must exist in current `packages`, method must be enabled
+  - Cleared on `initiateMutation.onSuccess` (deposit created) and `resetDeposit()`
+- **Next:** Phase C — PayPal polish & cron (Gap 10, 11, 12) or B6 (WebSocket gap 15)
 
 ---
 

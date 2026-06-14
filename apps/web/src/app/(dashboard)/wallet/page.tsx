@@ -207,6 +207,50 @@ function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdA
   );
 }
 
+// ─── SessionStorage persistence for deposit form ─────────
+const DEPOSIT_FORM_KEY = 'engganyo_deposit_form';
+const DEPOSIT_FORM_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+interface PersistedDepositForm {
+  step: DepositStep;
+  packageId: string;
+  method: string;
+  cryptoMode: CryptoMode;
+  manualTxHash: string;
+  timestamp: number;
+}
+
+function readPersistedForm(): PersistedDepositForm | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(DEPOSIT_FORM_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedDepositForm;
+    if (Date.now() - parsed.timestamp > DEPOSIT_FORM_MAX_AGE_MS) {
+      sessionStorage.removeItem(DEPOSIT_FORM_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    sessionStorage.removeItem(DEPOSIT_FORM_KEY);
+    return null;
+  }
+}
+
+function writePersistedForm(state: PersistedDepositForm) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(DEPOSIT_FORM_KEY, JSON.stringify(state));
+  } catch { /* ignore quota errors */ }
+}
+
+function clearPersistedForm() {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(DEPOSIT_FORM_KEY);
+  } catch { /* ignore */ }
+}
+
 // ─── Main Page ────────────────────────────────────────────
 export default function WalletPage() {
   const queryClient = useQueryClient();
@@ -229,6 +273,7 @@ export default function WalletPage() {
   const evmWallet = useEvmWallet();
 
   const resetDeposit = useCallback(() => {
+    clearPersistedForm();
     setDepositStep(1);
     setSelectedPackage(null);
     setSelectedMethod(null);
@@ -316,12 +361,57 @@ export default function WalletPage() {
     }
   }, [depositHistory, depositResult, resetDeposit]);
 
+  // ─── Restore deposit form from sessionStorage ────────────
+  useEffect(() => {
+    if (!packages?.length || !depositOptions) return;
+    const saved = readPersistedForm();
+    if (!saved) return;
+
+    const pkg = packages.find((p) => p.id === saved.packageId);
+    if (!pkg) { clearPersistedForm(); return; }
+
+    const enabled = Object.entries({
+      PAYMONGO: depositOptions.paymongo.enabled,
+      PAYPAL: depositOptions.paypal.enabled,
+      USDT_BEP20: depositOptions.usdtBep20.enabled,
+      USDT_BASE: depositOptions.usdtBase.enabled,
+    }).filter(([, v]) => v).map(([k]) => k);
+    if (!enabled.includes(saved.method)) { clearPersistedForm(); return; }
+
+    if (saved.step < 1 || saved.step > 3) { clearPersistedForm(); return; }
+
+    setDepositStep(saved.step);
+    setSelectedPackage(pkg);
+    setSelectedMethod(saved.method);
+    setCryptoMode(saved.cryptoMode);
+    setManualTxHash(saved.manualTxHash ?? '');
+  }, [packages, depositOptions]);
+
+  // ─── Persist deposit form to sessionStorage ──────────────
+  useEffect(() => {
+    if (depositStep === 1 && !selectedPackage && !selectedMethod) {
+      clearPersistedForm();
+      return;
+    }
+    if (selectedPackage && selectedMethod) {
+      writePersistedForm({
+        step: depositStep,
+        packageId: selectedPackage.id,
+        method: selectedMethod,
+        cryptoMode,
+        manualTxHash,
+        timestamp: Date.now(),
+      });
+    }
+  }, [depositStep, selectedPackage, selectedMethod, cryptoMode, manualTxHash]);
+
   const initiateMutation = useMutation({
     mutationFn: async (body: { packageId: string; method: string; txHash?: string; userWalletAddress?: string }) =>
       (await apiClient.post<ApiResponse<{ deposit: DepositRecord; instructions: DepositInstructions }>>('wallet/deposit/initiate', body)).data.data,
     onSuccess: (data) => {
       setDepositResult(data ?? null);
       setDepositError(null);
+      clearPersistedForm(); // deposit created — form state no longer needed
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
     },
