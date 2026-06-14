@@ -289,7 +289,12 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - `EventsService.emitToAdmins()`: broadcasts to `admin` room
   - `wallet.service.ts` cron (`verifyCryptoDeposits`): when deposit marked FAILED, emits `admin:deposit-failed` + creates `SYSTEM_ANNOUNCEMENT` notification for every admin
   - Admin layout (`(admin)/layout.tsx`): listens for `admin:deposit-failed`, shows error toast + invalidates finances queries
-- **Next:** E2E tests (F3)
+- ✅ **E2E Deposit Tests** (2026-06-14)
+  - `e2e/wallet-deposit.spec.ts`: 5 Playwright tests covering full deposit flow
+  - Tests: PayMongo creation, PayPal creation, USDT manual txHash, minimum deposit disabled states, cancel pending deposit
+  - All backend APIs mocked (no real payments)
+  - Requires dev server running: `npm run dev` in `apps/web` and `apps/api`
+- **Next:** (all consolidated items complete)
 
 ---
 
