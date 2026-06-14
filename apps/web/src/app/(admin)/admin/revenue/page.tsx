@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { formatCredits, creditLabel } from '@/lib/utils';
-import { DollarSign, Calendar, TrendingUp, Loader2, Coins, Banknote, AlertTriangle, RefreshCw } from 'lucide-react';
+import { DollarSign, Calendar, TrendingUp, Loader2, Coins, Banknote, AlertTriangle, RefreshCw, Bitcoin } from 'lucide-react';
 import type { ApiResponse } from '@/types';
 
 interface RevenueDay {
@@ -58,6 +58,9 @@ export default function RevenuePage() {
   const other = data?.daily.reduce((sum, d) => sum + d.other, 0) ?? 0;
   const cashTotalPHP = data?.summary.cashTotalPHP ?? 0;
   const cashTotalUSD = data?.summary.cashTotalUSD ?? 0;
+  // Separate PayPal USD from USDT crypto for admin clarity
+  const paypalTotal = data?.cashFlow.reduce((sum, day) => sum + (day.byMethod['PAYPAL'] ?? 0), 0) ?? 0;
+  const usdtTotal   = data?.cashFlow.reduce((sum, day) => sum + (day.byMethod['USDT_BEP20'] ?? 0) + (day.byMethod['USDT_BASE'] ?? 0), 0) ?? 0;
 
   return (
     <div className="space-y-6">
@@ -193,7 +196,7 @@ export default function RevenuePage() {
           <h2 className="text-sm font-semibold text-white">Cash Flow (Completed Deposits)</h2>
           <span className="text-xs text-zinc-600">Real money from payment gateways</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -204,7 +207,7 @@ export default function RevenuePage() {
                 <p className="text-xl font-bold text-white">₱{cashTotalPHP.toFixed(2)} <span className="text-xs font-normal text-zinc-500">PHP</span></p>
               )}
               {cashTotalUSD > 0 && (
-                <p className="text-xl font-bold text-white">${cashTotalUSD.toFixed(2)} <span className="text-xs font-normal text-zinc-500">USD</span></p>
+                <p className="text-xl font-bold text-white">${cashTotalUSD.toFixed(2)} <span className="text-xs font-normal text-zinc-500">USD incl. USDT</span></p>
               )}
               {cashTotalPHP === 0 && cashTotalUSD === 0 && (
                 <p className="text-2xl font-bold text-white">—</p>
@@ -224,13 +227,23 @@ export default function RevenuePage() {
           </div>
           <div className="card-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="w-4 h-4 text-emerald-300" />
+              <DollarSign className="w-4 h-4 text-blue-400" />
               <span className="text-xs text-zinc-500 uppercase tracking-wider">USD Deposits</span>
             </div>
             <p className="text-2xl font-bold text-white">
-              ${cashTotalUSD.toFixed(2)}
+              ${paypalTotal.toFixed(2)}
             </p>
             <p className="text-xs text-zinc-500">PayPal</p>
+          </div>
+          <div className="card-glass rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Bitcoin className="w-4 h-4 text-orange-400" />
+              <span className="text-xs text-zinc-500 uppercase tracking-wider">USDT Deposits</span>
+            </div>
+            <p className="text-2xl font-bold text-white">
+              ${usdtTotal.toFixed(2)}
+            </p>
+            <p className="text-xs text-zinc-500">BEP-20 + Base</p>
           </div>
         </div>
 

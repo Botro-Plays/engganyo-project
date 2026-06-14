@@ -237,7 +237,8 @@ export default function FinancesPage() {
 
   const statCards = stats ? [
     { label: 'Total Deposits', value: stats.counts.total, color: 'text-zinc-300', bg: 'bg-zinc-500/10' },
-    { label: 'Pending Review', value: stats.counts.pending, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+    { label: 'Pending', value: stats.counts.pending, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+    { label: 'Processing', value: stats.counts.processing, color: 'text-blue-400', bg: 'bg-blue-500/10' },
     { label: 'Completed', value: stats.counts.completed, color: 'text-green-400', bg: 'bg-green-500/10' },
     { label: 'Failed', value: stats.counts.failed, color: 'text-red-400', bg: 'bg-red-500/10' },
   ] : [];
@@ -265,11 +266,11 @@ export default function FinancesPage() {
 
       {/* Stats */}
       {statsLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[1,2,3,4].map((i) => <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-20" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[1,2,3,4,5].map((i) => <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-20" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {statCards.map((s) => (
             <div key={s.label} className="card-glass rounded-xl p-5">
               <p className="text-xs text-zinc-500 mb-1">{s.label}</p>
