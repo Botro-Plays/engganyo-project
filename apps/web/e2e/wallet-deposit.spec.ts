@@ -59,9 +59,9 @@ async function mockDepositApis(page: import('@playwright/test').Page) {
       headers: CORS_HEADERS,
       contentType: 'application/json',
       body: apiResponse([
-        { id: 'pkg-e2e-1', usdAmount: 5, creditsBase: 500, creditsTotal: 500, bonusCredits: 0, phpEquivalent: 290, label: null, isPopular: false, isActive: true },
-        { id: 'pkg-e2e-2', usdAmount: 10, creditsBase: 1000, creditsTotal: 1100, bonusCredits: 100, phpEquivalent: 580, label: 'Best Value', isPopular: true, isActive: true },
-        { id: 'pkg-e2e-3', usdAmount: 50, creditsBase: 5000, creditsTotal: 6000, bonusCredits: 1000, phpEquivalent: 2900, label: null, isPopular: false, isActive: true },
+        { id: 'pkg-e2e-1', usdAmount: 5,  creditsBase: 500,  creditsTotal: 500,  bonusCredits: 0,    phpEquivalent: 290,  usdToPhp: 58, label: null,         isPopular: false, isActive: true },
+        { id: 'pkg-e2e-2', usdAmount: 10, creditsBase: 1000, creditsTotal: 1100, bonusCredits: 100,  phpEquivalent: 580,  usdToPhp: 58, label: 'Best Value', isPopular: true,  isActive: true },
+        { id: 'pkg-e2e-3', usdAmount: 50, creditsBase: 5000, creditsTotal: 6000, bonusCredits: 1000, phpEquivalent: 2900, usdToPhp: 58, label: null,         isPopular: false, isActive: true },
       ]),
     });
   });
@@ -143,16 +143,14 @@ async function mockSubmitTxHash(page: import('@playwright/test').Page) {
   });
 }
 
-async function waitForPackages(page: import('@playwright/test').Page) {
-  // Wait for package-grid loading skeletons inside #deposit-card to disappear.
-  // The persistent "Live rate" green dot also has animate-pulse, so we scope
-  // to the specific skeleton divs (h-32 bg-zinc-800 rounded-xl animate-pulse).
-  await page.waitForFunction(() => {
-    const depositCard = document.getElementById('deposit-card');
-    if (!depositCard) return false;
-    const skeletons = depositCard.querySelectorAll('.h-32.bg-zinc-800.rounded-xl.animate-pulse');
-    return skeletons.length === 0;
-  }, { timeout: 10_000 });
+async function waitForPackageButton(page: import('@playwright/test').Page, amountPattern: RegExp) {
+  // Wait until a package button with the matching dollar amount is visible
+  // inside #deposit-card.  This is a positive existence check — far more
+  // robust than waiting for skeleton *absence* which also resolves when the
+  // component has crashed or rendered an empty state.
+  await expect(
+    page.locator('#deposit-card button').filter({ hasText: amountPattern }).first(),
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe('Wallet Deposit Flow (mocked APIs)', () => {
@@ -174,12 +172,9 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await depositTab.click();
     await page.waitForLoadState('networkidle');
 
-    // Wait for package loading skeletons to disappear
-    await waitForPackages(page);
-
-    // Step 1: select a package (the $5 one)
-    const packageCard = page.locator('button').filter({ hasText: /\$5/ }).first();
-    await expect(packageCard).toBeVisible({ timeout: 5_000 });
+    // Wait until the $5 package button is visible (packages loaded + rendered)
+    await waitForPackageButton(page, /\$5/);
+    const packageCard = page.locator('#deposit-card button').filter({ hasText: /\$5/ }).first();
     await packageCard.click();
 
     // Step 2: choose PayMongo method
@@ -215,12 +210,9 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await depositTab.click();
     await page.waitForLoadState('networkidle');
 
-    // Wait for package loading skeletons to disappear
-    await waitForPackages(page);
-
-    // Step 1: select a package (the $10 one with bonus)
-    const packageCard = page.locator('button').filter({ hasText: /\$10/ }).first();
-    await expect(packageCard).toBeVisible({ timeout: 5_000 });
+    // Wait until the $10 package button is visible (packages loaded + rendered)
+    await waitForPackageButton(page, /\$10/);
+    const packageCard = page.locator('#deposit-card button').filter({ hasText: /\$10/ }).first();
     await packageCard.click();
 
     // Step 2: choose PayPal method
@@ -255,12 +247,9 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await depositTab.click();
     await page.waitForLoadState('networkidle');
 
-    // Wait for package loading skeletons to disappear
-    await waitForPackages(page);
-
-    // Step 1: select a package
-    const packageCard = page.locator('button').filter({ hasText: /\$5/ }).first();
-    await expect(packageCard).toBeVisible({ timeout: 5_000 });
+    // Wait until the $5 package button is visible (packages loaded + rendered)
+    await waitForPackageButton(page, /\$5/);
+    const packageCard = page.locator('#deposit-card button').filter({ hasText: /\$5/ }).first();
     await packageCard.click();
 
     // Step 2: choose USDT BEP20 method
@@ -314,12 +303,9 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await depositTab.click();
     await page.waitForLoadState('networkidle');
 
-    // Wait for package loading skeletons to disappear
-    await waitForPackages(page);
-
-    // Select $5 package
-    const packageCard = page.locator('button').filter({ hasText: /\$5/ }).first();
-    await expect(packageCard).toBeVisible({ timeout: 5_000 });
+    // Wait until the $5 package button is visible (packages loaded + rendered)
+    await waitForPackageButton(page, /\$5/);
+    const packageCard = page.locator('#deposit-card button').filter({ hasText: /\$5/ }).first();
     await packageCard.click();
 
     // PayMongo should show "Min ₱600" (disabled)
