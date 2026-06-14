@@ -970,21 +970,43 @@ export default function WalletPage() {
                       {cryptoMode === 'auto' ? (
                         /* Auto: connect wallet → send USDT */
                         <div className="space-y-3">
-                          {!evmWallet.isAvailable && (
-                            <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs">
-                              <AlertCircle className="w-4 h-4 shrink-0" />
-                              No EVM wallet detected. Install <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">MetaMask</a> or use Brave Wallet.
-                            </div>
-                          )}
-
                           {evmWallet.state === 'idle' || evmWallet.state === 'error' ? (
-                            <button
-                              onClick={() => void evmWallet.connect().then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
-                              disabled={!evmWallet.isAvailable}
-                              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium transition-all"
-                            >
-                              <LinkIcon className="w-4 h-4" />Connect Wallet
-                            </button>
+                            <div className="space-y-3">
+                              {evmWallet.providers.length > 0 ? (
+                                <>
+                                  <p className="text-xs text-zinc-400">Detected wallets — select one to connect:</p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {evmWallet.providers.map((p) => (
+                                      <button
+                                        key={p.info.rdns}
+                                        onClick={() => void evmWallet.connect(p.info.rdns).then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
+                                        className="flex items-center gap-3 p-3 rounded-xl border border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left"
+                                      >
+                                        <img
+                                          src={p.info.icon}
+                                          alt={p.info.name}
+                                          className="w-8 h-8 rounded-md shrink-0"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                        <span className="text-sm font-medium text-white">{p.info.name}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : evmWallet.isAvailable ? (
+                                <button
+                                  onClick={() => void evmWallet.connect().then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
+                                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium transition-all"
+                                >
+                                  <LinkIcon className="w-4 h-4" />Connect Wallet
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs">
+                                  <AlertCircle className="w-4 h-4 shrink-0" />
+                                  No EVM wallet detected. Install <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">MetaMask</a> or use Brave Wallet.
+                                </div>
+                              )}
+                            </div>
                           ) : evmWallet.state === 'connecting' || evmWallet.state === 'switching_chain' ? (
                             <div className="flex items-center gap-2 text-sm text-zinc-400">
                               <Loader2 className="w-4 h-4 animate-spin" />

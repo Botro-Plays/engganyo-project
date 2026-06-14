@@ -515,9 +515,8 @@ User → /wallet (Deposit tab)
   → Select package → Step 2
   → Select USDT_BEP20 → Step 3
   → Auto mode:
-    → "Connect Wallet" button enabled after isAvailable becomes true
-    → Wallet detection: EIP-6963 (branded provider list) + legacy fallback
-    → User selects wallet → eth_requestAccounts → connected
+    → Branded wallet selection grid appears (MetaMask, Brave, etc. with icons)
+    → User explicitly selects wallet → eth_requestAccounts → connected
     → Click "Send USDT" → sendUsdt() → ERC20 transfer on-chain
     → txHash returned → initiateMutation with txHash → PROCESSING deposit
     → SUCCESS: Auto mode works end-to-end (manual placeholder, not full automation)
@@ -526,14 +525,15 @@ User → /wallet (Deposit tab)
     → Instructions show wallet address
   → [User navigates away to get wallet address]
     → Returns to /wallet
-    → No banner for crypto
-    → deposit is PENDING in history
-    → Expanded view shows gatewayData JSON with wallet address
-    → BUT user must know to expand, and read raw JSON
-    → FAILURE: Poor UX, easy to lose track of payment details
+    → Resume banner shows crypto deposit with network + address
+    → deposit is PENDING in history with "View Details" button
+    → Phase B sessionStorage restores form state (step 3, selections preserved)
+    → OK: User has multiple paths to resume (banner, history, sessionStorage)
 ```
 
 **Bug fixed (2026-06-14):** `isAvailable` in `useEvmWallet.ts` was a static boolean evaluated once at render time. If `window.ethereum` was injected asynchronously (common with MetaMask), `isAvailable` remained `false` and the "Connect Wallet" button stayed disabled — auto mode was completely broken. Fix: reactive `useState` + EIP-6963 provider discovery (`eip6963:announceProvider` / `eip6963:requestProvider`) + legacy `ethereum#initialized` event listener + 5-second polling fallback. Hook now also stores active provider in a `useRef` and attaches `accountsChanged`/`chainChanged` listeners to keep React state in sync.
+
+**UI update (2026-06-14):** Branded wallet selection grid implemented. When multiple wallets are detected via EIP-6963, each is shown with its name and icon in a 2-column grid. User must explicitly click to connect — prevents random auto-connect when multiple extensions are installed. Legacy `window.ethereum` falls back to generic "Connect Wallet" button.
 
 ---
 

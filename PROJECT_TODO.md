@@ -93,13 +93,13 @@
 
 # Phase D — USDT Full Automation
 
-**Status:** ⏳ PLANNED
+**Status:** 🟠 PARTIAL (wallet selection UI done; on-chain automation pending)
 **Scope:** Complete crypto deposit automation without admin review.
 **Priority:** 🟡 MEDIUM (manual placeholder works; admin review is acceptable for current volume)
 
 | # | Item | File | Severity | Notes |
 |---|------|------|----------|-------|
-| D1 | Branded wallet selection modal UI (MetaMask, Brave, Coinbase Wallet, etc.) | `wallet/page.tsx` | 🟡 | Use `providers[]` from `useEvmWallet` |
+| D1 | Branded wallet selection UI (MetaMask, Brave, Coinbase Wallet, etc.) | `wallet/page.tsx` | 🟡 | ✅ DONE 2026-06-14 — shows `providers[]` from `useEvmWallet` as branded grid; user must explicitly select; legacy fallback for non-EIP-6963 wallets |
 | D2 | `POST /wallet/deposit/evm/verify` endpoint — accept txHash, query BSC/Base RPC | API | 🟡 | Backend |
 | D3 | On-chain confirmation listener — poll BSC/Base RPC for tx receipts | API | 🟡 | Could use cron or webhook |
 | D4 | Auto-credit after N confirmations — no admin review | `wallet.service.ts` | 🟡 | Depends on D2/D3 |
@@ -175,6 +175,11 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - 30-minute stale guard on restore
   - Validation: package must exist in current `packages`, method must be enabled
   - Cleared on `initiateMutation.onSuccess` (deposit created) and `resetDeposit()`
+- ✅ **Branded wallet selection UI implemented** (2026-06-14)
+  - Shows `evmWallet.providers[]` as branded grid with icon + name
+  - User must explicitly select wallet (prevents random auto-connect)
+  - Legacy fallback: generic "Connect Wallet" button for non-EIP-6963 wallets
+  - Crypto resume across tabs: already handled by resume banner + `sessionStorage`
 - **Next:** Phase C — PayPal polish & cron (Gap 10, 11, 12) or B6 (WebSocket gap 15)
 
 ---
