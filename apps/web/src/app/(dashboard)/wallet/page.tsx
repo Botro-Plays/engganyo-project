@@ -719,7 +719,12 @@ export default function WalletPage() {
                 )}
                 {isCrypto && (
                   <button
-                    onClick={() => setTab('deposit')}
+                    onClick={() => {
+                      setTab('deposit');
+                      setTimeout(() => {
+                        document.getElementById('deposit-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 50);
+                    }}
                     className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />View Details
@@ -812,7 +817,7 @@ export default function WalletPage() {
         <div className="space-y-6">
 
           {/* ── 3-step deposit card ── */}
-          <div className="card-glass rounded-xl border border-surface-border">
+          <div id="deposit-card" className="card-glass rounded-xl border border-surface-border">
             {/* Step indicator */}
             <div className="flex items-center gap-0 border-b border-surface-border px-6 py-3">
                     {([1,2,3] as DepositStep[]).map((s, i) => (
@@ -955,7 +960,10 @@ export default function WalletPage() {
                       <p className="text-xs text-zinc-500">Package · {METHOD_META[selectedMethod]?.label}</p>
                       <p className="text-sm font-semibold text-white">${selectedPackage.usdAmount} → <span className="text-brand-300">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
                     </div>
-                    {depositResult && (
+                    {/* New Deposit: only show when user can actually start a new one.
+                        Hidden when deposit is PENDING/PROCESSING because backend blocks
+                        new deposits and the reconstruction effect would immediately restore it. */}
+                    {depositResult && (depositResult.deposit.status === 'COMPLETED' || depositResult.deposit.status === 'CANCELLED' || depositResult.deposit.status === 'FAILED') && (
                       <button onClick={resetDeposit} className="text-xs text-brand-400 hover:text-brand-300 transition-colors">New Deposit</button>
                     )}
                   </div>
