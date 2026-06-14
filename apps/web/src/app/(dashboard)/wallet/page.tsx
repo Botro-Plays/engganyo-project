@@ -628,7 +628,7 @@ export default function WalletPage() {
           if (d.status !== 'PENDING' && d.status !== 'PROCESSING') return false;
           if (d.method === 'PAYMONGO') return typeof d.gatewayData?.checkoutUrl === 'string';
           if (d.method === 'PAYPAL') return typeof d.gatewayData?.approvalUrl === 'string';
-          if (d.method === 'USDT_BEP20' || d.method === 'USDT_BASE') return d.status === 'PENDING';
+          if (d.method === 'USDT_BEP20' || d.method === 'USDT_BASE') return d.status === 'PENDING' || d.status === 'PROCESSING';
           return false;
         });
         if (!pending) return null;
@@ -772,34 +772,49 @@ export default function WalletPage() {
           {/* ── 3-step deposit card ── */}
           <div className="card-glass rounded-xl border border-surface-border">
             {/* Step indicator */}
-            <div className="flex items-center gap-0 border-b border-surface-border px-6 py-3">
-              {([1,2,3] as DepositStep[]).map((s, i) => (
-                <div key={s} className="flex items-center gap-0">
-                  {i > 0 && <div className={`h-px w-8 ${depositStep > i ? 'bg-brand-500' : 'bg-zinc-700'}`} />}
-                  <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-all ${
-                    depositStep === s ? 'bg-brand-500/20 text-brand-300' :
-                    depositStep > s ? 'text-zinc-500' : 'text-zinc-600'
-                  }`}>
-                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      depositStep > s ? 'bg-brand-500/30 text-brand-300' :
-                      depositStep === s ? 'bg-brand-500 text-white' : 'bg-zinc-700 text-zinc-500'
-                    }`}>{depositStep > s ? '✓' : s}</span>
-                    {s === 1 ? 'Choose Package' : s === 2 ? 'Payment Method' : 'Complete'}
+            {/* Pre-compute: is there any existing pending/processing deposit? */}
+            {(() => {
+              const hasExistingDeposit = depositHistory?.items.some((d) => d.status === 'PENDING' || d.status === 'PROCESSING') ?? false;
+
+              return (
+                <>
+                  <div className="flex items-center gap-0 border-b border-surface-border px-6 py-3">
+                    {([1,2,3] as DepositStep[]).map((s, i) => (
+                      <div key={s} className="flex items-center gap-0">
+                        {i > 0 && <div className={`h-px w-8 ${depositStep > i ? 'bg-brand-500' : 'bg-zinc-700'}`} />}
+                        <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-all ${
+                          depositStep === s ? 'bg-brand-500/20 text-brand-300' :
+                          depositStep > s ? 'text-zinc-500' : 'text-zinc-600'
+                        }`}>
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            depositStep > s ? 'bg-brand-500/30 text-brand-300' :
+                            depositStep === s ? 'bg-brand-500 text-white' : 'bg-zinc-700 text-zinc-500'
+                          }`}>{depositStep > s ? '✓' : s}</span>
+                          {s === 1 ? 'Choose Package' : s === 2 ? 'Payment Method' : 'Complete'}
+                        </div>
+                      </div>
+                    ))}
+                    {depositStep > 1 && !depositResult && (
+                      <button onClick={() => { setDepositStep((s) => (s - 1) as DepositStep); setDepositError(null); evmWallet.reset(); }} className="ml-auto flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors">
+                        <ArrowLeft className="w-3 h-3" />Back
+                      </button>
+                    )}
                   </div>
-                </div>
-              ))}
-              {depositStep > 1 && !depositResult && (
-                <button onClick={() => { setDepositStep((s) => (s - 1) as DepositStep); setDepositError(null); evmWallet.reset(); }} className="ml-auto flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors">
-                  <ArrowLeft className="w-3 h-3" />Back
-                </button>
-              )}
-            </div>
 
-            <div className="p-6">
+                  <div className="p-6">
 
-              {/* ───────── Step 1: Package selection ───────── */}
-              {depositStep === 1 && (
-                <div>
+                    {/* ───────── Step 1: Package selection ───────── */}
+                    {depositStep === 1 && (
+                      <div>
+                        {/* Guard: if there is any PENDING/PROCESSING deposit (any method), warn and disable */}
+                        {hasExistingDeposit && (
+                          <div className="mb-5 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
+                            <p className="font-medium mb-1">You have a deposit in progress</p>
+                            <p className="text-xs text-yellow-300/70">
+                              Complete or cancel your existing deposit from the resume banner above before creating a new one.
+                            </p>
+                          </div>
+                        )}
                   <h2 className="font-semibold text-white mb-1">Choose a Credit Package</h2>
                   {packages?.[0] && (
                     <div className="flex items-center gap-2 text-xs text-zinc-500 mb-4">
@@ -1136,9 +1151,12 @@ export default function WalletPage() {
                 </div>
               )}
             </div>
-          </div>
+            </>
+          );
+        })()}
+      </div>
 
-          {/* ── Deposit history ── */}
+      {/* ── Deposit history ── */}
           <div className="card-glass rounded-xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
               <h2 className="font-semibold text-white">Deposit History</h2>

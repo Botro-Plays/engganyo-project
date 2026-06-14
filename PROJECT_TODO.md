@@ -186,6 +186,13 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - **C1 (Gap 11):** PayPal expiry cron — `@Cron(EVERY_5_MINUTES)` auto-cancels PENDING PayPal deposits >3h old, atomic `updateMany` guard, emits socket event
   - **C2 (Gap 12):** PayMongo cancel race — `cancelDeposit()` now uses `updateMany` with `{ id, status: { in: [PENDING, PROCESSING] } }` atomic guard; test added for race guard
   - **C3 (Gap 10):** CountdownTimer — removed hardcoded 30-minute fallback; shows "Expires soon" when `expiredAt` is missing from `gatewayData`
+- ✅ **Crypto resume banner fixed** (2026-06-14)
+  - Banner now includes PROCESSING crypto deposits (auto crypto goes to PROCESSING after on-chain transfer)
+  - Previously only showed PENDING crypto deposits, so auto crypto was invisible in the resume banner
+- ✅ **Frontend deposit restriction guard added** (2026-06-14)
+  - Backend already had `initiateDeposit` guard preventing new deposits when PENDING/PROCESSING exists
+  - Frontend now shows a yellow warning banner on Step 1 when the user already has a deposit in progress
+  - Directs user to use the resume banner to complete or cancel the existing deposit
 - **Next:** Phase D crypto backend automation (on-chain verification + auto-credit) or deferred polish (C4–C5)
 
 ---
