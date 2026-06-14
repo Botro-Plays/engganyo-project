@@ -6,61 +6,63 @@ const MOCK_DEPOSIT_ID = 'dep-e2e-test-123';
 const MOCK_CHECKOUT_URL = 'https://checkout.paymongo.com/test-link';
 const MOCK_PAYPAL_URL = 'https://www.paypal.com/checkout/test-order';
 
+function apiResponse<T>(data: T) {
+  return JSON.stringify({ success: true, data, timestamp: new Date().toISOString() });
+}
+
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'access-control-allow-headers': 'Content-Type, Authorization',
+};
+
 async function mockDepositApis(page: import('@playwright/test').Page) {
-  // Mock deposit history: no pending deposits (avoids duplicate-pending guard)
   await page.route('**/api/wallet/deposits**', async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          items: [],
-          meta: { total: 0, page: 1, limit: 20, totalPages: 0 },
-        },
+      body: apiResponse({
+        items: [],
+        meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false },
       }),
     });
   });
 
-  // Mock wallet balance
   await page.route('**/api/wallet/me', async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: { balance: 1000, lifetimeEarned: 5000, lifetimeSpent: 4000 },
-      }),
+      body: apiResponse({ balance: 1000, lifetimeEarned: 5000, lifetimeSpent: 4000 }),
     });
   });
 
-  // Mock deposit options (payment methods enabled)
   await page.route('**/api/wallet/deposit/options', async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          pricing: { creditsPerUsd: 100, minDepositUsd: 1, minDepositPhp: 50, usdToPhp: 58 },
-          paymongo: { enabled: true },
-          paypal: { enabled: true },
-          usdtBep20: { enabled: true, walletAddress: '0x1234', contractAddress: '0x55d3', chainId: 56, network: 'BSC', minAmount: 1 },
-          usdtBase: { enabled: true, walletAddress: '0x5678', contractAddress: '0xf17f', chainId: 8453, network: 'Base', minAmount: 1 },
-        },
+      body: apiResponse({
+        pricing: { creditsPerUsd: 100, minDepositUsd: 1, minDepositPhp: 50, usdToPhp: 58 },
+        paymongo: { enabled: true, publicKey: 'pk_test_paymongo' },
+        paypal: { enabled: true, clientId: 'test_paypal_client', mode: 'sandbox' },
+        usdtBep20: { enabled: true, walletAddress: '0x1234567890123456789012345678901234567890', contractAddress: '0x55d398326f99059fF775485246999027B3197955', chainId: 56, network: 'BSC', minAmount: 1 },
+        usdtBase: { enabled: true, walletAddress: '0x5678901234567890123456789012345678901234', contractAddress: '0xf17f6d7f3d4f2b5c8e9a1b2c3d4e5f6a7b8c9d0', chainId: 8453, network: 'Base', minAmount: 1 },
       }),
     });
   });
 
-  // Mock deposit packages
   await page.route('**/api/wallet/deposit/packages', async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: [
-          { id: 'pkg-e2e-1', usdAmount: 5, creditsBase: 500, creditsTotal: 500, bonusCredits: 0, phpEquivalent: 290, label: null, isPopular: false, isActive: true },
-          { id: 'pkg-e2e-2', usdAmount: 10, creditsBase: 1000, creditsTotal: 1100, bonusCredits: 100, phpEquivalent: 580, label: 'Best Value', isPopular: true, isActive: true },
-          { id: 'pkg-e2e-3', usdAmount: 50, creditsBase: 5000, creditsTotal: 6000, bonusCredits: 1000, phpEquivalent: 2900, label: null, isPopular: false, isActive: true },
-        ],
-      }),
+      body: apiResponse([
+        { id: 'pkg-e2e-1', usdAmount: 5, creditsBase: 500, creditsTotal: 500, bonusCredits: 0, phpEquivalent: 290, label: null, isPopular: false, isActive: true },
+        { id: 'pkg-e2e-2', usdAmount: 10, creditsBase: 1000, creditsTotal: 1100, bonusCredits: 100, phpEquivalent: 580, label: 'Best Value', isPopular: true, isActive: true },
+        { id: 'pkg-e2e-3', usdAmount: 50, creditsBase: 5000, creditsTotal: 6000, bonusCredits: 1000, phpEquivalent: 2900, label: null, isPopular: false, isActive: true },
+      ]),
     });
   });
 }
@@ -71,34 +73,33 @@ async function mockInitiateDeposit(page: import('@playwright/test').Page, method
     const postData = JSON.parse((await request.postData()) ?? '{}');
     await route.fulfill({
       status: 201,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          deposit: {
-            id: MOCK_DEPOSIT_ID,
-            userId: 'user-e2e',
-            packageId: postData.packageId,
-            method: postData.method,
-            status: 'PENDING',
-            amountFiat: method === 'PAYMONGO' ? 290 : method === 'PAYPAL' ? 5 : 5,
-            currency: method === 'PAYMONGO' ? 'PHP' : 'USD',
-            creditsToAward: method === 'PAYMONGO' ? 500 : method === 'PAYPAL' ? 500 : 500,
-            paymentRef: postData.txHash ?? null,
-            gatewayData: {},
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          instructions: {
-            type: postData.method,
-            depositId: MOCK_DEPOSIT_ID,
-            message:
-              postData.method === 'PAYMONGO'
-                ? 'Complete your payment in the PayMongo checkout page. The link is available below.'
-                : postData.method === 'PAYPAL'
-                  ? 'Complete your payment in the PayPal checkout page. The link is available below.'
-                  : 'Send exactly $5 USDT on BSC to the platform wallet. Submit your TX hash after sending.',
-            ...(postData.txHash ? { txHash: postData.txHash } : {}),
-          },
+      body: apiResponse({
+        deposit: {
+          id: MOCK_DEPOSIT_ID,
+          userId: 'user-e2e',
+          packageId: postData.packageId,
+          method: postData.method,
+          status: 'PENDING',
+          amountFiat: method === 'PAYMONGO' ? 290 : 5,
+          currency: method === 'PAYMONGO' ? 'PHP' : 'USD',
+          creditsToAward: 500,
+          paymentRef: postData.txHash ?? null,
+          gatewayData: {},
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        instructions: {
+          type: postData.method,
+          depositId: MOCK_DEPOSIT_ID,
+          message:
+            postData.method === 'PAYMONGO'
+              ? 'Complete your payment in the PayMongo checkout page. The link is available below.'
+              : postData.method === 'PAYPAL'
+                ? 'Complete your payment in the PayPal checkout page. The link is available below.'
+                : 'Send exactly $5 USDT on BSC to the platform wallet. Submit your TX hash after sending.',
+          ...(postData.txHash ? { txHash: postData.txHash } : {}),
         },
       }),
     });
@@ -109,8 +110,9 @@ async function mockPaymongoLink(page: import('@playwright/test').Page) {
   await page.route('**/api/paymongo/link', async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({ data: { linkId: 'link-e2e-123', checkoutUrl: MOCK_CHECKOUT_URL } }),
+      body: apiResponse({ linkId: 'link-e2e-123', checkoutUrl: MOCK_CHECKOUT_URL }),
     });
   });
 }
@@ -119,8 +121,9 @@ async function mockPayPalOrder(page: import('@playwright/test').Page) {
   await page.route('**/api/paypal/create-order', async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({ data: { orderId: 'order-e2e-123', approvalUrl: MOCK_PAYPAL_URL } }),
+      body: apiResponse({ orderId: 'order-e2e-123', approvalUrl: MOCK_PAYPAL_URL }),
     });
   });
 }
@@ -129,16 +132,22 @@ async function mockSubmitTxHash(page: import('@playwright/test').Page) {
   await page.route(/.*\/api\/wallet\/deposit\/.*\/tx-hash/, async (route) => {
     await route.fulfill({
       status: 200,
+      headers: CORS_HEADERS,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          id: MOCK_DEPOSIT_ID,
-          status: 'PROCESSING',
-          paymentRef: '0xabcdef1234567890abcdef1234567890abcdef12',
-        },
+      body: apiResponse({
+        id: MOCK_DEPOSIT_ID,
+        status: 'PROCESSING',
+        paymentRef: '0xabcdef1234567890abcdef1234567890abcdef12',
       }),
     });
   });
+}
+
+async function waitForPackages(page: import('@playwright/test').Page) {
+  await page.waitForFunction(() => {
+    const skeletons = document.querySelectorAll('.animate-pulse');
+    return skeletons.length === 0;
+  }, { timeout: 10_000 });
 }
 
 test.describe('Wallet Deposit Flow (mocked APIs)', () => {
@@ -151,12 +160,17 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await mockPaymongoLink(page);
 
     await page.goto('/wallet');
+    await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/wallet/);
 
     // Switch to Deposit Credits tab
     const depositTab = page.getByRole('button', { name: /deposit credits/i });
     await expect(depositTab).toBeVisible({ timeout: 5_000 });
     await depositTab.click();
+    await page.waitForLoadState('networkidle');
+
+    // Wait for package loading skeletons to disappear
+    await waitForPackages(page);
 
     // Step 1: select a package (the $5 one)
     const packageCard = page.locator('button').filter({ hasText: /\$5/ }).first();
@@ -164,7 +178,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await packageCard.click();
 
     // Step 2: choose PayMongo method
-    const paymongoMethod = page.locator('button').filter({ hasText: /GCash|PayMongo|Cards/i }).first();
+    const paymongoMethod = page.getByText(/GCash \/ Cards|PayMongo/i).first();
     await expect(paymongoMethod).toBeVisible({ timeout: 5_000 });
     await paymongoMethod.click();
 
@@ -187,12 +201,17 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await mockPayPalOrder(page);
 
     await page.goto('/wallet');
+    await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/wallet/);
 
     // Switch to Deposit Credits tab
     const depositTab = page.getByRole('button', { name: /deposit credits/i });
     await expect(depositTab).toBeVisible({ timeout: 5_000 });
     await depositTab.click();
+    await page.waitForLoadState('networkidle');
+
+    // Wait for package loading skeletons to disappear
+    await waitForPackages(page);
 
     // Step 1: select a package (the $10 one with bonus)
     const packageCard = page.locator('button').filter({ hasText: /\$10/ }).first();
@@ -200,7 +219,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await packageCard.click();
 
     // Step 2: choose PayPal method
-    const paypalMethod = page.locator('button').filter({ hasText: /PayPal checkout/i }).first();
+    const paypalMethod = page.getByText(/PayPal checkout/i).first();
     await expect(paypalMethod).toBeVisible({ timeout: 5_000 });
     await paypalMethod.click();
 
@@ -222,12 +241,17 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await mockSubmitTxHash(page);
 
     await page.goto('/wallet');
+    await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/wallet/);
 
     // Switch to Deposit Credits tab
     const depositTab = page.getByRole('button', { name: /deposit credits/i });
     await expect(depositTab).toBeVisible({ timeout: 5_000 });
     await depositTab.click();
+    await page.waitForLoadState('networkidle');
+
+    // Wait for package loading skeletons to disappear
+    await waitForPackages(page);
 
     // Step 1: select a package
     const packageCard = page.locator('button').filter({ hasText: /\$5/ }).first();
@@ -235,7 +259,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await packageCard.click();
 
     // Step 2: choose USDT BEP20 method
-    const usdtMethod = page.locator('button').filter({ hasText: /BNB Smart Chain|USDT_BEP20/i }).first();
+    const usdtMethod = page.getByText(/BNB Smart Chain|USDT_BEP20/i).first();
     await expect(usdtMethod).toBeVisible({ timeout: 5_000 });
     await usdtMethod.click();
 
@@ -265,24 +289,28 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await page.route('**/api/wallet/deposit/options', async (route) => {
       await route.fulfill({
         status: 200,
+        headers: CORS_HEADERS,
         contentType: 'application/json',
-        body: JSON.stringify({
-          data: {
-            pricing: { creditsPerUsd: 100, minDepositUsd: 10, minDepositPhp: 600, usdToPhp: 58 },
-            paymongo: { enabled: true },
-            paypal: { enabled: true },
-            usdtBep20: { enabled: true, walletAddress: '0x1234', contractAddress: '0x55d3', chainId: 56, network: 'BSC', minAmount: 1 },
-            usdtBase: { enabled: true, walletAddress: '0x5678', contractAddress: '0xf17f', chainId: 8453, network: 'Base', minAmount: 1 },
-          },
+        body: apiResponse({
+          pricing: { creditsPerUsd: 100, minDepositUsd: 10, minDepositPhp: 600, usdToPhp: 58 },
+          paymongo: { enabled: true, publicKey: 'pk_test_paymongo' },
+          paypal: { enabled: true, clientId: 'test_paypal_client', mode: 'sandbox' },
+          usdtBep20: { enabled: true, walletAddress: '0x1234567890123456789012345678901234567890', contractAddress: '0x55d398326f99059fF775485246999027B3197955', chainId: 56, network: 'BSC', minAmount: 1 },
+          usdtBase: { enabled: true, walletAddress: '0x5678901234567890123456789012345678901234', contractAddress: '0xf17f6d7f3d4f2b5c8e9a1b2c3d4e5f6a7b8c9d0', chainId: 8453, network: 'Base', minAmount: 1 },
         }),
       });
     });
 
     await page.goto('/wallet');
+    await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/wallet/);
 
     const depositTab = page.getByRole('button', { name: /deposit credits/i });
     await depositTab.click();
+    await page.waitForLoadState('networkidle');
+
+    // Wait for package loading skeletons to disappear
+    await waitForPackages(page);
 
     // Select $5 package
     const packageCard = page.locator('button').filter({ hasText: /\$5/ }).first();
@@ -301,28 +329,27 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await page.route('**/api/wallet/deposits**', async (route) => {
       await route.fulfill({
         status: 200,
+        headers: CORS_HEADERS,
         contentType: 'application/json',
-        body: JSON.stringify({
-          data: {
-            items: [
-              {
-                id: 'dep-pending-123',
-                userId: 'user-e2e',
-                packageId: 'pkg-e2e-1',
-                method: 'PAYMONGO',
-                status: 'PENDING',
-                amountFiat: 290,
-                currency: 'PHP',
-                creditsToAward: 500,
-                paymentRef: 'link-old-123',
-                gatewayData: { checkoutUrl: 'https://checkout.paymongo.com/old', expiredAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                package: { usdAmount: 5 },
-              },
-            ],
-            meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
-          },
+        body: apiResponse({
+          items: [
+            {
+              id: 'dep-pending-123',
+              userId: 'user-e2e',
+              packageId: 'pkg-e2e-1',
+              method: 'PAYMONGO',
+              status: 'PENDING',
+              amountFiat: 290,
+              currency: 'PHP',
+              creditsToAward: 500,
+              paymentRef: 'link-old-123',
+              gatewayData: { checkoutUrl: 'https://checkout.paymongo.com/old', expiredAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              package: { usdAmount: 5 },
+            },
+          ],
+          meta: { total: 1, page: 1, limit: 20, totalPages: 1, hasNext: false, hasPrev: false },
         }),
       });
     });
@@ -331,12 +358,14 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await page.route(/.*\/api\/wallet\/deposit\/.*\/cancel/, async (route) => {
       await route.fulfill({
         status: 200,
+        headers: CORS_HEADERS,
         contentType: 'application/json',
-        body: JSON.stringify({ data: { success: true } }),
+        body: apiResponse({ success: true }),
       });
     });
 
     await page.goto('/wallet');
+    await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/wallet/);
 
     // Global resume banner should appear
