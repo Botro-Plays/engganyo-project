@@ -1,12 +1,26 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Eip1193Provider } from 'ethers';
 
 export type EvmWalletState = 'idle' | 'connecting' | 'connected' | 'switching_chain' | 'sending' | 'submitted' | 'error';
 
 interface EthereumProvider extends Eip1193Provider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
+  on?(event: string, listener: (...args: unknown[]) => void): void;
+  removeListener?(event: string, listener: (...args: unknown[]) => void): void;
+}
+
+interface Eip6963ProviderInfo {
+  uuid: string;
+  name: string;
+  icon: string;
+  rdns: string;
+}
+
+interface Eip6963ProviderDetail {
+  info: Eip6963ProviderInfo;
+  provider: EthereumProvider;
 }
 
 interface ChainConfig {
@@ -48,6 +62,10 @@ function getEthereum(): EthereumProvider | null {
   return (window as unknown as { ethereum?: EthereumProvider }).ethereum ?? null;
 }
 
+function getActiveProvider(ref: React.RefObject<EthereumProvider | null>): EthereumProvider | null {
+  return ref.current ?? getEthereum();
+}
+
 export function useEvmWallet() {
   const [state, setState] = useState<EvmWalletState>('idle');
   const [address, setAddress] = useState<string | null>(null);
@@ -55,35 +73,150 @@ export function useEvmWallet() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
+  const [providers, setProviders] = useState<Eip6963ProviderDetail[]>([]);
+  const [isAvailable, setIsAvailable] = useState(false);
 
-  const isAvailable = typeof window !== 'undefined' && Boolean((window as unknown as { ethereum?: unknown }).ethereum);
+  // Remember the provider we actually connected to (EIP-6963 or legacy window.ethereum)
+  const activeProviderRef = useRef<EthereumProvider | null>(null);
 
-  const connect = useCallback(async (): Promise<string | null> => {
-    const ethereum = getEthereum();
+  // ─── Wallet detection: EIP-6963 + legacy fallback ──────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Immediate legacy check
+    if (getEthereum()) {
+      setIsAvailable(true);
+    }
+
+    // EIP-6963: wallets announce themselves in response to requestProvider
+    const handleAnnounce = (event: Event) => {
+      const customEvent = event as unknown as { detail?: Eip6963ProviderDetail };
+      const detail = customEvent.detail;
+      if (!detail?.info || !detail?.provider) return;
+
+      setProviders(prev => {
+        if (prev.some(p => p.info.rdns === detail.info.rdns)) return prev;
+        return [...prev, detail];
+      });
+      setIsAvailable(true);
+    };
+
+    window.addEventListener('eip6963:announceProvider' as string, handleAnnounce as EventListener);
+
+    // Trigger wallets to announce themselves
+    window.dispatchEvent(new Event('eip6963:requestProvider' as string));
+
+    // Legacy fallback: MetaMask fires ethereum#initialized when ready
+    const handleLegacyInit = () => {
+      setIsAvailable(true);
+    };
+    window.addEventListener('ethereum#initialized' as string, handleLegacyInit as EventListener);
+
+    // Polling fallback for up to 5 seconds (catches slow injectors)
+    let pollCount = 0;
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      if (getEthereum()) {
+        setIsAvailable(true);
+      }
+      if (pollCount >= 10) {
+        clearInterval(pollInterval);
+      }
+    }, 500);
+
+    return () => {
+      window.removeEventListener('eip6963:announceProvider' as string, handleAnnounce as EventListener);
+      window.removeEventListener('ethereum#initialized' as string, handleLegacyInit as EventListener);
+      clearInterval(pollInterval);
+    };
+  }, []);
+
+  // ─── Wallet event handlers ───────────────────────────────────────
+  const handleAccountsChanged = useCallback((accounts: unknown) => {
+    const accs = accounts as string[];
+    if (accs.length === 0) {
+      setAddress(null);
+      setState('idle');
+      activeProviderRef.current = null;
+    } else {
+      setAddress(accs[0]);
+    }
+  }, []);
+
+  const handleChainChanged = useCallback((chainIdHex: unknown) => {
+    setChainId(parseInt(chainIdHex as string, 16));
+  }, []);
+
+  const attachListeners = useCallback((ethereum: EthereumProvider) => {
+    if (ethereum.on) {
+      ethereum.on('accountsChanged', handleAccountsChanged);
+      ethereum.on('chainChanged', handleChainChanged);
+    }
+  }, [handleAccountsChanged, handleChainChanged]);
+
+  const detachListeners = useCallback((ethereum: EthereumProvider) => {
+    if (ethereum.removeListener) {
+      ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener('chainChanged', handleChainChanged);
+    }
+  }, [handleAccountsChanged, handleChainChanged]);
+
+  // ─── Connect ─────────────────────────────────────────────────────
+  const connect = useCallback(async (rdns?: string): Promise<string | null> => {
+    let ethereum: EthereumProvider | null = null;
+
+    // If specific provider requested (EIP-6963), use it
+    if (rdns) {
+      const found = providers.find(p => p.info.rdns === rdns);
+      if (found) {
+        ethereum = found.provider;
+      }
+    }
+    // Otherwise use first discovered provider
+    if (!ethereum && providers.length > 0) {
+      ethereum = providers[0].provider;
+    }
+    // Final fallback: legacy window.ethereum
     if (!ethereum) {
-      setError('No EVM wallet detected. Please install MetaMask or Brave Wallet.');
+      ethereum = getEthereum();
+    }
+
+    if (!ethereum) {
+      setError('No EVM wallet detected. Please install MetaMask, Brave Wallet, or another compatible wallet.');
       setState('error');
       return null;
     }
+
     try {
       setState('connecting');
       setError(null);
       const accounts = (await ethereum.request({ method: 'eth_requestAccounts' })) as string[];
       const connected = accounts[0];
-      setAddress(connected);
+      if (!connected) {
+        setError('No accounts returned from wallet');
+        setState('error');
+        return null;
+      }
       const chainHex = (await ethereum.request({ method: 'eth_chainId' })) as string;
+      setAddress(connected);
       setChainId(parseInt(chainHex, 16));
       setState('connected');
+
+      // Remember this provider for all future operations
+      activeProviderRef.current = ethereum;
+      attachListeners(ethereum);
+
       return connected;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
+      const msg = err instanceof Error ? err.message : 'Failed to connect wallet';
+      setError(msg.includes('user rejected') ? 'Connection rejected by user' : msg);
       setState('error');
       return null;
     }
-  }, []);
+  }, [providers, attachListeners]);
 
   const switchChain = useCallback(async (targetChainId: number): Promise<boolean> => {
-    const ethereum = getEthereum();
+    const ethereum = getActiveProvider(activeProviderRef);
     const cfg = CHAIN_CONFIGS[targetChainId];
     if (!ethereum || !cfg) { setError('Unsupported chain or wallet not available'); return false; }
     try {
@@ -109,7 +242,7 @@ export function useEvmWallet() {
   }, []);
 
   const fetchUsdtBalance = useCallback(async (walletAddr: string, contractAddress: string): Promise<string> => {
-    const ethereum = getEthereum();
+    const ethereum = getActiveProvider(activeProviderRef);
     if (!ethereum) return '0';
     try {
       const { ethers } = await import('ethers');
@@ -131,7 +264,7 @@ export function useEvmWallet() {
     amount: number,
     targetChainId: number,
   ): Promise<string | null> => {
-    const ethereum = getEthereum();
+    const ethereum = getActiveProvider(activeProviderRef);
     if (!ethereum) { setError('Wallet not available'); setState('error'); return null; }
     try {
       setState('sending');
@@ -160,13 +293,22 @@ export function useEvmWallet() {
   }, [chainId, switchChain]);
 
   const reset = useCallback(() => {
+    const current = activeProviderRef.current;
+    if (current) {
+      detachListeners(current);
+    }
+    activeProviderRef.current = null;
     setState('idle');
     setAddress(null);
     setChainId(null);
     setTxHash(null);
     setError(null);
     setUsdtBalance(null);
-  }, []);
+  }, [detachListeners]);
 
-  return { state, address, chainId, txHash, error, usdtBalance, isAvailable, connect, switchChain, sendUsdt, fetchUsdtBalance, reset };
+  return {
+    state, address, chainId, txHash, error, usdtBalance,
+    isAvailable, providers,
+    connect, switchChain, sendUsdt, fetchUsdtBalance, reset,
+  };
 }

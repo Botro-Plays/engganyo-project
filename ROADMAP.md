@@ -743,7 +743,8 @@
 - [⏳] **Phase C (cron expiry + toast UX)** — PayPal order expiry cron, toast notifications, loading states (planned)
 
 **Crypto payments (USDT) — FULL AUTOMATION NOT IMPLEMENTED**
-- [⏳] Wallet detection modal — detect installed extensions, show branded list (MetaMask, etc.), fallback to install links
+- [🟠] Wallet detection — EIP-6963 provider discovery + legacy fallback implemented in `useEvmWallet.ts` (2026-06-14). Branded selection modal UI still pending.
+  - **Bug fixed (2026-06-14):** `isAvailable` was static, broke MetaMask popup. Now reactive with EIP-6963 + polling + event listeners.
 - [⏳] On-chain confirmation listener — monitor BSC/Base for incoming USDT transfers, auto-credit after N confirmations
 - [⏳] Auto-complete deposit flow — no admin review required for confirmed on-chain txs
 - [🟡] USDT payment via Tron (TRC-20) or Ethereum (ERC-20) — deferred

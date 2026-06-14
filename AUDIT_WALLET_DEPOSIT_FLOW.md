@@ -507,11 +507,18 @@ User → /wallet (Deposit tab)
     → FAILURE: User is dead-ended
 ```
 
-### Crypto Flow (Current — BROKEN)
+### Crypto Flow (Current — PARTIAL, Auto mode fixed 2026-06-14)
 ```
 User → /wallet (Deposit tab)
   → Select package → Step 2
   → Select USDT_BEP20 → Step 3
+  → Auto mode:
+    → "Connect Wallet" button enabled after isAvailable becomes true
+    → Wallet detection: EIP-6963 (branded provider list) + legacy fallback
+    → User selects wallet → eth_requestAccounts → connected
+    → Click "Send USDT" → sendUsdt() → ERC20 transfer on-chain
+    → txHash returned → initiateMutation with txHash → PROCESSING deposit
+    → SUCCESS: Auto mode works end-to-end (manual placeholder, not full automation)
   → Manual mode (no txHash): clicks "I Sent the Payment"
     → initiateMutation: creates deposit (PENDING, no txHash)
     → Instructions show wallet address
@@ -523,6 +530,8 @@ User → /wallet (Deposit tab)
     → BUT user must know to expand, and read raw JSON
     → FAILURE: Poor UX, easy to lose track of payment details
 ```
+
+**Bug fixed (2026-06-14):** `isAvailable` in `useEvmWallet.ts` was a static boolean evaluated once at render time. If `window.ethereum` was injected asynchronously (common with MetaMask), `isAvailable` remained `false` and the "Connect Wallet" button stayed disabled — auto mode was completely broken. Fix: reactive `useState` + EIP-6963 provider discovery (`eip6963:announceProvider` / `eip6963:requestProvider`) + legacy `ethereum#initialized` event listener + 5-second polling fallback. Hook now also stores active provider in a `useRef` and attaches `accountsChanged`/`chainChanged` listeners to keep React state in sync.
 
 ---
 

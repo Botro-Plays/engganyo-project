@@ -1672,6 +1672,7 @@ This document should be updated when:
 - Phase 12b: Wire PayMongo payment link API (create link → redirect user → webhook marks COMPLETED) ✅ DONE
 - Phase 12c: Wire PayPal Orders API (create order → redirect → webhook) ✅ DONE
 - Phase 12d: Wire USDT deposit scaffold (manual placeholder — EVM wallet connect + send, then admin review) 🟠 DONE (not automated)
+  - **Bug fix (2026-06-14):** `useEvmWallet.ts` `isAvailable` was static, preventing MetaMask popup. Fixed with reactive detection (EIP-6963 + legacy fallback + polling) + active provider tracking + event listeners.
 - Phase A (hardening): Global resume banner, duplicate-pending guard, PayPal cancel fix, atomic capture race guard, socket cleanup ✅ DONE 2026-06-13
 - Phase B (persistence): sessionStorage for deposit form state across refresh ⏳ PLANNED
 - Phase C (polish): PayPal order expiry cron, toast notifications, loading states ⏳ PLANNED

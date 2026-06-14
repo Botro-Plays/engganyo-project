@@ -147,12 +147,15 @@
 - **Dependencies:** None (self-custodial wallet connection)
 - **Deliverables:**
   - Frontend wallet connection via `ethers.js` + MetaMask (or WalletConnect for broader support)
-  - `POST /wallet/deposit/evm/initiate` — accepts `chainId`, `tokenAddress` (USDC/USDT), `amount`
-  - On-chain payment verification via RPC (BSC, Base, Ethereum)
-  - `POST /wallet/deposit/evm/verify` — user submits txHash, backend verifies on-chain transfer to platform wallet
-  - Admin panel: platform wallet address config per chain, deposit verification
-  - Update `initiateDeposit()` to support EVM methods with txHash submission flow
-- **Acceptance:** User connects MetaMask, sends USDC/USDT on BSC/Base, backend verifies on-chain, wallet credited.
+  - ✅ `POST /wallet/deposit/initiate` already supports `USDT_BEP20`/`USDT_BASE` with optional `txHash`
+  - ✅ Frontend `useEvmWallet()` hook: MetaMask connection, chain switching, USDT `transfer()` via ethers.js
+  - ✅ **Bug fix (2026-06-14):** `isAvailable` detection was static (computed once at render) — failed when `window.ethereum` was injected asynchronously. Fixed with reactive `useState` + EIP-6963 provider discovery + 5-second polling fallback + `ethereum#initialized` event. Hook now also tracks active provider (ref) and listens to `accountsChanged`/`chainChanged` events.
+  - ✅ Manual mode: user pastes `txHash`, creates `PROCESSING` deposit
+  - ✅ Auto mode: wallet connect → `sendUsdt()` → submit `txHash` → `PROCESSING` deposit
+  - ⏳ On-chain payment verification via RPC — NOT implemented. Deposit requires admin manual review to credit.
+  - ⏳ `POST /wallet/deposit/evm/verify` endpoint — NOT implemented.
+  - ⏳ Admin panel per-chain platform wallet config — partially: addresses are in `PlatformConfig` but no admin UI.
+- **Acceptance (current):** User connects MetaMask, sends USDT on BSC/Base, txHash recorded, deposit goes PROCESSING → awaits admin review. NOT auto-credited.
 
 ---
 
@@ -186,7 +189,7 @@
 1. All 5 critical bugs in Phase 1 are fixed and CI passes. ✅
 2. All 6 documentation files in Phase 2 are updated and accurate. ✅
 3. PayPal deposit integration is implemented and tested. ✅
-4. EVM wallet (MetaMask) deposit integration is implemented and tested.
+4. EVM wallet (MetaMask) deposit MANUAL PLACEHOLDER is implemented and tested. ✅ Full automation (on-chain verification + auto-credit) is ⏳ NOT implemented — deferred to Phase D.
 5. No shortcuts, no guessing, no papering over failures.
 
 ---

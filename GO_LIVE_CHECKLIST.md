@@ -64,8 +64,8 @@ After C1–C3 are complete, proceed here.
 ### Week 2 — Revenue Foundation ✅ DONE
 - [x] C3: Platform fees on campaign creation
 - [x] Revenue tracking model + admin dashboard
-- [ ] Update terms of service to reflect fees
-- [ ] Test: create campaign → verify fee deducted → verify fee tracked
+- [x] Update terms of service to reflect fees — DONE 2026-06-11 (Section 5 Platform Fees, Section 6 Anti-Abuse added)
+- [x] Test: create campaign → verify fee deducted → verify fee tracked — DONE, live in production
 
 ### Week 3–4 — Stripe Integration
 - **Status: ⛔ DEFERRED** — Stripe is not yet applicable/available for this platform (2026-06-10). Will re-evaluate when Stripe account is approved. Deposit system (PayMongo, PayPal, USDT) is live as the current revenue channel.
