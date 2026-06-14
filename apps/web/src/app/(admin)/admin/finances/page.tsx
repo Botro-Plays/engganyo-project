@@ -16,6 +16,7 @@ interface FinanceStats {
   counts: { total: number; pending: number; processing: number; completed: number; failed: number };
   totals: { creditsDistributed: number; revenueFiat: number };
   byMethod: { method: string; count: number; amountFiat: number; creditsAwarded: number; currency: string }[];
+  minDepositUsd: number;
 }
 
 interface DepositPackage {
@@ -382,7 +383,14 @@ export default function FinancesPage() {
               </div>
               {editingPkg && (
                 <div>
-                  <button onClick={() => updatePkgMutation.mutate({ id: editingPkg.id, data: { isActive: !editingPkg.isActive } })}
+                  <button onClick={() => {
+                    if (!editingPkg.isActive && editingPkg.usdAmount < (stats?.minDepositUsd ?? 1)) {
+                      setNotice({ type: 'error', msg: `Cannot activate: package USD amount ($${editingPkg.usdAmount}) is below the minimum deposit ($${stats?.minDepositUsd ?? 1}). Increase the amount first.` });
+                      setTimeout(() => setNotice(null), 5000);
+                      return;
+                    }
+                    updatePkgMutation.mutate({ id: editingPkg.id, data: { isActive: !editingPkg.isActive } });
+                  }}
                     className={`w-full px-4 py-2 rounded-lg text-xs font-medium transition-all border ${editingPkg.isActive ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
                     {editingPkg.isActive ? 'Deactivate Package' : 'Activate Package'}
                   </button>
