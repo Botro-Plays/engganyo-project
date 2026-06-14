@@ -1,3 +1,5 @@
+> **⚠️ NOTE:** This is a decision log. For the current actionable task list, see **`PROJECT_TODO.md`** (single source of truth).
+
 # ENGGANYO — Current Architectural & Product Decisions
 
 > **Authoritative decision log** — This document tracks major architectural, infrastructure, deployment, and product decisions. All future decisions should be documented here to preserve continuity.

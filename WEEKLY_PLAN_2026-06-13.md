@@ -1,3 +1,5 @@
+> **⚠️ NOTE:** This is a historical weekly plan. For the current actionable task list, see **`PROJECT_TODO.md`** (single source of truth).
+
 # Weekly Plan — 2026-06-13 to 2026-06-20
 
 > **Scope:** Fix all critical anti-abuse bugs, clean up documentation drift, and prepare for next major feature.

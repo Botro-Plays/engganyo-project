@@ -1,3 +1,5 @@
+> **⚠️ NOTE:** This is an audit report. For the current actionable task list, see **`PROJECT_TODO.md`** (single source of truth).
+
 # Wallet Deposit Flow — Comprehensive Audit Report
 
 **Audited:** 2026-06-13  

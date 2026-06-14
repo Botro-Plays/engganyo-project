@@ -1,3 +1,5 @@
+> **⚠️ NOTE:** This is a checklist. For the current actionable task list, see **`PROJECT_TODO.md`** (single source of truth).
+
 # ENGGANYO — Go-Live Checklist
 
 > **Living document** — updated after each session. Last updated: 2026-06-10 (Markdown audit + BullMQ queue migration done + trust gates implemented + Stripe deferred)

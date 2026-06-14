@@ -1,4 +1,6 @@
-﻿# ENGGANYO — Development Roadmap
+﻿> **⚠️ NOTE:** This is a roadmap. For the current actionable task list, see **`PROJECT_TODO.md`** (single source of truth).
+
+# ENGGANYO — Development Roadmap
 
 > Last updated: 2026-06-13 (Phase A deposit hardening complete: global resume banner, duplicate-pending guard, PayPal cancel fix, symmetric forwardRef for circular deps)
 > Stack: NestJS (API) · Next.js 14 (Web) · PostgreSQL · Redis · Prisma
