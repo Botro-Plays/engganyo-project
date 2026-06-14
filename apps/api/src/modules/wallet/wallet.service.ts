@@ -242,7 +242,7 @@ export class WalletService {
       'paypal_enabled', 'paypal_client_id', 'paypal_mode',
       'usdt_bep20_enabled', 'usdt_bep20_wallet_address', 'usdt_bep20_contract',
       'usdt_base_enabled',  'usdt_base_wallet_address',  'usdt_base_contract',
-      'credits_per_usd', 'min_deposit_usd',
+      'credits_per_usd', 'min_deposit_usd', 'min_deposit_php',
     ];
     const [configs, usdToPhp] = await Promise.all([
       this.prisma.platformConfig.findMany({ where: { key: { in: keys } } }),
@@ -251,6 +251,7 @@ export class WalletService {
     const map = Object.fromEntries(configs.map((c) => [c.key, c.value]));
     const creditsPerUsd = (map['credits_per_usd'] as number) ?? 5000;
     const minDepositUsd = (map['min_deposit_usd'] as number) ?? 1;
+    const minDepositPhp = (map['min_deposit_php'] as number) ?? Math.ceil(minDepositUsd * usdToPhp);
 
     return {
       paymongo:  { enabled: Boolean(map['paymongo_enabled'] ?? false),  publicKey: (map['paymongo_public_key'] as string) ?? null },
@@ -273,7 +274,7 @@ export class WalletService {
         creditsPerUsd,
         minDepositUsd,
         usdToPhp,
-        minDepositPhp: Math.ceil(minDepositUsd * usdToPhp),
+        minDepositPhp,
         creditsPerPhp: creditsPerUsd / usdToPhp,
       },
       liveRates: { usdToPhp, rateSource: 'frankfurter.app', baseCurrency: 'USD' },
@@ -337,10 +338,18 @@ export class WalletService {
     const cfg = methodConfigs[method as string];
     if (!cfg?.enabled) throw new BadRequestException(`${method} deposits are not currently available`);
 
-    const { creditsPerUsd, usdToPhp } = options.pricing;
+    const { creditsPerUsd, usdToPhp, minDepositUsd, minDepositPhp } = options.pricing;
     const isPhp = method === 'PAYMONGO';
     const rawAmountPhp = parseFloat((pkg.usdAmount * usdToPhp).toFixed(2));
     const amountFiat = isPhp ? Math.max(1, rawAmountPhp) : pkg.usdAmount;
+
+    // ── Guard: minimum deposit amounts ──
+    if (!isPhp && pkg.usdAmount < minDepositUsd) {
+      throw new BadRequestException(`Minimum deposit is $${minDepositUsd} USD`);
+    }
+    if (isPhp && amountFiat < minDepositPhp) {
+      throw new BadRequestException(`Minimum deposit is ₱${minDepositPhp} PHP`);
+    }
     const currency   = isPhp ? 'PHP' : 'USD';
     const creditsBase   = Math.floor(pkg.usdAmount * creditsPerUsd);
     const creditsToAward = creditsBase + pkg.bonusCredits;

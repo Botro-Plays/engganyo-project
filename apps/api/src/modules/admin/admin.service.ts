@@ -1390,6 +1390,7 @@ export class AdminService {
     // ── Pricing ───────────────────────────────────────────
     credits_per_usd:             { value: 5000,  description: 'Credits per $1 USD (canonical rate)', isPublic: true },
     min_deposit_usd:             { value: 1,     description: 'Minimum deposit amount in USD', isPublic: true },
+    min_deposit_php:             { value: 50,    description: 'Minimum deposit amount in PHP (independent of USD minimum)', isPublic: true },
   };
 
   async getServerConfig() {
@@ -1921,6 +1922,11 @@ export class AdminService {
   }
 
   async createDepositPackage(dto: { usdAmount: number; bonusCredits?: number; label?: string; isPopular?: boolean; sortOrder?: number }) {
+    const minUsd = await this.prisma.platformConfig.findUnique({ where: { key: 'min_deposit_usd' } });
+    const minDepositUsd = (minUsd?.value as number) ?? 1;
+    if (dto.usdAmount < minDepositUsd) {
+      throw new BadRequestException(`Package USD amount must be at least $${minDepositUsd} (current minimum deposit)`);
+    }
     return this.prisma.depositPackage.create({
       data: {
         usdAmount: dto.usdAmount,
@@ -1935,6 +1941,13 @@ export class AdminService {
   async updateDepositPackage(id: string, dto: { usdAmount?: number; bonusCredits?: number; label?: string; isPopular?: boolean; isActive?: boolean; sortOrder?: number }) {
     const pkg = await this.prisma.depositPackage.findUnique({ where: { id } });
     if (!pkg) throw new NotFoundException('Package not found');
+    if (dto.usdAmount !== undefined) {
+      const minUsd = await this.prisma.platformConfig.findUnique({ where: { key: 'min_deposit_usd' } });
+      const minDepositUsd = (minUsd?.value as number) ?? 1;
+      if (dto.usdAmount < minDepositUsd) {
+        throw new BadRequestException(`Package USD amount must be at least $${minDepositUsd} (current minimum deposit)`);
+      }
+    }
     return this.prisma.depositPackage.update({ where: { id }, data: dto });
   }
 

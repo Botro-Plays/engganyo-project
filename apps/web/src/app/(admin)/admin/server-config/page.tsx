@@ -140,7 +140,8 @@ const FINANCE_CONFIG_META: Record<string, { label: string; type: 'boolean' | 'nu
   usdt_base_wallet_address:  { label: 'Base Receiving Address',      type: 'text',     section: 'Crypto', hint: 'Your Base Network wallet address that receives USDT deposits' },
   usdt_base_contract:        { label: 'USDT Base Contract Address',  type: 'text',     section: 'Crypto', hint: 'Default: 0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2 (Base USDT). Change only if using a different token.' },
   credits_per_usd:         { label: 'Credits per $1 (USD)',     type: 'number',   section: 'Pricing', hint: 'Canonical rate. PHP & other currencies auto-derived via live exchange rate. e.g. 5000 → $1 = 5,000 credits' },
-  min_deposit_usd:         { label: 'Min Deposit (USD)',         type: 'number',   section: 'Pricing', hint: 'PHP minimum is auto-derived from live USD/PHP rate' },
+  min_deposit_usd:         { label: 'Min Deposit (USD)',         type: 'number',   section: 'Pricing', hint: 'Applies to PayPal and crypto deposits' },
+  min_deposit_php:         { label: 'Min Deposit (PHP)',         type: 'number',   section: 'Pricing', hint: 'Independent PHP minimum for PayMongo / GCash deposits' },
 };
 
 const FINANCE_SECTIONS = ['PayMongo', 'PayPal', 'Crypto', 'Pricing'] as const;
