@@ -336,7 +336,7 @@ export default function WalletPage() {
   const { data: packages, isLoading: packagesLoading } = useQuery({
     queryKey: ['wallet', 'deposit-packages'],
     queryFn: async () => (await apiClient.get<ApiResponse<DepositPackage[]>>('wallet/deposit/packages')).data.data,
-    enabled: tab === 'deposit',
+    // Always enabled: needed to reconstruct deposit form from pending deposits in history
   });
 
   const { data: depositOptions, isLoading: optionsLoading } = useQuery({
@@ -362,6 +362,48 @@ export default function WalletPage() {
       resetDeposit();
     }
   }, [depositHistory, depositResult, resetDeposit]);
+
+  // ── Reconstruct deposit form from pending deposit in history ──
+  // After refresh/navigation, depositResult is lost. If there's still a
+  // PENDING/PROCESSING deposit in history, restore the "Deposit Submitted"
+  // view so the user sees their in-progress deposit instead of package cards.
+  useEffect(() => {
+    if (depositResult) return; // already tracking
+    if (!packages?.length || !depositHistory?.items) return;
+
+    const pending = depositHistory.items.find(
+      (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
+    );
+    if (!pending) return;
+
+    // Find matching package by USD amount
+    const pkg = packages.find((p) => p.usdAmount === pending.package?.usdAmount);
+    if (!pkg) return;
+
+    const instructions: DepositInstructions = {
+      type: pending.method,
+      depositId: pending.id,
+      message:
+        pending.method === 'PAYMONGO'
+          ? 'Complete your payment in the PayMongo checkout page. The link is available below.'
+          : pending.method === 'PAYPAL'
+            ? 'Complete your payment in the PayPal checkout page. The link is available below.'
+            : 'Your crypto deposit is being processed. Admin will review and credit your wallet.',
+      ...(pending.paymentRef ? { txHash: pending.paymentRef } : {}),
+    };
+
+    setDepositStep(3);
+    setSelectedPackage(pkg);
+    setSelectedMethod(pending.method);
+    setDepositResult({ deposit: pending, instructions });
+
+    if (pending.method === 'PAYMONGO' && pending.gatewayData?.checkoutUrl) {
+      setFiatCheckoutUrl(pending.gatewayData.checkoutUrl as string);
+    }
+    if (pending.method === 'PAYPAL' && pending.gatewayData?.approvalUrl) {
+      setFiatCheckoutUrl(pending.gatewayData.approvalUrl as string);
+    }
+  }, [depositResult, packages, depositHistory]);
 
   // ─── Restore deposit form from sessionStorage ────────────
   useEffect(() => {
@@ -677,7 +719,7 @@ export default function WalletPage() {
                 )}
                 {isCrypto && (
                   <button
-                    onClick={() => setExpandedDepositId(pending.id)}
+                    onClick={() => setTab('deposit')}
                     className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />View Details
@@ -772,13 +814,7 @@ export default function WalletPage() {
           {/* ── 3-step deposit card ── */}
           <div className="card-glass rounded-xl border border-surface-border">
             {/* Step indicator */}
-            {/* Pre-compute: is there any existing pending/processing deposit? */}
-            {(() => {
-              const hasExistingDeposit = depositHistory?.items.some((d) => d.status === 'PENDING' || d.status === 'PROCESSING') ?? false;
-
-              return (
-                <>
-                  <div className="flex items-center gap-0 border-b border-surface-border px-6 py-3">
+            <div className="flex items-center gap-0 border-b border-surface-border px-6 py-3">
                     {([1,2,3] as DepositStep[]).map((s, i) => (
                       <div key={s} className="flex items-center gap-0">
                         {i > 0 && <div className={`h-px w-8 ${depositStep > i ? 'bg-brand-500' : 'bg-zinc-700'}`} />}
@@ -806,15 +842,6 @@ export default function WalletPage() {
                     {/* ───────── Step 1: Package selection ───────── */}
                     {depositStep === 1 && (
                       <div>
-                        {/* Guard: if there is any PENDING/PROCESSING deposit (any method), warn and disable */}
-                        {hasExistingDeposit && (
-                          <div className="mb-5 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
-                            <p className="font-medium mb-1">You have a deposit in progress</p>
-                            <p className="text-xs text-yellow-300/70">
-                              Complete or cancel your existing deposit from the resume banner above before creating a new one.
-                            </p>
-                          </div>
-                        )}
                   <h2 className="font-semibold text-white mb-1">Choose a Credit Package</h2>
                   {packages?.[0] && (
                     <div className="flex items-center gap-2 text-xs text-zinc-500 mb-4">
@@ -1151,10 +1178,7 @@ export default function WalletPage() {
                 </div>
               )}
             </div>
-            </>
-          );
-        })()}
-      </div>
+          </div>
 
       {/* ── Deposit history ── */}
           <div className="card-glass rounded-xl">

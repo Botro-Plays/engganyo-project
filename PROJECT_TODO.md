@@ -189,10 +189,16 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
 - ✅ **Crypto resume banner fixed** (2026-06-14)
   - Banner now includes PROCESSING crypto deposits (auto crypto goes to PROCESSING after on-chain transfer)
   - Previously only showed PENDING crypto deposits, so auto crypto was invisible in the resume banner
-- ✅ **Frontend deposit restriction guard added** (2026-06-14)
-  - Backend already had `initiateDeposit` guard preventing new deposits when PENDING/PROCESSING exists
-  - Frontend now shows a yellow warning banner on Step 1 when the user already has a deposit in progress
-  - Directs user to use the resume banner to complete or cancel the existing deposit
+- ✅ **Deposit form auto-reconstruction from history** (2026-06-14)
+  - After refresh/navigation, `depositResult` is null for ALL methods
+  - Added `useEffect` that checks `depositHistory` for any PENDING/PROCESSING deposit
+  - If found: reconstructs `depositResult`, sets `depositStep=3`, restores `selectedPackage` (by matching `usdAmount`) and `selectedMethod`
+  - Also restores `fiatCheckoutUrl` for PayMongo/PayPal from `gatewayData`
+  - Result: package cards are HIDDEN when any deposit is in progress — consistent with PayMongo/PayPal behavior
+  - `packages` query now always enabled (needed for package lookup during reconstruction)
+- ✅ **Crypto 'View Details' button fixed** (2026-06-14)
+  - Was: `setExpandedDepositId()` which only expands a history row (not visible when scrolled up)
+  - Now: `setTab('deposit')` — switches to deposit tab where the reconstructed deposit detail view is shown
 - **Next:** Phase D crypto backend automation (on-chain verification + auto-credit) or deferred polish (C4–C5)
 
 ---
