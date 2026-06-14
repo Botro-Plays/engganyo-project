@@ -74,6 +74,9 @@ export class PayMongoService {
       });
     } catch (err) {
       this.logger.error(`PayMongo fetch error: ${String(err)}`);
+      Sentry.captureException(err instanceof Error ? err : new Error(`PayMongo fetch error: ${String(err)}`), {
+        extra: { depositId, amountCents, currency },
+      });
       throw new BadRequestException(`Failed to connect to PayMongo: ${String(err)}`);
     }
 
@@ -88,6 +91,10 @@ export class PayMongoService {
 
     if (!res.ok) {
       this.logger.error(`PayMongo link creation failed: ${JSON.stringify(json)}`);
+      Sentry.captureMessage(`PayMongo link creation failed: ${res.status}`, {
+        level: 'error',
+        extra: { depositId, amountCents, currency, response: json },
+      });
       throw new BadRequestException(`Failed to create PayMongo payment link: ${JSON.stringify(json)}`);
     }
 
@@ -109,6 +116,9 @@ export class PayMongoService {
       });
     } catch (err) {
       this.logger.error(`Failed to update deposit ${depositId} with paymentRef: ${String(err)}`);
+      Sentry.captureException(err instanceof Error ? err : new Error(`Failed to update deposit with PayMongo paymentRef`), {
+        extra: { depositId, linkId, checkoutUrl },
+      });
       throw new BadRequestException(`PayMongo link created but failed to update deposit: ${String(err)}`);
     }
 
@@ -158,6 +168,10 @@ export class PayMongoService {
       }
     }
     this.logger.error(`Archive link ${linkId} exhausted all ${MAX_RETRIES} retries`);
+    Sentry.captureMessage(`PayMongo archiveLink exhausted all ${MAX_RETRIES} retries`, {
+      level: 'warning',
+      extra: { linkId },
+    });
     return false;
   }
 
@@ -375,7 +389,20 @@ export class PayMongoService {
           });
           return { received: true, action: 'failed', depositId: externalRef };
         }
+        if (deposit && deposit.status === DepositStatus.COMPLETED) {
+          this.logger.warn(`payment.failed: deposit ${externalRef} already completed — possible duplicate webhook`);
+          Sentry.captureMessage('PayMongo payment.failed for already-completed deposit', {
+            level: 'warning',
+            extra: { depositId: externalRef, paymentId: eventData?.id },
+          });
+          return { received: true, action: 'ignored' };
+        }
       }
+      this.logger.warn(`payment.failed: no deposit matched (externalRef=${externalRef ?? 'none'})`);
+      Sentry.captureMessage('PayMongo payment.failed: no deposit matched', {
+        level: 'warning',
+        extra: { externalRef, paymentId: eventData?.id, eventType },
+      });
     }
 
     // link.payment.failed — a payment attempt on a link failed (declined card, etc.).
@@ -432,6 +459,11 @@ export class PayMongoService {
       return { received: true, action: 'ignored', reason: 'qr_auto_refresh' };
     }
 
+    this.logger.warn(`PayMongo webhook: unhandled event type "${eventType}"`);
+    Sentry.captureMessage(`PayMongo webhook: unhandled event type`, {
+      level: 'warning',
+      extra: { eventType, eventData },
+    });
     return { received: true, action: 'ignored', eventType };
   }
 
@@ -491,6 +523,9 @@ export class PayMongoService {
         }
       } catch (err) {
         this.logger.error(`Failed to auto-cancel deposit ${deposit.id}: ${String(err)}`);
+        Sentry.captureException(err instanceof Error ? err : new Error(`Failed to auto-cancel PayMongo deposit`), {
+          extra: { depositId: deposit.id, paymentRef: deposit.paymentRef },
+        });
       }
     }
   }
