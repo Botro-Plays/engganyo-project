@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { PayPalService } from '../paypal/paypal.service';
+import { CryptoVerificationService } from './crypto-verification.service';
 
 const MOCK_WALLET = {
   id: 'wallet-1',
@@ -111,6 +112,10 @@ describe('WalletService', () => {
         {
           provide: PayPalService,
           useValue: { cancelOrder: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: CryptoVerificationService,
+          useValue: { verifyDeposit: jest.fn().mockResolvedValue({ valid: true }) },
         },
       ],
     }).compile();
