@@ -483,7 +483,15 @@ export default function WalletPage() {
     mutationFn: async ({ depositId, txHash }: { depositId: string; txHash: string }) =>
       (await apiClient.post<ApiResponse<DepositRecord>>(`wallet/deposit/${depositId}/tx-hash`, { txHash })).data.data,
     onSuccess: (data) => {
-      setDepositResult((prev) => prev ? { ...prev, deposit: data, instructions: { ...prev.instructions, txHash: data.paymentRef ?? undefined } } : null);
+      setDepositResult((prev) => prev ? {
+        ...prev,
+        deposit: data,
+        instructions: {
+          ...prev.instructions,
+          txHash: data.paymentRef ?? undefined,
+          message: 'Your crypto deposit is being verified on-chain. You will be notified when it completes.',
+        },
+      } : null);
       setDepositError(null);
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
       addToast('Transaction hash submitted. Verification in progress.', 'info', 4000);
