@@ -494,6 +494,24 @@ export default function WalletPage() {
     },
   });
 
+  const verifyDepositMutation = useMutation({
+    mutationFn: async ({ depositId }: { depositId: string }) =>
+      (await apiClient.post<ApiResponse<{ status: string; depositId: string; message: string }>>(`wallet/deposit/${depositId}/verify`)).data.data,
+    onSuccess: (data) => {
+      if (data.status === 'COMPLETED') {
+        addToast('Deposit verified and completed! Credits added to your wallet.', 'success', 6000);
+      } else if (data.status === 'PROCESSING') {
+        addToast(data.message, 'info', 4000);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+    },
+    onError: (err) => {
+      const msg = getApiErrorMessage(err);
+      addToast(msg, 'error', 5000);
+    },
+  });
+
   const enabledMethods = depositOptions
     ? Object.entries({
         PAYMONGO:   depositOptions.paymongo.enabled,
@@ -514,8 +532,40 @@ export default function WalletPage() {
       selectedPackage.usdAmount,
       cryptoCfg.chainId,
     );
-    if (hash) {
-      initiateMutation.mutate({ packageId: selectedPackage.id, method: selectedMethod!, txHash: hash, userWalletAddress: evmWallet.address ?? undefined });
+    if (!hash) return;
+
+    // Create deposit record immediately with the txHash
+    try {
+      const result = await initiateMutation.mutateAsync({
+        packageId: selectedPackage.id,
+        method: selectedMethod!,
+        txHash: hash,
+        userWalletAddress: evmWallet.address ?? undefined,
+      });
+      setDepositResult(result ?? null);
+      setDepositError(null);
+      clearPersistedForm();
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+
+      addToast('Transaction submitted. Waiting for blockchain confirmation...', 'info', 4000);
+
+      // Poll wallet provider for on-chain confirmation, then trigger backend verify
+      const waitResult = await evmWallet.waitForTransaction(hash, 1, 120000);
+      if (waitResult.status === 'failed') {
+        addToast('Transaction failed on-chain.', 'error', 6000);
+        return;
+      }
+      if (waitResult.status === 'timeout') {
+        addToast('Confirmation is taking longer than expected. Your deposit will be verified automatically.', 'warning', 6000);
+        return;
+      }
+
+      // Confirmed on-chain — trigger backend verification immediately
+      addToast('Transaction confirmed! Verifying deposit...', 'success', 3000);
+      await verifyDepositMutation.mutateAsync({ depositId: result.deposit.id });
+    } catch {
+      // initiate or verify errors are handled by their mutation onError callbacks
     }
   };
 
@@ -1030,6 +1080,19 @@ export default function WalletPage() {
                         <div className="px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300/80 leading-relaxed">
                           {depositResult.instructions.message}
                         </div>
+                        {/* PROCESSING crypto with txHash: allow manual verify trigger */}
+                        {depositResult.deposit.status === 'PROCESSING' &&
+                          (depositResult.deposit.method === 'USDT_BEP20' || depositResult.deposit.method === 'USDT_BASE') &&
+                          depositResult.deposit.paymentRef && (
+                          <button
+                            onClick={() => verifyDepositMutation.mutate({ depositId: depositResult.deposit.id })}
+                            disabled={verifyDepositMutation.isPending}
+                            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-medium transition-all"
+                          >
+                            {verifyDepositMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                            Verify Now
+                          </button>
+                        )}
                         {/* PENDING crypto without txHash: show wallet address + txHash input */}
                         {depositResult.deposit.status === 'PENDING' &&
                           (depositResult.deposit.method === 'USDT_BEP20' || depositResult.deposit.method === 'USDT_BASE') &&

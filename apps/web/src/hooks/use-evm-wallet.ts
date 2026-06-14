@@ -292,6 +292,35 @@ export function useEvmWallet() {
     }
   }, [chainId, switchChain]);
 
+  const waitForTransaction = useCallback(async (txHash: string, confirmations = 1, timeoutMs = 120000): Promise<{ status: 'success' | 'failed' | 'timeout'; confirmations?: number }> => {
+    const ethereum = getActiveProvider(activeProviderRef);
+    if (!ethereum) throw new Error('Wallet not available');
+
+    const { ethers } = await import('ethers');
+    const provider = new ethers.BrowserProvider(ethereum);
+    const start = Date.now();
+
+    try {
+      while (Date.now() - start < timeoutMs) {
+        const receipt = await provider.getTransactionReceipt(txHash);
+        if (receipt) {
+          if (receipt.status !== 1) {
+            return { status: 'failed' };
+          }
+          const currentBlock = await provider.getBlockNumber();
+          const confs = currentBlock - receipt.blockNumber + 1;
+          if (confs >= confirmations) {
+            return { status: 'success', confirmations: confs };
+          }
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+      return { status: 'timeout' };
+    } finally {
+      provider.destroy();
+    }
+  }, []);
+
   const reset = useCallback(() => {
     const current = activeProviderRef.current;
     if (current) {
@@ -309,6 +338,6 @@ export function useEvmWallet() {
   return {
     state, address, chainId, txHash, error, usdtBalance,
     isAvailable, providers,
-    connect, switchChain, sendUsdt, fetchUsdtBalance, reset,
+    connect, switchChain, sendUsdt, fetchUsdtBalance, waitForTransaction, reset,
   };
 }

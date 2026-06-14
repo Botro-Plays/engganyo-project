@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 import { WalletService } from './wallet.service';
@@ -14,6 +15,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 @Controller({ path: 'wallet' })
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('access-token')
+@Throttle({ default: { limit: 30, ttl: 60 } })
 export class WalletController {
   constructor(private readonly walletService: WalletService) {}
 
@@ -70,6 +72,7 @@ export class WalletController {
 
   @Post('deposit/:id/tx-hash')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60 } })
   @ApiOperation({ summary: 'Submit a transaction hash for an existing crypto deposit' })
   async submitTxHash(
     @CurrentUser() user: JwtPayload,
@@ -79,8 +82,17 @@ export class WalletController {
     return this.walletService.submitTxHash(user.sub, id, dto.txHash);
   }
 
+  @Post('deposit/:id/verify')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60 } })
+  @ApiOperation({ summary: 'Request immediate on-chain verification of a crypto deposit' })
+  async verifyCryptoDeposit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.walletService.verifyCryptoDeposit(user.sub, id);
+  }
+
   @Delete('deposit/:id/cancel')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60 } })
   @ApiOperation({ summary: 'Cancel a pending deposit' })
   async cancelDeposit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.walletService.cancelDeposit(user.sub, id);

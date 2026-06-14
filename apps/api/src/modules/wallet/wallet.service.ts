@@ -623,12 +623,18 @@ export class WalletService {
       throw new BadRequestException(`Cannot submit txHash for a deposit with status ${deposit.status}`);
     }
 
+    // Validate txHash format: must be 0x + 64 hex characters
+    const normalized = txHash.trim();
+    if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
+      throw new BadRequestException('Invalid transaction hash format. Expected 0x followed by 64 hexadecimal characters.');
+    }
+
     // Atomic update: ensure deposit is still PENDING before flipping to PROCESSING
     const claimed = await this.prisma.deposit.updateMany({
       where: { id: depositId, status: DepositStatus.PENDING },
       data: {
         status: DepositStatus.PROCESSING,
-        paymentRef: txHash,
+        paymentRef: normalized,
       },
     });
 
@@ -641,9 +647,83 @@ export class WalletService {
     return updated;
   }
 
+  // ─── Frontend-triggered crypto deposit verification ────────
+
+  async verifyCryptoDeposit(userId: string, depositId: string) {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { id: depositId },
+      include: { package: { select: { usdAmount: true } } },
+    });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
+
+    const isCrypto = deposit.method === DepositMethod.USDT_BEP20 || deposit.method === DepositMethod.USDT_BASE;
+    if (!isCrypto) throw new BadRequestException('Verification is only available for crypto deposits');
+
+    // Idempotency: already completed
+    if (deposit.status === DepositStatus.COMPLETED) {
+      return { status: 'COMPLETED', depositId, message: 'Deposit already completed' };
+    }
+    if (deposit.status === DepositStatus.CANCELLED) {
+      throw new BadRequestException('Deposit was cancelled');
+    }
+    if (deposit.status === DepositStatus.FAILED) {
+      throw new BadRequestException('Deposit has failed');
+    }
+    if (deposit.status !== DepositStatus.PROCESSING || !deposit.paymentRef) {
+      throw new BadRequestException('Deposit must be in PROCESSING status with a transaction hash to verify');
+    }
+
+    const options = await this.getDepositOptions();
+    const platformWallet =
+      deposit.method === DepositMethod.USDT_BEP20
+        ? options.usdtBep20.walletAddress
+        : options.usdtBase.walletAddress;
+
+    if (!platformWallet) {
+      throw new BadRequestException('Platform wallet address not configured for this network');
+    }
+
+    const expectedAmount = deposit.package?.usdAmount ?? deposit.amountFiat;
+
+    const result = await this.cryptoVerification.verifyDeposit({
+      method: deposit.method as 'USDT_BEP20' | 'USDT_BASE',
+      txHash: deposit.paymentRef,
+      expectedAmountUsd: expectedAmount,
+      platformWalletAddress: platformWallet,
+    });
+
+    if (result.valid) {
+      this.logger.log(`Frontend-triggered verification: auto-completing crypto deposit ${deposit.id}`);
+      await this.completeDeposit(deposit.id, { paymentRef: deposit.paymentRef });
+      return { status: 'COMPLETED', depositId, txHash: deposit.paymentRef, message: 'Deposit verified and completed' };
+    }
+
+    // If still waiting for confirmations, tell the user to wait
+    if (result.error?.includes('Waiting for confirmations')) {
+      return {
+        status: 'PROCESSING',
+        depositId,
+        txHash: deposit.paymentRef,
+        message: result.error,
+        confirmations: result.confirmations,
+        minConfirmations: result.confirmations !== undefined ? 12 : undefined,
+      };
+    }
+
+    // For any other failure, return the error without marking FAILED
+    // (only the cron job should mark deposits as FAILED to avoid race conditions)
+    return {
+      status: 'PROCESSING',
+      depositId,
+      txHash: deposit.paymentRef,
+      message: result.error ?? 'Verification failed',
+    };
+  }
+
   // ─── Cron: auto-verify PROCESSING crypto deposits ──────────
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_MINUTE)
   async verifyCryptoDeposits() {
     const pendingDeposits = await this.prisma.deposit.findMany({
       where: {

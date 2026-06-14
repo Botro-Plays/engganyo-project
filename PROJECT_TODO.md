@@ -225,6 +225,37 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
     - In reconstructed step 3 view, shows wallet address + txHash input + Submit button
     - Only shown when deposit is PENDING + crypto + no txHash
     - PROCESSING crypto deposits show "Verifying on-chain" instead of "Admin will review"
+- ✅ **Security Hardening + Frontend-Triggered Verification** (2026-06-14)
+  - **Cron frequency:** Changed from `EVERY_5_MINUTES` to `EVERY_MINUTE` for faster auto-verification
+  - **TxHash validation:** `submitTxHash` now validates format (`^0x[a-fA-F0-9]{64}$`) before accepting
+  - **Rate limiting:** Added `@Throttle` to `WalletController`:
+    - Controller default: 30 req/min
+    - `deposit/initiate`: inherits default (30/min)
+    - `deposit/:id/tx-hash`: 5 req/min (prevents griefing with fake hashes)
+    - `deposit/:id/verify`: 10 req/min (prevents verification spam)
+    - `deposit/:id/cancel`: 5 req/min
+  - **Frontend-triggered verification endpoint:** `POST /wallet/deposit/:id/verify`
+    - Ownership check, crypto-only, PROCESSING + paymentRef required
+    - Idempotent: returns success if already COMPLETED
+    - Calls `CryptoVerificationService.verifyDeposit()` on backend (never trusts frontend)
+    - On valid → `completeDeposit()` → credits awarded immediately
+    - On "waiting for confirmations" → returns progress info, leaves as PROCESSING
+    - On other failures → returns error, leaves as PROCESSING (only cron marks FAILED)
+  - **Frontend `waitForTransaction`:** Added to `useEvmWallet` hook
+    - Polls `eth_getTransactionReceipt` every 3s up to 120s timeout
+    - After `sendUsdt`, waits for 1 confirmation then calls `verify` endpoint
+    - Gives near-instant completion feedback for auto-wallet deposits
+  - **"Verify Now" button:** Added to PROCESSING crypto deposit detail view
+    - Allows users to manually trigger verification at any time
+    - Useful for manual txHash submissions or if auto-polling times out
+  - **Security review summary:**
+    - ✅ Replay attacks: `paymentRef @unique` DB constraint prevents txHash reuse
+    - ✅ Frontend manipulation: Backend always verifies via RPC; frontend only triggers
+    - ✅ Race conditions: `completeDeposit` uses atomic `updateMany` with status guard
+    - ✅ Idempotency: `verifyCryptoDeposit` handles already-COMPLETED gracefully
+    - ✅ Griefing: txHash format validation + rate limiting + one-pending-deposit guard
+    - ✅ Cron vs frontend race: Only cron marks FAILED; frontend only marks COMPLETED
+
 - **Next:** C5 (loading states during PayPal order creation) or Phase F infrastructure
 
 ---
