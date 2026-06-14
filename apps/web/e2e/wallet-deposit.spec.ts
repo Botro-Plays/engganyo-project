@@ -10,8 +10,13 @@ function apiResponse<T>(data: T) {
   return JSON.stringify({ success: true, data, timestamp: new Date().toISOString() });
 }
 
+// Axios uses withCredentials:true, which triggers a CORS preflight OPTIONS
+// request.  Chrome rejects preflight responses with Access-Control-Allow-Origin:*
+// for credentialed requests; the only valid value is the exact request origin.
+const CORS_ORIGIN = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
 const CORS_HEADERS = {
-  'access-control-allow-origin': '*',
+  'access-control-allow-origin': CORS_ORIGIN,
+  'access-control-allow-credentials': 'true',
   'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'access-control-allow-headers': 'Content-Type, Authorization',
 };
