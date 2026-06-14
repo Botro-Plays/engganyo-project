@@ -141,6 +141,7 @@ async function mockSubmitTxHash(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: apiResponse({
         id: MOCK_DEPOSIT_ID,
+        method: 'USDT_BEP20',
         status: 'PROCESSING',
         paymentRef: '0xabcdef1234567890abcdef1234567890abcdef12',
       }),
@@ -316,11 +317,13 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     // PayMongo should show "Min ₱600" (disabled)
     await expect(page.getByText(/min ₱600/i)).toBeVisible({ timeout: 5_000 });
 
-    // PayPal should show "Min $10" (disabled)
-    await expect(page.getByText(/min \$10/i)).toBeVisible({ timeout: 5_000 });
+    // PayPal should show "Min $10" (disabled) — all non-PHP methods show the same min label
+    await expect(page.getByText(/min \$10/i).first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('cancel pending deposit from global resume banner', async ({ page }) => {
+    let cancelled = false;
+
     // Show a pending deposit in history so the resume banner appears
     await page.route('**/api/wallet/deposits**', async (route) => {
       await route.fulfill({
@@ -328,30 +331,33 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
         headers: CORS_HEADERS,
         contentType: 'application/json',
         body: apiResponse({
-          items: [
-            {
-              id: 'dep-pending-123',
-              userId: 'user-e2e',
-              packageId: 'pkg-e2e-1',
-              method: 'PAYMONGO',
-              status: 'PENDING',
-              amountFiat: 290,
-              currency: 'PHP',
-              creditsToAward: 500,
-              paymentRef: 'link-old-123',
-              gatewayData: { checkoutUrl: 'https://checkout.paymongo.com/old', expiredAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              package: { usdAmount: 5 },
-            },
-          ],
-          meta: { total: 1, page: 1, limit: 20, totalPages: 1, hasNext: false, hasPrev: false },
+          items: cancelled
+            ? []
+            : [
+                {
+                  id: 'dep-pending-123',
+                  userId: 'user-e2e',
+                  packageId: 'pkg-e2e-1',
+                  method: 'PAYMONGO',
+                  status: 'PENDING',
+                  amountFiat: 290,
+                  currency: 'PHP',
+                  creditsToAward: 500,
+                  paymentRef: 'link-old-123',
+                  gatewayData: { checkoutUrl: 'https://checkout.paymongo.com/old', expiredAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  package: { usdAmount: 5 },
+                },
+              ],
+          meta: { total: cancelled ? 0 : 1, page: 1, limit: 20, totalPages: cancelled ? 0 : 1, hasNext: false, hasPrev: false },
         }),
       });
     });
 
-    // Mock cancel endpoint
+    // Mock cancel endpoint — flip the flag so subsequent history queries return empty
     await page.route(/.*\/api\/wallet\/deposit\/.*\/cancel/, async (route) => {
+      cancelled = true;
       await route.fulfill({
         status: 200,
         headers: CORS_HEADERS,
