@@ -1797,7 +1797,7 @@ export class AdminService {
   // ─── Finances (deposits) ──────────────────────────────────
 
   async getFinanceStats() {
-    const [total, pending, processing, completed, failed, byMethod, totalCredits, minUsdConfig] = await Promise.all([
+    const [total, pending, processing, completed, failed, byMethod, totalCredits, depositOpts] = await Promise.all([
       this.prisma.deposit.count(),
       this.prisma.deposit.count({ where: { status: DepositStatus.PENDING } }),
       this.prisma.deposit.count({ where: { status: DepositStatus.PROCESSING } }),
@@ -1810,7 +1810,7 @@ export class AdminService {
         where: { status: DepositStatus.COMPLETED },
       }),
       this.prisma.deposit.aggregate({ where: { status: DepositStatus.COMPLETED }, _sum: { creditsAwarded: true, amountFiat: true } }),
-      this.prisma.platformConfig.findUnique({ where: { key: 'min_deposit_usd' } }),
+      this.walletService.getDepositOptions(),
     ]);
     return {
       counts: { total, pending, processing, completed, failed },
@@ -1819,7 +1819,9 @@ export class AdminService {
         revenueFiat: totalCredits._sum.amountFiat ?? 0,
       },
       byMethod: byMethod.map((r) => ({ method: r.method, count: r._count.id, amountFiat: r._sum.amountFiat ?? 0, creditsAwarded: r._sum.creditsAwarded ?? 0, currency: r.currency })),
-      minDepositUsd: (minUsdConfig?.value as number) ?? 1,
+      minDepositUsd: depositOpts.pricing.minDepositUsd,
+      minDepositPhp: depositOpts.pricing.minDepositPhp,
+      usdToPhp: depositOpts.pricing.usdToPhp,
     };
   }
 

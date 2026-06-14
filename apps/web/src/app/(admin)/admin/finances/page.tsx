@@ -17,6 +17,8 @@ interface FinanceStats {
   totals: { creditsDistributed: number; revenueFiat: number };
   byMethod: { method: string; count: number; amountFiat: number; creditsAwarded: number; currency: string }[];
   minDepositUsd: number;
+  minDepositPhp: number;
+  usdToPhp: number;
 }
 
 interface DepositPackage {
@@ -384,10 +386,22 @@ export default function FinancesPage() {
               {editingPkg && (
                 <div>
                   <button onClick={() => {
-                    if (!editingPkg.isActive && editingPkg.usdAmount < (stats?.minDepositUsd ?? 1)) {
-                      setNotice({ type: 'error', msg: `Cannot activate: package USD amount ($${editingPkg.usdAmount}) is below the minimum deposit ($${stats?.minDepositUsd ?? 1}). Increase the amount first.` });
-                      setTimeout(() => setNotice(null), 5000);
-                      return;
+                    if (!editingPkg.isActive) {
+                      const minUsd = stats?.minDepositUsd ?? 1;
+                      const minPhp = stats?.minDepositPhp ?? 50;
+                      const rate   = stats?.usdToPhp ?? 58;
+                      const phpEq  = Math.ceil(editingPkg.usdAmount * rate);
+                      const okUsd  = editingPkg.usdAmount >= minUsd;
+                      const okPhp  = phpEq >= minPhp;
+                      if (!okUsd && !okPhp) {
+                        setNotice({ type: 'error', msg: `Cannot activate: package is below both minimums (USD $${minUsd} and PHP ₱${minPhp}). Increase the amount first.` });
+                        setTimeout(() => setNotice(null), 5000);
+                        return;
+                      }
+                      if (!okUsd && okPhp) {
+                        setNotice({ type: 'success', msg: `Activated. This package is below the USD minimum ($${minUsd}), so only PayMongo (₱${phpEq}) will be available.` });
+                        setTimeout(() => setNotice(null), 5000);
+                      }
                     }
                     updatePkgMutation.mutate({ id: editingPkg.id, data: { isActive: !editingPkg.isActive } });
                   }}
