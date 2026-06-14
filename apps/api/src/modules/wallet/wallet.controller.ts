@@ -5,6 +5,7 @@ import { WalletService } from './wallet.service';
 import { GetTransactionsDto } from './dto/get-transactions.dto';
 import { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import { ListDepositsDto } from './dto/list-deposits.dto';
+import { SubmitTxHashDto } from './dto/submit-tx-hash.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -65,6 +66,17 @@ export class WalletController {
   @ApiOperation({ summary: 'Get own deposit history' })
   getDeposits(@CurrentUser() user: JwtPayload, @Query() dto: ListDepositsDto) {
     return this.walletService.getUserDeposits(user.sub, dto);
+  }
+
+  @Post('deposit/:id/tx-hash')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Submit a transaction hash for an existing crypto deposit' })
+  async submitTxHash(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: SubmitTxHashDto,
+  ) {
+    return this.walletService.submitTxHash(user.sub, id, dto.txHash);
   }
 
   @Delete('deposit/:id/cancel')

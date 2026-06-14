@@ -6,6 +6,7 @@ import {
   forwardRef,
   Inject,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma, DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -14,6 +15,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { PayPalService } from '../paypal/paypal.service';
+import { CryptoVerificationService } from './crypto-verification.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -51,6 +53,7 @@ export class WalletService {
     private readonly payMongoService: PayMongoService,
     @Inject(forwardRef(() => PayPalService))
     private readonly payPalService: PayPalService,
+    private readonly cryptoVerification: CryptoVerificationService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -605,5 +608,102 @@ export class WalletService {
     }
 
     return deposit;
+  }
+
+  // ─── Submit txHash for an existing PENDING crypto deposit ──
+
+  async submitTxHash(userId: string, depositId: string, txHash: string) {
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
+
+    const isCrypto = deposit.method === DepositMethod.USDT_BEP20 || deposit.method === DepositMethod.USDT_BASE;
+    if (!isCrypto) throw new BadRequestException('Transaction hash can only be submitted for crypto deposits');
+    if (deposit.status !== DepositStatus.PENDING) {
+      throw new BadRequestException(`Cannot submit txHash for a deposit with status ${deposit.status}`);
+    }
+
+    // Atomic update: ensure deposit is still PENDING before flipping to PROCESSING
+    const claimed = await this.prisma.deposit.updateMany({
+      where: { id: depositId, status: DepositStatus.PENDING },
+      data: {
+        status: DepositStatus.PROCESSING,
+        paymentRef: txHash,
+      },
+    });
+
+    if (claimed.count === 0) {
+      throw new BadRequestException('Deposit status changed. Please refresh and try again.');
+    }
+
+    const updated = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    this.eventsService.emitToUser(userId, 'deposit:updated', { depositId, status: DepositStatus.PROCESSING });
+    return updated;
+  }
+
+  // ─── Cron: auto-verify PROCESSING crypto deposits ──────────
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async verifyCryptoDeposits() {
+    const pendingDeposits = await this.prisma.deposit.findMany({
+      where: {
+        method: { in: [DepositMethod.USDT_BEP20, DepositMethod.USDT_BASE] },
+        status: DepositStatus.PROCESSING,
+        paymentRef: { not: null },
+      },
+      include: { package: { select: { usdAmount: true } } },
+    });
+
+    if (pendingDeposits.length === 0) return;
+
+    // Load platform wallet addresses from config
+    const options = await this.getDepositOptions();
+
+    for (const deposit of pendingDeposits) {
+      try {
+        const platformWallet =
+          deposit.method === DepositMethod.USDT_BEP20
+            ? options.usdtBep20.walletAddress
+            : options.usdtBase.walletAddress;
+
+        if (!platformWallet) {
+          this.logger.warn(`No platform wallet configured for ${deposit.method}; skipping verification for ${deposit.id}`);
+          continue;
+        }
+
+        const expectedAmount = deposit.package?.usdAmount ?? deposit.amountFiat;
+
+        const result = await this.cryptoVerification.verifyDeposit({
+          method: deposit.method as 'USDT_BEP20' | 'USDT_BASE',
+          txHash: deposit.paymentRef!,
+          expectedAmountUsd: expectedAmount,
+          platformWalletAddress: platformWallet,
+        });
+
+        if (result.valid) {
+          this.logger.log(`Auto-completing crypto deposit ${deposit.id} (tx: ${deposit.paymentRef})`);
+          await this.completeDeposit(deposit.id, { paymentRef: deposit.paymentRef! });
+        } else {
+          this.logger.warn(`Crypto deposit ${deposit.id} verification failed: ${result.error}`);
+          // If the error indicates the tx is permanently invalid (not just waiting),
+          // we could mark it as FAILED. For now, leave as PROCESSING for admin review.
+          if (result.error?.includes('Transaction failed on-chain') ||
+              result.error?.includes('No USDT transfer to platform wallet') ||
+              result.error?.includes('Amount mismatch')) {
+            await this.prisma.deposit.updateMany({
+              where: { id: deposit.id, status: DepositStatus.PROCESSING },
+              data: {
+                status: DepositStatus.FAILED,
+                adminNotes: `Auto-verification failed: ${result.error}`,
+              },
+            });
+            this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.FAILED });
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Unexpected error verifying crypto deposit ${deposit.id}: ${message}`);
+      }
+    }
   }
 }

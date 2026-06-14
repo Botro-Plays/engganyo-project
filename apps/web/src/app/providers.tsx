@@ -8,6 +8,7 @@ import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { ChatWidget } from '@/components/chat/ChatWidget';
 import { SocketProvider } from '@/components/socket-provider';
+import { ToastProvider } from '@/components/toast-provider';
 import { useAuthStore } from '@/store/auth.store';
 import { usePathname } from 'next/navigation';
 
@@ -57,8 +58,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthInitializer />
       <AdminPinRouteGuard />
       <SocketProvider>
-        {children}
-        <ChatWidget />
+        <ToastProvider>
+          {children}
+          <ChatWidget />
+        </ToastProvider>
       </SocketProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

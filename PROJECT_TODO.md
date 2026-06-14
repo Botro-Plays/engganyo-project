@@ -199,7 +199,33 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
 - ✅ **Crypto 'View Details' button fixed** (2026-06-14)
   - Was: `setExpandedDepositId()` which only expands a history row (not visible when scrolled up)
   - Now: `setTab('deposit')` — switches to deposit tab where the reconstructed deposit detail view is shown
-- **Next:** Phase D crypto backend automation (on-chain verification + auto-credit) or deferred polish (C4–C5)
+- ✅ **C4: Toast notifications for deposit transitions** (2026-06-14)
+  - Created `ToastProvider` context + `ToastContainer` component in web app
+  - Shows bottom-right toasts: success (green), error (red), info (blue), warning (yellow)
+  - Integrated with WebSocket `deposit:updated`: COMPLETED → success toast, CANCELLED → info, FAILED → error, PROCESSING → info
+- ✅ **Phase D — USDT Full Automation** (2026-06-14)
+  - **D1 (existing):** Branded wallet selection UI already done
+  - **D2:** `CryptoVerificationService` — verifies USDT transfers on BSC and Base via `ethers.js`
+    - Queries transaction receipt, parses ERC-20 Transfer event logs
+    - Verifies recipient matches platform wallet, amount within 1% tolerance, ≥12 confirmations
+    - Fallback RPC support (primary → fallback on failure)
+  - **D3:** Cron `@Cron(EVERY_5_MINUTES)` auto-verifies PROCESSING crypto deposits with txHash
+    - Finds all PROCESSING USDT_BEP20/USDT_BASE deposits with `paymentRef`
+    - Calls `CryptoVerificationService.verifyDeposit()` for each
+    - Valid → auto-completes via `completeDeposit()` (credits awarded, socket event emitted)
+    - Permanently invalid (wrong wallet, amount mismatch, tx failed) → marks FAILED with note
+    - Waiting for confirmations → leaves as PROCESSING for next cron run
+  - **D4:** `POST /wallet/deposit/:id/tx-hash` endpoint for manual crypto deposits
+    - User creates deposit without txHash → status=PENDING
+    - After sending USDT, user submits txHash via this endpoint
+    - Atomic `updateMany` guard: only updates if still PENDING
+    - Flips status to PROCESSING, emits `deposit:updated` socket event
+    - Cron picks it up on next run and auto-verifies
+  - **D5:** Frontend txHash submission UI for PENDING crypto deposits
+    - In reconstructed step 3 view, shows wallet address + txHash input + Submit button
+    - Only shown when deposit is PENDING + crypto + no txHash
+    - PROCESSING crypto deposits show "Verifying on-chain" instead of "Admin will review"
+- **Next:** C5 (loading states during PayPal order creation) or Phase F infrastructure
 
 ---
 

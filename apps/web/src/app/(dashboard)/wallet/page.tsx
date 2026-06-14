@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useEvmWallet } from '@/hooks/use-evm-wallet';
 import { useSocketEvent } from '@/hooks/use-socket';
+import { useToast } from '@/components/toast-provider';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
@@ -250,6 +251,7 @@ function clearPersistedForm() {
 // ─── Main Page ────────────────────────────────────────────
 export default function WalletPage() {
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
   const [tab, setTab] = useState<Tab>('history');
   const [txPage, setTxPage] = useState(1);
   const [depPage, setDepPage] = useState(1);
@@ -284,6 +286,18 @@ export default function WalletPage() {
   // Real-time: refresh deposits + wallet on backend events
   useSocketEvent('deposit:updated', (payload: { depositId: string; status: string }) => {
     const isTerminal = payload.status === 'COMPLETED' || payload.status === 'CANCELLED' || payload.status === 'FAILED';
+
+    // Toast notifications for deposit state transitions
+    if (payload.status === 'COMPLETED') {
+      addToast('Deposit completed! Credits have been added to your wallet.', 'success', 6000);
+    } else if (payload.status === 'CANCELLED') {
+      addToast('Deposit cancelled.', 'info', 4000);
+    } else if (payload.status === 'FAILED') {
+      addToast('Deposit failed. Please try again or contact support.', 'error', 6000);
+    } else if (payload.status === 'PROCESSING') {
+      addToast('Deposit is being processed. You will be notified when it completes.', 'info', 4000);
+    }
+
     if (depositResult?.deposit.id === payload.depositId && isTerminal) {
       // Deposit we are actively tracking has finished → clear the form
       resetDeposit();
@@ -380,6 +394,7 @@ export default function WalletPage() {
     const pkg = packages.find((p) => p.usdAmount === pending.package?.usdAmount);
     if (!pkg) return;
 
+    const isCryptoMethod = pending.method === 'USDT_BEP20' || pending.method === 'USDT_BASE';
     const instructions: DepositInstructions = {
       type: pending.method,
       depositId: pending.id,
@@ -388,7 +403,9 @@ export default function WalletPage() {
           ? 'Complete your payment in the PayMongo checkout page. The link is available below.'
           : pending.method === 'PAYPAL'
             ? 'Complete your payment in the PayPal checkout page. The link is available below.'
-            : 'Your crypto deposit is being processed. Admin will review and credit your wallet.',
+            : isCryptoMethod && pending.status === 'PENDING' && !pending.paymentRef
+              ? `Send exactly $${pkg.usdAmount} USDT on ${METHOD_META[pending.method]?.label} to the platform wallet. Submit your TX hash after sending.`
+              : 'Your crypto deposit is being verified on-chain. You will be notified when it completes.',
       ...(pending.paymentRef ? { txHash: pending.paymentRef } : {}),
     };
 
@@ -460,6 +477,21 @@ export default function WalletPage() {
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
     },
     onError: (err) => setDepositError(getApiErrorMessage(err)),
+  });
+
+  const submitTxHashMutation = useMutation({
+    mutationFn: async ({ depositId, txHash }: { depositId: string; txHash: string }) =>
+      (await apiClient.post<ApiResponse<DepositRecord>>(`wallet/deposit/${depositId}/tx-hash`, { txHash })).data.data,
+    onSuccess: (data) => {
+      setDepositResult((prev) => prev ? { ...prev, deposit: data, instructions: { ...prev.instructions, txHash: data.paymentRef ?? undefined } } : null);
+      setDepositError(null);
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+      addToast('Transaction hash submitted. Verification in progress.', 'info', 4000);
+    },
+    onError: (err) => {
+      setDepositError(getApiErrorMessage(err));
+      addToast(getApiErrorMessage(err), 'error', 5000);
+    },
   });
 
   const enabledMethods = depositOptions
@@ -975,7 +1007,11 @@ export default function WalletPage() {
                         <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
                         <div>
                           <p className="text-sm font-semibold text-white">Deposit Submitted</p>
-                          <p className="text-xs text-zinc-400">Admin will review and credit your wallet.</p>
+                          <p className="text-xs text-zinc-400">
+                            {depositResult.deposit.status === 'PROCESSING' && (depositResult.deposit.method === 'USDT_BEP20' || depositResult.deposit.method === 'USDT_BASE')
+                              ? 'Verifying on-chain. You will be notified when it completes.'
+                              : 'Admin will review and credit your wallet.'}
+                          </p>
                         </div>
                       </div>
                       <div className="space-y-2 text-xs">
@@ -994,6 +1030,46 @@ export default function WalletPage() {
                         <div className="px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300/80 leading-relaxed">
                           {depositResult.instructions.message}
                         </div>
+                        {/* PENDING crypto without txHash: show wallet address + txHash input */}
+                        {depositResult.deposit.status === 'PENDING' &&
+                          (depositResult.deposit.method === 'USDT_BEP20' || depositResult.deposit.method === 'USDT_BASE') &&
+                          !depositResult.deposit.paymentRef && (
+                          <div className="space-y-3 mt-2">
+                            {(() => {
+                              const cfg = depositResult.deposit.method === 'USDT_BEP20' ? depositOptions?.usdtBep20 : depositOptions?.usdtBase;
+                              return cfg?.walletAddress ? (
+                                <div>
+                                  <label className="block text-xs text-zinc-500 mb-1.5">Send USDT to this address</label>
+                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-zinc-800/60 border border-surface-border">
+                                    <code className="font-mono text-xs text-white flex-1 truncate">{cfg.walletAddress}</code>
+                                    <CopyButton text={cfg.walletAddress} />
+                                  </div>
+                                </div>
+                              ) : null;
+                            })()}
+                            <div>
+                              <label className="block text-xs text-zinc-500 mb-1.5">Transaction Hash</label>
+                              <input
+                                type="text"
+                                value={manualTxHash}
+                                onChange={(e) => setManualTxHash(e.target.value)}
+                                placeholder="0x..."
+                                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2.5 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                              />
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!manualTxHash.trim()) return;
+                                submitTxHashMutation.mutate({ depositId: depositResult.deposit.id, txHash: manualTxHash.trim() });
+                              }}
+                              disabled={submitTxHashMutation.isPending || !manualTxHash.trim()}
+                              className="flex items-center justify-center gap-2 w-full px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                            >
+                              {submitTxHashMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                              Submit TX Hash
+                            </button>
+                          </div>
+                        )}
                         {fiatCheckoutUrl && (
                           <button
                             onClick={() => window.open(fiatCheckoutUrl, '_blank', 'noopener,noreferrer')}
