@@ -383,33 +383,39 @@ export default function FinancesPage() {
                   </label>
                 </div>
               </div>
-              {editingPkg && (
-                <div>
-                  <button onClick={() => {
-                    if (!editingPkg.isActive) {
-                      const minUsd = stats?.minDepositUsd ?? 1;
-                      const minPhp = stats?.minDepositPhp ?? 50;
-                      const rate   = stats?.usdToPhp ?? 58;
-                      const phpEq  = Math.ceil(editingPkg.usdAmount * rate);
-                      const okUsd  = editingPkg.usdAmount >= minUsd;
-                      const okPhp  = phpEq >= minPhp;
-                      if (!okUsd && !okPhp) {
-                        setNotice({ type: 'error', msg: `Cannot activate: package is below both minimums (USD $${minUsd} and PHP ₱${minPhp}). Increase the amount first.` });
-                        setTimeout(() => setNotice(null), 5000);
-                        return;
-                      }
-                      if (!okUsd && okPhp) {
-                        setNotice({ type: 'success', msg: `Activated. This package is below the USD minimum ($${minUsd}), so only PayMongo (₱${phpEq}) will be available.` });
-                        setTimeout(() => setNotice(null), 5000);
-                      }
-                    }
-                    updatePkgMutation.mutate({ id: editingPkg.id, data: { isActive: !editingPkg.isActive } });
-                  }}
-                    className={`w-full px-4 py-2 rounded-lg text-xs font-medium transition-all border ${editingPkg.isActive ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
-                    {editingPkg.isActive ? 'Deactivate Package' : 'Activate Package'}
-                  </button>
-                </div>
-              )}
+              {editingPkg && (() => {
+                const minUsd = stats?.minDepositUsd ?? 1;
+                const minPhp = stats?.minDepositPhp ?? 50;
+                const rate   = stats?.usdToPhp ?? 58;
+                const phpEq  = Math.ceil(editingPkg.usdAmount * rate);
+                const okUsd  = editingPkg.usdAmount >= minUsd;
+                const okPhp  = phpEq >= minPhp;
+                const canActivate = editingPkg.isActive || okUsd || okPhp;
+                const disabledHint = !editingPkg.isActive && !canActivate
+                  ? `Below minimum: USD $${minUsd} / PHP ₱${minPhp}`
+                  : !editingPkg.isActive && !okUsd && okPhp
+                    ? 'PayMongo only (below USD min)'
+                    : undefined;
+                return (
+                  <div>
+                    <button
+                      disabled={!canActivate}
+                      onClick={() => updatePkgMutation.mutate({ id: editingPkg.id, data: { isActive: !editingPkg.isActive } })}
+                      className={`w-full px-4 py-2 rounded-lg text-xs font-medium transition-all border ${
+                        editingPkg.isActive
+                          ? 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+                          : canActivate
+                            ? 'border-green-500/30 text-green-400 hover:bg-green-500/10'
+                            : 'border-zinc-700 text-zinc-600 cursor-not-allowed'
+                      }`}>
+                      {editingPkg.isActive ? 'Deactivate Package' : 'Activate Package'}
+                    </button>
+                    {disabledHint && (
+                      <p className="text-[10px] text-zinc-600 mt-1.5 text-center">{disabledHint}</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowPkgForm(false)} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
