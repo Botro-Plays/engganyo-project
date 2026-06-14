@@ -550,8 +550,8 @@ export default function WalletPage() {
 
       addToast('Transaction submitted. Waiting for blockchain confirmation...', 'info', 4000);
 
-      // Poll wallet provider for on-chain confirmation, then trigger backend verify
-      const waitResult = await evmWallet.waitForTransaction(hash, 1, 120000);
+      // Poll wallet provider for 12 on-chain confirmations (matches backend MIN_CONFIRMATIONS)
+      const waitResult = await evmWallet.waitForTransaction(hash, 12, 180000);
       if (waitResult.status === 'failed') {
         addToast('Transaction failed on-chain.', 'error', 6000);
         return;
@@ -561,11 +561,32 @@ export default function WalletPage() {
         return;
       }
 
-      // Confirmed on-chain — trigger backend verification immediately
+      // Confirmed on-chain — trigger backend verification, retry if backend RPC lags
       addToast('Transaction confirmed! Verifying deposit...', 'success', 3000);
-      await verifyDepositMutation.mutateAsync({ depositId: result.deposit.id });
-    } catch {
-      // initiate or verify errors are handled by their mutation onError callbacks
+
+      const maxVerifyAttempts = 6;
+      for (let attempt = 1; attempt <= maxVerifyAttempts; attempt++) {
+        const verifyResult = await verifyDepositMutation.mutateAsync({ depositId: result.deposit.id });
+        if (verifyResult.status === 'COMPLETED') {
+          // Toast already shown by onSuccess; deposit completed
+          return;
+        }
+        if (verifyResult.status === 'PROCESSING' && verifyResult.message?.includes('Waiting for confirmations')) {
+          // Backend RPC hasn't caught up yet — wait 15s and retry
+          if (attempt < maxVerifyAttempts) {
+            await new Promise((r) => setTimeout(r, 15000));
+          }
+        } else {
+          // Other error (amount mismatch, wrong recipient, etc.) — stop retrying
+          return;
+        }
+      }
+
+      // Exhausted retries without completion
+      addToast('Deposit is confirmed on-chain but verification is still processing. It will complete automatically shortly.', 'info', 6000);
+    } catch (err) {
+      // Log for debugging; mutation onError callbacks already show UI toasts
+      console.error('[handleEvmSend] error:', err);
     }
   };
 
