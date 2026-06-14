@@ -144,8 +144,13 @@ async function mockSubmitTxHash(page: import('@playwright/test').Page) {
 }
 
 async function waitForPackages(page: import('@playwright/test').Page) {
+  // Wait for package-grid loading skeletons inside #deposit-card to disappear.
+  // The persistent "Live rate" green dot also has animate-pulse, so we scope
+  // to the specific skeleton divs (h-32 bg-zinc-800 rounded-xl animate-pulse).
   await page.waitForFunction(() => {
-    const skeletons = document.querySelectorAll('.animate-pulse');
+    const depositCard = document.getElementById('deposit-card');
+    if (!depositCard) return false;
+    const skeletons = depositCard.querySelectorAll('.h-32.bg-zinc-800.rounded-xl.animate-pulse');
     return skeletons.length === 0;
   }, { timeout: 10_000 });
 }
