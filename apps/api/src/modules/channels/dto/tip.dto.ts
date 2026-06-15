@@ -1,9 +1,10 @@
-import { IsUUID, IsInt, IsOptional, Min, Max } from 'class-validator';
+import { IsInt, IsOptional, Min, Max } from 'class-validator';
+import { IsCuid } from '../../../common/validators/is-cuid.validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SendTipDto {
   @ApiProperty({ description: 'Recipient user ID' })
-  @IsUUID()
+  @IsCuid()
   toUserId!: string;
 
   @ApiProperty({ description: 'Tip amount in credits', minimum: 10, maximum: 10000 })
@@ -14,6 +15,6 @@ export class SendTipDto {
 
   @ApiPropertyOptional({ description: 'Optional message ID this tip is linked to' })
   @IsOptional()
-  @IsUUID()
+  @IsCuid()
   messageId?: string;
 }

@@ -25,7 +25,7 @@ const navItems = [
   { href: '/admin/finances', icon: Banknote, label: 'Finances' },
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/campaigns', icon: Megaphone, label: 'Campaigns' },
-  { href: '/admin/chats', icon: MessageSquare, label: 'Chats' },
+  { href: '/admin/ai-support', icon: MessageSquare, label: 'AI Support' },
   { href: '/admin/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/admin/gamification', icon: Trophy, label: 'Gamification' },
   { href: '/admin/abuse', icon: ShieldAlert, label: 'Abuse' },
