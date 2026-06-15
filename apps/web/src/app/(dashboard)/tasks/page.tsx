@@ -150,7 +150,7 @@ export default function TasksPage() {
   const { user, isAuthenticated } = useAuthStore();
 
   // Refetch when tab becomes visible after background
-  useRefetchOnVisible([['tasks'], ['social-accounts'], ['public-config']]);
+  useRefetchOnVisible([['tasks'], ['social-accounts'], ['public-config'], ['tasks', 'limits']]);
 
   // Real-time: refresh tasks on backend events
   useSocketEvent('task:assigned', () => {
@@ -223,6 +223,28 @@ export default function TasksPage() {
   });
 
   const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
+
+  // ─── Daily task limits ───────────────────────────────────
+  const { data: limitsData } = useQuery({
+    queryKey: ['tasks', 'limits'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<ApiResponse<{
+          dailyLimit: number | null;
+          tasksCompletedToday: number | null;
+          remaining: number | null;
+          bonus: number;
+          trustLevel: string;
+          vipTier: { name: string; displayName: string; level: number; color: string } | null;
+        }>>('tasks/limits');
+        return res.data.data;
+      } catch (err) {
+        console.error('Failed to fetch task limits:', err);
+        return null;
+      }
+    },
+    enabled: !!user && isAuthenticated,
+  });
 
   // ─── Browse tasks ──────────────────────────────────────────
   const { data: browseData, isLoading: browseLoading } = useQuery({
@@ -420,18 +442,36 @@ export default function TasksPage() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 mb-6 p-1 bg-surface-hover rounded-lg w-fit">
-        {(['browse', 'mine'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            {t === 'browse' ? 'Browse Tasks' : 'My Tasks'}
-          </button>
-        ))}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex gap-1 p-1 bg-surface-hover rounded-lg w-fit">
+          {(['browse', 'mine'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              {t === 'browse' ? 'Browse Tasks' : 'My Tasks'}
+            </button>
+          ))}
+        </div>
+        {limitsData && limitsData.dailyLimit !== null && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-zinc-500">Daily limit:</span>
+            <span className={`font-medium ${limitsData.remaining === 0 ? 'text-red-400' : 'text-zinc-300'}`}>
+              {limitsData.tasksCompletedToday ?? 0}/{limitsData.dailyLimit} done
+            </span>
+            {limitsData.remaining !== null && limitsData.remaining > 0 && (
+              <span className="text-green-400">({limitsData.remaining} left)</span>
+            )}
+            {limitsData.bonus > 0 && limitsData.vipTier && (
+              <span className="text-purple-400 flex items-center gap-0.5" style={{ color: limitsData.vipTier.color }}>
+                +{limitsData.bonus} {limitsData.vipTier.displayName}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Assign error banner ── */}

@@ -71,4 +71,11 @@ export class TasksController {
   recheck(@CurrentUser() user: JwtPayload, @Param('campaignId') campaignId: string) {
     return this.tasksService.recheckTask(user.sub, campaignId);
   }
+
+  @Get('limits')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get daily task limits for current user' })
+  getLimits(@CurrentUser() user: JwtPayload) {
+    return this.tasksService.getDailyLimits(user.sub, user.role);
+  }
 }

@@ -755,6 +755,12 @@ export class WalletService {
             } as Prisma.InputJsonValue,
           },
         });
+        this.eventsService.emitToUser(deposit.userId, 'deposit:updated', {
+          depositId,
+          status: DepositStatus.PROCESSING,
+          confirmations: result.confirmations,
+          minConfirmations,
+        });
       }
       return {
         status: 'PROCESSING',
@@ -781,6 +787,14 @@ export class WalletService {
           } as Prisma.InputJsonValue,
         },
       });
+      if (result.confirmations !== undefined) {
+        this.eventsService.emitToUser(deposit.userId, 'deposit:updated', {
+          depositId,
+          status: DepositStatus.PROCESSING,
+          confirmations: result.confirmations,
+          minConfirmations: 12,
+        });
+      }
     }
     return {
       status: 'PROCESSING',
@@ -849,6 +863,12 @@ export class WalletService {
                   minConfirmations: 12,
                 } as Prisma.InputJsonValue,
               },
+            });
+            this.eventsService.emitToUser(deposit.userId, 'deposit:updated', {
+              depositId: deposit.id,
+              status: DepositStatus.PROCESSING,
+              confirmations: result.confirmations,
+              minConfirmations: 12,
             });
           }
           // If the error indicates the tx is permanently invalid (not just waiting),

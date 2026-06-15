@@ -671,4 +671,56 @@ export class TasksService {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
+
+  async getDailyLimits(userId: string, userRole: string) {
+    const isAdminUser = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MODERATOR';
+    if (isAdminUser) {
+      return { dailyLimit: null, tasksCompletedToday: null, bonus: 0, vipTier: null };
+    }
+
+    const trustRecord = await this.prisma.trustScore.findUnique({
+      where: { userId },
+      select: { level: true },
+    });
+    const trustLevel = trustRecord?.level ?? TrustLevel.NEW;
+    const DAILY_LIMITS: Partial<Record<TrustLevel, number>> = {
+      [TrustLevel.NEW]: 5,
+      [TrustLevel.LOW]: 20,
+    };
+    let dailyLimit = DAILY_LIMITS[trustLevel];
+    let bonus = 0;
+    const vipStatus = await this.gamificationService.getVipStatus(userId);
+    if (dailyLimit !== undefined) {
+      bonus = vipStatus.perks.taskLimitBonus ?? 0;
+      if (bonus > 0) {
+        dailyLimit = dailyLimit + bonus;
+      }
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const tasksCompletedToday = await this.prisma.taskCompletion.count({
+      where: {
+        userId,
+        assignedAt: { gte: todayStart },
+        status: { not: CompletionStatus.EXPIRED },
+      },
+    });
+
+    return {
+      dailyLimit,
+      tasksCompletedToday,
+      remaining: dailyLimit !== undefined ? Math.max(0, dailyLimit - tasksCompletedToday) : null,
+      bonus,
+      trustLevel,
+      vipTier: vipStatus.currentTier
+        ? {
+            name: vipStatus.currentTier.name,
+            displayName: vipStatus.currentTier.displayName,
+            level: vipStatus.currentTier.level,
+            color: ((vipStatus.currentTier.perks as Record<string, unknown>)?.color as string) ?? '#888888',
+          }
+        : null,
+    };
+  }
 }
