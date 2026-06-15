@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { connectChannelSocket, disconnectChannelSocket } from '@/lib/channel-socket';
-import { useToast } from '@/components/toast-provider';
 import { formatRelativeTime } from '@/lib/utils';
 import {
   Send,
@@ -67,7 +66,7 @@ interface ApiResponse<T> {
 
 export default function ChatPage() {
   const { user, isAuthenticated, accessToken } = useAuthStore();
-  const { addToast } = useToast();
+  const [chatToasts, setChatToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' }>>([]); 
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
@@ -87,6 +86,12 @@ export default function ChatPage() {
   const [reportDescription, setReportDescription] = useState('');
   const [mobileShowList, setMobileShowList] = useState(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const addChatToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    const id = Math.random().toString(36).slice(2);
+    setChatToasts((prev) => [...prev.slice(-2), { id, message, type }]);
+    setTimeout(() => setChatToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
+  }, []);
 
   // ─── Fetch channels ────────────────────────────────────────
   const { data: channels, isLoading: channelsLoading } = useQuery({
@@ -145,12 +150,12 @@ export default function ChatPage() {
     };
 
     const onTipReceived = (tip: { fromUserId: string; amount: number }) => {
-      addToast(`You received ${tip.amount} credits!`, 'success');
+      addChatToast(`You received ${tip.amount} credits!`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     };
 
     const onRainReceived = (rain: { fromUsername: string; amount: number }) => {
-      addToast(`🌧️ You caught a rain! ${rain.fromUsername} sent you ${rain.amount} credits!`, 'success');
+      addChatToast(`🌧️ You caught a rain! ${rain.fromUsername} sent you ${rain.amount} credits!`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     };
 
@@ -172,7 +177,7 @@ export default function ChatPage() {
       socket.off('rain:received', onRainReceived);
       disconnectChannelSocket();
     };
-  }, [accessToken, isAuthenticated, queryClient, addToast]);
+  }, [accessToken, isAuthenticated, queryClient, addChatToast]);
 
   // Auto-join active channel via socket
   useEffect(() => {
@@ -199,7 +204,7 @@ export default function ChatPage() {
       });
       setInput('');
     },
-    onError: (err) => addToast(getApiErrorMessage(err), 'error'),
+    onError: (err) => addChatToast(getApiErrorMessage(err), 'error'),
   });
 
   // ─── Join channel mutation ────────────────────────────────
@@ -211,7 +216,7 @@ export default function ChatPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['channels'] });
     },
-    onError: (err) => addToast(getApiErrorMessage(err), 'error'),
+    onError: (err) => addChatToast(getApiErrorMessage(err), 'error'),
   });
 
   // ─── Send tip mutation ────────────────────────────────────
@@ -221,11 +226,11 @@ export default function ChatPage() {
       return res.data.data;
     },
     onSuccess: () => {
-      addToast('Tip sent successfully!', 'success');
+      addChatToast('Tip sent successfully!', 'success');
       setTipModal(null);
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     },
-    onError: (err) => addToast(getApiErrorMessage(err), 'error'),
+    onError: (err) => addChatToast(getApiErrorMessage(err), 'error'),
   });
 
   // ─── Report mutation ───────────────────────────────────────
@@ -239,11 +244,11 @@ export default function ChatPage() {
       return res.data.data;
     },
     onSuccess: () => {
-      addToast('Report submitted. Thank you for helping keep the community safe.', 'success');
+      addChatToast('Report submitted. Thank you for helping keep the community safe.', 'success');
       setReportModal(null);
       setReportDescription('');
     },
-    onError: (err) => addToast(getApiErrorMessage(err), 'error'),
+    onError: (err) => addChatToast(getApiErrorMessage(err), 'error'),
   });
 
   // ─── Handlers ──────────────────────────────────────────────
@@ -251,7 +256,7 @@ export default function ChatPage() {
   const handleSend = useCallback(() => {
     if (!activeChannelId || !input.trim()) return;
     if (!activeChannel?.isMember) {
-      addToast('Join the channel to send messages', 'error');
+      addChatToast('Join the channel to send messages', 'error');
       return;
     }
     sendMessageMutation.mutate({ channelId: activeChannelId, content: input.trim() });
@@ -259,7 +264,7 @@ export default function ChatPage() {
     // Emit typing stop
     const socket = connectChannelSocket(accessToken ?? '');
     socket.emit('chat:typing', { channelId: activeChannelId, isTyping: false });
-  }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addToast]);
+  }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addChatToast]);
 
   const handleInputChange = async (value: string) => {
     setInput(value);
@@ -503,7 +508,30 @@ export default function ChatPage() {
             </div>
 
             {/* Input */}
-            <div className="px-4 py-3 border-t border-white/5">
+            <div className="px-4 pt-2 border-t border-white/5">
+              {/* In-page toasts above input */}
+              {chatToasts.length > 0 && (
+                <div className="mb-2 space-y-1.5">
+                  {chatToasts.map((t) => (
+                    <div
+                      key={t.id}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                        t.type === 'error'
+                          ? 'bg-red-500/15 border border-red-500/30 text-red-300'
+                          : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                      }`}
+                    >
+                      <span className="flex-1 leading-snug">{t.message}</span>
+                      <button
+                        onClick={() => setChatToasts((prev) => prev.filter((x) => x.id !== t.id))}
+                        className="shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!activeChannel.isMember ? (
                 <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
                   <AlertTriangle className="w-4 h-4" />
@@ -517,7 +545,7 @@ export default function ChatPage() {
                   </button>
                 </div>
               ) : (
-                <div className="relative flex gap-2">
+                <div className="relative flex gap-2 pb-3">
                   <div className="flex-1 relative">
                     <input
                       ref={inputRef}
