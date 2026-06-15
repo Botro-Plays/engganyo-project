@@ -402,6 +402,49 @@
 
 ---
 
+## Phase 10.6 — Real-time User Chat + Credits Tipping ✅
+
+> Room-based real-time chat with VIP perks, rate limiting, profanity filtering, and credits tipping restricted to VIP users with alt-account detection.
+
+**Priority**: 🟡 MEDIUM — Community engagement and VIP monetization
+**Dependencies**: Phase 10 (Production Hardening), WalletModule, GamificationModule, AntiAbuseModule
+**Date**: 2026-06-15
+**Status**: COMPLETE
+
+**Backend**
+- [✅] `Channel`, `ChannelMember`, `ChannelMessage` Prisma models
+- [✅] `ChannelType` enum: PUBLIC, VIP, PRIVATE, ADMIN
+- [✅] `ChannelsController` — REST endpoints for channels, messages, tips
+- [✅] `ChannelsGateway` — Socket.io `/channels` namespace with JWT auth
+- [✅] `ChannelsService` — business logic, moderation, tipping
+- [✅] Rate limits: 10 msg/min, 5 tips/min, 3 joins/hour via `UserRateLimitGuard`
+- [✅] Profanity filter via `bad-words` library
+- [✅] Duplicate message detection (30s window via Redis)
+- [✅] VIP gating: VIP-only channels, tipping restricted to VIPs
+- [✅] Alt-account detection: `AntiAbuseService.areUsersRelated()` — IP overlap in 30-day window
+- [✅] `SPEND_TIP` / `EARN_TIP` `TransactionType` values
+- [✅] `TIP_RECEIVED` `NotificationType` value
+- [✅] Default channels auto-seeded on startup: `#general` (PUBLIC), `#vip-lounge` (VIP)
+- [✅] 10 unit tests for `ChannelsService`
+
+**Frontend**
+- [✅] `/chat` page with channel list sidebar and message feed
+- [✅] Socket.io integration via `/channels` namespace
+- [✅] Typing indicators
+- [✅] VIP badge rendering in message bubbles
+- [✅] Tip button on messages (VIP-only)
+- [✅] Tip modal with amount selection (10–10,000 credits)
+- [✅] Mobile-responsive layout with collapsible channel list
+- [✅] Navigation link in dashboard sidebar and mobile nav
+
+**VIP Perks Extended**
+- [✅] `canTip` — gate tipping ability
+- [✅] `chatBadge` — custom badge in chat
+- [✅] `chatRateMultiplier` — higher message rate limits
+- [✅] `canCreateRooms` — private channel creation (Gold+)
+
+---
+
 ## Phase 11 — Social Verification Engine 🟠
 
 > Auto-resolve task completions via official platform APIs (like like4like.com)

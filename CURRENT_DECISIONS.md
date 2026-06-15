@@ -1704,3 +1704,28 @@ This document should be updated when:
 - Less type-safe at compile time (NestJS resolves at runtime)
 **Alternative Considered**:
 - Move cross-service call to controller instead — rejected because `cancelDeposit` is a domain operation that belongs in the service layer; controller-level orchestration is acceptable but doesn't eliminate the need for `forwardRef` in other places (e.g. `PayPalService.captureOrder()` calls `walletService.completeDeposit()`))
+
+### ADR-028: Real-time User Chat + Credits Tipping
+**Status**: Implemented (2026-06-15)
+**Date**: 2026-06-15
+**Context**: Need community engagement features — real-time chat with moderation, plus VIP-only credits tipping as a monetization/engagement mechanic.
+**Decision**: Build `ChannelsModule` (separate from existing AI `ChatModule`) with room-based messaging, Socket.io `/channels` namespace, VIP perks integration, and tipping via existing `WalletService`.
+**Rationale**:
+- Existing `ChatModule` is AI support (Groq) — user-to-user chat is a separate domain
+- Reuse existing infrastructure: Socket.io gateway pattern, Redis rate limiting, `WalletService.credit/debit`, `AntiAbuseService` IP tracking, `GamificationService` VIP tiers
+- `bad-words` library is lightweight (~2KB, no API key) — sufficient for profanity filtering
+- Separate `/channels` namespace keeps concerns isolated from `/notifications`
+**Implementation**:
+- Prisma: `Channel`, `ChannelMember`, `ChannelMessage` models + `ChannelType` enum
+- Backend: `ChannelsController` (REST), `ChannelsGateway` (Socket.io), `ChannelsService` (business logic)
+- Rate limits: 10 msg/min base, 5 tips/min, 3 joins/hour — all via existing `UserRateLimitGuard`
+- VIP perks extended: `canTip`, `chatBadge`, `chatRateMultiplier`, `canCreateRooms`
+- Alt-account detection: `AntiAbuseService.areUsersRelated()` checks IP overlap in 30-day window
+- Frontend: `/chat` page with channel list, message feed, tip modal, typing indicators
+- Default channels auto-seeded: `#general` (PUBLIC), `#vip-lounge` (VIP)
+**Tradeoffs**:
+- Alt-account detection is IP-heuristic based — false positives possible on shared WiFi
+- No message edit functionality yet (only soft-delete)
+- No file uploads in chat (keeps scope focused)
+**Alternative Considered**:
+- Extend existing `ChatModule` — rejected because AI support chat and user-to-user chat have fundamentally different persistence, moderation, and permission models

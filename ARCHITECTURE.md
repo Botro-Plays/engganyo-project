@@ -79,7 +79,7 @@ Before implementing major architectural changes:
              │                                 │
 ┌────────────▼──────────────┐   ┌──────────────▼──────────────────┐
 │     NestJS REST API        │   │      WebSocket Gateway           │
-│   (Modular Architecture)   │   │   (Notifications · Real-time)    │
+│   (Modular Architecture)   │   │   (notifications + channels ns)  │
 │                            │   └─────────────────────────────────┘
 │  ┌──────────────────────┐  │
 │  │  Auth Module         │  │
@@ -93,7 +93,8 @@ Before implementing major architectural changes:
 │  │  Analytics Module    │  │
 │  │  Admin Module        │  │
 │  │  Forum Module        │  │
-│  │  Chat Module         │  │
+│  │  Chat Module (AI)    │  │
+│  │  Channels Module     │  │
 │  │  Social Auth Module  │  │
 │  └──────────────────────┘  │
 └────────────┬───────────────┘
