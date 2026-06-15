@@ -42,6 +42,8 @@ export interface SafeUser {
   status: string;
   xp: number;
   level: number;
+  vp: number;
+  vipTier: { name: string; level: number; displayName: string; perks: unknown } | null;
   creditBalance: number;
   reputationScore: number;
   currentStreak: number;
@@ -445,6 +447,7 @@ export class AuthService {
   async getMe(userId: string): Promise<SafeUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
+      include: { vipTier: { select: { name: true, level: true, displayName: true, perks: true } } },
     });
     if (!user) throw new NotFoundException('User not found');
     return this.sanitizeUser(user);
@@ -657,6 +660,9 @@ export class AuthService {
     status: string;
     xp: number;
     level: number;
+    vp: number;
+    vipTierId: string | null;
+    vipTier?: { name: string; level: number; displayName: string; perks: unknown } | null;
     creditBalance: number;
     reputationScore: number;
     currentStreak: number;
@@ -677,6 +683,8 @@ export class AuthService {
       status: user.status,
       xp: user.xp,
       level: user.level,
+      vp: user.vp,
+      vipTier: user.vipTier ?? (user.vipTierId ? { name: '', level: 0, displayName: '', perks: {} } : null),
       creditBalance: user.creditBalance,
       reputationScore: user.reputationScore,
       currentStreak: user.currentStreak,

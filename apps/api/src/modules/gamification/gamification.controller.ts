@@ -72,6 +72,13 @@ export class GamificationController {
     return this.gamificationService.getMissionLeaderboard(Number(page), 50);
   }
 
+  @Get('vip')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get current VIP tier, next tier, and progress' })
+  getVipStatus(@CurrentUser() user: JwtPayload) {
+    return this.gamificationService.getVipStatus(user.sub);
+  }
+
   // ─── Admin: Achievements ─────────────────────────────────
 
   @Get('admin/achievements')

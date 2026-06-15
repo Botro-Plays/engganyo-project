@@ -253,6 +253,11 @@ model User {
   level         Int   @default(1)
   reputationScore Float @default(0) @map("reputation_score")
 
+  // VIP Points & Tier (denormalized for quick reads)
+  vp        Int     @default(0)
+  vipTierId String? @map("vip_tier_id")
+  vipTier   VipTier? @relation(fields: [vipTierId], references: [id])
+
   // Wallet balance (denormalized from wallet for quick reads)
   creditBalance Int @default(0) @map("credit_balance")
 
@@ -322,6 +327,8 @@ model User {
   @@index([role])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([vipTierId])
+  @@index([vp])
   @@map("users")
 }
 
@@ -776,6 +783,39 @@ model XpEvent {
   @@index([userId])
   @@index([createdAt])
   @@map("xp_events")
+}
+
+model VpEvent {
+  id          String @id @default(cuid())
+  userId      String @map("user_id")
+  amount      Int
+  source      String // 'task_completion' | 'deposit_completed' | 'daily_login' | 'level_up' | 'campaign_create'
+  referenceId String? @map("reference_id")
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("vp_events")
+}
+
+// =============================================================
+// VIP TIERS
+// =============================================================
+
+model VipTier {
+  id            String @id @default(cuid())
+  name          String @unique
+  level         Int    @unique
+  displayName   String @map("display_name")
+  description   String?
+  requirementVp Int    @map("requirement_vp")
+  perks         Json   // { taskLimitBonus: number, feeDiscountPercent: number, color: string, icon: string }
+  users         User[]
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("vip_tiers")
 }
 
 // =============================================================

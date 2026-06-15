@@ -16,6 +16,7 @@ import { EventsService } from '../events/events.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { PayPalService } from '../paypal/paypal.service';
 import { CryptoVerificationService } from './crypto-verification.service';
+import { GamificationService, VP_REWARDS } from '../gamification/gamification.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -54,6 +55,8 @@ export class WalletService {
     @Inject(forwardRef(() => PayPalService))
     private readonly payPalService: PayPalService,
     private readonly cryptoVerification: CryptoVerificationService,
+    @Inject(forwardRef(() => GamificationService))
+    private readonly gamificationService: GamificationService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -614,6 +617,16 @@ export class WalletService {
 
     if (notification) {
       this.eventsService.emitToUser(deposit.userId, 'notification:new', notification);
+    }
+
+    // Award VP for deposit completion (outside transaction for resilience)
+    try {
+      const vpAmount = Math.round((deposit.amountFiat ?? 0) * VP_REWARDS.DEPOSIT_PER_DOLLAR);
+      if (vpAmount > 0) {
+        await this.gamificationService.awardVp(deposit.userId, vpAmount, 'deposit_completed', deposit.id, `Deposit ${deposit.method}`);
+      }
+    } catch (vpErr) {
+      this.logger.warn(`Failed to award VP for deposit ${depositId}: ${(vpErr as Error).message}`);
     }
 
     return deposit;

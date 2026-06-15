@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Upload,
   X,
+  Award,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -51,6 +52,8 @@ interface FullProfile {
   status: string;
   xp: number;
   level: number;
+  vp: number;
+  vipTier: { name: string; displayName: string; level: number; perks: { color: string; icon: string } } | null;
   creditBalance: number;
   reputationScore: number;
   currentStreak: number;
@@ -425,6 +428,44 @@ export default function ProfilePage() {
           <p className="text-lg font-bold text-white truncate">{displayName}</p>
           <p className="text-zinc-400 text-sm truncate">@{profile?.username ?? user?.username}</p>
           <p className="text-zinc-500 text-xs truncate">{profile?.email ?? user?.email}</p>
+
+          {/* VIP Tier Badge */}
+          {(profile?.vipTier ?? user?.vipTier) ? (
+            <div className="flex items-center gap-2 mt-2">
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold"
+                style={{
+                  backgroundColor: `${(profile?.vipTier ?? user?.vipTier)?.perks.color}22`,
+                  color: (profile?.vipTier ?? user?.vipTier)?.perks.color,
+                  border: `1px solid ${(profile?.vipTier ?? user?.vipTier)?.perks.color}44`,
+                }}
+              >
+                <Award className="w-3 h-3" />
+                {(profile?.vipTier ?? user?.vipTier)?.displayName}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-700/50 text-zinc-400 border border-zinc-600/50">
+                <Award className="w-3 h-3" />
+                No VIP Tier — earn VP to unlock
+              </span>
+            </div>
+          )}
+
+          {/* VP Progress */}
+          <div className="mt-2">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-zinc-400">VIP Points</span>
+              <span className="text-zinc-300 font-medium">{profile?.vp ?? user?.vp ?? 0} VP</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-zinc-700/50 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all"
+                style={{ width: `${Math.min((profile?.vp ?? user?.vp ?? 0) / 100 * 100, 100)}%` }}
+              />
+            </div>
+          </div>
 
           <Link
             href={`/users/${profile?.username ?? user?.username}`}

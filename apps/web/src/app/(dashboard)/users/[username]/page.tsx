@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   User, MapPin, Globe, Flag, ArrowLeft, ExternalLink,
-  CheckCircle2, Zap, Star, BarChart2, Shield,
+  CheckCircle2, Zap, Star, BarChart2, Shield, Award,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
@@ -27,6 +27,8 @@ interface PublicProfile {
   role: string;
   xp: number;
   level: number;
+  vp: number;
+  vipTier: { name: string; displayName: string; level: number; perks: { color: string; icon: string } } | null;
   reputationScore: number;
   currentStreak: number;
   longestStreak: number;
@@ -182,6 +184,19 @@ export default function UserProfilePage() {
               {data.role !== 'USER' && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   {data.role.replace('_', ' ')}
+                </span>
+              )}
+              {data.vipTier && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                  style={{
+                    backgroundColor: `${data.vipTier.perks.color}22`,
+                    color: data.vipTier.perks.color,
+                    border: `1px solid ${data.vipTier.perks.color}44`,
+                  }}
+                >
+                  <Award className="w-3 h-3" />
+                  {data.vipTier.displayName}
                 </span>
               )}
             </div>

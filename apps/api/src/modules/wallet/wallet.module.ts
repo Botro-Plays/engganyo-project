@@ -8,9 +8,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
 import { PayMongoModule } from '../paymongo/paymongo.module';
 import { PayPalModule } from '../paypal/paypal.module';
+import { GamificationModule } from '../gamification/gamification.module';
 
 @Module({
-  imports: [NotificationsModule, EventsModule, forwardRef(() => PayMongoModule), forwardRef(() => PayPalModule)],
+  imports: [NotificationsModule, EventsModule, forwardRef(() => PayMongoModule), forwardRef(() => PayPalModule), forwardRef(() => GamificationModule)],
   controllers: [WalletController],
   providers: [WalletService, CurrencyService, CryptoVerificationService],
   exports: [WalletService, CurrencyService, CryptoVerificationService],

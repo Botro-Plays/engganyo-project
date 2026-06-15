@@ -10,6 +10,7 @@ import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PayMongoService } from '../paymongo/paymongo.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -96,6 +97,11 @@ describe('AdminService', () => {
     archiveLink: jest.fn().mockResolvedValue(true),
   };
 
+  const mockGamificationService = {
+    awardVp: jest.fn().mockResolvedValue({ newVp: 0, tierUp: false, newTier: null }),
+    getVipStatus: jest.fn().mockResolvedValue({ currentTier: null, nextTier: null, vp: 0, progressPercent: 0, perks: { taskLimitBonus: 0, feeDiscountPercent: 0 } }),
+  };
+
   const mockWeeklyDigestService = {
     getUserDigestData: jest.fn().mockResolvedValue({
       username: 'Admin',
@@ -128,6 +134,7 @@ describe('AdminService', () => {
         { provide: EmailService, useValue: mockEmailService },
         { provide: WeeklyDigestService, useValue: mockWeeklyDigestService },
         { provide: PayMongoService, useValue: mockPayMongoService },
+        { provide: GamificationService, useValue: mockGamificationService },
       ],
     }).compile();
 

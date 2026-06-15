@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+export interface VipTierInfo {
+  name: string;
+  level: number;
+  displayName: string;
+  perks: {
+    taskLimitBonus: number;
+    feeDiscountPercent: number;
+    color: string;
+    icon: string;
+  };
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -12,6 +24,8 @@ export interface AuthUser {
   creditBalance: number;
   xp: number;
   level: number;
+  vp: number;
+  vipTier: VipTierInfo | null;
   currentStreak: number;
   reputationScore: number;
   referralCode: string | null;

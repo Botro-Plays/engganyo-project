@@ -59,6 +59,9 @@ interface GamStats {
   dailyRewardAvailable: boolean;
   totalTasks: number;
   totalCampaigns: number;
+  vp: number;
+  vipTier: { name: string; displayName: string; level: number; perks: { color: string; icon: string } } | null;
+  nextTierProgress: number;
 }
 
 const RANK_STYLES = ['text-yellow-400', 'text-zinc-300', 'text-amber-600'];

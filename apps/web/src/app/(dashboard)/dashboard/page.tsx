@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2 } from 'lucide-react';
+import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -18,7 +18,7 @@ interface MyStats {
   tasks: { totalVerified: number; last7Days: number; last30Days: number };
   credits: { balance: number; lifetimeEarned: number; lifetimeSpent: number };
   campaigns: { total: number; active: number };
-  gamification: { xp: number; level: number; currentStreak: number; longestStreak: number; reputationScore: number; leaderboardRank: number };
+  gamification: { xp: number; level: number; currentStreak: number; longestStreak: number; reputationScore: number; leaderboardRank: number; vp: number; vipTier: { name: string; displayName: string; level: number; perks: { color: string; icon: string } } | null };
   dailyActivity: { day: string; count: number }[];
 }
 
@@ -32,6 +32,9 @@ interface GamStats {
   dailyRewardAvailable: boolean;
   totalTasks: number;
   totalCampaigns: number;
+  vp: number;
+  vipTier: { name: string; displayName: string; level: number; perks: { color: string; icon: string } } | null;
+  nextTierProgress: number;
 }
 
 export default function DashboardPage() {
@@ -160,6 +163,13 @@ function DashboardPageInner() {
       sub: gamStats ? `${gamStats.xpToNext} XP to next` : `${(stats?.gamification.xp ?? user?.xp ?? 0).toLocaleString()} XP`,
       icon: Trophy, color: 'text-purple-400',
       progress: levelInfo?.progress ?? 0,
+    },
+    {
+      label: 'VIP Points',
+      value: (stats?.gamification.vp ?? user?.vp ?? 0).toLocaleString(),
+      sub: stats?.gamification.vipTier?.displayName ?? 'No tier yet',
+      icon: Award,
+      color: stats?.gamification.vipTier?.perks.color ?? '#888888',
     },
   ];
 

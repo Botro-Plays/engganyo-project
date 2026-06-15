@@ -5,6 +5,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { CompletionStatus, CampaignStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { GamificationService } from '../gamification/gamification.service';
 
 export const ANALYTICS_QUEUE = 'analytics';
 export const ANALYTICS_JOBS = {
@@ -18,6 +19,7 @@ export class AnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(ANALYTICS_QUEUE) private readonly queue: Queue,
+    private readonly gamificationService: GamificationService,
   ) {}
 
   // ─── Platform overview (admin) ──────────────────────────────────────────────
@@ -159,6 +161,7 @@ export class AnalyticsService {
       activeCampaigns,
       streak,
       rank,
+      vipStatus,
       recentCompletions,
     ] = await Promise.all([
       this.prisma.taskCompletion.count({ where: { userId, status: CompletionStatus.VERIFIED } }),
@@ -178,6 +181,8 @@ export class AnalyticsService {
       this.prisma.user.count({
         where: { xp: { gt: (await this.prisma.user.findUnique({ where: { id: userId }, select: { xp: true } }))?.xp ?? 0 } },
       }).then((ahead) => ahead + 1),
+      // VIP status
+      this.gamificationService.getVipStatus(userId),
       // Last 30 daily completions for a sparkline
       this.prisma.$queryRaw<{ day: Date; count: bigint }[]>`
         SELECT DATE_TRUNC('day', verified_at) AS day, COUNT(*) AS count
@@ -212,6 +217,8 @@ export class AnalyticsService {
         longestStreak: streak?.longestStreak ?? 0,
         reputationScore: streak?.reputationScore ?? 0,
         leaderboardRank: rank,
+        vp: vipStatus?.vp ?? 0,
+        vipTier: vipStatus?.currentTier ?? null,
       },
       dailyActivity: recentCompletions.map((r) => ({
         day: r.day,

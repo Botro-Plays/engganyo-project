@@ -34,6 +34,9 @@ interface GamStats {
   dailyRewardAvailable: boolean;
   totalTasks: number;
   totalCampaigns: number;
+  vp: number;
+  vipTier: { name: string; displayName: string; level: number; perks: { color: string; icon: string } } | null;
+  nextTierProgress: number;
 }
 
 export default function MissionsPage() {

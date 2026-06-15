@@ -1,5 +1,5 @@
-import { Injectable, OnModuleInit, Logger, BadRequestException } from '@nestjs/common';
-import { AchievementCategory, MissionType, TransactionType, UserRole } from '@prisma/client';
+import { Injectable, OnModuleInit, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -51,6 +51,28 @@ const DEFAULT_MISSIONS = [
   { name: 'Campaign Builder',description: 'Create a campaign today.',    type: MissionType.CREATE_CAMPAIGN,  requirement: 1,   creditReward: 100, xpReward: 100, sortOrder: 4 },
 ];
 
+// ─── VP per action ────────────────────────────────────────────
+export const VP_REWARDS = {
+  TASK_COMPLETION: 1,
+  CAMPAIGN_CREATE: 5,
+  DEPOSIT_PER_DOLLAR: 10,
+  DAILY_LOGIN_BASE: 1,
+  DAILY_LOGIN_STREAK_7: 10,
+  DAILY_LOGIN_STREAK_14: 25,
+  DAILY_LOGIN_STREAK_30: 50,
+  LEVEL_UP_MULTIPLIER: 20,
+};
+
+// ─── Seed data ────────────────────────────────────────────────
+const DEFAULT_VIP_TIERS = [
+  { name: 'BRONZE',   level: 1, displayName: 'Bronze Member',   requirementVp: 100,   perks: { taskLimitBonus: 5,  feeDiscountPercent: 5,  color: '#CD7F32', icon: 'award' } },
+  { name: 'SILVER',   level: 2, displayName: 'Silver Member',   requirementVp: 500,   perks: { taskLimitBonus: 15, feeDiscountPercent: 10, color: '#C0C0C0', icon: 'medal' } },
+  { name: 'GOLD',     level: 3, displayName: 'Gold Member',     requirementVp: 2000,  perks: { taskLimitBonus: 0,  feeDiscountPercent: 15, color: '#FFD700', icon: 'crown' } },
+  { name: 'PLATINUM', level: 4, displayName: 'Platinum Member', requirementVp: 5000,  perks: { taskLimitBonus: 0,  feeDiscountPercent: 20, color: '#E5E4E2', icon: 'gem' } },
+  { name: 'DIAMOND',  level: 5, displayName: 'Diamond Member',  requirementVp: 10000, perks: { taskLimitBonus: 0,  feeDiscountPercent: 25, color: '#B9F2FF', icon: 'diamond' } },
+  { name: 'LEGEND',   level: 6, displayName: 'Legend',          requirementVp: 25000, perks: { taskLimitBonus: 0,  feeDiscountPercent: 30, color: '#FF4500', icon: 'star' } },
+];
+
 @Injectable()
 export class GamificationService implements OnModuleInit {
   private readonly logger = new Logger(GamificationService.name);
@@ -58,6 +80,7 @@ export class GamificationService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
@@ -67,6 +90,7 @@ export class GamificationService implements OnModuleInit {
     // Seeding enabled - migrations confirmed deployed
     await this.seedAchievements();
     await this.seedMissions();
+    await this.seedVipTiers();
   }
 
   // ─── Seeds ────────────────────────────────────────────────
@@ -91,6 +115,17 @@ export class GamificationService implements OnModuleInit {
       });
     }
     this.logger.log(`Daily missions seeded (${DEFAULT_MISSIONS.length})`);
+  }
+
+  private async seedVipTiers() {
+    for (const t of DEFAULT_VIP_TIERS) {
+      await this.prisma.vipTier.upsert({
+        where: { name: t.name },
+        create: t,
+        update: { displayName: t.displayName, requirementVp: t.requirementVp, perks: t.perks as unknown as Prisma.InputJsonValue },
+      });
+    }
+    this.logger.log(`VIP tiers seeded (${DEFAULT_VIP_TIERS.length})`);
   }
 
   // ─── Award XP (used internally by other services) ─────────
@@ -130,6 +165,10 @@ export class GamificationService implements OnModuleInit {
         { previousLevel: user.level, newLevel },
       ).catch(() => null);
       this.eventsService.emitToUser(userId, 'level:up', { newLevel, previousLevel: user.level });
+
+      // Award bonus VP for leveling up
+      const vpReward = VP_REWARDS.LEVEL_UP_MULTIPLIER * newLevel;
+      await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`);
     }
 
     return { newXp, newLevel, leveledUp };
@@ -143,6 +182,8 @@ export class GamificationService implements OnModuleInit {
       select: {
         xp: true,
         level: true,
+        vp: true,
+        vipTierId: true,
         currentStreak: true,
         longestStreak: true,
         lastActiveAt: true,
@@ -159,6 +200,8 @@ export class GamificationService implements OnModuleInit {
     const xpNeeded = nextLevelXp - currentLevelXp;
     const progress = xpNeeded > 0 ? Math.min((xpIntoLevel / xpNeeded) * 100, 100) : 100;
 
+    const vipStatus = await this.getVipStatus(userId);
+
     return {
       xp: user.xp,
       level: user.level,
@@ -170,6 +213,148 @@ export class GamificationService implements OnModuleInit {
       dailyRewardAvailable: this.isDailyRewardAvailable(user.lastDailyRewardAt),
       totalTasks: user._count.completions,
       totalCampaigns: user._count.campaigns,
+      vp: user.vp,
+      vipTier: vipStatus.currentTier,
+      nextTierProgress: vipStatus.progressPercent,
+    };
+  }
+
+  // ─── Award VP (VIP Points) ────────────────────────────────
+
+  async awardVp(
+    userId: string,
+    amount: number,
+    source: string,
+    referenceId?: string,
+    description?: string,
+  ) {
+    if (amount <= 0) return { newVp: 0, tierUp: false, newTier: null };
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { vp: true, vipTierId: true },
+    });
+    if (!user) return { newVp: 0, tierUp: false, newTier: null };
+
+    const newVp = user.vp + amount;
+    const oldTier = user.vipTierId
+      ? await this.prisma.vipTier.findUnique({ where: { id: user.vipTierId } })
+      : null;
+    const newTier = await this.getUserVipTier(userId, newVp);
+
+    const tierUp = newTier !== null && newTier.id !== user.vipTierId;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { vp: newVp, ...(tierUp ? { vipTierId: newTier.id } : {}) },
+    });
+
+    await this.prisma.vpEvent.create({
+      data: { userId, amount, source, referenceId, description },
+    });
+
+    if (tierUp) {
+      void this.notificationsService.createNotification(
+        userId,
+        'LEVEL_UP',
+        `${newTier.displayName} Reached!`,
+        `You've unlocked ${newTier.displayName} status. New perks active!`,
+        { previousTier: oldTier?.name ?? null, newTier: newTier.name, newTierLevel: newTier.level },
+      ).catch(() => null);
+      this.eventsService.emitToUser(userId, 'vip:tier-up', {
+        newTier: newTier.name,
+        newTierDisplay: newTier.displayName,
+        previousTier: oldTier?.name ?? null,
+      });
+    }
+
+    return { newVp, tierUp, newTier };
+  }
+
+  async getUserVipTier(userId: string, currentVp?: number) {
+    const vp = currentVp ?? (await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { vp: true },
+    }))?.vp ?? 0;
+
+    const tiers = await this.prisma.vipTier.findMany({
+      where: { requirementVp: { lte: vp } },
+      orderBy: { level: 'desc' },
+      take: 1,
+    });
+
+    return tiers[0] ?? null;
+  }
+
+  async getVipStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { vp: true, vipTierId: true },
+    });
+    if (!user) {
+      return {
+        currentTier: null,
+        nextTier: null,
+        vp: 0,
+        progressPercent: 0,
+        perks: { taskLimitBonus: 0, feeDiscountPercent: 0 },
+      };
+    }
+
+    const currentTier = user.vipTierId
+      ? await this.prisma.vipTier.findUnique({ where: { id: user.vipTierId } })
+      : null;
+
+    const nextTier = await this.prisma.vipTier.findFirst({
+      where: { requirementVp: { gt: user.vp } },
+      orderBy: { level: 'asc' },
+    });
+
+    let progressPercent = 0;
+    if (currentTier && nextTier) {
+      const range = nextTier.requirementVp - currentTier.requirementVp;
+      const earned = user.vp - currentTier.requirementVp;
+      progressPercent = range > 0 ? Math.min(Math.round((earned / range) * 100), 100) : 100;
+    } else if (!currentTier && nextTier) {
+      progressPercent = Math.min(Math.round((user.vp / nextTier.requirementVp) * 100), 100);
+    } else if (currentTier && !nextTier) {
+      progressPercent = 100;
+    }
+
+    const perks = (currentTier?.perks as Record<string, number> | null) ?? { taskLimitBonus: 0, feeDiscountPercent: 0 };
+
+    return {
+      currentTier: currentTier
+        ? {
+            name: currentTier.name,
+            level: currentTier.level,
+            displayName: currentTier.displayName,
+            perks: {
+              taskLimitBonus: perks.taskLimitBonus ?? 0,
+              feeDiscountPercent: perks.feeDiscountPercent ?? 0,
+              color: (currentTier.perks as Record<string, string>)?.color ?? '#888888',
+              icon: (currentTier.perks as Record<string, string>)?.icon ?? 'award',
+            },
+          }
+        : null,
+      nextTier: nextTier
+        ? {
+            name: nextTier.name,
+            level: nextTier.level,
+            displayName: nextTier.displayName,
+            requirementVp: nextTier.requirementVp,
+            perks: {
+              taskLimitBonus: ((nextTier.perks as Record<string, number>)?.taskLimitBonus) ?? 0,
+              feeDiscountPercent: ((nextTier.perks as Record<string, number>)?.feeDiscountPercent) ?? 0,
+            },
+          }
+        : null,
+      vp: user.vp,
+      progressPercent,
+      perks: {
+        taskLimitBonus: perks.taskLimitBonus ?? 0,
+        feeDiscountPercent: perks.feeDiscountPercent ?? 0,
+      },
     };
   }
 
@@ -446,6 +631,14 @@ export class GamificationService implements OnModuleInit {
     });
 
     await this.awardXp(userId, xpReward, 'daily_login');
+
+    // Award VP based on streak milestone
+    let vpReward = VP_REWARDS.DAILY_LOGIN_BASE;
+    if (newStreak >= 30) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_30;
+    else if (newStreak >= 14) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_14;
+    else if (newStreak >= 7) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_7;
+    await this.awardVp(userId, vpReward, 'daily_login', undefined, `Day ${newStreak} streak`);
+
     this.eventsService.emitToUser(userId, 'streak:updated', { newStreak, streakBroken });
 
     // Check streak achievements

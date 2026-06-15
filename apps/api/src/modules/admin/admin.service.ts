@@ -10,6 +10,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
+import { GamificationService, VP_REWARDS } from '../gamification/gamification.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
@@ -32,6 +33,7 @@ export class AdminService {
     private readonly walletService: WalletService,
     private readonly authService: AuthService,
     private readonly eventsService: EventsService,
+    private readonly gamificationService: GamificationService,
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
     private readonly weeklyDigestService: WeeklyDigestService,
@@ -620,6 +622,9 @@ export class AdminService {
         referenceId: completion.campaign.id,
         referenceType: 'campaign',
       });
+
+      // Award VP for task completion (admin approval path)
+      await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', completion.campaign.id);
 
       await this.prisma.auditLog.create({
         data: {

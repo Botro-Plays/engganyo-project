@@ -11,7 +11,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
-import { GamificationService, XP_REWARDS } from '../gamification/gamification.service';
+import { GamificationService, XP_REWARDS, VP_REWARDS } from '../gamification/gamification.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -138,8 +138,14 @@ export class TasksService {
         [TrustLevel.NEW]: 5,
         [TrustLevel.LOW]: 20,
       };
-      const dailyLimit = DAILY_LIMITS[trustLevel];
+      let dailyLimit = DAILY_LIMITS[trustLevel];
       if (dailyLimit !== undefined) {
+        // Apply VIP tier task limit bonus
+        const vipStatus = await this.gamificationService.getVipStatus(userId);
+        const bonus = vipStatus.perks.taskLimitBonus ?? 0;
+        if (bonus > 0) {
+          dailyLimit = dailyLimit + bonus;
+        }
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayCount = await this.prisma.taskCompletion.count({
@@ -151,7 +157,7 @@ export class TasksService {
         });
         if (todayCount >= dailyLimit) {
           throw new BadRequestException(
-            `Daily task limit reached (${dailyLimit} tasks/day for trust level ${trustLevel}). Complete more tasks and link social accounts to increase your trust score.`,
+            `Daily task limit reached (${dailyLimit} tasks/day for trust level ${trustLevel}${bonus > 0 ? ` + VIP bonus ${bonus}` : ''}). Complete more tasks and link social accounts to increase your trust score.`,
           );
         }
       }
@@ -464,6 +470,7 @@ export class TasksService {
       });
 
       await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+      await this.gamificationService.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
       await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
       await this.gamificationService.checkAchievements(userId);
       void this.antiAbuseService.queueRecalculate(userId);
@@ -603,6 +610,7 @@ export class TasksService {
       });
 
       await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+      await this.gamificationService.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
       await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
       await this.gamificationService.checkAchievements(userId);
       void this.antiAbuseService.queueRecalculate(userId);

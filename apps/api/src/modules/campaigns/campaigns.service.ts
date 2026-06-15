@@ -9,6 +9,7 @@ import { CampaignStatus, CompletionStatus, TaskType, TransactionType, TrustLevel
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
+import { GamificationService, VP_REWARDS } from '../gamification/gamification.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -59,6 +60,7 @@ export class CampaignsService {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly walletService: WalletService,
+    private readonly gamificationService: GamificationService,
     private readonly antiAbuseService: AntiAbuseService,
     private readonly socialAuthService: SocialAuthService,
     private readonly notificationsService: NotificationsService,
@@ -121,6 +123,19 @@ export class CampaignsService {
           rate = tier.rate;
           feeTier = tier.label;
           break; // tiers ordered highest-first, first match is the best
+        }
+      }
+    }
+
+    // Apply VIP tier fee discount (lowest rate wins)
+    if (userId) {
+      const vipStatus = await this.gamificationService.getVipStatus(userId);
+      const vipDiscount = vipStatus.perks.feeDiscountPercent ?? 0;
+      if (vipDiscount > 0) {
+        const vipRate = Math.max(rate * (1 - vipDiscount / 100), 0.01); // minimum 1% floor
+        if (vipRate < rate) {
+          rate = vipRate;
+          feeTier = vipStatus.currentTier?.name ?? feeTier;
         }
       }
     }
@@ -219,6 +234,9 @@ export class CampaignsService {
 
       return created;
     });
+
+    // Award VP for campaign creation
+    await this.gamificationService.awardVp(userId, VP_REWARDS.CAMPAIGN_CREATE, 'campaign_create', campaign.id);
 
     return campaign;
   }
@@ -373,6 +391,8 @@ export class CampaignsService {
         referenceId: campaignId,
         referenceType: 'campaign',
       });
+
+      await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
 
       void this.notificationsService.createNotification(
         completion.userId,

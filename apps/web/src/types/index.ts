@@ -22,6 +22,18 @@ export interface PaginatedResponse<T> {
 export type UserRole = 'USER' | 'CREATOR' | 'MODERATOR' | 'ADMIN' | 'SUPER_ADMIN';
 export type UserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'BANNED' | 'DEACTIVATED';
 
+export interface VipTierInfo {
+  name: string;
+  level: number;
+  displayName: string;
+  perks: {
+    taskLimitBonus: number;
+    feeDiscountPercent: number;
+    color: string;
+    icon: string;
+  };
+}
+
 export interface User {
   id: string;
   email: string;
@@ -33,6 +45,8 @@ export interface User {
   status: UserStatus;
   xp: number;
   level: number;
+  vp: number;
+  vipTier: VipTierInfo | null;
   creditBalance: number;
   reputationScore: number;
   currentStreak: number;

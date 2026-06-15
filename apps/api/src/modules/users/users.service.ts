@@ -24,6 +24,8 @@ const USER_BASE_SELECT = {
   status: true,
   xp: true,
   level: true,
+  vp: true,
+  vipTierId: true,
   creditBalance: true,
   reputationScore: true,
   currentStreak: true,
@@ -140,6 +142,7 @@ export class UsersService {
         trustScore: {
           select: { score: true, level: true },
         },
+        vipTier: { select: { name: true, displayName: true, level: true, perks: true } },
       },
     });
 
