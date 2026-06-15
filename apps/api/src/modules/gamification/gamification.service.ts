@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
-import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole } from '@prisma/client';
+import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -159,7 +159,7 @@ export class GamificationService implements OnModuleInit {
     if (leveledUp) {
       void this.notificationsService.createNotification(
         userId,
-        'LEVEL_UP',
+        NotificationType.LEVEL_UP,
         `Level ${newLevel} reached!`,
         `You advanced to level ${newLevel}. Keep it up!`,
         { previousLevel: user.level, newLevel },
@@ -169,6 +169,14 @@ export class GamificationService implements OnModuleInit {
       // Award bonus VP for leveling up
       const vpReward = VP_REWARDS.LEVEL_UP_MULTIPLIER * newLevel;
       await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`);
+
+      void this.notificationsService.createNotification(
+        userId,
+        NotificationType.VIP_POINTS_EARNED,
+        'Level-Up Bonus',
+        `You earned ${vpReward} VIP Points for reaching level ${newLevel}!`,
+        { source: 'level_up', level: newLevel, vpEarned: vpReward },
+      ).catch(() => null);
     }
 
     return { newXp, newLevel, leveledUp };
@@ -558,6 +566,49 @@ export class GamificationService implements OnModuleInit {
     }));
   }
 
+  async getVipLeaderboard(page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+    const roleFilter = await this.getLeaderboardRoleFilter();
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        vp: { gt: 0 },
+        ...(roleFilter ?? {}),
+      },
+      orderBy: [
+        { vipTier: { level: 'desc' } },
+        { vp: 'desc' },
+      ],
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatarUrl: true,
+        level: true,
+        currentStreak: true,
+        vp: true,
+        vipTier: { select: { name: true, displayName: true, level: true, perks: true } },
+      },
+    });
+
+    return users.map((u, i) => ({
+      rank: skip + i + 1,
+      ...u,
+      vipTier: u.vipTier
+        ? {
+            name: u.vipTier.name,
+            displayName: u.vipTier.displayName,
+            level: u.vipTier.level,
+            color: (u.vipTier.perks as Record<string, string>)?.color ?? '#888888',
+            icon: (u.vipTier.perks as Record<string, string>)?.icon ?? 'award',
+          }
+        : null,
+    }));
+  }
+
   // ─── Streak info ───────────────────────────────────────────
 
   async getStreak(userId: string) {
@@ -638,6 +689,14 @@ export class GamificationService implements OnModuleInit {
     else if (newStreak >= 14) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_14;
     else if (newStreak >= 7) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_7;
     await this.awardVp(userId, vpReward, 'daily_login', undefined, `Day ${newStreak} streak`);
+
+    void this.notificationsService.createNotification(
+      userId,
+      NotificationType.VIP_POINTS_EARNED,
+      'Daily Reward Claimed',
+      `You claimed your daily reward and earned ${vpReward} VIP Points!`,
+      { source: 'daily_login', streak: newStreak, vpEarned: vpReward },
+    ).catch(() => null);
 
     this.eventsService.emitToUser(userId, 'streak:updated', { newStreak, streakBroken });
 

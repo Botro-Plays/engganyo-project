@@ -143,6 +143,7 @@ type CreateFormData = z.infer<typeof createSchema>;
 
 export default function CampaignsPage() {
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuthStore();
 
   // Refetch when tab becomes visible after background
   useRefetchOnVisible([['campaigns'], ['campaign-submissions'], ['public-config']]);
@@ -422,6 +423,9 @@ export default function CampaignsPage() {
                     {publicConfig?.feePromoEnabled && new Date(publicConfig.feePromoUntil) > new Date() && (
                       <span className="ml-1 text-[10px] text-green-400">PROMO</span>
                     )}
+                    {authUser?.vipTier && authUser.vipTier.perks.feeDiscountPercent > 0 && (
+                      <span className="ml-1 text-[10px] text-purple-400">VIP -{authUser.vipTier.perks.feeDiscountPercent}%</span>
+                    )}
                   </span>
                   <span className="text-sm font-medium text-zinc-300">{formatCredits(feeAmount)} {creditLabel(feeAmount)}</span>
                 </div>
@@ -431,6 +435,12 @@ export default function CampaignsPage() {
                 </div>
                 {totalCost > 0 && totalCost < minBudget && (
                   <p className="text-xs text-red-400">Minimum budget is {minBudget} credits.</p>
+                )}
+                {authUser?.vipTier && (
+                  <div className="flex items-center gap-1.5 text-xs text-purple-400 bg-purple-500/5 border border-purple-500/10 rounded-md px-2 py-1">
+                    <span style={{ color: authUser.vipTier.perks.color }}>{authUser.vipTier.displayName}</span>
+                    <span>— Fee discount: {authUser.vipTier.perks.feeDiscountPercent}% · Task limit bonus: +{authUser.vipTier.perks.taskLimitBonus}</span>
+                  </div>
                 )}
               </div>
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Trophy, Flame, Zap, Medal, Target, BarChart3,
+  Trophy, Flame, Zap, Medal, Target, BarChart3, Crown,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
@@ -49,6 +49,24 @@ interface MissionLeaderboardEntry {
   missionCount: number;
 }
 
+interface VipLeaderboardEntry {
+  rank: number;
+  id: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  level: number;
+  currentStreak: number;
+  vp: number;
+  vipTier: {
+    name: string;
+    displayName: string;
+    level: number;
+    color: string;
+    icon: string;
+  } | null;
+}
+
 interface GamStats {
   xp: number;
   level: number;
@@ -66,7 +84,7 @@ interface GamStats {
 
 const RANK_STYLES = ['text-yellow-400', 'text-zinc-300', 'text-amber-600'];
 
-type MainTab = 'level' | 'achievements' | 'missions';
+type MainTab = 'level' | 'achievements' | 'missions' | 'vip';
 type TimeTab = 'alltime' | 'weekly';
 
 export default function LeaderboardPage() {
@@ -74,7 +92,7 @@ export default function LeaderboardPage() {
   const { user: authUser } = useAuthStore();
 
   // Refetch when tab becomes visible after background
-  useRefetchOnVisible([['gamification', 'stats'], ['gamification', 'leaderboard'], ['gamification', 'leaderboard', 'achievements'], ['gamification', 'leaderboard', 'missions']]);
+  useRefetchOnVisible([['gamification', 'stats'], ['gamification', 'leaderboard'], ['gamification', 'leaderboard', 'achievements'], ['gamification', 'leaderboard', 'missions'], ['gamification', 'leaderboard', 'vip']]);
 
   // Real-time: refresh leaderboard on backend events
   useSocketEvent('level:up', () => {
@@ -127,6 +145,17 @@ export default function LeaderboardPage() {
       return res.data.data;
     },
     enabled: mainTab === 'missions',
+  });
+
+  const { data: vipLbData, isLoading: vipLbLoading } = useQuery({
+    queryKey: ['gamification', 'leaderboard', 'vip'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<VipLeaderboardEntry[]>>(
+        'gamification/leaderboard/vip',
+      );
+      return res.data.data;
+    },
+    enabled: mainTab === 'vip',
   });
 
   const levelInfo = stats ? getLevelProgress(stats.xp) : null;
@@ -207,6 +236,7 @@ export default function LeaderboardPage() {
           { key: 'level' as MainTab, label: 'Level', icon: BarChart3 },
           { key: 'achievements' as MainTab, label: 'Achievements', icon: Medal },
           { key: 'missions' as MainTab, label: 'Missions', icon: Target },
+          { key: 'vip' as MainTab, label: 'VIP Points', icon: Crown },
         ]).map((t) => (
           <button
             key={t.key}
@@ -295,6 +325,60 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             renderRankList(missionLbData, (e) => `${e.missionCount} missions`)
+          )}
+        </>
+      )}
+
+      {/* ── VIP Points leaderboard ── */}
+      {mainTab === 'vip' && (
+        <>
+          {vipLbLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-14" />
+              ))}
+            </div>
+          ) : !vipLbData?.length ? (
+            <div className="card-glass rounded-2xl p-12 text-center">
+              <p className="text-zinc-500 text-sm">No data yet. Earn VIP Points to appear here!</p>
+            </div>
+          ) : (
+            <div className="card-glass rounded-xl divide-y divide-surface-border">
+              {vipLbData.map((entry) => {
+                const isSelf = entry.id === authUser?.id;
+                const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-zinc-500';
+                return (
+                  <div
+                    key={entry.id}
+                    className={`flex items-center gap-4 px-5 py-3.5 ${isSelf ? 'bg-brand-500/5' : 'hover:bg-surface-hover'} transition-colors`}
+                  >
+                    <div className={`w-7 text-center font-bold text-sm ${rankColor}`}>
+                      {entry.rank <= 3 ? <Trophy className="w-4 h-4 mx-auto" /> : entry.rank}
+                    </div>
+                    <UserLink user={entry} showAvatar size="md" />
+                    <div className="flex-1 min-w-0">
+                      {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
+                      <p className="text-xs text-zinc-500">Lvl {entry.level}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-purple-300 flex items-center gap-1">
+                        {formatCredits(entry.vp)} VP
+                      </p>
+                      {entry.vipTier && (
+                        <p className="text-xs flex items-center justify-end gap-0.5" style={{ color: entry.vipTier.color }}>
+                          <Crown className="w-3 h-3" />{entry.vipTier.displayName}
+                        </p>
+                      )}
+                      {entry.currentStreak > 0 && (
+                        <p className="text-xs text-orange-400 flex items-center justify-end gap-0.5">
+                          <Flame className="w-3 h-3" />{entry.currentStreak}d
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </>
       )}

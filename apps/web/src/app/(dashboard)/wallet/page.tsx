@@ -80,6 +80,7 @@ interface DepositRecord {
   completedAt: string | null;
   createdAt: string;
   package: { usdAmount: number; label: string | null } | null;
+  vpAwarded?: number;
 }
 
 interface DepositInstructions {
@@ -826,6 +827,11 @@ export default function WalletPage() {
                   <div className="mt-1 text-xs text-zinc-500">
                     Send {pending.gatewayData.amount as number} USDT on {pending.gatewayData.network as string} to{' '}
                     <code className="text-zinc-300 font-mono">{(pending.gatewayData.walletAddress as string)?.slice(0, 12)}…</code>
+                    {typeof pending.gatewayData.confirmations === 'number' && (
+                      <span className="block mt-0.5 text-orange-400">
+                        {pending.gatewayData.confirmations as number}/{(pending.gatewayData.minConfirmations as number) ?? 12} Confirmations
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -1438,6 +1444,14 @@ export default function WalletPage() {
                             {dep.status === 'COMPLETED' && dep.creditsAwarded > 0 && (
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
                             )}
+                            {dep.status === 'COMPLETED' && (dep.vpAwarded ?? 0) > 0 && (
+                              <p className="text-xs text-purple-400 mt-0.5 font-medium">+{dep.vpAwarded} VIP Points</p>
+                            )}
+                            {(dep.method === 'USDT_BEP20' || dep.method === 'USDT_BASE') && dep.status === 'PROCESSING' && typeof dep.gatewayData?.confirmations === 'number' && (
+                              <p className="text-xs text-orange-400 mt-0.5 font-medium">
+                                {dep.gatewayData.confirmations as number}/{(dep.gatewayData.minConfirmations as number) ?? 12} Confirmations
+                              </p>
+                            )}
                             {/* Continue/Resume links for pending deposits */}
                             {dep.status === 'PENDING' && (
                               <>
@@ -1515,6 +1529,9 @@ export default function WalletPage() {
                             <DetailItem label="Credits Awarded" value={dep.creditsAwarded.toLocaleString()} />
                             {dep.bonusCredits > 0 && (
                               <DetailItem label="Bonus Credits" value={dep.bonusCredits.toLocaleString()} />
+                            )}
+                            {dep.vpAwarded !== undefined && dep.vpAwarded > 0 && (
+                              <DetailItem label="VIP Points Awarded" value={dep.vpAwarded.toLocaleString()} />
                             )}
                             <DetailItem label="Created At" value={new Date(dep.createdAt).toLocaleString()} />
                             {dep.completedAt && (

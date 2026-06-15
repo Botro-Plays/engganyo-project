@@ -72,6 +72,14 @@ export class GamificationController {
     return this.gamificationService.getMissionLeaderboard(Number(page), 50);
   }
 
+  @Get('leaderboard/vip')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get public VIP leaderboard ordered by tier then points' })
+  @ApiQuery({ name: 'page', type: Number, required: false })
+  getVipLeaderboard(@Query('page') page = 1) {
+    return this.gamificationService.getVipLeaderboard(Number(page), 50);
+  }
+
   @Get('vip')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get current VIP tier, next tier, and progress' })

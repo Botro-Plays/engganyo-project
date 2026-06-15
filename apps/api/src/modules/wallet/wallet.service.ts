@@ -435,7 +435,23 @@ export class WalletService {
       }),
       this.prisma.deposit.count({ where: { userId } }),
     ]);
-    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
+
+    // Enrich completed deposits with VP awarded
+    const depositIds = items.filter((d) => d.status === 'COMPLETED').map((d) => d.id);
+    const vpEvents = depositIds.length > 0
+      ? await this.prisma.vpEvent.findMany({
+          where: { userId, source: 'deposit_completed', referenceId: { in: depositIds } },
+          select: { referenceId: true, amount: true },
+        })
+      : [];
+    const vpMap = new Map(vpEvents.map((v) => [v.referenceId, v.amount]));
+
+    const enrichedItems = items.map((d) => ({
+      ...d,
+      vpAwarded: d.status === 'COMPLETED' ? (vpMap.get(d.id) ?? 0) : 0,
+    }));
+
+    return { items: enrichedItems, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
   }
 
   async getDepositForUser(userId: string, depositId: string) {
@@ -593,13 +609,15 @@ export class WalletService {
         data: { creditBalance: balanceAfter },
       });
 
+      const vpAmount = Math.round((existing.amountFiat ?? 0) * VP_REWARDS.DEPOSIT_PER_DOLLAR);
+      const vpText = vpAmount > 0 ? ` (+${vpAmount} VIP Points)` : '';
       const newNotification = await tx.notification.create({
         data: {
           userId: existing.userId,
           type: NotificationType.CREDIT_EARNED,
           title: 'Deposit Approved',
-          body: `Your ${existing.method} deposit of ${existing.currency} ${existing.amountFiat} has been approved. ${existing.creditsToAward.toLocaleString()} credits added to your wallet.`,
-          data: { depositId, credits: existing.creditsToAward },
+          body: `Your ${existing.method} deposit of ${existing.currency} ${existing.amountFiat} has been approved. ${existing.creditsToAward.toLocaleString()} credits added to your wallet.${vpText}`,
+          data: { depositId, credits: existing.creditsToAward, vpAwarded: vpAmount },
         },
       });
 
@@ -721,25 +739,56 @@ export class WalletService {
       return { status: 'COMPLETED', depositId, txHash: deposit.paymentRef, message: 'Deposit verified and completed' };
     }
 
-    // If still waiting for confirmations, tell the user to wait
+    // If still waiting for confirmations, persist them to gatewayData and tell the user to wait
     if (result.error?.includes('Waiting for confirmations')) {
+      const minConfirmations = 12;
+      if (result.confirmations !== undefined) {
+        await this.prisma.deposit.update({
+          where: { id: depositId },
+          data: {
+            gatewayData: {
+              ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+                ? (deposit.gatewayData as Prisma.JsonObject)
+                : {}),
+              confirmations: result.confirmations,
+              minConfirmations,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
       return {
         status: 'PROCESSING',
         depositId,
         txHash: deposit.paymentRef,
         message: result.error,
         confirmations: result.confirmations,
-        minConfirmations: result.confirmations !== undefined ? 12 : undefined,
+        minConfirmations: result.confirmations !== undefined ? minConfirmations : undefined,
       };
     }
 
-    // For any other failure, return the error without marking FAILED
+    // For any other failure, persist error details and return without marking FAILED
     // (only the cron job should mark deposits as FAILED to avoid race conditions)
+    if (result.confirmations !== undefined || result.error) {
+      await this.prisma.deposit.update({
+        where: { id: depositId },
+        data: {
+          gatewayData: {
+            ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+              ? (deposit.gatewayData as Prisma.JsonObject)
+              : {}),
+            ...(result.confirmations !== undefined && { confirmations: result.confirmations }),
+            ...(result.error && { lastError: result.error }),
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
     return {
       status: 'PROCESSING',
       depositId,
       txHash: deposit.paymentRef,
       message: result.error ?? 'Verification failed',
+      confirmations: result.confirmations,
+      minConfirmations: result.confirmations !== undefined ? 12 : undefined,
     };
   }
 
@@ -787,6 +836,21 @@ export class WalletService {
           await this.completeDeposit(deposit.id, { paymentRef: deposit.paymentRef! });
         } else {
           this.logger.warn(`Crypto deposit ${deposit.id} verification failed: ${result.error}`);
+          // Persist confirmation count so UI can show X/12 progress
+          if (result.confirmations !== undefined) {
+            await this.prisma.deposit.update({
+              where: { id: deposit.id },
+              data: {
+                gatewayData: {
+                  ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+                    ? (deposit.gatewayData as Prisma.JsonObject)
+                    : {}),
+                  confirmations: result.confirmations,
+                  minConfirmations: 12,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
           // If the error indicates the tx is permanently invalid (not just waiting),
           // we could mark it as FAILED. For now, leave as PROCESSING for admin review.
           if (result.error?.includes('Transaction failed on-chain') ||

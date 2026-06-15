@@ -5,7 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel } from '@prisma/client';
+import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -477,10 +477,10 @@ export class TasksService {
 
       void this.notificationsService.createNotification(
         userId,
-        'TASK_COMPLETED',
+        NotificationType.TASK_COMPLETED,
         'Task Verified',
-        `Your task was auto-verified. You earned ${completion.campaign.creditPerTask} credits.`,
-        { campaignId, creditsEarned: completion.campaign.creditPerTask },
+        `Your task was auto-verified. You earned ${completion.campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
+        { campaignId, creditsEarned: completion.campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
       ).catch(() => null);
 
       // Clear browse caches for all users since slot counts changed

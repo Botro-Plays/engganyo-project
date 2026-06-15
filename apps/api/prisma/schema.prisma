@@ -169,6 +169,7 @@ enum NotificationType {
   ACCOUNT_WARNING
   FORUM_MENTION
   WELCOME
+  VIP_POINTS_EARNED
 }
 
 enum ReportReason {

@@ -626,6 +626,14 @@ export class AdminService {
       // Award VP for task completion (admin approval path)
       await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', completion.campaign.id);
 
+      void this.notificationsService.createNotification(
+        completion.userId,
+        NotificationType.TASK_COMPLETED,
+        'Task Approved',
+        `Your task submission was approved by admin. You earned ${completion.campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
+        { campaignId: completion.campaign.id, completionId, creditsEarned: completion.campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
+      ).catch(() => null);
+
       await this.prisma.auditLog.create({
         data: {
           userId: adminId,

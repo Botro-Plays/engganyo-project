@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { CampaignStatus, CompletionStatus, TaskType, TransactionType, TrustLevel } from '@prisma/client';
+import { CampaignStatus, CompletionStatus, TaskType, TransactionType, TrustLevel, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -238,6 +238,14 @@ export class CampaignsService {
     // Award VP for campaign creation
     await this.gamificationService.awardVp(userId, VP_REWARDS.CAMPAIGN_CREATE, 'campaign_create', campaign.id);
 
+    void this.notificationsService.createNotification(
+      userId,
+      NotificationType.VIP_POINTS_EARNED,
+      'Campaign Created',
+      `You earned ${VP_REWARDS.CAMPAIGN_CREATE} VIP Points for creating a campaign!`,
+      { source: 'campaign_create', campaignId: campaign.id, vpEarned: VP_REWARDS.CAMPAIGN_CREATE },
+    ).catch(() => null);
+
     return campaign;
   }
 
@@ -396,10 +404,10 @@ export class CampaignsService {
 
       void this.notificationsService.createNotification(
         completion.userId,
-        'TASK_COMPLETED',
+        NotificationType.TASK_COMPLETED,
         'Task Approved',
-        `Your task submission was approved. You earned ${campaign.creditPerTask} credits.`,
-        { campaignId, completionId, creditsEarned: campaign.creditPerTask },
+        `Your task submission was approved. You earned ${campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
+        { campaignId, completionId, creditsEarned: campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
       ).catch(() => null);
 
       if (willBeFull) {
