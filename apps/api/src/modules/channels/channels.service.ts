@@ -133,7 +133,7 @@ export class ChannelsService implements OnModuleInit {
   }
 
   async joinChannel(userId: string, channelId: string, role?: UserRole) {
-    await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.join);
+    await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.join, role);
 
     const channel = await this.prisma.channel.findUnique({
       where: { id: channelId },
@@ -289,7 +289,7 @@ export class ChannelsService implements OnModuleInit {
   }
 
   async sendMessage(userId: string, channelId: string, content: string, role?: UserRole) {
-    await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.message);
+    await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.message, role);
 
     // Check mute status
     const muteStatus = await this.isUserMuted(userId);
@@ -301,7 +301,7 @@ export class ChannelsService implements OnModuleInit {
 
     // Handle /rain command
     if (trimmed.startsWith('/rain ')) {
-      await this.enforceRateLimit(userId, { limit: 1, ttl: 300, scope: 'chat_rain' });
+      await this.enforceRateLimit(userId, { limit: 1, ttl: 300, scope: 'chat_rain' }, role);
       return this.handleRainCommand(userId, channelId, trimmed, role);
     }
 
@@ -542,7 +542,7 @@ export class ChannelsService implements OnModuleInit {
   }
 
   async sendTip(fromUserId: string, toUserId: string, amount: number, messageId?: string, role?: UserRole) {
-    await this.enforceRateLimit(fromUserId, CHAT_RATE_LIMITS.tip);
+    await this.enforceRateLimit(fromUserId, CHAT_RATE_LIMITS.tip, role);
 
     const validation = await this.validateTipEligibility(fromUserId, toUserId, amount, role);
     if (!validation.eligible) {
@@ -605,9 +605,11 @@ export class ChannelsService implements OnModuleInit {
   //  HELPERS
   // ═══════════════════════════════════════════════════════════
 
-  private async enforceRateLimit(userId: string, opts: { limit: number; ttl: number; scope: string }) {
+  private async enforceRateLimit(userId: string, opts: { limit: number; ttl: number; scope: string }, role?: UserRole) {
+    if (this.isAdminOrSuperAdmin(role)) return;
     const key = `ratelimit:user:${userId}:${opts.scope}`;
-    const count = await this.redis.incrWithExpiry(key, opts.ttl);
+    const effectiveTtl = role === UserRole.MODERATOR ? Math.ceil(opts.ttl / 2) : opts.ttl;
+    const count = await this.redis.incrWithExpiry(key, effectiveTtl);
     if (count > opts.limit) {
       const retryAfter = await this.redis.ttl(key);
       throw new BadRequestException(

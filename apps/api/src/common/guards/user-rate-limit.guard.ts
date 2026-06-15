@@ -40,12 +40,20 @@ export class UserRateLimitGuard implements CanActivate {
 
     if (!opts) return true;
 
-    const req = context.switchToHttp().getRequest<Request & { user?: { sub?: string } }>();
+    const req = context.switchToHttp().getRequest<Request & { user?: { sub?: string; role?: string } }>();
+    const role = req.user?.role;
+
+    // ADMIN and SUPER_ADMIN are exempt from all rate limits
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN') return true;
+
     const userId = req.user?.sub ?? req.ip ?? 'anonymous';
     const scope = opts.scope ?? context.getHandler().name;
     const key = `ratelimit:user:${userId}:${scope}`;
 
-    const count = await this.redis.incrWithExpiry(key, opts.ttl);
+    // MODERATOR gets half the cooldown window
+    const effectiveTtl = role === 'MODERATOR' ? Math.ceil(opts.ttl / 2) : opts.ttl;
+
+    const count = await this.redis.incrWithExpiry(key, effectiveTtl);
 
     if (count > opts.limit) {
       const retryAfter = await this.redis.ttl(key);
