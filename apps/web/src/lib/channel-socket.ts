@@ -24,6 +24,11 @@ export function connectChannelSocket(token: string): Socket {
     timeout: 20000,
   });
 
+  channelSocket.on('connect_error', (err) => {
+    // eslint-disable-next-line no-console
+    console.error('[channel-socket] connect_error:', err.message);
+  });
+
   return channelSocket;
 }
 

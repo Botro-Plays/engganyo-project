@@ -4,6 +4,9 @@ import {
   SubscribeMessage,
   MessageBody,
   ConnectedSocket,
+  OnGatewayInit,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Logger, UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
@@ -30,7 +33,9 @@ function extractToken(client: Socket): string | null {
     credentials: true,
   },
 })
-export class ChannelsGateway {
+export class ChannelsGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(ChannelsGateway.name);
 
   @WebSocketServer()
@@ -42,10 +47,15 @@ export class ChannelsGateway {
     private readonly channelsService: ChannelsService,
   ) {}
 
+  afterInit(server: Server) {
+    this.logger.log('ChannelsGateway initialized');
+  }
+
   async handleConnection(client: Socket) {
     try {
       const token = extractToken(client);
       if (!token) {
+        this.logger.warn('Channel socket rejected: no token');
         client.disconnect(true);
         return;
       }
@@ -54,12 +64,14 @@ export class ChannelsGateway {
       });
       const userId = payload.sub as string;
       if (!userId) {
+        this.logger.warn('Channel socket rejected: no userId in token');
         client.disconnect(true);
         return;
       }
       client.data.userId = userId;
       this.logger.debug(`Channel socket connected: ${client.id} for user ${userId}`);
-    } catch {
+    } catch (err) {
+      this.logger.warn(`Channel socket rejected: ${(err as Error).message}`);
       client.disconnect(true);
     }
   }
