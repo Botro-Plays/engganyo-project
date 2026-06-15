@@ -637,13 +637,12 @@ export class ChannelsService implements OnModuleInit {
     const maxTippable = Math.floor(balance * 0.25);
 
     const key = `tip_window:${userId}`;
-    const client = this.redis.getClient();
 
     // Prune old entries outside the 48h window
-    await client.zremrangebyscore(key, 0, cutoff);
+    await this.redis.zremrangebyscore(key, 0, cutoff);
 
     // Sum all tip amounts within the window
-    const entries = await client.zrangebyscore(key, cutoff, '+inf');
+    const entries = await this.redis.zrangebyscore(key, cutoff, '+inf');
     let totalTipped = 0;
     for (const entry of entries) {
       const amountStr = entry.split(':').pop();
@@ -658,10 +657,9 @@ export class ChannelsService implements OnModuleInit {
     const key = `tip_window:${userId}`;
     const now = Date.now();
     const uniqueId = `${now}_${Math.random().toString(36).substring(2, 8)}`;
-    const client = this.redis.getClient();
-    await client.zadd(key, now, `${uniqueId}:${amount}`);
+    await this.redis.zadd(key, now, `${uniqueId}:${amount}`);
     // Auto-expire the entire key after 48h + 1h buffer
-    await client.expire(key, 48 * 60 * 60 + 3600);
+    await this.redis.expire(key, 48 * 60 * 60 + 3600);
   }
 
   // ─── Rain Command ────────────────────────────────────────

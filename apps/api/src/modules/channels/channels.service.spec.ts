@@ -56,6 +56,10 @@ const mockRedis = {
   ttl: jest.fn().mockResolvedValue(0),
   exists: jest.fn().mockResolvedValue(0),
   set: jest.fn().mockResolvedValue('OK'),
+  zrangebyscore: jest.fn().mockResolvedValue([]),
+  zremrangebyscore: jest.fn().mockResolvedValue(0),
+  zadd: jest.fn().mockResolvedValue('OK'),
+  expire: jest.fn().mockResolvedValue('OK'),
 };
 
 const mockWalletService = {
