@@ -17,6 +17,8 @@ import {
   ChevronLeft,
   Lock,
   AlertTriangle,
+  Flag,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -70,11 +72,19 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionSuggestions, setMentionSuggestions] = useState<Array<{ id: string; username: string; displayName: string | null; avatarUrl: string | null; allowMentions: boolean }>>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [showMentions, setShowMentions] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [tipModal, setTipModal] = useState<{ messageId: string; toUserId: string } | null>(null);
   const [tipAmount, setTipAmount] = useState(100);
+  const [reportModal, setReportModal] = useState<{ messageId: string; userId: string; username: string } | null>(null);
+  const [reportReason, setReportReason] = useState('HARASSMENT');
+  const [reportDescription, setReportDescription] = useState('');
   const [mobileShowList, setMobileShowList] = useState(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -211,6 +221,24 @@ export default function ChatPage() {
     onError: (err) => addToast(getApiErrorMessage(err), 'error'),
   });
 
+  // ─── Report mutation ───────────────────────────────────────
+  const reportMutation = useMutation({
+    mutationFn: async (dto: { messageId: string; reason: string; description: string }) => {
+      const res = await apiClient.post<ApiResponse<unknown>>('anti-abuse/reports', {
+        messageId: dto.messageId,
+        reason: dto.reason,
+        description: dto.description,
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      addToast('Report submitted. Thank you for helping keep the community safe.', 'success');
+      setReportModal(null);
+      setReportDescription('');
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), 'error'),
+  });
+
   // ─── Handlers ──────────────────────────────────────────────
 
   const handleSend = useCallback(() => {
@@ -226,8 +254,34 @@ export default function ChatPage() {
     socket.emit('chat:typing', { channelId: activeChannelId, isTyping: false });
   }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addToast]);
 
-  const handleInputChange = (value: string) => {
+  const handleInputChange = async (value: string) => {
     setInput(value);
+
+    // Detect @mention
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const afterAt = value.slice(lastAtIndex + 1);
+      const spaceIndex = afterAt.indexOf(' ');
+      const query = spaceIndex === -1 ? afterAt : afterAt.slice(0, spaceIndex);
+      if (query.length >= 2 && spaceIndex === -1) {
+        setMentionQuery(query);
+        try {
+          const res = await apiClient.get<ApiResponse<Array<{ id: string; username: string; displayName: string | null; avatarUrl: string | null; allowMentions: boolean }>>>(
+            `channels/users/search?q=${encodeURIComponent(query)}&limit=5`,
+          );
+          setMentionSuggestions(res.data.data.filter((u) => u.allowMentions));
+          setMentionIndex(0);
+          setShowMentions(true);
+        } catch {
+          setShowMentions(false);
+        }
+      } else {
+        setShowMentions(false);
+      }
+    } else {
+      setShowMentions(false);
+    }
+
     if (!activeChannelId || !socketConnected) return;
 
     const socket = connectChannelSocket(accessToken ?? '');
@@ -237,6 +291,15 @@ export default function ChatPage() {
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit('chat:typing', { channelId: activeChannelId, isTyping: false });
     }, 2000);
+  };
+
+  const insertMention = (username: string) => {
+    const lastAtIndex = input.lastIndexOf('@');
+    const before = input.slice(0, lastAtIndex);
+    const after = input.slice(lastAtIndex + 1 + mentionQuery.length);
+    setInput(`${before}@${username} ${after}`);
+    setShowMentions(false);
+    inputRef.current?.focus();
   };
 
   const handleSelectChannel = (channel: Channel) => {
@@ -391,15 +454,26 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      {/* Tip button */}
-                      {!msg.isDeleted && msg.userId !== user?.id && canTip && (
-                        <button
-                          onClick={() => setTipModal({ messageId: msg.id, toUserId: msg.userId })}
-                          className="mt-1 text-[10px] text-zinc-600 hover:text-brand-400 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Gift className="w-3 h-3" />
-                          Tip
-                        </button>
+                      {/* Tip + Report buttons */}
+                      {!msg.isDeleted && msg.userId !== user?.id && (
+                        <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {canTip && (
+                            <button
+                              onClick={() => setTipModal({ messageId: msg.id, toUserId: msg.userId })}
+                              className="text-[10px] text-zinc-600 hover:text-brand-400 flex items-center gap-0.5"
+                            >
+                              <Gift className="w-3 h-3" />
+                              Tip
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setReportModal({ messageId: msg.id, userId: msg.userId, username: msg.user.username })}
+                            className="text-[10px] text-zinc-600 hover:text-red-400 flex items-center gap-0.5"
+                          >
+                            <Flag className="w-3 h-3" />
+                            Report
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -436,21 +510,67 @@ export default function ChatPage() {
                   </button>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => handleInputChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    placeholder="Type a message..."
-                    className="flex-1 bg-surface-hover border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-brand-500/50"
-                    maxLength={2000}
-                  />
+                <div className="relative flex gap-2">
+                  <div className="flex-1 relative">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={input}
+                      onChange={(e) => handleInputChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (showMentions) {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setMentionIndex((i) => (i + 1) % mentionSuggestions.length);
+                            return;
+                          }
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setMentionIndex((i) => (i - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+                            return;
+                          }
+                          if (e.key === 'Enter' || e.key === 'Tab') {
+                            e.preventDefault();
+                            if (mentionSuggestions[mentionIndex]) {
+                              insertMention(mentionSuggestions[mentionIndex].username);
+                            }
+                            return;
+                          }
+                          if (e.key === 'Escape') {
+                            setShowMentions(false);
+                            return;
+                          }
+                        }
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
+                      placeholder="Type a message... Use @username to mention"
+                      className="w-full bg-surface-hover border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-brand-500/50"
+                      maxLength={2000}
+                    />
+                    {/* Mention dropdown */}
+                    {showMentions && mentionSuggestions.length > 0 && (
+                      <div className="absolute bottom-full left-0 mb-1 w-full bg-surface border border-white/10 rounded-lg shadow-xl overflow-hidden z-20">
+                        {mentionSuggestions.map((u, i) => (
+                          <button
+                            key={u.id}
+                            onClick={() => insertMention(u.username)}
+                            className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm transition-colors ${
+                              i === mentionIndex ? 'bg-brand-500/20 text-brand-300' : 'text-zinc-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+                              {u.displayName?.[0] ?? u.username[0]}
+                            </div>
+                            <span className="font-medium">{u.displayName ?? u.username}</span>
+                            <span className="text-zinc-500 text-xs">@{u.username}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={handleSend}
                     disabled={sendMessageMutation.isPending || !input.trim()}
@@ -508,6 +628,70 @@ export default function ChatPage() {
                 className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-brand-500 hover:bg-brand-400 disabled:opacity-40 text-white transition-colors"
               >
                 {tipMutation.isPending ? 'Sending...' : `Tip ${tipAmount}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Report Modal ── */}
+      {reportModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-bold text-white">Report Message</h3>
+              <button onClick={() => setReportModal(null)} className="text-zinc-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-zinc-400 mb-4">Report @{reportModal.username} for moderation review.</p>
+
+            <div className="mb-3">
+              <label className="text-xs text-zinc-500 mb-1 block">Reason</label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                className="w-full bg-surface-hover border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50"
+              >
+                <option value="HARASSMENT">Harassment</option>
+                <option value="INAPPROPRIATE_CONTENT">Inappropriate Content</option>
+                <option value="SPAM_CAMPAIGN">Spam</option>
+                <option value="BOT_ACTIVITY">Bot Activity</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-xs text-zinc-500 mb-1 block">Description</label>
+              <textarea
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                placeholder="Describe the issue..."
+                className="w-full bg-surface-hover border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-brand-500/50 resize-none"
+                rows={3}
+                maxLength={1000}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReportModal(null)}
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  reportMutation.mutate({
+                    messageId: reportModal.messageId,
+                    reason: reportReason,
+                    description: reportDescription || 'No additional description provided.',
+                  })
+                }
+                disabled={reportMutation.isPending || reportDescription.length < 10}
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-400 disabled:opacity-40 text-white transition-colors"
+              >
+                {reportMutation.isPending ? 'Submitting...' : 'Submit Report'}
               </button>
             </div>
           </div>

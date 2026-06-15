@@ -573,6 +573,77 @@ export class AdminController {
     return this.adminService.getSocialGraph(userId);
   }
 
+  // ─── Chat Moderation ─────────────────────────────────────
+
+  @Get('chat-moderation/stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Chat moderation dashboard stats' })
+  getChatModerationStats() {
+    return this.adminService.getChatModerationStats();
+  }
+
+  @Get('chat-moderation/messages')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List chat messages for moderation' })
+  listChatMessages(
+    @Query('page') page = 1,
+    @Query('limit') limit = 50,
+    @Query('channelId') channelId?: string,
+    @Query('userId') userId?: string,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.adminService.listChatMessages(
+      Number(page),
+      Number(limit),
+      channelId,
+      userId,
+      search,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    );
+  }
+
+  @Delete('chat-moderation/messages/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin delete a chat message' })
+  adminDeleteChatMessage(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.adminService.adminDeleteChatMessage(admin.sub, id, body.reason);
+  }
+
+  @Post('chat-moderation/users/:userId/mute')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mute a user from sending chat messages' })
+  muteChatUser(
+    @CurrentUser() admin: JwtPayload,
+    @Param('userId') userId: string,
+    @Body() body: { durationMinutes?: number; reason?: string },
+  ) {
+    return this.adminService.muteChatUser(admin.sub, userId, body.durationMinutes ?? 60, body.reason);
+  }
+
+  @Post('chat-moderation/users/:userId/unmute')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unmute a user from chat' })
+  unmuteChatUser(
+    @CurrentUser() admin: JwtPayload,
+    @Param('userId') userId: string,
+  ) {
+    return this.adminService.unmuteChatUser(admin.sub, userId);
+  }
+
+  @Get('chat-moderation/channels')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all channels with member/message counts' })
+  listChannelsForModeration() {
+    return this.adminService.listChannelsForModeration();
+  }
+
   @Get('queues')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get BullMQ queue stats' })

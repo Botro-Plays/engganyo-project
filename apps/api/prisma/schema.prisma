@@ -171,6 +171,7 @@ enum NotificationType {
   SECURITY_ALERT
   ACCOUNT_WARNING
   FORUM_MENTION
+  CHANNEL_MENTION
   WELCOME
   VIP_POINTS_EARNED
   TIP_RECEIVED
@@ -324,9 +325,10 @@ model User {
   twoFactorCodes      TwoFactorCode[]
   twoFactorBackupCodes TwoFactorBackupCode[]
   deposits             Deposit[]
-  channelMemberships  ChannelMember[]
-  channelMessages     ChannelMessage[]
-  createdChannels     Channel[]         @relation("ChannelCreator")
+  channelMemberships     ChannelMember[]
+  channelMessages        ChannelMessage[]
+  channelMessageMentions ChannelMessageMention[]
+  createdChannels        Channel[]         @relation("ChannelCreator")
 
   @@index([email])
   @@index([username])
@@ -962,7 +964,7 @@ model Report {
   submittedById String @map("submitted_by_id")
   submittedBy   User   @relation("ReportSubmitter", fields: [submittedById], references: [id])
 
-  // Target can be a user, a campaign, a forum topic, or a forum reply
+  // Target can be a user, a campaign, a forum topic, a forum reply, or a chat message
   targetUserId String?   @map("target_user_id")
   targetUser   User?     @relation("ReportTarget", fields: [targetUserId], references: [id])
   campaignId   String?   @map("campaign_id")
@@ -971,6 +973,8 @@ model Report {
   topic        ForumTopic? @relation(fields: [topicId], references: [id], onDelete: Cascade)
   replyId      String?   @unique @map("reply_id")
   reply        ForumReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  messageId    String?   @unique @map("message_id")
+  message      ChannelMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   reason      ReportReason
   description String       @db.Text
@@ -1244,9 +1248,25 @@ model ChannelMessage {
   tipTransactionId String?      @unique @map("tip_transaction_id")
   tipTransaction   Transaction? @relation(fields: [tipTransactionId], references: [id])
 
+  reports   Report[]
+  mentions  ChannelMessageMention[]
+
   @@index([channelId, createdAt])
   @@index([userId, createdAt])
   @@map("channel_messages")
+}
+
+model ChannelMessageMention {
+  id        String   @id @default(cuid())
+  messageId String   @map("message_id")
+  message   ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([messageId, userId])
+  @@index([userId, createdAt])
+  @@map("channel_message_mentions")
 }
 
 // =============================================================

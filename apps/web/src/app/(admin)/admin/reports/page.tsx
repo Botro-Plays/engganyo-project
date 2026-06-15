@@ -15,6 +15,7 @@ interface Report {
   campaign: { id: string; title: string } | null;
   topic: { id: string; title: string } | null;
   reply: { id: string } | null;
+  message: { id: string; content: string; channelId: string } | null;
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -120,6 +121,13 @@ export default function AdminReportsPage() {
                     {r.campaign && <> · Campaign: <span className="text-zinc-300">{r.campaign.title}</span></>}
                     {r.topic && <> · Topic: <span className="text-zinc-300">{r.topic.title}</span></>}
                     {r.reply && <> · Reply</>}
+                    {r.message && (
+                      <>
+                        {' · '}
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">Chat</span>
+                        <span className="text-zinc-400 ml-1 truncate max-w-[200px] inline-block align-bottom">{r.message.content}</span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>

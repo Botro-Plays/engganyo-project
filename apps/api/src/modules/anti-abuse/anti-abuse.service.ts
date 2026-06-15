@@ -163,8 +163,8 @@ export class AntiAbuseService {
   // ─── Reports ───────────────────────────────────────────────
 
   async submitReport(submittedById: string, dto: CreateReportDto) {
-    if (!dto.targetUserId && !dto.campaignId && !dto.topicId && !dto.replyId) {
-      throw new BadRequestException('Must provide targetUserId, campaignId, topicId, or replyId');
+    if (!dto.targetUserId && !dto.campaignId && !dto.topicId && !dto.replyId && !dto.messageId) {
+      throw new BadRequestException('Must provide targetUserId, campaignId, topicId, replyId, or messageId');
     }
     if (dto.targetUserId && dto.targetUserId === submittedById) {
       throw new BadRequestException('Cannot report yourself');
@@ -189,6 +189,14 @@ export class AntiAbuseService {
       if (!reply) throw new NotFoundException('Reply not found');
       targetUserId = reply.authorId;
     }
+    if (!targetUserId && dto.messageId) {
+      const message = await this.prisma.channelMessage.findUnique({
+        where: { id: dto.messageId },
+        select: { userId: true },
+      });
+      if (!message) throw new NotFoundException('Message not found');
+      targetUserId = message.userId;
+    }
 
     if (targetUserId && targetUserId === submittedById) {
       throw new BadRequestException('Cannot report yourself');
@@ -201,6 +209,7 @@ export class AntiAbuseService {
         campaignId: dto.campaignId,
         topicId: dto.topicId,
         replyId: dto.replyId,
+        messageId: dto.messageId,
         reason: dto.reason,
         description: dto.description,
       },

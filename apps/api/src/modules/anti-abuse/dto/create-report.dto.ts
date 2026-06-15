@@ -34,4 +34,9 @@ export class CreateReportDto {
   @IsOptional()
   @IsString()
   replyId?: string;
+
+  @ApiPropertyOptional({ example: 'message_cm123abc' })
+  @IsOptional()
+  @IsString()
+  messageId?: string;
 }

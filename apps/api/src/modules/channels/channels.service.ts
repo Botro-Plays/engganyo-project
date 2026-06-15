@@ -316,6 +316,9 @@ export class ChannelsService implements OnModuleInit {
       },
     });
 
+    // Process mentions asynchronously (fire-and-forget)
+    void this.processMentions(message.id, channelId, filteredContent, userId);
+
     const vipTier = message.user.vipTier
       ? {
           name: message.user.vipTier.name,
@@ -361,6 +364,74 @@ export class ChannelsService implements OnModuleInit {
     });
 
     return { success: true };
+  }
+
+  // ─── Mentions ──────────────────────────────────────────────
+
+  private async processMentions(
+    messageId: string,
+    channelId: string,
+    content: string,
+    senderId: string,
+  ) {
+    try {
+      // Extract @username mentions (alphanumeric, underscore, hyphen — up to 30 chars)
+      const mentionRegex = /@([a-zA-Z0-9_-]{1,30})/g;
+      const usernames: string[] = [];
+      let match;
+      while ((match = mentionRegex.exec(content)) !== null) {
+        usernames.push(match[1].toLowerCase());
+      }
+      if (usernames.length === 0) return;
+
+      // Deduplicate
+      const uniqueUsernames = [...new Set(usernames)];
+
+      // Find users who exist and allow mentions
+      const users = await this.prisma.user.findMany({
+        where: {
+          username: { in: uniqueUsernames },
+          id: { not: senderId },
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          username: true,
+          profile: { select: { allowMentions: true } },
+        },
+      });
+
+      const eligibleUsers = users.filter((u) => u.profile?.allowMentions !== false);
+      if (eligibleUsers.length === 0) return;
+
+      // Create mention records
+      await this.prisma.channelMessageMention.createMany({
+        data: eligibleUsers.map((u) => ({
+          messageId,
+          userId: u.id,
+        })),
+        skipDuplicates: true,
+      });
+
+      // Send notifications
+      const channel = await this.prisma.channel.findUnique({
+        where: { id: channelId },
+        select: { name: true, slug: true },
+      });
+      const channelName = channel?.name ?? 'a channel';
+
+      for (const u of eligibleUsers) {
+        await this.notificationsService.createNotification(
+          u.id,
+          'CHANNEL_MENTION',
+          'You were mentioned',
+          `Someone mentioned you in ${channelName}`,
+          { messageId, channelId, channelSlug: channel?.slug },
+        );
+      }
+    } catch (err) {
+      this.logger.error(`Mention processing failed for message ${messageId}: ${(err as Error).message}`);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -506,6 +577,31 @@ export class ChannelsService implements OnModuleInit {
       hash = ((hash << 5) - hash + char) | 0;
     }
     return hash.toString(16);
+  }
+
+  async searchUsersForMentions(query: string, limit = 5) {
+    if (!query || query.length < 2) return [];
+    const users = await this.prisma.user.findMany({
+      where: {
+        username: { startsWith: query.toLowerCase(), mode: 'insensitive' },
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatarUrl: true,
+        profile: { select: { allowMentions: true } },
+      },
+      take: limit,
+    });
+    return users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      allowMentions: u.profile?.allowMentions ?? true,
+    }));
   }
 
   async onModuleInit() {

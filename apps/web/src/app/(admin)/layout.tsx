@@ -26,6 +26,7 @@ const navItems = [
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/admin/ai-support', icon: MessageSquare, label: 'AI Support' },
+  { href: '/admin/chat-moderation', icon: MessageSquare, label: 'Chat Moderation' },
   { href: '/admin/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/admin/gamification', icon: Trophy, label: 'Gamification' },
   { href: '/admin/abuse', icon: ShieldAlert, label: 'Abuse' },

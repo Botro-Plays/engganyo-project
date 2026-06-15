@@ -108,4 +108,14 @@ export class ChannelsController {
   sendTip(@CurrentUser() user: JwtPayload, @Body() dto: SendTipDto) {
     return this.channelsService.sendTip(user.sub, dto.toUserId, dto.amount, dto.messageId);
   }
+
+  @Get('users/search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search users by username for @mentions' })
+  searchUsersForMentions(
+    @Query('q') query: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.channelsService.searchUsersForMentions(query, limit ? parseInt(limit, 10) : 5);
+  }
 }

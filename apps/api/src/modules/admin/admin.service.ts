@@ -758,6 +758,7 @@ export class AdminService {
           campaign: { select: { id: true, title: true } },
           topic: { select: { id: true, title: true } },
           reply: { select: { id: true } },
+          message: { select: { id: true, content: true, channelId: true, userId: true } },
         },
         orderBy: { createdAt: 'asc' },
         skip,
@@ -781,6 +782,7 @@ export class AdminService {
         topicId: true,
         replyId: true,
         campaignId: true,
+        messageId: true,
       },
     });
     if (!report) throw new NotFoundException('Report not found');
@@ -840,6 +842,7 @@ export class AdminService {
           topicId: report.topicId ?? undefined,
           replyId: report.replyId ?? undefined,
           replyTopicId: replyTopicId ?? undefined,
+          messageId: report.messageId ?? undefined,
           targetUserId: report.targetUserId ?? undefined,
           targetUsername: report.targetUser?.username ?? undefined,
         },
@@ -856,6 +859,7 @@ export class AdminService {
           topicId: report.topicId ?? undefined,
           replyId: report.replyId ?? undefined,
           replyTopicId: replyTopicId ?? undefined,
+          messageId: report.messageId ?? undefined,
           targetUserId: report.targetUserId ?? undefined,
           targetUsername: report.targetUser?.username ?? undefined,
         },
@@ -876,6 +880,7 @@ export class AdminService {
           topicId: report.topicId ?? undefined,
           replyId: report.replyId ?? undefined,
           replyTopicId: replyTopicId ?? undefined,
+          messageId: report.messageId ?? undefined,
           targetUserId: report.targetUserId ?? undefined,
           targetUsername: report.targetUser?.username ?? undefined,
         },
@@ -2368,5 +2373,235 @@ export class AdminService {
       bidirectionalCreators,
       recentFlags,
     };
+  }
+
+  // ─── Chat Moderation ───────────────────────────────────────
+
+  async getChatModerationStats() {
+    const [
+      totalMessages,
+      totalChannels,
+      activeMembers,
+      reportedMessages,
+      deletedMessages,
+      messagesToday,
+    ] = await Promise.all([
+      this.prisma.channelMessage.count(),
+      this.prisma.channel.count(),
+      this.prisma.channelMember.count(),
+      this.prisma.report.count({ where: { messageId: { not: null } } }),
+      this.prisma.channelMessage.count({ where: { isDeleted: true } }),
+      this.prisma.channelMessage.count({
+        where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      }),
+    ]);
+
+    const topChannels = await this.prisma.channel.findMany({
+      where: { isActive: true },
+      orderBy: { messages: { _count: 'desc' } },
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        _count: { select: { members: true, messages: true } },
+      },
+    });
+
+    const activeUsers = await this.prisma.channelMessage.groupBy({
+      by: ['userId'],
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 5,
+      where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    });
+
+    const userIds = activeUsers.map((u) => u.userId);
+    const users = userIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, username: true, displayName: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return {
+      totalMessages,
+      totalChannels,
+      activeMembers,
+      reportedMessages,
+      deletedMessages,
+      messagesToday,
+      topChannels: topChannels.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        memberCount: c._count.members,
+        messageCount: c._count.messages,
+      })),
+      topUsers: activeUsers.map((u) => ({
+        userId: u.userId,
+        messageCount: u._count.id,
+        username: userMap.get(u.userId)?.username ?? 'Unknown',
+        displayName: userMap.get(u.userId)?.displayName ?? null,
+      })),
+    };
+  }
+
+  async listChatMessages(
+    page = 1,
+    limit = 50,
+    channelId?: string,
+    userId?: string,
+    search?: string,
+    from?: Date,
+    to?: Date,
+  ) {
+    const skip = (page - 1) * limit;
+    const where: Prisma.ChannelMessageWhereInput = {
+      ...(channelId ? { channelId } : {}),
+      ...(userId ? { userId } : {}),
+      ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}),
+      ...(from || to ? {
+        createdAt: {
+          ...(from ? { gte: from } : {}),
+          ...(to ? { lte: to } : {}),
+        },
+      } : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.channelMessage.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          content: true,
+          isDeleted: true,
+          createdAt: true,
+          channel: { select: { id: true, name: true, slug: true } },
+          user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+          _count: { select: { reports: true } },
+        },
+      }),
+      this.prisma.channelMessage.count({ where }),
+    ]);
+
+    return {
+      items: items.map((m) => ({
+        ...m,
+        reportCount: m._count.reports,
+      })),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  async adminDeleteChatMessage(adminId: string, messageId: string, reason?: string) {
+    const message = await this.prisma.channelMessage.findUnique({
+      where: { id: messageId },
+      select: { userId: true, content: true },
+    });
+    if (!message) throw new NotFoundException('Message not found');
+
+    await this.prisma.channelMessage.update({
+      where: { id: messageId },
+      data: { isDeleted: true, content: '[deleted by moderator]' },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'chat_message.delete',
+        entityType: 'ChannelMessage',
+        entityId: messageId,
+        oldValue: { content: message.content },
+        newValue: { reason: reason ?? 'No reason provided' },
+      },
+    });
+
+    // Notify the user
+    await this.notificationsService.createNotification(
+      message.userId,
+      'ACCOUNT_WARNING',
+      'Chat message removed',
+      `A moderator removed one of your chat messages. Reason: ${reason ?? 'Violation of community guidelines'}`,
+      { messageId, adminId },
+    );
+
+    return { success: true };
+  }
+
+  async muteChatUser(adminId: string, userId: string, durationMinutes: number, reason?: string) {
+    const until = new Date(Date.now() + durationMinutes * 60 * 1000);
+    const key = `chat:mute:${userId}`;
+
+    // Use Redis for temporary mutes (fast, auto-expires)
+    await this.prisma.platformConfig.upsert({
+      where: { key },
+      create: { key, value: until.toISOString() },
+      update: { value: until.toISOString() },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'chat_user.mute',
+        entityType: 'User',
+        entityId: userId,
+        newValue: { until: until.toISOString(), durationMinutes, reason: reason ?? 'No reason' },
+      },
+    });
+
+    await this.notificationsService.createNotification(
+      userId,
+      'ACCOUNT_WARNING',
+      'Chat muted',
+      `You have been muted from chat for ${durationMinutes} minutes. Reason: ${reason ?? 'Violation of community guidelines'}`,
+      { adminId, durationMinutes },
+    );
+
+    return { success: true, mutedUntil: until };
+  }
+
+  async unmuteChatUser(adminId: string, userId: string) {
+    const key = `chat:mute:${userId}`;
+    await this.prisma.platformConfig.deleteMany({ where: { key } });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'chat_user.unmute',
+        entityType: 'User',
+        entityId: userId,
+      },
+    });
+
+    return { success: true };
+  }
+
+  async listChannelsForModeration() {
+    const channels = await this.prisma.channel.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        type: true,
+        isActive: true,
+        _count: { select: { members: true, messages: true } },
+      },
+    });
+
+    return channels.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      type: c.type,
+      isActive: c.isActive,
+      memberCount: c._count.members,
+      messageCount: c._count.messages,
+    }));
   }
 }
