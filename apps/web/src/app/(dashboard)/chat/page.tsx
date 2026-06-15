@@ -149,11 +149,17 @@ export default function ChatPage() {
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     };
 
+    const onRainReceived = (rain: { fromUsername: string; amount: number }) => {
+      addToast(`🌧️ You caught a rain! ${rain.fromUsername} sent you ${rain.amount} credits!`, 'success');
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('chat:message', onMessage);
     socket.on('chat:typing', onTyping);
     socket.on('tip:received', onTipReceived);
+    socket.on('rain:received', onRainReceived);
 
     if (socket.connected) setSocketConnected(true);
 
@@ -163,6 +169,7 @@ export default function ChatPage() {
       socket.off('chat:message', onMessage);
       socket.off('chat:typing', onTyping);
       socket.off('tip:received', onTipReceived);
+      socket.off('rain:received', onRainReceived);
       disconnectChannelSocket();
     };
   }, [accessToken, isAuthenticated, queryClient, addToast]);

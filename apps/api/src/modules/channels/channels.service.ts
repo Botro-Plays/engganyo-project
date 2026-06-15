@@ -54,6 +54,10 @@ export class ChannelsService implements OnModuleInit {
     return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN || role === UserRole.MODERATOR;
   }
 
+  private isAdminOrSuperAdmin(role?: UserRole): boolean {
+    return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN;
+  }
+
   async getChannels(userId: string, role?: UserRole) {
     const vipStatus = await this.gamificationService.getVipStatus(userId);
     const hasVip = vipStatus.currentTier !== null;
@@ -168,10 +172,11 @@ export class ChannelsService implements OnModuleInit {
   async createChannel(
     userId: string,
     dto: { name: string; slug?: string; description?: string; type?: ChannelType },
+    role?: UserRole,
   ) {
     const vipStatus = await this.gamificationService.getVipStatus(userId);
     const canCreate = vipStatus.currentTier?.perks.canCreateRooms ?? false;
-    if (!canCreate) {
+    if (!canCreate && !this.isAdminOrSuperAdmin(role)) {
       throw new ForbiddenException('Channel creation requires VIP Gold+');
     }
 
@@ -290,6 +295,14 @@ export class ChannelsService implements OnModuleInit {
     const muteStatus = await this.isUserMuted(userId);
     if (muteStatus.muted) {
       throw new ForbiddenException(`You are muted from chat until ${muteStatus.until!.toISOString()}`);
+    }
+
+    const trimmed = content.trim();
+
+    // Handle /rain command
+    if (trimmed.startsWith('/rain ')) {
+      await this.enforceRateLimit(userId, { limit: 1, ttl: 300, scope: 'chat_rain' });
+      return this.handleRainCommand(userId, channelId, trimmed, role);
     }
 
     const channel = await this.prisma.channel.findUnique({
@@ -467,16 +480,18 @@ export class ChannelsService implements OnModuleInit {
   //  TIPPING
   // ═══════════════════════════════════════════════════════════
 
-  async validateTipEligibility(fromUserId: string, toUserId: string, amount: number) {
+  async validateTipEligibility(fromUserId: string, toUserId: string, amount: number, role?: UserRole) {
     // 1. Self-tip prevention
     if (fromUserId === toUserId) {
       return { eligible: false, reason: 'Cannot tip yourself' };
     }
 
-    // 2. VIP gate
-    const vipStatus = await this.gamificationService.getVipStatus(fromUserId);
-    if (!vipStatus.currentTier?.perks.canTip) {
-      return { eligible: false, reason: 'Tipping requires VIP status' };
+    // 2. VIP gate (admin/superadmin bypass)
+    if (!this.isAdminOrSuperAdmin(role)) {
+      const vipStatus = await this.gamificationService.getVipStatus(fromUserId);
+      if (!vipStatus.currentTier?.perks.canTip) {
+        return { eligible: false, reason: 'Tipping requires VIP status' };
+      }
     }
 
     // 3. Amount bounds (from PlatformConfig)
@@ -495,7 +510,13 @@ export class ChannelsService implements OnModuleInit {
       return { eligible: false, reason: 'Insufficient credits' };
     }
 
-    // 5. Alt-account detection (IP overlap in 30 days)
+    // 5. 25% tip budget within 48h sliding window
+    const remainingBudget = await this.getTipBudget(fromUserId);
+    if (amount > remainingBudget) {
+      return { eligible: false, reason: `Tip exceeds your remaining tippable budget (${remainingBudget} credits). Budget regenerates over 48 hours.` };
+    }
+
+    // 6. Alt-account detection (IP overlap in 30 days)
     const isAlt = await this.antiAbuseService.areUsersRelated(fromUserId, toUserId, 30);
     if (isAlt) {
       await this.antiAbuseService.flagUser(
@@ -508,7 +529,7 @@ export class ChannelsService implements OnModuleInit {
       return { eligible: false, reason: 'Cannot tip suspected alternate accounts' };
     }
 
-    // 6. Recipient not suspended
+    // 7. Recipient not suspended
     const recipient = await this.prisma.user.findUnique({
       where: { id: toUserId },
       select: { status: true },
@@ -520,10 +541,10 @@ export class ChannelsService implements OnModuleInit {
     return { eligible: true };
   }
 
-  async sendTip(fromUserId: string, toUserId: string, amount: number, messageId?: string) {
+  async sendTip(fromUserId: string, toUserId: string, amount: number, messageId?: string, role?: UserRole) {
     await this.enforceRateLimit(fromUserId, CHAT_RATE_LIMITS.tip);
 
-    const validation = await this.validateTipEligibility(fromUserId, toUserId, amount);
+    const validation = await this.validateTipEligibility(fromUserId, toUserId, amount, role);
     if (!validation.eligible) {
       throw new BadRequestException(validation.reason);
     }
@@ -543,6 +564,9 @@ export class ChannelsService implements OnModuleInit {
       referenceId: messageId ?? undefined,
       referenceType: 'tip',
     });
+
+    // Record tip in 48h sliding window budget
+    await this.recordTipInWindow(fromUserId, amount);
 
     // Link tip to message if applicable
     if (messageId) {
@@ -596,6 +620,223 @@ export class ChannelsService implements OnModuleInit {
     const row = await this.prisma.platformConfig.findUnique({ where: { key } });
     if (row && typeof row.value === 'number') return row.value;
     return defaultValue;
+  }
+
+  // ─── Tip Budget (25% of balance within 48h sliding window) ───
+
+  private async getTipBudget(userId: string): Promise<number> {
+    const WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
+    const now = Date.now();
+    const cutoff = now - WINDOW_MS;
+
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { balance: true },
+    });
+    const balance = wallet?.balance ?? 0;
+    const maxTippable = Math.floor(balance * 0.25);
+
+    const key = `tip_window:${userId}`;
+    const client = this.redis.getClient();
+
+    // Prune old entries outside the 48h window
+    await client.zremrangebyscore(key, 0, cutoff);
+
+    // Sum all tip amounts within the window
+    const entries = await client.zrangebyscore(key, cutoff, '+inf');
+    let totalTipped = 0;
+    for (const entry of entries) {
+      const amountStr = entry.split(':').pop();
+      const amount = parseInt(amountStr ?? '0', 10);
+      if (!Number.isNaN(amount)) totalTipped += amount;
+    }
+
+    return Math.max(0, maxTippable - totalTipped);
+  }
+
+  private async recordTipInWindow(userId: string, amount: number): Promise<void> {
+    const key = `tip_window:${userId}`;
+    const now = Date.now();
+    const uniqueId = `${now}_${Math.random().toString(36).substring(2, 8)}`;
+    const client = this.redis.getClient();
+    await client.zadd(key, now, `${uniqueId}:${amount}`);
+    // Auto-expire the entire key after 48h + 1h buffer
+    await client.expire(key, 48 * 60 * 60 + 3600);
+  }
+
+  // ─── Rain Command ────────────────────────────────────────
+
+  private parseRainCommand(content: string): { total: number; count: number } | null {
+    const match = content.match(/^\/rain\s+(\d+)\s+(\d+)$/);
+    if (!match) return null;
+    return { total: parseInt(match[1], 10), count: parseInt(match[2], 10) };
+  }
+
+  async handleRainCommand(userId: string, channelId: string, content: string, role?: UserRole) {
+    const parsed = this.parseRainCommand(content);
+    if (!parsed) {
+      throw new BadRequestException('Invalid /rain command. Usage: /rain <total_credits> <num_users>');
+    }
+
+    const { total, count } = parsed;
+    if (total < 1 || count < 1) {
+      throw new BadRequestException('Rain amount and user count must be at least 1');
+    }
+    if (count > 100) {
+      throw new BadRequestException('Cannot rain to more than 100 users at once');
+    }
+
+    // 1. Permission check: VIP or admin/superadmin
+    const isAdmin = this.isAdminOrSuperAdmin(role);
+    if (!isAdmin) {
+      const vipStatus = await this.gamificationService.getVipStatus(userId);
+      if (!vipStatus.currentTier?.perks.canTip) {
+        throw new ForbiddenException('Rain requires VIP status or admin privileges');
+      }
+    }
+
+    // 2. Budget check against 25% tip cap
+    const remainingBudget = await this.getTipBudget(userId);
+    if (total > remainingBudget) {
+      throw new BadRequestException(
+        `Rain exceeds your remaining tippable budget (${remainingBudget} credits). Budget regenerates over 48 hours.`,
+      );
+    }
+
+    // 3. Sender balance check
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { balance: true },
+    });
+    if (!wallet || wallet.balance < total) {
+      throw new BadRequestException('Insufficient credits for rain');
+    }
+
+    // 4. Get eligible channel members (excluding sender, ACTIVE status)
+    const members = await this.prisma.channelMember.findMany({
+      where: {
+        channelId,
+        userId: { not: userId },
+        user: { status: 'ACTIVE' },
+      },
+      include: {
+        user: { select: { id: true, username: true } },
+      },
+    });
+
+    if (members.length < count) {
+      throw new BadRequestException(
+        `Not enough active members in this channel. Available: ${members.length}, Requested: ${count}`,
+      );
+    }
+
+    // 5. Shuffle and select random recipients
+    const shuffled = members.sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, count);
+
+    // 6. Calculate distribution (floor division, remainder to last recipient)
+    const baseAmount = Math.floor(total / count);
+    const remainder = total % count;
+    if (baseAmount < 1) {
+      throw new BadRequestException('Rain amount too small to distribute among requested users');
+    }
+
+    // 7. Distribute credits
+    const sender = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true, displayName: true },
+    });
+    const senderName = sender?.displayName ?? sender?.username ?? 'Someone';
+
+    const recipientNames: string[] = [];
+    for (let i = 0; i < selected.length; i++) {
+      const recipient = selected[i];
+      const amount = baseAmount + (i === selected.length - 1 ? remainder : 0);
+
+      await this.walletService.debit(userId, amount, {
+        type: TransactionType.SPEND_TIP,
+        description: `Rain to ${recipient.user.username}`,
+        referenceType: 'rain',
+      });
+
+      await this.walletService.credit(recipient.user.id, amount, {
+        type: TransactionType.EARN_TIP,
+        description: `Rain from ${senderName}`,
+        referenceType: 'rain',
+      });
+
+      // Emit rain received event
+      this.eventsService.emitToUser(recipient.user.id, 'rain:received', {
+        fromUserId: userId,
+        fromUsername: senderName,
+        amount,
+        channelId,
+      });
+
+      // Notify recipient
+      await this.notificationsService.createNotification(
+        recipient.user.id,
+        NotificationType.TIP_RECEIVED,
+        'You caught a rain!',
+        `${senderName} rained ${amount} credits on you!`,
+        { fromUserId: userId, amount, type: 'rain' },
+      );
+
+      recipientNames.push(recipient.user.username);
+    }
+
+    // Record total rain in tip window
+    await this.recordTipInWindow(userId, total);
+
+    // 8. Create announcement message
+    const displayNames = recipientNames.slice(0, 5).join(', ') +
+      (recipientNames.length > 5 ? ` and ${recipientNames.length - 5} others` : '');
+    const announcementContent = `🌧️ ${senderName} rained ${total} credits on ${count} users! ${displayNames} each received ${baseAmount}${remainder > 0 ? `–${baseAmount + remainder}` : ''} credits!`;
+
+    const announcement = await this.prisma.channelMessage.create({
+      data: {
+        channelId,
+        userId,
+        content: announcementContent,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            vipTier: { select: { name: true, displayName: true, perks: true } },
+          },
+        },
+      },
+    });
+
+    const vipTier = announcement.user.vipTier
+      ? {
+          name: announcement.user.vipTier.name,
+          displayName: announcement.user.vipTier.displayName,
+          color: ((announcement.user.vipTier.perks as Record<string, unknown>)?.color as string) ?? '#888888',
+          badge: ((announcement.user.vipTier.perks as Record<string, unknown>)?.chatBadge as string) ?? announcement.user.vipTier.displayName,
+        }
+      : null;
+
+    return {
+      id: announcement.id,
+      channelId: announcement.channelId,
+      userId: announcement.userId,
+      content: announcement.content,
+      isDeleted: announcement.isDeleted,
+      createdAt: announcement.createdAt,
+      user: {
+        id: announcement.user.id,
+        username: announcement.user.username,
+        displayName: announcement.user.displayName,
+        avatarUrl: announcement.user.avatarUrl,
+        vipTier,
+      },
+      tip: null,
+    };
   }
 
   private hashContent(content: string): string {

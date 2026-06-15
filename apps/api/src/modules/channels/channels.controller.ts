@@ -97,7 +97,7 @@ export class ChannelsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new channel (VIP Gold+)' })
   createChannel(@CurrentUser() user: JwtPayload, @Body() dto: CreateChannelDto) {
-    return this.channelsService.createChannel(user.sub, dto);
+    return this.channelsService.createChannel(user.sub, dto, user.role);
   }
 
   @Post('tips')
@@ -106,7 +106,7 @@ export class ChannelsController {
   @UserRateLimit({ limit: 5, ttl: 60, scope: 'chat_tip' })
   @ApiOperation({ summary: 'Send credits tip to another user' })
   sendTip(@CurrentUser() user: JwtPayload, @Body() dto: SendTipDto) {
-    return this.channelsService.sendTip(user.sub, dto.toUserId, dto.amount, dto.messageId);
+    return this.channelsService.sendTip(user.sub, dto.toUserId, dto.amount, dto.messageId, user.role);
   }
 
   @Get('users/search')

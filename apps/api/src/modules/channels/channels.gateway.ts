@@ -12,6 +12,7 @@ import { Logger, UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '@prisma/client';
 
 import { ChannelsService } from './channels.service';
 
@@ -63,12 +64,14 @@ export class ChannelsGateway
         secret: this.configService.get<string>('jwt.accessSecret'),
       });
       const userId = payload.sub as string;
+      const role = payload.role as string | undefined;
       if (!userId) {
         this.logger.warn('Channel socket rejected: no userId in token');
         client.disconnect(true);
         return;
       }
       client.data.userId = userId;
+      client.data.role = role;
       this.logger.debug(`Channel socket connected: ${client.id} for user ${userId}`);
     } catch (err) {
       this.logger.warn(`Channel socket rejected: ${(err as Error).message}`);
@@ -86,10 +89,11 @@ export class ChannelsGateway
     @MessageBody() payload: { channelId: string },
   ) {
     const userId = client.data.userId as string;
+    const role = client.data.role as string | undefined;
     if (!userId || !payload.channelId) return;
 
     try {
-      await this.channelsService.joinChannel(userId, payload.channelId);
+      await this.channelsService.joinChannel(userId, payload.channelId, role as UserRole);
       await client.join(`channel:${payload.channelId}`);
       client.emit('channel:joined', { channelId: payload.channelId });
     } catch (err) {
@@ -113,10 +117,11 @@ export class ChannelsGateway
     @MessageBody() payload: { channelId: string; content: string },
   ) {
     const userId = client.data.userId as string;
+    const role = client.data.role as string | undefined;
     if (!userId || !payload.channelId || !payload.content) return;
 
     try {
-      const message = await this.channelsService.sendMessage(userId, payload.channelId, payload.content);
+      const message = await this.channelsService.sendMessage(userId, payload.channelId, payload.content, role as UserRole);
       this.server.to(`channel:${payload.channelId}`).emit('chat:message', message);
     } catch (err) {
       client.emit('chat:error', { message: (err as Error).message });
