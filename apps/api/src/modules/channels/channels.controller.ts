@@ -32,14 +32,14 @@ export class ChannelsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List available channels for current user' })
   getChannels(@CurrentUser() user: JwtPayload) {
-    return this.channelsService.getChannels(user.sub);
+    return this.channelsService.getChannels(user.sub, user.role);
   }
 
   @Get(':slug')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get channel by slug' })
   getChannelBySlug(@CurrentUser() user: JwtPayload, @Param('slug') slug: string) {
-    return this.channelsService.getChannelBySlug(user.sub, slug);
+    return this.channelsService.getChannelBySlug(user.sub, slug, user.role);
   }
 
   @Post('join')
@@ -48,7 +48,7 @@ export class ChannelsController {
   @UserRateLimit({ limit: 3, ttl: 3600, scope: 'chat_join' })
   @ApiOperation({ summary: 'Join a channel' })
   joinChannel(@CurrentUser() user: JwtPayload, @Body() dto: JoinChannelDto) {
-    return this.channelsService.joinChannel(user.sub, dto.channelId);
+    return this.channelsService.joinChannel(user.sub, dto.channelId, user.role);
   }
 
   @Post('leave')
@@ -79,7 +79,7 @@ export class ChannelsController {
   @UserRateLimit({ limit: 10, ttl: 60, scope: 'chat_message' })
   @ApiOperation({ summary: 'Send a message to a channel' })
   sendMessage(@CurrentUser() user: JwtPayload, @Body() dto: SendMessageDto) {
-    return this.channelsService.sendMessage(user.sub, dto.channelId, dto.content);
+    return this.channelsService.sendMessage(user.sub, dto.channelId, dto.content, user.role);
   }
 
   @Delete('messages/:messageId')

@@ -12,6 +12,7 @@ import {
   ChannelMemberRole,
   TransactionType,
   NotificationType,
+  UserRole,
 } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -49,16 +50,21 @@ export class ChannelsService implements OnModuleInit {
   //  CHANNEL MANAGEMENT
   // ═══════════════════════════════════════════════════════════
 
-  async getChannels(userId: string) {
+  private isStaffRole(role?: UserRole): boolean {
+    return role === UserRole.ADMIN || role === UserRole.SUPER_ADMIN || role === UserRole.MODERATOR;
+  }
+
+  async getChannels(userId: string, role?: UserRole) {
     const vipStatus = await this.gamificationService.getVipStatus(userId);
     const hasVip = vipStatus.currentTier !== null;
+    const isStaff = this.isStaffRole(role);
 
     const channels = await this.prisma.channel.findMany({
       where: {
         isActive: true,
         OR: [
           { type: ChannelType.PUBLIC },
-          ...(hasVip ? [{ type: ChannelType.VIP }] : []),
+          ...((hasVip || isStaff) ? [{ type: ChannelType.VIP }] : []),
           {
             members: { some: { userId } },
           },
@@ -88,7 +94,7 @@ export class ChannelsService implements OnModuleInit {
     }));
   }
 
-  async getChannelBySlug(userId: string, slug: string) {
+  async getChannelBySlug(userId: string, slug: string, role?: UserRole) {
     const channel = await this.prisma.channel.findUnique({
       where: { slug },
       include: {
@@ -102,8 +108,8 @@ export class ChannelsService implements OnModuleInit {
 
     if (!channel) throw new NotFoundException('Channel not found');
 
-    // VIP gate
-    if (channel.type === ChannelType.VIP) {
+    // VIP gate (staff bypass)
+    if (channel.type === ChannelType.VIP && !this.isStaffRole(role)) {
       const vipStatus = await this.gamificationService.getVipStatus(userId);
       if (!vipStatus.currentTier) {
         throw new ForbiddenException('VIP access required for this channel');
@@ -122,7 +128,7 @@ export class ChannelsService implements OnModuleInit {
     };
   }
 
-  async joinChannel(userId: string, channelId: string) {
+  async joinChannel(userId: string, channelId: string, role?: UserRole) {
     await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.join);
 
     const channel = await this.prisma.channel.findUnique({
@@ -131,8 +137,8 @@ export class ChannelsService implements OnModuleInit {
     if (!channel) throw new NotFoundException('Channel not found');
     if (!channel.isActive) throw new BadRequestException('Channel is inactive');
 
-    // VIP gate
-    if (channel.type === ChannelType.VIP) {
+    // VIP gate (staff bypass)
+    if (channel.type === ChannelType.VIP && !this.isStaffRole(role)) {
       const vipStatus = await this.gamificationService.getVipStatus(userId);
       if (!vipStatus.currentTier) {
         throw new ForbiddenException('VIP access required');
@@ -277,7 +283,7 @@ export class ChannelsService implements OnModuleInit {
     return { muted: false };
   }
 
-  async sendMessage(userId: string, channelId: string, content: string) {
+  async sendMessage(userId: string, channelId: string, content: string, role?: UserRole) {
     await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.message);
 
     // Check mute status
@@ -298,8 +304,8 @@ export class ChannelsService implements OnModuleInit {
     });
     if (!member) throw new ForbiddenException('Join the channel to send messages');
 
-    // VIP gate for VIP channels
-    if (channel.type === ChannelType.VIP) {
+    // VIP gate for VIP channels (staff bypass)
+    if (channel.type === ChannelType.VIP && !this.isStaffRole(role)) {
       const vipStatus = await this.gamificationService.getVipStatus(userId);
       if (!vipStatus.currentTier) {
         throw new ForbiddenException('VIP access required');
