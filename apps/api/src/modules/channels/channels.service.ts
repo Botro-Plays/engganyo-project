@@ -6,7 +6,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Filter } from 'bad-words';
+import Filter from 'bad-words';
 import {
   ChannelType,
   ChannelMemberRole,

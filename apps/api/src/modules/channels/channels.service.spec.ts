@@ -3,7 +3,8 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ChannelType, TransactionType, NotificationType } from '@prisma/client';
 
 jest.mock('bad-words', () => ({
-  Filter: class {
+  __esModule: true,
+  default: class {
     isProfane() { return false; }
     clean(text: string) { return text; }
   },

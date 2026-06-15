@@ -30,7 +30,7 @@
   },
   "packageManager": "npm@10.5.0",
   "dependencies": {
-    "bad-words": "^4.0.0",
+    "bad-words": "3.0.4",
     "sharp": "^0.34.5"
   }
 }
