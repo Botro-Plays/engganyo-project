@@ -249,7 +249,7 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 | 10 | Production hardening | ✅ Complete | - |
 | 11 | Social Verification Engine | 🟠 Partially Done (YouTube/Twitch/Spotify ✅) | 🟠 HIGH |
 | 11.5 | Anti-Abuse Enhancements | 🟠 Partially Done (trust gates ✅) | 🟠 HIGH |
-| 12 | Community & Social Features | ⏳ Pending | 🟡 MEDIUM |
+| 12 | Community & Social Features | 🟠 Partially Done (forum ✅, real-time chat ✅, chat moderation ✅) | 🟡 MEDIUM |
 | 12.5 | UX & Onboarding Improvements | 🟠 Partially Done (notifications ✅, realtime ✅) | 🟡 MEDIUM |
 | 13 | Gamification 2.0 | ⏳ Pending | 🟡 MEDIUM |
 | 14 | Security & Trust Hardening | 🟡 Mostly Complete (weekly digest ✅, disposable email ✅) | � MEDIUM |
@@ -297,11 +297,20 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - ✅ Analytics snapshots → BullMQ queue (`analytics` queue + `AnalyticsProcessor`, 2026-06-10)
 - ✅ Partial caching: campaign browse (5m), leaderboard (15m), trust scores (1h) — user profiles still uncached
 - ✅ Database backup strategy documented (DEPLOYMENT.md: retention policy, cron jobs, restore procedures)
+- ✅ Real-time user chat with moderation (`ChannelsModule`)
+  - Socket.io `/channels` namespace with JWT auth
+  - `Channel`, `ChannelMember`, `ChannelMessage` models + `ChannelMessageMention` for @mentions
+  - VIP gating, rate limits (10 msg/min, 5 tips/min), profanity filter, duplicate detection
+  - Credits tipping via `WalletService` with alt-account detection
+  - `@mention` autocomplete with `CHANNEL_MENTION` notifications
+  - Chat message reporting (`messageId` on `Report` model)
+  - Admin moderation dashboard (`/admin/chat-moderation`): stats, message list, delete, mute/unmute, channel overview
+  - Mute enforcement in `ChannelsService.sendMessage()` via `PlatformConfig` with lazy expiry cleanup
 
 ### Pending (Phases 11-17)
 - Social verification via OAuth APIs (PARTIALLY IMPLEMENTED: YouTube, Twitch, Spotify working; Twitter/X, TikTok, Instagram, Facebook manual link only)
 - Enhanced anti-abuse with behavioral analysis (task timing, social graph, image proof analysis)
-- Community and social features (follow/unfollow, campaign reviews, user profiles)
+- Community features remaining: follow/unfollow, campaign reviews, public user profiles
 - UX and onboarding improvements (onboarding walkthrough, PWA, mobile responsiveness)
 - Gamification 2.0 with perks and rewards store
 - Security hardening additions (user-facing 2FA enforcement, SMS 2FA)

@@ -404,7 +404,7 @@
 
 ## Phase 10.6 — Real-time User Chat + Credits Tipping ✅
 
-> Room-based real-time chat with VIP perks, rate limiting, profanity filtering, and credits tipping restricted to VIP users with alt-account detection.
+> Room-based real-time chat with VIP perks, rate limiting, profanity filtering, credits tipping, @mentions, message reporting, and admin moderation dashboard.
 
 **Priority**: 🟡 MEDIUM — Community engagement and VIP monetization
 **Dependencies**: Phase 10 (Production Hardening), WalletModule, GamificationModule, AntiAbuseModule
@@ -426,6 +426,15 @@
 - [✅] `TIP_RECEIVED` `NotificationType` value
 - [✅] Default channels auto-seeded on startup: `#general` (PUBLIC), `#vip-lounge` (VIP)
 - [✅] 10 unit tests for `ChannelsService`
+- [✅] `@mention` autocomplete with `ChannelMessageMention` tracking and `CHANNEL_MENTION` notifications
+- [✅] Chat message reporting via `AntiAbuseController` — `messageId` on `Report` model
+- [✅] **Admin Chat Moderation Dashboard** (`/admin/chat-moderation`)
+  - Stats endpoint: total messages, channels, active members, reported/deleted messages, messages today, top channels, top users
+  - Message list endpoint with filtering by channel, user, search, date range
+  - Admin delete message with reason logging to audit log + user notification
+  - Mute/unmute users via `PlatformConfig` key (`chat:mute:{userId}`) with expiry
+  - Channel list endpoint for moderation overview
+- [✅] Mute enforcement in `ChannelsService.sendMessage()` (reads `PlatformConfig`, validates expiry, auto-cleans stale records)
 
 **Frontend**
 - [✅] `/chat` page with channel list sidebar and message feed
@@ -436,6 +445,15 @@
 - [✅] Tip modal with amount selection (10–10,000 credits)
 - [✅] Mobile-responsive layout with collapsible channel list
 - [✅] Navigation link in dashboard sidebar and mobile nav
+- [✅] Report button on chat messages (Flag icon) — opens report modal with reason selection
+- [✅] `@mention` autocomplete in chat input (detects `@` + username substring, fetches suggestions, keyboard navigation)
+- [✅] **Admin Chat Moderation page** (`/admin/chat-moderation`)
+  - Stats cards: total messages, channels, active members, reported messages, deleted messages, messages today
+  - Paginated message table with filters (channel, user, search, date range)
+  - Action buttons per message: Delete (with reason), View User, View Channel
+  - Mute/Unmute user modal with duration selection
+  - Channel overview tab with member/message counts
+- [✅] Admin reports page updated to show chat message badge and content preview for message reports
 
 **VIP Perks Extended**
 - [✅] `canTip` — gate tipping ability

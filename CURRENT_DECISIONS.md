@@ -1729,3 +1729,34 @@ This document should be updated when:
 - No file uploads in chat (keeps scope focused)
 **Alternative Considered**:
 - Extend existing `ChatModule` — rejected because AI support chat and user-to-user chat have fundamentally different persistence, moderation, and permission models
+
+### ADR-029: Chat Moderation System
+**Status**: Implemented (2026-06-15)
+**Date**: 2026-06-15
+**Context**: Real-time chat requires moderation tools — reported messages, admin delete, user mutes, and message audit trails.
+**Decision**: Add moderation endpoints to `AdminController`/`AdminService`, extend `Report` model with `messageId`, create `ChannelMessageMention` model, and enforce mutes in `ChannelsService.sendMessage()`.
+**Rationale**:
+- Centralized moderation in existing `AdminModule` (leverages admin guards, audit logging, notification system)
+- `Report` model already supports campaign/topic/reply targets — adding `messageId` is a natural extension
+- `PlatformConfig` table reused for temporary mute storage (key = `chat:mute:{userId}`, value = ISO expiry) — no new table needed
+- Mute enforcement in `sendMessage()` prevents muted users from bypassing restrictions via socket reconnection
+**Implementation**:
+- `GET /admin/chat-moderation/stats` — aggregated dashboard stats
+- `GET /admin/chat-moderation/messages` — paginated, filterable message list with report counts
+- `DELETE /admin/chat-moderation/messages/:id` — soft-delete with reason, audit log, and user notification
+- `POST /admin/chat-moderation/users/:userId/mute` — writes `PlatformConfig` key with duration
+- `POST /admin/chat-moderation/users/:userId/unmute` — deletes `PlatformConfig` key
+- `GET /admin/chat-moderation/channels` — channel overview with member/message counts
+- Frontend: `/admin/chat-moderation` page with stats cards, message table, filters, mute modal, channel tab
+- `@mention` autocomplete in chat input with `ChannelMessageMention` records and `CHANNEL_MENTION` notifications
+- Chat message reporting via `AntiAbuseController` with `ReportReason` enum
+**Tradeoffs**:
+- `PlatformConfig` is a generic key-value store — mute records are not strongly typed; requires careful key naming
+- No scheduled cron for mute expiry cleanup; stale records are cleaned lazily when `sendMessage()` checks mute status
+- Message reports use the same `Report` table as campaigns/topics/replies — may need dedicated chat report queue at high volume
+**Lesson Learned**:
+- Prisma schema changes **must always** be accompanied by a migration. The `messageId` field and `ChannelMessageMention` model were added to schema but no migration was generated, causing 500 errors in production because the database lacked the column/table. Migration `20260615174607_add_chat_message_reports_and_mentions` was created and applied to resolve.
+
+---
+
+**Last Updated**: 2026-06-15 (ADR-029: chat moderation system; migration fix for missing schema columns; mute enforcement in ChannelsService)
