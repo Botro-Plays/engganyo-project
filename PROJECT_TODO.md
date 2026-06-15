@@ -4,7 +4,7 @@
 >
 > **Purpose:** This file is the single source of truth for all pending work. When in doubt, check here first. Individual markdowns may contain historical context but should not be treated as the authoritative task list.
 >
-> **Last Updated:** 2026-06-14
+> **Last Updated:** 2026-06-15 (Phase Chat complete — real-time chat + moderation dashboard + migration fix)
 > **Next Review:** After each completed phase
 
 ---
@@ -104,6 +104,29 @@
 | D3 | Cron auto-verifies PROCESSING crypto deposits every minute | `wallet.service.ts` | 🟡 | ✅ DONE 2026-06-14 — `@Cron(EVERY_MINUTE)`: finds PROCESSING USDT deposits with txHash, verifies on-chain, auto-completes or auto-fails |
 | D4 | Auto-credit after ≥12 confirmations — no admin review | `wallet.service.ts` | 🟡 | ✅ DONE 2026-06-14 — `completeDeposit()` with atomic `updateMany` status guard; credits awarded + socket event emitted |
 | D5 | Frontend txHash submission + "Verify Now" button + auto-polling | `wallet/page.tsx` | 🟢 | ✅ DONE 2026-06-14 — manual txHash input; `waitForTransaction` polls for 12 confirmations then triggers backend verify; "Verify Now" button for impatient users |
+
+---
+
+# Phase Chat — Real-time Chat + Moderation ✅ COMPLETE 2026-06-15
+
+**Status:** ✅ COMPLETE
+**Scope:** Room-based real-time chat with VIP perks, credits tipping, @mentions, message reporting, and admin moderation dashboard.
+
+| # | Item | File | Status |
+|---|------|------|--------|
+| CH1 | Prisma schema: `Channel`, `ChannelMember`, `ChannelMessage` models + `ChannelType` enum | `schema.prisma` | ✅ |
+| CH2 | `ChannelsController` — REST endpoints for channels, messages, tips | `channels.controller.ts` | ✅ |
+| CH3 | `ChannelsGateway` — Socket.io `/channels` namespace with JWT auth | `channels.gateway.ts` | ✅ |
+| CH4 | `ChannelsService` — business logic, profanity filter, rate limits, duplicate detection | `channels.service.ts` | ✅ |
+| CH5 | Credits tipping via `WalletService` with alt-account detection | `channels.service.ts` | ✅ |
+| CH6 | `@mention` autocomplete with `ChannelMessageMention` tracking | `channels.service.ts`, `chat/page.tsx` | ✅ |
+| CH7 | `CHANNEL_MENTION` notification type + `ChannelMessageMention` model | `schema.prisma` | ✅ |
+| CH8 | Chat message reporting (`messageId` on `Report` model) | `schema.prisma`, `anti-abuse.controller.ts` | ✅ |
+| CH9 | Admin chat moderation dashboard (`/admin/chat-moderation`) | `admin/chat-moderation/page.tsx` | ✅ |
+| CH10 | Admin endpoints: stats, message list, delete, mute/unmute, channel overview | `admin.controller.ts`, `admin.service.ts` | ✅ |
+| CH11 | Migration for `messageId` on `Report` + `ChannelMessageMention` table | `prisma/migrations/20260615174607_*` | ✅ |
+| CH12 | Mute enforcement in `ChannelsService.sendMessage()` | `channels.service.ts` | ✅ |
+| CH13 | Frontend chat page with channel list, message feed, tip modal, typing indicators | `chat/page.tsx` | ✅ |
 
 ---
 

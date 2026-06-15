@@ -1,9 +1,11 @@
 # Implementation Plan: Real-time Chat + Credits Tipping
 
+> **Status:** ✅ IMPLEMENTED (2026-06-15) — All backend endpoints, frontend pages, Socket.io namespace, admin moderation dashboard, @mentions, message reporting, and mute enforcement are live.
+
 ## 1. Executive Summary
 
 This document outlines the implementation of two features on the Engganyo platform:
-1. **Real-time chat** with rate limiting, anti-spam, profanity filtering, and VIP perks
+1. **Real-time chat** with rate limiting, anti-spam, profanity filtering, VIP perks, @mentions, and admin moderation
 2. **Credits tipping** gated to VIP users only, with alt-account detection and security controls
 
 Both features are **viable within the current architecture** with minimal infrastructure additions. The work primarily involves extending existing patterns rather than building new systems.
