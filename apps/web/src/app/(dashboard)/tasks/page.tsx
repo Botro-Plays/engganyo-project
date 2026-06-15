@@ -456,13 +456,13 @@ export default function TasksPage() {
             </button>
           ))}
         </div>
-        {limitsData && limitsData.dailyLimit !== null && (
+        {limitsData && typeof limitsData.dailyLimit === 'number' && (
           <div className="flex items-center gap-2 text-xs">
             <span className="text-zinc-500">Daily limit:</span>
             <span className={`font-medium ${limitsData.remaining === 0 ? 'text-red-400' : 'text-zinc-300'}`}>
               {limitsData.tasksCompletedToday ?? 0}/{limitsData.dailyLimit} done
             </span>
-            {limitsData.remaining !== null && limitsData.remaining > 0 && (
+            {typeof limitsData.remaining === 'number' && limitsData.remaining > 0 && (
               <span className="text-green-400">({limitsData.remaining} left)</span>
             )}
             {limitsData.bonus > 0 && limitsData.vipTier && (

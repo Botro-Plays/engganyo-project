@@ -137,6 +137,9 @@ export class TasksService {
       const DAILY_LIMITS: Partial<Record<TrustLevel, number>> = {
         [TrustLevel.NEW]: 5,
         [TrustLevel.LOW]: 20,
+        [TrustLevel.MEDIUM]: 50,
+        [TrustLevel.HIGH]: 100,
+        [TrustLevel.VERIFIED]: 200,
       };
       let dailyLimit = DAILY_LIMITS[trustLevel];
       if (dailyLimit !== undefined) {
@@ -686,6 +689,9 @@ export class TasksService {
     const DAILY_LIMITS: Partial<Record<TrustLevel, number>> = {
       [TrustLevel.NEW]: 5,
       [TrustLevel.LOW]: 20,
+      [TrustLevel.MEDIUM]: 50,
+      [TrustLevel.HIGH]: 100,
+      [TrustLevel.VERIFIED]: 200,
     };
     let dailyLimit = DAILY_LIMITS[trustLevel];
     let bonus = 0;

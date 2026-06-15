@@ -34,6 +34,13 @@ export class TasksController {
     return this.tasksService.getMyTasks(user.sub, dto);
   }
 
+  @Get('limits')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get daily task limits for current user' })
+  getLimits(@CurrentUser() user: JwtPayload) {
+    return this.tasksService.getDailyLimits(user.sub, user.role);
+  }
+
   @Post(':campaignId/assign')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(UserRateLimitGuard)
@@ -70,12 +77,5 @@ export class TasksController {
   @ApiOperation({ summary: 'Recheck task verification via platform API (for YouTube subscribe tasks)' })
   recheck(@CurrentUser() user: JwtPayload, @Param('campaignId') campaignId: string) {
     return this.tasksService.recheckTask(user.sub, campaignId);
-  }
-
-  @Get('limits')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get daily task limits for current user' })
-  getLimits(@CurrentUser() user: JwtPayload) {
-    return this.tasksService.getDailyLimits(user.sub, user.role);
   }
 }
