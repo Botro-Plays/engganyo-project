@@ -55,6 +55,9 @@ enum TransactionType {
   // Neutral
   REFUND_CAMPAIGN_CANCEL
   REFUND_COMPLETION_REJECT
+  // Tipping
+  SPEND_TIP
+  EARN_TIP
 }
 
 enum DepositStatus {
@@ -170,6 +173,7 @@ enum NotificationType {
   FORUM_MENTION
   WELCOME
   VIP_POINTS_EARNED
+  TIP_RECEIVED
 }
 
 enum ReportReason {
@@ -320,6 +324,9 @@ model User {
   twoFactorCodes      TwoFactorCode[]
   twoFactorBackupCodes TwoFactorBackupCode[]
   deposits             Deposit[]
+  channelMemberships  ChannelMember[]
+  channelMessages     ChannelMessage[]
+  createdChannels     Channel[]         @relation("ChannelCreator")
 
   @@index([email])
   @@index([username])
@@ -531,6 +538,9 @@ model Transaction {
   metadata Json?
 
   createdAt DateTime @default(now()) @map("created_at")
+
+  // Optional backlink to channel message for tips
+  tipMessage ChannelMessage?
 
   @@index([walletId])
   @@index([type])
@@ -1165,6 +1175,78 @@ enum ChatStatus {
 enum ChatRole {
   USER
   ASSISTANT
+}
+
+// =============================================================
+// USER CHAT SYSTEM (Real-time channels)
+// =============================================================
+
+enum ChannelType {
+  PUBLIC    // Open to all authenticated users
+  VIP       // VIP-only channels
+  PRIVATE   // Invite-only / DM
+  ADMIN     // Admin/mod only
+}
+
+enum ChannelMemberRole {
+  MEMBER
+  MODERATOR
+  ADMIN
+}
+
+model Channel {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique // URL-friendly identifier
+  type        ChannelType @default(PUBLIC)
+  description String?     @db.Text
+  createdById String?     @map("created_by_id")
+  createdBy   User?       @relation("ChannelCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  members   ChannelMember[]
+  messages  ChannelMessage[]
+
+  @@index([type, isActive])
+  @@index([slug])
+  @@map("channels")
+}
+
+model ChannelMember {
+  id        String            @id @default(cuid())
+  channelId String            @map("channel_id")
+  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String            @map("user_id")
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      ChannelMemberRole @default(MEMBER)
+  joinedAt  DateTime          @default(now()) @map("joined_at")
+  lastReadAt DateTime?        @map("last_read_at")
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@map("channel_members")
+}
+
+model ChannelMessage {
+  id        String   @id @default(cuid())
+  channelId String   @map("channel_id")
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // For tip transactions linked to messages
+  tipTransactionId String?      @unique @map("tip_transaction_id")
+  tipTransaction   Transaction? @relation(fields: [tipTransactionId], references: [id])
+
+  @@index([channelId, createdAt])
+  @@index([userId, createdAt])
+  @@map("channel_messages")
 }
 
 // =============================================================

@@ -65,12 +65,12 @@ export const VP_REWARDS = {
 
 // ─── Seed data ────────────────────────────────────────────────
 const DEFAULT_VIP_TIERS = [
-  { name: 'BRONZE',   level: 1, displayName: 'Bronze Member',   requirementVp: 100,   perks: { taskLimitBonus: 5,  feeDiscountPercent: 5,  color: '#CD7F32', icon: 'award' } },
-  { name: 'SILVER',   level: 2, displayName: 'Silver Member',   requirementVp: 500,   perks: { taskLimitBonus: 15, feeDiscountPercent: 10, color: '#C0C0C0', icon: 'medal' } },
-  { name: 'GOLD',     level: 3, displayName: 'Gold Member',     requirementVp: 2000,  perks: { taskLimitBonus: 0,  feeDiscountPercent: 15, color: '#FFD700', icon: 'crown' } },
-  { name: 'PLATINUM', level: 4, displayName: 'Platinum Member', requirementVp: 5000,  perks: { taskLimitBonus: 0,  feeDiscountPercent: 20, color: '#E5E4E2', icon: 'gem' } },
-  { name: 'DIAMOND',  level: 5, displayName: 'Diamond Member',  requirementVp: 10000, perks: { taskLimitBonus: 0,  feeDiscountPercent: 25, color: '#B9F2FF', icon: 'diamond' } },
-  { name: 'LEGEND',   level: 6, displayName: 'Legend',          requirementVp: 25000, perks: { taskLimitBonus: 0,  feeDiscountPercent: 30, color: '#FF4500', icon: 'star' } },
+  { name: 'BRONZE',   level: 1, displayName: 'Bronze Member',   requirementVp: 100,   perks: { taskLimitBonus: 5,  feeDiscountPercent: 5,  color: '#CD7F32', icon: 'award',   canTip: true,  chatBadge: 'Bronze', chatRateMultiplier: 1.0, canCreateRooms: false } },
+  { name: 'SILVER',   level: 2, displayName: 'Silver Member',   requirementVp: 500,   perks: { taskLimitBonus: 15, feeDiscountPercent: 10, color: '#C0C0C0', icon: 'medal',   canTip: true,  chatBadge: 'Silver', chatRateMultiplier: 1.5, canCreateRooms: false } },
+  { name: 'GOLD',     level: 3, displayName: 'Gold Member',     requirementVp: 2000,  perks: { taskLimitBonus: 0,  feeDiscountPercent: 15, color: '#FFD700', icon: 'crown',   canTip: true,  chatBadge: 'Gold',   chatRateMultiplier: 2.0, canCreateRooms: true  } },
+  { name: 'PLATINUM', level: 4, displayName: 'Platinum Member', requirementVp: 5000,  perks: { taskLimitBonus: 0,  feeDiscountPercent: 20, color: '#E5E4E2', icon: 'gem',     canTip: true,  chatBadge: 'Plat',   chatRateMultiplier: 2.5, canCreateRooms: true  } },
+  { name: 'DIAMOND',  level: 5, displayName: 'Diamond Member',  requirementVp: 10000, perks: { taskLimitBonus: 0,  feeDiscountPercent: 25, color: '#B9F2FF', icon: 'diamond', canTip: true,  chatBadge: 'Diam',   chatRateMultiplier: 3.0, canCreateRooms: true  } },
+  { name: 'LEGEND',   level: 6, displayName: 'Legend',          requirementVp: 25000, perks: { taskLimitBonus: 0,  feeDiscountPercent: 30, color: '#FF4500', icon: 'star',    canTip: true,  chatBadge: 'Legend', chatRateMultiplier: 5.0, canCreateRooms: true  } },
 ];
 
 @Injectable()
@@ -340,8 +340,12 @@ export class GamificationService implements OnModuleInit {
             perks: {
               taskLimitBonus: perks.taskLimitBonus ?? 0,
               feeDiscountPercent: perks.feeDiscountPercent ?? 0,
-              color: (currentTier.perks as Record<string, string>)?.color ?? '#888888',
-              icon: (currentTier.perks as Record<string, string>)?.icon ?? 'award',
+              color: (currentTier.perks as Record<string, unknown>)?.color as string ?? '#888888',
+              icon: (currentTier.perks as Record<string, unknown>)?.icon as string ?? 'award',
+              canTip: ((currentTier.perks as Record<string, unknown>)?.canTip as boolean) ?? false,
+              chatBadge: ((currentTier.perks as Record<string, unknown>)?.chatBadge as string) ?? '',
+              chatRateMultiplier: ((currentTier.perks as Record<string, unknown>)?.chatRateMultiplier as number) ?? 1.0,
+              canCreateRooms: ((currentTier.perks as Record<string, unknown>)?.canCreateRooms as boolean) ?? false,
             },
           }
         : null,

@@ -30,6 +30,7 @@ import { SocialAuthModule } from './modules/social-auth/social-auth.module';
 import { EmailModule } from './modules/email/email.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { ChannelsModule } from './modules/channels/channels.module';
 import { ForumModule } from './modules/forum/forum.module';
 import { SearchModule } from './modules/search/search.module';
 import { EventsModule } from './modules/events/events.module';
@@ -105,6 +106,7 @@ import { EventsModule } from './modules/events/events.module';
     EmailModule,
     UploadsModule,
     ChatModule,
+    ChannelsModule,
     ForumModule,
     SearchModule,
     EventsModule,

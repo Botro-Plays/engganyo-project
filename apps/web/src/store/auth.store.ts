@@ -10,6 +10,10 @@ export interface VipTierInfo {
     feeDiscountPercent: number;
     color: string;
     icon: string;
+    canTip: boolean;
+    chatBadge: string;
+    chatRateMultiplier: number;
+    canCreateRooms: boolean;
   };
 }
 

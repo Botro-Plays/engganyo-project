@@ -386,4 +386,43 @@ export class AntiAbuseService {
       data: { userId, ipAddress, action, ...geo },
     }).catch(() => null); // fire-and-forget, don't block request
   }
+
+  // ─── Alt-account detection for tipping ─────────────────────
+
+  async areUsersRelated(userA: string, userB: string, days: number = 30): Promise<boolean> {
+    const window = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Exclude private IPs from comparison
+    const isPrivateIp = (ip: string) =>
+      !ip || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
+
+    const [ipsA, ipsB] = await Promise.all([
+      this.prisma.ipRecord.findMany({
+        where: {
+          userId: userA,
+          createdAt: { gte: window },
+          ipAddress: { not: { startsWith: '192.168.' } },
+        },
+        select: { ipAddress: true },
+        distinct: ['ipAddress'],
+      }),
+      this.prisma.ipRecord.findMany({
+        where: {
+          userId: userB,
+          createdAt: { gte: window },
+          ipAddress: { not: { startsWith: '192.168.' } },
+        },
+        select: { ipAddress: true },
+        distinct: ['ipAddress'],
+      }),
+    ]);
+
+    const publicIpsA = ipsA.filter((i) => !isPrivateIp(i.ipAddress)).map((i) => i.ipAddress);
+    const publicIpsB = ipsB.filter((i) => !isPrivateIp(i.ipAddress)).map((i) => i.ipAddress);
+
+    const setA = new Set(publicIpsA);
+    const shared = publicIpsB.filter((ip) => setA.has(ip));
+
+    return shared.length > 0;
+  }
 }

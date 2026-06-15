@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   MessageSquare,
+  MessageCircle,
   Bell,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
@@ -37,6 +38,7 @@ const navItems = [
   { href: '/campaigns', icon: Megaphone, label: 'My Campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
+  { href: '/chat', icon: MessageCircle, label: 'Chat' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/achievements', icon: Medal, label: 'Achievements' },
   { href: '/missions', icon: Target, label: 'Missions' },
@@ -50,6 +52,7 @@ const baseMobileNavItems = [
   { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
+  { href: '/chat', icon: MessageCircle, label: 'Chat' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/achievements', icon: Medal, label: 'Achievements' },
   { href: '/missions', icon: Target, label: 'Missions' },
