@@ -510,8 +510,8 @@ export class ChannelsService implements OnModuleInit {
       return { eligible: false, reason: 'Insufficient credits' };
     }
 
-    // 5. 25% tip budget within 48h sliding window
-    const remainingBudget = await this.getTipBudget(fromUserId);
+    // 5. 25% tip budget within 48h sliding window (reuse already-fetched balance)
+    const remainingBudget = await this.getTipBudget(fromUserId, wallet.balance);
     if (amount > remainingBudget) {
       return { eligible: false, reason: `Tip exceeds your remaining tippable budget (${remainingBudget} credits). Budget regenerates over 48 hours.` };
     }
@@ -624,16 +624,19 @@ export class ChannelsService implements OnModuleInit {
 
   // ─── Tip Budget (25% of balance within 48h sliding window) ───
 
-  private async getTipBudget(userId: string): Promise<number> {
+  private async getTipBudget(userId: string, knownBalance?: number): Promise<number> {
     const WINDOW_MS = 48 * 60 * 60 * 1000; // 48 hours
     const now = Date.now();
     const cutoff = now - WINDOW_MS;
 
-    const wallet = await this.prisma.wallet.findUnique({
-      where: { userId },
-      select: { balance: true },
-    });
-    const balance = wallet?.balance ?? 0;
+    let balance = knownBalance;
+    if (balance === undefined) {
+      const wallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { balance: true },
+      });
+      balance = wallet?.balance ?? 0;
+    }
     const maxTippable = Math.floor(balance * 0.25);
 
     const key = `tip_window:${userId}`;
@@ -693,21 +696,20 @@ export class ChannelsService implements OnModuleInit {
       }
     }
 
-    // 2. Budget check against 25% tip cap
-    const remainingBudget = await this.getTipBudget(userId);
-    if (total > remainingBudget) {
-      throw new BadRequestException(
-        `Rain exceeds your remaining tippable budget (${remainingBudget} credits). Budget regenerates over 48 hours.`,
-      );
-    }
-
-    // 3. Sender balance check
+    // 2. Sender balance + budget check (single wallet query)
     const wallet = await this.prisma.wallet.findUnique({
       where: { userId },
       select: { balance: true },
     });
     if (!wallet || wallet.balance < total) {
       throw new BadRequestException('Insufficient credits for rain');
+    }
+
+    const remainingBudget = await this.getTipBudget(userId, wallet.balance);
+    if (total > remainingBudget) {
+      throw new BadRequestException(
+        `Rain exceeds your remaining tippable budget (${remainingBudget} credits). Budget regenerates over 48 hours.`,
+      );
     }
 
     // 4. Get eligible channel members (excluding sender, ACTIVE status)
