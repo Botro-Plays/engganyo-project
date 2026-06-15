@@ -260,8 +260,31 @@ export class ChannelsService implements OnModuleInit {
     }));
   }
 
+  private async isUserMuted(userId: string): Promise<{ muted: boolean; until?: Date }> {
+    const record = await this.prisma.platformConfig.findUnique({
+      where: { key: `chat:mute:${userId}` },
+    });
+    if (!record) return { muted: false };
+    const value = record.value;
+    if (typeof value !== 'string') return { muted: false };
+    const until = new Date(value);
+    if (Number.isNaN(until.getTime())) return { muted: false };
+    if (until > new Date()) {
+      return { muted: true, until };
+    }
+    // Mute expired — clean up
+    await this.prisma.platformConfig.deleteMany({ where: { key: `chat:mute:${userId}` } });
+    return { muted: false };
+  }
+
   async sendMessage(userId: string, channelId: string, content: string) {
     await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.message);
+
+    // Check mute status
+    const muteStatus = await this.isUserMuted(userId);
+    if (muteStatus.muted) {
+      throw new ForbiddenException(`You are muted from chat until ${muteStatus.until!.toISOString()}`);
+    }
 
     const channel = await this.prisma.channel.findUnique({
       where: { id: channelId },
