@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ChevronLeft, ChevronRight, X, Loader2, Coins, ShieldCheck, Shield, Trash2, AlertTriangle, ShieldOff } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, ChevronDown, X, Loader2, Coins, ShieldCheck, Shield, Trash2, AlertTriangle, ShieldOff, Copy, Check } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,10 +14,20 @@ import type { ApiResponse } from '@/types';
 
 interface AdminUser {
   id: string; username: string; email: string; displayName: string | null;
-  role: string; status: string; level: number; creditBalance: number;
-  createdAt: string; hasTwoFactor: boolean;
+  role: string; status: string; xp: number; level: number; creditBalance: number;
+  currentStreak: number; createdAt: string; hasTwoFactor: boolean;
   _count: { completions: number; campaigns: number; abuseFlags: number };
   ipRecords: { country: string | null; region: string | null; ipAddress: string | null }[];
+}
+
+interface AdminDetailUser {
+  id: string; username: string; email: string; displayName: string | null;
+  role: string; status: string; xp: number; level: number; creditBalance: number;
+  currentStreak: number; longestStreak: number; createdAt: string; hasTwoFactor: boolean;
+  _count: { completions: number; campaigns: number; abuseFlags: number; reportsReceived: number; inventory: number };
+  trustScore: { score: number; level: string } | null;
+  abuseFlags: { flagType: string; severity: string; createdAt: string }[];
+  ipRecords: { country: string | null; region: string | null; ipAddress: string | null; createdAt: string }[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -65,6 +75,134 @@ const trustSchema = z.object({
 });
 type TrustFormData = z.infer<typeof trustSchema>;
 
+function UserDetailPanel({ userId }: { userId: string }) {
+  const [copied, setCopied] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'user-detail', userId],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminDetailUser>>(`admin/users/${userId}`);
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+
+  function copyUuid() {
+    void navigator.clipboard.writeText(userId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="px-6 py-4 flex items-center gap-2 text-zinc-500 text-xs">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading details…
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const TRUST_COLORS: Record<string, string> = {
+    VERIFIED: 'text-emerald-400', HIGH: 'text-green-400',
+    MEDIUM: 'text-yellow-400', LOW: 'text-orange-400', NEW: 'text-zinc-400',
+  };
+
+  return (
+    <div className="px-6 py-4 bg-zinc-900/60 border-t border-surface-border space-y-4">
+      {/* UUID row */}
+      <div>
+        <p className="text-xs text-zinc-500 mb-1 uppercase tracking-wide">User UUID</p>
+        <div className="flex items-center gap-2">
+          <code className="text-xs font-mono text-zinc-300 bg-zinc-800 px-2 py-1 rounded flex-1 truncate">{data.id}</code>
+          <button
+            onClick={copyUuid}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-white text-xs transition-colors flex-shrink-0"
+          >
+            {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">XP</p>
+          <p className="text-sm font-semibold text-white">{data.xp.toLocaleString()}</p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">Trust Score</p>
+          <p className={`text-sm font-semibold ${TRUST_COLORS[data.trustScore?.level ?? 'NEW'] ?? 'text-zinc-400'}`}>
+            {data.trustScore?.score ?? 0}
+            <span className="text-xs font-normal ml-1 text-zinc-500">({data.trustScore?.level ?? 'NEW'})</span>
+          </p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">Streak (Current / Best)</p>
+          <p className="text-sm font-semibold text-white">{data.currentStreak} <span className="text-zinc-500">/</span> {data.longestStreak} days</p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">2FA</p>
+          <p className={`text-sm font-semibold ${data.hasTwoFactor ? 'text-green-400' : 'text-zinc-500'}`}>
+            {data.hasTwoFactor ? 'Enabled' : 'Disabled'}
+          </p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">Inventory Items</p>
+          <p className="text-sm font-semibold text-white">{data._count.inventory}</p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">Reports Received</p>
+          <p className={`text-sm font-semibold ${data._count.reportsReceived > 0 ? 'text-red-400' : 'text-zinc-400'}`}>
+            {data._count.reportsReceived}
+          </p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">Campaigns Created</p>
+          <p className="text-sm font-semibold text-white">{data._count.campaigns}</p>
+        </div>
+        <div className="bg-zinc-800/60 rounded-lg p-3">
+          <p className="text-xs text-zinc-500 mb-0.5">Task Completions</p>
+          <p className="text-sm font-semibold text-white">{data._count.completions}</p>
+        </div>
+      </div>
+
+      {/* IP records */}
+      {data.ipRecords.length > 0 && (
+        <div>
+          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Recent IP Addresses</p>
+          <div className="space-y-1">
+            {data.ipRecords.map((ip, i) => (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <code className="font-mono text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded">{ip.ipAddress ?? '—'}</code>
+                <span className="text-zinc-400">{[ip.country, ip.region].filter(Boolean).join(' · ') || '—'}</span>
+                <span className="text-zinc-600 ml-auto">{formatDate(ip.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active abuse flags */}
+      {data.abuseFlags.length > 0 && (
+        <div>
+          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">
+            Active Abuse Flags <span className="text-red-400">({data.abuseFlags.length})</span>
+          </p>
+          <div className="space-y-1">
+            {data.abuseFlags.map((f, i) => (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <span className="text-red-400 font-medium">{f.flagType}</span>
+                <span className="text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">{f.severity}</span>
+                <span className="text-zinc-600 ml-auto">{formatDate(f.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminUsersPage() {
   const { user: currentAdmin } = useAuthStore();
   const isSuperAdmin = currentAdmin?.role === 'SUPER_ADMIN';
@@ -88,6 +226,11 @@ export default function AdminUsersPage() {
   const [trustSuccess, setTrustSuccess] = useState(false);
   const [disable2faUser, setDisable2faUser] = useState<AdminUser | null>(null);
   const [disable2faError, setDisable2faError] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+
+  function toggleExpand(id: string) {
+    setExpandedUserId((cur) => (cur === id ? null : id));
+  }
 
   const params = new URLSearchParams({
     page: String(page), limit: '25',
@@ -233,10 +376,16 @@ export default function AdminUsersPage() {
                 </tr>
               ))
               : (data?.items ?? []).map((u) => (
-                <tr key={u.id} className="border-b border-surface-border last:border-0 hover:bg-surface-hover transition-colors">
+                <Fragment key={u.id}>
+                <tr className={`border-b border-surface-border hover:bg-surface-hover transition-colors cursor-pointer ${expandedUserId === u.id ? 'bg-surface-hover' : ''}`} onClick={() => toggleExpand(u.id)}>
                   <td className="px-4 py-3">
-                    <UserLink user={u} />
-                    <p className="text-xs text-zinc-500 mt-0.5">{u.email}</p>
+                    <div className="flex items-center gap-1.5">
+                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 flex-shrink-0 transition-transform ${expandedUserId === u.id ? 'rotate-0' : '-rotate-90'}`} />
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <UserLink user={u} />
+                        <p className="text-xs text-zinc-500 mt-0.5">{u.email}</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'text-zinc-400 bg-zinc-500/10'}`}>
@@ -261,7 +410,7 @@ export default function AdminUsersPage() {
                     {u.ipRecords?.[0]?.region && <span className="text-zinc-600"> · {u.ipRecords[0].region}</span>}
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(u.createdAt)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const isPrivileged = u.role === 'ADMIN' || u.role === 'SUPER_ADMIN';
                       const canAct = !isPrivileged || isSuperAdmin;
@@ -314,6 +463,14 @@ export default function AdminUsersPage() {
                     })()}
                   </td>
                 </tr>
+                {expandedUserId === u.id && (
+                  <tr className="border-b border-surface-border">
+                    <td colSpan={10} className="p-0">
+                      <UserDetailPanel userId={u.id} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
           </tbody>
         </table>

@@ -102,13 +102,16 @@ export class AdminService {
         id: true, username: true, email: true, displayName: true,
         role: true, status: true, xp: true, level: true,
         creditBalance: true, currentStreak: true, longestStreak: true, createdAt: true,
-        _count: { select: { completions: true, campaigns: true, abuseFlags: true, reportsReceived: true } },
+        twoFactorTotpSecret: true, twoFactorEmailEnabled: true,
+        _count: { select: { completions: true, campaigns: true, abuseFlags: true, reportsReceived: true, inventory: true } },
         trustScore: { select: { score: true, level: true } },
         abuseFlags: { where: { isResolved: false }, select: { flagType: true, severity: true, createdAt: true }, take: 10 },
+        ipRecords: { orderBy: { createdAt: 'desc' }, take: 5, select: { country: true, region: true, ipAddress: true, createdAt: true } },
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    const { twoFactorTotpSecret, twoFactorEmailEnabled, ...rest } = user;
+    return { ...rest, hasTwoFactor: !!twoFactorTotpSecret || twoFactorEmailEnabled };
   }
 
   async updateUserStatus(adminId: string, adminRole: string, userId: string, dto: UpdateUserStatusDto) {

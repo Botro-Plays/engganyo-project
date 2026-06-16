@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag, Plus, Pencil, ToggleLeft, ToggleRight, Gift,
-  Zap, Sparkles, Wrench, Package, Loader2, X, Check,
+  Zap, Sparkles, Wrench, Package, Loader2, X, Check, Search,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits } from '@/lib/utils';
@@ -28,6 +28,13 @@ interface AdminStoreItem {
   _count: { purchases: number };
 }
 
+interface SuggestedUser {
+  id: string;
+  username: string;
+  displayName: string | null;
+  email: string;
+}
+
 const CATEGORIES = ['BOOST', 'COSMETIC', 'CONVENIENCE', 'CREDIT_PACK', 'GUILD_PERK'];
 
 const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -46,6 +53,30 @@ const CATEGORY_COLORS: Record<string, string> = {
   GUILD_PERK: 'text-rose-400',
 };
 
+const EFFECT_TYPES = [
+  { value: 'none', label: 'None / Passive' },
+  { value: 'xp_boost', label: 'XP Boost' },
+  { value: 'task_limit_boost', label: 'Task Limit Boost' },
+  { value: 'streak_freeze', label: 'Streak Freeze' },
+  { value: 'task_refresh', label: 'Task Refresh' },
+  { value: 'cosmetic', label: 'Cosmetic (Passive)' },
+  { value: 'loot_box', label: 'Loot Box' },
+];
+
+const EFFECT_TEMPLATES: Record<string, Record<string, unknown>> = {
+  xp_boost: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+  task_limit_boost: { boostType: 'task_limit', bonusSlots: 5, durationHours: 48, effectType: 'task_limit_boost' },
+  streak_freeze: { convenienceType: 'streak_freeze', protectedDays: 3, effectType: 'streak_freeze' },
+  task_refresh: { convenienceType: 'task_refresh', cooldownHours: 24, effectType: 'task_refresh' },
+  cosmetic: { cosmeticType: 'avatar_frame', style: '', assetUrl: '', effectType: 'cosmetic' },
+  loot_box: { isLootBox: true, effectType: 'loot_box', possibleRewards: [{ type: 'credits', min: 50, max: 500 }, { type: 'xp_boost', hours: 12 }] },
+  none: {},
+};
+
+function parseMetaJson(json: string): Record<string, unknown> {
+  try { return JSON.parse(json) as Record<string, unknown>; } catch { return {}; }
+}
+
 const emptyForm = {
   name: '',
   description: '',
@@ -58,6 +89,8 @@ const emptyForm = {
   isActive: true,
   startsAt: '',
   endsAt: '',
+  effectType: 'none',
+  metadataJson: '{}',
 };
 
 export default function AdminStorePage() {
@@ -69,6 +102,45 @@ export default function AdminStorePage() {
   const [form, setForm] = useState({ ...emptyForm });
   const [grantForm, setGrantForm] = useState({ userId: '', itemId: '', quantity: 1, reason: '' });
   const [error, setError] = useState('');
+
+  // ─── Grant: user search typeahead ─────────────────────────
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [debouncedTerm, setDebouncedTerm] = useState('');
+  const [selectedGrantUser, setSelectedGrantUser] = useState<SuggestedUser | null>(null);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedTerm(userSearchTerm), 300);
+    return () => clearTimeout(t);
+  }, [userSearchTerm]);
+
+  const { data: userSuggestions = [] } = useQuery({
+    queryKey: ['admin', 'user-suggest', debouncedTerm],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ items: SuggestedUser[] }>>(
+        `admin/users?search=${encodeURIComponent(debouncedTerm)}&limit=6`
+      );
+      return res.data.data?.items ?? [];
+    },
+    enabled: debouncedTerm.length >= 2,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowUserDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  function handleEffectTypeChange(et: string) {
+    const template = EFFECT_TEMPLATES[et] ?? {};
+    setForm((f) => ({ ...f, effectType: et, metadataJson: JSON.stringify(template, null, 2) }));
+  }
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['admin', 'store', 'items', includeInactive],
@@ -82,12 +154,20 @@ export default function AdminStorePage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
+      const metadata = parseMetaJson(data.metadataJson);
       const payload = {
-        ...data,
+        name: data.name,
+        description: data.description || undefined,
+        category: data.category,
+        creditCost: Number(data.creditCost),
+        isLimited: data.isLimited,
         limitedQty: data.limitedQty !== '' ? Number(data.limitedQty) : null,
+        isConsumable: data.isConsumable,
         maxOwnedPerUser: data.maxOwnedPerUser !== '' ? Number(data.maxOwnedPerUser) : null,
+        isActive: data.isActive,
         startsAt: data.startsAt || null,
         endsAt: data.endsAt || null,
+        metadata,
       };
       const res = await apiClient.post<ApiResponse<AdminStoreItem>>('admin/store/items', payload);
       return res.data.data;
@@ -104,12 +184,19 @@ export default function AdminStorePage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<typeof form> & { isActive?: boolean } }) => {
+      const metadata = data.metadataJson !== undefined ? parseMetaJson(data.metadataJson) : undefined;
       const payload = {
-        ...data,
+        name: data.name,
+        description: data.description,
+        creditCost: data.creditCost,
+        isLimited: data.isLimited,
         limitedQty: data.limitedQty !== undefined && data.limitedQty !== '' ? Number(data.limitedQty) : data.limitedQty === '' ? null : undefined,
+        isConsumable: data.isConsumable,
         maxOwnedPerUser: data.maxOwnedPerUser !== undefined && data.maxOwnedPerUser !== '' ? Number(data.maxOwnedPerUser) : data.maxOwnedPerUser === '' ? null : undefined,
+        isActive: data.isActive,
         startsAt: data.startsAt === '' ? null : data.startsAt,
         endsAt: data.endsAt === '' ? null : data.endsAt,
+        ...(metadata !== undefined ? { metadata } : {}),
       };
       const res = await apiClient.patch<ApiResponse<AdminStoreItem>>(`admin/store/items/${id}`, payload);
       return res.data.data;
@@ -134,12 +221,16 @@ export default function AdminStorePage() {
     onSuccess: () => {
       setShowGrant(false);
       setGrantForm({ userId: '', itemId: '', quantity: 1, reason: '' });
+      setSelectedGrantUser(null);
+      setUserSearchTerm('');
       setError('');
     },
     onError: (err) => setError(getApiErrorMessage(err)),
   });
 
   function openEdit(item: AdminStoreItem) {
+    const existingMeta = item.metadata ?? {};
+    const existingEffect = (existingMeta['effectType'] as string | undefined) ?? 'none';
     setEditItem(item);
     setForm({
       name: item.name,
@@ -153,6 +244,8 @@ export default function AdminStorePage() {
       isActive: item.isActive,
       startsAt: item.startsAt ? item.startsAt.slice(0, 16) : '',
       endsAt: item.endsAt ? item.endsAt.slice(0, 16) : '',
+      effectType: existingEffect,
+      metadataJson: JSON.stringify(existingMeta, null, 2),
     });
     setError('');
   }
@@ -162,6 +255,9 @@ export default function AdminStorePage() {
     setShowCreate(false);
     setShowGrant(false);
     setForm({ ...emptyForm });
+    setGrantForm({ userId: '', itemId: '', quantity: 1, reason: '' });
+    setSelectedGrantUser(null);
+    setUserSearchTerm('');
     setError('');
   }
 
@@ -231,6 +327,7 @@ export default function AdminStorePage() {
               <tr className="text-xs text-zinc-500 uppercase tracking-wide">
                 <th className="text-left px-4 py-3">Item</th>
                 <th className="text-left px-4 py-3">Category</th>
+                <th className="text-left px-4 py-3">Effect</th>
                 <th className="text-right px-4 py-3">Cost</th>
                 <th className="text-center px-4 py-3">Purchases</th>
                 <th className="text-center px-4 py-3">Status</th>
@@ -255,6 +352,11 @@ export default function AdminStorePage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium ${colorClass}`}>{item.category}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-mono text-zinc-500">
+                        {(item.metadata?.['effectType'] as string | undefined) ?? '—'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-brand-300 font-medium">{formatCredits(item.creditCost)}</span>
@@ -308,7 +410,7 @@ export default function AdminStorePage() {
       {/* ── Modal ──────────────────────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="card-glass rounded-2xl w-full max-w-lg p-6">
+          <div className="card-glass rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-white">
                 {showGrant ? 'Grant Item to User' : editItem ? `Edit: ${editItem.name}` : 'Create Store Item'}
@@ -320,15 +422,68 @@ export default function AdminStorePage() {
 
             {showGrant ? (
               <div className="space-y-4">
+                {/* User typeahead */}
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">User ID</label>
-                  <input
-                    type="text"
-                    value={grantForm.userId}
-                    onChange={(e) => setGrantForm({ ...grantForm, userId: e.target.value })}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
-                    placeholder="User UUID"
-                  />
+                  <label className="block text-xs text-zinc-400 mb-1">User</label>
+                  {selectedGrantUser ? (
+                    <div className="flex items-center justify-between bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5">
+                      <div>
+                        <span className="text-white text-sm font-medium">@{selectedGrantUser.username}</span>
+                        {selectedGrantUser.displayName && (
+                          <span className="text-zinc-400 text-xs ml-2">{selectedGrantUser.displayName}</span>
+                        )}
+                        <p className="text-xs text-zinc-500">{selectedGrantUser.email}</p>
+                      </div>
+                      <button
+                        onClick={() => { setSelectedGrantUser(null); setUserSearchTerm(''); setGrantForm({ ...grantForm, userId: '' }); }}
+                        className="text-zinc-500 hover:text-red-400 transition-colors ml-2 flex-shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative" ref={dropdownRef}>
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={userSearchTerm}
+                        onChange={(e) => { setUserSearchTerm(e.target.value); setShowUserDropdown(true); }}
+                        onFocus={() => setShowUserDropdown(true)}
+                        placeholder="Search by username or email…"
+                        className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-brand-500"
+                      />
+                      {showUserDropdown && userSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-10 max-h-52 overflow-y-auto">
+                          {userSuggestions.map((u) => (
+                            <button
+                              key={u.id}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setSelectedGrantUser(u);
+                                setGrantForm({ ...grantForm, userId: u.id });
+                                setShowUserDropdown(false);
+                                setUserSearchTerm('');
+                              }}
+                              className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-zinc-700 text-left transition-colors border-b border-zinc-700/50 last:border-0"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm text-white font-medium">
+                                  @{u.username}
+                                  {u.displayName && <span className="text-zinc-400 font-normal ml-1.5">{u.displayName}</span>}
+                                </p>
+                                <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showUserDropdown && debouncedTerm.length >= 2 && userSuggestions.length === 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-3 text-xs text-zinc-500 z-10">
+                          No users found for &ldquo;{debouncedTerm}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1">Item</label>
@@ -455,6 +610,31 @@ export default function AdminStorePage() {
                       onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white"
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-zinc-400 mb-1">Effect Type</label>
+                    <select
+                      value={form.effectType}
+                      onChange={(e) => handleEffectTypeChange(e.target.value)}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
+                    >
+                      {EFFECT_TYPES.map((et) => <option key={et.value} value={et.value}>{et.label}</option>)}
+                    </select>
+                    <p className="text-xs text-zinc-600 mt-1">Controls what happens when a user activates this item.</p>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-zinc-400 mb-1">Metadata (JSON)</label>
+                    <textarea
+                      value={form.metadataJson}
+                      onChange={(e) => setForm({ ...form, metadataJson: e.target.value })}
+                      rows={5}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-brand-500 resize-none"
+                      placeholder="{}"
+                    />
+                    {(() => {
+                      try { JSON.parse(form.metadataJson); return null; }
+                      catch { return <p className="text-xs text-red-400 mt-1">Invalid JSON</p>; }
+                    })()}
                   </div>
                 </div>
 
