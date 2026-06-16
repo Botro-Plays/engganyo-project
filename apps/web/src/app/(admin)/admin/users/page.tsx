@@ -458,42 +458,92 @@ export default function AdminUsersPage() {
                       return (
                         <div className="flex items-center gap-1.5">
                           {canAct && !isSelf && u.status !== 'SUSPENDED' && u.status !== 'BANNED' && (
-                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'SUSPENDED' })} className="px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors">Suspend</button>
+                            <button
+                              onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'SUSPENDED' })}
+                              className="px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
+                              title="Suspend — temporarily restrict the user's access. They cannot log in until reactivated."
+                            >
+                              Suspend
+                            </button>
                           )}
                           {canAct && !isSelf && u.status !== 'BANNED' && (
-                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'BANNED' })} className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">Ban</button>
+                            <button
+                              onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'BANNED' })}
+                              className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                              title="Ban — permanently block the user. Their account and data remain but they cannot access the platform."
+                            >
+                              Ban
+                            </button>
                           )}
                           {canAct && !isSelf && (u.status === 'SUSPENDED' || u.status === 'BANNED') && (
-                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })} className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors">Activate</button>
+                            <button
+                              onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })}
+                              className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                              title="Activate — restore the user's access and allow them to log in again."
+                            >
+                              Activate
+                            </button>
                           )}
                           {canAct && u.status === 'PENDING_VERIFICATION' && (
-                            <button onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })} className="px-2 py-1 text-xs rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">Approve</button>
+                            <button
+                              onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })}
+                              className="px-2 py-1 text-xs rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                              title="Approve — manually verify the user's email and activate their account."
+                            >
+                              Approve
+                            </button>
                           )}
                           {canAct && (
-                            <button onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }} className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors">
+                            <button
+                              onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }}
+                              className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors"
+                              title="Adjust Credits — grant or deduct credits from this user's wallet balance."
+                            >
                               <Coins className="w-3 h-3" />
                             </button>
                           )}
                           {canAct && (
-                            <button onClick={() => { setTrustUser(u); setTrustSuccess(false); setTrustError(null); trustForm.reset({ action: 'add' }); }} className="px-2 py-1 text-xs rounded bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors">
+                            <button
+                              onClick={() => { setTrustUser(u); setTrustSuccess(false); setTrustError(null); trustForm.reset({ action: 'add' }); }}
+                              className="px-2 py-1 text-xs rounded bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
+                              title="Adjust Trust Score — add or subtract trust score points to influence the user's platform reputation."
+                            >
                               <Shield className="w-3 h-3" />
                             </button>
                           )}
                           {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
-                            <button onClick={() => { setRoleUser(u); setRoleSuccess(false); setRoleError(null); roleForm.reset({ role: u.role as typeof ASSIGNABLE_ROLES[number] }); }} className="px-2 py-1 text-xs rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors">
+                            <button
+                              onClick={() => { setRoleUser(u); setRoleSuccess(false); setRoleError(null); roleForm.reset({ role: u.role as typeof ASSIGNABLE_ROLES[number] }); }}
+                              className="px-2 py-1 text-xs rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                              title="Change Role — assign a different platform role (USER, CREATOR, MODERATOR, ADMIN)."
+                            >
                               <ShieldCheck className="w-3 h-3" />
                             </button>
                           )}
                           {isSuperAdmin && (
-                            <button onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }} className="px-2 py-1 text-xs rounded bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors">Edit</button>
+                            <button
+                              onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }}
+                              className="px-2 py-1 text-xs rounded bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors"
+                              title="Edit — update the user's basic info such as email, username, and display name."
+                            >
+                              Edit
+                            </button>
                           )}
                           {canAct && !isSelf && u.hasTwoFactor && (
-                            <button onClick={() => { setDisable2faUser(u); setDisable2faError(null); }} className="px-2 py-1 text-xs rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors" title="Disable 2FA">
+                            <button
+                              onClick={() => { setDisable2faUser(u); setDisable2faError(null); }}
+                              className="px-2 py-1 text-xs rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                              title="Disable 2FA — remove two-factor authentication from this user's account."
+                            >
                               <ShieldOff className="w-3 h-3" />
                             </button>
                           )}
                           {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
-                            <button onClick={() => { setDeleteUser(u); setDeleteError(null); }} className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">
+                            <button
+                              onClick={() => { setDeleteUser(u); setDeleteError(null); }}
+                              className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                              title="Delete — permanently remove this user and all associated data. Referrals linked to this user are also cleaned up."
+                            >
                               <Trash2 className="w-3 h-3" />
                             </button>
                           )}

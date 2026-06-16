@@ -340,6 +340,7 @@ export default function ProfilePage() {
   const { user, updateUser } = useAuthStore();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const [showSocialForm, setShowSocialForm] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -528,6 +529,13 @@ export default function ProfilePage() {
     return `Join Engganyo and earn credits by completing tasks! Use my referral code ${code ?? ''} to sign up:`;
   };
 
+  const copyReferralLink = () => {
+    const url = getReferralUrl();
+    void navigator.clipboard.writeText(url);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
   const handleNativeShare = async () => {
     try {
       await navigator.share({
@@ -536,7 +544,8 @@ export default function ProfilePage() {
         url: getReferralUrl(),
       });
     } catch {
-      // User cancelled or share failed — no action needed
+      // User cancelled or share failed — fallback to copying the link
+      copyReferralLink();
     }
   };
 
@@ -634,15 +643,29 @@ export default function ProfilePage() {
           Invite friends and earn credits when they sign up and complete their first verified task. Both you and your friend get 50 credits each — awarded automatically.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
-          <button
-            onClick={copyReferral}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
-          >
-            {profile?.referralCode ?? user?.referralCode ?? '—'}
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
-          <span className="text-xs text-zinc-500">Tap to copy your referral code</span>
+        <div className="flex flex-col gap-3 mb-4">
+          {/* Referral code */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <button
+              onClick={copyReferral}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
+            >
+              {profile?.referralCode ?? user?.referralCode ?? '—'}
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+            <span className="text-xs text-zinc-500">Tap to copy your referral code</span>
+          </div>
+          {/* Full referral link */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <button
+              onClick={copyReferralLink}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs font-mono hover:bg-zinc-700 hover:text-white transition-all max-w-full overflow-hidden"
+            >
+              <span className="truncate max-w-[220px] sm:max-w-[280px]">{getReferralUrl()}</span>
+              {linkCopied ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
+            </button>
+            <span className="text-xs text-zinc-500">Tap to copy full referral link</span>
+          </div>
         </div>
 
         <div className="border-t border-surface-border pt-4">

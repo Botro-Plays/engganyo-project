@@ -44,7 +44,7 @@ const jsonLd = {
 
 interface PublicStats {
   totalUsers: number;
-  totalVerifiedTasks: number;
+  totalTaskCompletions: number;
   totalCountries: number;
 }
 
@@ -54,11 +54,13 @@ async function getPublicStats(): Promise<PublicStats> {
     const res = await fetch(`${apiUrl}/analytics/public-stats`, {
       next: { revalidate: 3600 }, // 1 hour
     });
-    if (!res.ok) throw new Error('Failed to fetch stats');
+    if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status} ${res.statusText}`);
     const json = await res.json();
     return json.data as PublicStats;
-  } catch {
-    return { totalUsers: 0, totalVerifiedTasks: 0, totalCountries: 0 };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    if (process.env.NODE_ENV === 'development') console.error('Landing stats fetch failed:', err);
+    return { totalUsers: 0, totalTaskCompletions: 0, totalCountries: 0 };
   }
 }
 
@@ -116,11 +118,11 @@ export default async function LandingPage() {
           <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-500 text-sm">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-brand-400" />
-              <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
+              <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> users</span>
             </div>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-accent-400" />
-              <span><strong className="text-white">{stats.totalVerifiedTasks.toLocaleString()}+</strong> tasks completed</span>
+              <span><strong className="text-white">{stats.totalTaskCompletions.toLocaleString()}+</strong> tasks completed</span>
             </div>
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-green-400" />

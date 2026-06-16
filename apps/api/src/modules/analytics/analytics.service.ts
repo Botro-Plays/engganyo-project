@@ -230,12 +230,18 @@ export class AnalyticsService {
   // ─── Public stats (landing page) ────────────────────────────────────────────
 
   async getPublicStats() {
-    const [totalUsers, totalVerifiedTasks, totalCountries] = await Promise.all([
+    const [totalUsers, totalTaskCompletions, totalCountries] = await Promise.all([
       this.prisma.user.count({ where: { status: { not: 'DEACTIVATED' } } }),
-      this.prisma.taskCompletion.count({ where: { status: CompletionStatus.VERIFIED } }),
+      // Count every task a user actually finished (submitted, approved, or verified)
+      this.prisma.taskCompletion.count({
+        where: {
+          status: { in: [CompletionStatus.SUBMITTED, CompletionStatus.APPROVED, CompletionStatus.VERIFIED] },
+        },
+      }),
+      // Distinct countries from IP records + user registrationIp as fallback
       this.prisma.ipRecord.groupBy({ by: ['country'] }).then((rows) => rows.filter((r) => r.country).length),
     ]);
-    return { totalUsers, totalVerifiedTasks, totalCountries };
+    return { totalUsers, totalTaskCompletions, totalCountries };
   }
 
   // ─── Daily snapshot cron (runs at midnight UTC) ──────────────────────────────
