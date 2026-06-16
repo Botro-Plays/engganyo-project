@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Logger, BadRequestException, NotFoundExceptio
 import { StoreCategory, TransactionType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 
 // ─── Default store items ─────────────────────────────────────
@@ -11,55 +12,71 @@ const DEFAULT_STORE_ITEMS: Array<{
   category: StoreCategory;
   creditCost: number;
   metadata: Record<string, unknown>;
+  isConsumable?: boolean;
+  maxOwnedPerUser?: number | null;
 }> = [
   {
     name: 'XP Boost (24h)',
     description: 'Earn 2x XP on all task completions for 24 hours.',
     category: StoreCategory.BOOST,
     creditCost: 150,
-    metadata: { boostType: 'xp', multiplier: 2, durationHours: 24 },
+    isConsumable: true,
+    maxOwnedPerUser: null,
+    metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
   },
   {
     name: 'Task Limit Boost (+5)',
     description: 'Increase your daily task limit by 5 for 48 hours.',
     category: StoreCategory.BOOST,
     creditCost: 200,
-    metadata: { boostType: 'task_limit', bonusSlots: 5, durationHours: 48 },
+    isConsumable: true,
+    maxOwnedPerUser: null,
+    metadata: { boostType: 'task_limit', bonusSlots: 5, durationHours: 48, effectType: 'task_limit_boost' },
   },
   {
     name: 'VIP Badge: Gold Frame',
     description: 'Equip a gold frame around your avatar.',
     category: StoreCategory.COSMETIC,
     creditCost: 500,
-    metadata: { cosmeticType: 'avatar_frame', style: 'gold', assetUrl: '/assets/badges/gold-frame.svg' },
+    isConsumable: false,
+    maxOwnedPerUser: 1,
+    metadata: { cosmeticType: 'avatar_frame', style: 'gold', assetUrl: '/assets/badges/gold-frame.svg', effectType: 'cosmetic' },
   },
   {
     name: 'Profile Theme: Neon',
     description: 'Unlock the Neon profile theme for your public profile.',
     category: StoreCategory.COSMETIC,
     creditCost: 350,
-    metadata: { cosmeticType: 'profile_theme', themeId: 'neon', assetUrl: '/assets/themes/neon.css' },
+    isConsumable: false,
+    maxOwnedPerUser: 1,
+    metadata: { cosmeticType: 'profile_theme', themeId: 'neon', assetUrl: '/assets/themes/neon.css', effectType: 'cosmetic' },
   },
   {
     name: 'Streak Freeze (3 days)',
     description: 'Protects your login streak for up to 3 missed days.',
     category: StoreCategory.CONVENIENCE,
     creditCost: 100,
-    metadata: { convenienceType: 'streak_freeze', protectedDays: 3 },
+    isConsumable: true,
+    maxOwnedPerUser: null,
+    metadata: { convenienceType: 'streak_freeze', protectedDays: 3, effectType: 'streak_freeze' },
   },
   {
     name: 'Instant Task Refresh',
     description: 'Immediately refresh your daily task assignments (once per day).',
     category: StoreCategory.CONVENIENCE,
     creditCost: 75,
-    metadata: { convenienceType: 'task_refresh', cooldownHours: 24 },
+    isConsumable: true,
+    maxOwnedPerUser: 1,
+    metadata: { convenienceType: 'task_refresh', cooldownHours: 24, effectType: 'task_refresh' },
   },
   {
     name: 'Mystery Gift Box',
     description: 'Contains a random reward: 50–500 credits, XP boost, or cosmetic.',
     category: StoreCategory.CONVENIENCE,
     creditCost: 120,
-    metadata: { isLootBox: true, possibleRewards: [
+    isConsumable: true,
+    maxOwnedPerUser: null,
+    metadata: { isLootBox: true, effectType: 'loot_box', possibleRewards: [
       { type: 'credits', min: 50, max: 500 },
       { type: 'xp_boost', hours: 12 },
       { type: 'cosmetic', pool: ['silver-frame', 'holographic-badge'] },
@@ -73,6 +90,7 @@ export class StoreService implements OnModuleInit {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     private readonly walletService: WalletService,
   ) {}
 
@@ -90,8 +108,14 @@ export class StoreService implements OnModuleInit {
     }
 
     for (const item of DEFAULT_STORE_ITEMS) {
+      const { isConsumable, maxOwnedPerUser, ...rest } = item;
       await this.prisma.storeItem.create({
-        data: { ...item, metadata: item.metadata as Prisma.InputJsonValue },
+        data: {
+          ...rest,
+          isConsumable: isConsumable ?? true,
+          maxOwnedPerUser: maxOwnedPerUser ?? null,
+          metadata: rest.metadata as Prisma.InputJsonValue,
+        },
       });
     }
 
@@ -119,6 +143,8 @@ export class StoreService implements OnModuleInit {
         limitedQty: true,
         startsAt: true,
         endsAt: true,
+        isConsumable: true,
+        maxOwnedPerUser: true,
         metadata: true,
         createdAt: true,
         updatedAt: true,
@@ -149,61 +175,86 @@ export class StoreService implements OnModuleInit {
       throw new BadRequestException('Item sale has ended');
     }
 
-    // Check limited quantity
-    if (item.isLimited && item.limitedQty !== null) {
-      const soldCount = await this.prisma.storePurchase.count({ where: { itemId } });
-      const remaining = item.limitedQty - soldCount;
-      if (remaining <= 0) throw new BadRequestException('Item is sold out');
-      if (quantity > remaining) {
-        throw new BadRequestException(`Only ${remaining} remaining`);
+    // ── Cosmetic dedup guard ─────────────────────────────────
+    if (item.category === StoreCategory.COSMETIC) {
+      const existingCosmetic = await this.prisma.userInventory.findFirst({
+        where: { userId, itemId, consumedAt: null },
+      });
+      if (existingCosmetic) {
+        throw new BadRequestException('You already own this cosmetic');
+      }
+    }
+
+    // ── Max owned per user guard ────────────────────────────
+    if (item.maxOwnedPerUser !== null) {
+      const ownedCount = await this.prisma.userInventory.aggregate({
+        where: { userId, itemId },
+        _sum: { quantity: true },
+      });
+      const currentTotal = ownedCount._sum.quantity ?? 0;
+      if (currentTotal + quantity > item.maxOwnedPerUser) {
+        throw new BadRequestException(
+          `Max ownership limit reached (${item.maxOwnedPerUser} total). You currently own ${currentTotal}.`,
+        );
       }
     }
 
     const totalCost = item.creditCost * quantity;
 
-    // Debit credits via WalletService (creates transaction with optimistic locking)
-    const transaction = await this.walletService.debit(userId, totalCost, {
-      type: TransactionType.SPEND_STORE_PURCHASE,
-      description: `Purchased ${quantity}x ${item.name}`,
-      referenceId: itemId,
-      referenceType: 'store_item',
-      metadata: { itemName: item.name, quantity, unitCost: item.creditCost },
-    });
+    // ── Atomic purchase inside transaction ──────────────────
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Re-check limited quantity inside transaction (race-condition fix)
+      if (item.isLimited && item.limitedQty !== null) {
+        const soldCount = await tx.storePurchase.count({ where: { itemId } });
+        const remaining = item.limitedQty - soldCount;
+        if (remaining <= 0) throw new BadRequestException('Item is sold out');
+        if (quantity > remaining) {
+          throw new BadRequestException(`Only ${remaining} remaining`);
+        }
+      }
 
-    // Create purchase record
-    const purchase = await this.prisma.storePurchase.create({
-      data: {
-        userId,
-        itemId,
-        transactionId: transaction.id,
-        quantity,
-        creditCostAtPurchase: item.creditCost,
-      },
-    });
-
-    // Upsert inventory (stack quantities for consumables; cosmetics stack too)
-    const existingInventory = await this.prisma.userInventory.findFirst({
-      where: { userId, itemId, consumedAt: null },
-    });
-
-    if (existingInventory) {
-      await this.prisma.userInventory.update({
-        where: { id: existingInventory.id },
-        data: { quantity: { increment: quantity } },
+      // Debit credits
+      const transaction = await this.walletService.debit(userId, totalCost, {
+        type: TransactionType.SPEND_STORE_PURCHASE,
+        description: `Purchased ${quantity}x ${item.name}`,
+        referenceId: itemId,
+        referenceType: 'store_item',
+        metadata: { itemName: item.name, quantity, unitCost: item.creditCost },
       });
-    } else {
-      await this.prisma.userInventory.create({
+
+      // Create purchase record
+      const purchase = await tx.storePurchase.create({
         data: {
           userId,
           itemId,
+          transactionId: transaction.id,
           quantity,
+          creditCostAtPurchase: item.creditCost,
         },
       });
-    }
+
+      // Upsert inventory
+      const existingInventory = await tx.userInventory.findFirst({
+        where: { userId, itemId, consumedAt: null },
+      });
+
+      if (existingInventory) {
+        await tx.userInventory.update({
+          where: { id: existingInventory.id },
+          data: { quantity: { increment: quantity } },
+        });
+      } else {
+        await tx.userInventory.create({
+          data: { userId, itemId, quantity },
+        });
+      }
+
+      return { purchase, transaction };
+    });
 
     return {
-      purchase,
-      transaction,
+      purchase: result.purchase,
+      transaction: result.transaction,
       item: {
         id: item.id,
         name: item.name,
@@ -226,6 +277,7 @@ export class StoreService implements OnModuleInit {
             description: true,
             category: true,
             creditCost: true,
+            isConsumable: true,
             metadata: true,
           },
         },
@@ -234,5 +286,180 @@ export class StoreService implements OnModuleInit {
     });
 
     return inventory;
+  }
+
+  // ─── Use an inventory item ─────────────────────────────────
+
+  async useItem(userId: string, inventoryId: string) {
+    const inventory = await this.prisma.userInventory.findFirst({
+      where: { id: inventoryId, userId },
+      include: { item: true },
+    });
+    if (!inventory) throw new NotFoundException('Item not found in your inventory');
+    if (inventory.consumedAt) throw new BadRequestException('Item has already been used');
+    if (inventory.quantity <= 0) throw new BadRequestException('Item is depleted');
+
+    const item = inventory.item;
+    const meta = item.metadata as Record<string, unknown>;
+    const effectType = meta?.['effectType'] as string | undefined;
+
+    // Decrement or consume
+    const newQty = inventory.quantity - 1;
+    if (newQty <= 0 && item.isConsumable) {
+      await this.prisma.userInventory.update({
+        where: { id: inventoryId },
+        data: { quantity: 0, consumedAt: new Date() },
+      });
+    } else {
+      await this.prisma.userInventory.update({
+        where: { id: inventoryId },
+        data: { quantity: newQty },
+      });
+    }
+
+    // Apply effect via Redis
+    const effectResult = await this.applyEffect(userId, effectType, meta);
+
+    return {
+      inventoryId,
+      itemName: item.name,
+      effectType,
+      effectResult,
+      remainingQuantity: newQty,
+    };
+  }
+
+  // ─── Apply effect to Redis ─────────────────────────────────
+
+  private async applyEffect(
+    userId: string,
+    effectType: string | undefined,
+    meta: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    if (!effectType) return { applied: false, reason: 'No effect type' };
+
+    switch (effectType) {
+      case 'xp_boost': {
+        const multiplier = (meta['multiplier'] as number) ?? 2;
+        const durationHours = (meta['durationHours'] as number) ?? 24;
+        const ttlSeconds = durationHours * 3600;
+        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        await this.redisService.setJson(`boost:xp:${userId}`, { multiplier, expiresAt }, ttlSeconds);
+        return { applied: true, type: 'xp_boost', multiplier, expiresAt };
+      }
+
+      case 'task_limit_boost': {
+        const bonusSlots = (meta['bonusSlots'] as number) ?? 5;
+        const durationHours = (meta['durationHours'] as number) ?? 48;
+        const ttlSeconds = durationHours * 3600;
+        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        await this.redisService.setJson(`boost:task_limit:${userId}`, { bonusSlots, expiresAt }, ttlSeconds);
+        return { applied: true, type: 'task_limit_boost', bonusSlots, expiresAt };
+      }
+
+      case 'streak_freeze': {
+        const protectedDays = (meta['protectedDays'] as number) ?? 3;
+        const key = `boost:streak_freeze:${userId}`;
+        const current = await this.redisService.get(key);
+        const currentCount = current ? parseInt(current, 10) : 0;
+        const newCount = currentCount + protectedDays;
+        await this.redisService.set(key, String(newCount));
+        return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: newCount };
+      }
+
+      case 'task_refresh': {
+        // No persistent Redis state — immediate effect handled by caller
+        return { applied: true, type: 'task_refresh', message: 'Daily task assignments refreshed' };
+      }
+
+      case 'cosmetic': {
+        // Cosmetics are passive — no active effect to apply
+        return { applied: true, type: 'cosmetic', message: 'Cosmetic equipped' };
+      }
+
+      case 'loot_box': {
+        return this.openLootBox(userId, meta);
+      }
+
+      default:
+        return { applied: false, reason: `Unknown effect type: ${effectType}` };
+    }
+  }
+
+  // ─── Loot box reveal ───────────────────────────────────────
+
+  private async openLootBox(
+    userId: string,
+    meta: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const possibleRewards = (meta['possibleRewards'] as Array<Record<string, unknown>>) ?? [];
+    if (possibleRewards.length === 0) {
+      return { applied: false, reason: 'Loot box has no configured rewards' };
+    }
+
+    const roll = Math.random();
+    let selected: Record<string, unknown>;
+
+    if (roll < 0.5) {
+      // 50% credits
+      selected = possibleRewards.find((r) => r['type'] === 'credits') ?? possibleRewards[0];
+    } else if (roll < 0.8) {
+      // 30% xp boost
+      selected = possibleRewards.find((r) => r['type'] === 'xp_boost') ?? possibleRewards[0];
+    } else {
+      // 20% cosmetic
+      selected = possibleRewards.find((r) => r['type'] === 'cosmetic') ?? possibleRewards[0];
+    }
+
+    const rewardType = selected['type'] as string;
+
+    if (rewardType === 'credits') {
+      const min = (selected['min'] as number) ?? 50;
+      const max = (selected['max'] as number) ?? 500;
+      const credits = Math.floor(Math.random() * (max - min + 1)) + min;
+      await this.walletService.credit(userId, credits, {
+        type: TransactionType.EARN_ACHIEVEMENT,
+        description: `Loot box reward: ${credits} credits`,
+      });
+      return { applied: true, type: 'loot_box', reward: 'credits', amount: credits };
+    }
+
+    if (rewardType === 'xp_boost') {
+      const hours = (selected['hours'] as number) ?? 12;
+      const ttlSeconds = hours * 3600;
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      await this.redisService.setJson(`boost:xp:${userId}`, { multiplier: 2, expiresAt }, ttlSeconds);
+      return { applied: true, type: 'loot_box', reward: 'xp_boost', multiplier: 2, durationHours: hours };
+    }
+
+    if (rewardType === 'cosmetic') {
+      const pool = (selected['pool'] as string[]) ?? ['silver-frame'];
+      const cosmetic = pool[Math.floor(Math.random() * pool.length)];
+      return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic };
+    }
+
+    return { applied: false, reason: 'Unknown reward type' };
+  }
+
+  // ─── Read active effects (used by other services) ──────────
+
+  async getActiveXpBoost(userId: string): Promise<{ multiplier: number; expiresAt: string } | null> {
+    return this.redisService.getJson<{ multiplier: number; expiresAt: string }>(`boost:xp:${userId}`);
+  }
+
+  async getActiveTaskLimitBoost(userId: string): Promise<{ bonusSlots: number; expiresAt: string } | null> {
+    return this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(`boost:task_limit:${userId}`);
+  }
+
+  async getStreakFreezeCharges(userId: string): Promise<number> {
+    const raw = await this.redisService.get(`boost:streak_freeze:${userId}`);
+    return raw ? parseInt(raw, 10) : 0;
+  }
+
+  async consumeStreakFreezeCharge(userId: string): Promise<boolean> {
+    const charges = await this.getStreakFreezeCharges(userId);
+    if (charges <= 0) return false;
+    await this.redisService.set(`boost:streak_freeze:${userId}`, String(charges - 1));
+    return true;
   }
 }

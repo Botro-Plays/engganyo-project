@@ -149,6 +149,14 @@ export class TasksService {
         if (bonus > 0) {
           dailyLimit = dailyLimit + bonus;
         }
+
+        // Apply active store task-limit boost if present
+        const taskBoost = await this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(`boost:task_limit:${userId}`);
+        const storeBonus = taskBoost?.bonusSlots ?? 0;
+        if (storeBonus > 0) {
+          dailyLimit = dailyLimit + storeBonus;
+        }
+
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayCount = await this.prisma.taskCompletion.count({
@@ -160,7 +168,7 @@ export class TasksService {
         });
         if (todayCount >= dailyLimit) {
           throw new BadRequestException(
-            `Daily task limit reached (${dailyLimit} tasks/day for trust level ${trustLevel}${bonus > 0 ? ` + VIP bonus ${bonus}` : ''}). Complete more tasks and link social accounts to increase your trust score.`,
+            `Daily task limit reached (${dailyLimit} tasks/day for trust level ${trustLevel}${bonus > 0 ? ` + VIP bonus ${bonus}` : ''}${storeBonus > 0 ? ` + Store boost ${storeBonus}` : ''}). Complete more tasks and link social accounts to increase your trust score.`,
           );
         }
       }
@@ -703,6 +711,13 @@ export class TasksService {
       }
     }
 
+    // Apply active store task-limit boost
+    const taskBoost = await this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(`boost:task_limit:${userId}`);
+    const storeBonus = taskBoost?.bonusSlots ?? 0;
+    if (storeBonus > 0 && dailyLimit !== undefined) {
+      dailyLimit = dailyLimit + storeBonus;
+    }
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const tasksCompletedToday = await this.prisma.taskCompletion.count({
@@ -718,6 +733,7 @@ export class TasksService {
       tasksCompletedToday,
       remaining: dailyLimit !== undefined ? Math.max(0, dailyLimit - tasksCompletedToday) : null,
       bonus,
+      storeBonus,
       trustLevel,
       vipTier: vipStatus.currentTier
         ? {

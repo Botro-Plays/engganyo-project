@@ -1385,8 +1385,10 @@ model StoreItem {
   limitedQty  Int?          @map("limited_qty") // NULL = unlimited
   startsAt    DateTime?     @map("starts_at")
   endsAt      DateTime?     @map("ends_at")
-  isActive    Boolean       @default(true) @map("is_active")
-  metadata    Json // item-specific data (boost duration, cosmetic URL, etc.)
+  isActive      Boolean       @default(true) @map("is_active")
+  isConsumable  Boolean       @default(true) @map("is_consumable")
+  maxOwnedPerUser Int?        @map("max_owned_per_user") // NULL = unlimited
+  metadata      Json // item-specific data (boost duration, cosmetic URL, etc.)
 
   purchases   StorePurchase[]
   inventory   UserInventory[]

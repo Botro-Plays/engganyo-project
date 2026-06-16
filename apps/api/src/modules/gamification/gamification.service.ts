@@ -137,13 +137,20 @@ export class GamificationService implements OnModuleInit {
     referenceId?: string,
     description?: string,
   ) {
+    // Apply active XP boost multiplier if present
+    const xpBoost = await this.redisService.getJson<{ multiplier: number; expiresAt: string }>(`boost:xp:${userId}`);
+    let boostedAmount = amount;
+    if (xpBoost && xpBoost.multiplier > 1) {
+      boostedAmount = Math.floor(amount * xpBoost.multiplier);
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { xp: true, level: true },
     });
     if (!user) return;
 
-    const newXp = user.xp + amount;
+    const newXp = user.xp + boostedAmount;
     const newLevel = getLevelFromXp(newXp);
     const leveledUp = newLevel > user.level;
 
@@ -661,7 +668,18 @@ export class GamificationService implements OnModuleInit {
     }
 
     const now = new Date();
-    const streakBroken = this.isStreakBroken(user.lastDailyRewardAt, userTimezone);
+    let streakBroken = this.isStreakBroken(user.lastDailyRewardAt, userTimezone);
+
+    // ── Streak freeze: if broken, try to consume a charge ─────
+    if (streakBroken) {
+      const freezeCharges = await this.redisService.get('boost:streak_freeze:' + userId);
+      const charges = freezeCharges ? parseInt(freezeCharges, 10) : 0;
+      if (charges > 0) {
+        await this.redisService.set('boost:streak_freeze:' + userId, String(charges - 1));
+        streakBroken = false; // protect the streak
+      }
+    }
+
     const newStreak = streakBroken ? 1 : user.currentStreak + 1;
     const newLongest = Math.max(newStreak, user.longestStreak);
 

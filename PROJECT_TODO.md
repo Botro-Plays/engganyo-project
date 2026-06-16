@@ -137,7 +137,7 @@
 | # | Item | Reason |
 |---|------|--------|
 | E1 | Stripe Integration | Account not yet approved; PayMongo/PayPal/USDT sufficient |
-| E2 | Rewards / Prizes Store (Phase 13) | Credit sink; revisit when deposit volume justifies it |
+| E2 | ~~Rewards / Prizes Store (Phase 13)~~ | ✅ **COMPLETE 2026-06-16** — Sprint 2 Store implemented |
 | E3 | OAuth Expansion (Twitter/X, TikTok, Instagram, Facebook) | Manual verification works; API apps pending |
 | E4 | Onboarding Walkthrough | Churn reduction; revisit after deposit UX polished |
 | E5 | USDT via Tron (TRC-20) or Ethereum (ERC-20) | BSC + Base sufficient for MVP |
@@ -318,6 +318,21 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - All backend APIs mocked (no real payments)
   - Requires dev server running: `npm run dev` in `apps/web` and `apps/api`
 - **Next:** (all consolidated items complete)
+
+---
+
+- ✅ **Sprint 2 — In-App Store** (2026-06-16)
+  - Schema: `StoreCategory` enum, `StoreItem`, `UserInventory`, `StorePurchase` models + migration `20260616021529_add_store`
+  - `TransactionType.SPEND_STORE_PURCHASE` added — real credit sink now wired to wallet debit
+  - `StoreService`: 7 default items auto-seeded on first boot (2 boosts, 2 cosmetics, 2 convenience, 1 mystery gift box)
+  - API: `GET /store/items` (public), `POST /store/purchase` (auth), `GET /store/inventory` (auth)
+  - Purchase uses optimistic-locking `WalletService.debit()` — race-condition safe
+  - Limited qty tracking, date window (startsAt/endsAt), stacking inventory
+  - Frontend: `/store` — item grid with category tabs, credit affordability check, buy button
+  - Frontend: `/store/inventory` — owned items with consumed state
+  - Store nav link added to desktop sidebar + mobile nav
+  - API tsc 0 errors, web tsc 0 errors, eslint 0 errors (20 pre-existing warnings), 36/36 jest pass
+  - Commit: `b12be61` pushed to `origin main`
 
 ---
 

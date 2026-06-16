@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, UseGuards } from '@nestjs/common';
 import { StoreCategory } from '@prisma/client';
+import { Throttle } from '@nestjs/throttler';
 
 import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -18,6 +19,7 @@ export class StoreController {
 
   @Post('purchase')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60 } })
   async purchaseItem(@CurrentUser('userId') userId: string, @Body() dto: PurchaseItemDto) {
     const result = await this.storeService.purchaseItem(userId, dto.itemId, dto.quantity);
     return { success: true, data: result };
@@ -28,5 +30,12 @@ export class StoreController {
   async getInventory(@CurrentUser('userId') userId: string) {
     const inventory = await this.storeService.getUserInventory(userId);
     return { success: true, data: inventory };
+  }
+
+  @Post('inventory/:id/use')
+  @UseGuards(JwtAuthGuard)
+  async useItem(@CurrentUser('userId') userId: string, @Param('id') inventoryId: string) {
+    const result = await this.storeService.useItem(userId, inventoryId);
+    return { success: true, data: result };
   }
 }
