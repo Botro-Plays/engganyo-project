@@ -34,6 +34,7 @@ import { ChannelsModule } from './modules/channels/channels.module';
 import { ForumModule } from './modules/forum/forum.module';
 import { SearchModule } from './modules/search/search.module';
 import { EventsModule } from './modules/events/events.module';
+import { StoreModule } from './modules/store/store.module';
 
 @Module({
   imports: [
@@ -110,6 +111,7 @@ import { EventsModule } from './modules/events/events.module';
     ForumModule,
     SearchModule,
     EventsModule,
+    StoreModule,
   ],
 })
 export class AppModule {}

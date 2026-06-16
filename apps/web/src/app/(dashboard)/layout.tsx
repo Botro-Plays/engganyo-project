@@ -18,6 +18,7 @@ import {
   MessageSquare,
   MessageCircle,
   Bell,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -42,6 +43,7 @@ const navItems = [
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/achievements', icon: Medal, label: 'Achievements' },
   { href: '/missions', icon: Target, label: 'Missions' },
+  { href: '/store', icon: ShoppingBag, label: 'Store' },
   { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
   { href: '/notifications', icon: Bell, label: 'Notifications' },
 ];
@@ -56,6 +58,7 @@ const baseMobileNavItems = [
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/achievements', icon: Medal, label: 'Achievements' },
   { href: '/missions', icon: Target, label: 'Missions' },
+  { href: '/store', icon: ShoppingBag, label: 'Store' },
   { href: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
   { href: '/notifications', icon: Bell, label: 'Alerts' },
   { href: '/settings', icon: Settings, label: 'Settings' },

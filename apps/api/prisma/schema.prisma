@@ -50,6 +50,7 @@ enum TransactionType {
   SPEND_CAMPAIGN_BOOST
   SPEND_PREMIUM_FEATURE
   SPEND_ADMIN_DEDUCT
+  SPEND_STORE_PURCHASE
   // Platform revenue
   PLATFORM_FEE_CAMPAIGN
   // Neutral
@@ -214,6 +215,14 @@ enum MissionType {
   VISIT_DISCOVER
 }
 
+enum StoreCategory {
+  BOOST
+  COSMETIC
+  CONVENIENCE
+  CREDIT_PACK
+  GUILD_PERK
+}
+
 enum TrustLevel {
   NEW       // 0-20  — new account, limited access
   LOW       // 21-40 — some concerns
@@ -329,6 +338,8 @@ model User {
   channelMessages        ChannelMessage[]
   channelMessageMentions ChannelMessageMention[]
   createdChannels        Channel[]         @relation("ChannelCreator")
+  storePurchases         StorePurchase[]
+  inventory              UserInventory[]
 
   @@index([email])
   @@index([username])
@@ -543,6 +554,7 @@ model Transaction {
 
   // Optional backlink to channel message for tips
   tipMessage ChannelMessage?
+  storePurchases StorePurchase[]
 
   @@index([walletId])
   @@index([type])
@@ -1357,4 +1369,66 @@ model ForumReaction {
   @@unique([replyId, userId])
   @@index([userId])
   @@map("forum_reactions")
+}
+
+// =============================================================
+// IN-APP STORE
+// =============================================================
+
+model StoreItem {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  category    StoreCategory
+  creditCost  Int           @map("credit_cost")
+  isLimited   Boolean       @default(false) @map("is_limited")
+  limitedQty  Int?          @map("limited_qty") // NULL = unlimited
+  startsAt    DateTime?     @map("starts_at")
+  endsAt      DateTime?     @map("ends_at")
+  isActive    Boolean       @default(true) @map("is_active")
+  metadata    Json // item-specific data (boost duration, cosmetic URL, etc.)
+
+  purchases   StorePurchase[]
+  inventory   UserInventory[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([category, isActive])
+  @@index([isActive])
+  @@map("store_items")
+}
+
+model UserInventory {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId     String    @map("item_id")
+  item       StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity   Int       @default(1)
+  consumedAt DateTime? @map("consumed_at") // for consumables like boosts
+  acquiredAt DateTime  @default(now()) @map("acquired_at")
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([userId, itemId])
+  @@map("user_inventory")
+}
+
+model StorePurchase {
+  id                   String      @id @default(cuid())
+  userId               String      @map("user_id")
+  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId               String      @map("item_id")
+  item                 StoreItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  transactionId        String      @unique @map("transaction_id")
+  transaction          Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  quantity             Int         @default(1)
+  creditCostAtPurchase Int         @map("credit_cost_at_purchase")
+  createdAt            DateTime    @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([transactionId])
+  @@map("store_purchases")
 }
