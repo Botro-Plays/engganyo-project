@@ -118,7 +118,7 @@ export default async function LandingPage() {
           <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-500 text-sm">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-brand-400" />
-              <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> users</span>
+              <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
             </div>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-accent-400" />

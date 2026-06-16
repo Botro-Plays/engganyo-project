@@ -230,17 +230,22 @@ export class AnalyticsService {
   // ─── Public stats (landing page) ────────────────────────────────────────────
 
   async getPublicStats() {
-    const [totalUsers, totalTaskCompletions, totalCountries] = await Promise.all([
+    const [totalUsers, totalTaskCompletions, ipRecordCountries, userLocations] = await Promise.all([
       this.prisma.user.count({ where: { status: { not: 'DEACTIVATED' } } }),
-      // Count every task a user actually finished (submitted, approved, or verified)
+      // Count every task a user actually finished (submitted proof or verified)
       this.prisma.taskCompletion.count({
         where: {
-          status: { in: [CompletionStatus.SUBMITTED, CompletionStatus.APPROVED, CompletionStatus.VERIFIED] },
+          status: { in: [CompletionStatus.SUBMITTED, CompletionStatus.VERIFIED] },
         },
       }),
-      // Distinct countries from IP records + user registrationIp as fallback
+      // Distinct countries from IP record geo lookups
       this.prisma.ipRecord.groupBy({ by: ['country'] }).then((rows) => rows.filter((r) => r.country).length),
+      // Supplement with user-provided locations as fallback
+      this.prisma.userProfile.groupBy({ by: ['location'] }).then((rows) => rows.filter((r) => r.location).length),
     ]);
+    // Use the larger of the two geographic sources so we don't undercount
+    // if ip-api lookups silently fail but users have set their location
+    const totalCountries = Math.max(ipRecordCountries, userLocations);
     return { totalUsers, totalTaskCompletions, totalCountries };
   }
 
