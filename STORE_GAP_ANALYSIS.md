@@ -17,14 +17,27 @@
 
 ---
 
-## 🔴 Critical
+## � Bug Fixes (Post-Deploy)
 
-### C1. No rate limit on `POST /store/purchase`
+### F1. `import type` caused "Invalid data provided" on purchase
+
+- **Date:** 2026-06-16
+- **Problem:** `StoreController.purchaseItem` used `import type { PurchaseItemDto }`. In the Docker production build, TypeScript strips `import type` entirely, so the `PurchaseItemDto` class was unavailable at runtime. NestJS `ValidationPipe` could not instantiate/validate the DTO, leaving `dto.itemId` as `undefined`. This caused a `PrismaClientValidationError` when passed to Prisma queries, which the global exception filter mapped to 400 "Invalid data provided".
+- **Fix:** Changed `import type` to `import { PurchaseItemDto }` in `apps/api/src/modules/store/store.controller.ts`.
+- **Verification:** After deploy, user 'botro' (SUPER_ADMIN) successfully purchased items without error. Server logs showed no Prisma validation errors.
+- **Lesson:** Never use `import type` for DTOs consumed by `ValidationPipe` or any runtime decorator that needs the actual class reference. The ts-jest test environment handles `import type` differently than the compiled Docker build, so local Jest tests can pass while production fails.
+
+---
+
+## �🔴 Critical
+
+### C1. No rate limit on `POST /store/purchase` ✅ DONE
 
 - **Problem:** Users can spam-purchase in a tight loop. Even with optimistic locking, timing exploits can drain credits or trigger unnecessary DB contention.
 - **Fix:** Add `@Throttle` to `StoreController.purchaseItem` — 10 req/min is reasonable.
 - **File:** `apps/api/src/modules/store/store.controller.ts`
 - **Est:** 15 min
+- **Status:** ✅ Complete — `@Throttle({ default: { limit: 10, ttl: 60 } })` already on `purchaseItem`.
 
 ### C2. Limited-quantity race condition
 
@@ -57,12 +70,13 @@
 
 ## 🟡 High
 
-### H1. No cosmetic deduplication guard
+### H1. No cosmetic deduplication guard ✅ DONE
 
 - **Problem:** A user can buy "VIP Badge: Gold Frame" twice, wasting 500 credits. The second purchase just increments `quantity` on an already-owned cosmetic.
 - **Fix:** In `purchaseItem`, if `item.category === 'COSMETIC'` and `UserInventory` already has an unconsumed row for this item, throw `BadRequestException('You already own this cosmetic')`.
 - **File:** `apps/api/src/modules/store/store.service.ts`
 - **Est:** 20 min
+- **Status:** ✅ Complete — cosmetic dedup guard already implemented in `purchaseItem`.
 
 ### H2. No "Owned" state in frontend `/store`
 
@@ -87,7 +101,7 @@
   - `apps/web/src/app/(dashboard)/store/inventory/page.tsx`
 - **Est:** 1.5 hours
 
-### H4. No purchase success notification / socket event
+### H4. No purchase success notification / socket event ✅ DONE
 
 - **Problem:** After a successful purchase, the user only knows it worked if the React Query invalidation refreshes the data before they navigate away. No explicit feedback.
 - **Fix:**
@@ -97,6 +111,7 @@
   - `apps/api/src/modules/store/store.service.ts`
   - `apps/web/src/app/(dashboard)/store/page.tsx`
 - **Est:** 30 min
+- **Status:** ✅ Complete — notification and socket event already emitted after successful purchase.
 
 ### H5. `getItems` leaks internal metadata to clients
 

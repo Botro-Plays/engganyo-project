@@ -6,7 +6,7 @@ import { StoreService } from './store.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import type { PurchaseItemDto } from './dto/purchase-item.dto';
+import { PurchaseItemDto } from './dto/purchase-item.dto';
 
 @Controller('store')
 export class StoreController {
