@@ -42,7 +42,28 @@ const jsonLd = {
   ],
 };
 
-export default function LandingPage() {
+interface PublicStats {
+  totalUsers: number;
+  totalVerifiedTasks: number;
+  totalCountries: number;
+}
+
+async function getPublicStats(): Promise<PublicStats> {
+  try {
+    const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/+$/, '');
+    const res = await fetch(`${apiUrl}/analytics/public-stats`, {
+      next: { revalidate: 3600 }, // 1 hour
+    });
+    if (!res.ok) throw new Error('Failed to fetch stats');
+    const json = await res.json();
+    return json.data as PublicStats;
+  } catch {
+    return { totalUsers: 0, totalVerifiedTasks: 0, totalCountries: 0 };
+  }
+}
+
+export default async function LandingPage() {
+  const stats = await getPublicStats();
   return (
     <>
       <Script
@@ -95,15 +116,15 @@ export default function LandingPage() {
           <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-500 text-sm">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-brand-400" />
-              <span><strong className="text-white">10,000+</strong> creators</span>
+              <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
             </div>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-accent-400" />
-              <span><strong className="text-white">500K+</strong> tasks completed</span>
+              <span><strong className="text-white">{stats.totalVerifiedTasks.toLocaleString()}+</strong> tasks completed</span>
             </div>
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-green-400" />
-              <span><strong className="text-white">50+</strong> countries</span>
+              <span><strong className="text-white">{stats.totalCountries.toLocaleString()}+</strong> countries</span>
             </div>
           </div>
         </section>

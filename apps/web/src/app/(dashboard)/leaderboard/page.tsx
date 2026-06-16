@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Trophy, Flame, Zap, Medal, Target, BarChart3, Crown,
+  Trophy, Flame, Zap, Medal, Target, BarChart3, Crown, Users,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
@@ -67,6 +67,16 @@ interface VipLeaderboardEntry {
   } | null;
 }
 
+interface ReferralLeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  referralCount: number;
+  creditsEarned: number;
+}
+
 interface GamStats {
   xp: number;
   level: number;
@@ -84,8 +94,9 @@ interface GamStats {
 
 const RANK_STYLES = ['text-yellow-400', 'text-zinc-300', 'text-amber-600'];
 
-type MainTab = 'level' | 'achievements' | 'missions' | 'vip';
+type MainTab = 'level' | 'achievements' | 'missions' | 'vip' | 'referrals';
 type TimeTab = 'alltime' | 'weekly';
+type ReferralPeriod = 'alltime' | 'monthly' | 'weekly' | 'daily';
 
 export default function LeaderboardPage() {
   const queryClient = useQueryClient();
@@ -104,6 +115,7 @@ export default function LeaderboardPage() {
 
   const [mainTab, setMainTab] = useState<MainTab>('level');
   const [timeTab, setTimeTab] = useState<TimeTab>('alltime');
+  const [referralPeriod, setReferralPeriod] = useState<ReferralPeriod>('alltime');
 
   const { data: stats } = useQuery({
     queryKey: ['gamification', 'stats'],
@@ -156,6 +168,17 @@ export default function LeaderboardPage() {
       return res.data.data;
     },
     enabled: mainTab === 'vip',
+  });
+
+  const { data: refLbData, isLoading: refLbLoading } = useQuery({
+    queryKey: ['referrals', 'leaderboard', referralPeriod],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ReferralLeaderboardEntry[]>>(
+        `referrals/leaderboard?period=${referralPeriod}`,
+      );
+      return res.data.data;
+    },
+    enabled: mainTab === 'referrals',
   });
 
   const levelInfo = stats ? getLevelProgress(stats.xp) : null;
@@ -237,6 +260,7 @@ export default function LeaderboardPage() {
           { key: 'achievements' as MainTab, label: 'Achievements', icon: Medal },
           { key: 'missions' as MainTab, label: 'Missions', icon: Target },
           { key: 'vip' as MainTab, label: 'VIP Points', icon: Crown },
+          { key: 'referrals' as MainTab, label: 'Referrals', icon: Users },
         ]).map((t) => (
           <button
             key={t.key}
@@ -266,6 +290,28 @@ export default function LeaderboardPage() {
               }`}
             >
               <t.icon className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Referral period tabs ── */}
+      {mainTab === 'referrals' && (
+        <div className="flex gap-1 mb-6 p-1 bg-surface-hover rounded-lg w-fit">
+          {([
+            { key: 'alltime' as ReferralPeriod, label: 'All Time' },
+            { key: 'monthly' as ReferralPeriod, label: 'Monthly' },
+            { key: 'weekly' as ReferralPeriod, label: 'Weekly' },
+            { key: 'daily' as ReferralPeriod, label: 'Daily' },
+          ]).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setReferralPeriod(t.key)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                referralPeriod === t.key ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-white'
+              }`}
+            >
               {t.label}
             </button>
           ))}
@@ -374,6 +420,48 @@ export default function LeaderboardPage() {
                           <Flame className="w-3 h-3" />{entry.currentStreak}d
                         </p>
                       )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Referrals leaderboard ── */}
+      {mainTab === 'referrals' && (
+        <>
+          {refLbLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-14" />
+              ))}
+            </div>
+          ) : !refLbData?.length ? (
+            <div className="card-glass rounded-2xl p-12 text-center">
+              <p className="text-zinc-500 text-sm">No referrals yet. Invite friends to appear here!</p>
+            </div>
+          ) : (
+            <div className="card-glass rounded-xl divide-y divide-surface-border">
+              {refLbData.map((entry) => {
+                const isSelf = entry.userId === authUser?.id;
+                const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-zinc-500';
+                return (
+                  <div
+                    key={entry.userId}
+                    className={`flex items-center gap-4 px-5 py-3.5 ${isSelf ? 'bg-brand-500/5' : 'hover:bg-surface-hover'} transition-colors`}
+                  >
+                    <div className={`w-7 text-center font-bold text-sm ${rankColor}`}>
+                      {entry.rank <= 3 ? <Trophy className="w-4 h-4 mx-auto" /> : entry.rank}
+                    </div>
+                    <UserLink user={{ ...entry, id: entry.userId }} showAvatar size="md" />
+                    <div className="flex-1 min-w-0">
+                      {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-brand-300">{entry.referralCount} invited</p>
+                      <p className="text-xs text-zinc-500">{formatCredits(entry.creditsEarned)} credits earned</p>
                     </div>
                   </div>
                 );

@@ -24,10 +24,13 @@ interface AdminDetailUser {
   id: string; username: string; email: string; displayName: string | null;
   role: string; status: string; xp: number; level: number; creditBalance: number;
   currentStreak: number; longestStreak: number; createdAt: string; hasTwoFactor: boolean;
-  _count: { completions: number; campaigns: number; abuseFlags: number; reportsReceived: number; inventory: number };
+  referralCode: string;
+  referredBy: { id: string; username: string; displayName: string | null } | null;
+  _count: { completions: number; campaigns: number; abuseFlags: number; reportsReceived: number; inventory: number; deposits: number; referralsGiven: number };
   trustScore: { score: number; level: string } | null;
   abuseFlags: { flagType: string; severity: string; createdAt: string }[];
   ipRecords: { country: string | null; region: string | null; ipAddress: string | null; createdAt: string }[];
+  depositStats: Record<string, { count: number; amountFiat: number }>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -163,6 +166,43 @@ function UserDetailPanel({ userId }: { userId: string }) {
         <div className="bg-zinc-800/60 rounded-lg p-3">
           <p className="text-xs text-zinc-500 mb-0.5">Task Completions</p>
           <p className="text-sm font-semibold text-white">{data._count.completions}</p>
+        </div>
+      </div>
+
+      {/* Deposit stats */}
+      {data._count.deposits > 0 && (
+        <div>
+          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Deposits</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {Object.entries(data.depositStats).map(([status, s]) => (
+              <div key={status} className="bg-zinc-800/60 rounded-lg p-3">
+                <p className="text-xs text-zinc-500 mb-0.5">{status}</p>
+                <p className="text-sm font-semibold text-white">{s.count}</p>
+                <p className="text-xs text-zinc-600">${s.amountFiat.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Referral info */}
+      <div>
+        <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Referral</p>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="bg-zinc-800/60 rounded-lg px-3 py-2">
+            <span className="text-zinc-500">Code:</span>{' '}
+            <span className="text-white font-mono">{data.referralCode}</span>
+          </div>
+          {data.referredBy && (
+            <div className="bg-zinc-800/60 rounded-lg px-3 py-2">
+              <span className="text-zinc-500">Referred by:</span>{' '}
+              <span className="text-white">@{data.referredBy.username}</span>
+            </div>
+          )}
+          <div className="bg-zinc-800/60 rounded-lg px-3 py-2">
+            <span className="text-zinc-500">Users invited:</span>{' '}
+            <span className="text-white font-semibold">{data._count.referralsGiven}</span>
+          </div>
         </div>
       </div>
 

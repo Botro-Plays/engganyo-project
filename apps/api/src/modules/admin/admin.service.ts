@@ -16,6 +16,7 @@ import { PayMongoService } from '../paymongo/paymongo.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { EmailService } from '../email/email.service';
 import { WeeklyDigestService } from '../email/weekly-digest.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -37,6 +38,7 @@ export class AdminService {
     private readonly notificationsService: NotificationsService,
     private readonly emailService: EmailService,
     private readonly weeklyDigestService: WeeklyDigestService,
+    private readonly referralsService: ReferralsService,
     @Inject(forwardRef(() => PayMongoService))
     private readonly payMongoService: PayMongoService,
   ) {}
@@ -102,16 +104,29 @@ export class AdminService {
         id: true, username: true, email: true, displayName: true,
         role: true, status: true, xp: true, level: true,
         creditBalance: true, currentStreak: true, longestStreak: true, createdAt: true,
+        referralCode: true,
         twoFactorTotpSecret: true, twoFactorEmailEnabled: true,
-        _count: { select: { completions: true, campaigns: true, abuseFlags: true, reportsReceived: true, inventory: true } },
+        _count: { select: { completions: true, campaigns: true, abuseFlags: true, reportsReceived: true, inventory: true, deposits: true, referralsGiven: true } },
         trustScore: { select: { score: true, level: true } },
         abuseFlags: { where: { isResolved: false }, select: { flagType: true, severity: true, createdAt: true }, take: 10 },
         ipRecords: { orderBy: { createdAt: 'desc' }, take: 5, select: { country: true, region: true, ipAddress: true, createdAt: true } },
+        referredBy: { select: { id: true, username: true, displayName: true } },
       },
     });
     if (!user) throw new NotFoundException('User not found');
     const { twoFactorTotpSecret, twoFactorEmailEnabled, ...rest } = user;
-    return { ...rest, hasTwoFactor: !!twoFactorTotpSecret || twoFactorEmailEnabled };
+
+    const depositBreakdown = await this.prisma.deposit.groupBy({
+      by: ['status'],
+      where: { userId },
+      _count: { id: true },
+      _sum: { amountFiat: true },
+    });
+    const depositStats = Object.fromEntries(
+      depositBreakdown.map((d) => [d.status, { count: d._count.id, amountFiat: d._sum.amountFiat ?? 0 }]),
+    );
+
+    return { ...rest, hasTwoFactor: !!twoFactorTotpSecret || twoFactorEmailEnabled, depositStats };
   }
 
   async updateUserStatus(adminId: string, adminRole: string, userId: string, dto: UpdateUserStatusDto) {
@@ -618,6 +633,8 @@ export class AdminService {
           data: { totalTasksDone: { increment: 1 } },
         });
       });
+
+      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
 
       await this.walletService.credit(completion.userId, completion.campaign.creditPerTask, {
         type: TransactionType.EARN_TASK_COMPLETION,

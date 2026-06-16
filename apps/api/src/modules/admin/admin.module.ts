@@ -8,6 +8,7 @@ import { EventsModule } from '../events/events.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { GamificationModule } from '../gamification/gamification.module';
 import { EmailModule } from '../email/email.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
@@ -20,6 +21,7 @@ import { AdminService } from './admin.service';
     NotificationsModule,
     GamificationModule,
     EmailModule,
+    ReferralsModule,
     BullModule.registerQueue(
       { name: 'email' },
       { name: 'analytics' },

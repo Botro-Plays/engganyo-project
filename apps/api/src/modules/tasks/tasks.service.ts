@@ -16,6 +16,7 @@ import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -58,6 +59,7 @@ export class TasksService {
     private readonly socialAuthService: SocialAuthService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   // ─── Browse available tasks ────────────────────────────────
@@ -473,6 +475,8 @@ export class TasksService {
         });
       });
 
+      void this.referralsService.qualifyReferral(userId).catch(() => null);
+
       await this.walletService.credit(userId, completion.campaign.creditPerTask, {
         type: TransactionType.EARN_TASK_COMPLETION,
         description: `Task verified`,
@@ -612,6 +616,8 @@ export class TasksService {
           data: { totalTasksDone: { increment: 1 } },
         });
       });
+
+      void this.referralsService.qualifyReferral(userId).catch(() => null);
 
       await this.walletService.credit(userId, completion.campaign.creditPerTask, {
         type: TransactionType.EARN_TASK_COMPLETION,

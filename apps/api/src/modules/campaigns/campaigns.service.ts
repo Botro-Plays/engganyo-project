@@ -14,6 +14,7 @@ import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -65,6 +66,7 @@ export class CampaignsService {
     private readonly socialAuthService: SocialAuthService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   // ─── Create ────────────────────────────────────────────────
@@ -392,6 +394,8 @@ export class CampaignsService {
           data: { totalTasksDone: { increment: 1 } },
         });
       });
+
+      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
 
       await this.walletService.credit(completion.userId, campaign.creditPerTask, {
         type: TransactionType.EARN_TASK_COMPLETION,

@@ -227,6 +227,17 @@ export class AnalyticsService {
     };
   }
 
+  // ─── Public stats (landing page) ────────────────────────────────────────────
+
+  async getPublicStats() {
+    const [totalUsers, totalVerifiedTasks, totalCountries] = await Promise.all([
+      this.prisma.user.count({ where: { status: { not: 'DEACTIVATED' } } }),
+      this.prisma.taskCompletion.count({ where: { status: CompletionStatus.VERIFIED } }),
+      this.prisma.ipRecord.groupBy({ by: ['country'] }).then((rows) => rows.filter((r) => r.country).length),
+    ]);
+    return { totalUsers, totalVerifiedTasks, totalCountries };
+  }
+
   // ─── Daily snapshot cron (runs at midnight UTC) ──────────────────────────────
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)

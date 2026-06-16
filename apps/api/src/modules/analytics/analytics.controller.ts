@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
 
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -37,5 +38,12 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Personal stats dashboard' })
   getMyStats(@CurrentUser() user: JwtPayload) {
     return this.analytics.getMyStats(user.sub);
+  }
+
+  @Get('public-stats')
+  @Public()
+  @ApiOperation({ summary: 'Public platform statistics for landing page' })
+  getPublicStats() {
+    return this.analytics.getPublicStats();
   }
 }

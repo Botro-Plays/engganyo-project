@@ -6,11 +6,12 @@ import { SocialAuthModule } from '../social-auth/social-auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
 import { GamificationModule } from '../gamification/gamification.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 
 @Module({
-  imports: [WalletModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule, EventsModule],
+  imports: [WalletModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule, EventsModule, ReferralsModule],
   controllers: [CampaignsController],
   providers: [CampaignsService],
   exports: [CampaignsService],
