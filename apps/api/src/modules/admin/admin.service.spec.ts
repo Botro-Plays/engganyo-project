@@ -11,6 +11,7 @@ import { NotFoundException, BadRequestException, ForbiddenException } from '@nes
 import { UserRole } from '@prisma/client';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -102,6 +103,10 @@ describe('AdminService', () => {
     getVipStatus: jest.fn().mockResolvedValue({ currentTier: null, nextTier: null, vp: 0, progressPercent: 0, perks: { taskLimitBonus: 0, feeDiscountPercent: 0 } }),
   };
 
+  const mockReferralsService = {
+    qualifyReferral: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mockWeeklyDigestService = {
     getUserDigestData: jest.fn().mockResolvedValue({
       username: 'Admin',
@@ -133,6 +138,7 @@ describe('AdminService', () => {
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: EmailService, useValue: mockEmailService },
         { provide: WeeklyDigestService, useValue: mockWeeklyDigestService },
+        { provide: ReferralsService, useValue: mockReferralsService },
         { provide: PayMongoService, useValue: mockPayMongoService },
         { provide: GamificationService, useValue: mockGamificationService },
       ],
