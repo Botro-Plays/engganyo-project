@@ -55,8 +55,20 @@ async function getPublicStats(): Promise<PublicStats> {
       next: { revalidate: 3600 }, // 1 hour
     });
     if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status} ${res.statusText}`);
-    const json = await res.json();
-    return json.data as PublicStats;
+    const json = (await res.json()) as {
+      data?: {
+        totalUsers?: number;
+        totalTaskCompletions?: number;
+        totalVerifiedTasks?: number; // backward-compat: old API field name
+        totalCountries?: number;
+      };
+    };
+    const d = json.data ?? {};
+    return {
+      totalUsers: d.totalUsers ?? 0,
+      totalTaskCompletions: d.totalTaskCompletions ?? d.totalVerifiedTasks ?? 0,
+      totalCountries: d.totalCountries ?? 0,
+    };
   } catch (err) {
     // eslint-disable-next-line no-console
     if (process.env.NODE_ENV === 'development') console.error('Landing stats fetch failed:', err);
