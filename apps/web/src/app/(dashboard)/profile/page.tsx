@@ -24,6 +24,10 @@ import {
   Upload,
   X,
   Award,
+  Users,
+  UserCheck,
+  Clock,
+  Coins,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -140,6 +144,30 @@ interface TrustScore {
   abuseFlagCount: number;
 }
 
+interface Referee {
+  id: string;
+  username: string;
+  displayName: string | null;
+  createdAt: string;
+}
+
+interface ReferralItem {
+  id: string;
+  isQualified: boolean;
+  qualifiedAt: string | null;
+  creditsAwarded: number;
+  createdAt: string;
+  referee: Referee;
+}
+
+interface MyReferralsData {
+  total: number;
+  qualified: number;
+  pending: number;
+  totalCreditsEarned: number;
+  referrals: ReferralItem[];
+}
+
 function TrustScoreCard() {
   const { data, isLoading } = useQuery({
     queryKey: ['trust', 'me'],
@@ -185,6 +213,122 @@ function TrustScoreCard() {
             <span>Linked socials: <span className="text-zinc-300">{data.verifiedSocials}</span></span>
             <span>Reports received: <span className={data.reportCount > 0 ? 'text-red-400' : 'text-zinc-300'}>{data.reportCount}</span></span>
           </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── My Referrals Card ──────────────────────────────────────
+function MyReferralsCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['referrals', 'me'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<MyReferralsData>>('referrals/me');
+      return res.data.data;
+    },
+  });
+
+  return (
+    <div className="card-glass rounded-xl p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Users className="w-4 h-4 text-brand-400" />
+        <h2 className="font-semibold text-white">My Referrals</h2>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          <div className="h-16 animate-pulse bg-zinc-800 rounded-lg" />
+          <div className="h-32 animate-pulse bg-zinc-800 rounded-lg" />
+        </div>
+      ) : data ? (
+        <>
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <Users className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="text-xs text-zinc-500">Invited</span>
+              </div>
+              <span className="text-lg font-semibold text-white">{data.total}</span>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <UserCheck className="w-3.5 h-3.5 text-green-400" />
+                <span className="text-xs text-zinc-500">Qualified</span>
+              </div>
+              <span className="text-lg font-semibold text-green-400">{data.qualified}</span>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <Clock className="w-3.5 h-3.5 text-yellow-400" />
+                <span className="text-xs text-zinc-500">Pending</span>
+              </div>
+              <span className="text-lg font-semibold text-yellow-400">{data.pending}</span>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <Coins className="w-3.5 h-3.5 text-brand-400" />
+                <span className="text-xs text-zinc-500">Earned</span>
+              </div>
+              <span className="text-lg font-semibold text-brand-400">{data.totalCreditsEarned}</span>
+            </div>
+          </div>
+
+          {/* Explanation */}
+          <div className="rounded-lg bg-brand-500/5 border border-brand-500/10 p-3 mb-4">
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              <span className="text-brand-300 font-medium">How it works:</span>{' '}
+              When someone signs up with your code and completes their first verified task, both you and they earn{' '}
+              <span className="text-brand-300">50 credits</span> each. Bonuses are awarded automatically — no manual claiming needed.
+            </p>
+          </div>
+
+          {/* Referral list */}
+          {data.referrals.length > 0 ? (
+            <div className="border-t border-surface-border pt-4">
+              <p className="text-xs font-medium text-zinc-500 mb-3">Invited users</p>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {data.referrals.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between rounded-lg bg-zinc-800/30 px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-medium text-zinc-300">
+                        {(r.referee.displayName ?? r.referee.username).charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm text-white font-medium">
+                          @{r.referee.username}
+                        </p>
+                        <p className="text-[10px] text-zinc-500">
+                          Joined {new Date(r.referee.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    {r.isQualified ? (
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-400 text-xs font-medium">
+                        <UserCheck className="w-3 h-3" />
+                        <span>+{r.creditsAwarded}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-400 text-xs font-medium">
+                        <Clock className="w-3 h-3" />
+                        <span>Pending</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="border-t border-surface-border pt-4 text-center">
+              <p className="text-xs text-zinc-500">
+                No referrals yet. Share your code to start earning!
+              </p>
+            </div>
+          )}
         </>
       ) : null}
     </div>
@@ -487,7 +631,7 @@ export default function ProfilePage() {
           <h2 className="font-semibold text-white">Refer & Earn</h2>
         </div>
         <p className="text-sm text-zinc-400 mb-4">
-          Invite friends and earn credits when they sign up and complete tasks.
+          Invite friends and earn credits when they sign up and complete their first verified task. Both you and your friend get 50 credits each — awarded automatically.
         </p>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
@@ -545,6 +689,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* ── My Referrals stats & list ── */}
+      <MyReferralsCard />
 
       {/* ── Edit profile form ── */}
       <div className="card-glass rounded-xl p-6">
