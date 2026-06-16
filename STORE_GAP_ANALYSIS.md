@@ -27,9 +27,50 @@
 - **Verification:** After deploy, user 'botro' (SUPER_ADMIN) successfully purchased items without error. Server logs showed no Prisma validation errors.
 - **Lesson:** Never use `import type` for DTOs consumed by `ValidationPipe` or any runtime decorator that needs the actual class reference. The ts-jest test environment handles `import type` differently than the compiled Docker build, so local Jest tests can pass while production fails.
 
+### F2. Cosmetics `is_consumable` = true in production DB (wrong default migration)
+
+- **Date:** 2026-06-16
+- **Problem:** Migration `20260616025608` added `is_consumable` column with `DEFAULT true`. Since seed ran before this migration, all existing items (including cosmetics) had `is_consumable = true` in production. This meant cosmetics like "Profile Theme: Neon" could be "used" via the `useItem` endpoint, getting marked as consumed with `consumedAt` and quantity=0, but the row was never deleted. This caused: (1) item still visible in inventory with "Used" tag, (2) cosmetic dedup guard used `consumedAt: null` filter, which no longer matched, allowing re-purchase, (3) two duplicate inventory rows for same cosmetic.
+- **Fix:** New migration `20260616100000` updates `is_consumable = false` for all `COSMETIC` category items. It also repairs cosmetic inventory rows that were erroneously consumed (`consumed_at = NULL`, `quantity = 1`) and auto-equips them.
+- **Files:** `apps/api/prisma/migrations/20260616100000_add_equipped_and_fix_cosmetics/migration.sql`
+
+### F3. Inventory ghost rows after use + active-effect duplication
+
+- **Date:** 2026-06-16
+- **Problem:** `useItem` decremented quantity and set `consumedAt` when reaching zero, but did NOT delete the row. This left ghost rows (`quantity = 0`, `consumedAt = Date`) that were still returned by `getUserInventory`, cluttering the UI. Additionally, there was no guard against using multiple XP Boosts or Task Limit Boosts simultaneously — a user could stack the same effect by using multiple identical items, breaking balance.
+- **Fix:** `useItem` now `DELETE`s the inventory row when quantity reaches 0 (no ghost rows). Added active-effect guards: if an `xp_boost` or `task_limit_boost` is already active in Redis, reject the `useItem` call with a clear message. `getUserInventory` now filters with `quantity > 0` to exclude any pre-existing ghost rows.
+- **Files:** `apps/api/src/modules/store/store.service.ts`
+
+### F4. Cosmetic dedup guard was too narrow
+
+- **Date:** 2026-06-16
+- **Problem:** The cosmetic dedup guard in `purchaseItem` checked `{ userId, itemId, consumedAt: null }`. After the `is_consumable` fix (F2), cosmetics are no longer consumed, so this guard would always find a match and correctly block. But it was fundamentally wrong — cosmetics should be checked by `itemId` alone, not by `consumedAt`.
+- **Fix:** Changed cosmetic dedup guard to `findFirst({ where: { userId, itemId } })` with no `consumedAt` filter. Cosmetics are permanent and never consumed; ownership is binary (owned or not).
+- **Files:** `apps/api/src/modules/store/store.service.ts`
+
 ---
 
-## �🔴 Critical
+## New Features (Implemented in this session)
+
+### N1. Cosmetic equip/unequip system
+
+- **Problem:** Cosmetics had no mechanism to be "active" on a user's profile. Buying "Profile Theme: Neon" did nothing visible.
+- **Fix:** Added `equipped` boolean field to `UserInventory`. New `PATCH /store/inventory/:id/equip` endpoint toggles equip state. Auto-equip on purchase. Only one cosmetic per `cosmeticType` can be equipped at a time; equipping one auto-unequips the other.
+- **Frontend:** Inventory page shows "Equipped" badge and Equip/Unequip button for cosmetics (replacing the incorrect "Use" button). Store page shows "Owned" badge for any cosmetic the user already has.
+- **Profile display:** Both `/profile` (own) and `/users/:username` (public) now show equipped cosmetic badges with color-coded styling (violet for themes, amber for frames).
+- **Files:**
+  - `apps/api/prisma/schema.prisma` — `equipped` field on `UserInventory`
+  - `apps/api/src/modules/store/store.service.ts` — `equipCosmetic`, auto-equip in `purchaseItem`
+  - `apps/api/src/modules/store/store.controller.ts` — `PATCH /store/inventory/:id/equip`
+  - `apps/api/src/modules/users/users.service.ts` — `equippedCosmetics` in `getMe` and `getPublicProfile`
+  - `apps/web/src/app/(dashboard)/store/inventory/page.tsx` — equip/unequip UI
+  - `apps/web/src/app/(dashboard)/store/page.tsx` — owned badge logic fix
+  - `apps/web/src/app/(dashboard)/profile/page.tsx` — render equipped cosmetics
+  - `apps/web/src/app/(dashboard)/users/[username]/page.tsx` — render equipped cosmetics
+
+---
+
+## �� Critical
 
 ### C1. No rate limit on `POST /store/purchase` ✅ DONE
 
@@ -78,12 +119,13 @@
 - **Est:** 20 min
 - **Status:** ✅ Complete — cosmetic dedup guard already implemented in `purchaseItem`.
 
-### H2. No "Owned" state in frontend `/store`
+### H2. No "Owned" state in frontend `/store` ✅ DONE
 
 - **Problem:** The store grid always shows "Buy" even if the user already owns the cosmetic. Bad UX.
-- **Fix:** Frontend `/store` page should call `GET /store/inventory` in parallel with `GET /store/items`, then overlay owned/consumed state on each card.
+- **Fix:** Frontend `/store` page calls `GET /store/inventory` in parallel with `GET /store/items`. The `ownedItemIds` set now correctly detects any inventory entry for an item (not just unconsumed). Non-consumable items (cosmetics) show "Owned" badge and a disabled "Owned" button.
 - **File:** `apps/web/src/app/(dashboard)/store/page.tsx`
 - **Est:** 30 min
+- **Status:** ✅ Complete — `InventoryEntry` type updated with nested `item` field, `ownedItemIds` built from all inventory entries.
 
 ### H3. Mystery Gift Box loot reveal not implemented
 

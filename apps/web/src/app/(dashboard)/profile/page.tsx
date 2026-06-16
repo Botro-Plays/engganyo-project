@@ -28,6 +28,7 @@ import {
   UserCheck,
   Clock,
   Coins,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -43,6 +44,17 @@ interface SocialAccount {
   profileUrl: string | null;
   followerCount: number | null;
   isVerified: boolean;
+}
+
+interface EquippedCosmetic {
+  id: string;
+  equipped: boolean;
+  item: {
+    id: string;
+    name: string;
+    category: string;
+    metadata: Record<string, unknown>;
+  };
 }
 
 interface FullProfile {
@@ -77,6 +89,7 @@ interface FullProfile {
     allowMentions: boolean;
   } | null;
   socialAccounts: SocialAccount[];
+  equippedCosmetics: EquippedCosmetic[];
 }
 
 // ─── Schemas ──────────────────────────────────────────────────
@@ -619,6 +632,33 @@ export default function ProfilePage() {
               />
             </div>
           </div>
+
+          {/* Equipped Cosmetics */}
+          {(profile?.equippedCosmetics?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {profile!.equippedCosmetics.map((c) => {
+                const meta = c.item.metadata as Record<string, unknown>;
+                const cosmeticType = meta['cosmeticType'] as string | undefined;
+                const isTheme = cosmeticType === 'profile_theme';
+                const isFrame = cosmeticType === 'avatar_frame';
+                return (
+                  <span
+                    key={c.id}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${
+                      isTheme
+                        ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
+                        : isFrame
+                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                        : 'bg-zinc-700/50 text-zinc-300 border-zinc-600/50'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {c.item.name}
+                  </span>
+                );
+              })}
+            </div>
+          )}
 
           <Link
             href={`/users/${profile?.username ?? user?.username}`}

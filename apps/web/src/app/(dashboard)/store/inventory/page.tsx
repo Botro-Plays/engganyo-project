@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, ArrowLeft, Zap, Sparkles, Wrench, Loader2 } from 'lucide-react';
+import { Package, ArrowLeft, Zap, Sparkles, Wrench, Loader2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -14,6 +14,7 @@ interface InventoryItem {
   id: string;
   quantity: number;
   consumedAt: string | null;
+  equipped: boolean;
   acquiredAt: string;
   item: {
     id: string;
@@ -46,22 +47,43 @@ export default function InventoryPage() {
   const queryClient = useQueryClient();
   const { addToast } = useToast();
   const [usingId, setUsingId] = useState<string | null>(null);
+  const [equippingId, setEquippingId] = useState<string | null>(null);
 
   const useMutation_ = useMutation({
     mutationFn: async (inventoryId: string) => {
-      const res = await apiClient.post<ApiResponse<{ message: string }>>(
+      const res = await apiClient.post<ApiResponse<{ itemName: string; remainingQuantity: number }>>(
         `store/inventory/${inventoryId}/use`
       );
       return res.data.data;
     },
     onSuccess: (data) => {
-      addToast(data?.message ?? 'Item activated!', 'success');
+      addToast(`${data?.itemName ?? 'Item'} activated!`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
       setUsingId(null);
     },
     onError: (err) => {
       addToast(getApiErrorMessage(err), 'error');
       setUsingId(null);
+    },
+  });
+
+  const equipMutation = useMutation({
+    mutationFn: async (inventoryId: string) => {
+      const res = await apiClient.patch<ApiResponse<{ inventoryId: string; equipped: boolean; itemName: string }>>(
+        `store/inventory/${inventoryId}/equip`
+      );
+      return res.data.data;
+    },
+    onSuccess: (data) => {
+      const action = data?.equipped ? 'equipped' : 'unequipped';
+      addToast(`${data?.itemName ?? 'Cosmetic'} ${action}!`, 'success');
+      void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
+      void queryClient.invalidateQueries({ queryKey: ['users', 'me'] });
+      setEquippingId(null);
+    },
+    onError: (err) => {
+      addToast(getApiErrorMessage(err), 'error');
+      setEquippingId(null);
     },
   });
 
@@ -109,22 +131,32 @@ export default function InventoryPage() {
           {inventory.map((entry) => {
             const Icon = CATEGORY_ICONS[entry.item.category] ?? Package;
             const colorClass = CATEGORY_COLORS[entry.item.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
-            const isConsumed = entry.consumedAt !== null;
+            const isCosmetic = !entry.item.isConsumable;
 
             return (
               <div
                 key={entry.id}
-                className={`rounded-xl border p-4 flex flex-col ${colorClass} ${
-                  isConsumed ? 'opacity-50' : ''
+                className={`rounded-xl border p-4 flex flex-col transition-all ${colorClass} ${
+                  isCosmetic && entry.equipped ? 'ring-1 ring-purple-400/40' : ''
                 }`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className={`p-2 rounded-lg ${colorClass.split(' ').slice(1).join(' ')}`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">
-                    x{entry.quantity}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {isCosmetic && entry.equipped && (
+                      <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        <ShieldCheck className="w-3 h-3" />
+                        Equipped
+                      </span>
+                    )}
+                    {!isCosmetic && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">
+                        x{entry.quantity}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="text-white font-semibold mb-1">{entry.item.name}</h3>
@@ -133,29 +165,49 @@ export default function InventoryPage() {
                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
                   <div className="text-xs text-zinc-500">
                     Acquired {new Date(entry.acquiredAt).toLocaleDateString()}
-                    {isConsumed && (
-                      <span className="ml-2 text-red-400">Used</span>
-                    )}
-                    {!entry.item.isConsumable && !isConsumed && (
-                      <span className="ml-2 text-zinc-400">Permanent</span>
+                    {isCosmetic && (
+                      <span className="ml-2 text-purple-400/70">Permanent</span>
                     )}
                   </div>
-                  {entry.item.isConsumable && !isConsumed && entry.quantity > 0 && (
+
+                  {isCosmetic ? (
                     <button
-                      disabled={usingId === entry.id || useMutation_.isPending}
+                      disabled={equippingId === entry.id || equipMutation.isPending}
                       onClick={() => {
-                        setUsingId(entry.id);
-                        useMutation_.mutate(entry.id);
+                        setEquippingId(entry.id);
+                        equipMutation.mutate(entry.id);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+                        entry.equipped
+                          ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30'
+                          : 'bg-brand-500 hover:bg-brand-400 text-white'
+                      }`}
                     >
-                      {usingId === entry.id ? (
+                      {equippingId === entry.id ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
-                        <Zap className="w-3 h-3" />
+                        <Sparkles className="w-3 h-3" />
                       )}
-                      Use
+                      {entry.equipped ? 'Unequip' : 'Equip'}
                     </button>
+                  ) : (
+                    entry.quantity > 0 && (
+                      <button
+                        disabled={usingId === entry.id || useMutation_.isPending}
+                        onClick={() => {
+                          setUsingId(entry.id);
+                          useMutation_.mutate(entry.id);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {usingId === entry.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Zap className="w-3 h-3" />
+                        )}
+                        Use
+                      </button>
+                    )
                   )}
                 </div>
               </div>

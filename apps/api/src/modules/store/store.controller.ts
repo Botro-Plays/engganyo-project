@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { StoreCategory } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 
@@ -38,5 +38,12 @@ export class StoreController {
   @HttpCode(HttpStatus.OK)
   async useItem(@CurrentUser() user: JwtPayload, @Param('id') inventoryId: string) {
     return this.storeService.useItem(user.sub, inventoryId);
+  }
+
+  @Patch('inventory/:id/equip')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async equipCosmetic(@CurrentUser() user: JwtPayload, @Param('id') inventoryId: string) {
+    return this.storeService.equipCosmetic(user.sub, inventoryId);
   }
 }

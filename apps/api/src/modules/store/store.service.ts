@@ -185,9 +185,11 @@ export class StoreService implements OnModuleInit {
     }
 
     // ── Cosmetic dedup guard ─────────────────────────────────
+    // Cosmetics are permanent (isConsumable: false) and can only be owned once.
+    // Check without consumedAt filter since cosmetics are never consumed.
     if (item.category === StoreCategory.COSMETIC) {
       const existingCosmetic = await this.prisma.userInventory.findFirst({
-        where: { userId, itemId, consumedAt: null },
+        where: { userId, itemId },
       });
       if (existingCosmetic) {
         throw new BadRequestException('You already own this cosmetic');
@@ -250,17 +252,36 @@ export class StoreService implements OnModuleInit {
           },
         });
 
-        const existing = await tx.userInventory.findFirst({
-          where: { userId, itemId, consumedAt: null },
-        });
-
-        if (existing) {
-          await tx.userInventory.update({
-            where: { id: existing.id },
-            data: { quantity: { increment: quantity } },
-          });
+        if (item.category === StoreCategory.COSMETIC) {
+          // Cosmetics: create with equipped=true; unequip any other of same cosmeticType
+          const meta = item.metadata as Record<string, unknown>;
+          const cosmeticType = meta?.['cosmeticType'] as string | undefined;
+          if (cosmeticType) {
+            const otherEquipped = await tx.userInventory.findMany({
+              where: { userId, equipped: true },
+              include: { item: { select: { metadata: true } } },
+            });
+            for (const other of otherEquipped) {
+              const otherMeta = other.item.metadata as Record<string, unknown>;
+              if (otherMeta?.['cosmeticType'] === cosmeticType) {
+                await tx.userInventory.update({ where: { id: other.id }, data: { equipped: false } });
+              }
+            }
+          }
+          await tx.userInventory.create({ data: { userId, itemId, quantity: 1, equipped: true } });
         } else {
-          await tx.userInventory.create({ data: { userId, itemId, quantity } });
+          // Consumables: stack into an existing unconsumed row or create a new one
+          const existing = await tx.userInventory.findFirst({
+            where: { userId, itemId, consumedAt: null },
+          });
+          if (existing) {
+            await tx.userInventory.update({
+              where: { id: existing.id },
+              data: { quantity: { increment: quantity } },
+            });
+          } else {
+            await tx.userInventory.create({ data: { userId, itemId, quantity } });
+          }
         }
 
         return p;
@@ -311,7 +332,11 @@ export class StoreService implements OnModuleInit {
 
   async getUserInventory(userId: string) {
     const inventory = await this.prisma.userInventory.findMany({
-      where: { userId },
+      where: {
+        userId,
+        // Filter out old ghost rows left by the pre-fix behaviour (consumedAt set, quantity 0)
+        quantity: { gt: 0 },
+      },
       include: {
         item: {
           select: {
@@ -331,6 +356,19 @@ export class StoreService implements OnModuleInit {
     return inventory;
   }
 
+  // ─── Get equipped cosmetics for a user ─────────────────────
+
+  async getEquippedCosmetics(userId: string) {
+    return this.prisma.userInventory.findMany({
+      where: { userId, equipped: true },
+      include: {
+        item: {
+          select: { id: true, name: true, category: true, metadata: true },
+        },
+      },
+    });
+  }
+
   // ─── Use an inventory item ─────────────────────────────────
 
   async useItem(userId: string, inventoryId: string) {
@@ -344,21 +382,28 @@ export class StoreService implements OnModuleInit {
 
     const item = inventory.item;
 
-    // Non-consumable items (cosmetics) are passive — cannot be explicitly "used"
+    // Non-consumable items (cosmetics) are equipped/unequipped, not "used"
     if (!item.isConsumable) {
-      throw new BadRequestException(`${item.name} is a permanent item and does not need to be activated.`);
+      throw new BadRequestException(`${item.name} is a permanent cosmetic. Use the equip endpoint instead.`);
     }
 
     const meta = item.metadata as Record<string, unknown>;
     const effectType = meta?.['effectType'] as string | undefined;
 
-    // Decrement quantity; mark consumed when exhausted
+    // Guard: reject if an effect of the same type is already active
+    if (effectType === 'xp_boost') {
+      const active = await this.getActiveXpBoost(userId);
+      if (active) throw new BadRequestException('An XP Boost is already active. Wait for it to expire before using another.');
+    }
+    if (effectType === 'task_limit_boost') {
+      const active = await this.getActiveTaskLimitBoost(userId);
+      if (active) throw new BadRequestException('A Task Limit Boost is already active. Wait for it to expire before using another.');
+    }
+
+    // Decrement quantity; DELETE the row when exhausted (no ghost rows)
     const newQty = inventory.quantity - 1;
     if (newQty <= 0) {
-      await this.prisma.userInventory.update({
-        where: { id: inventoryId },
-        data: { quantity: 0, consumedAt: new Date() },
-      });
+      await this.prisma.userInventory.delete({ where: { id: inventoryId } });
     } else {
       await this.prisma.userInventory.update({
         where: { id: inventoryId },
@@ -433,6 +478,45 @@ export class StoreService implements OnModuleInit {
       default:
         return { applied: false, reason: `Unknown effect type: ${effectType}` };
     }
+  }
+
+  // ─── Equip / unequip a cosmetic ────────────────────────────
+
+  async equipCosmetic(userId: string, inventoryId: string) {
+    const inventory = await this.prisma.userInventory.findFirst({
+      where: { id: inventoryId, userId },
+      include: { item: true },
+    });
+    if (!inventory) throw new NotFoundException('Item not found in your inventory');
+    if (inventory.item.isConsumable || inventory.item.category !== StoreCategory.COSMETIC) {
+      throw new BadRequestException('Only cosmetics can be equipped or unequipped');
+    }
+
+    const meta = inventory.item.metadata as Record<string, unknown>;
+    const cosmeticType = meta?.['cosmeticType'] as string | undefined;
+
+    if (inventory.equipped) {
+      // Unequip
+      await this.prisma.userInventory.update({ where: { id: inventoryId }, data: { equipped: false } });
+      return { inventoryId, equipped: false, itemName: inventory.item.name };
+    }
+
+    // Equip: first unequip any other cosmetic of the same cosmeticType for this user
+    if (cosmeticType) {
+      const otherEquipped = await this.prisma.userInventory.findMany({
+        where: { userId, equipped: true },
+        include: { item: { select: { metadata: true } } },
+      });
+      for (const other of otherEquipped) {
+        const otherMeta = other.item.metadata as Record<string, unknown>;
+        if (otherMeta?.['cosmeticType'] === cosmeticType && other.id !== inventoryId) {
+          await this.prisma.userInventory.update({ where: { id: other.id }, data: { equipped: false } });
+        }
+      }
+    }
+
+    await this.prisma.userInventory.update({ where: { id: inventoryId }, data: { equipped: true } });
+    return { inventoryId, equipped: true, itemName: inventory.item.name };
   }
 
   // ─── Loot box reveal ───────────────────────────────────────

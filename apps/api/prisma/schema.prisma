@@ -1416,6 +1416,7 @@ model UserInventory {
   item       StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   quantity   Int       @default(1)
   consumedAt DateTime? @map("consumed_at") // for consumables like boosts
+  equipped   Boolean   @default(false) @map("equipped") // for cosmetics: whether this item is currently active
   acquiredAt DateTime  @default(now()) @map("acquired_at")
 
   @@index([userId])

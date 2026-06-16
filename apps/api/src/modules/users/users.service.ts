@@ -71,13 +71,22 @@ export class UsersService {
         ...USER_BASE_SELECT,
         profile: { select: PROFILE_SELECT },
         socialAccounts: { select: SOCIAL_SELECT, orderBy: { platform: 'asc' } },
+        inventory: {
+          where: { equipped: true },
+          select: {
+            id: true,
+            equipped: true,
+            item: { select: { id: true, name: true, category: true, metadata: true } },
+          },
+        },
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    // Ensure socialAccounts is always an array (defensive check for malformed data)
+    const { inventory, ...rest } = user;
     return {
-      ...user,
-      socialAccounts: Array.isArray(user.socialAccounts) ? user.socialAccounts : [],
+      ...rest,
+      socialAccounts: Array.isArray(rest.socialAccounts) ? rest.socialAccounts : [],
+      equippedCosmetics: inventory,
     };
   }
 
@@ -143,6 +152,14 @@ export class UsersService {
           select: { score: true, level: true },
         },
         vipTier: { select: { name: true, displayName: true, level: true, perks: true } },
+        inventory: {
+          where: { equipped: true },
+          select: {
+            id: true,
+            equipped: true,
+            item: { select: { id: true, name: true, category: true, metadata: true } },
+          },
+        },
       },
     });
 
@@ -152,12 +169,12 @@ export class UsersService {
     }
 
     // Strip email from public view
-    const { email: _, ...publicUser } = user;
-    // Ensure socialAccounts is always an array (defensive check for malformed data)
+    const { email: _, inventory, ...publicUser } = user;
     return {
       ...publicUser,
       socialAccounts: Array.isArray(publicUser.socialAccounts) ? publicUser.socialAccounts : [],
       trustScore: publicUser.trustScore ?? null,
+      equippedCosmetics: inventory,
     };
   }
 

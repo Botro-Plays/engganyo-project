@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   User, MapPin, Globe, Flag, ArrowLeft, ExternalLink,
-  CheckCircle2, Zap, Star, BarChart2, Shield, Award,
+  CheckCircle2, Zap, Star, BarChart2, Shield, Award, Sparkles,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
@@ -52,6 +52,16 @@ interface PublicProfile {
     isVerified: boolean;
   }[];
   trustScore: TrustScoreBrief | null;
+  equippedCosmetics: {
+    id: string;
+    equipped: boolean;
+    item: {
+      id: string;
+      name: string;
+      category: string;
+      metadata: Record<string, unknown>;
+    };
+  }[];
 }
 
 const REPORT_REASONS: { value: string; label: string }[] = [
@@ -199,6 +209,25 @@ export default function UserProfilePage() {
                   {data.vipTier.displayName}
                 </span>
               )}
+              {data.equippedCosmetics?.map((c) => {
+                const meta = c.item.metadata as Record<string, unknown>;
+                const cosmeticType = meta['cosmeticType'] as string | undefined;
+                return (
+                  <span
+                    key={c.id}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                      cosmeticType === 'profile_theme'
+                        ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
+                        : cosmeticType === 'avatar_frame'
+                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                        : 'bg-zinc-700/50 text-zinc-300 border-zinc-600/50'
+                    }`}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {c.item.name}
+                  </span>
+                );
+              })}
             </div>
             <p className="text-sm text-zinc-400">@{data.username}</p>
             {data.bio && <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{data.bio}</p>}

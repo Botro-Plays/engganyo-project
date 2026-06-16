@@ -27,9 +27,11 @@ interface StoreItem {
 }
 
 interface InventoryEntry {
-  itemId: string;
+  id: string;
+  equipped: boolean;
   consumedAt: string | null;
   quantity: number;
+  item: { id: string };
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -109,10 +111,9 @@ export default function StorePage() {
   });
 
   // Build a set of owned non-consumable item IDs (cosmetics etc.)
+  // A cosmetic is "owned" if any inventory entry exists for it (permanent, never deleted)
   const ownedItemIds = new Set(
-    (inventoryData ?? [])
-      .filter((e) => !e.consumedAt && e.quantity > 0)
-      .map((e) => e.itemId)
+    (inventoryData ?? []).map((e) => e.item.id)
   );
 
   const items = itemsData ?? [];
