@@ -541,11 +541,10 @@ export class AdminService {
   async listPendingSubmissions(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     const now = new Date();
-    // Admin queue: SUBMITTED completions where creator's 48h review window has passed (escalated)
+    // Admin queue: ALL SUBMITTED completions from manual-review campaigns (not just escalated)
     const where = {
       status: CompletionStatus.SUBMITTED,
       campaign: { autoVerify: false },
-      reviewDeadline: { lt: now },
     };
     const [items, total] = await Promise.all([
       this.prisma.taskCompletion.findMany({
@@ -567,13 +566,19 @@ export class AdminService {
           },
           user: { select: { id: true, username: true } },
         },
-        orderBy: { reviewDeadline: 'asc' },
+        orderBy: { submittedAt: 'asc' },
         skip,
         take: limit,
       }),
       this.prisma.taskCompletion.count({ where }),
     ]);
-    return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      items: items.map((item) => ({
+        ...item,
+        escalated: item.reviewDeadline ? item.reviewDeadline < now : false,
+      })),
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async reviewSubmission(

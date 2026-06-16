@@ -290,7 +290,7 @@ export class TasksService {
     ]);
 
     // Invalidate browse cache so the task disappears from the user's browse list immediately
-    void this.redisService.delByPattern(`campaigns:browse:${userId}:*`).catch(() => null);
+    await this.redisService.delByPattern(`campaigns:browse:${userId}:*`).catch(() => null);
 
     void this.notificationsService.createNotification(
       userId,

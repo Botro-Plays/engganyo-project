@@ -154,10 +154,10 @@ export default function TasksPage() {
 
   // Real-time: refresh tasks on backend events
   useSocketEvent('task:assigned', () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
   });
   useSocketEvent('task:reviewed', () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
     void queryClient.invalidateQueries({ queryKey: ['wallet'] });
   });
 
@@ -168,6 +168,7 @@ export default function TasksPage() {
   const [submitting, setSubmitting] = useState<MyTask | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [assigningIds, setAssigningIds] = useState<Set<string>>(new Set());
   const [reporting, setReporting] = useState<{ userId: string; label: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -302,11 +303,42 @@ export default function TasksPage() {
   // ─── Assign task ───────────────────────────────────────────
   const assignMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/assign`),
+    onMutate: async (campaignId) => {
+      setAssigningIds((prev) => new Set(prev).add(campaignId));
+      // Optimistically remove the assigned task from browse cache
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'browse'], type: 'all' });
+      const previousBrowse = queryClient.getQueriesData<{ items: AvailableTask[]; meta: { total: number } }>({ queryKey: ['tasks', 'browse'], type: 'all' });
+      queryClient.setQueriesData<{ items: AvailableTask[]; meta: { total: number } }>({ queryKey: ['tasks', 'browse'], type: 'all' }, (old: { items: AvailableTask[]; meta: { total: number } } | undefined) => {
+        if (!old) return old;
+        const filtered = old.items.filter((t: AvailableTask) => t.id !== campaignId);
+        return {
+          ...old,
+          items: filtered,
+          meta: { ...old.meta, total: Math.max(0, old.meta.total - 1) },
+        };
+      });
+      return { previousBrowse };
+    },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
       setAssignError(null);
     },
-    onError: (err) => setAssignError(getApiErrorMessage(err)),
+    onError: (err, _campaignId, context) => {
+      setAssignError(getApiErrorMessage(err));
+      // Rollback optimistic removal on error
+      if (context?.previousBrowse) {
+        for (const [queryKey, data] of context.previousBrowse) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
+    onSettled: (_data, _err, campaignId) => {
+      setAssigningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(campaignId);
+        return next;
+      });
+    },
   });
 
   // ─── Submit proof ──────────────────────────────────────────
@@ -574,10 +606,10 @@ export default function TasksPage() {
                           return (
                             <button
                               onClick={() => assignMutation.mutate(task.id)}
-                              disabled={assignMutation.isPending || available <= 0}
+                              disabled={assigningIds.has(task.id) || available <= 0}
                               className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                              {assignMutation.isPending ? (
+                              {assigningIds.has(task.id) ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
                                 'Accept task'
