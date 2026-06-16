@@ -333,6 +333,17 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - Store nav link added to desktop sidebar + mobile nav
   - API tsc 0 errors, web tsc 0 errors, eslint 0 errors (20 pre-existing warnings), 36/36 jest pass
   - Commit: `b12be61` pushed to `origin main`
+- ✅ **Store Critical Fixes** (2026-06-16)
+  - C1: `@Throttle(10/min)` on `POST /store/purchase` — prevents spam-purchase attacks
+  - C2: Atomic `$transaction` with inline limited-qty recheck — fixes overselling race condition
+  - C3: `isConsumable`, `maxOwnedPerUser` fields added to `StoreItem` + migration `20260616025608_add_store_item_fields`
+  - C3: `POST /store/inventory/:id/use` endpoint — items now actually do something
+  - C3: XP boost wired into `GamificationService.awardXp()` (Redis `boost:xp:{userId}` with TTL)
+  - C3: Task limit boost wired into `TasksService.assignTask()` (Redis `boost:task_limit:{userId}` + `getDailyLimits`)
+  - C3: Streak freeze wired into `GamificationService.claimDailyReward()` (Redis counter `boost:streak_freeze:{userId}`)
+  - C3: Loot box open logic with weighted rewards (credits / xp boost / cosmetic)
+  - Cosmetic dedup guard: blocks re-purchase of already-owned cosmetics
+  - Commit: `a632759` pushed to `origin main`
 
 ---
 
