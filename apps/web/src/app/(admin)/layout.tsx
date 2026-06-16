@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare, Trophy, DollarSign, Banknote,
-  Menu, X, Bell, Loader2, Mail, ListOrdered, Webhook,
+  Menu, X, Bell, Loader2, Mail, ListOrdered, Webhook, ShoppingBag,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -34,6 +34,7 @@ const navItems = [
   { href: '/admin/notifications', icon: Bell, label: 'Notifications' },
   { href: '/admin/audit-log', icon: ScrollText, label: 'Audit Log' },
   { href: '/admin/communications', icon: Mail, label: 'Communications' },
+  { href: '/admin/store', icon: ShoppingBag, label: 'Store' },
   { href: '/admin/queues', icon: ListOrdered, label: 'Queues' },
 ];
 

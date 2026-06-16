@@ -2604,4 +2604,159 @@ export class AdminService {
       messageCount: c._count.messages,
     }));
   }
+
+  // ─── Store management ──────────────────────────────────────
+
+  async listStoreItems(includeInactive = false) {
+    return this.prisma.storeItem.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      orderBy: [{ category: 'asc' }, { creditCost: 'asc' }],
+      include: {
+        _count: { select: { purchases: true } },
+      },
+    });
+  }
+
+  async createStoreItem(adminId: string, dto: {
+    name: string;
+    description?: string;
+    category: string;
+    creditCost: number;
+    isLimited?: boolean;
+    limitedQty?: number | null;
+    isConsumable?: boolean;
+    maxOwnedPerUser?: number | null;
+    startsAt?: string | null;
+    endsAt?: string | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    const validCategories = Object.values({ BOOST: 'BOOST', COSMETIC: 'COSMETIC', CONVENIENCE: 'CONVENIENCE', CREDIT_PACK: 'CREDIT_PACK', GUILD_PERK: 'GUILD_PERK' });
+    if (!validCategories.includes(dto.category)) {
+      throw new BadRequestException(`Invalid category: ${dto.category}. Must be one of: ${validCategories.join(', ')}`);
+    }
+    if (dto.creditCost < 0) throw new BadRequestException('creditCost must be >= 0');
+
+    const item = await this.prisma.storeItem.create({
+      data: {
+        name: dto.name,
+        description: dto.description,
+        category: dto.category as import('@prisma/client').StoreCategory,
+        creditCost: dto.creditCost,
+        isLimited: dto.isLimited ?? false,
+        limitedQty: dto.limitedQty ?? null,
+        isConsumable: dto.isConsumable ?? true,
+        maxOwnedPerUser: dto.maxOwnedPerUser ?? null,
+        startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
+        endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
+        metadata: (dto.metadata ?? {}) as Prisma.InputJsonValue,
+        isActive: true,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'store_item.create',
+        entityType: 'StoreItem',
+        entityId: item.id,
+        metadata: { name: item.name, creditCost: item.creditCost } as Prisma.InputJsonValue,
+      },
+    });
+
+    return item;
+  }
+
+  async updateStoreItem(adminId: string, itemId: string, dto: {
+    name?: string;
+    description?: string;
+    creditCost?: number;
+    isLimited?: boolean;
+    limitedQty?: number | null;
+    isConsumable?: boolean;
+    maxOwnedPerUser?: number | null;
+    startsAt?: string | null;
+    endsAt?: string | null;
+    metadata?: Record<string, unknown>;
+    isActive?: boolean;
+  }) {
+    const existing = await this.prisma.storeItem.findUnique({ where: { id: itemId } });
+    if (!existing) throw new NotFoundException('Store item not found');
+
+    if (dto.creditCost !== undefined && dto.creditCost < 0) {
+      throw new BadRequestException('creditCost must be >= 0');
+    }
+
+    const updated = await this.prisma.storeItem.update({
+      where: { id: itemId },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.creditCost !== undefined && { creditCost: dto.creditCost }),
+        ...(dto.isLimited !== undefined && { isLimited: dto.isLimited }),
+        ...(dto.limitedQty !== undefined && { limitedQty: dto.limitedQty }),
+        ...(dto.isConsumable !== undefined && { isConsumable: dto.isConsumable }),
+        ...(dto.maxOwnedPerUser !== undefined && { maxOwnedPerUser: dto.maxOwnedPerUser }),
+        ...(dto.startsAt !== undefined && { startsAt: dto.startsAt ? new Date(dto.startsAt) : null }),
+        ...(dto.endsAt !== undefined && { endsAt: dto.endsAt ? new Date(dto.endsAt) : null }),
+        ...(dto.metadata !== undefined && { metadata: dto.metadata as Prisma.InputJsonValue }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'store_item.update',
+        entityType: 'StoreItem',
+        entityId: itemId,
+        metadata: { changes: dto } as Prisma.InputJsonValue,
+      },
+    });
+
+    return updated;
+  }
+
+  async grantStoreItem(adminId: string, dto: { userId: string; itemId: string; quantity: number; reason?: string }) {
+    const [user, item] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: dto.userId }, select: { id: true, username: true } }),
+      this.prisma.storeItem.findUnique({ where: { id: dto.itemId }, select: { id: true, name: true } }),
+    ]);
+    if (!user) throw new NotFoundException('User not found');
+    if (!item) throw new NotFoundException('Store item not found');
+    if (dto.quantity < 1 || dto.quantity > 999) throw new BadRequestException('Quantity must be 1–999');
+
+    const existing = await this.prisma.userInventory.findFirst({
+      where: { userId: dto.userId, itemId: dto.itemId, consumedAt: null },
+    });
+
+    if (existing) {
+      await this.prisma.userInventory.update({
+        where: { id: existing.id },
+        data: { quantity: { increment: dto.quantity } },
+      });
+    } else {
+      await this.prisma.userInventory.create({
+        data: { userId: dto.userId, itemId: dto.itemId, quantity: dto.quantity },
+      });
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: 'store_item.grant',
+        entityType: 'User',
+        entityId: dto.userId,
+        metadata: { itemId: dto.itemId, itemName: item.name, quantity: dto.quantity, reason: dto.reason } as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.notificationsService.createNotification(
+      dto.userId,
+      NotificationType.CREDIT_EARNED,
+      'Item granted',
+      `An admin granted you ${dto.quantity}x ${item.name}${dto.reason ? `: ${dto.reason}` : ''}.`,
+    );
+
+    return { success: true, granted: { item: item.name, quantity: dto.quantity, toUser: user.username } };
+  }
 }

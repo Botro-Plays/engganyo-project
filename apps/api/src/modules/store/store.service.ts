@@ -1,9 +1,11 @@
 import { Injectable, OnModuleInit, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
-import { StoreCategory, TransactionType, Prisma } from '@prisma/client';
+import { StoreCategory, TransactionType, NotificationType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 
 // ─── Default store items ─────────────────────────────────────
 const DEFAULT_STORE_ITEMS: Array<{
@@ -92,6 +94,8 @@ export class StoreService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly walletService: WalletService,
+    private readonly notificationsService: NotificationsService,
+    private readonly eventsService: EventsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -151,7 +155,12 @@ export class StoreService implements OnModuleInit {
       },
     });
 
-    return items;
+    // Strip internal metadata fields from public response
+    return items.map((item) => {
+      const raw = item.metadata as Record<string, unknown>;
+      const { possibleRewards: _pr, effectType: _et, ...publicMeta } = raw ?? {};
+      return { ...item, metadata: publicMeta };
+    });
   }
 
   // ─── Purchase an item ────────────────────────────────────────
@@ -201,60 +210,94 @@ export class StoreService implements OnModuleInit {
 
     const totalCost = item.creditCost * quantity;
 
-    // ── Atomic purchase inside transaction ──────────────────
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Re-check limited quantity inside transaction (race-condition fix)
-      if (item.isLimited && item.limitedQty !== null) {
-        const soldCount = await tx.storePurchase.count({ where: { itemId } });
-        const remaining = item.limitedQty - soldCount;
-        if (remaining <= 0) throw new BadRequestException('Item is sold out');
-        if (quantity > remaining) {
-          throw new BadRequestException(`Only ${remaining} remaining`);
+    // ── Step 1: Re-check limited qty (pre-debit, best effort) ──
+    if (item.isLimited && item.limitedQty !== null) {
+      const soldCount = await this.prisma.storePurchase.count({ where: { itemId } });
+      const remaining = item.limitedQty - soldCount;
+      if (remaining <= 0) throw new BadRequestException('Item is sold out');
+      if (quantity > remaining) throw new BadRequestException(`Only ${remaining} remaining`);
+    }
+
+    // ── Step 2: Debit wallet (optimistic-locking, own transaction) ──
+    const walletTx = await this.walletService.debit(userId, totalCost, {
+      type: TransactionType.SPEND_STORE_PURCHASE,
+      description: `Purchased ${quantity}x ${item.name}`,
+      referenceId: itemId,
+      referenceType: 'store_item',
+      metadata: { itemName: item.name, quantity, unitCost: item.creditCost },
+    });
+
+    // ── Step 3: Create purchase record + inventory atomically ──
+    // If this fails, we issue a refund to ensure no credits are lost.
+    let purchase;
+    try {
+      purchase = await this.prisma.$transaction(async (tx) => {
+        // Final limited-qty recheck inside tx to close the race window
+        if (item.isLimited && item.limitedQty !== null) {
+          const soldCount = await tx.storePurchase.count({ where: { itemId } });
+          if (item.limitedQty - soldCount < quantity) {
+            throw new BadRequestException('Item just sold out');
+          }
         }
-      }
 
-      // Debit credits
-      const transaction = await this.walletService.debit(userId, totalCost, {
-        type: TransactionType.SPEND_STORE_PURCHASE,
-        description: `Purchased ${quantity}x ${item.name}`,
-        referenceId: itemId,
-        referenceType: 'store_item',
-        metadata: { itemName: item.name, quantity, unitCost: item.creditCost },
-      });
-
-      // Create purchase record
-      const purchase = await tx.storePurchase.create({
-        data: {
-          userId,
-          itemId,
-          transactionId: transaction.id,
-          quantity,
-          creditCostAtPurchase: item.creditCost,
-        },
-      });
-
-      // Upsert inventory
-      const existingInventory = await tx.userInventory.findFirst({
-        where: { userId, itemId, consumedAt: null },
-      });
-
-      if (existingInventory) {
-        await tx.userInventory.update({
-          where: { id: existingInventory.id },
-          data: { quantity: { increment: quantity } },
+        const p = await tx.storePurchase.create({
+          data: {
+            userId,
+            itemId,
+            transactionId: walletTx.id,
+            quantity,
+            creditCostAtPurchase: item.creditCost,
+          },
         });
-      } else {
-        await tx.userInventory.create({
-          data: { userId, itemId, quantity },
-        });
-      }
 
-      return { purchase, transaction };
+        const existing = await tx.userInventory.findFirst({
+          where: { userId, itemId, consumedAt: null },
+        });
+
+        if (existing) {
+          await tx.userInventory.update({
+            where: { id: existing.id },
+            data: { quantity: { increment: quantity } },
+          });
+        } else {
+          await tx.userInventory.create({ data: { userId, itemId, quantity } });
+        }
+
+        return p;
+      });
+    } catch (err) {
+      // Refund wallet if record creation fails
+      await this.walletService.credit(userId, totalCost, {
+        type: TransactionType.EARN_ACHIEVEMENT,
+        description: `Refund: failed purchase of ${item.name}`,
+        referenceId: walletTx.id,
+        referenceType: 'refund',
+      }).catch((refundErr: unknown) => {
+        this.logger.error(`CRITICAL: Failed to refund ${totalCost} credits to user ${userId} after purchase failure`, refundErr);
+      });
+      throw err;
+    }
+
+    // ── Step 4: Emit real-time notification ─────────────────
+    void this.notificationsService.createNotification(
+      userId,
+      NotificationType.CREDIT_SPENT,
+      'Purchase successful',
+      `You purchased ${quantity}x ${item.name} for ${totalCost} credits.`,
+      { itemId, itemName: item.name, quantity, totalCost },
+    ).catch(() => null);
+
+    this.eventsService.emitToUser(userId, 'store:purchased', {
+      itemId,
+      itemName: item.name,
+      quantity,
+      totalCost,
+      category: item.category,
     });
 
     return {
-      purchase: result.purchase,
-      transaction: result.transaction,
+      purchase,
+      transaction: walletTx,
       item: {
         id: item.id,
         name: item.name,
@@ -300,12 +343,18 @@ export class StoreService implements OnModuleInit {
     if (inventory.quantity <= 0) throw new BadRequestException('Item is depleted');
 
     const item = inventory.item;
+
+    // Non-consumable items (cosmetics) are passive — cannot be explicitly "used"
+    if (!item.isConsumable) {
+      throw new BadRequestException(`${item.name} is a permanent item and does not need to be activated.`);
+    }
+
     const meta = item.metadata as Record<string, unknown>;
     const effectType = meta?.['effectType'] as string | undefined;
 
-    // Decrement or consume
+    // Decrement quantity; mark consumed when exhausted
     const newQty = inventory.quantity - 1;
-    if (newQty <= 0 && item.isConsumable) {
+    if (newQty <= 0) {
       await this.prisma.userInventory.update({
         where: { id: inventoryId },
         data: { quantity: 0, consumedAt: new Date() },

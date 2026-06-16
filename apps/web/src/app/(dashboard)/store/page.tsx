@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShoppingBag, Zap, Sparkles, Wrench, Package, Loader2 } from 'lucide-react';
+import { ShoppingBag, Zap, Sparkles, Wrench, Package, Loader2, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
 import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
+import { useSocketEvent } from '@/hooks/use-socket';
+import { useToast } from '@/components/toast-provider';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -19,7 +21,15 @@ interface StoreItem {
   creditCost: number;
   isLimited: boolean;
   limitedQty: number | null;
+  isConsumable: boolean;
+  maxOwnedPerUser: number | null;
   metadata: Record<string, unknown>;
+}
+
+interface InventoryEntry {
+  itemId: string;
+  consumedAt: string | null;
+  quantity: number;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -49,6 +59,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function StorePage() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const { addToast } = useToast();
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
 
@@ -59,6 +70,23 @@ export default function StorePage() {
       return res.data.data ?? [];
     },
   });
+
+  const { data: inventoryData } = useQuery({
+    queryKey: ['store', 'inventory'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<InventoryEntry[]>>('store/inventory');
+      return res.data.data ?? [];
+    },
+    enabled: !!user,
+  });
+
+  // Real-time purchase confirmation
+  useSocketEvent<{ itemName: string; quantity: number; totalCost: number }>(
+    'store:purchased',
+    ({ itemName, totalCost }) => {
+      addToast(`Purchased ${itemName} for ${totalCost} credits`, 'success');
+    },
+  );
 
   const purchaseMutation = useMutation({
     mutationFn: async (itemId: string) => {
@@ -73,10 +101,19 @@ export default function StorePage() {
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
       setPurchasingId(null);
     },
-    onError: () => {
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Purchase failed';
+      addToast(msg, 'error');
       setPurchasingId(null);
     },
   });
+
+  // Build a set of owned non-consumable item IDs (cosmetics etc.)
+  const ownedItemIds = new Set(
+    (inventoryData ?? [])
+      .filter((e) => !e.consumedAt && e.quantity > 0)
+      .map((e) => e.itemId)
+  );
 
   const items = itemsData ?? [];
   const categories = ['ALL', ...Array.from(new Set(items.map((i) => i.category)))];
@@ -143,6 +180,7 @@ export default function StorePage() {
             const colorClass = CATEGORY_COLORS[item.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
             const isPurchasing = purchasingId === item.id;
             const canAfford = (user?.creditBalance ?? 0) >= item.creditCost;
+            const alreadyOwned = !item.isConsumable && ownedItemIds.has(item.id);
 
             return (
               <div
@@ -153,11 +191,19 @@ export default function StorePage() {
                   <div className={`p-2 rounded-lg ${colorClass.split(' ').slice(1).join(' ')}`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  {item.isLimited && (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
-                      Limited
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {alreadyOwned && (
+                      <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Owned
+                      </span>
+                    )}
+                    {item.isLimited && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">
+                        Limited
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="text-white font-semibold mb-1">{item.name}</h3>
@@ -167,26 +213,32 @@ export default function StorePage() {
                   <span className="text-brand-300 font-bold text-sm">
                     {formatCredits(item.creditCost)} credits
                   </span>
-                  <button
-                    disabled={!canAfford || isPurchasing || purchaseMutation.isPending}
-                    onClick={() => {
-                      setPurchasingId(item.id);
-                      purchaseMutation.mutate(item.id);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      canAfford
-                        ? 'bg-brand-500 hover:bg-brand-400 text-white disabled:opacity-50'
-                        : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {isPurchasing ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : canAfford ? (
-                      'Buy'
-                    ) : (
-                      'Too expensive'
-                    )}
-                  </button>
+                  {alreadyOwned ? (
+                    <span className="px-3 py-1.5 rounded-lg text-sm font-medium bg-zinc-700 text-zinc-400 cursor-not-allowed">
+                      Owned
+                    </span>
+                  ) : (
+                    <button
+                      disabled={!canAfford || isPurchasing || purchaseMutation.isPending}
+                      onClick={() => {
+                        setPurchasingId(item.id);
+                        purchaseMutation.mutate(item.id);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        canAfford
+                          ? 'bg-brand-500 hover:bg-brand-400 text-white disabled:opacity-50'
+                          : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {isPurchasing ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : canAfford ? (
+                        'Buy'
+                      ) : (
+                        'Too expensive'
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -194,12 +246,6 @@ export default function StorePage() {
         </div>
       )}
 
-      {/* Error toast */}
-      {purchaseMutation.isError && (
-        <div className="fixed bottom-6 right-6 z-50 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm max-w-sm">
-          {(purchaseMutation.error as Error)?.message ?? 'Purchase failed. Please try again.'}
-        </div>
-      )}
     </div>
   );
 }

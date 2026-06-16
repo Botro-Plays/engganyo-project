@@ -644,6 +644,70 @@ export class AdminController {
     return this.adminService.listChannelsForModeration();
   }
 
+  // ─── Store management ─────────────────────────────────────
+
+  @Get('store/items')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all store items (admin view, includes inactive)' })
+  listStoreItems(@Query('includeInactive') includeInactive?: string) {
+    return this.adminService.listStoreItems(includeInactive === 'true');
+  }
+
+  @Post('store/items')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new store item' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  createStoreItem(@CurrentUser() admin: JwtPayload, @Body() body: {
+    name: string;
+    description?: string;
+    category: string;
+    creditCost: number;
+    isLimited?: boolean;
+    limitedQty?: number | null;
+    isConsumable?: boolean;
+    maxOwnedPerUser?: number | null;
+    startsAt?: string | null;
+    endsAt?: string | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    return this.adminService.createStoreItem(admin.sub, body);
+  }
+
+  @Patch('store/items/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update a store item (price, availability, dates, toggle active)' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  updateStoreItem(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() body: {
+      name?: string;
+      description?: string;
+      creditCost?: number;
+      isLimited?: boolean;
+      limitedQty?: number | null;
+      isConsumable?: boolean;
+      maxOwnedPerUser?: number | null;
+      startsAt?: string | null;
+      endsAt?: string | null;
+      metadata?: Record<string, unknown>;
+      isActive?: boolean;
+    },
+  ) {
+    return this.adminService.updateStoreItem(admin.sub, id, body);
+  }
+
+  @Post('store/grant')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Grant a store item directly to a user (no credit cost)' })
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  grantStoreItem(
+    @CurrentUser() admin: JwtPayload,
+    @Body() body: { userId: string; itemId: string; quantity: number; reason?: string },
+  ) {
+    return this.adminService.grantStoreItem(admin.sub, body);
+  }
+
   @Get('queues')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get BullMQ queue stats' })
