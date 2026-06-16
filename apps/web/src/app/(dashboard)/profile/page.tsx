@@ -34,6 +34,7 @@ import Link from 'next/link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
+import { resolveCosmeticStyles } from '@/lib/cosmetics';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -573,6 +574,8 @@ export default function ProfilePage() {
     );
   }
 
+  const cosmeticStyles = resolveCosmeticStyles(profile?.equippedCosmetics);
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -581,8 +584,10 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Avatar + header ── */}
-      <div className="card-glass rounded-xl p-6 flex items-start gap-4 flex-wrap">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-2xl font-bold shrink-0">
+      <div className={`rounded-xl p-6 flex items-start gap-4 flex-wrap transition-all ${cosmeticStyles.themeCardClass}`}>
+        <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-2xl font-bold shrink-0 ${cosmeticStyles.frameClass}`}
+          style={cosmeticStyles.frameStyle}
+        >
           {avatarPreview || profile?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarPreview || profile?.avatarUrl || ''} alt={displayName} className="w-16 h-16 rounded-full object-cover" />

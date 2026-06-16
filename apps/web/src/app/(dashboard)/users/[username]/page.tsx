@@ -10,6 +10,7 @@ import {
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { resolveCosmeticStyles } from '@/lib/cosmetics';
 import Link from 'next/link';
 import type { ApiResponse } from '@/types';
 
@@ -169,6 +170,7 @@ export default function UserProfilePage() {
   }
 
   const isSelf = currentUser?.id === data.id;
+  const cosmeticStyles = resolveCosmeticStyles(data.equippedCosmetics);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -181,9 +183,11 @@ export default function UserProfilePage() {
       </button>
 
       {/* ── Profile card ── */}
-      <div className="card-glass rounded-xl p-6 mb-4">
+      <div className={`rounded-xl p-6 mb-4 transition-all ${cosmeticStyles.themeCardClass}`}>
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl shrink-0 overflow-hidden">
+          <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl shrink-0 overflow-hidden ${cosmeticStyles.frameClass}`}
+            style={cosmeticStyles.frameStyle}
+          >
             {data.avatarUrl
               ? <img src={data.avatarUrl} alt={data.username} className="w-full h-full object-cover" />
               : (data.displayName?.[0] ?? data.username[0]).toUpperCase()}
