@@ -15,8 +15,7 @@ export class StoreController {
   @Get('items')
   @HttpCode(HttpStatus.OK)
   async getItems(@Query('category') category?: StoreCategory) {
-    const items = await this.storeService.getItems(category);
-    return { success: true, data: items };
+    return this.storeService.getItems(category);
   }
 
   @Post('purchase')
@@ -24,23 +23,20 @@ export class StoreController {
   @Throttle({ default: { limit: 10, ttl: 60 } })
   @HttpCode(HttpStatus.OK)
   async purchaseItem(@CurrentUser() user: JwtPayload, @Body() dto: PurchaseItemDto) {
-    const result = await this.storeService.purchaseItem(user.sub, dto.itemId, dto.quantity);
-    return { success: true, data: result };
+    return this.storeService.purchaseItem(user.sub, dto.itemId, dto.quantity);
   }
 
   @Get('inventory')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getInventory(@CurrentUser() user: JwtPayload) {
-    const inventory = await this.storeService.getUserInventory(user.sub);
-    return { success: true, data: inventory };
+    return this.storeService.getUserInventory(user.sub);
   }
 
   @Post('inventory/:id/use')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async useItem(@CurrentUser() user: JwtPayload, @Param('id') inventoryId: string) {
-    const result = await this.storeService.useItem(user.sub, inventoryId);
-    return { success: true, data: result };
+    return this.storeService.useItem(user.sub, inventoryId);
   }
 }

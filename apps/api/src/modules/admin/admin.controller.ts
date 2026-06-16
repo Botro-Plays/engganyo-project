@@ -650,7 +650,7 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'List all store items (admin view, includes inactive)' })
   listStoreItems(@Query('includeInactive') includeInactive?: string) {
-    return this.adminService.listStoreItems(includeInactive === 'true');
+    return this.adminService.listStoreItems(includeInactive !== 'false');
   }
 
   @Post('store/items')
