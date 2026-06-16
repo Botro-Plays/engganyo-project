@@ -149,6 +149,7 @@ export class StoreService implements OnModuleInit {
         endsAt: true,
         isConsumable: true,
         maxOwnedPerUser: true,
+        requiredVipTierLevel: true,
         metadata: true,
         createdAt: true,
         updatedAt: true,
@@ -182,6 +183,20 @@ export class StoreService implements OnModuleInit {
     }
     if (item.endsAt && now > item.endsAt) {
       throw new BadRequestException('Item sale has ended');
+    }
+
+    // ── VIP tier requirement guard ────────────────────────────
+    if (item.requiredVipTierLevel !== null) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { vipTier: { select: { level: true } } },
+      });
+      const userLevel = user?.vipTier?.level ?? 0;
+      if (userLevel < item.requiredVipTierLevel) {
+        throw new BadRequestException(
+          `This item requires VIP Tier level ${item.requiredVipTierLevel}. Your current level is ${userLevel}.`,
+        );
+      }
     }
 
     // ── Cosmetic dedup guard ─────────────────────────────────

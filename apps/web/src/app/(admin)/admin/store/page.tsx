@@ -22,6 +22,7 @@ interface AdminStoreItem {
   limitedQty: number | null;
   isConsumable: boolean;
   maxOwnedPerUser: number | null;
+  requiredVipTierLevel: number | null;
   isActive: boolean;
   startsAt: string | null;
   endsAt: string | null;
@@ -112,6 +113,7 @@ const emptyForm = {
   limitedQty: '' as string | number,
   isConsumable: true,
   maxOwnedPerUser: '' as string | number,
+  requiredVipTierLevel: '' as string | number,
   isActive: true,
   startsAt: '',
   endsAt: '',
@@ -200,6 +202,7 @@ export default function AdminStorePage() {
         limitedQty: data.limitedQty !== '' ? Number(data.limitedQty) : null,
         isConsumable: data.isConsumable,
         maxOwnedPerUser: data.maxOwnedPerUser !== '' ? Number(data.maxOwnedPerUser) : null,
+        requiredVipTierLevel: data.requiredVipTierLevel !== '' ? Number(data.requiredVipTierLevel) : null,
         isActive: data.isActive,
         startsAt: data.startsAt || null,
         endsAt: data.endsAt || null,
@@ -229,6 +232,7 @@ export default function AdminStorePage() {
         limitedQty: data.limitedQty !== undefined && data.limitedQty !== '' ? Number(data.limitedQty) : data.limitedQty === '' ? null : undefined,
         isConsumable: data.isConsumable,
         maxOwnedPerUser: data.maxOwnedPerUser !== undefined && data.maxOwnedPerUser !== '' ? Number(data.maxOwnedPerUser) : data.maxOwnedPerUser === '' ? null : undefined,
+        requiredVipTierLevel: data.requiredVipTierLevel !== undefined && data.requiredVipTierLevel !== '' ? Number(data.requiredVipTierLevel) : data.requiredVipTierLevel === '' ? null : undefined,
         isActive: data.isActive,
         startsAt: data.startsAt === '' ? null : data.startsAt,
         endsAt: data.endsAt === '' ? null : data.endsAt,
@@ -277,6 +281,7 @@ export default function AdminStorePage() {
       limitedQty: item.limitedQty ?? '',
       isConsumable: item.isConsumable,
       maxOwnedPerUser: item.maxOwnedPerUser ?? '',
+      requiredVipTierLevel: item.requiredVipTierLevel ?? '',
       isActive: item.isActive,
       startsAt: item.startsAt ? item.startsAt.slice(0, 16) : '',
       endsAt: item.endsAt ? item.endsAt.slice(0, 16) : '',
@@ -745,6 +750,19 @@ export default function AdminStorePage() {
                       placeholder="blank = unlimited"
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Required VIP Tier Level</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={form.requiredVipTierLevel}
+                      onChange={(e) => setForm({ ...form, requiredVipTierLevel: e.target.value })}
+                      placeholder="blank = no requirement"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500"
+                    />
+                    <p className="text-[10px] text-zinc-600 mt-1">Minimum VIP tier level to purchase. Leave blank for no restriction.</p>
                   </div>
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1">Limited Qty</label>

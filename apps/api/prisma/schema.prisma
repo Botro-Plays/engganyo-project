@@ -1395,6 +1395,7 @@ model StoreItem {
   isActive      Boolean       @default(true) @map("is_active")
   isConsumable  Boolean       @default(true) @map("is_consumable")
   maxOwnedPerUser Int?        @map("max_owned_per_user") // NULL = unlimited
+  requiredVipTierLevel Int?   @map("required_vip_tier_level") // NULL = no requirement
   metadata      Json // item-specific data (boost duration, cosmetic URL, etc.)
 
   purchases   StorePurchase[]

@@ -2646,6 +2646,7 @@ export class AdminService {
     limitedQty?: number | null;
     isConsumable?: boolean;
     maxOwnedPerUser?: number | null;
+    requiredVipTierLevel?: number | null;
     startsAt?: string | null;
     endsAt?: string | null;
     metadata?: Record<string, unknown>;
@@ -2666,6 +2667,7 @@ export class AdminService {
         limitedQty: dto.limitedQty ?? null,
         isConsumable: dto.isConsumable ?? true,
         maxOwnedPerUser: dto.maxOwnedPerUser ?? null,
+        requiredVipTierLevel: dto.requiredVipTierLevel ?? null,
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
         endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
         metadata: (dto.metadata ?? {}) as Prisma.InputJsonValue,
@@ -2694,6 +2696,7 @@ export class AdminService {
     limitedQty?: number | null;
     isConsumable?: boolean;
     maxOwnedPerUser?: number | null;
+    requiredVipTierLevel?: number | null;
     startsAt?: string | null;
     endsAt?: string | null;
     metadata?: Record<string, unknown>;
@@ -2716,6 +2719,7 @@ export class AdminService {
         ...(dto.limitedQty !== undefined && { limitedQty: dto.limitedQty }),
         ...(dto.isConsumable !== undefined && { isConsumable: dto.isConsumable }),
         ...(dto.maxOwnedPerUser !== undefined && { maxOwnedPerUser: dto.maxOwnedPerUser }),
+        ...(dto.requiredVipTierLevel !== undefined && { requiredVipTierLevel: dto.requiredVipTierLevel }),
         ...(dto.startsAt !== undefined && { startsAt: dto.startsAt ? new Date(dto.startsAt) : null }),
         ...(dto.endsAt !== undefined && { endsAt: dto.endsAt ? new Date(dto.endsAt) : null }),
         ...(dto.metadata !== undefined && { metadata: dto.metadata as Prisma.InputJsonValue }),

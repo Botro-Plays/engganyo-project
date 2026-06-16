@@ -666,6 +666,7 @@ export class AdminController {
     limitedQty?: number | null;
     isConsumable?: boolean;
     maxOwnedPerUser?: number | null;
+    requiredVipTierLevel?: number | null;
     startsAt?: string | null;
     endsAt?: string | null;
     metadata?: Record<string, unknown>;
@@ -688,6 +689,7 @@ export class AdminController {
       limitedQty?: number | null;
       isConsumable?: boolean;
       maxOwnedPerUser?: number | null;
+      requiredVipTierLevel?: number | null;
       startsAt?: string | null;
       endsAt?: string | null;
       metadata?: Record<string, unknown>;
