@@ -1083,6 +1083,13 @@ model AnalyticsSnapshot {
   creditsIssued  Int @default(0) @map("credits_issued")   // earned by workers
   creditsSpent   Int @default(0) @map("credits_spent")    // paid by campaign owners
 
+  // Store
+  storePurchases    Int @default(0) @map("store_purchases")      // total store purchase transactions
+  storeCreditsSpent Int @default(0) @map("store_credits_spent") // credits spent via store
+  storeTopItemId    String? @map("store_top_item_id")            // most-purchased item ID that day
+  storeTopItemName  String? @map("store_top_item_name")          // most-purchased item name
+  storeTopItemCount Int @default(0) @map("store_top_item_count") // purchases of top item
+
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([date])

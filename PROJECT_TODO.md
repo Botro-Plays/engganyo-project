@@ -344,6 +344,20 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - C3: Loot box open logic with weighted rewards (credits / xp boost / cosmetic)
   - Cosmetic dedup guard: blocks re-purchase of already-owned cosmetics
   - Commit: `a632759` pushed to `origin main`
+- ✅ **A1 — Admin CRUD for Store Items** (2026-06-16)
+  - `GET /admin/store/items` — list with `_count.purchases`, includeInactive toggle
+  - `POST /admin/store/items` — create with effect type templates + metadata JSON
+  - `PATCH /admin/store/items/:id` — update all fields, toggle active/inactive
+  - Frontend `/admin/store` — full management UI with stats bar, table, create/edit modal
+- ✅ **A2 — Grant Item to User** (2026-06-16)
+  - `POST /admin/store/grant` — creates `UserInventory` with audit log + notification
+  - Frontend modal with user search typeahead, item selector, quantity, reason
+  - No credit cost to user; pure admin compensation / promotional tool
+- ✅ **A3 — Store Purchase Analytics** (2026-06-16)
+  - Added `storePurchases`, `storeCreditsSpent`, `storeTopItemId/Name/Count` to `AnalyticsSnapshot` + migration
+  - Daily snapshot cron (`analytics.processor.ts`) rolls up `StorePurchase` counts, revenue, and top item
+  - Admin endpoint `GET /admin/store/analytics` — totals, per-item breakdown, 30-day daily trends
+  - Frontend `/admin/store` Analytics tab — 4 stat cards, revenue-by-item table, daily trends table
 
 ---
 

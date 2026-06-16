@@ -109,7 +109,7 @@
 
 ## 🟠 Admin / Operations
 
-### A1. No admin CRUD for store items
+### A1. No admin CRUD for store items ✅ DONE
 
 - **Problem:** To add, edit, or deactivate a store item, someone must write raw SQL or Prisma seed scripts. No admin UI or API exists.
 - **Fix:** Add admin endpoints under `AdminController`:
@@ -118,15 +118,17 @@
   - `GET /admin/store/items` — list all items (including inactive)
 - **File:** `apps/api/src/modules/admin/admin.controller.ts`, `admin.service.ts`
 - **Est:** 1 hour
+- **Status:** ✅ Complete — full CRUD UI at `/admin/store` with create, edit, toggle active, effect type templates, metadata JSON editor, and purchase count stats.
 
-### A2. No "grant item to user" support endpoint
+### A2. No "grant item to user" support endpoint ✅ DONE
 
 - **Problem:** Customer support cannot manually compensate a user with an item (e.g. refund in credits vs. items, or promotional giveaway).
 - **Fix:** Admin endpoint `POST /admin/store/grant` that creates `UserInventory` and optionally a zero-credit `StorePurchase` record for audit.
 - **File:** `apps/api/src/modules/admin/admin.controller.ts`
 - **Est:** 30 min
+- **Status:** ✅ Complete — `POST /admin/store/grant` with user search typeahead, quantity selector, and audit log + notification. UI in `/admin/store` "Grant Item" modal.
 
-### A3. No store purchase analytics
+### A3. No store purchase analytics ✅ DONE
 
 - **Problem:** No visibility into which items sell, revenue per item, conversion rate from store page to purchase.
 - **Fix:** Track in `AnalyticsSnapshot` or create a new `StoreAnalytics` table with daily rollups per item. Also expose on the admin dashboard.
@@ -135,6 +137,7 @@
   - `apps/api/src/modules/analytics/`
   - `apps/web/src/app/(admin)/admin/store/page.tsx`
 - **Est:** 2 hours
+- **Status:** ✅ Complete — added `storePurchases`, `storeCreditsSpent`, `storeTopItemId/Name/Count` to `AnalyticsSnapshot`. Daily snapshot cron rolls up store data. Admin endpoint `GET /admin/store/analytics` returns totals, per-item breakdown, and 30-day trends. Frontend `/admin/store` has Analytics tab with stat cards, revenue-by-item table, and daily trends table.
 
 ---
 

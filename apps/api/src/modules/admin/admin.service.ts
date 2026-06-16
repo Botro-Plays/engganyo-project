@@ -2779,4 +2779,71 @@ export class AdminService {
 
     return { success: true, granted: { item: item.name, quantity: dto.quantity, toUser: user.username } };
   }
+
+  async getStoreAnalytics(days = 30) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const [
+      totalPurchases,
+      totalCreditsSpent,
+      uniqueBuyers,
+      perItemBreakdown,
+      dailyTrends,
+    ] = await Promise.all([
+      this.prisma.storePurchase.count(),
+      this.prisma.storePurchase.aggregate({ _sum: { creditCostAtPurchase: true } }).then((r) => r._sum.creditCostAtPurchase ?? 0),
+      this.prisma.storePurchase.groupBy({ by: ['userId'] }).then((r) => r.length),
+      this.prisma.storePurchase.groupBy({
+        by: ['itemId'],
+        _sum: { creditCostAtPurchase: true, quantity: true },
+        _count: { id: true },
+        orderBy: { _sum: { creditCostAtPurchase: 'desc' } },
+      }).then(async (rows) => {
+        const itemIds = rows.map((r) => r.itemId);
+        const items = await this.prisma.storeItem.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, name: true, category: true, creditCost: true },
+        });
+        const itemMap = new Map(items.map((i) => [i.id, i]));
+        return rows.map((r) => ({
+          itemId: r.itemId,
+          itemName: itemMap.get(r.itemId)?.name ?? 'Unknown',
+          category: itemMap.get(r.itemId)?.category ?? 'UNKNOWN',
+          creditCost: itemMap.get(r.itemId)?.creditCost ?? 0,
+          purchaseCount: r._count.id,
+          quantitySold: r._sum.quantity ?? 0,
+          revenue: r._sum.creditCostAtPurchase ?? 0,
+        }));
+      }),
+      this.prisma.analyticsSnapshot.findMany({
+        where: { date: { gte: since } },
+        orderBy: { date: 'asc' },
+        select: {
+          date: true,
+          storePurchases: true,
+          storeCreditsSpent: true,
+          storeTopItemName: true,
+          storeTopItemCount: true,
+        },
+      }),
+    ]);
+
+    return {
+      totals: {
+        totalPurchases,
+        totalCreditsSpent,
+        uniqueBuyers,
+        averageOrderValue: totalPurchases > 0 ? Math.round(Number(totalCreditsSpent) / totalPurchases) : 0,
+      },
+      perItem: perItemBreakdown,
+      dailyTrends: dailyTrends.map((d) => ({
+        date: d.date.toISOString().slice(0, 10),
+        purchases: d.storePurchases,
+        creditsSpent: d.storeCreditsSpent,
+        topItem: d.storeTopItemName,
+        topItemCount: d.storeTopItemCount,
+      })),
+    };
+  }
 }

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag, Plus, Pencil, ToggleLeft, ToggleRight, Gift,
   Zap, Sparkles, Wrench, Package, Loader2, X, Check, Search,
+  BarChart3, TrendingUp, Users, CreditCard,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits } from '@/lib/utils';
@@ -33,6 +34,31 @@ interface SuggestedUser {
   username: string;
   displayName: string | null;
   email: string;
+}
+
+interface StoreAnalytics {
+  totals: {
+    totalPurchases: number;
+    totalCreditsSpent: number;
+    uniqueBuyers: number;
+    averageOrderValue: number;
+  };
+  perItem: Array<{
+    itemId: string;
+    itemName: string;
+    category: string;
+    creditCost: number;
+    purchaseCount: number;
+    quantitySold: number;
+    revenue: number;
+  }>;
+  dailyTrends: Array<{
+    date: string;
+    purchases: number;
+    creditsSpent: number;
+    topItem: string | null;
+    topItemCount: number;
+  }>;
 }
 
 const CATEGORIES = ['BOOST', 'COSMETIC', 'CONVENIENCE', 'CREDIT_PACK', 'GUILD_PERK'];
@@ -95,6 +121,7 @@ const emptyForm = {
 
 export default function AdminStorePage() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'items' | 'analytics'>('items');
   const [includeInactive, setIncludeInactive] = useState(true);
   const [editItem, setEditItem] = useState<AdminStoreItem | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -150,6 +177,15 @@ export default function AdminStorePage() {
       );
       return res.data.data ?? [];
     },
+  });
+
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({
+    queryKey: ['admin', 'store', 'analytics'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<StoreAnalytics>>('admin/store/analytics');
+      return res.data.data ?? null;
+    },
+    enabled: activeTab === 'analytics',
   });
 
   const createMutation = useMutation({
@@ -275,136 +311,264 @@ export default function AdminStorePage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIncludeInactive(!includeInactive)}
+            onClick={() => setActiveTab('items')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors border ${
-              includeInactive
+              activeTab === 'items'
                 ? 'bg-brand-500/10 border-brand-500/30 text-brand-400'
-                : 'bg-surface-hover border-surface-border text-zinc-400'
+                : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
             }`}
           >
-            {includeInactive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-            Show Inactive
+            <Package className="w-4 h-4" />
+            Items
           </button>
           <button
-            onClick={() => { setShowGrant(true); setError(''); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors border ${
+              activeTab === 'analytics'
+                ? 'bg-brand-500/10 border-brand-500/30 text-brand-400'
+                : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+            }`}
           >
-            <Gift className="w-4 h-4" />
-            Grant Item
+            <BarChart3 className="w-4 h-4" />
+            Analytics
           </button>
-          <button
-            onClick={() => { setShowCreate(true); setForm({ ...emptyForm }); setError(''); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-brand-500 hover:bg-brand-400 text-white transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            New Item
-          </button>
-        </div>
-      </div>
-
-      {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        {[
-          { label: 'Total Items', value: items.length },
-          { label: 'Active', value: items.filter((i) => i.isActive).length },
-          { label: 'Inactive', value: items.filter((i) => !i.isActive).length },
-          { label: 'Total Purchases', value: items.reduce((a, b) => a + b._count.purchases, 0) },
-        ].map((s) => (
-          <div key={s.label} className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500">{s.label}</p>
-            <p className="text-xl font-bold text-white mt-1">{s.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Items table */}
-      {isLoading ? (
-        <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
-      ) : (
-        <div className="card-glass rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-surface-border">
-              <tr className="text-xs text-zinc-500 uppercase tracking-wide">
-                <th className="text-left px-4 py-3">Item</th>
-                <th className="text-left px-4 py-3">Category</th>
-                <th className="text-left px-4 py-3">Effect</th>
-                <th className="text-right px-4 py-3">Cost</th>
-                <th className="text-center px-4 py-3">Purchases</th>
-                <th className="text-center px-4 py-3">Status</th>
-                <th className="text-center px-4 py-3">Limited</th>
-                <th className="text-right px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
-              {items.map((item) => {
-                const Icon = CATEGORY_ICONS[item.category] ?? Package;
-                const colorClass = CATEGORY_COLORS[item.category] ?? 'text-zinc-400';
-                return (
-                  <tr key={item.id} className={`hover:bg-surface-hover transition-colors ${!item.isActive ? 'opacity-50' : ''}`}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${colorClass} flex-shrink-0`} />
-                        <div>
-                          <p className="text-white font-medium">{item.name}</p>
-                          <p className="text-xs text-zinc-500 truncate max-w-xs">{item.description}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-medium ${colorClass}`}>{item.category}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-mono text-zinc-500">
-                        {(item.metadata?.['effectType'] as string | undefined) ?? '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-brand-300 font-medium">{formatCredits(item.creditCost)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-zinc-400">{item._count.purchases}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        item.isActive
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                          : 'bg-zinc-700 text-zinc-500 border border-zinc-600'
-                      }`}>
-                        {item.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-zinc-400 text-xs">
-                      {item.isLimited ? `${item.limitedQty ?? '∞'} qty` : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(item)}
-                          className="p-1.5 rounded-lg bg-surface-hover hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => updateMutation.mutate({ id: item.id, data: { isActive: !item.isActive } })}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            item.isActive
-                              ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400'
-                              : 'bg-green-500/10 hover:bg-green-500/20 text-green-400'
-                          }`}
-                          title={item.isActive ? 'Deactivate' : 'Activate'}
-                        >
-                          {item.isActive ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {items.length === 0 && (
-            <div className="text-center py-12 text-zinc-500">No store items found.</div>
+          {activeTab === 'items' && (
+            <>
+              <button
+                onClick={() => setIncludeInactive(!includeInactive)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors border ${
+                  includeInactive
+                    ? 'bg-brand-500/10 border-brand-500/30 text-brand-400'
+                    : 'bg-surface-hover border-surface-border text-zinc-400'
+                }`}
+              >
+                {includeInactive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                Show Inactive
+              </button>
+              <button
+                onClick={() => { setShowGrant(true); setError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+              >
+                <Gift className="w-4 h-4" />
+                Grant Item
+              </button>
+              <button
+                onClick={() => { setShowCreate(true); setForm({ ...emptyForm }); setError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-brand-500 hover:bg-brand-400 text-white transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                New Item
+              </button>
+            </>
           )}
         </div>
+      </div>
+
+      {activeTab === 'items' ? (
+        <>
+          {/* Stats bar */}
+          <div className="grid grid-cols-4 gap-3 mb-6">
+            {[
+              { label: 'Total Items', value: items.length },
+              { label: 'Active', value: items.filter((i) => i.isActive).length },
+              { label: 'Inactive', value: items.filter((i) => !i.isActive).length },
+              { label: 'Total Purchases', value: items.reduce((a, b) => a + b._count.purchases, 0) },
+            ].map((s) => (
+              <div key={s.label} className="card-glass rounded-xl p-4">
+                <p className="text-xs text-zinc-500">{s.label}</p>
+                <p className="text-xl font-bold text-white mt-1">{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Items table */}
+          {isLoading ? (
+            <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
+          ) : (
+            <div className="card-glass rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="border-b border-surface-border">
+                  <tr className="text-xs text-zinc-500 uppercase tracking-wide">
+                    <th className="text-left px-4 py-3">Item</th>
+                    <th className="text-left px-4 py-3">Category</th>
+                    <th className="text-left px-4 py-3">Effect</th>
+                    <th className="text-right px-4 py-3">Cost</th>
+                    <th className="text-center px-4 py-3">Purchases</th>
+                    <th className="text-center px-4 py-3">Status</th>
+                    <th className="text-center px-4 py-3">Limited</th>
+                    <th className="text-right px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-border">
+                  {items.map((item) => {
+                    const Icon = CATEGORY_ICONS[item.category] ?? Package;
+                    const colorClass = CATEGORY_COLORS[item.category] ?? 'text-zinc-400';
+                    return (
+                      <tr key={item.id} className={`hover:bg-surface-hover transition-colors ${!item.isActive ? 'opacity-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Icon className={`w-4 h-4 ${colorClass} flex-shrink-0`} />
+                            <div>
+                              <p className="text-white font-medium">{item.name}</p>
+                              <p className="text-xs text-zinc-500 truncate max-w-xs">{item.description}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-medium ${colorClass}`}>{item.category}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-mono text-zinc-500">
+                            {(item.metadata?.['effectType'] as string | undefined) ?? '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-brand-300 font-medium">{formatCredits(item.creditCost)}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-zinc-400">{item._count.purchases}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            item.isActive
+                              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                              : 'bg-zinc-700 text-zinc-500 border border-zinc-600'
+                          }`}>
+                            {item.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-zinc-400 text-xs">
+                          {item.isLimited ? `${item.limitedQty ?? '∞'} qty` : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => openEdit(item)}
+                              className="p-1.5 rounded-lg bg-surface-hover hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => updateMutation.mutate({ id: item.id, data: { isActive: !item.isActive } })}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                item.isActive
+                                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400'
+                                  : 'bg-green-500/10 hover:bg-green-500/20 text-green-400'
+                              }`}
+                              title={item.isActive ? 'Deactivate' : 'Activate'}
+                            >
+                              {item.isActive ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {items.length === 0 && (
+                <div className="text-center py-12 text-zinc-500">No store items found.</div>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* ── Analytics: Totals ─────────────────────────── */}
+          {analyticsLoading ? (
+            <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
+          ) : analytics ? (
+            <>
+              <div className="grid grid-cols-4 gap-3 mb-6">
+                {[
+                  { label: 'Total Purchases', value: analytics.totals.totalPurchases.toLocaleString(), icon: ShoppingBag, color: 'text-brand-400' },
+                  { label: 'Total Revenue', value: `${formatCredits(analytics.totals.totalCreditsSpent)}`, icon: CreditCard, color: 'text-green-400' },
+                  { label: 'Unique Buyers', value: analytics.totals.uniqueBuyers.toLocaleString(), icon: Users, color: 'text-sky-400' },
+                  { label: 'Avg Order Value', value: `${formatCredits(analytics.totals.averageOrderValue)}`, icon: TrendingUp, color: 'text-amber-400' },
+                ].map((s) => (
+                  <div key={s.label} className="card-glass rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <s.icon className={`w-4 h-4 ${s.color}`} />
+                      <p className="text-xs text-zinc-500">{s.label}</p>
+                    </div>
+                    <p className="text-xl font-bold text-white mt-1">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Per-item breakdown */}
+              <div className="card-glass rounded-xl overflow-hidden mb-6">
+                <div className="px-4 py-3 border-b border-surface-border">
+                  <h3 className="text-sm font-semibold text-white">Revenue by Item</h3>
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="border-b border-surface-border bg-zinc-800/30">
+                    <tr className="text-xs text-zinc-500 uppercase tracking-wide">
+                      <th className="text-left px-4 py-2">Item</th>
+                      <th className="text-left px-4 py-2">Category</th>
+                      <th className="text-right px-4 py-2">Purchases</th>
+                      <th className="text-right px-4 py-2">Qty Sold</th>
+                      <th className="text-right px-4 py-2">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-border">
+                    {analytics.perItem.map((row) => (
+                      <tr key={row.itemId} className="hover:bg-surface-hover transition-colors">
+                        <td className="px-4 py-2">
+                          <p className="text-white font-medium">{row.itemName}</p>
+                          <p className="text-xs text-zinc-500">{formatCredits(row.creditCost)} each</p>
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className="text-xs text-zinc-400">{row.category}</span>
+                        </td>
+                        <td className="px-4 py-2 text-right text-zinc-300">{row.purchaseCount.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-zinc-300">{row.quantitySold.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right">
+                          <span className="text-green-400 font-medium">{formatCredits(row.revenue)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {analytics.perItem.length === 0 && (
+                      <tr><td colSpan={5} className="text-center py-8 text-zinc-500">No purchase data yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Daily trends */}
+              {analytics.dailyTrends.length > 0 && (
+                <div className="card-glass rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-surface-border">
+                    <h3 className="text-sm font-semibold text-white">Daily Trends (Last 30 Days)</h3>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="border-b border-surface-border bg-zinc-800/30">
+                      <tr className="text-xs text-zinc-500 uppercase tracking-wide">
+                        <th className="text-left px-4 py-2">Date</th>
+                        <th className="text-right px-4 py-2">Purchases</th>
+                        <th className="text-right px-4 py-2">Credits Spent</th>
+                        <th className="text-left px-4 py-2">Top Item</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-border">
+                      {analytics.dailyTrends.map((d) => (
+                        <tr key={d.date} className="hover:bg-surface-hover transition-colors">
+                          <td className="px-4 py-2 text-zinc-300">{d.date}</td>
+                          <td className="px-4 py-2 text-right text-zinc-300">{d.purchases}</td>
+                          <td className="px-4 py-2 text-right text-brand-300">{formatCredits(d.creditsSpent)}</td>
+                          <td className="px-4 py-2 text-zinc-400 text-xs">
+                            {d.topItem ? `${d.topItem} (${d.topItemCount})` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-20 text-zinc-500">No analytics data available.</div>
+          )}
+        </>
       )}
 
       {/* ── Modal ──────────────────────────────────────────── */}

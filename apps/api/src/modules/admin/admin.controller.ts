@@ -708,6 +708,13 @@ export class AdminController {
     return this.adminService.grantStoreItem(admin.sub, body);
   }
 
+  @Get('store/analytics')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Store purchase analytics — totals, per-item breakdown, daily trends' })
+  getStoreAnalytics(@Query('days') days?: string) {
+    return this.adminService.getStoreAnalytics(days ? Number(days) : 30);
+  }
+
   @Get('queues')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get BullMQ queue stats' })

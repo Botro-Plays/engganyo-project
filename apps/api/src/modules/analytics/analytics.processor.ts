@@ -39,6 +39,9 @@ export class AnalyticsProcessor {
         campaignsCompleted,
         creditsIssued,
         creditsSpent,
+        storePurchases,
+        storeCreditsSpent,
+        storeTopItem,
       ] = await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { createdAt: { gte: yesterday, lt: today } } }),
@@ -52,6 +55,14 @@ export class AnalyticsProcessor {
         this.prisma.campaign.count({ where: { completedAt: { gte: yesterday, lt: today } } }),
         this.prisma.transaction.aggregate({ where: { type: 'EARN_TASK_COMPLETION', createdAt: { gte: yesterday, lt: today } }, _sum: { amount: true } }).then((r) => r._sum.amount ?? 0),
         this.prisma.transaction.aggregate({ where: { type: 'SPEND_CAMPAIGN_CREATE', createdAt: { gte: yesterday, lt: today } }, _sum: { amount: true } }).then((r) => Math.abs(r._sum.amount ?? 0)),
+        // Store metrics
+        this.prisma.storePurchase.count({ where: { createdAt: { gte: yesterday, lt: today } } }),
+        this.prisma.storePurchase.aggregate({ where: { createdAt: { gte: yesterday, lt: today } }, _sum: { creditCostAtPurchase: true } }).then((r) => r._sum.creditCostAtPurchase ?? 0),
+        this.prisma.storePurchase.groupBy({ by: ['itemId'], where: { createdAt: { gte: yesterday, lt: today } }, _count: { id: true }, orderBy: { _count: { id: 'desc' } }, take: 1 }).then(async (rows) => {
+          if (rows.length === 0) return null;
+          const item = await this.prisma.storeItem.findUnique({ where: { id: rows[0].itemId }, select: { name: true } });
+          return { itemId: rows[0].itemId, itemName: item?.name ?? 'Unknown', count: rows[0]._count.id };
+        }),
       ]);
 
       await this.prisma.analyticsSnapshot.upsert({
@@ -61,6 +72,11 @@ export class AnalyticsProcessor {
           tasksAssigned, tasksSubmitted, tasksVerified, tasksRejected,
           campaignsCreated, campaignsCompleted,
           creditsIssued: Number(creditsIssued), creditsSpent: Number(creditsSpent),
+          storePurchases: Number(storePurchases),
+          storeCreditsSpent: Number(storeCreditsSpent),
+          storeTopItemId: storeTopItem?.itemId ?? null,
+          storeTopItemName: storeTopItem?.itemName ?? null,
+          storeTopItemCount: storeTopItem?.count ?? 0,
         },
         create: {
           date: yesterday,
@@ -68,6 +84,11 @@ export class AnalyticsProcessor {
           tasksAssigned, tasksSubmitted, tasksVerified, tasksRejected,
           campaignsCreated, campaignsCompleted,
           creditsIssued: Number(creditsIssued), creditsSpent: Number(creditsSpent),
+          storePurchases: Number(storePurchases),
+          storeCreditsSpent: Number(storeCreditsSpent),
+          storeTopItemId: storeTopItem?.itemId ?? null,
+          storeTopItemName: storeTopItem?.itemName ?? null,
+          storeTopItemCount: storeTopItem?.count ?? 0,
         },
       });
 
