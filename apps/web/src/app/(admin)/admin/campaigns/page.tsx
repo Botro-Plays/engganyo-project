@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, XCircle, Plus, X, Loader2, Clock, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, XCircle, Plus, X, Loader2, Clock, AlertTriangle, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { formatCredits, creditLabel, formatDate, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
@@ -24,7 +24,20 @@ interface Submission {
   submittedAt: string;
   reviewDeadline: string | null;
   escalated: boolean;
-  campaign: { id: string; title: string; taskType: string; creditPerTask: number };
+  campaign: {
+    id: string;
+    title: string;
+    description: string | null;
+    taskType: string;
+    targetUrl: string;
+    creditPerTask: number;
+    totalSlots: number;
+    completedSlots: number;
+    pendingSlots: number;
+    requiresProof: boolean;
+    proofInstructions: string | null;
+    user: { username: string };
+  };
   user: { id: string; username: string };
 }
 
@@ -77,6 +90,10 @@ export default function AdminCampaignsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<PlatformTask | null>(null);
+  const [viewingProof, setViewingProof] = useState<Submission | null>(null);
+  const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const inputCls = 'w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500';
   const labelCls = 'block text-xs text-zinc-400 mb-1';
@@ -105,6 +122,39 @@ export default function AdminCampaignsPage() {
       requiresProof: task.requiresProof,
       autoVerify: task.autoVerify,
     });
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const openProofModal = async (submission: Submission) => {
+    setViewingProof(submission);
+    setProofLoading(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      const res = await fetch(submission.proofUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to load proof');
+      const blob = await res.blob();
+      setProofImageUrl(URL.createObjectURL(blob));
+    } catch {
+      setProofImageUrl(null);
+    } finally {
+      setProofLoading(false);
+    }
+  };
+
+  const closeProofModal = () => {
+    if (proofImageUrl) URL.revokeObjectURL(proofImageUrl);
+    setProofImageUrl(null);
+    setViewingProof(null);
+    setProofLoading(false);
   };
 
   // ─── Queries ──────────────────────────────────────────────
@@ -354,8 +404,8 @@ export default function AdminCampaignsPage() {
             <div className="space-y-3">
               {subData.items.map((s) => (
                 <div key={s.id} className="card-glass rounded-xl p-5">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
                       <p className="font-semibold text-white truncate">{s.campaign.title}</p>
                       <p className="text-xs text-zinc-500 mt-0.5">
                         by @{s.user.username} · {s.campaign.taskType.replace(/_/g, ' ')} · {formatCredits(s.campaign.creditPerTask)} {creditLabel(s.campaign.creditPerTask)}
@@ -373,12 +423,40 @@ export default function AdminCampaignsPage() {
                         )}
                       </div>
                     </div>
-                    <a href={s.proofUrl} target="_blank" rel="noopener noreferrer"
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-zinc-400 hover:text-white text-xs transition-colors">
-                      <ExternalLink className="w-3.5 h-3.5" /> View Proof
-                    </a>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => openProofModal(s)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-zinc-400 hover:text-white text-xs transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> View Proof
+                      </button>
+                      <button
+                        onClick={() => toggleExpand(s.id)}
+                        className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-surface-hover transition-colors"
+                        title="Toggle details"
+                      >
+                        {expandedIds.has(s.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 items-center">
+
+                  {expandedIds.has(s.id) && (
+                    <div className="mt-4 pt-4 border-t border-surface-border space-y-2 text-xs text-zinc-400">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><span className="text-zinc-500">Campaign:</span> <span className="text-zinc-300">{s.campaign.title}</span></div>
+                        <div><span className="text-zinc-500">Creator:</span> <span className="text-zinc-300">@{s.campaign.user.username}</span></div>
+                        <div><span className="text-zinc-500">Target:</span> <a href={s.campaign.targetUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">{s.campaign.targetUrl.slice(0, 50)}{s.campaign.targetUrl.length > 50 ? '…' : ''}</a></div>
+                        <div><span className="text-zinc-500">Task Type:</span> <span className="text-zinc-300">{s.campaign.taskType.replace(/_/g, ' ')}</span></div>
+                        <div><span className="text-zinc-500">Slots:</span> <span className="text-zinc-300">{s.campaign.completedSlots}/{s.campaign.totalSlots} done · {s.campaign.pendingSlots} pending</span></div>
+                        <div><span className="text-zinc-500">Submitted:</span> <span className="text-zinc-300">{formatDate(s.submittedAt)}</span></div>
+                      </div>
+                      {s.campaign.proofInstructions && (
+                        <div className="mt-1"><span className="text-zinc-500">Instructions:</span> <span className="text-zinc-300">{s.campaign.proofInstructions}</span></div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 items-center mt-3">
                     <input
                       value={rejReasons[s.id] ?? ''}
                       onChange={(e) => setRejReasons((r) => ({ ...r, [s.id]: e.target.value }))}
@@ -543,6 +621,33 @@ export default function AdminCampaignsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Proof Image Modal ─────────────────────────────── */}
+      {viewingProof && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeProofModal}>
+          <div className="relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white truncate">{viewingProof.campaign.title}</p>
+                <p className="text-xs text-zinc-500">by @{viewingProof.user.username} · {formatDate(viewingProof.submittedAt)}</p>
+              </div>
+              <button onClick={closeProofModal} className="text-zinc-500 hover:text-white ml-4"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-4 overflow-auto min-h-[200px]">
+              {proofLoading ? (
+                <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
+              ) : proofImageUrl ? (
+                <img src={proofImageUrl} alt="Proof" className="max-w-full max-h-[70vh] rounded-lg object-contain" />
+              ) : (
+                <div className="text-center">
+                  <p className="text-zinc-400 text-sm">Failed to load proof image.</p>
+                  <p className="text-zinc-600 text-xs mt-1">{viewingProof.proofUrl}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
