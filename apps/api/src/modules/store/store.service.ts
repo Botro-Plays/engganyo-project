@@ -156,12 +156,13 @@ export class StoreService implements OnModuleInit {
       },
     });
 
-    // Strip internal metadata fields from public response
-    return items.map((item) => {
-      const raw = item.metadata as Record<string, unknown>;
-      const { possibleRewards: _pr, effectType: _et, ...publicMeta } = raw ?? {};
-      return { ...item, metadata: publicMeta };
-    });
+    // Strip ALL internal metadata from public response — the store frontend
+    // only needs top-level fields. Anything in metadata leaks config values
+    // (multipliers, odds, durations) that could be exploited.
+    return items.map((item) => ({
+      ...item,
+      metadata: {},
+    }));
   }
 
   // ─── Purchase an item ────────────────────────────────────────
@@ -249,8 +250,10 @@ export class StoreService implements OnModuleInit {
     let purchase;
     try {
       purchase = await this.prisma.$transaction(async (tx) => {
-        // Final limited-qty recheck inside tx to close the race window
+        // Final limited-qty recheck inside tx with row lock to prevent oversell.
+        // SELECT ... FOR UPDATE serializes concurrent purchases of the same item.
         if (item.isLimited && item.limitedQty !== null) {
+          await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${itemId} FOR UPDATE`;
           const soldCount = await tx.storePurchase.count({ where: { itemId } });
           if (item.limitedQty - soldCount < quantity) {
             throw new BadRequestException('Item just sold out');

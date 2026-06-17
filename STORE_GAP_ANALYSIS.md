@@ -1,8 +1,8 @@
 # Store System — Gap Analysis & Improvement Roadmap
 
-> **Date:** 2026-06-16  
+> **Date:** 2026-06-17  
 > **Context:** Sprint 2 (In-App Store) shipped. This document captures the delta between "shipped" and "production-ready", prioritized by severity.  
-> **Status:** Ready for implementation
+> **Status:** Store system is now production-trustworthy. All 🔴 Critical and 🟡 High items are resolved. Only 🟢 Polish remains.
 
 ---
 
@@ -80,32 +80,28 @@
 - **Est:** 15 min
 - **Status:** ✅ Complete — `@Throttle({ default: { limit: 10, ttl: 60 } })` already on `purchaseItem`.
 
-### C2. Limited-quantity race condition
+### C2. Limited-quantity race condition ✅ DONE
 
 - **Problem:** Current flow: `count(purchases)` → `check remaining` → `create(purchase)`. Under concurrent load, two users can both see 1 remaining and both buy it, overselling the limit.
-- **Fix:** Wrap the entire purchase in a Prisma `$transaction` with `Serializable` isolation, or use `$executeRaw` with `SELECT ... FOR UPDATE` on `StoreItem` before counting. Alternatively, recheck count inside the same transaction block and throw if exceeded.
+- **Fix:** Added `SELECT ... FOR UPDATE` on the `StoreItem` row inside the Prisma `$transaction` before counting purchases. This serializes concurrent purchase attempts for the same limited item — the second transaction blocks until the first commits, then sees the updated count.
 - **File:** `apps/api/src/modules/store/store.service.ts` (`purchaseItem`)
-- **Est:** 30 min
+- **Status:** ✅ DONE 2026-06-17 — `tx.$executeRaw` `SELECT id FROM store_items WHERE id = ${itemId} FOR UPDATE` added before `tx.storePurchase.count()`.
 
-### C3. Purchased items have zero functional effect
+### C3. Purchased items have zero functional effect ✅ DONE
 
 - **Problem:** Users pay credits but boosts don't boost XP, streak freezes don't protect streaks, and task limit boosts don't add slots. The `UserInventory` records exist but nothing reads them. This is the #1 production trust risk.
-- **Fix phases:**
-  1. Add `isConsumable` + `maxOwnedPerUser` + `effectType` fields to `StoreItem` metadata schema (or dedicated JSON shape).
-  2. Implement `POST /store/inventory/:id/use` endpoint that:
-     - Validates ownership and unconsumed state.
-     - Sets `consumedAt` (or decrements `quantity` for stackables).
-     - Writes a Redis key with TTL for time-based effects (e.g. `xp_boost:{userId}`).
-  3. Wire effect reads into existing flows:
-     - `GamificationService.awardXp()` → check Redis for active XP boost multiplier.
-     - `TasksService.assignTask()` → check Redis for active task limit boost.
-     - `GamificationService.claimDailyReward()` → check Redis for active streak freeze before breaking streak.
+- **Fix:** All three effects are wired and live:
+  - `StoreService.useItem()` decrements inventory, calls `applyEffect()`, and writes Redis keys with TTL (`boost:xp:${userId}`, `boost:task_limit:${userId}`, `boost:streak_freeze:${userId}`).
+  - `GamificationService.awardXp()` @ `gamification.service.ts:141` reads the active XP boost from Redis and applies the multiplier.
+  - `TasksService.assignTask()` @ `tasks.service.ts:156` reads the active task-limit boost from Redis and adds bonus slots to the daily limit.
+  - `GamificationService.claimDailyReward()` @ `gamification.service.ts:675` reads streak-freeze charges from Redis and protects the streak before breaking it.
+  - Frontend inventory page has a working "Use" button calling `POST /store/inventory/:id/use`.
 - **Files:**
   - `apps/api/src/modules/store/store.service.ts`
   - `apps/api/src/modules/store/store.controller.ts`
   - `apps/api/src/modules/gamification/gamification.service.ts`
   - `apps/api/src/modules/tasks/tasks.service.ts`
-- **Est:** 3–4 hours
+- **Status:** ✅ DONE — all effects wired and verified in code.
 
 ---
 
@@ -127,21 +123,15 @@
 - **Est:** 30 min
 - **Status:** ✅ Complete — `InventoryEntry` type updated with nested `item` field, `ownedItemIds` built from all inventory entries.
 
-### H3. Mystery Gift Box loot reveal not implemented
+### H3. Mystery Gift Box loot reveal ✅ DONE
 
 - **Problem:** Purchasing a Mystery Box just adds an unconsumed inventory row. There's no endpoint or logic to "open" it and receive a random reward. A box that can't be opened is confusing.
-- **Fix:**
-  1. Add `POST /store/inventory/:id/open` endpoint.
-  2. Randomly select a reward from `metadata.possibleRewards`.
-  3. If credits: call `walletService.credit()` (type = `EARN_ACHIEVEMENT` or new `EARN_LOOTBOX`).
-  4. If boost or cosmetic: create a new `UserInventory` entry for that item.
-  5. Mark original box as consumed.
-  6. Return the reward details to the frontend so it can show a reveal animation.
+- **Fix:** `StoreService.openLootBox()` exists and rolls rewards: 50% credits (50–500), 30% XP boost (12h), 20% cosmetic. The `useItem` endpoint routes `effectType === 'loot_box'` to `openLootBox()`. Credits are credited to wallet, XP boost is written to Redis, or a cosmetic name is returned. The frontend "Use" button on the inventory page triggers this flow.
 - **Files:**
   - `apps/api/src/modules/store/store.service.ts`
   - `apps/api/src/modules/store/store.controller.ts`
   - `apps/web/src/app/(dashboard)/store/inventory/page.tsx`
-- **Est:** 1.5 hours
+- **Status:** ✅ DONE — loot box open logic implemented and wired to `useItem`.
 
 ### H4. No purchase success notification / socket event ✅ DONE
 
@@ -155,12 +145,12 @@
 - **Est:** 30 min
 - **Status:** ✅ Complete — notification and socket event already emitted after successful purchase.
 
-### H5. `getItems` leaks internal metadata to clients
+### H5. `getItems` leaks internal metadata to clients ✅ DONE
 
 - **Problem:** `GET /store/items` returns `metadata` as-is. For the Mystery Box, this includes `possibleRewards` pool, revealing the odds. For boosts, it reveals internal multiplier values that could be exploited if frontend validation is ever added.
-- **Fix:** Strip `metadata` from the public `getItems` response, or define a `StoreItemPublic` DTO with a whitelist of safe keys (e.g. `assetUrl`, `themeId`, `durationHours`).
+- **Fix:** `getItems` now returns an empty `{}` for `metadata` on all items. The store frontend does not consume any metadata fields — it only uses top-level item fields (`name`, `description`, `category`, `creditCost`, etc.).
 - **File:** `apps/api/src/modules/store/store.service.ts`
-- **Est:** 20 min
+- **Status:** ✅ DONE 2026-06-17 — `metadata: {}` returned for all public store items.
 
 ---
 
@@ -207,15 +197,15 @@
 - **File:** `apps/web/src/app/(dashboard)/store/page.tsx`
 - **Est:** 30 min
 
-### P2. No VIP tier gating on store items
+### P2. No VIP tier gating on store items ✅ DONE
 
 - **Problem:** Any user can buy any item. Premium cosmetics and guild perks should be gated behind VIP tiers to create aspiration.
-- **Fix:** Add `requiredVipTierLevel: Int?` to `StoreItem`. In `purchaseItem`, check user's VIP tier and reject if below.
+- **Fix:** `requiredVipTierLevel` field already exists on `StoreItem`. `purchaseItem()` checks the user's VIP tier and rejects with a clear message if below the requirement. The frontend shows a lock icon and VIP requirement label.
 - **Files:**
   - `apps/api/prisma/schema.prisma`
   - `apps/api/src/modules/store/store.service.ts`
-  - `apps/web/src/app/(dashboard)/store/page.tsx` (lock icon + tier requirement)
-- **Est:** 45 min
+  - `apps/web/src/app/(dashboard)/store/page.tsx`
+- **Status:** ✅ DONE — backend enforcement live; frontend lock icon displays.
 
 ### P3. No item image/icon assets
 
@@ -232,20 +222,15 @@
 
 ---
 
-## Recommended Execution Order (Today)
+## Recommended Execution Order (Remaining Polish)
 
-If proceeding, tackle in this order for maximum user trust and correctness:
+All critical, high, and admin items are complete. The store system is production-trustworthy. Remaining work is 🟢 polish only:
 
-1. **C1** — Rate limit on purchase (15 min)
-2. **C2** — Fix limited qty race condition (30 min)
-3. **C3** — Implement `useItem` + functional boost effects (3–4 hours)
-4. **H1** — Cosmetic dedup guard (20 min)
-5. **H2** — "Owned" state in `/store` frontend (30 min)
-6. **H3** — Mystery Box open logic (1.5 hours)
-7. **H4** — Purchase notification + socket event (30 min)
-8. **H5** — Strip sensitive metadata from public API (20 min)
+1. **P1** — Quantity selector in frontend (30 min)
+2. **P3** — Item image/icon assets (10 min)
+3. **P4** — Discount / promo code system (future sprint)
 
-Total estimate: ~6.5 hours of focused work.
+Total estimate: ~40 min of focused work for P1 + P3.
 
 ---
 
