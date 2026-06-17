@@ -14,6 +14,7 @@ import type { Request, Response } from 'express';
 import { UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { EmailService } from '../email/email.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -77,6 +78,7 @@ export class AuthService {
     private readonly antiAbuse: AntiAbuseService,
     private readonly twoFactor: TwoFactorService,
     private readonly notificationsService: NotificationsService,
+    private readonly redisService: RedisService,
   ) {}
 
   // ─── Register ──────────────────────────────────────────────
@@ -445,12 +447,19 @@ export class AuthService {
   // ─── Get Current User ──────────────────────────────────────
 
   async getMe(userId: string): Promise<SafeUser> {
+    const cacheKey = `auth:me:${userId}`;
+    const cached = await this.redisService.getJson<SafeUser>(cacheKey);
+    if (cached) return cached;
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
       include: { vipTier: { select: { name: true, level: true, displayName: true, perks: true } } },
     });
     if (!user) throw new NotFoundException('User not found');
-    return this.sanitizeUser(user);
+
+    const result = this.sanitizeUser(user);
+    await this.redisService.setJson(cacheKey, result, 3600);
+    return result;
   }
 
   // ─── Forgot Password ───────────────────────────────────────

@@ -8,6 +8,7 @@ import * as argon2 from 'argon2';
 import { SocialPlatform } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdatePasswordDto } from './dto/update-password.dto';
 import type { UpsertSocialDto } from './dto/upsert-social.dto';
@@ -60,11 +61,27 @@ const SOCIAL_SELECT = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   // ─── Get full profile (private, own user) ──────────────────
 
   async getMe(userId: string) {
+    const cacheKey = `user:profile:${userId}`;
+    const cached = await this.redisService.getJson<{
+      socialAccounts: unknown[];
+      equippedCosmetics: unknown[];
+    } & Record<string, unknown>>(cacheKey);
+    if (cached) {
+      return {
+        ...cached,
+        socialAccounts: Array.isArray(cached.socialAccounts) ? cached.socialAccounts : [],
+        equippedCosmetics: cached.equippedCosmetics ?? [],
+      };
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
       select: {
@@ -83,11 +100,13 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException('User not found');
     const { inventory, ...rest } = user;
-    return {
+    const result = {
       ...rest,
       socialAccounts: Array.isArray(rest.socialAccounts) ? rest.socialAccounts : [],
       equippedCosmetics: inventory,
     };
+    await this.redisService.setJson(cacheKey, result, 3600);
+    return result;
   }
 
   // ─── Update profile ────────────────────────────────────────
@@ -133,6 +152,7 @@ export class UsersService {
       });
     });
 
+    await this.redisService.invalidateUserCaches(userId);
     return this.getMe(userId);
   }
 
@@ -185,28 +205,29 @@ export class UsersService {
       where: { userId_platform: { userId, platform: dto.platform } },
     });
 
-    if (existing) {
-      return this.prisma.socialAccount.update({
-        where: { id: existing.id },
-        select: SOCIAL_SELECT,
-        data: {
-          platformUsername: dto.platformUsername,
-          ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
-          platformUserId: dto.platformUsername,
-        },
-      });
-    }
+    const result = existing
+      ? await this.prisma.socialAccount.update({
+          where: { id: existing.id },
+          select: SOCIAL_SELECT,
+          data: {
+            platformUsername: dto.platformUsername,
+            ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
+            platformUserId: dto.platformUsername,
+          },
+        })
+      : await this.prisma.socialAccount.create({
+          select: SOCIAL_SELECT,
+          data: {
+            userId,
+            platform: dto.platform,
+            platformUserId: dto.platformUsername,
+            platformUsername: dto.platformUsername,
+            ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
+          },
+        });
 
-    return this.prisma.socialAccount.create({
-      select: SOCIAL_SELECT,
-      data: {
-        userId,
-        platform: dto.platform,
-        platformUserId: dto.platformUsername,
-        platformUsername: dto.platformUsername,
-        ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
-      },
-    });
+    await this.redisService.del(`user:profile:${userId}`);
+    return result;
   }
 
   // ─── Remove social link ────────────────────────────────────
@@ -217,6 +238,7 @@ export class UsersService {
     });
     if (!existing) throw new NotFoundException('Social account not linked');
     await this.prisma.socialAccount.delete({ where: { id: existing.id } });
+    await this.redisService.del(`user:profile:${userId}`);
   }
 
   // ─── Change password ───────────────────────────────────────

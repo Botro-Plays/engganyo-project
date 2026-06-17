@@ -7,6 +7,7 @@ import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
@@ -31,6 +32,7 @@ import type { SendAnnouncementDto } from './dto/send-announcement.dto';
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
     private readonly walletService: WalletService,
     private readonly authService: AuthService,
     private readonly eventsService: EventsService,
@@ -142,6 +144,8 @@ export class AdminService {
       data: { status: dto.status },
       select: { id: true, username: true, status: true },
     });
+
+    await this.redisService.invalidateUserCaches(userId);
 
     await this.prisma.auditLog.create({
       data: {
@@ -519,6 +523,8 @@ export class AdminService {
       data: { role: dto.role },
       select: { id: true, username: true, role: true },
     });
+
+    await this.redisService.invalidateUserCaches(userId);
 
     this.eventsService.emitToUser(userId, 'user:role-changed', { role: dto.role });
 
@@ -1131,6 +1137,8 @@ export class AdminService {
       },
     });
 
+    await this.redisService.invalidateUserCaches(userId);
+
     return { success: true, user: updated };
   }
 
@@ -1155,6 +1163,8 @@ export class AdminService {
       await tx.twoFactorCode.deleteMany({ where: { userId } });
       await tx.twoFactorBackupCode.deleteMany({ where: { userId } });
     });
+
+    await this.redisService.del(`auth:me:${userId}`);
 
     await this.prisma.auditLog.create({
       data: {
@@ -1313,7 +1323,7 @@ export class AdminService {
       throw new BadRequestException(`Unknown platform: ${platform}`);
     }
 
-    const isOAuth = (this.OAUTH_PLATFORMS as readonly string[]).includes(p);
+    const _isOAuth = (this.OAUTH_PLATFORMS as readonly string[]).includes(p);
     const data: {
       clientId?: string | null;
       clientSecret?: string | null;

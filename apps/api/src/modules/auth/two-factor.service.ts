@@ -8,6 +8,7 @@ import * as argon2 from 'argon2';
 import { nanoid } from 'nanoid';
 
 import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
 import { EmailService } from '../email/email.service';
 
 export interface TwoFactorStatus {
@@ -43,6 +44,7 @@ export class TwoFactorService {
     private readonly config: ConfigService,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly redisService: RedisService,
   ) {
     const keyMaterial = config.get<string>('app.twoFactorEncryptionKey') ?? config.get<string>('jwt.accessSecret') ?? 'fallback-key-change-me';
     this.encKey = crypto.scryptSync(keyMaterial, '2fa-salt', 32);
@@ -115,6 +117,7 @@ export class TwoFactorService {
       where: { id: userId },
       data: { twoFactorTotpSecret: this.encrypt(secret) },
     });
+    await this.redisService.del(`auth:me:${userId}`);
 
     return { secret, qrCodeUrl, otpauthUrl };
   }
@@ -145,6 +148,7 @@ export class TwoFactorService {
     });
 
     this.logger.log(`TOTP enabled for user ${userId}`);
+    await this.redisService.del(`auth:me:${userId}`);
     return backupCodes;
   }
 
@@ -167,6 +171,7 @@ export class TwoFactorService {
       await tx.twoFactorBackupCode.deleteMany({ where: { userId } });
     });
     this.logger.log(`TOTP disabled for user ${userId}`);
+    await this.redisService.del(`auth:me:${userId}`);
   }
 
   verifyTotpCode(encryptedSecret: string, code: string): boolean {
@@ -184,6 +189,7 @@ export class TwoFactorService {
       where: { id: userId },
       data: { twoFactorEmailEnabled: true },
     });
+    await this.redisService.del(`auth:me:${userId}`);
     this.logger.log(`Email OTP 2FA enabled for user ${userId}`);
   }
 
@@ -192,6 +198,7 @@ export class TwoFactorService {
       where: { id: userId },
       data: { twoFactorEmailEnabled: false },
     });
+    await this.redisService.del(`auth:me:${userId}`);
     this.logger.log(`Email OTP 2FA disabled for user ${userId}`);
   }
 

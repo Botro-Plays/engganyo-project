@@ -12,6 +12,7 @@ import { UserRole } from '@prisma/client';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { RedisService } from '../../database/redis.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -127,11 +128,17 @@ describe('AdminService', () => {
     triggerWeeklyDigests: jest.fn().mockResolvedValue({ queued: 10, total: 50 }),
   };
 
+  const mockRedisService = {
+    del: jest.fn().mockResolvedValue(undefined),
+    invalidateUserCaches: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: RedisService, useValue: mockRedisService },
         { provide: WalletService, useValue: mockWalletService },
         { provide: AuthService, useValue: mockAuthService },
         { provide: EventsService, useValue: mockEventsService },

@@ -138,4 +138,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async setJson<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     await this.set(key, JSON.stringify(value), ttlSeconds);
   }
+
+  // ─── User cache invalidation ─────────────────────────────
+
+  async invalidateUserCaches(userId: string): Promise<void> {
+    await Promise.all([
+      this.del(`jwt:user:${userId}`),
+      this.del(`auth:me:${userId}`),
+      this.del(`user:profile:${userId}`),
+    ]);
+  }
 }
