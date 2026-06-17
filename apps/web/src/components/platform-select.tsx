@@ -94,7 +94,7 @@ export function PlatformSelect({ options, value, onChange, placeholder = 'Select
                     <PlatformIcon platform={opt.platform} className="w-4 h-4" />
                   </span>
                 )}
-                <span className="truncate">{opt.label}</span>
+                <span className="whitespace-normal leading-tight">{opt.label}</span>
               </li>
             );
           })}
