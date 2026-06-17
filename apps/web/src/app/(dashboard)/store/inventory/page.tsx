@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useToast } from '@/components/toast-provider';
+import { formatCredits } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -51,13 +52,38 @@ export default function InventoryPage() {
 
   const useMutation_ = useMutation({
     mutationFn: async (inventoryId: string) => {
-      const res = await apiClient.post<ApiResponse<{ itemName: string; remainingQuantity: number }>>(
+      const res = await apiClient.post<ApiResponse<{
+        itemName: string;
+        remainingQuantity: number;
+        effectResult: {
+          applied: boolean;
+          reward?: string;
+          amount?: number;
+          durationHours?: number;
+          cosmetic?: string;
+          message?: string;
+        };
+      }>>(
         `store/inventory/${inventoryId}/use`
       );
       return res.data.data;
     },
     onSuccess: (data) => {
-      addToast(`${data?.itemName ?? 'Item'} activated!`, 'success');
+      const itemName = data?.itemName ?? 'Item';
+      const effect = data?.effectResult;
+      let message = `${itemName} activated!`;
+
+      if (effect?.reward === 'credits' && effect.amount) {
+        message = `Mystery Gift Box opened! You won ${formatCredits(effect.amount)} credits!`;
+      } else if (effect?.reward === 'xp_boost' && effect.durationHours) {
+        message = `Mystery Gift Box opened! You won a ${effect.durationHours}h 2× XP Boost!`;
+      } else if (effect?.reward === 'cosmetic' && effect.cosmetic) {
+        message = `Mystery Gift Box opened! You won a rare cosmetic: ${effect.cosmetic}!`;
+      } else if (effect?.message) {
+        message = effect.message;
+      }
+
+      addToast(message, 'success');
       void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
       setUsingId(null);
     },
@@ -205,7 +231,7 @@ export default function InventoryPage() {
                         ) : (
                           <Zap className="w-3 h-3" />
                         )}
-                        Use
+                        {entry.item.metadata?.isLootBox ? 'Open' : 'Use'}
                       </button>
                     )
                   )}
