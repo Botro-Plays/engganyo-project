@@ -386,9 +386,20 @@ export default function WalletPage() {
     if (depositResult) return; // already tracking
     if (!packages?.length || !depositHistory?.items) return;
 
-    const pending = depositHistory.items.find(
-      (d) => d.status === 'PENDING' || d.status === 'PROCESSING',
-    );
+    const now = Date.now();
+    const pending = depositHistory.items.find((d) => {
+      if (d.status !== 'PENDING' && d.status !== 'PROCESSING') return false;
+      if (d.method === 'PAYMONGO') {
+        const expiredAt = typeof d.gatewayData?.expiredAt === 'string' ? new Date(d.gatewayData.expiredAt as string).getTime() : NaN;
+        return typeof d.gatewayData?.checkoutUrl === 'string' && (Number.isNaN(expiredAt) || expiredAt > now);
+      }
+      if (d.method === 'PAYPAL') {
+        const createdAt = new Date(d.createdAt).getTime();
+        const threeHoursMs = 3 * 60 * 60 * 1000;
+        return typeof d.gatewayData?.approvalUrl === 'string' && (now - createdAt < threeHoursMs);
+      }
+      return d.method === 'USDT_BEP20' || d.method === 'USDT_BASE';
+    });
     if (!pending) return;
 
     // Find matching package by USD amount
@@ -788,10 +799,18 @@ export default function WalletPage() {
 
       {/* ── Global: Resume any pending deposit (visible on ALL tabs) ── */}
       {(() => {
+        const now = Date.now();
         const pending = depositHistory?.items.find((d) => {
           if (d.status !== 'PENDING' && d.status !== 'PROCESSING') return false;
-          if (d.method === 'PAYMONGO') return typeof d.gatewayData?.checkoutUrl === 'string';
-          if (d.method === 'PAYPAL') return typeof d.gatewayData?.approvalUrl === 'string';
+          if (d.method === 'PAYMONGO') {
+            const expiredAt = typeof d.gatewayData?.expiredAt === 'string' ? new Date(d.gatewayData.expiredAt as string).getTime() : NaN;
+            return typeof d.gatewayData?.checkoutUrl === 'string' && (Number.isNaN(expiredAt) || expiredAt > now);
+          }
+          if (d.method === 'PAYPAL') {
+            const createdAt = new Date(d.createdAt).getTime();
+            const threeHoursMs = 3 * 60 * 60 * 1000;
+            return typeof d.gatewayData?.approvalUrl === 'string' && (now - createdAt < threeHoursMs);
+          }
           if (d.method === 'USDT_BEP20' || d.method === 'USDT_BASE') return d.status === 'PENDING' || d.status === 'PROCESSING';
           return false;
         });

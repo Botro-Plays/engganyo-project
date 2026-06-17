@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShoppingBag, Zap, Sparkles, Wrench, Package, Loader2, CheckCircle2, Lock } from 'lucide-react';
+import { ShoppingBag, Zap, Sparkles, Wrench, Package, Loader2, CheckCircle2, Lock, Minus, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 import { apiClient } from '@/lib/api';
@@ -66,6 +66,7 @@ export default function StorePage() {
   const { addToast } = useToast();
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   const { data: itemsData, isLoading } = useQuery({
     queryKey: ['store', 'items'],
@@ -93,10 +94,10 @@ export default function StorePage() {
   );
 
   const purchaseMutation = useMutation({
-    mutationFn: async (itemId: string) => {
+    mutationFn: async ({ itemId, quantity }: { itemId: string; quantity: number }) => {
       const res = await apiClient.post<ApiResponse<{ purchase: unknown; item: StoreItem }>>(
         'store/purchase',
-        { itemId, quantity: 1 }
+        { itemId, quantity }
       );
       return res.data.data;
     },
@@ -182,7 +183,8 @@ export default function StorePage() {
             const Icon = CATEGORY_ICONS[item.category] ?? Package;
             const colorClass = CATEGORY_COLORS[item.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
             const isPurchasing = purchasingId === item.id;
-            const canAfford = (user?.creditBalance ?? 0) >= item.creditCost;
+            const qty = Math.max(1, Math.min(99, quantities[item.id] ?? 1));
+            const canAfford = (user?.creditBalance ?? 0) >= item.creditCost * qty;
             const alreadyOwned = !item.isConsumable && ownedItemIds.has(item.id);
             const vipRequired = item.requiredVipTierLevel;
             const vipLocked = vipRequired !== null && userVipLevel < vipRequired;
@@ -221,42 +223,68 @@ export default function StorePage() {
                 <p className="text-sm text-zinc-400 mb-4 flex-1">{item.description}</p>
 
                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5">
-                  <span className="text-brand-300 font-bold text-sm">
-                    {formatCredits(item.creditCost)} credits
-                  </span>
+                  <div>
+                    <span className="text-brand-300 font-bold text-sm">
+                      {formatCredits(item.creditCost * qty)} credits
+                    </span>
+                    {qty > 1 && (
+                      <span className="text-[10px] text-zinc-500 block">{formatCredits(item.creditCost)} × {qty}</span>
+                    )}
+                  </div>
                   {alreadyOwned ? (
                     <span className="px-3 py-1.5 rounded-lg text-sm font-medium bg-zinc-700 text-zinc-400 cursor-not-allowed">
                       Owned
                     </span>
                   ) : (
-                    <button
-                      disabled={vipLocked || !canAfford || isPurchasing || purchaseMutation.isPending}
-                      onClick={() => {
-                        if (vipLocked) return;
-                        setPurchasingId(item.id);
-                        purchaseMutation.mutate(item.id);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        vipLocked
-                          ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30 cursor-not-allowed'
-                          : canAfford
-                          ? 'bg-brand-500 hover:bg-brand-400 text-white disabled:opacity-50'
-                          : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                      }`}
-                    >
-                      {isPurchasing ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : vipLocked ? (
-                        <span className="flex items-center gap-1">
-                          <Lock className="w-3.5 h-3.5" />
-                          VIP {vipRequired}
-                        </span>
-                      ) : canAfford ? (
-                        'Buy'
-                      ) : (
-                        'Too expensive'
+                    <div className="flex items-center gap-2">
+                      {item.isConsumable && (
+                        <div className="flex items-center bg-surface-hover border border-surface-border rounded-lg">
+                          <button
+                            onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.max(1, (q[item.id] ?? 1) - 1) }))}
+                            disabled={qty <= 1}
+                            className="px-2 py-1.5 text-zinc-400 hover:text-white disabled:text-zinc-600 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="text-xs text-white font-medium w-6 text-center">{qty}</span>
+                          <button
+                            onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.min(99, (q[item.id] ?? 1) + 1) }))}
+                            disabled={qty >= 99}
+                            className="px-2 py-1.5 text-zinc-400 hover:text-white disabled:text-zinc-600 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
-                    </button>
+                      <button
+                        disabled={vipLocked || !canAfford || isPurchasing || purchaseMutation.isPending}
+                        onClick={() => {
+                          if (vipLocked) return;
+                          setPurchasingId(item.id);
+                          purchaseMutation.mutate({ itemId: item.id, quantity: qty });
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          vipLocked
+                            ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30 cursor-not-allowed'
+                            : canAfford
+                            ? 'bg-brand-500 hover:bg-brand-400 text-white disabled:opacity-50'
+                            : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {isPurchasing ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : vipLocked ? (
+                          <span className="flex items-center gap-1">
+                            <Lock className="w-3.5 h-3.5" />
+                            VIP {vipRequired}
+                          </span>
+                        ) : canAfford ? (
+                          'Buy'
+                        ) : (
+                          'Too expensive'
+                        )}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

@@ -181,6 +181,7 @@ export default function CampaignsPage() {
   const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
   const [proofLoading, setProofLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [rejReasons, setRejReasons] = useState<Record<string, string>>({});
 
   // Fetch public config to know which platforms are enabled
   const { data: publicConfig } = useQuery({
@@ -855,21 +856,29 @@ export default function CampaignsPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => reviewMutation.mutate({ completionId: s.id, action: 'approve' })}
-                          disabled={reviewMutation.isPending}
-                          className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 transition-all disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="w-3 h-3" /> Approve
-                        </button>
-                        <button
-                          onClick={() => reviewMutation.mutate({ completionId: s.id, action: 'reject', reason: 'Does not meet requirements' })}
-                          disabled={reviewMutation.isPending}
-                          className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
-                        >
-                          <X className="w-3 h-3" /> Reject
-                        </button>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => reviewMutation.mutate({ completionId: s.id, action: 'approve' })}
+                            disabled={reviewMutation.isPending}
+                            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 transition-all disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Approve
+                          </button>
+                          <button
+                            onClick={() => reviewMutation.mutate({ completionId: s.id, action: 'reject', reason: rejReasons[s.id] || 'Does not meet requirements' })}
+                            disabled={reviewMutation.isPending}
+                            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                          >
+                            <X className="w-3 h-3" /> Reject
+                          </button>
+                        </div>
+                        <input
+                          value={rejReasons[s.id] ?? ''}
+                          onChange={(e) => setRejReasons((r) => ({ ...r, [s.id]: e.target.value }))}
+                          placeholder="Reason (optional)..."
+                          className="w-full bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-[10px] text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        />
                         <button
                           onClick={() => toggleExpand(s.id)}
                           className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-surface-hover transition-colors"
