@@ -14,7 +14,7 @@ import {
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
-import { formatCredits, creditLabel } from '@/lib/utils';
+import { formatCredits, creditLabel, formatDate } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import { PlatformSelect } from '@/components/platform-select';
 import type { ApiResponse } from '@/types';
@@ -167,6 +167,9 @@ export default function CampaignsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'finished' | 'cancelled'>('all');
   const [reviewingCampaign, setReviewingCampaign] = useState<Campaign | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [viewingProof, setViewingProof] = useState<{ id: string; proofUrl: string; user: Submission['user']; submittedAt: string } | null>(null);
+  const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
 
   // Fetch public config to know which platforms are enabled
   const { data: publicConfig } = useQuery({
@@ -812,14 +815,24 @@ export default function CampaignsPage() {
                           )}
                         </p>
                         {s.proofUrl && (
-                          <a
-                            href={s.proofUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            onClick={() => {
+                              setViewingProof({ id: s.id, proofUrl: s.proofUrl!, user: s.user, submittedAt: s.submittedAt });
+                              setProofLoading(true);
+                              const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+                              fetch(s.proofUrl!, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                                .then(async (res) => {
+                                  if (!res.ok) throw new Error('Failed to load proof');
+                                  const blob = await res.blob();
+                                  setProofImageUrl(URL.createObjectURL(blob));
+                                })
+                                .catch(() => setProofImageUrl(null))
+                                .finally(() => setProofLoading(false));
+                            }}
                             className="inline-flex items-center gap-1 text-xs text-brand-400 hover:underline mt-1"
                           >
                             View proof <ExternalLink className="w-3 h-3" />
-                          </a>
+                          </button>
                         )}
                       </div>
 
@@ -842,6 +855,38 @@ export default function CampaignsPage() {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Proof Image Modal ─────────────────────────────── */}
+      {viewingProof && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => { if (proofImageUrl) URL.revokeObjectURL(proofImageUrl); setProofImageUrl(null); setViewingProof(null); }}>
+          <div className="relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white truncate">Proof by @{viewingProof.user.username}</p>
+                <p className="text-xs text-zinc-500">{formatDate(viewingProof.submittedAt)}</p>
+              </div>
+              <button
+                onClick={() => { if (proofImageUrl) URL.revokeObjectURL(proofImageUrl); setProofImageUrl(null); setViewingProof(null); }}
+                className="text-zinc-500 hover:text-white ml-4"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-4 overflow-auto min-h-[200px]">
+              {proofLoading ? (
+                <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
+              ) : proofImageUrl ? (
+                <img src={proofImageUrl} alt="Proof" className="max-w-full max-h-[70vh] rounded-lg object-contain" />
+              ) : (
+                <div className="text-center">
+                  <p className="text-zinc-400 text-sm">Failed to load proof image.</p>
+                  <p className="text-zinc-600 text-xs mt-1">{viewingProof.proofUrl}</p>
+                </div>
               )}
             </div>
           </div>
