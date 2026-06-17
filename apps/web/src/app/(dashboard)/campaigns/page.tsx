@@ -160,12 +160,12 @@ export default function CampaignsPage() {
 
   // Real-time: refresh campaigns + submissions on backend events
   useSocketEvent('campaign:updated', () => {
-    void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
   });
   useSocketEvent('submission:new', () => {
-    void queryClient.invalidateQueries({ queryKey: ['campaign-submissions'] });
-    void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    void queryClient.invalidateQueries({ queryKey: ['campaign-submissions'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
   });
 
   const [showCreate, setShowCreate] = useState(false);
@@ -260,8 +260,8 @@ export default function CampaignsPage() {
         targetCountries: selectedCountries.length > 0 ? selectedCountries : undefined,
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
       // Refresh user to update nav credit balance
       apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
@@ -299,9 +299,9 @@ export default function CampaignsPage() {
     mutationFn: ({ completionId, action, reason }: { completionId: string; action: 'approve' | 'reject'; reason?: string }) =>
       apiClient.patch(`campaigns/${reviewingCampaign!.id}/submissions/${completionId}/review`, { action, reason }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['campaign-submissions', reviewingCampaign?.id] });
-      void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      void queryClient.invalidateQueries({ queryKey: ['campaign-submissions'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
       // Refresh user to update nav credit balance for affected parties
       apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
@@ -314,14 +314,14 @@ export default function CampaignsPage() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiClient.patch(`campaigns/${id}`, { status }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['campaigns'] }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' }),
   });
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`campaigns/${id}`),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
       // Refresh user to update nav credit balance
       apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })

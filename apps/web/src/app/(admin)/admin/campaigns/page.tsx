@@ -172,11 +172,34 @@ export default function AdminCampaignsPage() {
   const reviewSubmissionMutation = useMutation({
     mutationFn: ({ id, action, reason }: { id: string; action: 'approve' | 'reject'; reason?: string }) =>
       apiClient.patch(`admin/submissions/${id}/review`, { action, reason }),
+    onMutate: async ({ id }) => {
+      // Optimistically remove the reviewed submission from the current page
+      await queryClient.cancelQueries({ queryKey: ['admin', 'submissions'], type: 'all' });
+      const previousPages = queryClient.getQueriesData<{ items: Submission[]; meta: { total: number; totalPages: number } }>({ queryKey: ['admin', 'submissions'], type: 'all' });
+      queryClient.setQueriesData<{ items: Submission[]; meta: { total: number; totalPages: number } }>({ queryKey: ['admin', 'submissions'], type: 'all' }, (old) => {
+        if (!old) return old;
+        const filtered = old.items.filter((item) => item.id !== id);
+        return {
+          ...old,
+          items: filtered,
+          meta: { ...old.meta, total: Math.max(0, old.meta.total - 1) },
+        };
+      });
+      return { previousPages };
+    },
     onSuccess: () => {
       setActionError(null);
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'submissions'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'submissions'], type: 'all' });
     },
-    onError: (err) => setActionError(getApiErrorMessage(err)),
+    onError: (err, _vars, context) => {
+      setActionError(getApiErrorMessage(err));
+      // Rollback optimistic removal
+      if (context?.previousPages) {
+        for (const [queryKey, data] of context.previousPages) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+    },
   });
 
   const { data: ptData, isLoading: ptLoading } = useQuery({

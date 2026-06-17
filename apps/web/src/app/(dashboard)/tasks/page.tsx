@@ -156,9 +156,12 @@ export default function TasksPage() {
   useSocketEvent('task:assigned', () => {
     void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
   });
+  useSocketEvent('task:completed', () => {
+    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
+  });
   useSocketEvent('task:reviewed', () => {
     void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
-    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
   });
 
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
@@ -371,8 +374,8 @@ export default function TasksPage() {
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
       proofForm.reset();
       setSubmitting(null);
       setSubmitError(null);

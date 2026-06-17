@@ -101,8 +101,8 @@ export default function StorePage() {
       return res.data.data;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
-      void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
+      void queryClient.invalidateQueries({ queryKey: ['store'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
       setPurchasingId(null);
     },
     onError: (err: unknown) => {

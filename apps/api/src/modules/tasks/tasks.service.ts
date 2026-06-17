@@ -501,6 +501,7 @@ export class TasksService {
       // Clear browse caches for all users since slot counts changed
       void this.redisService.delByPattern('campaigns:browse:*').catch(() => null);
 
+      this.eventsService.emitToUser(userId, 'task:completed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
       this.eventsService.emitToUser(userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
 
       return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
@@ -521,6 +522,7 @@ export class TasksService {
         },
       });
 
+      this.eventsService.emitToUser(userId, 'task:completed', { campaignId, completionId: completion.id, status: 'SUBMITTED' });
       this.eventsService.emitToUser(completion.campaign.userId, 'submission:new', { campaignId, completionId: completion.id });
 
       return {
