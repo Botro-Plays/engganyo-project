@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { RedisService } from '../../database/redis.service';
 
 const FRANKFURTER_URL = 'https://api.frankfurter.app/latest?from=USD&to=PHP,EUR,SGD,GBP';
 const CACHE_TTL_MS    = 60 * 60 * 1000; // 1 hour
@@ -17,25 +18,35 @@ interface FrankfurterResponse {
 @Injectable()
 export class CurrencyService {
   private readonly logger = new Logger(CurrencyService.name);
-  private cachedRates: Record<string, number> = { ...FALLBACK_RATES };
-  private fetchedAt: Date | null = null;
+
+  constructor(private readonly redisService: RedisService) {}
 
   async getRates(): Promise<Record<string, number>> {
-    const now = new Date();
-    if (this.fetchedAt && now.getTime() - this.fetchedAt.getTime() < CACHE_TTL_MS) {
-      return this.cachedRates;
+    const now = Date.now();
+    const fetchedAtRaw = await this.redisService.get('currency:fetchedAt');
+    const fetchedAt = fetchedAtRaw ? parseInt(fetchedAtRaw, 10) : 0;
+
+    if (fetchedAt && now - fetchedAt < CACHE_TTL_MS) {
+      const cached = await this.redisService.getJson<Record<string, number>>('currency:rates');
+      if (cached) return cached;
     }
+
+    let rates: Record<string, number> = { ...FALLBACK_RATES };
     try {
       const res = await fetch(FRANKFURTER_URL, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as FrankfurterResponse;
-      this.cachedRates = data.rates;
-      this.fetchedAt = now;
+      rates = data.rates;
+      await this.redisService.setJson('currency:rates', rates, 3600);
+      await this.redisService.set('currency:fetchedAt', String(now), 3600);
       this.logger.log(`Exchange rates refreshed: ${JSON.stringify(data.rates)}`);
     } catch (err) {
       this.logger.warn(`Failed to fetch exchange rates (${String(err)}), using cached values`);
+      // On fetch failure, try to return stale cached rates from Redis before falling back
+      const stale = await this.redisService.getJson<Record<string, number>>('currency:rates');
+      if (stale) return stale;
     }
-    return this.cachedRates;
+    return rates;
   }
 
   async getUsdToPhp(): Promise<number> {
