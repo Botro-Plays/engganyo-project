@@ -121,8 +121,11 @@ export function SpinWheelModal({ open, onClose, onSpin, wheelStatus }: SpinWheel
       const targetIndex = indices[Math.floor(Math.random() * indices.length)];
       const baseAngle = getBaseAngle(targetIndex);
       const spins = Math.floor(Math.random() * 3) + 5; // 5–7 full rotations
-      // Always add from cumulative to prevent backward spin
-      const targetRotation = cumulativeRotation.current + 360 * spins + baseAngle;
+      // Compute clockwise delta from current effective angle to target base angle
+      const currentAngle = cumulativeRotation.current % 360;
+      let delta = baseAngle - currentAngle;
+      if (delta < 0) delta += 360;
+      const targetRotation = cumulativeRotation.current + 360 * spins + delta;
       cumulativeRotation.current = targetRotation;
       setResult(spinResult);
       setRotation(targetRotation);
@@ -270,7 +273,7 @@ export function SpinWheelModal({ open, onClose, onSpin, wheelStatus }: SpinWheel
                   <p className="text-sm text-sky-300">Streak freeze charge added — protects your streak!</p>
                 )}
                 {result.itemName && (
-                  <p className="text-sm text-violet-300">{result.itemName} added to your inventory</p>
+                  <p className="text-sm text-violet-300">{result.itemName} added to your inventory — open it there to reveal the prize!</p>
                 )}
                 <p className="text-[10px] text-zinc-500 mt-2">
                   {result.isFree ? 'Free spin' : `${result.cost} credits`}

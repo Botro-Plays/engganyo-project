@@ -101,7 +101,8 @@ export default function StorePage() {
       );
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      addToast(`Purchased ${data?.item?.name ?? 'item'} successfully!`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['store'], type: 'all' });
       void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
       setPurchasingId(null);
