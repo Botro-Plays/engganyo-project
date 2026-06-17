@@ -406,7 +406,12 @@ export class StoreService implements OnModuleInit {
     }
 
     const meta = item.metadata as Record<string, unknown>;
-    const effectType = meta?.['effectType'] as string | undefined;
+    let effectType = meta?.['effectType'] as string | undefined;
+
+    // Fallback for items created before effectType was added to metadata
+    if (!effectType && meta?.['isLootBox'] === true) {
+      effectType = 'loot_box';
+    }
 
     // Guard: reject if an effect of the same type is already active
     if (effectType === 'xp_boost') {
@@ -543,9 +548,14 @@ export class StoreService implements OnModuleInit {
     userId: string,
     meta: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const possibleRewards = (meta['possibleRewards'] as Array<Record<string, unknown>>) ?? [];
+    let possibleRewards = (meta['possibleRewards'] as Array<Record<string, unknown>>) ?? [];
+    // Fallback: use default rewards for legacy items without full metadata
     if (possibleRewards.length === 0) {
-      return { applied: false, reason: 'Loot box has no configured rewards' };
+      possibleRewards = [
+        { type: 'credits', min: 50, max: 500 },
+        { type: 'xp_boost', hours: 12 },
+        { type: 'cosmetic', pool: ['silver-frame', 'gold-frame', 'neon-theme', 'diamond-badge'] },
+      ];
     }
 
     const roll = Math.random();
