@@ -525,6 +525,7 @@ export class TasksService {
 
       this.eventsService.emitToUser(userId, 'task:completed', { campaignId, completionId: completion.id, status: 'SUBMITTED' });
       this.eventsService.emitToUser(completion.campaign.userId, 'submission:new', { campaignId, completionId: completion.id });
+      this.eventsService.emitToAdmins('submission:new', { campaignId, completionId: completion.id });
 
       return {
         creditsEarned: 0,

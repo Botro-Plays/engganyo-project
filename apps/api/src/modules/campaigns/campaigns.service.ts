@@ -428,6 +428,7 @@ export class CampaignsService {
       }
 
       this.eventsService.emitToUser(completion.userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
+      this.eventsService.emitToAdmins('task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
       if (willBeFull) {
         this.eventsService.emitToUser(campaign.userId, 'campaign:updated', { campaignId, status: 'COMPLETED' });
       }
@@ -463,6 +464,7 @@ export class CampaignsService {
       ).catch(() => null);
 
       this.eventsService.emitToUser(completion.userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'REJECTED' });
+      this.eventsService.emitToAdmins('task:reviewed', { campaignId, completionId: completion.id, status: 'REJECTED' });
 
       // Clear browse caches since pending slots changed
       void this.redisService.delByPattern('campaigns:browse:*').catch(() => null);

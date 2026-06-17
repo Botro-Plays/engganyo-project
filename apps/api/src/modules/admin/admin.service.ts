@@ -682,6 +682,8 @@ export class AdminService {
         },
       });
 
+      this.eventsService.emitToAdmins('task:reviewed', { campaignId: completion.campaign.id, completionId, status: 'VERIFIED' });
+
       return { status: 'VERIFIED', creditsPaid: completion.campaign.creditPerTask };
     } else {
       await this.prisma.taskCompletion.update({
@@ -708,6 +710,8 @@ export class AdminService {
           newValue: { reason: dto.reason },
         },
       });
+
+      this.eventsService.emitToAdmins('task:reviewed', { campaignId: completion.campaign.id, completionId, status: 'REJECTED' });
 
       return { status: 'REJECTED' };
     }

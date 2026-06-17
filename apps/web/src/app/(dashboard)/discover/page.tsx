@@ -1,12 +1,13 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Coins, Users, ExternalLink, Compass, MessageSquare,
   Trophy, ArrowRight, Zap, Star,
 } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
@@ -86,7 +87,18 @@ function SectionHeader({ icon: Icon, title, href, linkLabel }: { icon: React.Ele
 }
 
 export default function DiscoverPage() {
+  const queryClient = useQueryClient();
   useRefetchOnVisible([['discover', 'campaigns'], ['discover', 'topics'], ['discover', 'leaderboard']]);
+
+  // Real-time: refresh campaigns when slots/status change
+  useSocketEvent('campaign:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['discover', 'campaigns'] });
+    void queryClient.invalidateQueries({ queryKey: ['discover'] });
+  });
+  useSocketEvent('task:assigned', () => {
+    void queryClient.invalidateQueries({ queryKey: ['discover', 'campaigns'] });
+    void queryClient.invalidateQueries({ queryKey: ['discover'] });
+  });
 
   const { data: campaigns, isLoading: campaignsLoading } = useQuery<{ items: Campaign[] }>({
     queryKey: ['discover', 'campaigns'],

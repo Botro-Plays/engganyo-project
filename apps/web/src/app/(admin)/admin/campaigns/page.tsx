@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, XCircle, Plus, X, Loader2, Clock, AlertTriangle, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel, formatDate, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
@@ -98,6 +99,20 @@ export default function AdminCampaignsPage() {
   const inputCls = 'w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500';
   const labelCls = 'block text-xs text-zinc-400 mb-1';
   const errorCls = 'text-xs text-red-400 mt-0.5';
+
+  // ─── Real-time: refresh on backend events ─────────────────
+  useSocketEvent('submission:new', () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'submissions'], type: 'all' });
+  });
+  useSocketEvent('task:reviewed', () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'submissions'], type: 'all' });
+  });
+  useSocketEvent('campaign:updated', () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'campaigns', 'user'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'tasks'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['discover'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
+  });
 
   // ─── Create form ──────────────────────────────────────────
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateTaskForm>({
