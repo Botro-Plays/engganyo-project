@@ -34,6 +34,7 @@ export interface AuthUser {
   reputationScore: number;
   referralCode: string | null;
   twoFactorEnabled: boolean;
+  nextTierProgress?: number;
 }
 
 interface AuthState {

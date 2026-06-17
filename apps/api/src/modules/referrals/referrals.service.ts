@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
+import { Prisma, TransactionType, TransactionStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
@@ -15,8 +15,89 @@ export class ReferralsService {
   ) {}
 
   /**
+   * Award a referral milestone. Uses the milestones JSON field to avoid double-awards.
+   */
+  private async awardMilestone(
+    referralId: string,
+    milestone: string,
+    referrerBonus: number,
+    refereeBonus: number,
+    description: string,
+  ) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { id: referralId },
+      include: {
+        referrer: { select: { id: true, username: true } },
+        referee: { select: { id: true, username: true } },
+      },
+    });
+    if (!referral) return;
+
+    const ms = (referral.milestones as Record<string, boolean> | null) ?? {};
+    if (ms[milestone]) return; // already awarded
+
+    await this.prisma.withTransaction(async (tx) => {
+      await tx.referral.update({
+        where: { id: referralId },
+        data: {
+          milestones: { ...ms, [milestone]: true } as Prisma.InputJsonValue,
+          creditsAwarded: { increment: referrerBonus },
+        },
+      });
+
+      if (referrerBonus > 0) {
+        const w = await tx.wallet.findUnique({ where: { userId: referral.referrerId }, select: { id: true, balance: true, lifetimeEarned: true } });
+        if (w) {
+          await tx.wallet.update({ where: { id: w.id }, data: { balance: { increment: referrerBonus }, lifetimeEarned: { increment: referrerBonus } } });
+          await tx.transaction.create({
+            data: {
+              walletId: w.id, type: TransactionType.EARN_REFERRAL_BONUS, status: TransactionStatus.COMPLETED,
+              amount: referrerBonus, balanceBefore: w.balance, balanceAfter: w.balance + referrerBonus,
+              description: `Referral ${milestone}: ${description}`,
+            },
+          });
+        }
+      }
+      if (refereeBonus > 0) {
+        const w = await tx.wallet.findUnique({ where: { userId: referral.refereeId }, select: { id: true, balance: true, lifetimeEarned: true } });
+        if (w) {
+          await tx.wallet.update({ where: { id: w.id }, data: { balance: { increment: refereeBonus }, lifetimeEarned: { increment: refereeBonus } } });
+          await tx.transaction.create({
+            data: {
+              walletId: w.id, type: TransactionType.EARN_REFERRAL_BONUS, status: TransactionStatus.COMPLETED,
+              amount: refereeBonus, balanceBefore: w.balance, balanceAfter: w.balance + refereeBonus,
+              description: `Referral ${milestone} bonus`,
+            },
+          });
+        }
+      }
+    });
+
+    this.notifications
+      .createNotification(referral.referrerId, NotificationType.REFERRAL_QUALIFIED, 'Referral Milestone!', `${referral.referee.username} hit ${milestone}. You earned ${referrerBonus} credits!`)
+      .catch(() => {});
+    this.notifications
+      .createNotification(referral.refereeId, NotificationType.REFERRAL_QUALIFIED, 'Referral Bonus!', `You hit ${milestone} and earned ${refereeBonus} credits!`)
+      .catch(() => {});
+
+    this.logger.log(`Referral milestone ${milestone}: ${referral.referrer.username} → ${referral.referee.username} (+${referrerBonus}/${refereeBonus})`);
+  }
+
+  /**
+   * Called on registration. Awards sign-up milestone if applicable.
+   */
+  async awardSignUpBonus(refereeId: string) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { refereeId },
+      select: { id: true },
+    });
+    if (!referral) return;
+    await this.awardMilestone(referral.id, 'sign_up', 10, 25, 'Signed up');
+  }
+
+  /**
    * Called whenever a user completes their first verified task.
-   * Qualifies any pending referral and awards credits if configured.
+   * Qualifies any pending referral and awards first_task milestone.
    */
   async qualifyReferral(refereeId: string) {
     const referral = await this.prisma.referral.findFirst({
@@ -26,105 +107,62 @@ export class ReferralsService {
         referee: { select: { id: true, username: true } },
       },
     });
+    if (!referral) return;
 
-    if (!referral) return; // no pending referral
-
-    const config = await this.prisma.platformConfig.findMany({
-      where: { key: { in: ['referral_bonus_referrer', 'referral_bonus_referee'] } },
+    await this.prisma.referral.update({
+      where: { id: referral.id },
+      data: { isQualified: true, qualifiedAt: new Date() },
     });
-    const configMap = Object.fromEntries(config.map((c) => [c.key, Number(c.value) ?? 0]));
-    const referrerBonus = configMap['referral_bonus_referrer'] ?? 50;
-    const refereeBonus = configMap['referral_bonus_referee'] ?? 50;
 
-    await this.prisma.withTransaction(async (tx) => {
-      await tx.referral.update({
-        where: { id: referral.id },
-        data: { isQualified: true, qualifiedAt: new Date(), creditsAwarded: referrerBonus },
+    await this.awardMilestone(referral.id, 'first_task', 25, 0, 'First task completed');
+  }
+
+  /**
+   * Check and award all pending referral milestones for a referee.
+   * Called periodically or after major actions (task completion, deposit, tier-up).
+   */
+  async checkMilestones(refereeId: string) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { refereeId },
+      include: {
+        referrer: { select: { id: true } },
+        referee: { select: { id: true, vipTier: { select: { level: true } } } },
+      },
+    });
+    if (!referral) return;
+
+    const ms = (referral.milestones as Record<string, boolean> | null) ?? {};
+
+    // ten_tasks milestone
+    if (!ms['ten_tasks']) {
+      const taskCount = await this.prisma.taskCompletion.count({
+        where: { userId: refereeId, status: 'VERIFIED' },
       });
-
-      // Award referrer
-      if (referrerBonus > 0) {
-        const referrerWallet = await tx.wallet.findUnique({
-          where: { userId: referral.referrerId },
-          select: { id: true, balance: true, lifetimeEarned: true },
-        });
-        if (referrerWallet) {
-          await tx.wallet.update({
-            where: { id: referrerWallet.id },
-            data: {
-              balance: { increment: referrerBonus },
-              lifetimeEarned: { increment: referrerBonus },
-            },
-          });
-          await tx.transaction.create({
-            data: {
-              walletId: referrerWallet.id,
-              type: TransactionType.EARN_REFERRAL_BONUS,
-              status: TransactionStatus.COMPLETED,
-              amount: referrerBonus,
-              balanceBefore: referrerWallet.balance,
-              balanceAfter: referrerWallet.balance + referrerBonus,
-              description: `Referral bonus — ${referral.referee.username} completed their first task`,
-            },
-          });
-        }
+      if (taskCount >= 10) {
+        await this.awardMilestone(referral.id, 'ten_tasks', 50, 25, '10 tasks completed');
       }
+    }
 
-      // Award referee
-      if (refereeBonus > 0) {
-        const refereeWallet = await tx.wallet.findUnique({
-          where: { userId: refereeId },
-          select: { id: true, balance: true, lifetimeEarned: true },
-        });
-        if (refereeWallet) {
-          await tx.wallet.update({
-            where: { id: refereeWallet.id },
-            data: {
-              balance: { increment: refereeBonus },
-              lifetimeEarned: { increment: refereeBonus },
-            },
-          });
-          await tx.transaction.create({
-            data: {
-              walletId: refereeWallet.id,
-              type: TransactionType.EARN_REFERRAL_BONUS,
-              status: TransactionStatus.COMPLETED,
-              amount: refereeBonus,
-              balanceBefore: refereeWallet.balance,
-              balanceAfter: refereeWallet.balance + refereeBonus,
-              description: 'Referral completion bonus',
-            },
-          });
-        }
+    // deposit milestone
+    if (!ms['deposit']) {
+      const hasDeposit = await this.prisma.deposit.count({
+        where: { userId: refereeId, status: 'COMPLETED' },
+      });
+      if (hasDeposit > 0) {
+        await this.awardMilestone(referral.id, 'deposit', 100, 0, 'First deposit');
       }
-    });
+    }
 
-    // Fire-and-forget notifications
-    this.notifications
-      .createNotification(
-        referral.referrerId,
-        NotificationType.REFERRAL_QUALIFIED,
-        'Referral Qualified!',
-        `${referral.referee.username} completed their first task. You earned ${referrerBonus} credits!`,
-      )
-      .catch(() => {});
-    this.notifications
-      .createNotification(
-        refereeId,
-        NotificationType.REFERRAL_QUALIFIED,
-        'Welcome Bonus!',
-        `You completed your first task and earned ${refereeBonus} referral bonus credits!`,
-      )
-      .catch(() => {});
-
-    this.events.emitBroadcast('referral:qualified', {
-      referrerId: referral.referrerId,
-      refereeId,
-      referrerBonus,
-      refereeBonus,
-    });
-
-    this.logger.log(`Referral qualified: ${referral.referrer.username} → ${referral.referee.username} (+${referrerBonus}/${refereeBonus})`);
+    // silver_tier milestone
+    if (!ms['silver_tier']) {
+      const refereeTier = await this.prisma.user.findUnique({
+        where: { id: refereeId },
+        select: { vipTier: { select: { level: true } } },
+      });
+      if (refereeTier?.vipTier && refereeTier.vipTier.level >= 2) {
+        await this.awardMilestone(referral.id, 'silver_tier', 200, 100, 'Reached Silver tier');
+      }
+    }
   }
 
   async getMyReferrals(userId: string) {
@@ -136,6 +174,7 @@ export class ReferralsService {
           isQualified: true,
           qualifiedAt: true,
           creditsAwarded: true,
+          milestones: true,
           createdAt: true,
           referee: { select: { id: true, username: true, displayName: true, createdAt: true } },
         },

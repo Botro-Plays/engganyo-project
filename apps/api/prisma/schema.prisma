@@ -340,6 +340,8 @@ model User {
   createdChannels        Channel[]         @relation("ChannelCreator")
   storePurchases         StorePurchase[]
   inventory              UserInventory[]
+  wheelSpins             WheelSpin[]
+  dailyRewardLogs        DailyRewardLog[]
 
   @@index([email])
   @@index([username])
@@ -706,6 +708,7 @@ model Referral {
   isQualified     Boolean   @default(false) @map("is_qualified")
   qualifiedAt     DateTime? @map("qualified_at")
   creditsAwarded  Int       @default(0) @map("credits_awarded")
+  milestones      Json?     @map("milestones") // { sign_up: true, first_task: true, ten_tasks: true, deposit: true, silver_tier: true }
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1442,4 +1445,37 @@ model StorePurchase {
   @@index([itemId])
   @@index([transactionId])
   @@map("store_purchases")
+}
+
+// =============================================================
+// GAMIFICATION — Sprint 3 (Wheel + Daily Reward Log)
+// =============================================================
+
+model WheelSpin {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  result    String   // prize identifier
+  isFree    Boolean  @map("is_free")
+  cost      Int      @default(0) // credits spent (0 if free)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("wheel_spins")
+}
+
+model DailyRewardLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  streakDay Int      @map("streak_day")
+  creditReward Int   @map("credit_reward")
+  xpReward  Int      @map("xp_reward")
+  bonusLootBox Boolean @default(false) @map("bonus_loot_box")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("daily_reward_logs")
 }

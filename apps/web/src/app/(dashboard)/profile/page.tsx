@@ -77,6 +77,7 @@ interface FullProfile {
   longestStreak: number;
   referralCode: string;
   createdAt: string;
+  nextTierProgress?: number;
   profile: {
     websiteUrl: string | null;
     location: string | null;
@@ -633,8 +634,11 @@ export default function ProfilePage() {
             <div className="h-1.5 rounded-full bg-zinc-700/50 overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all"
-                style={{ width: `${Math.min((profile?.vp ?? user?.vp ?? 0) / 100 * 100, 100)}%` }}
+                style={{ width: `${Math.min(profile?.nextTierProgress ?? user?.nextTierProgress ?? 0, 100)}%` }}
               />
+            </div>
+            <div className="text-[10px] text-zinc-500 mt-1">
+              {profile?.nextTierProgress ?? user?.nextTierProgress ?? 0}% to next tier
             </div>
           </div>
 

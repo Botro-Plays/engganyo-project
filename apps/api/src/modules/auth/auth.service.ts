@@ -18,6 +18,7 @@ import { RedisService } from '../../database/redis.service';
 import { EmailService } from '../email/email.service';
 import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { NotificationType } from '@prisma/client';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
@@ -52,6 +53,7 @@ export interface SafeUser {
   referralCode: string;
   createdAt: Date;
   twoFactorEnabled: boolean;
+  nextTierProgress?: number;
 }
 
 export interface AuthResult {
@@ -79,6 +81,7 @@ export class AuthService {
     private readonly twoFactor: TwoFactorService,
     private readonly notificationsService: NotificationsService,
     private readonly redisService: RedisService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   // ─── Register ──────────────────────────────────────────────
@@ -191,6 +194,11 @@ export class AuthService {
 
       return newUser;
     });
+
+    // Sprint 7: Award sign-up referral milestone (outside tx to avoid lock contention)
+    if (referredById) {
+      void this.referralsService.awardSignUpBonus(user.id).catch(() => null);
+    }
 
     if (emailVerificationEnabled && emailVerToken) {
       this.emailService.queueVerificationEmail(dto.email, emailVerToken).catch((err: Error) => {
@@ -453,11 +461,29 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
-      include: { vipTier: { select: { name: true, level: true, displayName: true, perks: true } } },
+      include: { vipTier: { select: { name: true, level: true, displayName: true, perks: true, requirementVp: true } } },
     });
     if (!user) throw new NotFoundException('User not found');
 
-    const result = this.sanitizeUser(user);
+    const base = this.sanitizeUser(user);
+
+    // Compute VIP progress % to next tier
+    let nextTierProgress = 0;
+    const currentVp = user.vp ?? 0;
+    const currentReq = user.vipTier?.requirementVp ?? 0;
+    const nextTier = await this.prisma.vipTier.findFirst({
+      where: { requirementVp: { gt: currentVp } },
+      orderBy: { level: 'asc' },
+    });
+    if (nextTier) {
+      const range = nextTier.requirementVp - currentReq;
+      const earned = currentVp - currentReq;
+      nextTierProgress = range > 0 ? Math.min(Math.round((earned / range) * 100), 100) : Math.min(Math.round((currentVp / nextTier.requirementVp) * 100), 100);
+    } else {
+      nextTierProgress = 100;
+    }
+
+    const result: SafeUser = { ...base, nextTierProgress };
     await this.redisService.setJson(cacheKey, result, 3600);
     return result;
   }

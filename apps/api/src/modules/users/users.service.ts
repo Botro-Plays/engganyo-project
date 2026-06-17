@@ -73,6 +73,7 @@ export class UsersService {
     const cached = await this.redisService.getJson<{
       socialAccounts: unknown[];
       equippedCosmetics: unknown[];
+      nextTierProgress?: number;
     } & Record<string, unknown>>(cacheKey);
     if (cached) {
       return {
@@ -96,14 +97,33 @@ export class UsersService {
             item: { select: { id: true, name: true, category: true, metadata: true } },
           },
         },
+        vipTier: { select: { name: true, displayName: true, level: true, perks: true, requirementVp: true } },
       },
     });
     if (!user) throw new NotFoundException('User not found');
     const { inventory, ...rest } = user;
+
+    // Compute VIP progress % to next tier
+    let nextTierProgress = 0;
+    const currentVp = rest.vp ?? 0;
+    const currentReq = rest.vipTier?.requirementVp ?? 0;
+    const nextTier = await this.prisma.vipTier.findFirst({
+      where: { requirementVp: { gt: currentVp } },
+      orderBy: { level: 'asc' },
+    });
+    if (nextTier) {
+      const range = nextTier.requirementVp - currentReq;
+      const earned = currentVp - currentReq;
+      nextTierProgress = range > 0 ? Math.min(Math.round((earned / range) * 100), 100) : Math.min(Math.round((currentVp / nextTier.requirementVp) * 100), 100);
+    } else {
+      nextTierProgress = 100;
+    }
+
     const result = {
       ...rest,
       socialAccounts: Array.isArray(rest.socialAccounts) ? rest.socialAccounts : [],
       equippedCosmetics: inventory,
+      nextTierProgress,
     };
     await this.redisService.setJson(cacheKey, result, 3600);
     return result;
@@ -171,7 +191,7 @@ export class UsersService {
         trustScore: {
           select: { score: true, level: true },
         },
-        vipTier: { select: { name: true, displayName: true, level: true, perks: true } },
+        vipTier: { select: { name: true, displayName: true, level: true, perks: true, requirementVp: true } },
         inventory: {
           where: { equipped: true },
           select: {
@@ -188,6 +208,22 @@ export class UsersService {
       throw new NotFoundException('Profile is private');
     }
 
+    // Compute VIP progress % to next tier
+    let nextTierProgress = 0;
+    const currentVp = user.vp ?? 0;
+    const currentReq = user.vipTier?.requirementVp ?? 0;
+    const nextTier = await this.prisma.vipTier.findFirst({
+      where: { requirementVp: { gt: currentVp } },
+      orderBy: { level: 'asc' },
+    });
+    if (nextTier) {
+      const range = nextTier.requirementVp - currentReq;
+      const earned = currentVp - currentReq;
+      nextTierProgress = range > 0 ? Math.min(Math.round((earned / range) * 100), 100) : Math.min(Math.round((currentVp / nextTier.requirementVp) * 100), 100);
+    } else {
+      nextTierProgress = 100;
+    }
+
     // Strip email from public view
     const { email: _, inventory, ...publicUser } = user;
     return {
@@ -195,6 +231,7 @@ export class UsersService {
       socialAccounts: Array.isArray(publicUser.socialAccounts) ? publicUser.socialAccounts : [],
       trustScore: publicUser.trustScore ?? null,
       equippedCosmetics: inventory,
+      nextTierProgress,
     };
   }
 

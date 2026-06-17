@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award } from 'lucide-react';
+import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -51,7 +51,9 @@ function DashboardPageInner() {
   const searchParams = useSearchParams();
   const isWelcome = searchParams.get('welcome') === '1';
   const [rewardError, setRewardError] = useState<string | null>(null);
-  const [rewardResult, setRewardResult] = useState<{ creditReward: number; xpReward: number; newStreak: number } | null>(null);
+  const [rewardResult, setRewardResult] = useState<{ creditReward: number; xpReward: number; newStreak: number; bonusLootBox?: boolean } | null>(null);
+  const [spinResult, setSpinResult] = useState<{ prize: string; credits?: number; isFree: boolean; cost: number } | null>(null);
+  const [spinError, setSpinError] = useState<string | null>(null);
 
   // Refetch when tab becomes visible after background
   useRefetchOnVisible([['my-stats'], ['gamification', 'stats']]);
@@ -122,6 +124,39 @@ function DashboardPageInner() {
         .catch(() => {/* silent */});
     },
     onError: (err) => setRewardError(getApiErrorMessage(err)),
+  });
+
+  // ── Sprint 3: Wheel Spin ──
+  const { data: wheelStatus } = useQuery({
+    queryKey: ['gamification', 'wheel', 'status'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ freeSpinAvailable: boolean; paidSpinsToday: number; paidSpinsRemaining: number; costPerSpin: number }>>('gamification/wheel/status');
+      return res.data.data;
+    },
+    refetchInterval: 30_000,
+  });
+
+  const { data: rewardLog } = useQuery({
+    queryKey: ['gamification', 'daily-reward-log'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ streakDay: number; creditReward: number; bonusLootBox: boolean; date: string }[]>>('gamification/daily-reward-log');
+      return res.data.data ?? [];
+    },
+  });
+
+  const spinMutation = useMutation({
+    mutationFn: () => apiClient.post<ApiResponse<typeof spinResult>>('gamification/wheel/spin'),
+    onSuccess: (res) => {
+      setSpinResult(res.data.data);
+      setSpinError(null);
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+        .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+        .catch(() => {/* silent */});
+    },
+    onError: (err) => setSpinError(getApiErrorMessage(err)),
   });
 
   // Sync auth store credit balance with fresh API data to prevent flicker
@@ -221,6 +256,11 @@ function DashboardPageInner() {
             {rewardResult ? (
               <div className="text-sm text-green-400 font-medium">
                 +{formatCredits(rewardResult.creditReward)} {creditLabel(rewardResult.creditReward)} · +{rewardResult.xpReward} XP · Day {rewardResult.newStreak}
+                {rewardResult.bonusLootBox && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-violet-400">
+                    <Package className="w-3 h-3" /> Mystery Gift Box!
+                  </span>
+                )}
               </div>
             ) : (
               <button
@@ -232,9 +272,77 @@ function DashboardPageInner() {
               </button>
             )}
           </div>
+
+          {/* Streak milestone tracker */}
+          <div className="mt-4 pt-4 border-t border-zinc-800">
+            <div className="flex items-center justify-between text-xs text-zinc-500 mb-2">
+              <span>Streak Progress</span>
+              <span>{gamStats.currentStreak} day{gamStats.currentStreak !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((day) => {
+                const milestone = [5, 7, 14].includes(day);
+                const reached = gamStats.currentStreak >= day;
+                const logged = rewardLog?.some((r) => r.streakDay === day);
+                return (
+                  <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                    <div
+                      className={`w-full h-2 rounded-full ${reached ? 'bg-orange-500' : 'bg-zinc-800'} ${milestone ? 'ring-1 ring-orange-400/50' : ''}`}
+                    />
+                    {milestone && (
+                      <span className={`text-[9px] ${reached ? 'text-orange-400' : 'text-zinc-600'}`}>
+                        D{day}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {rewardError && <p className="text-xs text-red-400 mt-3">{rewardError}</p>}
           {!gamStats.dailyRewardAvailable && !rewardResult && (
             <p className="text-xs text-zinc-500 mt-3">Already claimed today. Come back tomorrow!</p>
+          )}
+        </div>
+      )}
+
+      {/* Spin the Wheel (Sprint 3) */}
+      {wheelStatus && (
+        <div className="card-glass rounded-xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                <RotateCcw className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-white">Spin the Wheel</h2>
+                <p className="text-xs text-zinc-500">
+                  {wheelStatus.freeSpinAvailable
+                    ? 'Free spin available today!'
+                    : `${wheelStatus.paidSpinsRemaining} paid spins left (${wheelStatus.costPerSpin} credits each)`}
+                </p>
+              </div>
+            </div>
+            {spinResult ? (
+              <div className="text-sm text-green-400 font-medium">
+                {spinResult.prize}
+                {spinResult.credits ? ` · +${spinResult.credits} credits` : ''}
+                {spinResult.isFree ? ' · Free spin' : ` · ${spinResult.cost} credits`}
+              </div>
+            ) : (
+              <button
+                onClick={() => spinMutation.mutate()}
+                disabled={(!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0) || spinMutation.isPending}
+                className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {spinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RotateCcw className="w-4 h-4" /> Spin</>}
+              </button>
+            )}
+          </div>
+          {spinError && <p className="text-xs text-red-400 mt-3">{spinError}</p>}
+          {!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0 && !spinResult && (
+            <p className="text-xs text-zinc-500 mt-3">No spins remaining today. Come back tomorrow!</p>
           )}
         </div>
       )}

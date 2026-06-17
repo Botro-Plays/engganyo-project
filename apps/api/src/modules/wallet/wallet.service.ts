@@ -17,6 +17,7 @@ import { PayMongoService } from '../paymongo/paymongo.service';
 import { PayPalService } from '../paypal/paypal.service';
 import { CryptoVerificationService } from './crypto-verification.service';
 import { GamificationService, VP_REWARDS } from '../gamification/gamification.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
 import type { InitiateDepositDto } from './dto/initiate-deposit.dto';
 import type { ListDepositsDto } from './dto/list-deposits.dto';
@@ -57,6 +58,7 @@ export class WalletService {
     private readonly cryptoVerification: CryptoVerificationService,
     @Inject(forwardRef(() => GamificationService))
     private readonly gamificationService: GamificationService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   // ─── Public read operations ────────────────────────────────
@@ -646,6 +648,9 @@ export class WalletService {
     } catch (vpErr) {
       this.logger.warn(`Failed to award VP for deposit ${depositId}: ${(vpErr as Error).message}`);
     }
+
+    // Sprint 7: Check referral milestones after deposit
+    void this.referralsService.checkMilestones(deposit.userId).catch(() => null);
 
     return deposit;
   }

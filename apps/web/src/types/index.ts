@@ -58,6 +58,7 @@ export interface User {
   referralCode: string;
   createdAt: string;
   twoFactorEnabled: boolean;
+  nextTierProgress?: number;
   profile?: UserProfile;
 }
 

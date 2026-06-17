@@ -722,6 +722,45 @@ export class GamificationService implements OnModuleInit {
 
     this.eventsService.emitToUser(userId, 'streak:updated', { newStreak, streakBroken });
 
+    // ── Sprint 3: log daily reward and award milestone loot boxes ─
+    const milestoneDays = [5, 7, 14, 30];
+    const isMilestone = milestoneDays.includes(newStreak);
+    let bonusLootBox = false;
+
+    if (isMilestone) {
+      // Find Mystery Gift Box store item
+      const lootBoxItem = await this.prisma.storeItem.findFirst({
+        where: { name: 'Mystery Gift Box', isActive: true },
+      });
+      if (lootBoxItem) {
+        await this.prisma.userInventory.create({
+          data: {
+            userId,
+            itemId: lootBoxItem.id,
+            quantity: 1,
+          },
+        });
+        bonusLootBox = true;
+        void this.notificationsService.createNotification(
+          userId,
+          NotificationType.VIP_POINTS_EARNED,
+          'Streak Milestone!',
+          `Day ${newStreak} streak! You earned a Mystery Gift Box!`,
+          { streak: newStreak, reward: 'Mystery Gift Box' },
+        ).catch(() => null);
+      }
+    }
+
+    await this.prisma.dailyRewardLog.create({
+      data: {
+        userId,
+        streakDay: newStreak,
+        creditReward,
+        xpReward,
+        bonusLootBox,
+      },
+    });
+
     // Check streak achievements
     await this.checkStreakAchievements(userId, newStreak);
 
@@ -740,6 +779,7 @@ export class GamificationService implements OnModuleInit {
       xpReward,
       newStreak,
       streakBroken,
+      bonusLootBox,
     };
   }
 
@@ -1023,5 +1063,147 @@ export class GamificationService implements OnModuleInit {
   async adminDeleteMission(id: string) {
     await this.prisma.dailyMission.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  // ─── Spin the Wheel (Sprint 3) ─────────────────────────────
+
+  async spinWheel(userId: string) {
+    const FREE_SPIN_KEY = `wheel:free:${userId}`;
+    const PAID_SPIN_KEY = `wheel:paid:${userId}`;
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Check free spin eligibility
+    const lastFree = await this.redisService.get(FREE_SPIN_KEY);
+    let isFree = false;
+    let cost = 20;
+
+    if (!lastFree || lastFree !== today) {
+      isFree = true;
+      cost = 0;
+    } else {
+      // Paid spin: max 10 per day
+      const paidCount = await this.redisService.get(PAID_SPIN_KEY);
+      const spinsToday = paidCount ? parseInt(paidCount, 10) : 0;
+      if (spinsToday >= 10) {
+        throw new BadRequestException('Maximum 10 paid spins per day');
+      }
+      // Debit 20 credits
+      const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+      if (!wallet || wallet.balance < 20) {
+        throw new BadRequestException('Not enough credits for a spin');
+      }
+      await this.walletService.debit(userId, 20, {
+        type: TransactionType.SPEND_STORE_PURCHASE,
+        description: 'Spin the wheel',
+      });
+    }
+
+    // Prize weight table
+    const PRIZES = [
+      { id: 'credits_5',     name: '5 Credits',        weight: 30, credits: 5 },
+      { id: 'credits_10',    name: '10 Credits',       weight: 25, credits: 10 },
+      { id: 'credits_25',    name: '25 Credits',       weight: 15, credits: 25 },
+      { id: 'xp_boost_1h',   name: 'XP Boost (1h)',    weight: 10, effect: 'xp_boost', hours: 1 },
+      { id: 'loot_box',      name: 'Mystery Gift Box', weight: 10, effect: 'loot_box' },
+      { id: 'streak_freeze', name: 'Streak Freeze',    weight: 8,  effect: 'streak_freeze' },
+      { id: 'credits_100',   name: '100 Credits',      weight: 2,  credits: 100 },
+    ];
+
+    const totalWeight = PRIZES.reduce((s, p) => s + p.weight, 0);
+    const roll = Math.random() * totalWeight;
+    let cumulative = 0;
+    let prize = PRIZES[0];
+    for (const p of PRIZES) {
+      cumulative += p.weight;
+      if (roll <= cumulative) { prize = p; break; }
+    }
+
+    // Award prize
+    let result: Record<string, unknown> = { prize: prize.name, type: prize.id };
+
+    if (prize.credits) {
+      await this.walletService.credit(userId, prize.credits, {
+        type: TransactionType.EARN_DAILY_REWARD,
+        description: `Wheel spin prize: ${prize.name}`,
+      });
+      result = { ...result, credits: prize.credits };
+    } else if (prize.effect === 'xp_boost' && prize.hours) {
+      const ttlSeconds = prize.hours * 3600;
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      await this.redisService.setJson(`boost:xp:${userId}`, { multiplier: 2, expiresAt }, ttlSeconds);
+      result = { ...result, multiplier: 2, durationHours: prize.hours };
+    } else if (prize.effect === 'streak_freeze') {
+      const ttlSeconds = 3 * 24 * 3600; // 3 days
+      const existing = await this.redisService.get(`boost:streak_freeze:${userId}`);
+      const charges = existing ? parseInt(existing, 10) : 0;
+      await this.redisService.set(`boost:streak_freeze:${userId}`, String(charges + 1), ttlSeconds);
+      result = { ...result, charges: charges + 1 };
+    } else if (prize.effect === 'loot_box') {
+      const lootBoxItem = await this.prisma.storeItem.findFirst({
+        where: { name: 'Mystery Gift Box', isActive: true },
+      });
+      if (lootBoxItem) {
+        await this.prisma.userInventory.create({
+          data: { userId, itemId: lootBoxItem.id, quantity: 1 },
+        });
+      }
+      result = { ...result, itemName: 'Mystery Gift Box' };
+    }
+
+    // Log spin
+    await this.prisma.wheelSpin.create({
+      data: { userId, result: prize.id, isFree, cost },
+    });
+
+    // Update spin tracking
+    if (isFree) {
+      await this.redisService.set(FREE_SPIN_KEY, today, 48 * 3600); // 48h TTL
+    } else {
+      const paidCount = await this.redisService.get(PAID_SPIN_KEY);
+      const newCount = (paidCount ? parseInt(paidCount, 10) : 0) + 1;
+      await this.redisService.set(PAID_SPIN_KEY, String(newCount), 24 * 3600);
+    }
+
+    return { ...result, isFree, cost };
+  }
+
+  // ─── Daily Reward Log (Sprint 3) ────────────────────────────
+
+  async getDailyRewardLog(userId: string, days = 30) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const logs = await this.prisma.dailyRewardLog.findMany({
+      where: { userId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      take: days,
+    });
+
+    return logs.map((l: { id: string; streakDay: number; creditReward: number; xpReward: number; bonusLootBox: boolean; createdAt: Date }) => ({
+      id: l.id,
+      streakDay: l.streakDay,
+      creditReward: l.creditReward,
+      xpReward: l.xpReward,
+      bonusLootBox: l.bonusLootBox,
+      date: l.createdAt.toISOString().slice(0, 10),
+    }));
+  }
+
+  async getWheelSpinStatus(userId: string) {
+    const FREE_SPIN_KEY = `wheel:free:${userId}`;
+    const PAID_SPIN_KEY = `wheel:paid:${userId}`;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const lastFree = await this.redisService.get(FREE_SPIN_KEY);
+    const paidCount = await this.redisService.get(PAID_SPIN_KEY);
+    const spinsToday = paidCount ? parseInt(paidCount, 10) : 0;
+
+    return {
+      freeSpinAvailable: !lastFree || lastFree !== today,
+      paidSpinsToday: spinsToday,
+      paidSpinsRemaining: Math.max(0, 10 - spinsToday),
+      costPerSpin: 20,
+    };
   }
 }

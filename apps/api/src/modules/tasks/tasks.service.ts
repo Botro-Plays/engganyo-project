@@ -476,6 +476,7 @@ export class TasksService {
       });
 
       void this.referralsService.qualifyReferral(userId).catch(() => null);
+      void this.referralsService.checkMilestones(userId).catch(() => null);
 
       await this.walletService.credit(userId, completion.campaign.creditPerTask, {
         type: TransactionType.EARN_TASK_COMPLETION,
@@ -620,6 +621,7 @@ export class TasksService {
       });
 
       void this.referralsService.qualifyReferral(userId).catch(() => null);
+      void this.referralsService.checkMilestones(userId).catch(() => null);
 
       await this.walletService.credit(userId, completion.campaign.creditPerTask, {
         type: TransactionType.EARN_TASK_COMPLETION,

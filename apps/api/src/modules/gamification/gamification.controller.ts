@@ -174,4 +174,31 @@ export class GamificationController {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? '';
     return this.gamificationService.claimDailyReward(user.sub, timezone, ip);
   }
+
+  // ─── Sprint 3: Spin Wheel ─────────────────────────────────
+
+  @Get('wheel/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get wheel spin status (free spin available, paid spins remaining)' })
+  getWheelSpinStatus(@CurrentUser() user: JwtPayload) {
+    return this.gamificationService.getWheelSpinStatus(user.sub);
+  }
+
+  @Post('wheel/spin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Spin the wheel (free once/day, 20 credits after)' })
+  spinWheel(@CurrentUser() user: JwtPayload) {
+    return this.gamificationService.spinWheel(user.sub);
+  }
+
+  @Get('daily-reward-log')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get daily reward history for streak calendar' })
+  @ApiQuery({ name: 'days', type: Number, required: false })
+  getDailyRewardLog(
+    @CurrentUser() user: JwtPayload,
+    @Query('days') days?: string,
+  ) {
+    return this.gamificationService.getDailyRewardLog(user.sub, days ? Number(days) : 30);
+  }
 }

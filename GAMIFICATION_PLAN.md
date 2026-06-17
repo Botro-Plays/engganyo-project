@@ -1,6 +1,6 @@
 # Engganyo Gamification Master Plan
 
-> **Status:** Sprint 1 Implemented | VIP Tiers + VP Tracking live | Sprints 2–7 pending
+> **Status:** Sprint 1 ✅ | Sprint 2 ✅ | Sprint 3 ✅ | Sprint 7 🟠 In Progress | Sprints 4–6 pending
 >
 > **Goal:** Transform the platform from a "task marketplace" into a "daily destination" — something users check every morning even when no campaigns are available.
 
@@ -457,7 +457,7 @@ enum EventType { WEEKLY_SPRINT CREATOR_CHALLENGE STREAK_WARS DOUBLE_XP TREASURE_
 | 1.3 | **VP Service:** `awardVp(userId, amount, reason)` helper + `getUserVipTier(user)` | 2h | `gamification.service.ts` | Called from task completion, deposit, streak. |
 | 1.4 | **VP Hooks:** Wire VP awards into existing flows (task complete, deposit, streak, level up) | 2h | `tasks.service.ts`, `wallet.service.ts`, `gamification.service.ts` | Existing events now give VP. |
 | 1.5 | **API:** `GET /gamification/vip` — returns user's current tier, next tier, progress %, perks | 2h | `gamification.controller.ts` | Frontend can read VIP status. |
-| 1.6 | **Profile UI:** Show VIP badge + progress bar on `/profile` and `/u/:username` | 3h | `profile/page.tsx`, `users/[username]/page.tsx` | Visible status = motivation. |
+| 1.6 | **Profile UI:** Show VIP badge + progress bar on `/profile` and `/u/:username` | 3h | `profile/page.tsx`, `users/[username]/page.tsx` | ✅ Done. Progress bar now shows % to next tier requirement. |
 | 1.7 | **Perks:** Apply tier perks (task limits, fee discount) at point of use | 3h | `tasks.service.ts` (assignTask limit), `campaigns.service.ts` (fee calc) | Bronze+ gets more tasks, etc. |
 
 **Sprint 1 total:** ~15 hours. Shippable increment: users see their VIP status and get real perks.
@@ -475,9 +475,9 @@ enum EventType { WEEKLY_SPRINT CREATOR_CHALLENGE STREAK_WARS DOUBLE_XP TREASURE_
 | 2.5 | **API:** `GET /store/inventory` — list user's items with quantities | 1h | `store.service.ts` | |
 | 2.6 | **Store Page UI:** Grid of items with credit cost, category filter, purchase button | 4h | `/store/page.tsx` | First credit sink visible to users. |
 | 2.7 | **Inventory UI:** "My Items" page — use consumables (boosts), equip cosmetics | 3h | `/store/inventory/page.tsx` | |
-| 2.8 | **Daily Deals:** 3 rotating deals, 24h timer, discounted prices | 3h | `store.service.ts` (deal rotation logic), UI badge | Creates urgency. |
+| 2.8 | **Daily Deals:** 3 rotating deals, 24h timer, discounted prices | 3h | `store.service.ts` (deal rotation logic), UI badge | 🟡 Postponed — not critical for launch. |
 
-**Sprint 2 total:** ~19 hours. Shippable increment: users can spend credits, economy has a sink.
+**Sprint 2 total:** ~19 hours. **Status: ✅ DONE** — All critical items complete (see `STORE_GAP_ANALYSIS.md`). Daily deals remain as future polish. |
 
 ---
 
@@ -485,16 +485,16 @@ enum EventType { WEEKLY_SPRINT CREATOR_CHALLENGE STREAK_WARS DOUBLE_XP TREASURE_
 
 | # | Task | Est. | Files | Notes |
 |---|------|------|-------|-------|
-| 3.1 | **Schema:** Add `LootBoxDrop` table; expand daily reward logic | 1h | `schema.prisma` | |
-| 3.2 | **Backend:** Daily reward with streak milestones (day 5, 7, 14, 30 bonuses) | 3h | `gamification.service.ts` | Returns loot box type at milestones. |
-| 3.3 | **Backend:** Loot box open — roll reward based on rarity table | 2h | `gamification.service.ts` | Common=70%, Rare=20%, Epic=8%, Legendary=2%. |
-| 3.4 | **Schema:** Add `WheelSpin` table | 1h | `schema.prisma` | Abuse tracking. |
-| 3.5 | **Backend:** Spin the wheel — free once/day, paid 20 credits/spin, max 10/day | 2h | `gamification.service.ts` | Prize weight table from plan. |
-| 3.6 | **Frontend:** Daily reward claim UI with streak calendar | 3h | `dashboard/page.tsx` or `/reward/page.tsx` | Visual streak calendar, milestone highlights. |
-| 3.7 | **Frontend:** Spin wheel component (animated, satisfying) | 4h | Reusable `SpinWheel` component | Can reuse for events later. |
-| 3.8 | **Frontend:** Loot box open animation | 3h | Reusable `LootBox` component | Shake → burst → reveal reward. |
+| 3.1 | **Schema:** Add `WheelSpin` and `DailyRewardLog` tables | 1h | `schema.prisma` | ✅ Done. |
+| 3.2 | **Backend:** Daily reward with streak milestones (day 5, 7, 14, 30 bonuses) | 3h | `gamification.service.ts` | ✅ Done. Awards Mystery Gift Box at milestones. |
+| 3.3 | **Backend:** Loot box open — roll reward based on rarity table | 2h | `store.service.ts` | ✅ Done. Reuses existing `openLootBox()` logic. |
+| 3.4 | **Schema:** Add `WheelSpin` table | 1h | `schema.prisma` | ✅ Done. |
+| 3.5 | **Backend:** Spin the wheel — free once/day, paid 20 credits/spin, max 10/day | 2h | `gamification.service.ts` | ✅ Done. Prize table: 5cr(30%), 10cr(25%), 25cr(15%), XP boost 1h(10%), loot box(10%), streak freeze(8%), 100cr(2%). |
+| 3.6 | **Frontend:** Daily reward claim UI with streak calendar | 3h | `dashboard/page.tsx` | ✅ Done. Streak milestone tracker bars shown. |
+| 3.7 | **Frontend:** Spin wheel component (animated, satisfying) | 4h | `dashboard/page.tsx` | ✅ Done. Functional spin button with prize reveal. |
+| 3.8 | **Frontend:** Loot box open animation | 3h | Reusable `LootBox` component | 🟡 Postponed — inventory page already handles opening. |
 
-**Sprint 3 total:** ~19 hours. Shippable increment: daily ritual is compelling, rewards feel exciting.
+**Sprint 3 total:** ~19 hours. **Status: ✅ DONE** — Daily ritual + spin wheel live. Loot box animation is polish for later. |
 
 ---
 
@@ -554,8 +554,8 @@ enum EventType { WEEKLY_SPRINT CREATOR_CHALLENGE STREAK_WARS DOUBLE_XP TREASURE_
 
 | # | Task | Est. | Files | Notes |
 |---|------|------|-------|-------|
-| 7.1 | **Backend:** Tiered referral rewards (sign up → first task → 10 tasks → deposit → tier) | 3h | `auth.service.ts`, `tasks.service.ts`, `wallet.service.ts` | |
-| 7.2 | **Frontend:** Referral dashboard — stats, earnings, share link | 3h | `/referrals/page.tsx` | |
+| 7.1 | **Backend:** Tiered referral rewards (sign up → first task → 10 tasks → deposit → tier) | 3h | `auth.service.ts`, `tasks.service.ts`, `wallet.service.ts` | ✅ Done. Milestones tracked via JSON field on `Referral`. |
+| 7.2 | **Frontend:** Referral dashboard — stats, earnings, share link | 3h | `/referrals/page.tsx` | ✅ Done. |
 | 7.3 | **Backend:** Engagement analytics (DAU, session length, feature usage) | 4h | New `analytics.service.ts` methods | Store in DB, expose to admin. |
 | 7.4 | **Frontend:** Admin engagement dashboard | 3h | `/admin/analytics/engagement/page.tsx` | |
 
@@ -565,15 +565,15 @@ enum EventType { WEEKLY_SPRINT CREATOR_CHALLENGE STREAK_WARS DOUBLE_XP TREASURE_
 
 ## Total Effort Estimate
 
-| Sprint | Hours | Shippable Increment |
-|--------|-------|---------------------|
-| 1 — VIP Tiers | ~15h | Status system with real perks |
-| 2 — Store | ~19h | Credit sink, users spend credits |
-| 3 — Daily Reward + Wheel | ~19h | Compelling daily ritual |
-| 4 — Guilds | ~17h | Social teams, guild leaderboard |
-| 5 — Events | ~15h | Time-limited competitions |
-| 6 — Collections | ~18h | Trading cards, completionism |
-| 7 — Referral + Analytics | ~13h | Growth loop + data visibility |
+| Sprint | Hours | Status | Shippable Increment |
+|--------|-------|--------|---------------------|
+| 1 — VIP Tiers | ~15h | ✅ Done | Status system with real perks |
+| 2 — Store | ~19h | ✅ Done | Credit sink, users spend credits |
+| 3 — Daily Reward + Wheel | ~19h | ✅ Done | Compelling daily ritual |
+| 4 — Guilds | ~17h | ⏳ Not started | Social teams, guild leaderboard |
+| 5 — Events | ~15h | ⏳ Not started | Time-limited competitions |
+| 6 — Collections | ~18h | ⏳ Not started | Trading cards, completionism |
+| 7 — Referral + Analytics | ~13h | 🟠 Partial | Tiered rewards + dashboard done; admin analytics pending |
 | **Total** | **~116h** | **~6 weeks at 20h/week** |
 
 **Pick any sprint in any order.** Each stands alone. No dependencies between sprints.
