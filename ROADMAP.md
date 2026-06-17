@@ -60,11 +60,13 @@
   - **Timeline**: Completed 2026-06-10
 
 ### Infrastructure (HIGH)
-- [🟠] Implement Redis caching strategy — **PARTIALLY DONE**
-  - **Implemented**: Campaign browse (5m TTL), leaderboard (15m TTL), trust scores (1h TTL) via ioredis
-  - **Remaining**: User profile caching (1h TTL), CurrencyService (currently in-memory, lost on restart)
-  - **Risk**: LOW — partial caching reduces DB load; user profiles still hit DB every request
-  - **Effort**: 2-3 hours (user profile cache + CurrencyService Redis migration)
+- [✅] Implement Redis caching strategy — **DONE 2026-06-17**
+  - **Implemented**: Campaign browse (5m TTL), leaderboard (15m TTL), trust scores (1h TTL), user profiles (1h TTL), CurrencyService (1h TTL) via ioredis
+  - **User profile cache**: `jwt:user:*` (JWT validation, 5m TTL), `auth:me:*` (`GET /auth/me`, 1h TTL), `user:profile:*` (`GET /users/me`, 1h TTL)
+  - **Invalidation**: `RedisService.invalidateUserCaches(userId)` clears all three keys; called on profile updates, social link changes, admin status/role/details changes, 2FA changes
+  - **CurrencyService**: Migrated from in-memory `cachedRates`/`fetchedAt` to Redis keys `currency:rates` + `currency:fetchedAt` with 1h TTL
+  - **Risk**: MITIGATED — container restarts no longer lose currency rates; JWT validation no longer hits DB on every request
+  - **Effort**: ~3 hours (user profile cache + CurrencyService Redis migration)
 - [✅] Add database backup strategy documentation
   - **Impact**: Backup/disaster recovery process documented in DEPLOYMENT.md
   - **Risk**: MITIGATED - backup strategy documented with retention policy, cron jobs, restore procedures
@@ -835,10 +837,11 @@
 - [🟠] Optimize slow queries
 
 **Caching strategy**
-- [🟠] Cache user profiles in Redis (TTL: 1 hour)
-- [🟠] Cache campaign listings (TTL: 5 minutes)
-- [🟠] Cache leaderboard rankings (TTL: 15 minutes)
-- [🟠] Cache trust scores (TTL: 1 hour)
+- [✅] Cache user profiles in Redis (TTL: 1 hour) — DONE 2026-06-17
+- [✅] Cache campaign listings (TTL: 5 minutes)
+- [✅] Cache leaderboard rankings (TTL: 15 minutes)
+- [✅] Cache trust scores (TTL: 1 hour)
+- [✅] Cache currency rates in Redis (TTL: 1 hour) — DONE 2026-06-17
 - [🟠] Redis pub/sub for cache invalidation
 - [🟠] Cache warming for frequently accessed data
 
@@ -935,10 +938,11 @@
 - [✅] ~~Platform fees on campaign creation~~ — 10% base fee, config-driven, `PlatformRevenue` model, admin dashboard at `/admin/revenue`
 - [✅] ~~Revenue tracking model~~ — `PlatformRevenue` model with daily aggregation + `GET /admin/revenue` API
 
-### Priority 2 — Performance ✅ MOSTLY DONE 2026-06-10
+### Priority 2 — Performance ✅ DONE 2026-06-17
 - [✅] Move analytics snapshot generation to BullMQ queue — DONE 2026-06-10
 - [✅] Move trust score recalculation to dedicated BullMQ queue — DONE 2026-06-10
-- [🟠] Redis caching: user profiles (1h) — campaign/leaderboard/trust score caching already implemented; user profiles pending
+- [✅] Redis caching: user profiles (1h) — DONE 2026-06-17
+- [✅] CurrencyService Redis migration — DONE 2026-06-17
 
 ### Priority 3 — UX Polish
 - [🟠] Onboarding walkthrough for new users
@@ -962,7 +966,7 @@
 | No CAPTCHA on registration | HIGH | HIGH | reCAPTCHA v2/v3 switch with admin panel + cache invalidation | ✅ MITIGATED |
 | Trust score calculation | MEDIUM | HIGH | BullMQ queue + 1h Redis cache | ✅ MITIGATED (2026-06-10) |
 | Analytics snapshot sync | MEDIUM | HIGH | BullMQ queue via AnalyticsProcessor | ✅ MITIGATED (2026-06-10) |
-| No full caching strategy | MEDIUM | MEDIUM | Campaign/leaderboard/trust score cached; user profiles pending | 🟠 PARTIAL |
+| No full caching strategy | MEDIUM | MEDIUM | Campaign/leaderboard/trust score/user profiles/CurrencyService all cached in Redis | ✅ MITIGATED (2026-06-17) |
 | No backup documentation | HIGH | LOW | Documented in DEPLOYMENT.md with cron jobs, retention, restore | ✅ MITIGATED |
 | No social verification | HIGH | HIGH | Partial: YouTube/Twitch/Spotify OAuth; others manual link | 🟠 HIGH |
 | No monetization | HIGH | MEDIUM | Platform fees live (10%); deposit system live (PayMongo/USDT); Stripe deferred | 🟠 PARTIAL |

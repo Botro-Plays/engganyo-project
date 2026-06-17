@@ -148,18 +148,19 @@
 
 # Phase F — Infrastructure & Scaling
 
-**Status:** ⏳ PLANNED (Future)
+**Status:** 🟠 MOSTLY DONE (2026-06-17)
 **Scope:** Performance, caching, monitoring improvements.
 **Priority:** 🟢 MEDIUM — not blocking revenue
 
 | # | Item | File | Notes |
 |---|------|------|-------|
-| F1 | Redis caching for user profiles | API | Currently hits DB every request |
-| F2 | Sentry coverage for PayMongo webhooks | `paymongo.service.ts` | Deferred from Phase 3 |
-| F3 | E2E deposit flow coverage (Playwright) | `e2e/wallet.spec.ts` | Deferred from Phase 3 |
-| F4 | PWA / Mobile-First Strategy | Next.js PWA plugin | Phase 12.5 |
-| F5 | Mobile responsiveness pass | All pages | Week 10 from GO_LIVE |
-| F6 | Campaign creation cost preview (live calculator) | `/campaigns/create` | Week 10 from GO_LIVE |
+| F1 | Redis caching for user profiles | API | ✅ DONE 2026-06-17 — JWT validation (`jwt:user:*` 5m TTL), `auth:me` (1h TTL), `user:profile` (1h TTL) with `invalidateUserCaches()` helper |
+| F2 | Sentry coverage for PayMongo webhooks | `paymongo.service.ts` | ✅ DONE 2026-06-14 |
+| F3 | E2E deposit flow coverage (Playwright) | `e2e/wallet.spec.ts` | ✅ DONE 2026-06-14 |
+| F4 | PWA / Mobile-First Strategy | Next.js PWA plugin | ⏳ Phase 12.5 |
+| F5 | Mobile responsiveness pass | All pages | ✅ DONE 2026-06-17 — tables, grids, flex overflows fixed across wallet, tasks, admin, user profile |
+| F6 | Campaign creation cost preview (live calculator) | `/campaigns/create` | ✅ ALREADY DONE — live fee preview with promo/VIP discounts + min budget guard in create modal |
+| F7 | CurrencyService Redis migration | `currency.service.ts` | ✅ DONE 2026-06-17 — moved from in-memory to Redis (`currency:rates` + `currency:fetchedAt`) |
 
 ---
 

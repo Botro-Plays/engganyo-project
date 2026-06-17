@@ -1757,6 +1757,43 @@ This document should be updated when:
 **Lesson Learned**:
 - Prisma schema changes **must always** be accompanied by a migration. The `messageId` field and `ChannelMessageMention` model were added to schema but no migration was generated, causing 500 errors in production because the database lacked the column/table. Migration `20260615174607_add_chat_message_reports_and_mentions` was created and applied to resolve.
 
+### ADR-030: Redis User Profile Caching (Three-Layer Cache)
+**Status**: Implemented (Phase F)
+**Date**: 2026-06-17
+**Context**: Every authenticated API request triggered a `prisma.user.findUnique` in `JwtStrategy.validate()`. `GET /auth/me` and `GET /users/me` also hit the DB on every call.
+**Decision**: Implement three separate Redis cache keys per user with centralized invalidation:
+1. `jwt:user:{userId}` — stores `{ id, email, username, role, status }` for JWT validation (5-minute TTL)
+2. `auth:me:{userId}` — stores `SafeUser` from `AuthService.getMe()` (1-hour TTL)
+3. `user:profile:{userId}` — stores full profile with social accounts + equipped cosmetics from `UsersService.getMe()` (1-hour TTL)
+**Invalidation Strategy**: `RedisService.invalidateUserCaches(userId)` clears all three keys atomically. Called from:
+- `UsersService.updateProfile()`, `upsertSocialLink()`, `removeSocialLink()`
+- `AdminService.updateUserStatus()`, `changeUserRole()`, `updateUserDetails()`
+- `TwoFactorService` (all 2FA state-change methods) — clears `auth:me` only
+- `AdminService.disableUserTwoFactor()` — clears `auth:me` only
+**Rationale**:
+- JWT validation is the hottest path (every API call); 5-minute TTL is short enough to catch status changes quickly
+- `auth:me` and `user:profile` have longer TTLs because they're explicitly invalidated on all mutation paths
+- Three separate keys allow each service to cache exactly what it needs without over-fetching
+**Tradeoffs**:
+- Dates in cached objects become strings after JSON round-trip; frontend already handles this since API responses are JSON
+- Cache invalidation must be remembered for every new user mutation endpoint
+- `UserRole` and `UserStatus` enums deserialize as strings; requires explicit casting in `JwtStrategy`
+**Lesson Learned**:
+- Global `@DatabaseModule` with `@Global()` decorator makes `RedisService` available everywhere without explicit imports — very convenient for cross-cutting concerns like caching
+
+### ADR-031: CurrencyService Redis Migration
+**Status**: Implemented (Phase F)
+**Date**: 2026-06-17
+**Context**: `CurrencyService` stored exchange rates in process memory (`cachedRates`, `fetchedAt`). Container restarts lost the cache, causing rate re-fetches and potential drift.
+**Decision**: Replace in-memory variables with Redis keys `currency:rates` (JSON) and `currency:fetchedAt` (timestamp string), both with 1-hour TTL.
+**Rationale**:
+- Survives container restarts and API horizontal scaling
+- Same TTL semantics as before (1 hour) but now shared across all API instances
+- On fetch failure, falls back to stale Redis cache before using hardcoded fallback rates
+**Tradeoffs**:
+- One extra Redis round-trip per `getRates()` call (read `fetchedAt`, then optionally read `rates`)
+- Redis outage would cause rate fetch on every call until connection recovers (graceful degradation to fallback rates)
+
 ---
 
-**Last Updated**: 2026-06-15 (ADR-029: chat moderation system; migration fix for missing schema columns; mute enforcement in ChannelsService)
+**Last Updated**: 2026-06-17 (ADR-030: Redis user profile caching; ADR-031: CurrencyService Redis migration; mobile responsiveness pass)
