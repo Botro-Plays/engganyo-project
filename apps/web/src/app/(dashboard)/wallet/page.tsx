@@ -100,6 +100,7 @@ const TX_CONFIG: Record<string, { label: string; color: string; bg: string }> = 
   EARN_REFERRAL_BONUS:      { label: 'Referral bonus',     color: 'text-green-400',  bg: 'bg-green-500/10' },
   EARN_DAILY_REWARD:        { label: 'Daily reward',       color: 'text-green-400',  bg: 'bg-green-500/10' },
   EARN_ACHIEVEMENT:         { label: 'Achievement',        color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+  EARN_LOOT_BOX:            { label: 'Loot box reward',    color: 'text-violet-400', bg: 'bg-violet-500/10' },
   EARN_MISSION_COMPLETE:    { label: 'Mission complete',   color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
   EARN_ADMIN_GRANT:         { label: 'Admin grant',        color: 'text-brand-400',  bg: 'bg-brand-500/10' },
   EARN_TIP:                 { label: 'Tip received',       color: 'text-green-400',  bg: 'bg-green-500/10' },

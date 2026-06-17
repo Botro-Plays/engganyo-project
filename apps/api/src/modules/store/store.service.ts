@@ -579,7 +579,7 @@ export class StoreService implements OnModuleInit {
       const max = (selected['max'] as number) ?? 500;
       const credits = Math.floor(Math.random() * (max - min + 1)) + min;
       await this.walletService.credit(userId, credits, {
-        type: TransactionType.EARN_ACHIEVEMENT,
+        type: TransactionType.EARN_LOOT_BOX,
         description: `Loot box reward: ${credits} credits`,
       });
       return { applied: true, type: 'loot_box', reward: 'credits', amount: credits };
