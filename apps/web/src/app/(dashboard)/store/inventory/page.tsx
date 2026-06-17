@@ -69,6 +69,7 @@ export default function InventoryPage() {
       return res.data.data;
     },
     onSuccess: (data) => {
+      console.log('[DEBUG] useItem response:', JSON.stringify(data, null, 2));
       const itemName = data?.itemName ?? 'Item';
       const effect = data?.effectResult;
       let message = `${itemName} activated!`;
