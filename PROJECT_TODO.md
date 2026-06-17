@@ -4,7 +4,7 @@
 >
 > **Purpose:** This file is the single source of truth for all pending work. When in doubt, check here first. Individual markdowns may contain historical context but should not be treated as the authoritative task list.
 >
-> **Last Updated:** 2026-06-15 (Phase Chat complete — real-time chat + moderation dashboard + migration fix)
+> **Last Updated:** 2026-06-17 (Redis caching complete, referral module DI fixes, markdown audit sync)
 > **Next Review:** After each completed phase
 
 ---
@@ -170,10 +170,10 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
 
 | Gap | Description | Status | Phase Assignment |
 |-----|-------------|--------|------------------|
-| Gap 10 | CountdownTimer hardcodes 30min fallback | ⏳ | **Phase C** (C3) |
-| Gap 11 | No PayPal order expiry handling | ⏳ | **Phase C** (C1) |
-| Gap 12 | PayMongo cancel race condition | ⏳ | **Phase C** (C2) |
-| Gap 15 | WebSocket state mismatch on refresh | ⏳ | **Phase B** (B6) |
+| Gap 10 | CountdownTimer hardcodes 30min fallback | ✅ | **Phase C** (C3) — fixed 2026-06-14 |
+| Gap 11 | No PayPal order expiry handling | ✅ | **Phase C** (C1) — fixed 2026-06-14 |
+| Gap 12 | PayMongo cancel race condition | ✅ | **Phase C** (C2) — fixed 2026-06-14 |
+| Gap 15 | WebSocket state mismatch on refresh | ✅ | **Phase B** (B6) — fixed 2026-06-14 |
 
 ---
 
@@ -181,9 +181,9 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
 
 | ID | Decision | Status | Context |
 |----|----------|--------|---------|
-| DEP-001 | Deposit system: manual-approval first, automate incrementally | Active | Phase 12d scaffold done; Phase D automation planned |
+| DEP-001 | Deposit system: manual-approval first, automate incrementally | Active | Phase D automation complete 2026-06-14 (USDT auto-credit, cron verification, frontend Verify Now) |
 | MDR-002 | Credit purchase: PayMongo/PayPal/USDT live; Stripe deferred | Active | Stripe ⛔ deferred until account approved |
-| MDR-003 | Prizes / Rewards Store | Planned | Phase 13; deferred until deposit volume justifies |
+| MDR-003 | In-App Store | ✅ Complete 2026-06-16 | Sprint 2 Store (items, inventory, purchases, admin CRUD, analytics) |
 | ADR-027 | Symmetric `forwardRef` for NestJS circular deps | Resolved | Applied to WalletModule ↔ PayPalModule |
 
 ---
@@ -359,6 +359,13 @@ From `AUDIT_WALLET_DEPOSIT_FLOW.md` — items not yet assigned to a phase above:
   - Daily snapshot cron (`analytics.processor.ts`) rolls up `StorePurchase` counts, revenue, and top item
   - Admin endpoint `GET /admin/store/analytics` — totals, per-item breakdown, 30-day daily trends
   - Frontend `/admin/store` Analytics tab — 4 stat cards, revenue-by-item table, daily trends table
+
+- ✅ **2026-06-17 — ReferralsModule DI fix + Markdown sync**
+  - Added `ReferralsModule` import to `WalletModule` and `AuthModule` (runtime DI failure in E2E CI)
+  - Added `ReferralsService` mock to `wallet.service.spec.ts` (unit test DI failure)
+  - Synced `COMPREHENSIVE_AUDIT_2026-06-10.md` with reality: Redis caching ✅, Store ✅, E2E ✅, Sentry ✅, Mobile ✅
+  - Updated `PROJECT_TODO.md` decisions log: DEP-001 (Phase D complete), MDR-003 (Store complete)
+  - Updated Prisma model count (36 → 39) and frontend page inventory (+store, +store/inventory, +admin/store)
 
 ---
 
