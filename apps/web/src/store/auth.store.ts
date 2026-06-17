@@ -33,6 +33,7 @@ export interface AuthUser {
   currentStreak: number;
   reputationScore: number;
   referralCode: string | null;
+  referredBy?: { username: string; displayName: string | null } | null;
   twoFactorEnabled: boolean;
   nextTierProgress?: number;
 }

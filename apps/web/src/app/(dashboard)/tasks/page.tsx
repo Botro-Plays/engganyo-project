@@ -113,6 +113,7 @@ interface MyTask {
   submittedAt: string | null;
   verifiedAt: string | null;
   expiresAt: string | null;
+  rejectionReason: string | null;
   campaign: {
     id: string;
     title: string;
@@ -121,6 +122,7 @@ interface MyTask {
     creditPerTask: number;
     requiresProof: boolean;
     proofInstructions: string | null;
+    user: { username: string; displayName: string | null };
   };
 }
 
@@ -711,8 +713,44 @@ export default function TasksPage() {
                         {TASK_TYPE_LABELS[task.campaign.taskType]?.split(' · ')[0] ?? platform}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{task.campaign.title}</p>
-                        <p className={`text-xs ${st.color}`}>{st.label} · {formatRelativeTime(task.assignedAt)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-white truncate">{task.campaign.title}</p>
+                          <span className="text-xs font-semibold text-green-400 shrink-0">+{formatCredits(task.campaign.creditPerTask)}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className={`text-xs ${st.color}`}>{st.label} · {formatRelativeTime(task.assignedAt)}</span>
+                          <span className="text-[10px] text-zinc-600">by <Link href={`/users/${task.campaign.user.username}`} className="text-zinc-500 hover:text-brand-300 transition-colors">@{task.campaign.user.username}</Link></span>
+                          <a
+                            href={task.campaign.targetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-zinc-500 hover:text-brand-400 flex items-center gap-0.5 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Link
+                          </a>
+                          {task.campaign.requiresProof && (
+                            <span className="text-[10px] text-amber-400/80 flex items-center gap-0.5">
+                              <Upload className="w-3 h-3" /> Proof required
+                            </span>
+                          )}
+                          {task.status === 'SUBMITTED' && task.submittedAt && (
+                            <span className="text-[10px] text-sky-500/80 flex items-center gap-1"><Clock className="w-3 h-3" /> Submitted {formatRelativeTime(task.submittedAt)}</span>
+                          )}
+                          {task.status === 'VERIFIED' && task.verifiedAt && (
+                            <span className="text-[10px] text-green-500/80">Verified {formatRelativeTime(task.verifiedAt)}</span>
+                          )}
+                          {task.status === 'REJECTED' && task.rejectionReason && (
+                            <span className="text-[10px] text-red-400/80 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {task.rejectionReason.length > 40 ? task.rejectionReason.slice(0, 40) + '…' : task.rejectionReason}</span>
+                          )}
+                          {canSubmit && task.expiresAt && (
+                            <span className="text-[10px] text-yellow-500/80 flex items-center gap-1"><Clock className="w-3 h-3" /> Due {formatRelativeTime(task.expiresAt)}</span>
+                          )}
+                          {task.proofUrl && (
+                            <a href={task.proofUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-400 hover:text-brand-300 flex items-center gap-0.5 transition-colors">
+                              <ExternalLink className="w-3 h-3" /> Proof
+                            </a>
+                          )}
+                        </div>
                       </div>
                       <div className="text-right shrink-0">
                         {task.status === 'VERIFIED' ? (

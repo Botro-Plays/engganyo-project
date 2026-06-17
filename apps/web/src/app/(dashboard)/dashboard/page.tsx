@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package } from 'lucide-react';
+import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package, Users, Link2, ChevronRight, Crown, Globe, TrendingUp } from 'lucide-react';
+import { SpinWheelModal } from '@/components/spin-wheel-modal';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -52,8 +53,9 @@ function DashboardPageInner() {
   const isWelcome = searchParams.get('welcome') === '1';
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [rewardResult, setRewardResult] = useState<{ creditReward: number; xpReward: number; newStreak: number; bonusLootBox?: boolean } | null>(null);
-  const [spinResult, setSpinResult] = useState<{ prize: string; credits?: number; isFree: boolean; cost: number } | null>(null);
+  const [spinResult, setSpinResult] = useState<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number } | null>(null);
   const [spinError, setSpinError] = useState<string | null>(null);
+  const [wheelOpen, setWheelOpen] = useState(false);
 
   // Refetch when tab becomes visible after background
   useRefetchOnVisible([['my-stats'], ['gamification', 'stats']]);
@@ -105,6 +107,22 @@ function DashboardPageInner() {
     refetchInterval: 60_000,
   });
 
+  // Referral stats
+  const { data: referralStats } = useQuery<{
+    total: number;
+    qualified: number;
+    pending: number;
+    totalCreditsEarned: number;
+    referrals: Array<{ id: string; isQualified: boolean; creditsAwarded: number; referee: { username: string; displayName: string | null } }>;
+  }>({
+    queryKey: ['referrals', 'me'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ total: number; qualified: number; pending: number; totalCreditsEarned: number; referrals: Array<{ id: string; isQualified: boolean; creditsAwarded: number; referee: { username: string; displayName: string | null } }> }>>('referrals/me');
+      return res.data.data;
+    },
+    refetchInterval: 60_000,
+  });
+
   const rewardMutation = useMutation({
     mutationFn: () => {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -136,16 +154,30 @@ function DashboardPageInner() {
     refetchInterval: 30_000,
   });
 
+  const { data: publicStats } = useQuery<{
+    totalUsers: number;
+    totalTaskCompletions: number;
+    totalCountries: number;
+  }>({
+    queryKey: ['analytics', 'public-stats'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ totalUsers: number; totalTaskCompletions: number; totalCountries: number }>>('analytics/public-stats');
+      return res.data.data;
+    },
+    refetchInterval: 300_000,
+    staleTime: 300_000,
+  });
+
   const { data: rewardLog } = useQuery({
     queryKey: ['gamification', 'daily-reward-log'],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<{ streakDay: number; creditReward: number; bonusLootBox: boolean; date: string }[]>>('gamification/daily-reward-log');
+      const res = await apiClient.get<ApiResponse<{ streakDay: number; creditReward: number; xpReward: number; bonusLootBox: boolean; date: string }[]>>('gamification/daily-reward-log');
       return res.data.data ?? [];
     },
   });
 
   const spinMutation = useMutation({
-    mutationFn: () => apiClient.post<ApiResponse<typeof spinResult>>('gamification/wheel/spin'),
+    mutationFn: () => apiClient.post<ApiResponse<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number }>>('gamification/wheel/spin'),
     onSuccess: (res) => {
       setSpinResult(res.data.data);
       setSpinError(null);
@@ -205,6 +237,14 @@ function DashboardPageInner() {
       sub: stats?.gamification.vipTier?.displayName ?? 'No tier yet',
       icon: Award,
       color: stats?.gamification.vipTier?.perks.color ?? '#888888',
+      progress: gamStats?.nextTierProgress ?? 0,
+    },
+    {
+      label: 'Referrals',
+      value: referralStats?.total ?? 0,
+      sub: `${referralStats?.qualified ?? 0} qualified · ${formatCredits(referralStats?.totalCreditsEarned ?? 0)} earned`,
+      icon: Users,
+      color: 'text-sky-400',
     },
   ];
 
@@ -217,6 +257,18 @@ function DashboardPageInner() {
         <p className="text-zinc-400 text-sm mt-1">
           {isWelcome ? "You've earned 200 welcome credits to get started." : "Here's what's happening with your account."}
         </p>
+        {user?.referredBy && (
+          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
+            <Crown className="w-3 h-3 text-amber-400" />
+            Referred by <Link href={`/users/${user.referredBy.username}`} className="text-brand-400 hover:text-brand-300 transition-colors">@{user.referredBy.username}</Link>
+          </p>
+        )}
+        {user?.referralCode && (
+          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
+            <Link2 className="w-3 h-3 text-sky-400" />
+            Your referral code: <span className="text-sky-400 font-mono">{user.referralCode}</span>
+          </p>
+        )}
       </div>
 
       {/* Stat cards */}
@@ -239,6 +291,32 @@ function DashboardPageInner() {
           </div>
         ))}
       </div>
+
+      {/* Platform Pulse */}
+      {publicStats && (
+        <div className="card-glass rounded-xl p-4 mb-8">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-8">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-brand-400" />
+              <span className="text-xs text-zinc-500">Members</span>
+              <span className="text-sm font-semibold text-white">{publicStats.totalUsers.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs text-zinc-500">Tasks done</span>
+              <span className="text-sm font-semibold text-white">{publicStats.totalTaskCompletions.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-sky-400" />
+              <span className="text-xs text-zinc-500">Countries</span>
+              <span className="text-sm font-semibold text-white">{publicStats.totalCountries}</span>
+            </div>
+            <Link href="/leaderboard" className="ml-auto text-xs text-brand-400 hover:text-brand-300 transition-colors flex items-center gap-1">
+              Leaderboard <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Daily Reward Card (dedicated module) */}
       {gamStats && (
@@ -277,23 +355,82 @@ function DashboardPageInner() {
           <div className="mt-4 pt-4 border-t border-zinc-800">
             <div className="flex items-center justify-between text-xs text-zinc-500 mb-2">
               <span>Streak Progress</span>
-              <span>{gamStats.currentStreak} day{gamStats.currentStreak !== 1 ? 's' : ''}</span>
+              <span className="flex items-center gap-1">
+                <Flame className="w-3 h-3 text-orange-400" />
+                {gamStats.currentStreak} day{gamStats.currentStreak !== 1 ? 's' : ''}
+              </span>
             </div>
             <div className="flex items-center gap-1">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((day) => {
                 const milestone = [5, 7, 14].includes(day);
                 const reached = gamStats.currentStreak >= day;
-                const logged = rewardLog?.some((r) => r.streakDay === day);
+                const isCurrent = gamStats.currentStreak === day;
+                const logged = rewardLog?.find((r) => r.streakDay === day);
+                const expectedCredits = Math.min(50 + (day - 1) * 10, 200);
                 return (
-                  <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                  <div key={day} className="flex-1 flex flex-col items-center gap-1 group relative py-2 cursor-help">
                     <div
-                      className={`w-full h-2 rounded-full ${reached ? 'bg-orange-500' : 'bg-zinc-800'} ${milestone ? 'ring-1 ring-orange-400/50' : ''}`}
-                    />
+                      className={`w-full h-4 rounded-full relative ${reached ? 'bg-orange-500' : 'bg-zinc-800'} ${milestone ? 'ring-2 ring-orange-400/50' : ''} ${isCurrent ? 'ring-2 ring-white/40 shadow-[0_0_8px_rgba(249,115,22,0.4)]' : ''}`}
+                    >
+                      {isCurrent && (
+                        <div className="absolute inset-0 rounded-full animate-pulse bg-orange-400/20" />
+                      )}
+                      {logged && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <CheckSquare className="w-2.5 h-2.5 text-white/70" />
+                        </div>
+                      )}
+                    </div>
                     {milestone && (
-                      <span className={`text-[9px] ${reached ? 'text-orange-400' : 'text-zinc-600'}`}>
+                      <span className={`text-[9px] font-semibold ${reached ? 'text-orange-400' : 'text-zinc-600'}`}>
                         D{day}
                       </span>
                     )}
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-20">
+                      <div className="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 shadow-2xl whitespace-nowrap min-w-[180px]">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs font-bold text-white">Day {day}</p>
+                          {logged ? (
+                            <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">Claimed</span>
+                          ) : reached ? (
+                            <span className="text-[10px] bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded-full">Reached</span>
+                          ) : (
+                            <span className="text-[10px] bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded-full">Upcoming</span>
+                          )}
+                        </div>
+                        {logged ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[10px] text-green-400">
+                              <Gift className="w-3 h-3" /> {logged.creditReward} credits
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-blue-400">
+                              <Award className="w-3 h-3" /> {logged.xpReward} XP
+                            </div>
+                            {logged.bonusLootBox && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-violet-400">
+                                <Package className="w-3 h-3" /> Mystery Gift Box!
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-300">
+                              <Gift className="w-3 h-3 text-zinc-500" /> {expectedCredits} credits
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-300">
+                              <Award className="w-3 h-3 text-zinc-500" /> 20 XP
+                            </div>
+                            {milestone && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-orange-400">
+                                <Package className="w-3 h-3" /> Mystery Gift Box!
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="w-2.5 h-2.5 bg-zinc-900 border-r border-b border-zinc-600 rotate-45 -mt-1.5" />
+                    </div>
                   </div>
                 );
               })}
@@ -324,21 +461,20 @@ function DashboardPageInner() {
                 </p>
               </div>
             </div>
-            {spinResult ? (
-              <div className="text-sm text-green-400 font-medium">
-                {spinResult.prize}
-                {spinResult.credits ? ` · +${spinResult.credits} credits` : ''}
-                {spinResult.isFree ? ' · Free spin' : ` · ${spinResult.cost} credits`}
-              </div>
-            ) : (
+            <div className="flex items-center gap-3">
+              {spinResult && (
+                <span className="text-xs text-green-400 hidden sm:inline">
+                  Last: {spinResult.prize}
+                </span>
+              )}
               <button
-                onClick={() => spinMutation.mutate()}
-                disabled={(!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0) || spinMutation.isPending}
+                onClick={() => setWheelOpen(true)}
+                disabled={!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0}
                 className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {spinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RotateCcw className="w-4 h-4" /> Spin</>}
+                <RotateCcw className="w-4 h-4" /> Spin
               </button>
-            )}
+            </div>
           </div>
           {spinError && <p className="text-xs text-red-400 mt-3">{spinError}</p>}
           {!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0 && !spinResult && (
@@ -346,6 +482,29 @@ function DashboardPageInner() {
           )}
         </div>
       )}
+
+      <SpinWheelModal
+        open={wheelOpen}
+        onClose={() => setWheelOpen(false)}
+        wheelStatus={wheelStatus}
+        onSpin={async () => {
+          const res = await spinMutation.mutateAsync();
+          if (!res.data.data) {
+            throw new Error('Spin failed: no result returned');
+          }
+          return {
+            prize: res.data.data.prize,
+            type: res.data.data.type,
+            credits: res.data.data.credits,
+            multiplier: res.data.data.multiplier,
+            durationHours: res.data.data.durationHours,
+            charges: res.data.data.charges,
+            itemName: res.data.data.itemName,
+            isFree: res.data.data.isFree,
+            cost: res.data.data.cost,
+          };
+        }}
+      />
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Activity sparkline */}
@@ -408,6 +567,20 @@ function DashboardPageInner() {
               </div>
               <span className="text-white font-medium">{formatCredits(stats?.credits.lifetimeEarned ?? 0)}</span>
             </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-zinc-400">
+                <Users className="w-4 h-4 text-sky-400" /> Referrals invited
+              </div>
+              <span className="text-white font-medium">{referralStats?.total ?? 0} <span className="text-zinc-500 text-xs">({referralStats?.qualified ?? 0} qualified)</span></span>
+            </div>
+            {referralStats && referralStats.totalCreditsEarned > 0 && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                  <Award className="w-4 h-4 text-amber-400" /> Referral credits
+                </div>
+                <span className="text-white font-medium">{formatCredits(referralStats.totalCreditsEarned)}</span>
+              </div>
+            )}
           </div>
           <Link href="/leaderboard" className="block text-center text-xs text-brand-400 hover:text-brand-300 transition-colors pt-2">
             View leaderboard →

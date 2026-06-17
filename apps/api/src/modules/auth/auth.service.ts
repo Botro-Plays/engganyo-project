@@ -51,6 +51,7 @@ export interface SafeUser {
   currentStreak: number;
   longestStreak: number;
   referralCode: string;
+  referredBy: { username: string; displayName: string | null } | null;
   createdAt: Date;
   twoFactorEnabled: boolean;
   nextTierProgress?: number;
@@ -461,7 +462,10 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
-      include: { vipTier: { select: { name: true, level: true, displayName: true, perks: true, requirementVp: true } } },
+      include: {
+        vipTier: { select: { name: true, level: true, displayName: true, perks: true, requirementVp: true } },
+        referredBy: { select: { username: true, displayName: true } },
+      },
     });
     if (!user) throw new NotFoundException('User not found');
 
@@ -703,6 +707,7 @@ export class AuthService {
     currentStreak: number;
     longestStreak: number;
     referralCode: string;
+    referredBy?: { username: string; displayName: string | null } | null;
     createdAt: Date;
     twoFactorTotpSecret?: string | null;
     twoFactorEmailEnabled?: boolean;
@@ -725,6 +730,7 @@ export class AuthService {
       currentStreak: user.currentStreak,
       longestStreak: user.longestStreak,
       referralCode: user.referralCode,
+      referredBy: user.referredBy ? { username: user.referredBy.username, displayName: user.referredBy.displayName } : null,
       createdAt: user.createdAt,
       twoFactorEnabled: !!(user.twoFactorTotpSecret || user.twoFactorEmailEnabled),
     };
