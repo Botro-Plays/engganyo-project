@@ -372,7 +372,7 @@ export default function AdminStorePage() {
       {activeTab === 'items' ? (
         <>
           {/* Stats bar */}
-          <div className="grid grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[
               { label: 'Total Items', value: items.length },
               { label: 'Active', value: items.filter((i) => i.isActive).length },
@@ -390,8 +390,8 @@ export default function AdminStorePage() {
           {isLoading ? (
             <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
           ) : (
-            <div className="card-glass rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="card-glass rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead className="border-b border-surface-border">
                   <tr className="text-xs text-zinc-500 uppercase tracking-wide">
                     <th className="text-left px-4 py-3">Item</th>
@@ -483,7 +483,7 @@ export default function AdminStorePage() {
             <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
           ) : analytics ? (
             <>
-              <div className="grid grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {[
                   { label: 'Total Purchases', value: analytics.totals.totalPurchases.toLocaleString(), icon: ShoppingBag, color: 'text-brand-400' },
                   { label: 'Total Revenue', value: `${formatCredits(analytics.totals.totalCreditsSpent)}`, icon: CreditCard, color: 'text-green-400' },
@@ -501,11 +501,11 @@ export default function AdminStorePage() {
               </div>
 
               {/* Per-item breakdown */}
-              <div className="card-glass rounded-xl overflow-hidden mb-6">
+              <div className="card-glass rounded-xl overflow-hidden mb-6 overflow-x-auto">
                 <div className="px-4 py-3 border-b border-surface-border">
                   <h3 className="text-sm font-semibold text-white">Revenue by Item</h3>
                 </div>
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[560px]">
                   <thead className="border-b border-surface-border bg-zinc-800/30">
                     <tr className="text-xs text-zinc-500 uppercase tracking-wide">
                       <th className="text-left px-4 py-2">Item</th>
@@ -541,11 +541,11 @@ export default function AdminStorePage() {
 
               {/* Daily trends */}
               {analytics.dailyTrends.length > 0 && (
-                <div className="card-glass rounded-xl overflow-hidden">
+                <div className="card-glass rounded-xl overflow-hidden overflow-x-auto">
                   <div className="px-4 py-3 border-b border-surface-border">
                     <h3 className="text-sm font-semibold text-white">Daily Trends (Last 30 Days)</h3>
                   </div>
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm min-w-[480px]">
                     <thead className="border-b border-surface-border bg-zinc-800/30">
                       <tr className="text-xs text-zinc-500 uppercase tracking-wide">
                         <th className="text-left px-4 py-2">Date</th>

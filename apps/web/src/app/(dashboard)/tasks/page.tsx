@@ -706,7 +706,7 @@ export default function TasksPage() {
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
                   const canSubmit = task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS';
                   return (
-                    <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-center gap-4">
+                    <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-start sm:items-center gap-3 sm:gap-4">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${platformColor}`}>
                         {TASK_TYPE_LABELS[task.campaign.taskType]?.split(' · ')[0] ?? platform}
                       </span>

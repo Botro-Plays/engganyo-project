@@ -392,8 +392,8 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Table */}
-      <div className="card-glass rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="card-glass rounded-xl overflow-hidden overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="border-b border-surface-border text-xs text-zinc-500 uppercase tracking-wide">
               <th className="text-left px-4 py-3">User</th>

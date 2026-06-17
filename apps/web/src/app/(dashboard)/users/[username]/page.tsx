@@ -259,7 +259,7 @@ export default function UserProfilePage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-5 gap-3 mt-5 pt-4 border-t border-zinc-700/50">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-5 pt-4 border-t border-zinc-700/50">
           {[
             { icon: Zap,         label: 'Level',       value: data.level },
             { icon: Star,        label: 'XP',          value: data.xp.toLocaleString() },
