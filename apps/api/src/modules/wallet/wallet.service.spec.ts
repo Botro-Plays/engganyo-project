@@ -11,6 +11,7 @@ import { PayMongoService } from '../paymongo/paymongo.service';
 import { PayPalService } from '../paypal/paypal.service';
 import { CryptoVerificationService } from './crypto-verification.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 const MOCK_WALLET = {
   id: 'wallet-1',
@@ -122,6 +123,12 @@ describe('WalletService', () => {
           provide: GamificationService,
           useValue: {
             awardVp: jest.fn().mockResolvedValue({ newVp: 0, tierUp: false, newTier: null }),
+          },
+        },
+        {
+          provide: ReferralsService,
+          useValue: {
+            checkMilestones: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
