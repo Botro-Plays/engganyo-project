@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
-  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle,
+  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -95,7 +95,17 @@ interface Submission {
   submittedAt: string;
   reviewDeadline: string | null;
   escalated: boolean;
-  user: { id: string; username: string; displayName: string | null };
+  assignedAt: string;
+  completionSeconds: number | null;
+  ipAddress: string | null;
+  user: {
+    id: string;
+    username: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    reputationScore: number;
+    level: number;
+  };
 }
 
 interface CampaignsResponse {
@@ -170,6 +180,7 @@ export default function CampaignsPage() {
   const [viewingProof, setViewingProof] = useState<{ id: string; proofUrl: string; user: Submission['user']; submittedAt: string } | null>(null);
   const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
   const [proofLoading, setProofLoading] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // Fetch public config to know which platforms are enabled
   const { data: publicConfig } = useQuery({
@@ -275,6 +286,14 @@ export default function CampaignsPage() {
     },
     enabled: !!reviewingCampaign,
   });
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const reviewMutation = useMutation({
     mutationFn: ({ completionId, action, reason }: { completionId: string; action: 'approve' | 'reject'; reason?: string }) =>
@@ -800,8 +819,8 @@ export default function CampaignsPage() {
                       ? 'bg-red-500/5 border-red-500/20'
                       : 'bg-surface-hover border-surface-border'
                   }`}>
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <UserLink user={s.user} />
                           {s.escalated && (
@@ -836,7 +855,7 @@ export default function CampaignsPage() {
                         )}
                       </div>
 
-                      <div className="flex gap-1.5 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => reviewMutation.mutate({ completionId: s.id, action: 'approve' })}
                           disabled={reviewMutation.isPending}
@@ -851,8 +870,26 @@ export default function CampaignsPage() {
                         >
                           <X className="w-3 h-3" /> Reject
                         </button>
+                        <button
+                          onClick={() => toggleExpand(s.id)}
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-surface-hover transition-colors"
+                          title="Toggle details"
+                        >
+                          {expandedIds.has(s.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
+
+                    {expandedIds.has(s.id) && (
+                      <div className="mt-3 pt-3 border-t border-surface-border space-y-2 text-xs text-zinc-400">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><span className="text-zinc-500">Assigned:</span> <span className="text-zinc-300">{formatDate(s.assignedAt)}</span></div>
+                          <div><span className="text-zinc-500">Reputation:</span> <span className="text-zinc-300">{s.user.reputationScore} pts · Lv.{s.user.level}</span></div>
+                          <div><span className="text-zinc-500">Completion time:</span> <span className="text-zinc-300">{s.completionSeconds ? `${Math.floor(s.completionSeconds / 60)}m ${s.completionSeconds % 60}s` : 'N/A'}</span></div>
+                          <div><span className="text-zinc-500">IP:</span> <span className="text-zinc-300 font-mono">{s.ipAddress ?? 'N/A'}</span></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
