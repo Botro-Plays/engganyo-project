@@ -234,4 +234,4 @@ Total estimate: ~40 min of focused work for P1 + P3.
 
 ---
 
-*Document created: 2026-06-16 | Next review: before starting Sprint 3 (Daily Reward 2.0 + Spin Wheel)*
+*Document created: 2026-06-16 | Next review: before starting Sprint 3 (Daily Reward 2.0, Spin Wheel)*

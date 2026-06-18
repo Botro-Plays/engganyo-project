@@ -42,6 +42,7 @@ enum TransactionType {
   EARN_LOOT_BOX
   EARN_MISSION_COMPLETE
   EARN_ADMIN_GRANT
+  EARN_WHEEL_SPIN
   // Deposits (fiat / crypto)
   DEPOSIT_PAYMONGO
   DEPOSIT_PAYPAL

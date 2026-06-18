@@ -1123,7 +1123,7 @@ export class GamificationService implements OnModuleInit {
 
     if (prize.credits) {
       await this.walletService.credit(userId, prize.credits, {
-        type: TransactionType.EARN_DAILY_REWARD,
+        type: TransactionType.EARN_WHEEL_SPIN,
         description: `Wheel spin prize: ${prize.name}`,
       });
       result = { ...result, credits: prize.credits };
