@@ -408,9 +408,15 @@ export class StoreService implements OnModuleInit {
     const meta = item.metadata as Record<string, unknown>;
     let effectType = meta?.['effectType'] as string | undefined;
 
-    // Fallback for items created before effectType was added to metadata
-    if (!effectType && meta?.['isLootBox'] === true) {
-      effectType = 'loot_box';
+    // Fallbacks for legacy items created before effectType was added to metadata.
+    // We match by item name since the DB row itself may lack the metadata field.
+    if (!effectType) {
+      const nameLower = item.name.toLowerCase();
+      if (nameLower.includes('xp boost')) effectType = 'xp_boost';
+      else if (nameLower.includes('task limit')) effectType = 'task_limit_boost';
+      else if (nameLower.includes('streak freeze')) effectType = 'streak_freeze';
+      else if (nameLower.includes('task refresh')) effectType = 'task_refresh';
+      else if (nameLower.includes('mystery') || meta?.['isLootBox'] === true) effectType = 'loot_box';
     }
 
     // Guard: reject if an effect of the same type is already active
@@ -465,7 +471,12 @@ export class StoreService implements OnModuleInit {
         const durationHours = (meta['durationHours'] as number) ?? 24;
         const ttlSeconds = durationHours * 3600;
         const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-        await this.redisService.setJson(`boost:xp:${userId}`, { multiplier, expiresAt }, ttlSeconds);
+        try {
+          await this.redisService.setJson(`boost:xp:${userId}`, { multiplier, expiresAt }, ttlSeconds);
+        } catch (redisErr: unknown) {
+          this.logger.error(`Redis setJson failed for boost:xp:${userId}`, redisErr);
+          return { applied: false, reason: 'Could not activate XP Boost. Please try again.' };
+        }
         return { applied: true, type: 'xp_boost', multiplier, expiresAt };
       }
 
@@ -474,18 +485,28 @@ export class StoreService implements OnModuleInit {
         const durationHours = (meta['durationHours'] as number) ?? 48;
         const ttlSeconds = durationHours * 3600;
         const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-        await this.redisService.setJson(`boost:task_limit:${userId}`, { bonusSlots, expiresAt }, ttlSeconds);
+        try {
+          await this.redisService.setJson(`boost:task_limit:${userId}`, { bonusSlots, expiresAt }, ttlSeconds);
+        } catch (redisErr: unknown) {
+          this.logger.error(`Redis setJson failed for boost:task_limit:${userId}`, redisErr);
+          return { applied: false, reason: 'Could not activate Task Limit Boost. Please try again.' };
+        }
         return { applied: true, type: 'task_limit_boost', bonusSlots, expiresAt };
       }
 
       case 'streak_freeze': {
         const protectedDays = (meta['protectedDays'] as number) ?? 3;
         const key = `boost:streak_freeze:${userId}`;
-        const current = await this.redisService.get(key);
-        const currentCount = current ? parseInt(current, 10) : 0;
-        const newCount = currentCount + protectedDays;
-        await this.redisService.set(key, String(newCount));
-        return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: newCount };
+        try {
+          const current = await this.redisService.get(key);
+          const currentCount = current ? parseInt(current, 10) : 0;
+          const newCount = currentCount + protectedDays;
+          await this.redisService.set(key, String(newCount));
+          return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: newCount };
+        } catch (redisErr: unknown) {
+          this.logger.error(`Redis operation failed for streak_freeze:${userId}`, redisErr);
+          return { applied: false, reason: 'Could not apply Streak Freeze. Please try again.' };
+        }
       }
 
       case 'task_refresh': {
@@ -552,117 +573,123 @@ export class StoreService implements OnModuleInit {
     userId: string,
     meta: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    let possibleRewards = (meta['possibleRewards'] as Array<Record<string, unknown>>) ?? [];
-    // Fallback: use default rewards for legacy items without full metadata
-    if (possibleRewards.length === 0) {
-      possibleRewards = [
-        { type: 'credits', min: 50, max: 500 },
-        { type: 'xp_boost', hours: 12 },
-        { type: 'cosmetic', pool: ['silver-frame', 'gold-frame', 'neon-theme', 'diamond-badge'] },
-      ];
-    }
+    try {
+      let possibleRewards = (meta['possibleRewards'] as Array<Record<string, unknown>>) ?? [];
+      // Fallback: use default rewards for legacy items without full metadata
+      if (possibleRewards.length === 0) {
+        possibleRewards = [
+          { type: 'credits', min: 50, max: 500 },
+          { type: 'xp_boost', hours: 12 },
+          { type: 'cosmetic', pool: ['silver-frame', 'gold-frame', 'neon-theme', 'diamond-badge'] },
+        ];
+      }
 
-    const roll = Math.random();
-    let selected: Record<string, unknown>;
+      const roll = Math.random();
+      let selected: Record<string, unknown>;
 
-    if (roll < 0.5) {
-      // 50% credits
-      selected = possibleRewards.find((r) => r['type'] === 'credits') ?? possibleRewards[0];
-    } else if (roll < 0.8) {
-      // 30% xp boost
-      selected = possibleRewards.find((r) => r['type'] === 'xp_boost') ?? possibleRewards[0];
-    } else {
-      // 20% cosmetic
-      selected = possibleRewards.find((r) => r['type'] === 'cosmetic') ?? possibleRewards[0];
-    }
+      if (roll < 0.5) {
+        // 50% credits
+        selected = possibleRewards.find((r) => r['type'] === 'credits') ?? possibleRewards[0];
+      } else if (roll < 0.8) {
+        // 30% xp boost
+        selected = possibleRewards.find((r) => r['type'] === 'xp_boost') ?? possibleRewards[0];
+      } else {
+        // 20% cosmetic
+        selected = possibleRewards.find((r) => r['type'] === 'cosmetic') ?? possibleRewards[0];
+      }
 
-    const rewardType = selected['type'] as string;
+      const rewardType = selected['type'] as string;
 
-    if (rewardType === 'credits') {
-      const min = (selected['min'] as number) ?? 50;
-      const max = (selected['max'] as number) ?? 500;
-      const credits = Math.floor(Math.random() * (max - min + 1)) + min;
-      await this.walletService.credit(userId, credits, {
-        type: TransactionType.EARN_LOOT_BOX,
-        description: `Loot box reward: ${credits} credits`,
-      });
-      return { applied: true, type: 'loot_box', reward: 'credits', amount: credits };
-    }
+      if (rewardType === 'credits') {
+        const min = (selected['min'] as number) ?? 50;
+        const max = (selected['max'] as number) ?? 500;
+        const credits = Math.floor(Math.random() * (max - min + 1)) + min;
+        await this.walletService.credit(userId, credits, {
+          type: TransactionType.EARN_LOOT_BOX,
+          description: `Loot box reward: ${credits} credits`,
+        });
+        return { applied: true, type: 'loot_box', reward: 'credits', amount: credits };
+      }
 
-    if (rewardType === 'xp_boost') {
-      const hours = (selected['hours'] as number) ?? 12;
-      const ttlSeconds = hours * 3600;
-      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-      await this.redisService.setJson(`boost:xp:${userId}`, { multiplier: 2, expiresAt }, ttlSeconds);
-      return { applied: true, type: 'loot_box', reward: 'xp_boost', multiplier: 2, durationHours: hours };
-    }
+      if (rewardType === 'xp_boost') {
+        const hours = (selected['hours'] as number) ?? 12;
+        const ttlSeconds = hours * 3600;
+        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        await this.redisService.setJson(`boost:xp:${userId}`, { multiplier: 2, expiresAt }, ttlSeconds);
+        return { applied: true, type: 'loot_box', reward: 'xp_boost', multiplier: 2, durationHours: hours };
+      }
 
-    if (rewardType === 'cosmetic') {
-      const pool = (selected['pool'] as string[]) ?? ['silver-frame'];
-      const cosmeticIdentifier = pool[Math.floor(Math.random() * pool.length)];
+      if (rewardType === 'cosmetic') {
+        const pool = (selected['pool'] as string[]) ?? ['silver-frame'];
+        const cosmeticIdentifier = pool[Math.floor(Math.random() * pool.length)];
 
-      // Try to find a matching cosmetic store item (by name or metadata)
-      const allCosmetics = await this.prisma.storeItem.findMany({
-        where: { category: StoreCategory.COSMETIC, isActive: true },
-      });
-
-      const cosmeticItem = allCosmetics.find((c) => {
-        const cMeta = c.metadata as Record<string, unknown>;
-        const itemNameLower = c.name.toLowerCase();
-        const idLower = String(cosmeticIdentifier).toLowerCase();
-        return itemNameLower.includes(idLower)
-          || cMeta?.['style'] === cosmeticIdentifier
-          || cMeta?.['themeId'] === cosmeticIdentifier;
-      });
-
-      if (cosmeticItem) {
-        // Check if user already owns it
-        const existing = await this.prisma.userInventory.findFirst({
-          where: { userId, itemId: cosmeticItem.id },
+        // Try to find a matching cosmetic store item (by name or metadata)
+        const allCosmetics = await this.prisma.storeItem.findMany({
+          where: { category: StoreCategory.COSMETIC, isActive: true },
         });
 
-        if (!existing) {
-          // Add to inventory and auto-equip (mirrors purchase behaviour)
-          const otherEquipped = await this.prisma.userInventory.findMany({
-            where: { userId, equipped: true },
-            include: { item: { select: { metadata: true } } },
+        const cosmeticItem = allCosmetics.find((c) => {
+          const cMeta = c.metadata as Record<string, unknown>;
+          const itemNameLower = c.name.toLowerCase();
+          const idLower = String(cosmeticIdentifier).toLowerCase();
+          return itemNameLower.includes(idLower)
+            || cMeta?.['style'] === cosmeticIdentifier
+            || cMeta?.['themeId'] === cosmeticIdentifier;
+        });
+
+        if (cosmeticItem) {
+          // Check if user already owns it
+          const existing = await this.prisma.userInventory.findFirst({
+            where: { userId, itemId: cosmeticItem.id },
           });
-          const cMeta = cosmeticItem.metadata as Record<string, unknown>;
-          const cosmeticType = cMeta?.['cosmeticType'] as string | undefined;
-          for (const other of otherEquipped) {
-            const otherMeta = other.item.metadata as Record<string, unknown>;
-            if (otherMeta?.['cosmeticType'] === cosmeticType && other.id) {
-              await this.prisma.userInventory.update({
-                where: { id: other.id },
-                data: { equipped: false },
-              });
+
+          if (!existing) {
+            // Add to inventory and auto-equip (mirrors purchase behaviour)
+            const otherEquipped = await this.prisma.userInventory.findMany({
+              where: { userId, equipped: true },
+              include: { item: { select: { metadata: true } } },
+            });
+            const cMeta = cosmeticItem.metadata as Record<string, unknown>;
+            const cosmeticType = cMeta?.['cosmeticType'] as string | undefined;
+            for (const other of otherEquipped) {
+              const otherMeta = other.item.metadata as Record<string, unknown>;
+              if (otherMeta?.['cosmeticType'] === cosmeticType && other.id) {
+                await this.prisma.userInventory.update({
+                  where: { id: other.id },
+                  data: { equipped: false },
+                });
+              }
             }
+            await this.prisma.userInventory.create({
+              data: { userId, itemId: cosmeticItem.id, quantity: 1, equipped: true },
+            });
+            return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic: cosmeticItem.name };
           }
-          await this.prisma.userInventory.create({
-            data: { userId, itemId: cosmeticItem.id, quantity: 1, equipped: true },
+
+          // Already owned — fall back to credits
+          const fallbackCredits = Math.floor(Math.random() * 200) + 100;
+          await this.walletService.credit(userId, fallbackCredits, {
+            type: TransactionType.EARN_LOOT_BOX,
+            description: `Loot box reward: duplicate cosmetic converted to ${fallbackCredits} credits`,
           });
-          return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic: cosmeticItem.name };
+          return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: `You already own ${cosmeticItem.name}, converted to ${fallbackCredits} credits` };
         }
 
-        // Already owned — fall back to credits
+        // No matching cosmetic found — fall back to credits
         const fallbackCredits = Math.floor(Math.random() * 200) + 100;
         await this.walletService.credit(userId, fallbackCredits, {
           type: TransactionType.EARN_LOOT_BOX,
-          description: `Loot box reward: duplicate cosmetic converted to ${fallbackCredits} credits`,
+          description: `Loot box reward: ${fallbackCredits} credits (cosmetic not available)`,
         });
-        return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: `You already own ${cosmeticItem.name}, converted to ${fallbackCredits} credits` };
+        return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: 'Cosmetic not available, converted to credits' };
       }
 
-      // No matching cosmetic found — fall back to credits
-      const fallbackCredits = Math.floor(Math.random() * 200) + 100;
-      await this.walletService.credit(userId, fallbackCredits, {
-        type: TransactionType.EARN_LOOT_BOX,
-        description: `Loot box reward: ${fallbackCredits} credits (cosmetic not available)`,
-      });
-      return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: 'Cosmetic not available, converted to credits' };
+      return { applied: false, reason: 'Unknown reward type' };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`openLootBox failed for user ${userId}: ${errMsg}`, err);
+      return { applied: false, reason: `Loot box could not be opened: ${errMsg}` };
     }
-
-    return { applied: false, reason: 'Unknown reward type' };
   }
 
   // ─── Read active effects (used by other services) ──────────
