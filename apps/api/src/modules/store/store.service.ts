@@ -456,12 +456,20 @@ export class StoreService implements OnModuleInit {
         const multiplier = (meta['multiplier'] as number) ?? 2;
         const durationHours = (meta['durationHours'] as number) ?? 24;
         const ttlSeconds = durationHours * 3600;
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000);
+        const expiresAt = expiresAtDate.toISOString();
+        const metadata = { multiplier, expiresAt };
+
+        // Persist to DB (source of truth)
+        await this.prisma.userActiveEffect.create({
+          data: { userId, type: 'xp_boost', metadata, expiresAt: expiresAtDate },
+        });
+
+        // Update Redis cache (best-effort)
         try {
-          await this.redisService.setJson(`boost:xp:${userId}`, { multiplier, expiresAt }, ttlSeconds);
+          await this.redisService.setJson(`boost:xp:${userId}`, metadata, ttlSeconds);
         } catch (redisErr: unknown) {
-          this.logger.error(`Redis setJson failed for boost:xp:${userId}`, redisErr);
-          return { applied: false, reason: 'Could not activate XP Boost. Please try again.' };
+          this.logger.error(`Redis cache write failed for boost:xp:${userId}`, redisErr);
         }
         return { applied: true, type: 'xp_boost', multiplier, expiresAt };
       }
@@ -470,12 +478,20 @@ export class StoreService implements OnModuleInit {
         const bonusSlots = (meta['bonusSlots'] as number) ?? 5;
         const durationHours = (meta['durationHours'] as number) ?? 48;
         const ttlSeconds = durationHours * 3600;
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+        const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000);
+        const expiresAt = expiresAtDate.toISOString();
+        const metadata = { bonusSlots, expiresAt };
+
+        // Persist to DB (source of truth)
+        await this.prisma.userActiveEffect.create({
+          data: { userId, type: 'task_limit_boost', metadata, expiresAt: expiresAtDate },
+        });
+
+        // Update Redis cache (best-effort)
         try {
-          await this.redisService.setJson(`boost:task_limit:${userId}`, { bonusSlots, expiresAt }, ttlSeconds);
+          await this.redisService.setJson(`boost:task_limit:${userId}`, metadata, ttlSeconds);
         } catch (redisErr: unknown) {
-          this.logger.error(`Redis setJson failed for boost:task_limit:${userId}`, redisErr);
-          return { applied: false, reason: 'Could not activate Task Limit Boost. Please try again.' };
+          this.logger.error(`Redis cache write failed for boost:task_limit:${userId}`, redisErr);
         }
         return { applied: true, type: 'task_limit_boost', bonusSlots, expiresAt };
       }
@@ -483,17 +499,22 @@ export class StoreService implements OnModuleInit {
       case 'streak_freeze': {
         const protectedDays = (meta['protectedDays'] as number) ?? 3;
         const key = `boost:streak_freeze:${userId}`;
+
+        // Update DB (source of truth)
+        const updatedUser = await this.prisma.user.update({
+          where: { id: userId },
+          data: { streakFreezeCharges: { increment: protectedDays } },
+          select: { streakFreezeCharges: true },
+        });
+
+        // Update Redis cache (best-effort)
         try {
-          const current = await this.redisService.get(key);
-          const parsed = current ? parseInt(current, 10) : 0;
-          const currentCount = Number.isNaN(parsed) ? 0 : parsed;
-          const newCount = currentCount + protectedDays;
-          await this.redisService.set(key, String(newCount));
-          return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: newCount };
+          await this.redisService.set(key, String(updatedUser.streakFreezeCharges));
         } catch (redisErr: unknown) {
-          this.logger.error(`Redis operation failed for streak_freeze:${userId}`, redisErr);
-          return { applied: false, reason: 'Could not apply Streak Freeze. Please try again.' };
+          this.logger.error(`Redis cache write failed for ${key}`, redisErr);
         }
+
+        return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: updatedUser.streakFreezeCharges };
       }
 
       case 'task_refresh': {
@@ -600,8 +621,15 @@ export class StoreService implements OnModuleInit {
       if (rewardType === 'xp_boost') {
         const hours = (selected['hours'] as number) ?? 12;
         const ttlSeconds = hours * 3600;
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-        await this.redisService.setJson(`boost:xp:${userId}`, { multiplier: 2, expiresAt }, ttlSeconds);
+        const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000);
+        const expiresAt = expiresAtDate.toISOString();
+        const metadata = { multiplier: 2, expiresAt };
+        // Persist to DB (source of truth)
+        await this.prisma.userActiveEffect.create({
+          data: { userId, type: 'xp_boost', metadata, expiresAt: expiresAtDate },
+        });
+        // Update Redis cache (best-effort)
+        await this.redisService.setJson(`boost:xp:${userId}`, metadata, ttlSeconds).catch(() => null);
         return { applied: true, type: 'loot_box', reward: 'xp_boost', multiplier: 2, durationHours: hours };
       }
 
@@ -681,16 +709,90 @@ export class StoreService implements OnModuleInit {
   // ─── Read active effects (used by other services) ──────────
 
   async getActiveXpBoost(userId: string): Promise<{ multiplier: number; expiresAt: string } | null> {
-    return this.redisService.getJson<{ multiplier: number; expiresAt: string }>(`boost:xp:${userId}`);
+    const key = `boost:xp:${userId}`;
+
+    // 1. Try Redis cache first
+    const cached = await this.redisService.getJson<{ multiplier: number; expiresAt: string }>(key);
+    if (cached) {
+      const expiresAt = new Date(cached.expiresAt);
+      if (!Number.isNaN(expiresAt.getTime()) && expiresAt > new Date()) {
+        return cached;
+      }
+      await this.redisService.del(key);
+    }
+
+    // 2. Redis miss → query DB (source of truth)
+    const dbEffect = await this.prisma.userActiveEffect.findFirst({
+      where: { userId, type: 'xp_boost', expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    if (dbEffect) {
+      const meta = dbEffect.metadata as { multiplier: number; expiresAt: string };
+      const ttlSeconds = Math.max(0, Math.floor((new Date(meta.expiresAt).getTime() - Date.now()) / 1000));
+      if (ttlSeconds > 0) {
+        await this.redisService.setJson(key, meta, ttlSeconds).catch(() => null);
+      }
+      return meta;
+    }
+
+    return null;
   }
 
   async getActiveTaskLimitBoost(userId: string): Promise<{ bonusSlots: number; expiresAt: string } | null> {
-    return this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(`boost:task_limit:${userId}`);
+    const key = `boost:task_limit:${userId}`;
+
+    // 1. Try Redis cache first
+    const cached = await this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(key);
+    if (cached) {
+      const expiresAt = new Date(cached.expiresAt);
+      if (!Number.isNaN(expiresAt.getTime()) && expiresAt > new Date()) {
+        return cached;
+      }
+      await this.redisService.del(key);
+    }
+
+    // 2. Redis miss → query DB (source of truth)
+    const dbEffect = await this.prisma.userActiveEffect.findFirst({
+      where: { userId, type: 'task_limit_boost', expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    if (dbEffect) {
+      const meta = dbEffect.metadata as { bonusSlots: number; expiresAt: string };
+      const ttlSeconds = Math.max(0, Math.floor((new Date(meta.expiresAt).getTime() - Date.now()) / 1000));
+      if (ttlSeconds > 0) {
+        await this.redisService.setJson(key, meta, ttlSeconds).catch(() => null);
+      }
+      return meta;
+    }
+
+    return null;
   }
 
   async getStreakFreezeCharges(userId: string): Promise<number> {
-    const raw = await this.redisService.get(`boost:streak_freeze:${userId}`);
-    return raw ? parseInt(raw, 10) : 0;
+    const key = `boost:streak_freeze:${userId}`;
+
+    // 1. Try Redis cache first
+    const raw = await this.redisService.get(key);
+    if (raw !== null) {
+      const parsed = parseInt(raw, 10);
+      const charges = Number.isNaN(parsed) ? 0 : parsed;
+      return charges;
+    }
+
+    // 2. Redis miss → query DB (source of truth)
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { streakFreezeCharges: true },
+    });
+
+    const charges = user?.streakFreezeCharges ?? 0;
+
+    // Populate Redis cache
+    await this.redisService.set(key, String(charges)).catch(() => null);
+
+    return charges;
   }
 
   async getActiveEffects(userId: string): Promise<{

@@ -281,6 +281,7 @@ model User {
   // Streaks & activity
   currentStreak     Int       @default(0) @map("current_streak")
   longestStreak     Int       @default(0) @map("longest_streak")
+  streakFreezeCharges Int     @default(0) @map("streak_freeze_charges")
   lastActiveAt      DateTime? @map("last_active_at")
   lastDailyRewardAt DateTime? @map("last_daily_reward_at")
   lastClaimIp       String?   @map("last_claim_ip") @db.VarChar(45)
@@ -342,6 +343,7 @@ model User {
   createdChannels        Channel[]         @relation("ChannelCreator")
   storePurchases         StorePurchase[]
   inventory              UserInventory[]
+  activeEffects          UserActiveEffect[]
   wheelSpins             WheelSpin[]
   dailyRewardLogs        DailyRewardLog[]
 
@@ -1447,6 +1449,21 @@ model StorePurchase {
   @@index([itemId])
   @@index([transactionId])
   @@map("store_purchases")
+}
+
+model UserActiveEffect {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // 'xp_boost', 'task_limit_boost'
+  metadata  Json     // { multiplier: 2, expiresAt: "..." } or { bonusSlots: 5, expiresAt: "..." }
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([userId, type])
+  @@map("user_active_effects")
 }
 
 // =============================================================

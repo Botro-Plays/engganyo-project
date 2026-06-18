@@ -6,6 +6,7 @@ import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { StoreService } from '../store/store.service';
 
 // ─── Level formula (matches frontend utils.ts) ────────────────
 export const getLevelFromXp = (xp: number) => Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -84,6 +85,7 @@ export class GamificationService implements OnModuleInit {
     private readonly walletService: WalletService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
+    private readonly storeService: StoreService,
   ) {}
 
   async onModuleInit() {
@@ -137,8 +139,8 @@ export class GamificationService implements OnModuleInit {
     referenceId?: string,
     description?: string,
   ) {
-    // Apply active XP boost multiplier if present
-    const xpBoost = await this.redisService.getJson<{ multiplier: number; expiresAt: string }>(`boost:xp:${userId}`);
+    // Apply active XP boost multiplier if present (DB-backed with Redis cache)
+    const xpBoost = await this.storeService.getActiveXpBoost(userId);
     let boostedAmount = amount;
     if (xpBoost && xpBoost.multiplier > 1) {
       boostedAmount = Math.floor(amount * xpBoost.multiplier);
@@ -672,11 +674,19 @@ export class GamificationService implements OnModuleInit {
 
     // ── Streak freeze: if broken, try to consume a charge ─────
     if (streakBroken) {
-      const freezeCharges = await this.redisService.get('boost:streak_freeze:' + userId);
-      const parsed = freezeCharges ? parseInt(freezeCharges, 10) : 0;
-      const charges = Number.isNaN(parsed) ? 0 : parsed;
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { streakFreezeCharges: true },
+      });
+      const charges = dbUser?.streakFreezeCharges ?? 0;
       if (charges > 0) {
-        await this.redisService.set('boost:streak_freeze:' + userId, String(charges - 1));
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { streakFreezeCharges: { decrement: 1 } },
+        });
+        // Best-effort cache sync
+        const key = 'boost:streak_freeze:' + userId;
+        await this.redisService.set(key, String(charges - 1)).catch(() => null);
         streakBroken = false; // protect the streak
       }
     }
@@ -1130,15 +1140,26 @@ export class GamificationService implements OnModuleInit {
       result = { ...result, credits: prize.credits };
     } else if (prize.effect === 'xp_boost' && prize.hours) {
       const ttlSeconds = prize.hours * 3600;
-      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-      await this.redisService.setJson(`boost:xp:${userId}`, { multiplier: 2, expiresAt }, ttlSeconds);
+      const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000);
+      const expiresAt = expiresAtDate.toISOString();
+      const metadata = { multiplier: 2, expiresAt };
+      // Persist to DB (source of truth)
+      await this.prisma.userActiveEffect.create({
+        data: { userId, type: 'xp_boost', metadata, expiresAt: expiresAtDate },
+      });
+      // Update Redis cache (best-effort)
+      await this.redisService.setJson(`boost:xp:${userId}`, metadata, ttlSeconds).catch(() => null);
       result = { ...result, multiplier: 2, durationHours: prize.hours };
     } else if (prize.effect === 'streak_freeze') {
-      const ttlSeconds = 3 * 24 * 3600; // 3 days
-      const existing = await this.redisService.get(`boost:streak_freeze:${userId}`);
-      const charges = existing ? parseInt(existing, 10) : 0;
-      await this.redisService.set(`boost:streak_freeze:${userId}`, String(charges + 1), ttlSeconds);
-      result = { ...result, charges: charges + 1 };
+      // Update DB (source of truth)
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: { streakFreezeCharges: { increment: 1 } },
+        select: { streakFreezeCharges: true },
+      });
+      // Update Redis cache (best-effort)
+      await this.redisService.set(`boost:streak_freeze:${userId}`, String(updatedUser.streakFreezeCharges)).catch(() => null);
+      result = { ...result, charges: updatedUser.streakFreezeCharges };
     } else if (prize.effect === 'loot_box') {
       const lootBoxItem = await this.prisma.storeItem.findFirst({
         where: { name: 'Mystery Gift Box', isActive: true },

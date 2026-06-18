@@ -17,6 +17,7 @@ import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { StoreService } from '../store/store.service';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -60,6 +61,7 @@ export class TasksService {
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
     private readonly referralsService: ReferralsService,
+    private readonly storeService: StoreService,
   ) {}
 
   // ─── Browse available tasks ────────────────────────────────
@@ -152,8 +154,8 @@ export class TasksService {
           dailyLimit = dailyLimit + bonus;
         }
 
-        // Apply active store task-limit boost if present
-        const taskBoost = await this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(`boost:task_limit:${userId}`);
+        // Apply active store task-limit boost if present (DB-backed with Redis cache)
+        const taskBoost = await this.storeService.getActiveTaskLimitBoost(userId);
         const storeBonus = taskBoost?.bonusSlots ?? 0;
         if (storeBonus > 0) {
           dailyLimit = dailyLimit + storeBonus;
@@ -722,8 +724,8 @@ export class TasksService {
       }
     }
 
-    // Apply active store task-limit boost
-    const taskBoost = await this.redisService.getJson<{ bonusSlots: number; expiresAt: string }>(`boost:task_limit:${userId}`);
+    // Apply active store task-limit boost (DB-backed with Redis cache)
+    const taskBoost = await this.storeService.getActiveTaskLimitBoost(userId);
     const storeBonus = taskBoost?.bonusSlots ?? 0;
     if (storeBonus > 0 && dailyLimit !== undefined) {
       dailyLimit = dailyLimit + storeBonus;

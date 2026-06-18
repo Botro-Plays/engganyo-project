@@ -254,6 +254,25 @@ All Phase A-D items from `PROJECT_TODO.md` verified:
 **File:** `REALTIME_AUDIT.md`
 **Status:** ✅ FIXED in this session.
 
+### N9. Active effects (XP boost, task limit boost, streak freeze) stored only in Redis — lost on restart
+**Impact:** Critical. All active boosts and streak freeze charges evaporate when Redis is restarted or flushed during deployment. Users lose purchased effects permanently.
+**Root cause:** `applyEffect()` wrote exclusively to Redis. `getActiveEffects()` read exclusively from Redis. No database persistence.
+**Fix:**
+- Added `UserActiveEffect` table for time-limited boosts (xp_boost, task_limit_boost) with `expiresAt` and `metadata` JSON.
+- Added `streakFreezeCharges` column to `User` model for persistent charge counter.
+- All write paths now use DB-first + Redis-cache pattern:
+  - `applyEffect()` → writes DB first, then updates Redis
+  - `claimDailyReward()` → reads/consumes from DB, syncs Redis
+  - Wheel spin prizes → write DB first, then Redis
+  - Loot box xp_boost reward → write DB first, then Redis
+- All read paths now use Redis-first with DB fallback:
+  - `getActiveXpBoost()` → Redis → DB → populate Redis
+  - `getActiveTaskLimitBoost()` → Redis → DB → populate Redis
+  - `getStreakFreezeCharges()` → Redis → DB → populate Redis
+- `TasksService` and `GamificationService` no longer access Redis directly; they use `StoreService` methods.
+**Files:** `schema.prisma`, `store.service.ts`, `gamification.service.ts`, `tasks.service.ts`
+**Status:** ✅ FIXED in this session.
+
 ---
 
 ## Recommended Actions (Priority Order)
