@@ -1139,17 +1139,14 @@ export class GamificationService implements OnModuleInit {
       });
       result = { ...result, credits: prize.credits };
     } else if (prize.effect === 'xp_boost' && prize.hours) {
-      const ttlSeconds = prize.hours * 3600;
-      const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000);
-      const expiresAt = expiresAtDate.toISOString();
-      const metadata = { multiplier: 2, expiresAt };
-      // Persist to DB (source of truth)
-      await this.prisma.userActiveEffect.create({
-        data: { userId, type: 'xp_boost', metadata, expiresAt: expiresAtDate },
-      });
-      // Update Redis cache (best-effort)
-      await this.redisService.setJson(`boost:xp:${userId}`, metadata, ttlSeconds).catch(() => null);
-      result = { ...result, multiplier: 2, durationHours: prize.hours };
+      // Rewards stack duration onto existing active effect (game design: bonuses add up)
+      const { expiresAt, extended } = await this.storeService.extendOrCreateActiveEffect(
+        userId,
+        'xp_boost',
+        { multiplier: 2 },
+        prize.hours,
+      );
+      result = { ...result, multiplier: 2, durationHours: prize.hours, expiresAt, extended };
     } else if (prize.effect === 'streak_freeze') {
       // Update DB (source of truth)
       const updatedUser = await this.prisma.user.update({

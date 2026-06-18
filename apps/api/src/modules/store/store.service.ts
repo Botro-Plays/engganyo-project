@@ -621,17 +621,21 @@ export class StoreService implements OnModuleInit {
 
       if (rewardType === 'xp_boost') {
         const hours = (selected['hours'] as number) ?? 12;
-        const ttlSeconds = hours * 3600;
-        const expiresAtDate = new Date(Date.now() + ttlSeconds * 1000);
-        const expiresAt = expiresAtDate.toISOString();
-        const metadata = { multiplier: 2, expiresAt };
-        // Persist to DB (source of truth)
-        await this.prisma.userActiveEffect.create({
-          data: { userId, type: 'xp_boost', metadata, expiresAt: expiresAtDate },
-        });
-        // Update Redis cache (best-effort)
-        await this.redisService.setJson(`boost:xp:${userId}`, metadata, ttlSeconds).catch(() => null);
-        return { applied: true, type: 'loot_box', reward: 'xp_boost', multiplier: 2, durationHours: hours };
+        const { expiresAt, extended } = await this.extendOrCreateActiveEffect(
+          userId,
+          'xp_boost',
+          { multiplier: 2 },
+          hours,
+        );
+        return {
+          applied: true,
+          type: 'loot_box',
+          reward: 'xp_boost',
+          multiplier: 2,
+          durationHours: hours,
+          expiresAt,
+          extended,
+        };
       }
 
       if (rewardType === 'cosmetic') {
@@ -705,6 +709,64 @@ export class StoreService implements OnModuleInit {
       this.logger.error(`openLootBox failed for user ${userId}: ${errMsg}`, err);
       return { applied: false, reason: `Loot box could not be opened: ${errMsg}` };
     }
+  }
+
+  // ─── Extend or create active effect (for rewards/prizes) ───
+
+  async extendOrCreateActiveEffect(
+    userId: string,
+    type: 'xp_boost' | 'task_limit_boost',
+    metadata: Record<string, unknown>,
+    durationHours: number,
+  ): Promise<{ expiresAt: string; extended: boolean }> {
+    const durationMs = durationHours * 3600 * 1000;
+    const redisKey = type === 'xp_boost' ? `boost:xp:${userId}` : `boost:task_limit:${userId}`;
+
+    // 1. Check for existing active effect of the same type
+    const existing = await this.prisma.userActiveEffect.findFirst({
+      where: { userId, type, expiresAt: { gt: new Date() } },
+      orderBy: { expiresAt: 'desc' },
+    });
+
+    if (existing) {
+      // Stack duration: new expiry = existing expiry + reward duration
+      const newExpiresAt = new Date(existing.expiresAt.getTime() + durationMs);
+      const newMetadata = { ...metadata, expiresAt: newExpiresAt.toISOString() };
+
+      await this.prisma.userActiveEffect.update({
+        where: { id: existing.id },
+        data: { expiresAt: newExpiresAt, metadata: newMetadata },
+      });
+
+      // Update Redis cache with new TTL
+      const ttlSeconds = Math.ceil((newExpiresAt.getTime() - Date.now()) / 1000);
+      try {
+        await this.redisService.setJson(redisKey, newMetadata, ttlSeconds);
+      } catch (redisErr: unknown) {
+        this.logger.error(`Redis cache update failed for ${redisKey}`, redisErr);
+      }
+
+      return { expiresAt: newExpiresAt.toISOString(), extended: true };
+    }
+
+    // 2. No active effect — create a fresh one
+    const expiresAtDate = new Date(Date.now() + durationMs);
+    const expiresAt = expiresAtDate.toISOString();
+    const newMetadata = { ...metadata, expiresAt };
+
+    await this.prisma.userActiveEffect.create({
+      data: { userId, type, metadata: newMetadata, expiresAt: expiresAtDate },
+    });
+
+    // Update Redis cache
+    const ttlSeconds = Math.ceil(durationMs / 1000);
+    try {
+      await this.redisService.setJson(redisKey, newMetadata, ttlSeconds);
+    } catch (redisErr: unknown) {
+      this.logger.error(`Redis cache write failed for ${redisKey}`, redisErr);
+    }
+
+    return { expiresAt, extended: false };
   }
 
   // ─── Read active effects (used by other services) ──────────
@@ -817,8 +879,14 @@ export class StoreService implements OnModuleInit {
   }
 
   // ─── Cron: clean up expired active effects ─────────────────
-
-  @Cron(CronExpression.EVERY_HOUR)
+  //
+  // SAFETY: This cron is PURELY garbage collection. It does NOT control
+  // when a boost expires — the `expiresAt` timestamp does. All read
+  // queries already filter with `expiresAt > NOW()`, so an expired row
+  // is never returned to a user even if this cron hasn't run yet.
+  // We run every 5 minutes so expired rows don't linger long in the DB.
+  //
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async cleanupExpiredEffects(): Promise<void> {
     try {
       const { count } = await this.prisma.userActiveEffect.deleteMany({
