@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { StoreCategory, TransactionType, NotificationType, Prisma } from '@prisma/client';
 
@@ -85,6 +85,7 @@ export class StoreService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
