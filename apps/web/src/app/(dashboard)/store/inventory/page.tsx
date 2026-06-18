@@ -68,27 +68,32 @@ export default function InventoryPage() {
       );
       return res.data.data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const itemName = data?.itemName ?? 'Item';
       const effect = data?.effectResult;
       let message = `${itemName} activated!`;
 
-      if (effect?.reward === 'credits' && effect.amount) {
+      // Backend custom message takes priority (e.g. duplicate-cosmetic fallback)
+      if (effect?.message) {
+        message = effect.message;
+      } else if (effect?.reward === 'credits' && effect.amount) {
         message = `Mystery Gift Box opened! You won ${formatCredits(effect.amount)} credits!`;
       } else if (effect?.reward === 'xp_boost' && effect.durationHours) {
         message = `Mystery Gift Box opened! You won a ${effect.durationHours}h 2× XP Boost!`;
       } else if (effect?.reward === 'cosmetic' && effect.cosmetic) {
         message = `Mystery Gift Box opened! You won a rare cosmetic: ${effect.cosmetic}!`;
-      } else if (effect?.message) {
-        message = effect.message;
       }
 
       addToast(message, 'success');
-      void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
+      // Wait for the inventory to fully refetch before re-enabling the button.
+      // This prevents a race where the user double-clicks and the second
+      // mutation fires against an already-deleted item.
+      await queryClient.refetchQueries({ queryKey: ['store', 'inventory'] });
       setUsingId(null);
     },
-    onError: (err) => {
+    onError: async (err) => {
       addToast(getApiErrorMessage(err), 'error');
+      await queryClient.refetchQueries({ queryKey: ['store', 'inventory'] });
       setUsingId(null);
     },
   });

@@ -423,7 +423,14 @@ export class StoreService implements OnModuleInit {
       if (active) throw new BadRequestException('A Task Limit Boost is already active. Wait for it to expire before using another.');
     }
 
-    // Decrement quantity; DELETE the row when exhausted (no ghost rows)
+    // Apply effect FIRST — if it fails, the item is NOT consumed.
+    // This prevents the item from vanishing with no reward on Redis / wallet errors.
+    const effectResult = await this.applyEffect(userId, effectType, meta);
+    if (!effectResult.applied) {
+      throw new BadRequestException((effectResult.reason as string) ?? 'Effect could not be applied');
+    }
+
+    // Only consume the item after the effect is successfully applied
     const newQty = inventory.quantity - 1;
     if (newQty <= 0) {
       await this.prisma.userInventory.delete({ where: { id: inventoryId } });
@@ -433,9 +440,6 @@ export class StoreService implements OnModuleInit {
         data: { quantity: newQty },
       });
     }
-
-    // Apply effect via Redis
-    const effectResult = await this.applyEffect(userId, effectType, meta);
 
     return {
       inventoryId,
@@ -595,8 +599,67 @@ export class StoreService implements OnModuleInit {
 
     if (rewardType === 'cosmetic') {
       const pool = (selected['pool'] as string[]) ?? ['silver-frame'];
-      const cosmetic = pool[Math.floor(Math.random() * pool.length)];
-      return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic };
+      const cosmeticIdentifier = pool[Math.floor(Math.random() * pool.length)];
+
+      // Try to find a matching cosmetic store item (by name or metadata)
+      const allCosmetics = await this.prisma.storeItem.findMany({
+        where: { category: StoreCategory.COSMETIC, isActive: true },
+      });
+
+      const cosmeticItem = allCosmetics.find((c) => {
+        const cMeta = c.metadata as Record<string, unknown>;
+        const itemNameLower = c.name.toLowerCase();
+        const idLower = String(cosmeticIdentifier).toLowerCase();
+        return itemNameLower.includes(idLower)
+          || cMeta?.['style'] === cosmeticIdentifier
+          || cMeta?.['themeId'] === cosmeticIdentifier;
+      });
+
+      if (cosmeticItem) {
+        // Check if user already owns it
+        const existing = await this.prisma.userInventory.findFirst({
+          where: { userId, itemId: cosmeticItem.id },
+        });
+
+        if (!existing) {
+          // Add to inventory and auto-equip (mirrors purchase behaviour)
+          const otherEquipped = await this.prisma.userInventory.findMany({
+            where: { userId, equipped: true },
+            include: { item: { select: { metadata: true } } },
+          });
+          const cMeta = cosmeticItem.metadata as Record<string, unknown>;
+          const cosmeticType = cMeta?.['cosmeticType'] as string | undefined;
+          for (const other of otherEquipped) {
+            const otherMeta = other.item.metadata as Record<string, unknown>;
+            if (otherMeta?.['cosmeticType'] === cosmeticType && other.id) {
+              await this.prisma.userInventory.update({
+                where: { id: other.id },
+                data: { equipped: false },
+              });
+            }
+          }
+          await this.prisma.userInventory.create({
+            data: { userId, itemId: cosmeticItem.id, quantity: 1, equipped: true },
+          });
+          return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic: cosmeticItem.name };
+        }
+
+        // Already owned — fall back to credits
+        const fallbackCredits = Math.floor(Math.random() * 200) + 100;
+        await this.walletService.credit(userId, fallbackCredits, {
+          type: TransactionType.EARN_LOOT_BOX,
+          description: `Loot box reward: duplicate cosmetic converted to ${fallbackCredits} credits`,
+        });
+        return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: `You already own ${cosmeticItem.name}, converted to ${fallbackCredits} credits` };
+      }
+
+      // No matching cosmetic found — fall back to credits
+      const fallbackCredits = Math.floor(Math.random() * 200) + 100;
+      await this.walletService.credit(userId, fallbackCredits, {
+        type: TransactionType.EARN_LOOT_BOX,
+        description: `Loot box reward: ${fallbackCredits} credits (cosmetic not available)`,
+      });
+      return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: 'Cosmetic not available, converted to credits' };
     }
 
     return { applied: false, reason: 'Unknown reward type' };
