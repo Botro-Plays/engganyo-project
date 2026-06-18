@@ -9,7 +9,6 @@ import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useToast } from '@/components/toast-provider';
 import { formatCredits } from '@/lib/utils';
 import { useActiveEffects } from '@/hooks/use-active-effects';
-import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -148,8 +147,6 @@ export default function InventoryPage() {
           <p className="text-sm text-zinc-400 mt-1">Items you have purchased.</p>
         </div>
       </div>
-
-      <ActiveEffectsBanner />
 
       {/* Inventory grid */}
       {isLoading ? (

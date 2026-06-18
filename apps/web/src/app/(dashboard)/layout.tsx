@@ -26,6 +26,7 @@ import { AuthGuard } from '@/components/auth-guard';
 import { AuthenticatedProviders } from '@/app/providers';
 import { NotificationBell } from '@/components/notification-bell';
 import { SearchBar } from '@/components/search-bar';
+import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
@@ -239,6 +240,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               : 'Your account is suspended. You can still browse but cannot complete tasks or create campaigns.'}
           </div>
         )}
+
+        {/* Active boosts banner — shown on all user pages */}
+        <div className="px-4 sm:px-6 pt-4">
+          <ActiveEffectsBanner />
+        </div>
 
         {/* Page content — extra bottom padding on mobile for the bottom nav */}
         <main className="flex-1 overflow-auto scrollbar-thin p-4 sm:p-6 pb-20 md:pb-6">
