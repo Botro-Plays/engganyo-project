@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
-import { useSocketEvent } from '@/hooks/use-socket';
 import { useToast } from '@/components/toast-provider';
 import type { ApiResponse } from '@/types';
 
@@ -84,14 +83,6 @@ export default function StorePage() {
     },
     enabled: !!user,
   });
-
-  // Real-time purchase confirmation
-  useSocketEvent<{ itemName: string; quantity: number; totalCost: number }>(
-    'store:purchased',
-    ({ itemName, totalCost }) => {
-      addToast(`Purchased ${itemName} for ${totalCost} credits`, 'success');
-    },
-  );
 
   const purchaseMutation = useMutation({
     mutationFn: async ({ itemId, quantity }: { itemId: string; quantity: number }) => {
