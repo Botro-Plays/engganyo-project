@@ -46,4 +46,11 @@ export class StoreController {
   async equipCosmetic(@CurrentUser() user: JwtPayload, @Param('id') inventoryId: string) {
     return this.storeService.equipCosmetic(user.sub, inventoryId);
   }
+
+  @Get('active-effects')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getActiveEffects(@CurrentUser() user: JwtPayload) {
+    return this.storeService.getActiveEffects(user.sub);
+  }
 }

@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, ArrowLeft, Zap, Sparkles, Wrench, Loader2, ShieldCheck } from 'lucide-react';
+import { Package, ArrowLeft, Zap, Sparkles, Wrench, Loader2, ShieldCheck, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useToast } from '@/components/toast-provider';
 import { formatCredits } from '@/lib/utils';
+import { useActiveEffects } from '@/hooks/use-active-effects';
+import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import type { ApiResponse } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ export default function InventoryPage() {
       // This prevents a race where the user double-clicks and the second
       // mutation fires against an already-deleted item.
       await queryClient.refetchQueries({ queryKey: ['store', 'inventory'] });
+      void queryClient.invalidateQueries({ queryKey: ['store', 'active-effects'] });
       setUsingId(null);
     },
     onError: async (err) => {
@@ -118,6 +121,8 @@ export default function InventoryPage() {
     },
   });
 
+  const { data: activeEffects } = useActiveEffects();
+
   const { data: inventoryData, isLoading } = useQuery({
     queryKey: ['store', 'inventory'],
     queryFn: async () => {
@@ -144,6 +149,8 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      <ActiveEffectsBanner />
+
       {/* Inventory grid */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-zinc-500">
@@ -163,6 +170,27 @@ export default function InventoryPage() {
             const Icon = CATEGORY_ICONS[entry.item.category] ?? Package;
             const colorClass = CATEGORY_COLORS[entry.item.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
             const isCosmetic = !entry.item.isConsumable;
+
+            // Derive the item's effect type (mirrors backend logic in useItem)
+            const nameLower = entry.item.name.toLowerCase();
+            let itemEffectType: string | null = null;
+            if (!isCosmetic) {
+              if (nameLower.includes('xp boost')) itemEffectType = 'xp_boost';
+              else if (nameLower.includes('task limit')) itemEffectType = 'task_limit_boost';
+              else if (nameLower.includes('streak freeze')) itemEffectType = 'streak_freeze';
+              else if (nameLower.includes('task refresh')) itemEffectType = 'task_refresh';
+              else if (nameLower.includes('mystery') || entry.item.metadata?.isLootBox === true) itemEffectType = 'loot_box';
+            }
+
+            const isBlocked =
+              itemEffectType === 'xp_boost' && !!activeEffects?.xpBoost ||
+              itemEffectType === 'task_limit_boost' && !!activeEffects?.taskLimitBoost;
+            const blockLabel =
+              itemEffectType === 'xp_boost' && activeEffects?.xpBoost
+                ? 'XP Boost already active'
+                : itemEffectType === 'task_limit_boost' && activeEffects?.taskLimitBoost
+                  ? 'Task Limit Boost already active'
+                  : null;
 
             return (
               <div
@@ -223,21 +251,29 @@ export default function InventoryPage() {
                     </button>
                   ) : (
                     entry.quantity > 0 && (
-                      <button
-                        disabled={usingId === entry.id || useMutation_.isPending}
-                        onClick={() => {
-                          setUsingId(entry.id);
-                          useMutation_.mutate(entry.id);
-                        }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
-                      >
-                        {usingId === entry.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Zap className="w-3 h-3" />
+                      <div className="flex items-center gap-2">
+                        {isBlocked && blockLabel && (
+                          <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                            <Clock className="w-3 h-3" />
+                            {blockLabel}
+                          </span>
                         )}
-                        {entry.item.metadata?.isLootBox ? 'Open' : 'Use'}
-                      </button>
+                        <button
+                          disabled={usingId === entry.id || useMutation_.isPending || isBlocked}
+                          onClick={() => {
+                            setUsingId(entry.id);
+                            useMutation_.mutate(entry.id);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                        >
+                          {usingId === entry.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Zap className="w-3 h-3" />
+                          )}
+                          {entry.item.metadata?.isLootBox ? 'Open' : 'Use'}
+                        </button>
+                      </div>
                     )
                   )}
                 </div>

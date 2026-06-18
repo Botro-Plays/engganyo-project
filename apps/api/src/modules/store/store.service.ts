@@ -707,6 +707,19 @@ export class StoreService implements OnModuleInit {
     return raw ? parseInt(raw, 10) : 0;
   }
 
+  async getActiveEffects(userId: string): Promise<{
+    xpBoost: { multiplier: number; expiresAt: string } | null;
+    taskLimitBoost: { bonusSlots: number; expiresAt: string } | null;
+    streakFreezeCharges: number;
+  }> {
+    const [xpBoost, taskLimitBoost, streakFreezeCharges] = await Promise.all([
+      this.getActiveXpBoost(userId),
+      this.getActiveTaskLimitBoost(userId),
+      this.getStreakFreezeCharges(userId),
+    ]);
+    return { xpBoost, taskLimitBoost, streakFreezeCharges };
+  }
+
   async consumeStreakFreezeCharge(userId: string): Promise<boolean> {
     const charges = await this.getStreakFreezeCharges(userId);
     if (charges <= 0) return false;

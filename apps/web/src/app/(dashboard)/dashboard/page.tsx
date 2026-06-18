@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package, Users, Link2, ChevronRight, Crown, Globe, TrendingUp } from 'lucide-react';
 import { SpinWheelModal } from '@/components/spin-wheel-modal';
+import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -270,6 +271,8 @@ function DashboardPageInner() {
           </p>
         )}
       </div>
+
+      <ActiveEffectsBanner />
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
