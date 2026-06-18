@@ -63,15 +63,6 @@ const DEFAULT_STORE_ITEMS: Array<{
     metadata: { convenienceType: 'streak_freeze', protectedDays: 3, effectType: 'streak_freeze' },
   },
   {
-    name: 'Instant Task Refresh',
-    description: 'Immediately refresh your daily task assignments (once per day).',
-    category: StoreCategory.CONVENIENCE,
-    creditCost: 75,
-    isConsumable: true,
-    maxOwnedPerUser: 1,
-    metadata: { convenienceType: 'task_refresh', cooldownHours: 24, effectType: 'task_refresh' },
-  },
-  {
     name: 'Mystery Gift Box',
     description: 'Contains a random reward: 50–500 credits, XP boost, or cosmetic.',
     category: StoreCategory.CONVENIENCE,
@@ -230,7 +221,11 @@ export class StoreService implements OnModuleInit {
 
     // ── Step 1: Re-check limited qty (pre-debit, best effort) ──
     if (item.isLimited && item.limitedQty !== null) {
-      const soldCount = await this.prisma.storePurchase.count({ where: { itemId } });
+      const soldAgg = await this.prisma.storePurchase.aggregate({
+        where: { itemId },
+        _sum: { quantity: true },
+      });
+      const soldCount = soldAgg._sum.quantity ?? 0;
       const remaining = item.limitedQty - soldCount;
       if (remaining <= 0) throw new BadRequestException('Item is sold out');
       if (quantity > remaining) throw new BadRequestException(`Only ${remaining} remaining`);
@@ -254,7 +249,11 @@ export class StoreService implements OnModuleInit {
         // SELECT ... FOR UPDATE serializes concurrent purchases of the same item.
         if (item.isLimited && item.limitedQty !== null) {
           await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${itemId} FOR UPDATE`;
-          const soldCount = await tx.storePurchase.count({ where: { itemId } });
+          const soldAgg = await tx.storePurchase.aggregate({
+            where: { itemId },
+            _sum: { quantity: true },
+          });
+          const soldCount = soldAgg._sum.quantity ?? 0;
           if (item.limitedQty - soldCount < quantity) {
             throw new BadRequestException('Item just sold out');
           }
@@ -374,19 +373,6 @@ export class StoreService implements OnModuleInit {
     return inventory;
   }
 
-  // ─── Get equipped cosmetics for a user ─────────────────────
-
-  async getEquippedCosmetics(userId: string) {
-    return this.prisma.userInventory.findMany({
-      where: { userId, equipped: true },
-      include: {
-        item: {
-          select: { id: true, name: true, category: true, metadata: true },
-        },
-      },
-    });
-  }
-
   // ─── Use an inventory item ─────────────────────────────────
 
   async useItem(userId: string, inventoryId: string) {
@@ -499,7 +485,8 @@ export class StoreService implements OnModuleInit {
         const key = `boost:streak_freeze:${userId}`;
         try {
           const current = await this.redisService.get(key);
-          const currentCount = current ? parseInt(current, 10) : 0;
+          const parsed = current ? parseInt(current, 10) : 0;
+          const currentCount = Number.isNaN(parsed) ? 0 : parsed;
           const newCount = currentCount + protectedDays;
           await this.redisService.set(key, String(newCount));
           return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: newCount };
@@ -510,8 +497,7 @@ export class StoreService implements OnModuleInit {
       }
 
       case 'task_refresh': {
-        // No persistent Redis state — immediate effect handled by caller
-        return { applied: true, type: 'task_refresh', message: 'Daily task assignments refreshed' };
+        return { applied: false, reason: 'Task refresh is not yet implemented.' };
       }
 
       case 'cosmetic': {
@@ -712,18 +698,19 @@ export class StoreService implements OnModuleInit {
     taskLimitBoost: { bonusSlots: number; expiresAt: string } | null;
     streakFreezeCharges: number;
   }> {
-    const [xpBoost, taskLimitBoost, streakFreezeCharges] = await Promise.all([
-      this.getActiveXpBoost(userId),
-      this.getActiveTaskLimitBoost(userId),
-      this.getStreakFreezeCharges(userId),
-    ]);
-    return { xpBoost, taskLimitBoost, streakFreezeCharges };
+    try {
+      const [xpBoost, taskLimitBoost, streakFreezeCharges] = await Promise.all([
+        this.getActiveXpBoost(userId),
+        this.getActiveTaskLimitBoost(userId),
+        this.getStreakFreezeCharges(userId),
+      ]);
+      return { xpBoost, taskLimitBoost, streakFreezeCharges };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`getActiveEffects Redis error for user ${userId}: ${message}`);
+      // Graceful degradation: banner simply won't show boosts during Redis outage
+      return { xpBoost: null, taskLimitBoost: null, streakFreezeCharges: 0 };
+    }
   }
 
-  async consumeStreakFreezeCharge(userId: string): Promise<boolean> {
-    const charges = await this.getStreakFreezeCharges(userId);
-    if (charges <= 0) return false;
-    await this.redisService.set(`boost:streak_freeze:${userId}`, String(charges - 1));
-    return true;
-  }
 }

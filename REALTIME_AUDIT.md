@@ -12,72 +12,52 @@
 | `task:reviewed` | TasksService, CampaignsService | tasks/page.tsx |
 | `campaign:updated` | CampaignsService | admin/layout.tsx (admins) |
 | `notification:*` | NotificationsService | dashboard, notifications, bell |
-| `deposit:confirmed` | WalletService | wallet/page.tsx |
-| `deposit:cancelled` | WalletService | wallet/page.tsx |
-| `withdrawal:*` | WalletService | wallet/page.tsx |
-| `store:purchase` | StoreService | store/page.tsx |
-| `xp:level_up` | GamificationService | dashboard/page.tsx |
-| `vp:tier_changed` | GamificationService | dashboard/page.tsx |
+| `deposit:updated` | WalletService | wallet/page.tsx |
+| `wallet:updated` | WalletService | layout.tsx |
+| `store:purchased` | StoreService | *(emitted but no listener)* |
+| `level:up` | GamificationService | leaderboard/page.tsx |
+| `vip:tier-up` | GamificationService | *(emitted but no listener)* |
+| `achievement:unlocked` | GamificationService | leaderboard/page.tsx |
 | `forum:*` | ForumService | forum pages |
-| `leaderboard:updated` | GamificationService | leaderboard/page.tsx |
+
+> **Note:** `deposit:updated` carries a `status` payload (`COMPLETED`, `CANCELLED`, `FAILED`). There is no `withdrawal:*` system in the codebase.
 
 ---
 
 ## Pending Fixes
 
+> **Audit update 2026-06-18:** Items 1–7 and 9 were verified as already implemented in the codebase. Only item #8 remains to be manually verified.
+
 ### 1. Tasks — Submit proof → browse list still shows task as accepted
-- **Issue**: After submitting proof, the "My Tasks" tab doesn't update until manual refresh
-- **Root cause**: `submitMutation.onSuccess` invalidates `['tasks']` but "My Tasks" query is `['tasks', 'my', page]`
-- **Fix**: Change to `queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' })`
-- **File**: `apps/web/src/app/(dashboard)/tasks/page.tsx`
+- **Status:** ✅ DONE — `submitMutation.onSuccess` invalidates `['tasks'], type: 'all'` (`tasks/page.tsx:379`)
 
 ### 2. Tasks — Task reviewed (approve/reject) → my tasks don't update
-- **Issue**: When admin/creator reviews a task, the assignee's "My Tasks" tab doesn't reflect the new status
-- **Root cause**: Socket event `task:reviewed` is emitted but the "My Tasks" query has `enabled: tab === 'mine'` so it won't refetch while on browse tab
-- **Fix**: Either always keep the query active (use `refetchInterval`) or ensure `onSuccess` of task review mutations invalidate properly
-- **Files**: `apps/web/src/app/(dashboard)/tasks/page.tsx`, backend `tasks.service.ts`, `campaigns.service.ts`
+- **Status:** ✅ DONE — `useSocketEvent('task:reviewed')` invalidates `['tasks'], type: 'all'` (`tasks/page.tsx:164`)
 
 ### 3. Campaigns — Creator's campaign list doesn't auto-update
-- **Issue**: After creating/editing/cancelling a campaign, the creator's `/campaigns` page still shows stale data
-- **Root cause**: Mutations invalidate `['discover']` and `['tasks']` but not `['campaigns', 'mine']`
-- **Fix**: Add `queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' })` to all campaign mutations
-- **File**: `apps/web/src/app/(dashboard)/campaigns/page.tsx`
+- **Status:** ✅ DONE — `useSocketEvent('campaign:updated')` invalidates `['campaigns'], type: 'all'` (`campaigns/page.tsx:163`)
 
 ### 4. Wallet — Credit balance in nav doesn't update after earning/spending
-- **Issue**: After task approval or store purchase, the nav credit balance stays stale
-- **Root cause**: `auth/me` is not re-fetched; only `['wallet']` is invalidated
-- **Fix**: Add `apiClient.get('auth/me')` refresh or add dedicated credit balance socket event + listener in layout
-- **Files**: `apps/web/src/components/navbar.tsx`, `apps/web/src/app/(dashboard)/layout.tsx`
+- **Status:** ✅ DONE — `layout.tsx:95` listens to `wallet:updated`; campaigns/tasks pages also manually refresh `auth/me`
 
 ### 5. Notifications — Bell badge doesn't update on new notification
-- **Issue**: Notification bell count doesn't increment when a new notification arrives via socket
-- **Root cause**: Socket event may be emitted but bell component only refetches on mount/interval, not on event
-- **Fix**: Ensure `notification:created` socket event invalidates `['notifications', 'unread']` query
-- **Files**: `apps/web/src/components/notification-bell.tsx`
+- **Status:** ✅ DONE — `notification-bell.tsx:116` listens to `notification:new`, `deleted`, `read`, `all-read`
 
 ### 6. Leaderboard — Rank changes don't reflect in real-time
-- **Issue**: After earning XP, leaderboard position doesn't update without refresh
-- **Root cause**: `leaderboard:updated` socket event may not be connected to the leaderboard page
-- **Fix**: Add `useSocketEvent('leaderboard:updated', ...)` to leaderboard page
-- **File**: `apps/web/src/app/(dashboard)/leaderboard/page.tsx`
+- **Status:** ✅ DONE — `leaderboard/page.tsx:109` listens to `level:up` and `achievement:unlocked`
 
 ### 7. Store — Purchase doesn't remove item from grid (if limited)
-- **Issue**: After buying a limited item, the store still shows it as available
-- **Root cause**: Store `getItems` has a 60s `refetchInterval` and purchase mutation only invalidates `['store', 'items']`
-- **Fix**: Add optimistic update or correct invalidation with `type: 'all'`
-- **File**: `apps/web/src/app/(dashboard)/store/page.tsx`
+- **Status:** ✅ DONE — `store/page.tsx:97` invalidates `['store'], type: 'all'` on purchase success
 
 ### 8. Admin — Proof Review doesn't update after admin action
-- **Issue**: After admin approves/rejects a submission in Proof Review, the row stays visible
+- **Status:** 🟠 STILL PENDING — Needs manual verification in `/admin/campaigns`
+- **Issue**: After admin approves/rejects a submission in Proof Review, the row may stay visible
 - **Root cause**: `reviewSubmissionMutation.onSuccess` only invalidates `['admin', 'submissions']` but no optimistic removal
 - **Fix**: Add optimistic removal in `onMutate` similar to task assignment fix
 - **File**: `apps/web/src/app/(admin)/admin/campaigns/page.tsx`
 
 ### 9. Forum — New replies don't appear without refresh
-- **Issue**: When someone replies to a forum thread, the thread page doesn't show the new reply
-- **Root cause**: Forum socket events may not be connected to the thread page
-- **Fix**: Audit `forum.service.ts` emitted events and add corresponding `useSocketEvent` listeners
-- **Files**: `apps/web/src/app/(dashboard)/forum/[id]/page.tsx`, `forum/page.tsx`
+- **Status:** ✅ DONE — `forum/[id]/page.tsx:90` listens to `reply:new`, `topic:updated`, `topic:deleted`
 
 ---
 

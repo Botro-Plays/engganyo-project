@@ -112,6 +112,10 @@ export default function LeaderboardPage() {
   useSocketEvent('achievement:unlocked', () => {
     void queryClient.invalidateQueries({ queryKey: ['gamification', 'leaderboard', 'achievements'] });
   });
+  useSocketEvent('vip:tier-up', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'leaderboard'] });
+    void queryClient.invalidateQueries({ queryKey: ['gamification', 'leaderboard', 'vip'] });
+  });
 
   const [mainTab, setMainTab] = useState<MainTab>('level');
   const [timeTab, setTimeTab] = useState<TimeTab>('alltime');

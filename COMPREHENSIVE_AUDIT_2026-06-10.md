@@ -1,3 +1,5 @@
+> **⚠️ NOTE:** A newer comprehensive audit exists: **`COMPREHENSIVE_AUDIT_2026-06-18.md`**. This file is retained for historical reference.
+
 # ENGGANYO — Comprehensive System Audit
 **Date:** 2026-06-10  
 **Auditor:** Cascade  

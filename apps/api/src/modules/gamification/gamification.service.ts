@@ -673,7 +673,8 @@ export class GamificationService implements OnModuleInit {
     // ── Streak freeze: if broken, try to consume a charge ─────
     if (streakBroken) {
       const freezeCharges = await this.redisService.get('boost:streak_freeze:' + userId);
-      const charges = freezeCharges ? parseInt(freezeCharges, 10) : 0;
+      const parsed = freezeCharges ? parseInt(freezeCharges, 10) : 0;
+      const charges = Number.isNaN(parsed) ? 0 : parsed;
       if (charges > 0) {
         await this.redisService.set('boost:streak_freeze:' + userId, String(charges - 1));
         streakBroken = false; // protect the streak

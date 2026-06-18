@@ -91,6 +91,11 @@ function DashboardPageInner() {
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
   });
+  useSocketEvent('vip:tier-up', () => {
+    void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+  });
 
   const { data: stats } = useQuery<MyStats>({
     queryKey: ['my-stats'],

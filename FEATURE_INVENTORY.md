@@ -1,6 +1,6 @@
 # Engganyo Feature Inventory
 
-> **Last Updated:** 2026-06-15  
+> **Last Updated:** 2026-06-18 (store system added)  
 > **Purpose:** A single, visual guide to everything Engganyo can do — and what’s coming next. Built for admins, QA testers, and non-technical team members.  
 > **How to use this:** Pick a section, follow the **Test Steps** to verify it works, and check the **Status** column to see if it’s live or planned.
 
@@ -92,6 +92,26 @@
 | **Leaderboards** | XP (weekly/all-time), achievements, missions, VIP. | 1. `/leaderboard` → switch tabs  <br>2. Verify rank, trophy icons, self-highlight |
 | **VIP Tiers** | 6 tiers (Bronze→Legend). Earn VP from tasks, deposits, streaks. | 1. `/profile` → check VIP badge  <br>2. Complete tasks → VP increases  <br>3. Tier upgrades automatically |
 | **VIP Perks** | More tasks/day, fee discounts, priority review, chat badges, tipping. | 1. Bronze user: 10 tasks/day  <br>2. Silver user: 5% fee discount  <br>3. Gold+: create private chat channels |
+
+---
+
+## 5.5. Store & Inventory ✅
+
+| Feature | What It Does | Test Steps |
+|---------|--------------|------------|
+| **Browse Store** | Browse items by category (Boosts, Cosmetics, Convenience, Loot Boxes). | 1. `/store` → verify item grid  <br>2. Switch category tabs  <br>3. Check affordability indicator |
+| **Purchase Items** | Buy with credits. Optimistic-lock wallet debit. Atomic inventory creation. | 1. Click "Buy" on an item  <br>2. Confirm → credits deducted  <br>3. Item appears in `/store/inventory` |
+| **Inventory Management** | View owned items, use consumables, equip cosmetics. | 1. `/store/inventory` → see owned items  <br>2. Click "Use" on XP Boost → active banner appears  <br>3. Click "Equip" on cosmetic → profile updates |
+| **XP Boost** | 2× XP multiplier for 24h. Activates via inventory use. | 1. Use XP Boost → banner shows countdown  <br>2. Complete a task → verify doubled XP  <br>3. Try using another XP Boost while active → blocked |
+| **Task Limit Boost** | +5 extra task slots for 48h. Activates via inventory use. | 1. Use Task Limit Boost → banner shows countdown  <br>2. Check `/tasks` → daily limit increased  <br>3. Try using another while active → blocked |
+| **Streak Freeze** | Protects streak for up to 3 missed days. Consumed automatically. | 1. Use Streak Freeze → charges stored  <br>2. Miss a day → streak protected  <br>3. Check banner shows remaining charges |
+| **Cosmetics** | Avatar frames and profile themes. Equip/unequip. Deduplication guard. | 1. Buy "Gold Frame" → equip  <br>2. Profile shows frame  <br>3. Try buying again → "Already owned" |
+| **Mystery Gift Box** | Loot box with random rewards (credits, XP boost, cosmetic). | 1. Buy/use Mystery Box → animation plays  <br>2. Reward added to inventory or wallet  <br>3. Duplicate cosmetic auto-converts to credits |
+| **Spin the Wheel** | Daily credit-cost wheel spin. Weighted prizes. | 1. `/dashboard` → Spin the Wheel  <br>2. Pay credits → spin animation  <br>3. Prize awarded (credits, boost, streak freeze, loot box) |
+| **Active Effects Banner** | Global banner on all user pages showing active boosts with live countdown. | 1. Activate any boost → banner appears  <br>2. Navigate to `/tasks`, `/campaigns` → banner persists  <br>3. Wait for expiry → banner disappears automatically |
+| **Admin Store CRUD** | Create/edit/toggle store items with metadata JSON. | 1. `/admin/store` → add new item  <br>2. Set effect type, cost, limited qty  <br>3. Verify appears in `/store` |
+| **Admin Grant Items** | Give items to users without credit cost. | 1. `/admin/store` → Grant Item  <br>2. Select user + item + qty  <br>3. Verify appears in their inventory |
+| **Store Analytics** | Purchase counts, revenue, top items. | 1. `/admin/store` → Analytics tab  <br>2. Verify stat cards and daily trends |
 
 ---
 
@@ -256,15 +276,16 @@
 | PWA (installable app) | Mobile retention | TBD |
 | Push notifications | Re-engage users for streaks/tasks | TBD |
 
-## Phase 13 — Gamification 2.0 (Store & Events) ⏳
+## Phase 13 — Gamification 2.0 (Store & Events) 🟠
 
 > Detailed in `GAMIFICATION_PLAN.md`
 
 | Feature | Why It Matters | ETA |
 |---------|----------------|-----|
-| **In-App Store** | Credit sink — prevents inflation | TBD |
-| **Loot Boxes** | Engagement + collection psychology | TBD |
-| **Spin the Wheel** | Daily retention hook | TBD |
+| **In-App Store** | Credit sink — prevents inflation | ✅ DONE 2026-06-16 |
+| **Loot Boxes** | Engagement + collection psychology | ✅ DONE 2026-06-16 |
+| **Spin the Wheel** | Daily retention hook | ✅ DONE 2026-06-16 |
+| **Active Effects Banner** | Global visibility of active boosts + countdown | ✅ DONE 2026-06-18 |
 | **Guilds / Crews** | Social competition, team missions | TBD |
 | **Competitions & Events** | Weekly sprints, creator challenges, double XP | TBD |
 | **Referral System 2.0** | Growth + rewards for invites | TBD |

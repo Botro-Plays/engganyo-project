@@ -121,15 +121,20 @@ npm test --workspace=apps/api -- --coverage
 | `/profile` | User profile & trust score | Auth |
 | `/settings` | Account settings | Auth |
 | `/discover` | Discover campaigns | Auth |
+| `/store` | Browse store items | Auth |
+| `/store/inventory` | Manage owned items & active boosts | Auth |
+| `/chat` | Real-time chat rooms | Auth |
 | `/admin` | Admin overview stats | Admin+ |
 | `/admin/users` | User management + role assignment | Admin+ |
+| `/admin/store` | Store item CRUD + analytics | Admin+ |
+| `/admin/chat-moderation` | Chat moderation dashboard | Admin+ |
+| `/admin/finances` | Deposit management + package CRUD | Admin+ |
 | `/admin/campaigns` | Campaign moderation queue | Admin+ |
 | `/admin/reports` | Report resolution queue | Admin+ |
 | `/admin/audit-log` | Full audit trail | Admin+ |
 | `/admin/analytics` | Platform-wide analytics dashboard | Admin+ |
 | `/admin/revenue` | Platform earnings (campaign fees + daily breakdown) | Admin+ |
 | `/admin/server-config` | Platform config toggles (fees, reCAPTCHA, leaderboard, crypto) | Admin+ |
-| `/admin/finances` | Deposit management + package CRUD | Admin+ |
 | `/admin/communications` | Announcement emails + weekly digest triggers | Admin+ |
 | `/forum` | Community forum (topics, replies, reactions) | Auth |
 | `/forum/[id]` | Topic detail with threaded replies | Auth |

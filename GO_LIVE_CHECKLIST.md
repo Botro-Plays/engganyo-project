@@ -103,8 +103,8 @@ After revenue is flowing, improve scale and trust.
 ### Week 8 — Performance
 - [x] Move trust score recalculation to BullMQ queue — **✅ DONE 2026-06-10** (`trust-score` BullMQ queue + `TrustScoreProcessor` + 1h Redis cache)
 - [x] Move analytics snapshot to BullMQ queue — **✅ DONE 2026-06-10** (`analytics` BullMQ queue + `AnalyticsProcessor`)
-- [ ] Redis caching: user profiles (1h) — campaign/leaderboard/trust score caching already done; user profiles pending
-- **Status: ✅ MOSTLY DONE** — BullMQ migration complete; full profile caching is the remaining item
+- [x] Redis caching: user profiles (1h) — **✅ DONE 2026-06-17** (`jwt:user:*` 5m, `auth:me:*` 1h, `user:profile:*` 1h with `invalidateUserCaches()` helper)
+- **Status: ✅ DONE** — BullMQ migration complete; profile caching implemented
 
 ### Week 9 — Trust Gates
 - [x] New users (0–20 trust): 5 tasks/day, no campaigns — **✅ DONE 2026-06-10**

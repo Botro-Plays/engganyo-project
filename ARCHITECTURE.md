@@ -215,7 +215,6 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 
 **Security Gaps (See COMPREHENSIVE_AUDIT_2026-06-10.md for current status)**:
 - Anti-abuse IP tracking broken: `UserSession.ipAddress` never populated; `@Ip()` decorator returns proxy IP instead of real client IP
-- Mobile responsiveness pass incomplete
 - OAuth verification for Twitter/X, TikTok, Instagram, Facebook still manual-only
 
 ---
@@ -295,7 +294,7 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - ✅ reCAPTCHA v2/v3 on registration + login (admin-panel switchable, cache invalidation)
 - ✅ Trust score recalculation → BullMQ queue (`trust-score` queue + `TrustScoreProcessor` + 1h Redis cache, 2026-06-10)
 - ✅ Analytics snapshots → BullMQ queue (`analytics` queue + `AnalyticsProcessor`, 2026-06-10)
-- ✅ Partial caching: campaign browse (5m), leaderboard (15m), trust scores (1h) — user profiles still uncached
+- ✅ Partial caching: campaign browse (5m), leaderboard (15m), trust scores (1h), user profiles (1h via `jwt:user:*`, `auth:me:*`, `user:profile:*` with `invalidateUserCaches()` helper)
 - ✅ Database backup strategy documented (DEPLOYMENT.md: retention policy, cron jobs, restore procedures)
 - ✅ Real-time user chat with moderation (`ChannelsModule`)
   - Socket.io `/channels` namespace with JWT auth
@@ -326,7 +325,7 @@ Request → Rate Limiter → IP Analysis → Trust Score Check
 - Single VPS with Docker Compose
 - Single PostgreSQL instance
 - Single Redis instance
-- Partial caching (campaigns 5m, leaderboard 15m, trust scores 1h; user profiles uncached)
+- Partial caching (campaigns 5m, leaderboard 15m, trust scores 1h, user profiles 1h)
 - BullMQ for email, analytics snapshots, trust score recalculation
 - No read replicas
 - Fully automated CI/CD deployment (GitHub Actions → GHCR → VPS SSH)

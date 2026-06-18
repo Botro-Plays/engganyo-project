@@ -730,11 +730,11 @@
 - Cost-effective scaling
 
 ### SAR-002: Caching Strategy
-**Status**: Planned (Future)
-**Date**: 2026-05-19
+**Status**: Implemented (2026-06-17)
+**Date**: 2026-05-19 (Updated 2026-06-17)
 **Context**: What to cache and when
 **Decision**:
-- **User profiles**: 1 hour TTL, invalidate on update
+- **User profiles**: 1 hour TTL (jwt:user:* 5m, auth:me:* 1h, user:profile:* 1h), invalidate via `invalidateUserCaches()` helper
 - **Campaign listings**: 5 minutes TTL, invalidate on create/update
 - **Leaderboard rankings**: 15 minutes TTL, recalculate periodically
 - **Trust scores**: 1 hour TTL, lazy recalculation
@@ -743,28 +743,27 @@
 - Improve response times
 - Balance freshness vs performance
 **Implementation**:
-- Redis as cache layer
-- Cache invalidation on updates
+- Redis as cache layer via `RedisService`
+- Cache invalidation on updates via dedicated helper
 - Fallback to database on cache miss
 
 ### SAR-003: Queue Strategy
-**Status**: Planned (Future)
-**Date**: 2026-05-19
+**Status**: Implemented (2026-06-10)
+**Date**: 2026-05-19 (Updated 2026-06-10)
 **Context**: Which operations should be async
 **Decision**:
-- **Email sending**: Already queued (BullMQ)
-- **Trust score recalculation**: Should be queued (currently sync)
-- **Analytics snapshots**: Should be queued (currently sync)
-- **Abuse flag processing**: Should be queued (currently sync)
-- **Social verification**: Should be queued (Phase 11)
+- **Email sending**: Queued (BullMQ)
+- **Trust score recalculation**: Queued (`trust-score` queue + `TrustScoreProcessor`, 2026-06-10)
+- **Analytics snapshots**: Queued (`analytics` queue + `AnalyticsProcessor`, 2026-06-10)
+- **Abuse flag processing**: Should be queued (currently sync — pending)
+- **Social verification**: Should be queued (Phase 11 — pending)
 **Rationale**:
 - Improve API response times
 - Prevent blocking on long operations
 - Better error handling with retries
-**Migration Plan**:
-- Move trust score recalculation to queue immediately
-- Move analytics snapshots to queue immediately
-- Add BullMQ workers for these operations
+**Implementation**:
+- BullMQ workers live for trust-score and analytics
+- Remaining items (abuse flag processing, social verification) still planned
 
 ---
 
