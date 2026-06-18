@@ -10,11 +10,12 @@ import { SocialAuthModule } from '../social-auth/social-auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
 import { ReferralsModule } from '../referrals/referrals.module';
+import { StoreModule } from '../store/store.module';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
 @Module({
-  imports: [DatabaseModule, WalletModule, CampaignsModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule, EventsModule, ReferralsModule],
+  imports: [DatabaseModule, WalletModule, CampaignsModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule, EventsModule, ReferralsModule, StoreModule],
   controllers: [TasksController],
   providers: [TasksService, UserRateLimitGuard],
   exports: [TasksService],
