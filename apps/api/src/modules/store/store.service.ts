@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { StoreCategory, TransactionType, NotificationType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -812,6 +813,23 @@ export class StoreService implements OnModuleInit {
       this.logger.error(`getActiveEffects Redis error for user ${userId}: ${message}`);
       // Graceful degradation: banner simply won't show boosts during Redis outage
       return { xpBoost: null, taskLimitBoost: null, streakFreezeCharges: 0 };
+    }
+  }
+
+  // ─── Cron: clean up expired active effects ─────────────────
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async cleanupExpiredEffects(): Promise<void> {
+    try {
+      const { count } = await this.prisma.userActiveEffect.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      if (count > 0) {
+        this.logger.log(`Cleaned up ${count} expired active effects`);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to clean up expired effects: ${message}`);
     }
   }
 
