@@ -352,24 +352,24 @@ jobs:
             docker compose stop api web
             docker compose rm -f api web
 
-            echo "[6/10] Starting updated app containers..."
+            echo "[6/10] Running database migrations..."
+            docker compose run --rm api node_modules/.bin/prisma migrate deploy
+
+            echo "[7/10] Starting updated app containers..."
             docker compose up -d --no-deps --force-recreate api web
 
-            echo "[7/10] Waiting for API health..."
+            echo "[8/10] Waiting for API health..."
             for i in $(seq 1 60); do
               if docker compose exec -T api wget -qO- http://localhost:3001/api/health 2>/dev/null | grep -q '"status"'; then
                 echo "API healthy after ${i}s"
                 break
               fi
               if [ "$i" -eq 60 ]; then
-                echo "WARNING: API health check timed out — continuing with migrations..."
+                echo "WARNING: API health check timed out — continuing..."
               fi
               echo "  health check $i/60..."
               sleep 2
             done
-
-            echo "[8/10] Running database migrations..."
-            docker compose exec -T api node_modules/.bin/prisma migrate deploy
 
             echo "[9/10] Recreating nginx to pick up config changes..."
             docker compose stop nginx || true
