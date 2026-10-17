@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, HttpCode, HttpStatus, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
@@ -168,11 +168,10 @@ export class GamificationController {
   @ApiOperation({ summary: 'Claim daily login reward (credits + XP + streak update)' })
   claimDailyReward(
     @CurrentUser() user: JwtPayload,
-    @Headers('x-timezone') timezone: string | undefined,
     @Req() req: Request,
   ) {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? '';
-    return this.gamificationService.claimDailyReward(user.sub, timezone, ip);
+    return this.gamificationService.claimDailyReward(user.sub, ip);
   }
 
   // ─── Sprint 3: Spin Wheel ─────────────────────────────────

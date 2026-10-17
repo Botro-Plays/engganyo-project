@@ -147,28 +147,34 @@ export class WalletService {
 
   // ─── Credit (internal — used by other services) ────────────
 
-  async credit(userId: string, amount: number, opts: CreditOptions) {
+  async credit(userId: string, amount: number, opts: CreditOptions, tx?: Prisma.TransactionClient) {
     if (amount <= 0) throw new BadRequestException('Credit amount must be positive');
-    return this.executeWithOptimisticLock(userId, amount, 'credit', opts);
+    return this.executeWithOptimisticLock(userId, amount, 'credit', opts, tx);
   }
 
   // ─── Debit (internal — used by other services) ─────────────
 
-  async debit(userId: string, amount: number, opts: DebitOptions) {
+  async debit(userId: string, amount: number, opts: DebitOptions, tx?: Prisma.TransactionClient) {
     if (amount <= 0) throw new BadRequestException('Debit amount must be positive');
-    return this.executeWithOptimisticLock(userId, amount, 'debit', opts);
+    return this.executeWithOptimisticLock(userId, amount, 'debit', opts, tx);
   }
 
   // ─── Optimistic-locking engine ─────────────────────────────
 
+  // When `tx` is provided, the operation joins the caller's transaction —
+  // all wallet writes commit or roll back atomically with the caller's other
+  // writes. The optimistic-lock retry still applies inside the outer tx
+  // (PostgreSQL READ COMMITTED gives each statement a fresh snapshot).
   private async executeWithOptimisticLock(
     userId: string,
     amount: number,
     direction: 'credit' | 'debit',
     opts: CreditOptions | DebitOptions,
+    outerTx?: Prisma.TransactionClient,
   ) {
+    const db = outerTx ?? this.prisma;
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-      const wallet = await this.prisma.wallet.findUnique({
+      const wallet = await db.wallet.findUnique({
         where: { userId },
         select: { id: true, balance: true, version: true },
       });
@@ -183,9 +189,8 @@ export class WalletService {
         ? balanceBefore + amount
         : balanceBefore - amount;
 
-      try {
-        const result = await this.prisma.withTransaction(async (tx) => {
-          const updated = await tx.wallet.updateMany({
+      const apply = async (tx: Prisma.TransactionClient) => {
+        const updated = await tx.wallet.updateMany({
             where: { id: wallet.id, version: wallet.version },
             data: {
               balance: balanceAfter,
@@ -220,10 +225,13 @@ export class WalletService {
             data: { creditBalance: balanceAfter },
           });
 
-          return transaction;
-        });
+        return transaction;
+      };
 
-        return result;
+      try {
+        // Join the caller's transaction when one is provided; otherwise open
+        // our own so the wallet update + ledger row + balance mirror stay atomic.
+        return outerTx ? await apply(outerTx) : await this.prisma.withTransaction(apply);
       } catch (err) {
         if (err instanceof Error && err.message === 'OPTIMISTIC_LOCK_CONFLICT') {
           this.logger.warn(`Optimistic lock conflict for userId=${userId}, attempt=${attempt}`);

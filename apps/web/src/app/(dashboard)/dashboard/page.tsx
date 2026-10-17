@@ -31,6 +31,7 @@ interface GamStats {
   currentStreak: number;
   longestStreak: number;
   dailyRewardAvailable: boolean;
+  nextClaimAt: string | null;
   totalTasks: number;
   totalCampaigns: number;
   vp: number;
@@ -129,12 +130,7 @@ function DashboardPageInner() {
   });
 
   const rewardMutation = useMutation({
-    mutationFn: () => {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      return apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward', {}, {
-        headers: { 'x-timezone': timezone },
-      });
-    },
+    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward'),
     onSuccess: (res) => {
       setRewardResult(res.data.data);
       setRewardError(null);
@@ -444,7 +440,11 @@ function DashboardPageInner() {
 
           {rewardError && <p className="text-xs text-red-400 mt-3">{rewardError}</p>}
           {!gamStats.dailyRewardAvailable && !rewardResult && (
-            <p className="text-xs text-zinc-500 mt-3">Already claimed today. Come back tomorrow!</p>
+            <p className="text-xs text-zinc-500 mt-3">
+              {gamStats.nextClaimAt
+                ? `Next claim available ${new Date(gamStats.nextClaimAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                : 'Already claimed. Come back later!'}
+            </p>
           )}
         </div>
       )}

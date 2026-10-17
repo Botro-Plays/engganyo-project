@@ -64,6 +64,12 @@ export const VP_REWARDS = {
   LEVEL_UP_MULTIPLIER: 20,
 };
 
+// ─── Daily reward timing rules ────────────────────────────────
+// Elapsed-time rules measured from the server clock only.
+// No calendar-day boundaries and no client-supplied timezone.
+export const DAILY_REWARD_COOLDOWN_MS = 24 * 60 * 60 * 1000; // next claim unlocks 24h after the last successful claim
+export const STREAK_GRACE_MS = 45 * 60 * 60 * 1000;          // streak resets when the gap exceeds 45h
+
 // ─── Seed data ────────────────────────────────────────────────
 const DEFAULT_VIP_TIERS = [
   { name: 'BRONZE',   level: 1, displayName: 'Bronze Member',   requirementVp: 100,   perks: { taskLimitBonus: 5,  feeDiscountPercent: 5,  color: '#CD7F32', icon: 'award',   canTip: true,  chatBadge: 'Bronze', chatRateMultiplier: 1.0, canCreateRooms: false } },
@@ -138,7 +144,9 @@ export class GamificationService implements OnModuleInit {
     source: string,
     referenceId?: string,
     description?: string,
+    tx?: Prisma.TransactionClient,
   ) {
+    const db = tx ?? this.prisma;
     // Apply active XP boost multiplier if present (DB-backed with Redis cache)
     const xpBoost = await this.storeService.getActiveXpBoost(userId);
     let boostedAmount = amount;
@@ -146,7 +154,7 @@ export class GamificationService implements OnModuleInit {
       boostedAmount = Math.floor(amount * xpBoost.multiplier);
     }
 
-    const user = await this.prisma.user.findUnique({
+    const user = await db.user.findUnique({
       where: { id: userId },
       select: { xp: true, level: true },
     });
@@ -156,12 +164,12 @@ export class GamificationService implements OnModuleInit {
     const newLevel = getLevelFromXp(newXp);
     const leveledUp = newLevel > user.level;
 
-    await this.prisma.user.update({
+    await db.user.update({
       where: { id: userId },
       data: { xp: newXp, level: newLevel },
     });
 
-    await this.prisma.xpEvent.create({
+    await db.xpEvent.create({
       data: { userId, amount, source, referenceId, description },
     });
 
@@ -177,7 +185,7 @@ export class GamificationService implements OnModuleInit {
 
       // Award bonus VP for leveling up
       const vpReward = VP_REWARDS.LEVEL_UP_MULTIPLIER * newLevel;
-      await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`);
+      await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`, tx);
 
       void this.notificationsService.createNotification(
         userId,
@@ -224,10 +232,11 @@ export class GamificationService implements OnModuleInit {
       level: user.level,
       xpToNext: nextLevelXp - user.xp,
       levelProgress: Math.round(progress),
-      currentStreak: user.currentStreak,
+      currentStreak: this.getEffectiveStreak(user.currentStreak, user.lastDailyRewardAt),
       longestStreak: user.longestStreak,
       lastActiveAt: user.lastActiveAt,
       dailyRewardAvailable: this.isDailyRewardAvailable(user.lastDailyRewardAt),
+      nextClaimAt: this.getNextClaimAt(user.lastDailyRewardAt),
       totalTasks: user._count.completions,
       totalCampaigns: user._count.campaigns,
       vp: user.vp,
@@ -244,10 +253,12 @@ export class GamificationService implements OnModuleInit {
     source: string,
     referenceId?: string,
     description?: string,
+    tx?: Prisma.TransactionClient,
   ) {
     if (amount <= 0) return { newVp: 0, tierUp: false, newTier: null };
 
-    const user = await this.prisma.user.findUnique({
+    const db = tx ?? this.prisma;
+    const user = await db.user.findUnique({
       where: { id: userId },
       select: { vp: true, vipTierId: true },
     });
@@ -255,18 +266,18 @@ export class GamificationService implements OnModuleInit {
 
     const newVp = user.vp + amount;
     const oldTier = user.vipTierId
-      ? await this.prisma.vipTier.findUnique({ where: { id: user.vipTierId } })
+      ? await db.vipTier.findUnique({ where: { id: user.vipTierId } })
       : null;
-    const newTier = await this.getUserVipTier(userId, newVp);
+    const newTier = await this.getUserVipTier(userId, newVp, tx);
 
     const tierUp = newTier !== null && newTier.id !== user.vipTierId;
 
-    await this.prisma.user.update({
+    await db.user.update({
       where: { id: userId },
       data: { vp: newVp, ...(tierUp ? { vipTierId: newTier.id } : {}) },
     });
 
-    await this.prisma.vpEvent.create({
+    await db.vpEvent.create({
       data: { userId, amount, source, referenceId, description },
     });
 
@@ -288,13 +299,14 @@ export class GamificationService implements OnModuleInit {
     return { newVp, tierUp, newTier };
   }
 
-  async getUserVipTier(userId: string, currentVp?: number) {
-    const vp = currentVp ?? (await this.prisma.user.findUnique({
+  async getUserVipTier(userId: string, currentVp?: number, tx?: Prisma.TransactionClient) {
+    const db = tx ?? this.prisma;
+    const vp = currentVp ?? (await db.user.findUnique({
       where: { id: userId },
       select: { vp: true },
     }))?.vp ?? 0;
 
-    const tiers = await this.prisma.vipTier.findMany({
+    const tiers = await db.vipTier.findMany({
       where: { requirementVp: { lte: vp } },
       orderBy: { level: 'desc' },
       take: 1,
@@ -632,25 +644,46 @@ export class GamificationService implements OnModuleInit {
     if (!user) return null;
 
     return {
-      currentStreak: user.currentStreak,
+      currentStreak: this.getEffectiveStreak(user.currentStreak, user.lastDailyRewardAt),
       longestStreak: user.longestStreak,
       lastActiveAt: user.lastActiveAt,
       dailyRewardAvailable: this.isDailyRewardAvailable(user.lastDailyRewardAt),
+      nextClaimAt: this.getNextClaimAt(user.lastDailyRewardAt),
     };
   }
 
   // ─── Claim daily reward ────────────────────────────────────
 
-  async claimDailyReward(userId: string, userTimezone?: string, clientIp?: string) {
+  /**
+   * Claim the daily login reward.
+   *
+   * Timing rules (backend clock only — no calendar days, no client timezone):
+   *   - Eligibility: >= 24h must have elapsed since the last successful claim.
+   *     Exactly 24h elapsed is eligible.
+   *   - Streak: advances while the gap between successful claims is <= 45h.
+   *     A gap > 45h resets the streak to 1. Streak freezes cannot prevent this.
+   *
+   * Atomicity: the conditional updateMany inside the transaction IS the
+   * claim — only one concurrent request can satisfy its where clause. The
+   * claim marker, wallet credit, XP, VP, loot box, reward log and streak
+   * achievements all run through the same transaction client, so a failure
+   * at ANY step rolls back everything and the user can retry safely. A
+   * failed claim can never leave a partially awarded reward.
+   */
+  async claimDailyReward(userId: string, clientIp?: string) {
+    const now = new Date();
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { currentStreak: true, longestStreak: true, lastDailyRewardAt: true },
+      select: {
+        currentStreak: true,
+        longestStreak: true,
+        lastDailyRewardAt: true,
+        lastActiveAt: true,
+        lastClaimIp: true,
+      },
     });
     if (!user) throw new BadRequestException('User not found');
-
-    if (!this.isDailyRewardAvailable(user.lastDailyRewardAt)) {
-      throw new BadRequestException('Daily reward already claimed today');
-    }
 
     // Single-IP restriction: one claim per IP per UTC day
     if (clientIp) {
@@ -669,60 +702,74 @@ export class GamificationService implements OnModuleInit {
       }
     }
 
-    const now = new Date();
-    let streakBroken = this.isStreakBroken(user.lastDailyRewardAt, userTimezone);
-
-    // ── Streak freeze: if broken, try to consume a charge ─────
-    if (streakBroken) {
-      const dbUser = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { streakFreezeCharges: true },
-      });
-      const charges = dbUser?.streakFreezeCharges ?? 0;
-      if (charges > 0) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: { streakFreezeCharges: { decrement: 1 } },
-        });
-        // Best-effort cache sync
-        const key = 'boost:streak_freeze:' + userId;
-        await this.redisService.set(key, String(charges - 1)).catch(() => null);
-        streakBroken = false; // protect the streak
-      }
-    }
-
+    const lastClaim = user.lastDailyRewardAt;
+    const streakBroken = lastClaim !== null && lastClaim.getTime() < now.getTime() - STREAK_GRACE_MS;
     const newStreak = streakBroken ? 1 : user.currentStreak + 1;
     const newLongest = Math.max(newStreak, user.longestStreak);
 
     // Credit reward scales with streak (base 50 + 10 per streak day, capped at 200)
     const creditReward = Math.min(50 + (newStreak - 1) * 10, 200);
     const xpReward = XP_REWARDS.DAILY_LOGIN;
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        currentStreak: newStreak,
-        longestStreak: newLongest,
-        lastActiveAt: now,
-        lastDailyRewardAt: now,
-        ...(clientIp && { lastClaimIp: clientIp }),
-      },
-    });
-
-    await this.walletService.credit(userId, creditReward, {
-      type: TransactionType.EARN_DAILY_REWARD,
-      description: `Daily reward — day ${newStreak} streak`,
-    });
-
-    await this.awardXp(userId, xpReward, 'daily_login');
-
-    // Award VP based on streak milestone
     let vpReward = VP_REWARDS.DAILY_LOGIN_BASE;
     if (newStreak >= 30) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_30;
     else if (newStreak >= 14) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_14;
     else if (newStreak >= 7) vpReward = VP_REWARDS.DAILY_LOGIN_STREAK_7;
-    await this.awardVp(userId, vpReward, 'daily_login', undefined, `Day ${newStreak} streak`);
 
+    const milestoneDays = [5, 7, 14, 30];
+    let bonusLootBox = false;
+
+    await this.prisma.withTransaction(async (tx) => {
+      // Atomic eligibility claim — only one concurrent request gets count=1
+      const eligibleSince = new Date(now.getTime() - DAILY_REWARD_COOLDOWN_MS);
+      const claimed = await tx.user.updateMany({
+        where: {
+          id: userId,
+          OR: [{ lastDailyRewardAt: null }, { lastDailyRewardAt: { lte: eligibleSince } }],
+        },
+        data: {
+          lastDailyRewardAt: now,
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          lastActiveAt: now,
+          ...(clientIp && { lastClaimIp: clientIp }),
+        },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException(
+          'Daily reward not yet available. The next claim unlocks 24 hours after your last successful claim.',
+        );
+      }
+
+      await this.walletService.credit(userId, creditReward, {
+        type: TransactionType.EARN_DAILY_REWARD,
+        description: `Daily reward — day ${newStreak} streak`,
+      }, tx);
+
+      await this.awardXp(userId, xpReward, 'daily_login', undefined, undefined, tx);
+      await this.awardVp(userId, vpReward, 'daily_login', undefined, `Day ${newStreak} streak`, tx);
+
+      // ── Sprint 3: milestone loot boxes ──
+      if (milestoneDays.includes(newStreak)) {
+        const lootBoxItem = await tx.storeItem.findFirst({
+          where: { name: 'Mystery Gift Box', isActive: true },
+        });
+        if (lootBoxItem) {
+          await tx.userInventory.create({
+            data: { userId, itemId: lootBoxItem.id, quantity: 1 },
+          });
+          bonusLootBox = true;
+        }
+      }
+
+      await tx.dailyRewardLog.create({
+        data: { userId, streakDay: newStreak, creditReward, xpReward, bonusLootBox },
+      });
+
+      // Check streak achievements (unlocks are idempotent per user+achievement)
+      await this.checkStreakAchievements(userId, newStreak, tx);
+    });
+
+    // Best-effort side effects (after commit — safe to retry/ignore)
     void this.notificationsService.createNotification(
       userId,
       NotificationType.VIP_POINTS_EARNED,
@@ -733,47 +780,15 @@ export class GamificationService implements OnModuleInit {
 
     this.eventsService.emitToUser(userId, 'streak:updated', { newStreak, streakBroken });
 
-    // ── Sprint 3: log daily reward and award milestone loot boxes ─
-    const milestoneDays = [5, 7, 14, 30];
-    const isMilestone = milestoneDays.includes(newStreak);
-    let bonusLootBox = false;
-
-    if (isMilestone) {
-      // Find Mystery Gift Box store item
-      const lootBoxItem = await this.prisma.storeItem.findFirst({
-        where: { name: 'Mystery Gift Box', isActive: true },
-      });
-      if (lootBoxItem) {
-        await this.prisma.userInventory.create({
-          data: {
-            userId,
-            itemId: lootBoxItem.id,
-            quantity: 1,
-          },
-        });
-        bonusLootBox = true;
-        void this.notificationsService.createNotification(
-          userId,
-          NotificationType.VIP_POINTS_EARNED,
-          'Streak Milestone!',
-          `Day ${newStreak} streak! You earned a Mystery Gift Box!`,
-          { streak: newStreak, reward: 'Mystery Gift Box' },
-        ).catch(() => null);
-      }
-    }
-
-    await this.prisma.dailyRewardLog.create({
-      data: {
+    if (bonusLootBox) {
+      void this.notificationsService.createNotification(
         userId,
-        streakDay: newStreak,
-        creditReward,
-        xpReward,
-        bonusLootBox,
-      },
-    });
-
-    // Check streak achievements
-    await this.checkStreakAchievements(userId, newStreak);
+        NotificationType.VIP_POINTS_EARNED,
+        'Streak Milestone!',
+        `Day ${newStreak} streak! You earned a Mystery Gift Box!`,
+        { streak: newStreak, reward: 'Mystery Gift Box' },
+      ).catch(() => null);
+    }
 
     if (streakBroken) {
       void this.notificationsService.createNotification(
@@ -909,58 +924,41 @@ export class GamificationService implements OnModuleInit {
 
   // ─── Private helpers ───────────────────────────────────────
 
+  /** Eligible when >= 24h elapsed since the last successful claim. Exactly 24h counts. */
   private isDailyRewardAvailable(lastDailyRewardAt: Date | null): boolean {
     if (!lastDailyRewardAt) return true;
-    const now = new Date();
-    const last = new Date(lastDailyRewardAt);
-    return (
-      now.getUTCFullYear() !== last.getUTCFullYear() ||
-      now.getUTCMonth() !== last.getUTCMonth() ||
-      now.getUTCDate() !== last.getUTCDate()
-    );
+    return lastDailyRewardAt.getTime() <= Date.now() - DAILY_REWARD_COOLDOWN_MS;
   }
 
-  private isStreakBroken(lastActiveAt: Date | null, userTimezone?: string): boolean {
-    if (!lastActiveAt) return false;
-
-    // Use UTC as fallback if no timezone provided
-    const timezone = userTimezone || 'UTC';
-
-    // Convert timestamps to user's local calendar day (YYYY-MM-DD format)
-    const lastLocalDay = this.toLocalCalendarDay(lastActiveAt, timezone);
-    const todayLocalDay = this.toLocalCalendarDay(new Date(), timezone);
-
-    // Calculate day gap between calendar days
-    const lastDate = new Date(lastLocalDay);
-    const todayDate = new Date(todayLocalDay);
-    const dayGap = Math.floor((todayDate.getTime() - lastDate.getTime()) / (24 * 60 * 60 * 1000));
-
-    // Streak broken if gap >= 2 days (missed a full calendar day)
-    return dayGap >= 2;
+  /** Timestamp when the next claim unlocks (last successful claim + 24h). */
+  private getNextClaimAt(lastDailyRewardAt: Date | null): Date {
+    if (!lastDailyRewardAt) return new Date();
+    return new Date(lastDailyRewardAt.getTime() + DAILY_REWARD_COOLDOWN_MS);
   }
 
-  private toLocalCalendarDay(date: Date, timezone: string): string {
-    // Convert to YYYY-MM-DD format in user's timezone
-    return new Date(date).toLocaleDateString('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
+  /**
+   * Backend-enforced streak truth for reads: a streak that has passed the 45h
+   * grace window without a claim reads as 0 until the next successful claim
+   * re-establishes it (the claim itself also resets stored streak to 1).
+   */
+  private getEffectiveStreak(currentStreak: number, lastDailyRewardAt: Date | null): number {
+    if (currentStreak <= 0 || !lastDailyRewardAt) return currentStreak;
+    return lastDailyRewardAt.getTime() < Date.now() - STREAK_GRACE_MS ? 0 : currentStreak;
   }
 
-  private async checkStreakAchievements(userId: string, streak: number) {
+  private async checkStreakAchievements(userId: string, streak: number, tx?: Prisma.TransactionClient) {
+    const db = tx ?? this.prisma;
     const streakAchievements = DEFAULT_ACHIEVEMENTS.filter(
       (a) => a.category === AchievementCategory.DEDICATION && streak >= a.requirement,
     );
     for (const a of streakAchievements) {
-      const existing = await this.prisma.achievement.findUnique({ where: { slug: a.slug } });
+      const existing = await db.achievement.findUnique({ where: { slug: a.slug } });
       if (!existing) continue;
-      const alreadyUnlocked = await this.prisma.userAchievement.findUnique({
+      const alreadyUnlocked = await db.userAchievement.findUnique({
         where: { userId_achievementId: { userId, achievementId: existing.id } },
       });
       if (!alreadyUnlocked) {
-        await this.unlockAchievement(userId, existing.id, a.creditReward, a.xpReward, a.name);
+        await this.unlockAchievement(userId, existing.id, a.creditReward, a.xpReward, a.name, tx);
       }
     }
   }
@@ -971,8 +969,10 @@ export class GamificationService implements OnModuleInit {
     creditReward: number,
     xpReward: number,
     name: string,
+    tx?: Prisma.TransactionClient,
   ) {
-    await this.prisma.userAchievement.create({
+    const db = tx ?? this.prisma;
+    await db.userAchievement.create({
       data: { userId, achievementId, notified: true },
     });
 
@@ -982,11 +982,11 @@ export class GamificationService implements OnModuleInit {
         description: `Achievement unlocked: ${name}`,
         referenceId: achievementId,
         referenceType: 'achievement',
-      });
+      }, tx);
     }
 
     if (xpReward > 0) {
-      await this.awardXp(userId, xpReward, 'achievement', achievementId, name);
+      await this.awardXp(userId, xpReward, 'achievement', achievementId, name, tx);
     }
 
     void this.notificationsService.createNotification(
