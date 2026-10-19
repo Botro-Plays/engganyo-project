@@ -27,6 +27,7 @@ import { AuthenticatedProviders } from '@/app/providers';
 import { NotificationBell } from '@/components/notification-bell';
 import { SearchBar } from '@/components/search-bar';
 import { ActiveEffectsBanner } from '@/components/active-effects-banner';
+import { OnboardingTour, TourReplayButton, tourNavAttr } from '@/components/onboarding-tour';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
@@ -112,7 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <AuthGuard>
       <AuthenticatedProviders>
-        <div className="min-h-screen bg-surface flex">
+        <div className="min-h-screen bg-surface flex" data-tour-scope>
       {/* Sidebar */}
       <aside className="w-64 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
         {/* Logo */}
@@ -140,6 +141,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={tourNavAttr(item.href)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   isActive
                     ? 'bg-brand-500/15 text-brand-300 border border-brand-500/20'
@@ -193,6 +195,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3">
             <SearchBar />
             <NotificationBell />
+            {user && <TourReplayButton />}
 
             {user && (
               <>
@@ -254,7 +257,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
 
       {/* Mobile bottom navigation — visible only below md breakpoint */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border" data-tour-scope>
         <div className="flex items-center overflow-x-auto scrollbar-hide px-1 py-2 snap-x">
           {mobileNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -262,6 +265,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={tourNavAttr(item.href)}
                 className={`flex flex-col items-center gap-0.5 min-w-[4.5rem] flex-shrink-0 py-1 rounded-lg transition-all snap-start ${
                   isActive ? 'text-brand-300' : 'text-zinc-500'
                 }`}
@@ -273,6 +277,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </div>
       </nav>
+
+      <OnboardingTour />
 
       </AuthenticatedProviders>
     </AuthGuard>

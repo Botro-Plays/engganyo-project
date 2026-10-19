@@ -542,7 +542,7 @@ export default function TasksPage() {
             </div>
           ) : (
             <>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-tour="task-browse-grid">
                 {browseData.items.map((task) => {
                   const platform = getPlatform(task.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';

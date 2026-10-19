@@ -108,3 +108,11 @@
     bottom: 90px !important;
   }
 }
+
+/* Onboarding tour: highlight ring on the real UI element for the current step */
+.tour-highlight-ring {
+  outline: 2px solid theme("colors.brand.500");
+  outline-offset: 3px;
+  border-radius: 8px;
+  transition: outline-color 0.15s ease;
+}

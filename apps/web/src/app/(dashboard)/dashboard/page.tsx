@@ -321,7 +321,7 @@ function DashboardPageInner() {
 
       {/* Daily Reward Card (dedicated module) */}
       {gamStats && (
-        <div className="card-glass rounded-xl p-6 mb-8">
+        <div className="card-glass rounded-xl p-6 mb-8" data-tour="daily-reward">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
