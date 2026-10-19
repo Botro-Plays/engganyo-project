@@ -52,6 +52,10 @@ apiClient.interceptors.request.use(
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
+// Pre-session credential endpoints return 401 for expected failures (e.g. invalid
+// credentials). A refresh cannot help there and the redirect would discard the error.
+const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
+
 function shouldRetry(error: AxiosError): boolean {
   // Retry on network errors (no response) or 5xx server errors
   if (!error.response) return true;
@@ -109,7 +113,11 @@ apiClient.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !NO_REFRESH_RE.test(originalRequest.url ?? '')
+    ) {
       originalRequest._retry = true;
 
       try {
