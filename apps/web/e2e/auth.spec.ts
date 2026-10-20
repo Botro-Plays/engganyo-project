@@ -10,7 +10,7 @@ test.describe('Authentication', () => {
     await expect(page.getByRole('link', { name: /get started free/i })).toBeVisible();
   });
 
-  test('register → redirect to check-email', async ({ page }) => {
+  test('register → check-email when verification required, dashboard when disabled', async ({ page }) => {
     const uid = UNIQUE();
     const email = `test_${uid}@example.com`;
     await page.goto('/register');
@@ -19,14 +19,28 @@ test.describe('Authentication', () => {
     await page.getByLabel('Username').fill(`testuser_${uid}`);
     await page.getByLabel('Password').fill('TestPassword123!');
 
-    await page.getByRole('button', { name: /register|sign up|create account/i }).click();
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/auth/register') && r.request().method() === 'POST'),
+      page.getByRole('button', { name: /register|sign up|create account/i }).click(),
+    ]);
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as { data?: { user?: { status?: string } } };
+    const status = body.data?.user?.status;
 
-    await expect(page).toHaveURL(
-      new RegExp(`/check-email\\?email=${encodeURIComponent(email).replace(/\./g, '\\.')}$`),
-      { timeout: 10_000 },
-    );
-    await expect(page.getByRole('heading', { name: /check your inbox/i })).toBeVisible();
-    await expect(page.getByText(email)).toBeVisible();
+    // The redirect must match the account status the API actually returned:
+    // ENABLE_EMAIL_VERIFICATION=true -> PENDING_VERIFICATION -> check-email (prod/local).
+    // ENABLE_EMAIL_VERIFICATION=false -> ACTIVE -> dashboard welcome (CI).
+    if (status === 'PENDING_VERIFICATION') {
+      await expect(page).toHaveURL(
+        new RegExp(`/check-email\\?email=${encodeURIComponent(email).replace(/\./g, '\\.')}$`),
+        { timeout: 10_000 },
+      );
+      await expect(page.getByRole('heading', { name: /check your inbox/i })).toBeVisible();
+      await expect(page.getByText(email)).toBeVisible();
+    } else {
+      expect(status).toBe('ACTIVE');
+      await expect(page).toHaveURL(/\/dashboard\?welcome=1/, { timeout: 10_000 });
+    }
   });
 
   test('login with valid credentials → dashboard', async ({ page }) => {
