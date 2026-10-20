@@ -20,9 +20,16 @@ function CheckEmailPageInner() {
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
 
+  // When no email is provided via query param, let the user type one.
+  const [typedEmail, setTypedEmail] = useState('');
+  const [typedEmailError, setTypedEmailError] = useState('');
+
   const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [resendError, setResendError] = useState('');
   const [cooldown, setCooldown] = useState(0);
+
+  // Determine the effective email: prefer the query param; fall back to user input.
+  const effectiveEmail = email || typedEmail.trim();
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -31,11 +38,28 @@ function CheckEmailPageInner() {
   }, [cooldown]);
 
   const handleResend = useCallback(async () => {
-    if (!email || cooldown > 0 || resendStatus === 'loading') return;
+    if (cooldown > 0 || resendStatus === 'loading') return;
+
+    // Validate typed email when no query param is present.
+    if (!email) {
+      const trimmed = typedEmail.trim();
+      if (!trimmed) {
+        setTypedEmailError('Please enter your email address.');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        setTypedEmailError('Please enter a valid email address.');
+        return;
+      }
+      setTypedEmailError('');
+    }
+
+    if (!effectiveEmail) return;
+
     setResendStatus('loading');
     setResendError('');
     try {
-      await apiClient.post('auth/resend-verification', { email });
+      await apiClient.post('auth/resend-verification', { email: effectiveEmail });
       setResendStatus('success');
       setCooldown(COOLDOWN_SECONDS);
     } catch (err: unknown) {
@@ -43,7 +67,7 @@ function CheckEmailPageInner() {
       setResendError(msg);
       setResendStatus('error');
     }
-  }, [email, cooldown, resendStatus]);
+  }, [email, typedEmail, effectiveEmail, cooldown, resendStatus]);
 
   return (
     <div className="w-full max-w-md">
@@ -56,13 +80,50 @@ function CheckEmailPageInner() {
 
         <h1 className="text-2xl font-bold text-white mb-3">Check your inbox</h1>
 
-        <p className="text-zinc-400 text-sm leading-relaxed mb-2">
-          We sent a verification link to:
-        </p>
-        {email && (
-          <p className="text-white font-medium text-sm mb-6 px-4 py-2 bg-surface-hover rounded-lg border border-surface-border inline-block">
-            {email}
-          </p>
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleResend();
+          }}
+        >
+        {email ? (
+          <>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-2">
+              We sent a verification link to:
+            </p>
+            <p className="text-white font-medium text-sm mb-6 px-4 py-2 bg-surface-hover rounded-lg border border-surface-border inline-block">
+              {email}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-4">
+              Enter your email address to request a new verification link.
+            </p>
+            <div className="text-left mb-4">
+              <label htmlFor="check-email-input" className="block text-xs text-zinc-500 mb-1.5">
+                Email address
+              </label>
+              <input
+                id="check-email-input"
+                type="email"
+                value={typedEmail}
+                onChange={(e) => {
+                  setTypedEmail(e.target.value);
+                  if (typedEmailError) setTypedEmailError('');
+                }}
+                placeholder="your@email.com"
+                disabled={resendStatus === 'loading'}
+                aria-invalid={typedEmailError ? true : undefined}
+                aria-describedby={typedEmailError ? 'check-email-error' : undefined}
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-50"
+              />
+              {typedEmailError && (
+                <p id="check-email-error" className="mt-1.5 text-xs text-red-400">{typedEmailError}</p>
+              )}
+            </div>
+          </>
         )}
 
         <p className="text-zinc-500 text-sm leading-relaxed mb-6">
@@ -86,8 +147,8 @@ function CheckEmailPageInner() {
 
         {/* Resend button */}
         <button
-          onClick={handleResend}
-          disabled={cooldown > 0 || resendStatus === 'loading' || !email}
+          type="submit"
+          disabled={cooldown > 0 || resendStatus === 'loading'}
           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-surface-border text-sm text-zinc-300 hover:text-white hover:border-zinc-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all mb-6"
         >
           <RefreshCw className={`w-4 h-4 ${resendStatus === 'loading' ? 'animate-spin' : ''}`} />
@@ -97,6 +158,7 @@ function CheckEmailPageInner() {
               ? `Resend in ${cooldown}s`
               : 'Resend verification email'}
         </button>
+        </form>
 
         <div className="space-y-2">
           <p className="text-xs text-zinc-600">

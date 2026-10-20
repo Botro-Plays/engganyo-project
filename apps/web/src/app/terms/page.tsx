@@ -179,12 +179,6 @@ export default function TermsPage() {
               <Link href="/contact" className="text-brand-400 hover:underline">contact us</Link>.
             </p>
           </section>
-
-          <section className="pt-6 border-t border-surface-border">
-            <p className="text-sm text-zinc-500">
-              Last updated: {new Date().toLocaleDateString()}
-            </p>
-          </section>
         </div>
       </div>
     </div>

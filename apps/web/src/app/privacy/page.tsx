@@ -170,12 +170,6 @@ export default function PrivacyPage() {
               <li>By email at: privacy@engganyo.com</li>
             </ul>
           </section>
-
-          <section className="pt-8 border-t border-surface-border">
-            <p className="text-sm text-zinc-500">
-              Last updated: {new Date().toLocaleDateString()}
-            </p>
-          </section>
         </div>
       </div>
     </div>

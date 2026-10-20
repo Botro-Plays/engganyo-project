@@ -83,7 +83,7 @@ export function renderContentWithMentions(
       parts.push(
         <Link
           key={`c-${campaignId}-${match.index}`}
-          href={`/campaigns/${campaignId}`}
+          href="/tasks"
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
             isActive
               ? 'bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30'
@@ -104,7 +104,7 @@ export function renderContentWithMentions(
       parts.push(
         <Link
           key={`u-${userId}-${match.index}`}
-          href={`/users/${username}`}
+          href={`/users/${encodeURIComponent(username)}`}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30"
         >
           @{displayName}
