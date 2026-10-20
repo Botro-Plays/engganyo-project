@@ -69,6 +69,38 @@ test.describe('Onboarding tour', () => {
     await expect.poll(() => readTourState(page)).toMatchObject({ status: 'active', step: 0 });
   });
 
+  test('tooltip is a non-modal dialog exposing step, title and instructions to assistive tech', async ({ page }) => {
+    await startTour(page);
+
+    const describedText = () =>
+      page.evaluate(() => {
+        const dlg = document.querySelector('[role="dialog"]');
+        if (!dlg) return null;
+        const resolve = (attr: string) =>
+          (dlg.getAttribute(attr) ?? '')
+            .split(/\s+/)
+            .map((id) => document.getElementById(id)?.textContent ?? '')
+            .join(' ')
+            .trim();
+        return { name: resolve('aria-labelledby'), desc: resolve('aria-describedby') };
+      });
+
+    // Info step: name is the step title; description carries progress + body text.
+    await expect(dialog(page)).toHaveAttribute('aria-modal', 'false');
+    const info = await describedText();
+    expect(info?.name).toBe('Your Daily Reward');
+    expect(info?.desc).toContain('Step 1 of 5');
+    expect(info?.desc).toContain('Come back every day');
+
+    // Navigate step: the click instruction is part of the accessible description too.
+    await gotIt(page).click();
+    await expect(dialog(page)).toContainText('Step 2 of 5');
+    const nav = await describedText();
+    expect(nav?.name).toBe('Find tasks');
+    expect(nav?.desc).toContain('Step 2 of 5');
+    expect(nav?.desc).toContain('Click the highlighted link to continue');
+  });
+
   test('walks all five steps using the real navigation links, then completes', async ({ page }) => {
     await startTour(page);
 

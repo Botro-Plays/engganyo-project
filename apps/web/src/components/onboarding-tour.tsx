@@ -739,11 +739,15 @@ export function OnboardingTour() {
             role="dialog"
             aria-modal="false"
             aria-labelledby="tour-title"
-            aria-describedby="tour-desc"
+            aria-describedby={
+              step.type === 'navigate' && !missing
+                ? 'tour-step tour-desc tour-hint'
+                : 'tour-step tour-desc'
+            }
             className="fixed z-[71] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-500/40 bg-[#161b2e] p-4 shadow-2xl"
             style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
           >
-            <p className="mb-1 text-xs font-medium text-brand-300">
+            <p id="tour-step" className="mb-1 text-xs font-medium text-brand-300">
               Step {stepIndex + 1} of {TOUR_STEPS.length}
             </p>
             <p id="tour-title" className="text-sm font-semibold text-white">
@@ -753,7 +757,7 @@ export function OnboardingTour() {
               {description}
             </p>
             {step.type === 'navigate' && !missing && (
-              <p className="mt-2 text-xs text-zinc-500">
+              <p id="tour-hint" className="mt-2 text-xs text-zinc-500">
                 Click the highlighted link to continue. With the keyboard, press Tab to reach it, then Enter.
               </p>
             )}
