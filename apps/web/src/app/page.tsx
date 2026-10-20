@@ -48,7 +48,7 @@ interface PublicStats {
   totalCountries: number;
 }
 
-async function getPublicStats(): Promise<PublicStats> {
+async function getPublicStats(): Promise<PublicStats | null> {
   try {
     const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/+$/, '');
     const res = await fetch(`${apiUrl}/analytics/public-stats`, {
@@ -72,7 +72,7 @@ async function getPublicStats(): Promise<PublicStats> {
   } catch (err) {
     // eslint-disable-next-line no-console
     if (process.env.NODE_ENV === 'development') console.error('Landing stats fetch failed:', err);
-    return { totalUsers: 0, totalTaskCompletions: 0, totalCountries: 0 };
+    return null;
   }
 }
 
@@ -126,21 +126,23 @@ export default async function LandingPage() {
             </Link>
           </div>
 
-          {/* Social proof */}
-          <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-500 text-sm">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-brand-400" />
-              <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
+          {/* Social proof — only shown when stats were successfully fetched */}
+          {stats && (
+            <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-500 text-sm">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-brand-400" />
+                <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-accent-400" />
+                <span><strong className="text-white">{stats.totalTaskCompletions.toLocaleString()}+</strong> tasks completed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-green-400" />
+                <span><strong className="text-white">{stats.totalCountries.toLocaleString()}+</strong> countries</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-accent-400" />
-              <span><strong className="text-white">{stats.totalTaskCompletions.toLocaleString()}+</strong> tasks completed</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-green-400" />
-              <span><strong className="text-white">{stats.totalCountries.toLocaleString()}+</strong> countries</span>
-            </div>
-          </div>
+          )}
         </section>
 
         {/* Features Grid */}
@@ -233,7 +235,7 @@ export default async function LandingPage() {
                 <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </Link>
               <Link
-                href="/faq"
+                href="#how-it-works"
                 className="inline-flex items-center text-zinc-400 hover:text-white text-sm font-medium transition-colors"
               >
                 Learn how it works

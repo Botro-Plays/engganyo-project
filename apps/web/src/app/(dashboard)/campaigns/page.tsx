@@ -6,9 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
+import Link from 'next/link';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
-  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp,
+  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp, BarChart2,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -735,6 +736,12 @@ export default function CampaignsPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2 mt-3 flex-wrap">
+                  <Link
+                    href={`/campaigns/${c.id}/analytics`}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 transition-colors"
+                  >
+                    <BarChart2 className="w-3 h-3" /> Analytics
+                  </Link>
                   {!c.autoVerify && (
                     <button
                       onClick={() => { setReviewingCampaign(c); setReviewError(null); }}

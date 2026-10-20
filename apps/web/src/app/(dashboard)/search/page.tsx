@@ -125,7 +125,7 @@ function SearchContent() {
             {(tab === 'all' || tab === 'campaigns') && data?.campaigns.map((c) => (
               <Link
                 key={c.id}
-                href={`/campaigns/${c.id}`}
+                href="/tasks"
                 className="card-glass rounded-xl p-4 block hover:bg-surface-hover transition-colors"
               >
                 <div className="flex items-center gap-2 mb-1">

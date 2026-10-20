@@ -101,8 +101,8 @@ function VerifyEmailPageInner() {
           </Link>
           <p className="text-xs text-zinc-600">
             Need a new link?{' '}
-            <Link href="/register" className="text-brand-400 hover:text-brand-300 transition-colors">
-              Re-register your account
+            <Link href="/check-email" className="text-brand-400 hover:text-brand-300 transition-colors">
+              Resend verification email
             </Link>
           </p>
         </div>

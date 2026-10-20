@@ -375,7 +375,7 @@ export default function ForumTopicPage() {
 
         {data.campaign && (
           <Link
-            href={`/campaigns/${data.campaign.id}`}
+            href="/tasks"
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium mb-3 ${
               data.campaign.status === 'ACTIVE' || data.campaign.status === 'PENDING_REVIEW'
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
@@ -594,7 +594,7 @@ function ReplyCard({
               {reply.isEdited && <span className="text-zinc-500 text-xs">(edited)</span>}
               {reply.campaign && (
                 <Link
-                  href={`/campaigns/${reply.campaign.id}`}
+                  href="/tasks"
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
                     reply.campaign.status === 'ACTIVE' || reply.campaign.status === 'PENDING_REVIEW'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'

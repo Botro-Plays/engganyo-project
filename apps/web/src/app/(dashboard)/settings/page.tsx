@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Link2, Bell, Shield, User, Cookie } from 'lucide-react';
+import { Link2, Bell, Shield, User, Users, Cookie } from 'lucide-react';
 import { CookieConsentSettings } from '@/components/cookie-consent';
 
 const SETTING_TILES = [
@@ -29,6 +29,13 @@ const SETTING_TILES = [
     icon: Shield,
     label: 'Security',
     description: 'Two-factor authentication and account security.',
+    available: true,
+  },
+  {
+    href: '/referrals',
+    icon: Users,
+    label: 'Referrals',
+    description: 'Invite friends and earn bonus credits for every successful referral.',
     available: true,
   },
 ];

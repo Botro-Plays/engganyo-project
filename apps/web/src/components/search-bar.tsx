@@ -172,7 +172,7 @@ export function SearchBar() {
                   {data.campaigns.map((c) => (
                     <Link
                       key={c.id}
-                      href={`/campaigns/${c.id}`}
+                      href="/tasks"
                       onClick={() => setOpen(false)}
                       className="block px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
                     >

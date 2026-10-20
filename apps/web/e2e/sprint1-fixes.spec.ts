@@ -91,3 +91,165 @@ test.describe('renderContentWithMentions', () => {
     expect(links[0]!.props.href).toBe('/tasks');
   });
 });
+
+test.describe('verify-email recovery', () => {
+  test('failed verification offers resend via /check-email', async ({ page }) => {
+    await page.goto('/verify-email?token=definitely-not-a-real-token');
+    await expect(page.getByRole('heading', { name: 'Verification failed' })).toBeVisible();
+
+    const resend = page.getByRole('link', { name: 'Resend verification email' });
+    await expect(resend).toHaveAttribute('href', '/check-email');
+    await resend.click();
+    await expect(page).toHaveURL(/\/check-email$/);
+    // The check-email page must still work without an ?email= param (typed input shown).
+    await expect(page.getByRole('textbox', { name: 'Email address' })).toBeVisible();
+  });
+});
+
+test.describe('landing page', () => {
+  // The social-proof stats fetch runs server-side inside the async RSC, so it cannot be
+  // intercepted by page.route. The failure branch (stats === null -> section hidden) is
+  // covered by code review; here we assert the page loads and the anchor link works.
+  test('"Learn how it works" navigates to the #how-it-works section', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Learn how it works' }).click();
+    await expect(page).toHaveURL(/#how-it-works$/);
+    await expect(page.locator('#how-it-works')).toBeInViewport();
+  });
+});
+
+const json = (data: unknown) => ({
+  status: 200,
+  contentType: 'application/json',
+  body: JSON.stringify({ success: true, data }),
+});
+
+test.describe('authenticated pages', () => {
+  test.use({ storageState: 'e2e/.auth/user.json' });
+
+  const FORUM_CAMPAIGN = {
+    id: 'c-e2e-forum',
+    title: 'E2E Promo Campaign',
+    status: 'ACTIVE',
+    taskType: 'SOCIAL_FOLLOW',
+  };
+
+  test('forum topic and reply campaign chips link to /tasks while detail route is unavailable', async ({
+    page,
+  }) => {
+    const topic = {
+      id: 'topic-e2e-1',
+      title: 'Topic with a campaign',
+      content: 'Topic body',
+      status: 'OPEN',
+      isPinned: false,
+      viewCount: 3,
+      replyCount: 1,
+      lockedAt: null,
+      lockedBy: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      campaign: FORUM_CAMPAIGN,
+      author: { id: 'u-1', username: 'author', displayName: null, avatarUrl: null },
+      replies: [
+        {
+          id: 'r-1',
+          content: 'A reply referencing the campaign',
+          isEdited: false,
+          editedAt: null,
+          createdAt: '2026-01-01T00:01:00.000Z',
+          updatedAt: '2026-01-01T00:01:00.000Z',
+          campaign: FORUM_CAMPAIGN,
+          author: { id: 'u-2', username: 'replier', displayName: null, avatarUrl: null },
+          parentReplyId: null,
+          childReplies: [],
+          _count: { childReplies: 0, reactions: 0 },
+        },
+      ],
+      _count: { reactions: 0 },
+    };
+
+    await page.route('**/api/forum/topics/**', (route) => {
+      const url = route.request().url();
+      if (url.includes('/reactions')) return route.fulfill(json([]));
+      return route.fulfill(json(topic));
+    });
+
+    await page.goto('/forum/topic-e2e-1');
+    const chips = page.getByRole('link', { name: /E2E Promo Campaign/ });
+    await expect(chips).toHaveCount(2); // topic header chip + reply chip
+    for (const chip of await chips.all()) {
+      await expect(chip).toHaveAttribute('href', '/tasks');
+    }
+  });
+
+  test('search results link campaigns to /tasks while detail route is unavailable', async ({ page }) => {
+    await page.route('**/api/search*', (route) =>
+      route.fulfill(
+        json({
+          users: [],
+          campaigns: [
+            {
+              id: 'c-e2e-search',
+              title: 'Searchable Campaign',
+              taskType: 'SOCIAL_FOLLOW',
+              status: 'ACTIVE',
+              creditPerTask: 5,
+              totalSlots: 10,
+              completedSlots: 2,
+              isPlatformTask: false,
+              user: { username: 'e2euser', displayName: null },
+            },
+          ],
+          topics: [],
+        }),
+      ),
+    );
+
+    await page.goto('/search?q=searchable');
+    const link = page.getByRole('link', { name: /Searchable Campaign/ });
+    await expect(link).toHaveAttribute('href', '/tasks');
+  });
+
+  test('campaign cards expose an Analytics link to /campaigns/{id}/analytics', async ({ page }) => {
+    await page.route('**/api/campaigns*', (route) =>
+      route.fulfill(
+        json({
+          items: [
+            {
+              id: 'c-e2e-1',
+              title: 'Analytics Campaign',
+              taskType: 'SOCIAL_FOLLOW',
+              targetUrl: 'https://example.com',
+              totalSlots: 10,
+              completedSlots: 3,
+              pendingSlots: 0,
+              creditPerTask: 5,
+              totalCost: 55,
+              feeAmount: 5,
+              status: 'ACTIVE',
+              requiresProof: false,
+              autoVerify: true,
+              proofInstructions: null,
+              isPlatformTask: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          meta: { total: 1, page: 1, totalPages: 1 },
+        }),
+      ),
+    );
+
+    await page.goto('/campaigns');
+    const link = page.getByRole('link', { name: /analytics/i });
+    await expect(link).toHaveAttribute('href', '/campaigns/c-e2e-1/analytics');
+  });
+
+  test('settings Referrals tile navigates to /referrals', async ({ page }) => {
+    await page.goto('/settings');
+    const tile = page.getByRole('link', { name: /referrals/i });
+    await expect(tile).toBeVisible();
+    await tile.click();
+    await expect(page).toHaveURL(/\/referrals$/);
+  });
+});
