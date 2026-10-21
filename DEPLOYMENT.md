@@ -196,7 +196,19 @@ chmod 644 infra/nginx/ssl/cert.pem
 chmod 600 infra/nginx/ssl/key.pem
 ```
 
-Nginx requires a client certificate on every TLS handshake (Authenticated Origin Pulls), so direct requests to the VPS IP cannot reach the application — only traffic through the proxied Cloudflare hostnames connects. The trust anchor is `infra/nginx/ssl/origin-pull-client.pem`: our own client certificate generated on the VPS (key `origin-pull-key.pem`, mode 600). Upload BOTH `origin-pull-client.pem` and `origin-pull-key.pem` as a per-hostname Authenticated Origin Pull certificate for `engganyo.com` and `www.engganyo.com` via the Cloudflare API (`PUT /zones/{zone}/origin_tls_client_auth/hostnames`), and enable it — this binds verification to our zone's presented certificate rather than the shared public Cloudflare origin-pull CA, which only proves "some Cloudflare zone". Configure it before or with this deployment; the origin fails closed (rejects all TLS) until the matching CF-side config exists.
+Nginx requires a client certificate on every TLS handshake (Authenticated Origin Pulls), so direct requests to the VPS IP cannot reach the application — only traffic through the proxied Cloudflare hostnames connects. The trust anchor is `infra/nginx/ssl/aop-root-ca.pem`: a private CA generated on the VPS (key `aop-root-key.pem`, mode 600, never leaves the VPS). The client leaf `origin-pull-client.pem`/`origin-pull-key.pem` (mode 600) is uploaded to Cloudflare in two separate API operations:
+
+```bash
+# 1. Upload the leaf certificate + key; response carries the cert id
+POST /zones/{zone_id}/origin_tls_client_auth   # body: {certificate, private_key}
+
+# 2. Associate that cert id with each hostname and enable it
+PUT /zones/{zone_id}/origin_tls_client_auth/hostnames
+# body: {"config": [{"cert_id": "...", "hostname": "engganyo.com", "enabled": true},
+#                   {"cert_id": "...", "hostname": "www.engganyo.com", "enabled": true}]}
+```
+
+This binds verification to our zone's presented certificate rather than the shared public Cloudflare origin-pull CA, which only proves "some Cloudflare zone". Configure it before or with this deployment; the origin fails closed (rejects all TLS) until the matching CF-side config exists.
 
 Allow inbound SSH (22, unless deliberately changed), HTTP 80 and HTTPS 443 in the provider firewall. Do not open PostgreSQL/Redis/API/web ports publicly. GitHub-hosted runners must be able to reach the SSH port. If the domain is different, update Nginx, API CORS/socket origins, app URLs and the frontend build setting together.
 
@@ -246,10 +258,9 @@ The API health JSON must report status ok (inside data), and containers should b
 
 reCAPTCHA is disabled for the first team-only deployment: `ENABLE_RECAPTCHA=false` in `.env`, and no `recaptcha_enabled` row exists in the fresh database (backend enforcement reads the `platformConfig` DB row, default off; the frontend reads the public config and skips token generation, so registration/login work without a widget). To activate later:
 
-1. Set `RECAPTCHA_SECRET` in the VPS `.env`.
-2. Ensure `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is set in repository Actions secrets — the frontend embeds it at build time.
-3. Set `recaptcha_enabled=true`, `recaptcha_v3_site_key`, and `recaptcha_v3_secret_key` in `platformConfig` (admin server-config UI), then rebuild/redeploy the frontend through the normal checked pipeline and recreate affected containers.
-4. Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, successful siteverify) plus working register/login.
+1. In the admin server-config UI (`platformConfig` rows), set `recaptcha_v3_site_key`, `recaptcha_v3_secret_key`, and `recaptcha_enabled=true`. This is the supported runtime path — the backend verifies tokens against the DB secret, and the public config supplies the site key, so **no rebuild is required**.
+2. `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (Actions secret, baked at build) and `RECAPTCHA_SECRET` (`.env`) are only fallbacks used when the DB values are absent — set them if you want belt-and-suspenders defaults before the DB is configured.
+3. Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, score threshold, successful siteverify) plus working register/login.
 
 ## Troubleshooting and operations
 
