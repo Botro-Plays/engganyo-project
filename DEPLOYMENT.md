@@ -196,7 +196,7 @@ chmod 644 infra/nginx/ssl/cert.pem
 chmod 600 infra/nginx/ssl/key.pem
 ```
 
-Nginx requires a Cloudflare origin-pull client certificate on every TLS handshake (Authenticated Origin Pulls), so direct requests to the VPS IP cannot reach the application — only traffic through the proxied Cloudflare hostnames connects. The public CA file must exist at `infra/nginx/ssl/origin-pull-ca.pem` (it is fetched once during host setup; deployment fails fast without it). Enable the zone's Authenticated Origin Pulls / `tls_client_auth` setting before or with the deployment of this configuration; enabling it on the zone first is harmless because an origin that does not verify client certs ignores it.
+Nginx requires a client certificate on every TLS handshake (Authenticated Origin Pulls), so direct requests to the VPS IP cannot reach the application — only traffic through the proxied Cloudflare hostnames connects. The trust anchor is `infra/nginx/ssl/origin-pull-client.pem`: our own client certificate generated on the VPS (key `origin-pull-key.pem`, mode 600). Upload BOTH `origin-pull-client.pem` and `origin-pull-key.pem` as a per-hostname Authenticated Origin Pull certificate for `engganyo.com` and `www.engganyo.com` via the Cloudflare API (`PUT /zones/{zone}/origin_tls_client_auth/hostnames`), and enable it — this binds verification to our zone's presented certificate rather than the shared public Cloudflare origin-pull CA, which only proves "some Cloudflare zone". Configure it before or with this deployment; the origin fails closed (rejects all TLS) until the matching CF-side config exists.
 
 Allow inbound SSH (22, unless deliberately changed), HTTP 80 and HTTPS 443 in the provider firewall. Do not open PostgreSQL/Redis/API/web ports publicly. GitHub-hosted runners must be able to reach the SSH port. If the domain is different, update Nginx, API CORS/socket origins, app URLs and the frontend build setting together.
 
@@ -241,6 +241,15 @@ curl -I https://engganyo.com/login
 ```
 
 The API health JSON must report status ok (inside data), and containers should be healthy. A green CI run alone is not a successful deploy: check the final Deploy to VPS job too.
+
+## Deferred reCAPTCHA (initial restricted deployment)
+
+reCAPTCHA is disabled for the first team-only deployment: `ENABLE_RECAPTCHA=false` in `.env`, and no `recaptcha_enabled` row exists in the fresh database (backend enforcement reads the `platformConfig` DB row, default off; the frontend reads the public config and skips token generation, so registration/login work without a widget). To activate later:
+
+1. Set `RECAPTCHA_SECRET` in the VPS `.env`.
+2. Ensure `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is set in repository Actions secrets — the frontend embeds it at build time.
+3. Set `recaptcha_enabled=true`, `recaptcha_v3_site_key`, and `recaptcha_v3_secret_key` in `platformConfig` (admin server-config UI), then rebuild/redeploy the frontend through the normal checked pipeline and recreate affected containers.
+4. Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, successful siteverify) plus working register/login.
 
 ## Troubleshooting and operations
 
