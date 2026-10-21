@@ -1,6 +1,6 @@
 # SSL Certificates
 
-This directory is mounted into the nginx container at `/etc/ssl/cf/`.
+This directory is mounted into the nginx container at `/opt/engganyo-project/infra/nginx/ssl/`.
 
 Place these two files here **on the VPS only** — they are gitignored and must never be committed.
 
