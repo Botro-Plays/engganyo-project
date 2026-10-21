@@ -1,53 +1,9 @@
-# Auto-Deploy Setup for VPS
+# Deployment scripts
 
-This directory contains scripts for automatic deployment on VPS boot.
+The supported update path is `.github/workflows/deploy.yml`: a push to main runs CI and E2E, builds images on GitHub, then invokes `deploy-release.sh` over SSH using the tested commit. Both collaborators can trigger it by pushing main.
 
-## Files
+See [the complete VPS setup guide](../../DEPLOYMENT.md) for Docker, the deployment account, the two SSH key pairs, Actions secrets, HTTPS, first seed, and health checks.
 
-- `auto-deploy.service` - Systemd service configuration
-- `auto-deploy.sh` - Deployment script that pulls git and rebuilds containers
+`deploy-release.sh` pulls the commit-tagged images, starts infrastructure, waits for healthy API/web/Nginx, and records `.release.env` and `.deployed-sha`. API migrations run in the API entrypoint. It does not seed automatically or build on the VPS. Do not invoke it with an arbitrary untested commit to bypass the workflow.
 
-## Installation
-
-Run these commands on your VPS:
-
-```bash
-# Copy the systemd service file
-sudo cp /opt/engganyo-project/infra/scripts/auto-deploy.service /etc/systemd/system/
-
-# Make the deploy script executable
-chmod +x /opt/engganyo-project/infra/scripts/auto-deploy.sh
-
-# Reload systemd daemon
-sudo systemctl daemon-reload
-
-# Enable the service to start on boot
-sudo systemctl enable auto-deploy
-
-# Start the service manually (optional, to test)
-sudo systemctl start auto-deploy
-
-# Check service status
-sudo systemctl status auto-deploy
-```
-
-## What it does
-
-When the VPS boots, the auto-deploy service will:
-1. Pull latest changes from git
-2. Stop existing Docker containers
-3. Rebuild and start Docker containers
-4. Run Prisma migrations
-5. Run database seed
-
-## Logs
-
-Logs are written to `/var/log/engganyo-auto-deploy.log`
-
-## Manual deployment
-
-To manually trigger deployment without rebooting:
-
-```bash
-sudo systemctl start auto-deploy
-```
+`auto-deploy.sh` and `auto-deploy.service` are legacy artifacts. Do not install or enable that service on the fresh host: it can deploy mutable latest images independently of CI. Docker restart policies handle ordinary reboots.

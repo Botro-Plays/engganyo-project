@@ -1,861 +1,294 @@
-# Engganyo Project Deployment Guide
+# Engganyo VPS setup and automatic deployment
 
-This guide covers all necessary commands to set up and deploy the Engganyo project from scratch.
+This is the fresh-server guide for Ubuntu 24.04. Both project collaborators may push to main. The deployment changes described here must first be reviewed and pushed to main; local edits do not change the workflow running on GitHub.
 
-## Prerequisites
+## How an update reaches the server
 
-- Ubuntu/Debian VPS with Docker and Docker Compose installed
-- Git access
-- SSH access to VPS
+1. Either collaborator pushes a complete change to main.
+2. GitHub Actions runs API lint/unit tests/build and web lint/build.
+3. Playwright E2E runs only after both CI jobs pass.
+4. GitHub builds API and web Docker images, using the root package-lock.json, and publishes commit-tagged images to GHCR.
+5. GitHub connects to the VPS over SSH. The VPS checks out that exact tested commit for configuration and pulls its matching images.
+6. Docker starts PostgreSQL/Redis as needed, then API/web. The API entrypoint runs database migrations before starting the API.
+7. Deployment waits for healthy API/web containers, recreates Nginx, and checks its configuration. A health timeout fails deployment.
 
-## Step 1: Clone the Repository
+The API compiled dist and Next.js standalone build are inside the images. The VPS does not need Node.js/npm and does not compile the application. A successful push deploys automatically once this workflow is on main and the host is configured. Manual Run workflow remains available on main. Other branches cannot publish or deploy through this workflow. Running deployments are not cancelled by a later push; intermediate pending runs may be superseded by newer pushes.
+
+There is no owner-only actor restriction. A failing check prevents deployment, but a direct push has already changed main: coordinate fixes and do not bypass checks. Application security findings in AUDIT_2026-10-21.md still require separate repair before handling real payments.
+
+## 1. Install Docker on the fresh VPS
+
+Run as root in the Ubuntu SSH session, not in Windows PowerShell:
 
 ```bash
-# SSH into your VPS
-ssh engganyo@134.255.225.158
-
-# Clone the repository (if not already cloned)
-cd /opt
-git clone https://github.com/Botro-Plays/engganyo-project.git
-cd engganyo-project
+apt-get update
+apt-get install -y ca-certificates curl git openssl python3
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+cat > /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+docker --version
+docker compose version
 ```
 
-## Step 2: Place SSL Certificates
+This uses [Docker's official Ubuntu apt installation](https://docs.docker.com/engine/install/ubuntu/). The audited host had no Docker installation; existing hosts with conflicting Docker packages require the additional removal guidance in that document.
 
-Before starting services, place your Cloudflare Origin Certificates:
+## 2. Create a dedicated deployment account
+
+Still as root:
 
 ```bash
-# See infra/nginx/ssl/README.md for how to generate these
-nano /opt/engganyo-project/infra/nginx/ssl/cert.pem   # paste certificate
-nano /opt/engganyo-project/infra/nginx/ssl/key.pem    # paste private key
+id engganyo >/dev/null 2>&1 || adduser --disabled-password --gecos '' engganyo
+usermod -aG docker engganyo
+install -d -m 0755 -o engganyo -g engganyo /opt/engganyo-project
+install -d -m 0700 -o engganyo -g engganyo /home/engganyo/.ssh
+```
+
+The docker group has root-equivalent control through Docker; keep this account's key restricted to trusted automation. No general passwordless sudo rule is needed.
+
+## 3. Set up GitHub Actions to VPS SSH access
+
+There are two different SSH key pairs. Do not confuse this deployment-login key with the repository-read key in step 4.
+
+On your Windows PC, generate a new dedicated key (choose another filename if this one already exists):
+
+```powershell
+ssh-keygen -t ed25519 -C "engganyo-actions-to-vps" -f "$env:USERPROFILE\.ssh\engganyo_actions"
+```
+
+Press Enter twice for an empty passphrase for this automation key. Keep the private key private. View only its public part to copy to the VPS:
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\engganyo_actions.pub"
+```
+
+On the VPS as root, open the file below and paste the entire public-key line. Add `restrict ` before `ssh-ed25519` to disable forwarding and PTY allocation while allowing the noninteractive deployment command:
+
+```bash
+nano /home/engganyo/.ssh/authorized_keys
+chown engganyo:engganyo /home/engganyo/.ssh/authorized_keys
+chmod 600 /home/engganyo/.ssh/authorized_keys
+```
+
+Test from PowerShell:
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\engganyo_actions" engganyo@134.255.225.158 "id; docker info >/dev/null && echo Docker-access-OK"
+```
+
+Add the full private key to the repository secret VPS_SSH_KEY, directly in GitHub Settings > Secrets and variables > Actions. On Windows, copy it to your clipboard with:
+
+```powershell
+Get-Content -Raw "$env:USERPROFILE\.ssh\engganyo_actions" | Set-Clipboard
+```
+
+Do not paste the private key in chat, a commit, or an issue. Existing Actions secrets may still refer to the old server's deleted authorized_keys.
+
+Verify the server fingerprint through the provider console:
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256
+```
+
+Use that independently verified SHA256 value as VPS_HOST_FINGERPRINT. The value reported in the recovery conversation was SHA256:FpRke85Jh9Qw1/TbDjL7ThghyOciePFRiPCeN8f7++I; the code does not assume it was verified.
+
+## 4. Set up VPS to repository read access
+
+On the VPS as root, switch to the deployment account:
+
+```bash
+su - engganyo
+ssh-keygen -t ed25519 -N '' -C "engganyo-vps-repository-read" -f ~/.ssh/github_repo
+cat ~/.ssh/github_repo.pub
+```
+
+Add this PUBLIC key in the repository's Settings > Deploy keys. Leave Allow write access unchecked. Its private key stays only on the VPS; it is not VPS_SSH_KEY.
+
+As engganyo, add this host entry to ~/.ssh/config (preserve any existing entries):
+
+```text
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/github_repo
+  IdentitiesOnly yes
+```
+
+Then:
+
+```bash
+chmod 600 ~/.ssh/config
+ssh -T git@github.com
+```
+
+Verify GitHub's fingerprint against [GitHub's published host fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints) before accepting it. A successful authentication message says GitHub does not provide shell access and can exit with code 1; that is normal for this test.
+
+Clone into the empty directory prepared earlier:
+
+```bash
+git clone git@github.com:Botro-Plays/engganyo-project.git /opt/engganyo-project
+cd /opt/engganyo-project
+```
+
+Do not clone over an existing checkout. Deployments leave this checkout detached at a release commit; that is intentional. Do application development on your PCs rather than editing tracked files here.
+
+## 5. Create the new environment configuration
+
+There is no recovered database in this setup. These commands initialize configuration for an intentional fresh installation. They refuse to overwrite an existing .env.
+
+As engganyo in /opt/engganyo-project:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import secrets
+path = Path('.env')
+if path.exists():
+    raise SystemExit('.env already exists; inspect it instead of overwriting it')
+password = secrets.token_hex(32)
+values = {
+    'DATABASE_HOST': 'postgres',
+    'DATABASE_PASSWORD': password,
+    'DATABASE_URL': f'postgresql://engganyo:{password}@postgres:5432/engganyo_prod?connection_limit=10&pool_timeout=30',
+    'JWT_ACCESS_SECRET': secrets.token_hex(64),
+    'JWT_REFRESH_SECRET': secrets.token_hex(64),
+    'COOKIE_SECRET': secrets.token_hex(32),
+    'ENCRYPTION_KEY': secrets.token_hex(32),
+    'ADMIN_PASSWORD': secrets.token_urlsafe(32),
+    'SENTRY_DSN': '',
+}
+lines = Path('.env.production.example').read_text().splitlines()
+text = '\n'.join(f'{line.split("=", 1)[0]}={values[line.split("=", 1)[0]]}'
+                 if '=' in line and line.split('=', 1)[0] in values else line
+                 for line in lines) + '\n'
+with path.open('x') as output:
+    path.chmod(0o600)
+    output.write(text)
+print('Created .env with generated secrets; review remaining settings privately.')
+PY
+nano .env
+```
+
+Set SMTP credentials, ADMIN_EMAIL, domain URLs, and any intentional feature settings. Keep ENCRYPTION_KEY and other generated secrets in a secure off-host backup. These are new keys for a new database, not substitutes for keys required to decrypt an old backup. Do not use JWT_SECRET: this app reads JWT_ACCESS_SECRET and JWT_REFRESH_SECRET.
+
+Docker Compose supplies the internal PostgreSQL connection. Database passwords generated above are hex, so they are safe in a connection URL. PostgreSQL and Redis have no host-published ports in the updated compose file. API/web ports bind to localhost; Nginx exposes 80/443. REDIS_PASSWORD remains empty for this isolated Docker-network configuration; changing only that variable does not configure the Redis server to require it.
+
+## 6. Restore domain routing and HTTPS
+
+The checked-in Nginx config expects engganyo.com and www.engganyo.com. Point the Cloudflare DNS records to 134.255.225.158, keep the records proxied, and use Full (strict) TLS with a valid Cloudflare Origin Certificate.
+
+Place the certificate and its matching private key on the VPS:
+
+```bash
+nano infra/nginx/ssl/cert.pem
+nano infra/nginx/ssl/key.pem
 chmod 644 infra/nginx/ssl/cert.pem
 chmod 600 infra/nginx/ssl/key.pem
 ```
 
-## Step 3: Configure Environment Variables
+Nginx requires a client certificate on every TLS handshake (Authenticated Origin Pulls), so direct requests to the VPS IP cannot reach the application — only traffic through the proxied Cloudflare hostnames connects. The trust anchor is `infra/nginx/ssl/aop-root-ca.pem`: a private CA generated on the VPS (key `aop-root-key.pem`, mode 600, never leaves the VPS). The client leaf `origin-pull-client.pem`/`origin-pull-key.pem` (mode 600) is uploaded to Cloudflare in two separate API operations:
 
 ```bash
-# Copy the production environment template
-cp .env.production.example .env
+# 1. Upload the leaf certificate + key; response carries the cert id
+POST /zones/{zone_id}/origin_tls_client_auth/hostnames/certificates
+# body: {certificate, private_key}
 
-# Edit the .env file with your actual values
-nano .env
+# 2. Associate that cert id with each hostname and enable it
+PUT /zones/{zone_id}/origin_tls_client_auth/hostnames
+# body: {"config": [{"cert_id": "...", "hostname": "engganyo.com", "enabled": true},
+#                   {"cert_id": "...", "hostname": "www.engganyo.com", "enabled": true}]}
 ```
 
-**Required environment variables:**
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
-- `JWT_SECRET` - Secret for JWT token signing
-- `COOKIE_SECRET` - Secret for cookie encryption
-- `ENCRYPTION_KEY` - Encryption key for sensitive data
-- `ADMIN_EMAIL` - Admin account email
-- `ADMIN_PASSWORD` - Admin account password
+This binds verification to our zone's presented certificate rather than the shared public Cloudflare origin-pull CA, which only proves "some Cloudflare zone". Configure it before or with this deployment; the origin fails closed (rejects all TLS) until the matching CF-side config exists.
 
-## Step 4: Start Infrastructure Services
+Allow inbound SSH (22, unless deliberately changed), HTTP 80 and HTTPS 443 in the provider firewall. Do not open PostgreSQL/Redis/API/web ports publicly. GitHub-hosted runners must be able to reach the SSH port. If the domain is different, update Nginx, API CORS/socket origins, app URLs and the frontend build setting together.
 
-```bash
-# Start PostgreSQL and Redis
-docker-compose up -d postgres redis
-```
+A Cloudflare Origin Certificate is trusted by Cloudflare, not ordinary browsers connecting directly to the IP. Test the website through the configured domain.
 
-## Step 5: Run Database Migrations
+## 7. Repository Actions secrets and package access
 
-```bash
-# Run Prisma migrations to create database tables
-docker-compose exec -T api npx prisma migrate deploy
-```
+Set these in [repository Actions secrets](https://github.com/Botro-Plays/engganyo-project/settings/secrets/actions):
 
-## Step 6: Seed Database with Initial Data
-
-```bash
-# Run the seed script to create admin user and initial data
-docker-compose exec -T api npx prisma db seed
-```
-
-## Step 7: Pull Pre-built Images and Start All Services
-
-On first VPS setup, pull the latest images from GHCR (built by GitHub Actions) then start:
-
-```bash
-# Authenticate to GHCR (requires GHCR_TOKEN in .env — see GitHub Secrets section below)
-set -a; source .env; set +a
-echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-
-# Pull pre-built images
-docker pull ghcr.io/botro-plays/engganyo-project/api:latest
-docker pull ghcr.io/botro-plays/engganyo-project/web:latest
-
-# Start all services (no --build; uses pulled images)
-docker-compose up -d
-```
-
-## Step 8: Verify Services are Running
-
-```bash
-# Check all containers are running
-docker-compose ps
-
-# Check logs if needed
-docker-compose logs -f api
-docker-compose logs -f web
-docker-compose logs -f nginx
-```
-
-## Step 9: Access the Application
-
-- **Main Application:** `https://engganyo.com`
-- **Admin Dashboard:** `https://engganyo.com/admin`
-
-Default admin credentials (from seed):
-- Email: `admin@engganyo.com` (or your `ADMIN_EMAIL` env var)
-- Password: `Admin@123456` (or your `ADMIN_PASSWORD` env var)
-
----
-
-## Automated Deployment (GitHub Actions → GHCR → VPS)
-
-Deployments are **fully automated** on every push to `main`:
-
-1. **CI + E2E** (`deploy.yml`) — lint, test, build, E2E (Playwright), then build & push Docker images to GHCR
-2. **Deploy** (`deploy.yml` deploy job) — triggered when build succeeds:
-   - SSHes into VPS → pulls pre-built images → restarts containers → runs migrations
-   - Container entrypoint also runs `prisma migrate deploy` before app start as a safety net
-
-**No manual action required.** Deploy time: ~3 minutes (down from ~15 min).
-
----
-
-### Required GitHub Secrets
-
-Configure these in **GitHub → Settings → Secrets and variables → Actions**:
-
-| Secret | Description |
+| Secret | Value |
 |---|---|
-| `VPS_HOST` | VPS IP address or domain (e.g. `134.255.225.158`) |
-| `VPS_USER` | SSH username (e.g. `engganyo`, `ubuntu`, or `root`) |
-| `VPS_SSH_KEY` | **Full contents** of the VPS SSH private key (`~/.ssh/id_rsa`) |
-| `NEXT_PUBLIC_API_URL` | Production API URL baked into Next.js build (e.g. `https://engganyo.com/api`) |
-| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | Google reCAPTCHA v3 site key (public, baked into Next.js bundle) |
+| VPS_HOST | 134.255.225.158 |
+| VPS_USER | engganyo |
+| VPS_SSH_PORT | 22, or the configured SSH port |
+| VPS_SSH_KEY | Dedicated Actions-to-VPS private key from step 3 |
+| VPS_HOST_FINGERPRINT | Independently verified SHA256 server host fingerprint |
+| NEXT_PUBLIC_API_URL | https://engganyo.com/api |
+| NEXT_PUBLIC_RECAPTCHA_SITE_KEY | Your public site key, if reCAPTCHA is used |
 
-> `GITHUB_TOKEN` is **automatic** — no setup needed. It is used to push images to GHCR and for the VPS pull.
+GITHUB_TOKEN is supplied automatically for publishing/pulling this repository's packages. No long-lived GHCR token is needed for the normal workflow. Ensure the API and web GHCR packages grant this repository Actions access; otherwise login/pull/push can fail even though the SSH key works. See [GitHub Container Registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
----
+## 8. First release, seed, and verification
 
-### Setup Auto-Deploy Service (One-time, Manual Fallback)
+Complete server setup before pushing the restored automatic workflow to main. Once that push passes all checks, GitHub deploys it. Do not manually copy dist or install Node on the VPS. If the configuration commit was already pushed before host setup, use Actions > Deploy > Run workflow > main to retry the complete pipeline.
 
-The systemd service is a **manual fallback** only (e.g., if GitHub Actions is unavailable).
+The first startup applies migrations automatically. Seeding is deliberately not part of every deploy and happens only after explicit inspection, in this order:
 
-```bash
-# Copy the systemd service file
-sudo cp infra/scripts/auto-deploy.service /etc/systemd/system/
-
-# Make the script executable
-chmod +x infra/scripts/auto-deploy.sh
-
-# Reload systemd daemon
-sudo systemctl daemon-reload
-
-# Enable on boot (optional)
-sudo systemctl enable auto-deploy
-```
-
-For the manual fallback to work, add these two lines to `/opt/engganyo-project/.env`:
+1. Deploy and let migrations complete; confirm containers are healthy.
+2. Inspect the database — confirm it is empty of application data and this is intentionally a fresh installation (the old production database was lost with the host). A seed is only appropriate for a confirmed-empty fresh install; never run it against a populated database.
+3. Inspect what the seed creates before running it (`apps/api/prisma/seed.ts`): two SUPER_ADMIN users (`ADMIN_EMAIL`/`ADMIN_PASSWORD` and the botro account `BOTRO_PASSWORD` — both must be explicitly set in `.env`, never the file's fallback defaults), welcome notifications, 7 achievements, 3 daily missions, 10 platform config rows, and 6 sample platform campaigns. It contains no real users, transactions, or uploads — those are unrecoverable.
+4. Seed once, as engganyo:
 
 ```bash
-GHCR_TOKEN=<GitHub PAT with read:packages scope>
-GHCR_USER=<your GitHub username, e.g. botro-plays>
-```
-
-To trigger a manual deploy:
-
-```bash
-sudo systemctl start auto-deploy
-```
-
-### Check Deployment Logs
-
-```bash
-# View deployment logs (manual fallback)
-tail -f /opt/engganyo-project/auto-deploy.log
-
-# Check systemd service status
-sudo systemctl status auto-deploy
-
-# GitHub Actions deploys: check the Deploy workflow on github.com/Botro-Plays/engganyo-project/actions
-```
-
----
-
-## Common Maintenance Commands
-
-### Restart All Services
-
-```bash
-docker-compose restart
-```
-
-### Rebuild Specific Service
-
-```bash
-# Rebuild API only
-docker-compose up -d --build api
-
-# Rebuild Web only
-docker-compose up -d --build web
-```
-
-### View Logs
-
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f api
-docker-compose logs -f web
-docker-compose logs -f nginx
-```
-
-### Stop All Services
-
-```bash
-docker-compose down
-```
-
-### Stop and Remove All Data (⚠️ Destructive)
-
-```bash
-docker-compose down -v
-```
-
-### Run Migrations Only
-
-```bash
-docker-compose exec -T api npx prisma migrate deploy
-```
-
-### Seed Database Only
-
-```bash
-docker-compose exec -T api npx prisma db seed
-```
-
----
-
-## Troubleshooting
-
-### Containers Won't Start
-
-```bash
-# Check container status
-docker-compose ps
-
-# View logs
-docker-compose logs
-
-# Check disk space
-df -h
-```
-
-### Database Connection Issues
-
-```bash
-# Check PostgreSQL is running
-docker-compose ps postgres
-
-# Restart PostgreSQL
-docker-compose restart postgres
-```
-
-### Permission Denied on Auto-Deploy
-
-```bash
-# Ensure script is executable
-chmod +x infra/scripts/auto-deploy.sh
-
-# Check service status
-sudo systemctl status auto-deploy
-```
-
-### Port Already in Use
-
-```bash
-# Check what's using the port
-sudo netstat -tlnp | grep :3000
-sudo netstat -tlnp | grep :3001
-
-# Kill the process if needed
-sudo kill -9 <PID>
-```
-
----
-
-## Security Notes
-
-- Keep your `.env` file secure and never commit it to git
-- Use strong passwords for `ADMIN_PASSWORD`, `JWT_SECRET`, and `COOKIE_SECRET`
-- Regularly update Docker images: `docker-compose pull && docker-compose up -d --build`
-- Monitor logs for suspicious activity
-- Keep your VPS updated: `sudo apt update && sudo apt upgrade`
-- Uploads are protected by JWT authentication - only authenticated users can access proof files
-- Upload volume `engganyo_uploads` persists across container rebuilds
-
----
-
-## Email Verification Configuration
-
-To enable/disable email verification for new user registrations:
-
-```bash
-# Edit .env file
-nano .env
-
-# Set to true to enable, false to disable
-ENABLE_EMAIL_VERIFICATION=false
-
-# Restart API
-docker-compose restart api
-```
-
-When enabled, new users will have `PENDING_VERIFICATION` status and must be approved by admin in the admin dashboard.
-
----
-
-## Database Backup Strategy
-
-### Current Infrastructure
-
-- **PostgreSQL service**: `engganyo_postgres`
-- **Database volume**: `engganyo_pgdata` (mounted at `/var/lib/postgresql/data` in container)
-- **Project directory**: `/opt/engganyo-project`
-- **Backup directory**: `/opt/engganyo-project/backups` (recommended)
-
-### Manual Database Backup
-
-```bash
-# Create backup directory
-mkdir -p /opt/engganyo-project/backups
-
-# Backup PostgreSQL database (compressed)
-docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/engganyo_db_$(date +%Y%m%d_%H%M%S).sql.gz
-
-# Verify backup was created
-ls -lh /opt/engganyo-project/backups/
-```
-
-### Backup Naming Convention
-
-Format: `engganyo_db_YYYYMMDD_HHMMSS.sql.gz`
-
-Examples:
-- `engganyo_db_20260521_030000.sql.gz` (daily backup at 3:00 AM UTC)
-- `engganyo_db_20260521_120000.sql.gz` (manual backup)
-- `engganyo_db_20260521_235959.sql.gz` (end-of-day backup)
-
-### Backup Retention Policy
-
-**Recommended retention**:
-- **Daily backups**: Keep last 7 days
-- **Weekly backups**: Keep last 4 weeks
-- **Monthly backups**: Keep last 3 months
-
-**Backup directory structure**:
-```
-/opt/engganyo-project/backups/
-├── daily/
-│   ├── engganyo_db_20260521_030000.sql.gz
-│   ├── engganyo_db_20260520_030000.sql.gz
-│   └── ...
-├── weekly/
-│   ├── engganyo_db_week_20260521.sql.gz
-│   └── ...
-└── monthly/
-    ├── engganyo_db_month_202605.sql.gz
-    └── ...
-```
-
-### Manual Backup Rotation
-
-```bash
-# Delete backups older than 7 days
-find /opt/engganyo-project/backups/daily -name "*.sql.gz" -mtime +7 -delete
-
-# Delete weekly backups older than 4 weeks
-find /opt/engganyo-project/backups/weekly -name "*.sql.gz" -mtime +28 -delete
-
-# Delete monthly backups older than 3 months
-find /opt/engganyo-project/backups/monthly -name "*.sql.gz" -mtime +90 -delete
-```
-
-### Restore Verification
-
-After creating a backup, verify it can be restored:
-
-```bash
-# Test restore to a temporary database
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "CREATE DATABASE engganyo_test_restore;"
-gunzip -c /opt/engganyo-project/backups/engganyo_db_20260521_030000.sql.gz | docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore
-docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore -c "\dt"
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "DROP DATABASE engganyo_test_restore;"
-```
-
----
-
-## Automated Backup Flow
-
-### Cron Job Setup
-
-Add a cron job to run daily backups at 3:00 AM UTC:
-
-```bash
-# Open crontab for root
-sudo crontab -e
-
-# Add the following line (runs daily at 3:00 AM UTC)
-0 3 * * * mkdir -p /opt/engganyo-project/backups/daily && cd /opt/engganyo-project && /usr/bin/docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/daily/engganyo_db_$(date +\%Y\%m\%d_\%H\%M\%S).sql.gz && find /opt/engganyo-project/backups/daily -name "*.sql.gz" -mtime +7 -delete >> /opt/engganyo-project/backups/backup.log 2>&1
-
-# Save and exit
-```
-
-### Weekly Backup Cron Job
-
-```bash
-# Add weekly backup (Sundays at 4:00 AM UTC)
-0 4 * * 0 mkdir -p /opt/engganyo-project/backups/weekly && cd /opt/engganyo-project && /usr/bin/docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/weekly/engganyo_db_week_$(date +\%Y\%m\%d).sql.gz && find /opt/engganyo-project/backups/weekly -name "*.sql.gz" -mtime +28 -delete >> /opt/engganyo-project/backups/backup.log 2>&1
-```
-
-### Monthly Backup Cron Job
-
-```bash
-# Add monthly backup (1st of month at 5:00 AM UTC)
-0 5 1 * * mkdir -p /opt/engganyo-project/backups/monthly && cd /opt/engganyo-project && /usr/bin/docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/monthly/engganyo_db_month_$(date +\%Y\%m).sql.gz && find /opt/engganyo-project/backups/monthly -name "*.sql.gz" -mtime +90 -delete >> /opt/engganyo-project/backups/backup.log 2>&1
-```
-
-### Safe Backup Timing
-
-**Recommended backup schedule**:
-- **Daily**: 3:00 AM UTC (lowest traffic period)
-- **Weekly**: Sunday 4:00 AM UTC
-- **Monthly**: 1st of month 5:00 AM UTC
-
-**Avoid backing up during**:
-- Active deployment (auto-deploy.sh runs `docker-compose down`)
-- Prisma migrations (database schema changes)
-- High-traffic periods
-
-### Log Output Strategy
-
-Backup logs are written to `/opt/engganyo-project/backups/backup.log`
-
-```bash
-# View backup logs
-tail -f /opt/engganyo-project/backups/backup.log
-
-# Check last backup status
-tail -20 /opt/engganyo-project/backups/backup.log
-```
-
----
-
-## Disaster Recovery
-
-### Full PostgreSQL Restore
-
-```bash
-# Stop application services (keeps PostgreSQL running)
-docker-compose stop api web nginx
-
-# Restore from backup
-gunzip -c /opt/engganyo-project/backups/daily/engganyo_db_20260521_030000.sql.gz | docker-compose exec -T postgres psql -U engganyo -d engganyo_db
-
-# Restart application services
-docker-compose start api web nginx
-
-# Verify services are running
-docker-compose ps
-```
-
-### Restoring Uploads Directory
-
-**Current status**: Uploads ARE persisted via Docker volume `engganyo_uploads` (mounted at `/app/uploads` in API container). The volume persists across container rebuilds.
-
-**If volume is corrupted or lost**:
-
-```bash
-# Check if volume exists
-docker volume ls | grep engganyo_uploads
-
-# If volume exists but data is corrupted, restore from backup (if you have off-site backup)
-# Currently, there is NO automated off-site backup for uploads - this is a gap
-
-# Recommended: Add rsync to remote storage for uploads backup
-# (See Future Recommendations below)
-```
-
-### Restoring Docker Services
-
-```bash
-# If all containers are down
 cd /opt/engganyo-project
-
-# Start infrastructure services
-docker-compose up -d postgres redis
-
-# Wait for services to be healthy
-sleep 10
-
-# Start application services
-docker-compose up -d api web nginx
-
-# Verify services
-docker-compose ps
+docker compose --env-file .env --env-file .release.env exec -T api npm run db:seed
 ```
 
-### Restore Order
+5. Then verify the admin login (seeded accounts are `ACTIVE` and do not depend on outgoing email).
 
-**Recommended restore sequence**:
-1. Stop application services (`docker-compose stop api web nginx`)
-2. Restore PostgreSQL database from backup
-3. Verify database integrity (`docker-compose exec postgres psql -U engganyo -d engganyo_db -c "\dt"`)
-4. Start application services (`docker-compose start api web nginx`)
-5. Verify application functionality
-6. Check logs for errors (`docker-compose logs -f api web`)
+Read your generated admin password privately from .env, sign in, enable admin 2FA, and configure integrations with sandbox credentials. The audit's application-level authentication and payment defects remain separate launch blockers.
 
-### Verification Steps After Restore
+Check:
 
 ```bash
-# 1. Check database tables exist
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "\dt"
-
-# 2. Check user count
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "SELECT COUNT(*) FROM \"User\";"
-
-# 3. Check wallet balances
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "SELECT COUNT(*) FROM Wallet;"
-
-# 4. Check API is responding
-curl -f https://engganyo.com/api/v1/health || echo "API not responding"
-
-# 5. Check web is responding
-curl -f https://engganyo.com || echo "Web not responding"
-
-# 6. Check container logs
-docker-compose logs api web nginx
+cat .deployed-sha
+docker compose --env-file .env --env-file .release.env ps
+curl -fsS http://127.0.0.1:3001/api/health
+curl -I https://engganyo.com/login
 ```
 
----
+The API health JSON must report status ok (inside data), and containers should be healthy. A green CI run alone is not a successful deploy: check the final Deploy to VPS job too.
 
-## Uploads Persistence Status
+## Deferred reCAPTCHA (initial restricted deployment)
 
-### Current Implementation
+reCAPTCHA is disabled for the first team-only deployment: `ENABLE_RECAPTCHA=false` in `.env`, and no `recaptcha_enabled` row exists in the fresh database (backend enforcement reads the `platformConfig` DB row, default off; the frontend reads the public config and skips token generation, so registration/login work without a widget). To activate later:
 
-**Uploads ARE persisted via Docker volume**:
-- Volume name: `engganyo_uploads`
-- Mount point: `/app/uploads` in API container
-- Docker Compose configuration: `uploads_data:/app/uploads` (line 64 in docker-compose.yml)
-- Persistence: Volume persists across container rebuilds and restarts
+1. In the admin server-config UI (`platformConfig` rows), set `recaptcha_v3_site_key`, `recaptcha_v3_secret_key`, and `recaptcha_enabled=true`. This is the supported runtime path — the backend verifies tokens against the DB secret, and the public config supplies the site key, so **no rebuild is required**.
+2. `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (Actions secret, baked at build) and `RECAPTCHA_SECRET` (`.env`) are only fallbacks used when the DB values are absent — set them if you want belt-and-suspenders defaults before the DB is configured.
+3. Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, score threshold, successful siteverify) plus working register/login.
 
-### Verification
+## Deferred external services (initial restricted deployment)
 
-```bash
-# Check volume exists
-docker volume ls | grep engganyo_uploads
+- **Cloudflare Access**: a Zero Trust application covers `engganyo.com` and `www.engganyo.com` with an Allow policy for the two owner emails (one-time PIN login at `black-field-169f.cloudflareaccess.com`). Unauthenticated visitors get a 302 to the Access wall — the application itself is unreachable without Access. Remove or widen the policy before public launch.
+- **Outgoing email**: `SMTP_PASS` is unset, so email verification is configured but undeliverable. New registrations land in `PENDING_VERIFICATION` and cannot log in until SMTP is configured and they verify. The seeded admin accounts are created `ACTIVE` and log in normally — email verification status is checked via `UserStatus`, not a separate flag. Password-reset and 2FA-email flows are likewise unavailable until `SMTP_PASS` (Resend/SendGrid) is set. No startup or health-check dependency on SMTP exists; mail jobs simply fail/retry in the queue.
+- **Deferred**: reCAPTCHA (above), Grafana monitoring, HeiGIT routing, and any other optional integrations. None are required for startup, health checks, or the seeded-admin login.
 
-# Check volume details
-docker volume inspect engganyo_uploads
+## Troubleshooting and operations
 
-# Check uploads directory in container
-docker-compose exec api ls -la /app/uploads
-```
+- SSH authentication failure: verify VPS_USER, port, private/public key pairing, ownership and modes, and docker-group membership in a fresh login.
+- Host fingerprint mismatch: verify the new key through the provider console; update the secret only after verification.
+- Git permission denied: repair the separate read-only deploy key, not VPS_SSH_KEY.
+- GHCR denied: check the repository/package Actions access and job package permissions.
+- Missing .env/certificate: finish steps 5-6. Deployment fails before replacing applications.
+- Migration/startup failure: inspect API logs; never use prisma migrate reset on the VPS.
+- Deployment rejects tracked changes: inspect and preserve server edits; move intended changes into Git rather than using a destructive reset.
+- Health timeout: inspect logs and fix/revert through Git. There is no automatic schema rollback.
 
-### Current Risk
+For compose operations after deployment, include both env files so recreation preserves the recorded release image tags. `docker compose ... restart` restarts existing containers; it does not fetch new code.
 
-**LOW RISK**: Uploads are persisted via Docker volume and will survive:
-- Container restarts
-- Container rebuilds
-- Service restarts
-- Auto-deploy script execution
+Do not enable the legacy auto-deploy.service at boot. Docker's restart policies restart existing services after reboot. The legacy script can bypass checks and select mutable latest images; it is not the automatic GitHub pipeline. If an old host had it enabled, disable it with systemctl disable --now auto-deploy as root.
 
-**MEDIUM RISK**: Uploads will be lost if:
-- Docker volume is manually deleted (`docker volume rm engganyo_uploads`)
-- VPS suffers catastrophic disk failure
-- Volume corruption occurs
-
-**NO OFF-SITE BACKUP**: Currently, uploads are NOT backed up to external storage. This is a gap for disaster recovery.
-
-### Recommended Future Fix
-
-Add off-site backup for uploads directory:
-
-```bash
-# Example: rsync uploads to remote storage (not yet implemented)
-# This would require:
-# 1. Remote storage service (S3, Backblaze B2, or remote VPS)
-# 2. rsync or rclone configuration
-# 3. Cron job for periodic sync
-# 4. Encryption for sensitive uploads
-```
-
----
-
-## Operational Safety Notes
-
-### Testing Restores Periodically
-
-**Recommended**: Test restore process monthly
-
-```bash
-# Monthly restore test procedure:
-# 1. Take a fresh backup
-docker-compose exec -T postgres pg_dump -U engganyo engganyo_db | gzip > /opt/engganyo-project/backups/test_restore_$(date +%Y%m%d).sql.gz
-
-# 2. Create test database
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "CREATE DATABASE engganyo_test_restore;"
-
-# 3. Restore to test database
-gunzip -c /opt/engganyo-project/backups/test_restore_$(date +%Y%m%d).sql.gz | docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore
-
-# 4. Verify data integrity
-docker-compose exec -T postgres psql -U engganyo -d engganyo_test_restore -c "SELECT COUNT(*) FROM \"User\";"
-
-# 5. Drop test database
-docker-compose exec -T postgres psql -U engganyo -d engganyo_db -c "DROP DATABASE engganyo_test_restore;"
-
-# 6. Document results in backup log
-echo "$(date): Monthly restore test completed successfully" >> /opt/engganyo-project/backups/backup.log
-```
-
-### Verifying Backup Integrity
-
-```bash
-# Check backup file size (should be > 0)
-ls -lh /opt/engganyo-project/backups/daily/
-
-# Verify backup is valid gzip file
-gunzip -t /opt/engganyo-project/backups/daily/engganyo_db_20260521_030000.sql.gz
-
-# Check backup content (first few lines)
-gunzip -c /opt/engganyo-project/backups/daily/engganyo_db_20260521_030000.sql.gz | head -20
-```
-
-### Off-Site Backup Recommendations
-
-**Current status**: No off-site backup configured
-
-**Recommended**: Add off-site backup for disaster recovery
-
-**Options**:
-1. **S3-compatible storage** (AWS S3, DigitalOcean Spaces, Wasabi)
-2. **Backblaze B2** (cost-effective object storage)
-3. **Remote VPS** (rsync to backup server)
-4. **GitHub Actions artifact** (for smaller databases)
-
-**Example cron job for S3 sync** (requires AWS CLI setup):
-```bash
-# Install AWS CLI
-sudo apt install awscli
-
-# Configure AWS credentials
-aws configure
-
-# Sync backups to S3 (not yet implemented)
-# 0 6 * * * aws s3 sync /opt/engganyo-project/backups/ s3://engganyo-backups/ --delete >> /opt/engganyo-project/backups/s3-sync.log 2>&1
-```
-
-### Disk Space Monitoring
-
-```bash
-# Check disk space
-df -h
-
-# Check backup directory size
-du -sh /opt/engganyo-project/backups/
-
-# Set up disk space alert (add to crontab)
-# Alert if disk usage > 80%
-0 */6 * * * df -h | awk '$5 > 80 {print "Disk usage warning: " $0}' | mail -s "Disk space alert" admin@engganyo.com
-```
-
-### Avoiding Backup During Migrations
-
-**Risk**: Backing up during Prisma migrations can capture inconsistent database state
-
-**Mitigation**:
-1. Schedule backups outside of deployment windows
-2. Auto-deploy.sh runs migrations after `docker-compose up -d --build`
-3. Avoid running manual backups during deployment
-4. Check deployment log before running manual backup
-
-**Recommended**: Run backups at least 1 hour after any deployment
-
-```bash
-# Check last deployment time
-tail -20 /opt/engganyo-project/auto-deploy.log
-
-# If recent deployment, wait before manual backup
-```
-
----
-
-## Monitoring & Auto-Recovery
-
-This section covers the health-check monitoring and auto-recovery mechanism to prevent outages.
-
-### What It Does
-
-The `health-check.sh` script runs every minute via cron. It performs the following checks and recovery actions:
-
-1. **API Health Check** — pings `http://localhost:3001/api/health`
-2. **Nginx Health Check** — pings `https://localhost/`
-3. **Host Nginx Detection** — detects if a host-level nginx process is interfering with Docker port bindings
-4. **Auto-Recovery** — attempts to restart services if any health check fails
-
-### Recovery Behavior
-
-| Failure Type | Recovery Action |
-|-------------|-----------------|
-| Host nginx on port 80 | Stop and disable host nginx service |
-| Nginx container unhealthy | Restart nginx container (`docker compose restart nginx`) |
-| API or full stack down | Full stack restart (`docker compose down && up -d`) |
-
-### One-Time Setup
-
-Run these commands **once** on the VPS after the initial deployment:
-
-```bash
-# Navigate to project directory
-cd /opt/engganyo-project
-
-# Make the health-check script executable
-chmod +x infra/scripts/health-check.sh
-
-# Install the cron job (runs every minute)
-( sudo crontab -l 2>/dev/null; echo "* * * * * /opt/engganyo-project/infra/scripts/health-check.sh >> /opt/engganyo-project/infra/scripts/health-check.log 2>&1" ) | sudo crontab -
-
-# Verify the cron job is installed
-sudo crontab -l | grep health-check
-```
-
-### Monitoring the Logs
-
-```bash
-# View the last 50 log entries
-tail -n 50 /opt/engganyo-project/infra/scripts/health-check.log
-
-# Follow logs in real-time
-tail -f /opt/engganyo-project/infra/scripts/health-check.log
-
-# Check log file size
-ls -lh /opt/engganyo-project/infra/scripts/health-check.log
-```
-
-The script automatically rotates the log file when it exceeds 10 MB.
-
-### Manual Health Check
-
-```bash
-# Run the health check manually (no recovery actions)
-curl -sf --max-time 10 http://localhost:3001/api/health
-
-# Check nginx response
-curl -sf --max-time 10 -k https://localhost/
-```
-
-### Expected Log Output
-
-When everything is healthy (logged once per hour):
-
-```
-[2026-05-29 10:00:00] OK: API and nginx healthy.
-```
-
-When recovery is triggered:
-
-```
-[2026-05-29 10:01:00] ALERT: API health check FAILED (http://localhost:3001/api/health)
-[2026-05-29 10:01:00] RECOVERY: Attempting to restore services...
-[2026-05-29 10:01:05] RECOVERY: Nginx restart succeeded.
-```
-
-### Removing the Cron Job
-
-```bash
-# Remove the health-check cron job
-sudo crontab -l | grep -v health-check | sudo crontab -
-```
-
----
-
-## Security Hardening
-
-### fail2ban — SSH Brute-Force Protection
-
-Install fail2ban to automatically block IPs that repeatedly fail SSH authentication:
-
-```bash
-# Install
-sudo apt install fail2ban -y
-
-# Enable and start immediately
-sudo systemctl enable fail2ban --now
-
-# Verify it's running
-sudo systemctl status fail2ban
-
-# Check it's watching SSH
-sudo fail2ban-client status sshd
-
-# See currently banned IPs
-sudo fail2ban-client status sshd | grep "Banned IP list"
-```
-
-**Default behavior:** 5 failed SSH login attempts within 10 minutes → IP banned for 1 hour.
-
-**Monitor bans in real-time:**
-```bash
-sudo tail -f /var/log/fail2ban.log
-```
-
-### SSH Hardening Checklist
-
-Verify these settings are in place:
-
-```bash
-# Check password authentication is disabled
-grep -E "^PasswordAuthentication|^PermitRootLogin" /etc/ssh/sshd_config
-```
-
-Expected output:
-```
-PasswordAuthentication no
-PermitRootLogin no
-```
-
-If either shows `yes`, edit `/etc/ssh/sshd_config` and set both to `no`, then restart SSH:
-```bash
-sudo systemctl restart sshd
-```
-
----
-
-## Future Recommendations
-
-### High Priority
-1. **Add off-site backup for PostgreSQL**: Use S3, Backblaze B2, or remote VPS
-2. **Add off-site backup for uploads**: Sync `engganyo_uploads` volume to remote storage
-3. **Add backup monitoring**: Alert on backup failure, disk space issues
-4. **Add automated restore testing**: Monthly restore test with automated verification
-
-### Medium Priority
-1. **Add point-in-time recovery**: Configure PostgreSQL WAL archiving
-2. **Add backup encryption**: Encrypt backups before off-site sync
-3. **Add backup compression optimization**: Use pg_dump custom format for faster restores
-4. **Add multi-region backup**: Store backups in different geographic region
-
-### Low Priority
-1. **Add backup dashboard**: Web UI for backup status monitoring
-2. **Add one-click restore**: Scripted restore with confirmation
-3. **Add backup retention policies per environment**: Different policies for dev/staging/prod
-4. **Add backup cost optimization**: Lifecycle policies for off-site storage
-
----
+Back up PostgreSQL, uploads and encryption/environment material off-host and verify restoration. A failed update may leave services unavailable; keep the previous release tags and a pre-migration backup available. Coordinate database schema changes between both collaborators.

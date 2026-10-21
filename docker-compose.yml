@@ -7,9 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-engganyo_db}
       POSTGRES_USER: ${DATABASE_USER:-engganyo}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-engganyo_dev_pass}
-    ports:
-      - '${DATABASE_PORT:-5432}:5432'
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in the VPS .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infra/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -40,9 +38,7 @@ services:
       redis-server
       --appendonly yes
       --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
-    ports:
-      - '${REDIS_PORT:-6379}:6379'
+      --maxmemory-policy noeviction
     volumes:
       - redisdata:/data
     healthcheck:
@@ -64,27 +60,34 @@ services:
 
   # ─── API (NestJS) ─────────────────────────────────────────
   api:
-    image: ghcr.io/botro-plays/engganyo-project/api:latest
+    image: ${API_IMAGE:-ghcr.io/botro-plays/engganyo-project/api:latest}
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/api/Dockerfile
       target: production
     container_name: engganyo_api
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://${DATABASE_USER:-engganyo}:${DATABASE_PASSWORD:-engganyo_dev_pass}@postgres:5432/${DATABASE_NAME:-engganyo_db}
+      DATABASE_URL: postgresql://${DATABASE_USER:-engganyo}:${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in the VPS .env}@postgres:5432/${DATABASE_NAME:-engganyo_db}
       REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
     ports:
-      - '${APP_PORT:-3001}:3001'
+      - '127.0.0.1:${APP_PORT:-3001}:3001'
     volumes:
-      - uploads_data:/app/uploads
+      - uploads_data:/app/apps/api/uploads
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3001/api/health', {signal: AbortSignal.timeout(4000)}).then(async r => { const j = await r.json(); process.exit(r.ok && (j.data ?? j).status === 'ok' ? 0 : 1); }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -99,24 +102,30 @@ services:
 
   # ─── Web (Next.js) ────────────────────────────────────────
   web:
-    image: ghcr.io/botro-plays/engganyo-project/web:latest
+    image: ${WEB_IMAGE:-ghcr.io/botro-plays/engganyo-project/web:latest}
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
       target: production
       args:
-        NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:3001}/${API_PREFIX:-api/v1}
+        NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:3001}/${API_PREFIX:-api}
         NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}
     container_name: engganyo_web
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:3001}/${API_PREFIX:-api/v1}
+      NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:3001}/${API_PREFIX:-api}
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     depends_on:
       - api
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/login', {signal: AbortSignal.timeout(4000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -146,7 +155,7 @@ services:
       web:
         condition: service_started
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost/']
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1/nginx-health']
       interval: 10s
       timeout: 5s
       retries: 5

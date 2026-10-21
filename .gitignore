@@ -32,6 +32,9 @@ infra/nginx/ssl/*.pem
 infra/nginx/ssl/*.crt
 infra/nginx/ssl/*.key
 .seeded
+.release.env
+.deployed-sha
+.deploy.lock
 
 # Testing
 coverage/

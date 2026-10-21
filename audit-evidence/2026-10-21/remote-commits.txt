@@ -1,0 +1,8 @@
+422d6ba 2026-10-21 jhingxpress fix(web): complete Sprint 1 frontend audit fixes
+48e030e 2026-10-20 jhingxpress chore(ci): gate image publishing and VPS deployment behind manual dispatch
+761aa43 2026-10-20 jhingxpress fix(e2e): assert register redirect matches returned user status
+05ae224 2026-10-20 jhingxpress fix(web): address Sprint 1 frontend audit findings
+92919bc 2026-10-20 jhingxpress fix(web): improve onboarding tour accessibility descriptions
+681b493 2026-10-20 jhingxpress feat(web): add interactive onboarding tour
+062426c 2026-10-19 jhingxpress fix(web): preserve login errors and verify forum topic edits
+90fe675 2026-10-17 jhingxpress fix(gamification): enforce 24h reward cooldown and 45h streak grace
