@@ -200,7 +200,8 @@ Nginx requires a client certificate on every TLS handshake (Authenticated Origin
 
 ```bash
 # 1. Upload the leaf certificate + key; response carries the cert id
-POST /zones/{zone_id}/origin_tls_client_auth   # body: {certificate, private_key}
+POST /zones/{zone_id}/origin_tls_client_auth/hostnames/certificates
+# body: {certificate, private_key}
 
 # 2. Associate that cert id with each hostname and enable it
 PUT /zones/{zone_id}/origin_tls_client_auth/hostnames
