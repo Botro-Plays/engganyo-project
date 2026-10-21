@@ -235,14 +235,21 @@ GITHUB_TOKEN is supplied automatically for publishing/pulling this repository's 
 
 Complete server setup before pushing the restored automatic workflow to main. Once that push passes all checks, GitHub deploys it. Do not manually copy dist or install Node on the VPS. If the configuration commit was already pushed before host setup, use Actions > Deploy > Run workflow > main to retry the complete pipeline.
 
-The first startup applies migrations automatically. After the deployment succeeds, seed the NEW database once, as engganyo:
+The first startup applies migrations automatically. Seeding is deliberately not part of every deploy and happens only after explicit inspection, in this order:
+
+1. Deploy and let migrations complete; confirm containers are healthy.
+2. Inspect the database — confirm it is empty of application data and this is intentionally a fresh installation (the old production database was lost with the host). A seed is only appropriate for a confirmed-empty fresh install; never run it against a populated database.
+3. Inspect what the seed creates before running it (`apps/api/prisma/seed.ts`): two SUPER_ADMIN users (`ADMIN_EMAIL`/`ADMIN_PASSWORD` and the botro account `BOTRO_PASSWORD` — both must be explicitly set in `.env`, never the file's fallback defaults), welcome notifications, 7 achievements, 3 daily missions, 10 platform config rows, and 6 sample platform campaigns. It contains no real users, transactions, or uploads — those are unrecoverable.
+4. Seed once, as engganyo:
 
 ```bash
 cd /opt/engganyo-project
 docker compose --env-file .env --env-file .release.env exec -T api npm run db:seed
 ```
 
-Seeding is deliberately not part of every deploy. Read your generated admin password privately from .env, sign in, enable admin 2FA, and configure integrations with sandbox credentials. The audit's application-level authentication and payment defects remain separate launch blockers.
+5. Then verify the admin login (seeded accounts are `ACTIVE` and do not depend on outgoing email).
+
+Read your generated admin password privately from .env, sign in, enable admin 2FA, and configure integrations with sandbox credentials. The audit's application-level authentication and payment defects remain separate launch blockers.
 
 Check:
 
