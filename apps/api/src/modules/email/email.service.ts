@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
-import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
-import * as nodemailer from 'nodemailer';
+import { SmtpSettingsService } from './smtp-settings.service';
 
 import { announcementEmailTemplate } from './email.templates';
 
@@ -29,7 +28,7 @@ export class EmailService {
 
   constructor(
     @InjectQueue(EMAIL_QUEUE) private readonly queue: Queue,
-    private readonly config: ConfigService,
+    private readonly smtp: SmtpSettingsService,
   ) {}
 
   async queueVerificationEmail(to: string, token: string): Promise<void> {
@@ -97,34 +96,18 @@ export class EmailService {
       ctaUrl?: string;
     },
   ): Promise<void> {
-    const mailer = nodemailer.createTransport({
-      host: this.config.get<string>('email.host', 'localhost'),
-      port: this.config.get<number>('email.port', 587),
-      secure: this.config.get<boolean>('email.secure', false),
-      auth: this.config.get<string>('email.user')
-        ? {
-            user: this.config.get<string>('email.user')!,
-            pass: this.config.get<string>('email.pass')!,
-          }
-        : undefined,
-    });
-
-    const fromName = this.config.get<string>('email.fromName', 'Engganyo');
-    const fromEmail = this.config.get<string>('email.fromEmail', 'no-reply@engganyo.com');
-
     try {
-      const info = await mailer.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
+      await this.smtp.sendMail({
         to,
         subject: data.subject,
         html: announcementEmailTemplate(data),
       });
 
-      this.logger.log(`Direct announcement sent → ${to} | response: ${info.response}`);
+      this.logger.log(`Direct announcement sent → ${to}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Direct announcement FAILED → ${to} | subject: "${data.subject}" | SMTP host: ${this.config.get<string>('email.host')} | error: ${msg}`,
+        `Direct announcement FAILED → ${to} | error: ${msg}`,
       );
       throw new Error(`Email send failed: ${msg}`);
     }

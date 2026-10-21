@@ -11,6 +11,7 @@ import {
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
+import { SmtpSettingsForm } from '@/components/admin/smtp-settings-form';
 
 // ─── Types ────────────────────────────────────────────────────
 interface OAuthConfigEntry {
@@ -163,7 +164,7 @@ const EXPORT_TABLES = [
   { key: 'audit_logs',   label: 'Audit Logs',        icon: ScrollText, description: 'Admin action audit trail (latest 50,000 rows)' },
 ];
 
-type Tab = 'integrations' | 'general' | 'finances' | 'export' | 'danger';
+type Tab = 'integrations' | 'email' | 'general' | 'finances' | 'export' | 'danger';
 
 // ─── Main Component ───────────────────────────────────────────
 export default function ServerConfigPage() {
@@ -335,6 +336,7 @@ export default function ServerConfigPage() {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'integrations', label: 'Integrations', icon: KeyRound },
+    { id: 'email',        label: 'Email',        icon: FileText },
     { id: 'general',      label: 'General',       icon: Settings2 },
     { id: 'finances',     label: 'Finances',      icon: Coins },
     { id: 'export',       label: 'Data Export',   icon: Download },
@@ -355,7 +357,7 @@ export default function ServerConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-surface-border">
+      <div className="flex gap-1 mb-6 border-b border-surface-border overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -375,6 +377,7 @@ export default function ServerConfigPage() {
       </div>
 
       {/* ── Tab: Integrations ── */}
+      {tab === 'email' && <SmtpSettingsForm />}
       {tab === 'integrations' && (
         <div>
           <p className="text-zinc-400 text-sm mb-5">
