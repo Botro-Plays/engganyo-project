@@ -263,6 +263,12 @@ reCAPTCHA is disabled for the first team-only deployment: `ENABLE_RECAPTCHA=fals
 2. `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (Actions secret, baked at build) and `RECAPTCHA_SECRET` (`.env`) are only fallbacks used when the DB values are absent — set them if you want belt-and-suspenders defaults before the DB is configured.
 3. Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, score threshold, successful siteverify) plus working register/login.
 
+## Deferred external services (initial restricted deployment)
+
+- **Cloudflare Access**: a Zero Trust application covers `engganyo.com` and `www.engganyo.com` with an Allow policy for the two owner emails (one-time PIN login at `black-field-169f.cloudflareaccess.com`). Unauthenticated visitors get a 302 to the Access wall — the application itself is unreachable without Access. Remove or widen the policy before public launch.
+- **Outgoing email**: `SMTP_PASS` is unset, so email verification is configured but undeliverable. New registrations land in `PENDING_VERIFICATION` and cannot log in until SMTP is configured and they verify. The seeded admin accounts are created `ACTIVE` and log in normally — email verification status is checked via `UserStatus`, not a separate flag. Password-reset and 2FA-email flows are likewise unavailable until `SMTP_PASS` (Resend/SendGrid) is set. No startup or health-check dependency on SMTP exists; mail jobs simply fail/retry in the queue.
+- **Deferred**: reCAPTCHA (above), Grafana monitoring, HeiGIT routing, and any other optional integrations. None are required for startup, health checks, or the seeded-admin login.
+
 ## Troubleshooting and operations
 
 - SSH authentication failure: verify VPS_USER, port, private/public key pairing, ownership and modes, and docker-group membership in a fresh login.
