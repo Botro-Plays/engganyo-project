@@ -196,6 +196,8 @@ chmod 644 infra/nginx/ssl/cert.pem
 chmod 600 infra/nginx/ssl/key.pem
 ```
 
+Nginx requires a Cloudflare origin-pull client certificate on every TLS handshake (Authenticated Origin Pulls), so direct requests to the VPS IP cannot reach the application — only traffic through the proxied Cloudflare hostnames connects. The public CA file must exist at `infra/nginx/ssl/origin-pull-ca.pem` (it is fetched once during host setup; deployment fails fast without it). Enable the zone's Authenticated Origin Pulls / `tls_client_auth` setting before or with the deployment of this configuration; enabling it on the zone first is harmless because an origin that does not verify client certs ignores it.
+
 Allow inbound SSH (22, unless deliberately changed), HTTP 80 and HTTPS 443 in the provider firewall. Do not open PostgreSQL/Redis/API/web ports publicly. GitHub-hosted runners must be able to reach the SSH port. If the domain is different, update Nginx, API CORS/socket origins, app URLs and the frontend build setting together.
 
 A Cloudflare Origin Certificate is trusted by Cloudflare, not ordinary browsers connecting directly to the IP. Test the website through the configured domain.

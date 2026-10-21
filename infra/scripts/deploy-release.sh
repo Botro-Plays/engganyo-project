@@ -13,7 +13,7 @@ cd /opt/engganyo-project
 exec 9>.deploy.lock
 flock -n 9 || { echo 'Another deployment is running'; exit 1; }
 
-for required_file in .env infra/nginx/ssl/cert.pem infra/nginx/ssl/key.pem; do
+for required_file in .env infra/nginx/ssl/cert.pem infra/nginx/ssl/key.pem infra/nginx/ssl/origin-pull-ca.pem; do
   test -s "$required_file" || { echo "Missing VPS setup file: $required_file"; exit 1; }
 done
 
