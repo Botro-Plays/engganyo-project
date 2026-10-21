@@ -26,6 +26,8 @@ import { AdminPinGuard } from '../../common/guards/admin-pin.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { SmtpSettingsService } from '../email/smtp-settings.service';
+import { SmtpSettingsDto } from '../email/smtp-settings.dto';
 
 @ApiTags('admin')
 @Controller({ path: 'admin' })
@@ -35,6 +37,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
+    private readonly smtp: SmtpSettingsService,
     @InjectQueue('email') private readonly emailQueue: Queue,
     @InjectQueue('analytics') private readonly analyticsQueue: Queue,
     @InjectQueue('trust-score') private readonly trustScoreQueue: Queue,
@@ -428,6 +431,30 @@ export class AdminController {
   }
 
   // ─── Server Config (SUPER_ADMIN only) ────────────────────────
+
+  @Get('smtp-settings')
+  @Roles(UserRole.SUPER_ADMIN)
+  getSmtpSettings() {
+    return this.smtp.getSettings();
+  }
+
+  @Patch('smtp-settings')
+  @Roles(UserRole.SUPER_ADMIN)
+  updateSmtpSettings(@CurrentUser() admin: JwtPayload, @Body() dto: SmtpSettingsDto) {
+    return this.smtp.saveSettings(admin.sub, dto);
+  }
+
+  @Post('smtp-settings/test')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.SUPER_ADMIN)
+  async testSmtpSettings(@CurrentUser() admin: JwtPayload) {
+    await this.smtp.sendMail({
+      to: admin.email,
+      subject: 'Engganyo email delivery test',
+      text: 'Your saved Engganyo email settings successfully submitted this test message.',
+    });
+    return { sent: true };
+  }
 
   @Get('server-config')
   @Roles(UserRole.SUPER_ADMIN)
