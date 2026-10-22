@@ -10,6 +10,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { UserRateLimitGuard } from '../../common/guards/user-rate-limit.guard';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     ReferralsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, TwoFactorService, JwtStrategy],
+  providers: [AuthService, TwoFactorService, JwtStrategy, UserRateLimitGuard],
   exports: [AuthService, TwoFactorService],
 })
 export class AuthModule {}

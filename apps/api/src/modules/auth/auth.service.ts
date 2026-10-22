@@ -422,8 +422,7 @@ export class AuthService {
       status: user.status,
     });
 
-    const forwarded = req.headers['x-forwarded-for'] as string | undefined;
-    const ip = forwarded?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? '';
     await this.storeSession(tokens.refreshToken, user.id, ip, req.headers['user-agent'] ?? '');
     this.setRefreshCookie(res, tokens.refreshToken);
 

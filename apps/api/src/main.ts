@@ -28,8 +28,11 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
   });
 
-  // Trust proxy headers from Nginx + Cloudflare
-  app.set('trust proxy', true);
+  // Trust exactly one proxy hop: Nginx overwrites X-Forwarded-For with the
+  // verified client address (CF-Connecting-IP for proxied traffic), so
+  // req.ip is the real client and client-supplied forwarding values are
+  // never reachable.
+  app.set('trust proxy', 1);
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port', 3001);
