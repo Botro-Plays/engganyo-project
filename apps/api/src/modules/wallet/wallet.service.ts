@@ -566,8 +566,6 @@ export class WalletService {
       if (!walletRecord) throw new NotFoundException('Wallet not found');
 
       const amount = existing.creditsToAward;
-      const balanceBefore = walletRecord.balance;
-      const balanceAfter = balanceBefore + amount;
 
       const updatedCount = await tx.deposit.updateMany({
         where: {
@@ -591,32 +589,18 @@ export class WalletService {
       const updatedDeposit = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!updatedDeposit) throw new NotFoundException('Deposit disappeared');
 
-      const updatedWallet = await tx.wallet.update({
+      // Route through the versioned engine — the deposit claim above stops
+      // double completion, but the wallet write still has to be safe against
+      // OTHER concurrent balance changes on the same wallet.
+      await this.credit(existing.userId, amount, {
+        type: txType,
+        description: `Deposit via ${existing.method} — ${existing.amountFiat} ${existing.currency}`,
+        referenceId: depositId,
+        referenceType: 'Deposit',
+      }, tx);
+
+      const updatedWallet = await tx.wallet.findUniqueOrThrow({
         where: { id: walletRecord.id },
-        data: {
-          balance: balanceAfter,
-          lifetimeEarned: { increment: amount },
-          version: { increment: 1 },
-        },
-      });
-
-      await tx.transaction.create({
-        data: {
-          walletId: walletRecord.id,
-          type: txType,
-          status: TransactionStatus.COMPLETED,
-          amount,
-          balanceBefore,
-          balanceAfter,
-          description: `Deposit via ${existing.method} — ${existing.amountFiat} ${existing.currency}`,
-          referenceId: depositId,
-          referenceType: 'Deposit',
-        },
-      });
-
-      await tx.user.update({
-        where: { id: existing.userId },
-        data: { creditBalance: balanceAfter },
       });
 
       const vpAmount = Math.round((existing.amountFiat ?? 0) * VP_REWARDS.DEPOSIT_PER_DOLLAR);
