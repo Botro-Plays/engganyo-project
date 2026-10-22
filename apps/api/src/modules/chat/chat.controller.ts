@@ -56,11 +56,7 @@ export class ChatController {
   }
 
   private getClientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'] as string;
-    if (forwarded) {
-      return forwarded.split(',')[0].trim();
-    }
-    return req.socket.remoteAddress || req.connection.remoteAddress || 'unknown';
+    return req.ip || req.socket.remoteAddress || req.connection.remoteAddress || 'unknown';
   }
 
   private extractUserIdFromToken(req: Request): string | null {

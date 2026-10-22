@@ -51,7 +51,7 @@ export class TasksController {
     @Param('campaignId') campaignId: string,
     @Req() req: Request,
   ) {
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const clientIp = req.ip ?? req.socket?.remoteAddress ?? '';
     return this.tasksService.assignTask(user.sub, campaignId, user.role, clientIp || undefined);
   }
 
@@ -66,7 +66,7 @@ export class TasksController {
     @Body() dto: SubmitProofDto,
     @Req() req: Request,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? '';
     return this.tasksService.submitProof(user.sub, campaignId, dto, ip, req.headers['user-agent'] ?? '');
   }
 

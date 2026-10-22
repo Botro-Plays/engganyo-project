@@ -55,7 +55,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? '';
     return this.authService.register(dto, res, ip, req.headers['user-agent'] ?? '');
   }
 
@@ -68,7 +68,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? '';
     return this.authService.login(dto, res, ip, req.headers['user-agent'] ?? '');
   }
 
@@ -224,7 +224,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? '';
     return this.authService.completeTwoFactorLogin(dto.twoFactorToken, dto.code, dto.method, res, ip, req.headers['user-agent'] ?? '');
   }
 
