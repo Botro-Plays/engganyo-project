@@ -6,7 +6,7 @@ import {
   Loader2, Save, Eye, EyeOff, CheckCircle2, AlertCircle, KeyRound,
   Settings2, Download, AlertTriangle, RotateCcw, Trash2, X,
   ShieldOff, ToggleLeft, Coins, Users, BarChart2, ScrollText,
-  Megaphone, FileText, MessageSquare, CreditCard, Wallet, Bitcoin, DollarSign,
+  Megaphone, Mail, MessageSquare, CreditCard, Wallet, Bitcoin, DollarSign,
 } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -336,7 +336,7 @@ export default function ServerConfigPage() {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'integrations', label: 'Integrations', icon: KeyRound },
-    { id: 'email',        label: 'Email',        icon: FileText },
+    { id: 'email',        label: 'Email',        icon: Mail },
     { id: 'general',      label: 'General',       icon: Settings2 },
     { id: 'finances',     label: 'Finances',      icon: Coins },
     { id: 'export',       label: 'Data Export',   icon: Download },

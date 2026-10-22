@@ -74,6 +74,12 @@ export class EventsGateway
         secret: this.configService.get<string>('jwt.accessSecret'),
       });
 
+      if ((payload as { purpose?: string }).purpose !== 'access') {
+        this.logger.warn('Socket connection rejected: wrong token purpose');
+        client.disconnect(true);
+        return;
+      }
+
       const userId = payload.sub as string;
       if (!userId) {
         this.logger.warn('Socket connection rejected: no userId in token');

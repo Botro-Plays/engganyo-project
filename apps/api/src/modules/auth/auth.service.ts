@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  ServiceUnavailableException,
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -89,19 +90,7 @@ export class AuthService {
 
   async register(dto: RegisterDto, res: Response, registrationIp?: string, userAgent?: string): Promise<AuthResult> {
     // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
-    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
-    if (recaptchaEnabled) {
-      if (!dto.recaptchaToken) {
-        this.logger.warn('Register attempt without reCAPTCHA token');
-        throw new BadRequestException('reCAPTCHA token is required');
-      }
-      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
-      this.logger.debug(`reCAPTCHA validation score: ${recaptchaScore}`);
-      if (recaptchaScore < 0.5) {
-        this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
-        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
-      }
-    }
+    await this.assertRecaptcha(dto.recaptchaToken, 'register');
 
     // Block disposable email addresses
     if (await this.isDisposableEmail(dto.email)) {
@@ -300,19 +289,7 @@ export class AuthService {
     }
 
     // Validate reCAPTCHA if enabled (config read from DB with 30s cache)
-    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
-    if (recaptchaEnabled) {
-      if (!dto.recaptchaToken) {
-        this.logger.warn('Login attempt without reCAPTCHA token');
-        throw new BadRequestException('reCAPTCHA token is required');
-      }
-      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
-      this.logger.debug(`reCAPTCHA validation score: ${recaptchaScore}`);
-      if (recaptchaScore < 0.5) {
-        this.logger.warn(`reCAPTCHA validation failed with score: ${recaptchaScore}`);
-        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
-      }
-    }
+    await this.assertRecaptcha(dto.recaptchaToken, 'login');
 
     const hasTwoFactor = !!(user.twoFactorTotpSecret || user.twoFactorEmailEnabled);
     if (hasTwoFactor) {
@@ -416,6 +393,10 @@ export class AuthService {
       this.clearRefreshCookie(res);
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+    if (payload.purpose !== 'refresh') {
+      this.clearRefreshCookie(res);
+      throw new UnauthorizedException('Invalid token purpose');
+    }
 
     const session = await this.prisma.userSession.findUnique({
       where: { refreshToken },
@@ -441,8 +422,7 @@ export class AuthService {
       status: user.status,
     });
 
-    const forwarded = req.headers['x-forwarded-for'] as string | undefined;
-    const ip = forwarded?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket?.remoteAddress ?? '';
     await this.storeSession(tokens.refreshToken, user.id, ip, req.headers['user-agent'] ?? '');
     this.setRefreshCookie(res, tokens.refreshToken);
 
@@ -497,20 +477,7 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
     const { email } = dto;
 
-    // Validate reCAPTCHA if enabled
-    const recaptchaEnabled = (await this.getRecaptchaConfig()).enabled;
-    if (recaptchaEnabled) {
-      if (!dto.recaptchaToken) {
-        this.logger.warn('Forgot-password attempt without reCAPTCHA token');
-        throw new BadRequestException('reCAPTCHA token is required');
-      }
-      const recaptchaScore = await this.validateRecaptcha(dto.recaptchaToken);
-      this.logger.debug(`Forgot-password reCAPTCHA score: ${recaptchaScore}`);
-      if (recaptchaScore < 0.5) {
-        this.logger.warn(`Forgot-password reCAPTCHA failed: ${recaptchaScore}`);
-        throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
-      }
-    }
+    await this.assertRecaptcha(dto.recaptchaToken, 'forgot_password');
 
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -628,11 +595,11 @@ export class AuthService {
 
   private async generateTokens(payload: JwtPayload): Promise<TokenPair> {
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
+      this.jwtService.signAsync({ ...payload, purpose: 'access' }, {
         secret: this.configService.get<string>('jwt.accessSecret'),
         expiresIn: this.configService.get<string>('jwt.accessExpiresIn', '15m'),
       }),
-      this.jwtService.signAsync(payload, {
+      this.jwtService.signAsync({ ...payload, purpose: 'refresh' }, {
         secret: this.configService.get<string>('jwt.refreshSecret'),
         expiresIn: this.configService.get<string>('jwt.refreshExpiresIn', '7d'),
       }),
@@ -830,38 +797,81 @@ export class AuthService {
     };
   }
 
-  private async validateRecaptcha(token: string): Promise<number> {
-    const cfg = await this.getRecaptchaConfig();
-    const secret = cfg.version === 'v2'
-      ? (cfg.v2SecretKey || this.configService.get<string>('recaptcha.secret', ''))
-      : (cfg.v3SecretKey || this.configService.get<string>('recaptcha.secret', ''));
+  private readonly recaptchaTimeoutMs = 5_000;
+  private readonly recaptchaMinScore = 0.5;
 
-    if (!secret) {
-      this.logger.warn('reCAPTCHA secret not configured - skipping validation');
-      return 1.0; // Allow login if secret not configured
+  private async assertRecaptcha(token: string | undefined, expectedAction: 'login' | 'register' | 'forgot_password'): Promise<void> {
+    const cfg = await this.getRecaptchaConfig();
+    if (!cfg.enabled) return;
+
+    if (!token) {
+      this.logger.warn(`reCAPTCHA token missing (${expectedAction})`);
+      throw new BadRequestException('reCAPTCHA token is required');
     }
+
+    const envSecret = this.configService.get<string>('app.recaptcha.secret', '');
+    const secret = cfg.version === 'v2'
+      ? (cfg.v2SecretKey || envSecret)
+      : (cfg.v3SecretKey || envSecret);
+
+    // Fail closed: enabled without a usable configuration is an outage, not a bypass.
+    if (!secret) {
+      this.logger.error('reCAPTCHA is enabled but no secret key is configured — failing closed');
+      throw new ServiceUnavailableException('Human verification is temporarily unavailable. Please try again later.');
+    }
+
+    let data: { success: boolean; score?: number; action?: string; hostname?: string; 'error-codes'?: string[] };
     try {
       const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `secret=${secret}&response=${token}`,
+        body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`,
+        signal: AbortSignal.timeout(this.recaptchaTimeoutMs),
       });
-      const data = (await response.json()) as { success: boolean; score?: number; 'error-codes'?: string[] };
-
-      // Log error codes for debugging
-      if (!data.success && data['error-codes']) {
-        this.logger.warn(`reCAPTCHA validation failed with error codes: ${data['error-codes'].join(', ')}`);
-      }
-
-      // v2 uses boolean success, v3 uses score
-      if (cfg.version === 'v2') {
-        return data.success ? 1.0 : 0;
-      }
-
-      return data.success ? (data.score ?? 0.5) : 0;
+      if (!response.ok) throw new Error(`siteverify HTTP ${response.status}`);
+      data = (await response.json()) as typeof data;
     } catch (error) {
-      this.logger.warn(`reCAPTCHA validation failed (network error): ${String(error)}`);
-      return 1.0; // Allow login on network errors to not block legitimate users
+      // Provider outage/timeout: fail closed with a retryable error.
+      this.logger.warn(`reCAPTCHA verification unavailable (${expectedAction}): ${String(error)}`);
+      throw new ServiceUnavailableException('Human verification is temporarily unavailable. Please try again.');
+    }
+
+    if (data.success !== true) {
+      this.logger.warn(`reCAPTCHA rejected (${expectedAction}): ${(data['error-codes'] ?? []).join(', ') || 'unsuccessful'}`);
+      throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
+    }
+
+    // Hostname must match this deployment — a token minted for another
+    // property using the same keys must not be accepted.
+    const expectedHosts = this.expectedRecaptchaHosts();
+    if (typeof data.hostname !== 'string' || !expectedHosts.has(data.hostname.toLowerCase())) {
+      this.logger.warn(`reCAPTCHA hostname mismatch (${expectedAction})`);
+      throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
+    }
+
+    if (cfg.version === 'v2') return; // v2 is interactive: success + hostname suffice
+
+    // v3: require a finite in-range score at/above threshold and the
+    // expected action; malformed provider responses are rejected.
+    if (typeof data.score !== 'number' || !Number.isFinite(data.score) || data.score < this.recaptchaMinScore || data.score > 1) {
+      this.logger.warn(`reCAPTCHA score rejected (${expectedAction})`);
+      throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
+    }
+    if (typeof data.action !== 'string' || data.action !== expectedAction) {
+      this.logger.warn(`reCAPTCHA action mismatch (${expectedAction})`);
+      throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
+    }
+  }
+
+  private expectedRecaptchaHosts(): Set<string> {
+    try {
+      const host = new URL(this.configService.get<string>('app.frontendUrl', '')).hostname.toLowerCase();
+      if (!host) return new Set(['localhost']);
+      const hosts = new Set([host]);
+      hosts.add(host.startsWith('www.') ? host.slice(4) : `www.${host}`);
+      return hosts;
+    } catch {
+      return new Set(['localhost']);
     }
   }
 

@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -112,6 +113,16 @@ import { StoreModule } from './modules/store/store.module';
     SearchModule,
     EventsModule,
     StoreModule,
+  ],
+  providers: [
+    // A08: ThrottlerModule was configured but no guard was registered, so
+    // @Throttle/@SkipThrottle were dead metadata. Register it globally — the
+    // configured default (app.throttle.*, 100/60s) applies to every route and
+    // per-route @Throttle overrides now enforce. Health already @SkipThrottle.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

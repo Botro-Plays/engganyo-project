@@ -18,6 +18,8 @@ import { SocialAuthService } from '../social-auth/social-auth.service';
 import { EmailService } from '../email/email.service';
 import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
+import { assertValidCampaignCounters, resolveFundedRefund } from '../campaigns/campaign-funding';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -162,6 +164,7 @@ export class AdminService {
   }
 
   async createPlatformTask(adminId: string, dto: CreatePlatformTaskDto) {
+    assertEngagementTaskAllowed(dto.taskType);
     const campaign = await this.prisma.campaign.create({
       data: {
         userId: adminId,
@@ -341,17 +344,7 @@ export class AdminService {
   async cancelUserCampaign(adminId: string, campaignId: string, reason?: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        status: true,
-        totalSlots: true,
-        completedSlots: true,
-        pendingSlots: true,
-        creditPerTask: true,
-        feeAmount: true,
-      },
+      select: { id: true, userId: true, title: true, feeAmount: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
@@ -361,28 +354,50 @@ export class AdminService {
       CampaignStatus.DRAFT,
       CampaignStatus.PENDING_REVIEW,
     ];
-    if (!cancellableStatuses.includes(campaign.status)) {
-      throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
-    }
 
-    // Calculate refund: only for unused pool slots (fee is retained by platform)
-    const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
-    const refundAmount = refundableSlots * campaign.creditPerTask;
-
+    let actualRefund = 0;
+    let refundableSlots = 0;
     await this.prisma.$transaction(async (tx) => {
-      await tx.campaign.update({
-        where: { id: campaignId },
+      // Lock the campaign row — serializes against assignments claiming slots.
+      const [row] = await tx.$queryRaw<Array<{
+        status: string; total_slots: number; completed_slots: number;
+        pending_slots: number; credit_per_task: number;
+      }>>`SELECT status::text AS status, total_slots, completed_slots, pending_slots, credit_per_task
+          FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      if (!row) throw new NotFoundException('Campaign not found');
+      if (!(cancellableStatuses as string[]).includes(row.status)) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
+      }
+
+      assertValidCampaignCounters(row);
+
+      // Calculate refund: only for unused pool slots (fee is retained by platform)
+      refundableSlots = row.total_slots - row.completed_slots - row.pending_slots;
+      const refundAmount = refundableSlots * row.credit_per_task;
+
+      const claimed = await tx.campaign.updateMany({
+        where: { id: campaignId, status: { in: cancellableStatuses } },
         data: {
           status: CampaignStatus.CANCELLED,
           cancelledAt: new Date(),
         },
       });
+      if (claimed.count !== 1) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
+      }
 
-      if (refundAmount > 0) {
-        await tx.user.update({
-          where: { id: campaign.userId },
-          data: { creditBalance: { increment: refundAmount } },
-        });
+      // Funding provenance: refund only against a verified funding debit —
+      // campaigns created outside the funded create() flow (e.g. seeds or
+      // platform tasks) have no pool to refund.
+      actualRefund = await resolveFundedRefund(tx, campaign, refundAmount);
+
+      if (actualRefund > 0) {
+        await this.walletService.credit(campaign.userId, actualRefund, {
+          type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+          description: `Admin refund for cancelled campaign: ${campaign.title}`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
       }
 
       await tx.auditLog.create({
@@ -393,7 +408,7 @@ export class AdminService {
           entityId: campaignId,
           oldValue: {
             title: campaign.title,
-            status: campaign.status,
+            status: row.status,
             refundableSlots,
             refundAmount,
             feeRetained: campaign.feeAmount,
@@ -401,7 +416,8 @@ export class AdminService {
           },
           newValue: {
             status: CampaignStatus.CANCELLED,
-            refunded: refundAmount,
+            refunded: actualRefund,
+            refundSkippedUnfunded: refundAmount > 0 && actualRefund === 0,
             feeRetained: campaign.feeAmount,
           },
         },
@@ -410,7 +426,7 @@ export class AdminService {
 
     return {
       message: 'Campaign cancelled successfully',
-      refunded: refundAmount,
+      refunded: actualRefund,
       refundableSlots,
       feeRetained: campaign.feeAmount,
       reason: reason || null,
@@ -608,6 +624,7 @@ export class AdminService {
         campaign: {
           select: {
             id: true,
+            taskType: true,
             creditPerTask: true,
             completedSlots: true,
             totalSlots: true,
@@ -618,6 +635,9 @@ export class AdminService {
     if (!completion) throw new NotFoundException('Submission not found');
     if (completion.status !== CompletionStatus.SUBMITTED) {
       throw new BadRequestException(`Submission is already ${completion.status.toLowerCase()}`);
+    }
+    if (dto.action === 'approve') {
+      assertEngagementTaskAllowed(completion.campaign.taskType);
     }
 
     const now = new Date();

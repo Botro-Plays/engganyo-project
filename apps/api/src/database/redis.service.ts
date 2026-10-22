@@ -64,10 +64,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client.incr(key);
   }
 
+  /**
+   * Fixed-window counter: the expiry is set only when the key has no expiry
+   * (i.e., on window creation). Blocked and allowed requests inside the
+   * window increment the counter but never extend it, so a saturated client
+   * regains access exactly when the window ends — ttl(key) is a truthful
+   * retryAfter.
+   */
   async incrWithExpiry(key: string, ttlSeconds: number): Promise<number> {
     const pipeline = this.client.pipeline();
     pipeline.incr(key);
-    pipeline.expire(key, ttlSeconds);
+    pipeline.expire(key, ttlSeconds, 'NX');
     const results = await pipeline.exec();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return (results?.[0]?.[1] as number) ?? 0;

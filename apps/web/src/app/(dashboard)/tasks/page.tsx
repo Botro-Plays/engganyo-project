@@ -39,6 +39,11 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
 // Only these platforms require a linked account to accept a task (OAuth-based verification)
 const OAUTH_REQUIRED_PLATFORMS = new Set(['YOUTUBE', 'TWITCH', 'SPOTIFY']);
 
+// Rewarded YouTube engagement is disabled for platform-policy compliance.
+const DISABLED_TASK_TYPES = new Set([
+  'YOUTUBE_SUBSCRIBE', 'YOUTUBE_LIKE', 'YOUTUBE_COMMENT', 'YOUTUBE_WATCH',
+]);
+
 const PLATFORM_LABEL: Record<string, string> = {
   YOUTUBE: 'YouTube', TIKTOK: 'TikTok', INSTAGRAM: 'Instagram',
   TWITTER: 'Twitter', FACEBOOK: 'Facebook', TWITCH: 'Twitch', SPOTIFY: 'Spotify',
@@ -264,6 +269,7 @@ export default function TasksPage() {
         // Ensure items is always an array and filter out disabled platforms
         const items = Array.isArray(data?.items) ? data.items : [];
         const filtered = items.filter((task: AvailableTask) => {
+          if (DISABLED_TASK_TYPES.has(task.taskType)) return false; // disabled for platform-policy compliance
           const platform = TASK_TYPE_TO_PLATFORM[task.taskType];
           // If config hasn't loaded yet, show everything; otherwise filter by enabled platforms
           return !platform || enabledPlatforms === null || enabledPlatforms.includes(platform);
@@ -746,9 +752,22 @@ export default function TasksPage() {
                             <span className="text-[10px] text-yellow-500/80 flex items-center gap-1"><Clock className="w-3 h-3" /> Due {formatRelativeTime(task.expiresAt)}</span>
                           )}
                           {task.proofUrl && (
-                            <a href={task.proofUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-400 hover:text-brand-300 flex items-center gap-0.5 transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+                                fetch(task.proofUrl!, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                                  .then(async (res) => {
+                                    if (!res.ok) throw new Error('Failed to load proof');
+                                    const blob = await res.blob();
+                                    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer');
+                                  })
+                                  .catch(() => {});
+                              }}
+                              className="text-[10px] text-brand-400 hover:text-brand-300 flex items-center gap-0.5 transition-colors"
+                            >
                               <ExternalLink className="w-3 h-3" /> Proof
-                            </a>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -763,7 +782,14 @@ export default function TasksPage() {
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
                         ) : canSubmit ? (
-                          task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' || task.campaign.taskType === 'YOUTUBE_LIKE' ? (
+                          DISABLED_TASK_TYPES.has(task.campaign.taskType) ? (
+                            <div
+                              title="This task type is disabled for platform-policy compliance and cannot earn rewards"
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-500/10 border border-zinc-500/20 text-zinc-500 cursor-not-allowed"
+                            >
+                              Disabled
+                            </div>
+                          ) : task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' || task.campaign.taskType === 'YOUTUBE_LIKE' ? (
                             <button
                               onClick={() => { setSubmitting(task); setSubmitError(null); setRecheckResult(null); }}
                               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"

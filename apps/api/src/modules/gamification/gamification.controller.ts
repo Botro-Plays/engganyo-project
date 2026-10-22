@@ -170,7 +170,7 @@ export class GamificationController {
     @CurrentUser() user: JwtPayload,
     @Req() req: Request,
   ) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? '';
+    const ip = req.ip ?? req.socket.remoteAddress ?? '';
     return this.gamificationService.claimDailyReward(user.sub, ip);
   }
 

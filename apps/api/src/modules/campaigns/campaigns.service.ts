@@ -15,6 +15,8 @@ import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
+import { assertValidCampaignCounters, resolveFundedRefund } from './campaign-funding';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -150,6 +152,9 @@ export class CampaignsService {
   }
 
   async create(userId: string, userRole: string, dto: CreateCampaignDto) {
+    // Rewarded-engagement policy gate (checked before any spend)
+    assertEngagementTaskAllowed(dto.taskType);
+
     const totalCost = dto.totalSlots * dto.creditPerTask;
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
@@ -193,12 +198,6 @@ export class CampaignsService {
       }
     }
 
-    // Debit pool + fee upfront
-    await this.walletService.debit(userId, totalDebit, {
-      type: TransactionType.SPEND_CAMPAIGN_CREATE,
-      description: `Campaign: ${dto.title} (includes ${feeAmount} platform fee)`,
-    });
-
     const campaign = await this.prisma.$transaction(async (tx) => {
       const created = await tx.campaign.create({
         select: CAMPAIGN_SELECT,
@@ -224,6 +223,15 @@ export class CampaignsService {
           status: CampaignStatus.ACTIVE,
         },
       });
+
+      // Debit pool + fee inside the same transaction so the campaign can never
+      // exist unfunded, and the funding ledger row is linked to the campaign.
+      await this.walletService.debit(userId, totalDebit, {
+        type: TransactionType.SPEND_CAMPAIGN_CREATE,
+        description: `Campaign: ${dto.title} (includes ${feeAmount} platform fee)`,
+        referenceId: created.id,
+        referenceType: 'campaign',
+      }, tx);
 
       await tx.platformRevenue.create({
         data: {
@@ -347,7 +355,7 @@ export class CampaignsService {
   ) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { userId: true, creditPerTask: true, completedSlots: true, totalSlots: true },
+      select: { userId: true, taskType: true, creditPerTask: true, completedSlots: true, totalSlots: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
@@ -360,6 +368,9 @@ export class CampaignsService {
     if (completion.campaignId !== campaignId) throw new ForbiddenException('Submission does not belong to this campaign');
     if (completion.status !== CompletionStatus.SUBMITTED) {
       throw new BadRequestException('Submission is not pending review');
+    }
+    if (dto.action === 'approve') {
+      assertEngagementTaskAllowed(campaign.taskType);
     }
 
     // ── Ownership enforcement: campaign owners cannot receive rewards for their own tasks ──
@@ -513,16 +524,7 @@ export class CampaignsService {
   async cancel(userId: string, campaignId: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        status: true,
-        totalSlots: true,
-        completedSlots: true,
-        pendingSlots: true,
-        creditPerTask: true,
-      },
+      select: { id: true, userId: true, title: true, feeAmount: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
@@ -533,41 +535,80 @@ export class CampaignsService {
       CampaignStatus.DRAFT,
       CampaignStatus.PENDING_REVIEW,
     ];
-    if (!cancellableStatuses.includes(campaign.status)) {
-      throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
-    }
 
-    // Block cancellation if any completions exist
-    const completionCount = await this.prisma.taskCompletion.count({
-      where: { campaignId },
-    });
-    if (completionCount > 0) {
-      throw new ForbiddenException(
-        'Cannot cancel a campaign that has active or completed tasks. Contact admin for assistance.',
-      );
-    }
+    let actualRefund = 0;
+    await this.prisma.$transaction(async (tx) => {
+      // Lock the campaign row for the whole transaction. This serializes
+      // against assignments (which claim slots via an UPDATE on the same row):
+      // an assignment either commits first (and is then visible below) or
+      // blocks and fails against the CANCELLED status.
+      const [row] = await tx.$queryRaw<Array<{
+        status: string; total_slots: number; completed_slots: number;
+        pending_slots: number; credit_per_task: number;
+      }>>`SELECT status::text AS status, total_slots, completed_slots, pending_slots, credit_per_task
+          FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      if (!row) throw new NotFoundException('Campaign not found');
+      if (!(cancellableStatuses as string[]).includes(row.status)) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
+      }
+      assertValidCampaignCounters(row);
 
-    // Refund uncompleted and non-pending slots (pool only, fee is kept)
-    const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
-    const refundAmount = refundableSlots * campaign.creditPerTask;
+      // Completion count under the lock — no new assignment can interleave.
+      const completionCount = await tx.taskCompletion.count({ where: { campaignId } });
+      if (completionCount > 0) {
+        throw new ForbiddenException(
+          'Cannot cancel a campaign that has active or completed tasks. Contact admin for assistance.',
+        );
+      }
 
-    await this.prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
+      // Refund uncompleted and non-pending slots (pool only, fee is kept)
+      const refundableSlots = row.total_slots - row.completed_slots - row.pending_slots;
+      const refundAmount = refundableSlots * row.credit_per_task;
+
+      const claimed = await tx.campaign.updateMany({
+        where: { id: campaignId, status: { in: cancellableStatuses } },
+        data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
+      }
+
+      // Funding provenance: refund only against a verified funding debit.
+      actualRefund = await resolveFundedRefund(tx, campaign, refundAmount);
+
+      if (actualRefund > 0) {
+        await this.walletService.credit(userId, actualRefund, {
+          type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+          description: `Refund for cancelled campaign: ${campaign.title}`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'campaign.cancelled',
+          entityType: 'Campaign',
+          entityId: campaignId,
+          oldValue: {
+            title: campaign.title,
+            status: row.status,
+            refundableSlots,
+            refundAmount,
+          },
+          newValue: {
+            status: CampaignStatus.CANCELLED,
+            refunded: actualRefund,
+            refundSkippedUnfunded: refundAmount > 0 && actualRefund === 0,
+          },
+        },
+      });
     });
 
     this.eventsService.emitToUser(userId, 'campaign:updated', { campaignId, status: CampaignStatus.CANCELLED });
 
-    if (refundAmount > 0) {
-      await this.walletService.credit(userId, refundAmount, {
-        type: TransactionType.REFUND_CAMPAIGN_CANCEL,
-        description: `Refund for cancelled campaign: ${campaign.title}`,
-        referenceId: campaignId,
-        referenceType: 'campaign',
-      });
-    }
-
-    return { refundAmount };
+    return { refundAmount: actualRefund };
   }
 
   // ─── Public browse (for task marketplace) ─────────────────

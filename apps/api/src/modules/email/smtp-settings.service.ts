@@ -62,9 +62,10 @@ export class SmtpSettingsService {
     )) {
       throw new BadRequestException('Enter the password/API key when changing the SMTP server or login.');
     }
+    const envPassword = this.environment().password;
     const encryptedPassword = dto.password
       ? this.crypto.encrypt(dto.password)
-      : previous?.encryptedPassword ?? this.crypto.encrypt(this.environment().password ?? '');
+      : previous?.encryptedPassword ?? (envPassword ? this.crypto.encrypt(envPassword) : '');
     const value = {
       enabled: dto.enabled,
       host: dto.host,

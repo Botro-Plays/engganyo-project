@@ -18,6 +18,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { StoreService } from '../store/store.service';
+import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -97,6 +98,7 @@ export class TasksService {
     });
 
     if (!campaign) throw new NotFoundException('Campaign not found');
+    assertEngagementTaskAllowed(campaign.taskType);
     if (campaign.userId === userId && !campaign.isPlatformTask) {
       throw new BadRequestException('Cannot assign your own campaign');
     }
@@ -275,8 +277,21 @@ export class TasksService {
 
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h to complete
 
-    const [completion] = await Promise.all([
-      this.prisma.taskCompletion.create({
+    const completion = await this.prisma.$transaction(async (tx) => {
+      // Atomic slot claim: the UPDATE both locks the campaign row (serializing
+      // against cancellation's FOR UPDATE) and conditions on ACTIVE + slots
+      // remaining, so an assignment can never land on a cancelled campaign or
+      // consume a slot that was already refunded.
+      const claimed = await tx.$executeRaw`
+        UPDATE campaigns
+        SET pending_slots = pending_slots + 1, updated_at = NOW()
+        WHERE id = ${campaignId}
+          AND status::text = 'ACTIVE'
+          AND pending_slots + completed_slots < total_slots`;
+      if (claimed !== 1) {
+        throw new BadRequestException('No slots available or campaign is not active');
+      }
+      return tx.taskCompletion.create({
         select: COMPLETION_SELECT,
         data: {
           campaignId,
@@ -284,12 +299,8 @@ export class TasksService {
           status: CompletionStatus.ASSIGNED,
           expiresAt,
         },
-      }),
-      this.prisma.campaign.update({
-        where: { id: campaignId },
-        data: { pendingSlots: { increment: 1 } },
-      }),
-    ]);
+      });
+    });
 
     // Invalidate browse cache so the task disappears from the user's browse list immediately
     await this.redisService.delByPattern(`campaigns:browse:${userId}:*`).catch(() => null);
@@ -339,6 +350,7 @@ export class TasksService {
     });
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
+    assertEngagementTaskAllowed(completion.campaign.taskType);
 
     // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
     if (completion.campaign.userId === userId) {
@@ -564,6 +576,7 @@ export class TasksService {
     });
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
+    assertEngagementTaskAllowed(completion.campaign.taskType);
 
     // ── Ownership enforcement: campaign owners cannot complete their own tasks unless it's a platform task ──
     if (completion.campaign.userId === userId && !completion.campaign.isPlatformTask) {

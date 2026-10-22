@@ -71,7 +71,7 @@ export class TwoFactorService {
     return this.jwtService.signAsync(
       { sub: userId, purpose: 'two_factor_auth' },
       {
-        secret: this.config.get<string>('jwt.accessSecret'),
+        secret: this.config.get<string>('jwt.twoFactorSecret'),
         expiresIn: TWO_FACTOR_TOKEN_TTL,
       },
     );
@@ -80,7 +80,7 @@ export class TwoFactorService {
   async validateTwoFactorToken(token: string): Promise<string> {
     try {
       const payload = this.jwtService.verify<{ sub: string; purpose: string }>(token, {
-        secret: this.config.get<string>('jwt.accessSecret'),
+        secret: this.config.get<string>('jwt.twoFactorSecret'),
       });
       if (payload.purpose !== 'two_factor_auth') throw new Error('Wrong purpose');
       return payload.sub;

@@ -162,6 +162,7 @@ values = {
     'DATABASE_URL': f'postgresql://engganyo:{password}@postgres:5432/engganyo_prod?connection_limit=10&pool_timeout=30',
     'JWT_ACCESS_SECRET': secrets.token_hex(64),
     'JWT_REFRESH_SECRET': secrets.token_hex(64),
+    'JWT_2FA_SECRET': secrets.token_hex(64),
     'COOKIE_SECRET': secrets.token_hex(32),
     'ENCRYPTION_KEY': secrets.token_hex(32),
     'ADMIN_PASSWORD': secrets.token_urlsafe(32),
@@ -179,7 +180,7 @@ PY
 nano .env
 ```
 
-Set SMTP credentials, ADMIN_EMAIL, domain URLs, and any intentional feature settings. Keep ENCRYPTION_KEY and other generated secrets in a secure off-host backup. These are new keys for a new database, not substitutes for keys required to decrypt an old backup. Do not use JWT_SECRET: this app reads JWT_ACCESS_SECRET and JWT_REFRESH_SECRET.
+Set SMTP credentials, ADMIN_EMAIL, domain URLs, and any intentional feature settings. Keep ENCRYPTION_KEY and other generated secrets in a secure off-host backup. These are new keys for a new database, not substitutes for keys required to decrypt an old backup. Do not use JWT_SECRET: this app reads JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, and JWT_2FA_SECRET. The API refuses to boot in production if JWT_2FA_SECRET is missing, a placeholder, weak, or equal to either other JWT secret; existing deployments must add it before upgrading.
 
 Docker Compose supplies the internal PostgreSQL connection. Database passwords generated above are hex, so they are safe in a connection URL. PostgreSQL and Redis have no host-published ports in the updated compose file. API/web ports bind to localhost; Nginx exposes 80/443. REDIS_PASSWORD remains empty for this isolated Docker-network configuration; changing only that variable does not configure the Redis server to require it.
 
