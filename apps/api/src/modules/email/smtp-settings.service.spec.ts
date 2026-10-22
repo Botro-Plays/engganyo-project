@@ -96,6 +96,33 @@ describe('SMTP runtime configuration', () => {
     await expect(service.saveSettings('admin', { ...settings, host: 'different.example.com' })).rejects.toThrow('Enter the password/API key');
   });
 
+  it('stores an empty credential as unset and reports passwordSet false', async () => {
+    // No previous row and no environment password: a blank save must leave
+    // encryptedPassword empty and never report a credential as configured.
+    const emptyEnv = {
+      get: (key: string, fallback: unknown) =>
+        ({ ENCRYPTION_KEY: 'a'.repeat(64), 'email.pass': '' })[key] ?? fallback,
+    } as ConfigService;
+    let localRow: { value: unknown } | null = null;
+    const localPrisma = {
+      platformConfig: {
+        findUnique: jest.fn().mockImplementation(() => Promise.resolve(localRow)),
+        upsert: jest.fn().mockImplementation(({ create, update }: { create: { value: unknown }; update: { value: unknown } }) => {
+          localRow = { value: localRow ? update.value : create.value };
+          return Promise.resolve(localRow);
+        }),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      $transaction: (operations: Promise<unknown>[]) => Promise.all(operations),
+    };
+    const local = new SmtpSettingsService(localPrisma as unknown as PrismaService, emptyEnv, new CryptoUtil(emptyEnv));
+
+    const response = await local.saveSettings('admin', { ...settings, user: '', password: '' });
+    expect((localRow!.value as { encryptedPassword: string }).encryptedPassword).toBe('');
+    expect(response.passwordSet).toBe(false);
+    expect(response).not.toHaveProperty('encryptedPassword');
+  });
+
   it('rejects malformed settings and header injection before persistence', async () => {
     const dto = Object.assign(new SmtpSettingsDto(), settings, { host: 'smtp.example.com\r\nInjected: value', port: 70000, fromName: 'Sender\nInjected' });
     const errors = await validate(dto);
