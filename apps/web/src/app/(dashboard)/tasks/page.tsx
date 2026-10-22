@@ -746,9 +746,22 @@ export default function TasksPage() {
                             <span className="text-[10px] text-yellow-500/80 flex items-center gap-1"><Clock className="w-3 h-3" /> Due {formatRelativeTime(task.expiresAt)}</span>
                           )}
                           {task.proofUrl && (
-                            <a href={task.proofUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-400 hover:text-brand-300 flex items-center gap-0.5 transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+                                fetch(task.proofUrl!, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+                                  .then(async (res) => {
+                                    if (!res.ok) throw new Error('Failed to load proof');
+                                    const blob = await res.blob();
+                                    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer');
+                                  })
+                                  .catch(() => {});
+                              }}
+                              className="text-[10px] text-brand-400 hover:text-brand-300 flex items-center gap-0.5 transition-colors"
+                            >
                               <ExternalLink className="w-3 h-3" /> Proof
-                            </a>
+                            </button>
                           )}
                         </div>
                       </div>

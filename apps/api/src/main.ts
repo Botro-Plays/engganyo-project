@@ -8,13 +8,16 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { Request, Response, NextFunction } from 'express';
+import { Response } from 'express';
 
+import { JwtService } from '@nestjs/jwt';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { SerializationInterceptor } from './common/interceptors/serialization.interceptor';
+import { createProofAccessMiddleware } from './common/middleware/proof-access.middleware';
 import { createWinstonConfig } from './config/logger.config';
+import { PrismaService } from './database/prisma.service';
 
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
@@ -60,16 +63,18 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser(configService.get<string>('app.cookieSecret')));
 
   // ─── Static File Serving (Uploads) ─────────────────────────
-  // Only proofs require auth (sensitive campaign data).
+  // Proof downloads require a valid purpose:'access' token authorized for the
+  // requested resource (proof owner, the owning campaign's reviewer, or admin).
   // Avatars are public — filenames are UUID-based (unguessable), so no auth needed.
-  app.use('/uploads/proofs', (req: Request, res: Response, next: NextFunction): void => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      res.status(401).json({ message: 'Unauthorized' });
-      return;
-    }
-    next();
-  });
+  const jwtAccessSecret = configService.get<string>('jwt.accessSecret', '');
+  app.use(
+    '/uploads/proofs',
+    createProofAccessMiddleware(
+      new JwtService(),
+      app.get(PrismaService),
+      jwtAccessSecret,
+    ),
+  );
 
   app.useStaticAssets('uploads', {
     prefix: '/uploads/',
