@@ -27,13 +27,12 @@ const PLATFORM_CONFIGS: Partial<Record<SocialPlatform, PlatformOAuthConfig>> = {
   [SocialPlatform.YOUTUBE]: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: [
-      'https://www.googleapis.com/auth/youtube',
-      'https://www.googleapis.com/auth/youtube.readonly',
-      'https://www.googleapis.com/auth/youtube.force-ssl',
-      'openid',
-      'profile',
-    ],
+    // Minimum required scope: youtube.readonly alone covers every implemented
+    // YouTube API call — subscriptions.list, videos.getRating, and all
+    // channels.list lookups (forHandle, forUsername, mine). youtube and
+    // youtube.force-ssl grant edit/delete capabilities we never use;
+    // openid/profile are unused (profile comes from channels.mine).
+    scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
     clientIdEnv: 'GOOGLE_CLIENT_ID',
     clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
   },
