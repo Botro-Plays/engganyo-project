@@ -97,9 +97,8 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     });
   };
 
-  /** Creates a campaign funded exactly like production create(): real debit. */
-  const makeFundedCampaign = async (ownerId: string) => {
-    const campaign = await prisma.campaign.create({
+  const makeCampaignRow = (ownerId: string) =>
+    prisma.campaign.create({
       data: {
         userId: ownerId,
         title: `${PREFIX}campaign`,
@@ -114,6 +113,10 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
         targetLanguages: [],
       },
     });
+
+  /** Creates a campaign funded exactly like production create(): real debit. */
+  const makeFundedCampaign = async (ownerId: string) => {
+    const campaign = await makeCampaignRow(ownerId);
     await wallet.credit(ownerId, 1000, {
       type: TransactionType.EARN_ADMIN_GRANT,
       description: 'fixture funding',
@@ -248,7 +251,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.audits).toHaveLength(1);
   });
 
-  it('forced order: assignment first → owner cancel refuses (active completion)', async () => {
+  it('ordered outcome — assignment first: owner cancel refuses (active completion)', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeFundedCampaign(owner.id);
@@ -265,7 +268,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.user.creditBalance).toBe(475);
   });
 
-  it('forced order: assignment first → admin cancel keeps the pending slot consumed and refunds only the free pool', async () => {
+  it('ordered outcome — assignment first: admin cancel keeps the pending slot consumed and refunds only the free pool', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const adminUser = await makeUser('SUPER_ADMIN');
@@ -287,7 +290,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.user.creditBalance).toBe(925);
   });
 
-  it('forced order: cancellation first → assignment cannot claim a refunded slot', async () => {
+  it('ordered outcome — cancellation first: assignment cannot claim a refunded slot', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeFundedCampaign(owner.id);
@@ -334,6 +337,50 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     }
     // Invariant under either interleaving:
     expect(!(s.campaign.status === CampaignStatus.CANCELLED && s.completions.length > 0)).toBe(true);
+  });
+
+  it('genuinely unfunded campaign: audited no-refund cancel preserved on real DB', async () => {
+    const owner = await makeUser();
+    const campaign = await makeCampaignRow(owner.id); // no funding debit — like the seed artifacts
+
+    const result = await campaigns.cancel(owner.id, campaign.id);
+
+    expect(result.refundAmount).toBe(0);
+    const s = await state(campaign.id, owner.id);
+    expect(s.campaign.status).toBe(CampaignStatus.CANCELLED);
+    expect(s.refunds).toHaveLength(0);
+    expect(s.walletRow.balance).toBe(0);
+    expect(s.user.creditBalance).toBe(0);
+    expect(s.audits).toHaveLength(1);
+    expect((s.audits[0].newValue as { refundSkippedUnfunded: boolean }).refundSkippedUnfunded).toBe(true);
+  });
+
+  it('absent funding with a ghost refund row requires manual review on real DB', async () => {
+    const owner = await makeUser();
+    const campaign = await makeCampaignRow(owner.id);
+    const walletRow = await prisma.wallet.findUniqueOrThrow({ where: { userId: owner.id } });
+    // A refund record with no funding debit is an impossible ledger state.
+    await prisma.transaction.create({
+      data: {
+        walletId: walletRow.id,
+        type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+        status: 'COMPLETED',
+        amount: 200,
+        balanceBefore: 0,
+        balanceAfter: 200,
+        description: 'ghost refund',
+        referenceId: campaign.id,
+        referenceType: 'campaign',
+      },
+    });
+
+    await expect(campaigns.cancel(owner.id, campaign.id)).rejects.toThrow(/Inconsistent/);
+
+    const s = await state(campaign.id, owner.id);
+    expect(s.campaign.status).toBe(CampaignStatus.ACTIVE);
+    expect(s.campaign.cancelledAt).toBeNull();
+    expect(s.walletRow.balance).toBe(0);
+    expect(s.audits).toHaveLength(0);
   });
 
   it('ledger failure rolls back status claim, wallet credit, and audit', async () => {

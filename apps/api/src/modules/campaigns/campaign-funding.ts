@@ -30,27 +30,32 @@ export function assertValidCampaignCounters(row: {
 
 /**
  * Resolve how much of a requested campaign cancellation refund may be
- * issued, given the campaign's funding-debit ledger rows.
+ * issued. Every campaign-linked funding and refund record is validated
+ * BEFORE the result is decided — a zero requested refund or absent
+ * funding never bypasses ledger checks.
  *
  * Funding semantics:
- * - Absent funding (no campaign-linked SPEND_CAMPAIGN_CREATE rows at all)
- *   means no pool was ever paid in → returns 0 (audited no-refund path,
- *   used for legacy seed artifacts).
- * - Malformed funding is different: any linked record with the wrong
- *   wallet, a non-COMPLETED status, or a non-negative amount triggers
- *   manual review instead of silently becoming an unfunded cancel.
- * - The creation debit covers pool + fee. The fee is platform revenue
- *   and never becomes refund capacity, so only `funded - feeAmount`
- *   bounds refunds; prior validated refunds reduce it further.
- * - Prior REFUND_CAMPAIGN_CANCEL rows are validated the same way —
- *   malformed rows fail closed rather than being ignored.
+ * - Genuinely unfunded (no linked funding debit AND no refund history)
+ *   → returns 0: the audited no-refund cancel used for legacy seed rows.
+ * - A refund history with no funding debit is an impossible state →
+ *   manual review, not a silent no-refund cancel.
+ * - Malformed linked records (wrong wallet, non-COMPLETED status, wrong
+ *   direction) → manual review, never silently treated as unfunded.
+ * - The creation debit covers pool + fee; only `funded - feeAmount`
+ *   bounds refunds. Prior validated refunds reduce it further, and an
+ *   over-refunded history (refundable < 0) fails closed even when the
+ *   requested refund is zero.
+ * - feeAmount itself must be a nonnegative valid credit amount.
  */
 export async function resolveFundedRefund(
   tx: Prisma.TransactionClient,
   campaign: { id: string; userId: string; feeAmount: number },
   requestedRefund: number,
 ): Promise<number> {
-  if (requestedRefund <= 0) return 0;
+  if (requestedRefund < 0) throw new BadRequestException(INCONSISTENT);
+  if (!Number.isInteger(campaign.feeAmount) || campaign.feeAmount < 0) {
+    throw new BadRequestException(INCONSISTENT);
+  }
 
   const fundingTxs = await tx.transaction.findMany({
     where: {
@@ -60,8 +65,6 @@ export async function resolveFundedRefund(
     },
     select: { amount: true, status: true, wallet: { select: { userId: true } } },
   });
-  if (fundingTxs.length === 0) return 0; // genuinely unfunded — nothing to refund
-
   for (const t of fundingTxs) {
     if (
       t.status !== TransactionStatus.COMPLETED ||
@@ -72,11 +75,6 @@ export async function resolveFundedRefund(
     }
   }
   const funded = fundingTxs.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-
-  // Only the pool portion of the debit is refund capacity — the retained
-  // fee is not refundable even though it was part of the same debit.
-  const poolFunded = funded - campaign.feeAmount;
-  if (poolFunded < 0) throw new BadRequestException(INCONSISTENT);
 
   const priorRefunds = await tx.transaction.findMany({
     where: {
@@ -98,7 +96,12 @@ export async function resolveFundedRefund(
     refunded += r.amount;
   }
 
-  const refundable = poolFunded - refunded;
+  if (funded === 0) {
+    if (refunded > 0) throw new BadRequestException(INCONSISTENT);
+    return 0; // genuinely unfunded — nothing to refund
+  }
+
+  const refundable = funded - campaign.feeAmount - refunded;
   if (refundable < 0 || refundable < requestedRefund) {
     throw new BadRequestException(INCONSISTENT);
   }

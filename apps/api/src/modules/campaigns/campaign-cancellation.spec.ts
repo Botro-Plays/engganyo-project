@@ -230,6 +230,51 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
     expect(walletService.credit).not.toHaveBeenCalled();
   });
 
+  it('zero-request refund still validates records — malformed funding throws', async () => {
+    const tx = makeTx({
+      row: [lockedRow({ completed_slots: 5, pending_slots: 5 })], // refundable = 0
+      funding: [{ amount: 525, status: 'COMPLETED', wallet: { userId: 'owner' } }], // positive = malformed
+    });
+    wire(tx);
+
+    await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+  });
+
+  it('zero-request refund with consistent ledger still cancels with no credit', async () => {
+    const tx = makeTx({
+      row: [lockedRow({ completed_slots: 5, pending_slots: 5 })],
+      funding: goodFunding(),
+    });
+    wire(tx);
+
+    const result = await service.cancel('owner', 'c1');
+    expect(result.refundAmount).toBe(0);
+    expect(walletService.credit).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).toHaveBeenCalled();
+  });
+
+  it('absent funding + refund history is an impossible state → manual review', async () => {
+    const tx = makeTx({
+      funding: [],
+      priorRefunds: [{ amount: 200, status: 'COMPLETED', wallet: { userId: 'owner' } }],
+    });
+    wire(tx);
+
+    await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it.each([[-5], [12.5]])('invalid feeAmount %p fails closed before subtraction', async (feeAmount) => {
+    prisma.campaign = { findUnique: jest.fn().mockResolvedValue({ ...campaignRow(), feeAmount }) } as never;
+    const tx = makeTx({ funding: goodFunding() });
+    wire(tx);
+
+    await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+  });
+
   it('concurrent cancel loses the status claim and cannot double-refund', async () => {
     const tx = makeTx({
       campaign: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
@@ -343,6 +388,37 @@ describe('AdminService — cancellation funding & atomicity', () => {
     // the observable assertions are: no refund credit and no audit row.
     expect(walletService.credit).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('zero-request refund still validates records — malformed funding throws', async () => {
+    const tx = makeTx({
+      row: [lockedRow({ completed_slots: 5, pending_slots: 5 })],
+      funding: [{ amount: 525, status: 'COMPLETED', wallet: { userId: 'owner' } }],
+    });
+    wire(tx);
+
+    await expect(service.cancelUserCampaign('admin1', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+  });
+
+  it('absent funding + refund history is an impossible state → manual review', async () => {
+    const tx = makeTx({
+      funding: [],
+      priorRefunds: [{ amount: 200, status: 'COMPLETED', wallet: { userId: 'owner' } }],
+    });
+    wire(tx);
+
+    await expect(service.cancelUserCampaign('admin1', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+  });
+
+  it('invalid feeAmount fails closed before subtraction', async () => {
+    prisma.campaign = { findUnique: jest.fn().mockResolvedValue({ ...campaignRow(), feeAmount: -5 }) } as never;
+    const tx = makeTx({ funding: goodFunding() });
+    wire(tx);
+
+    await expect(service.cancelUserCampaign('admin1', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
   });
 
   it('repeat cancel fails at the locked status check — cannot refund twice', async () => {
