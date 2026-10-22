@@ -63,7 +63,15 @@ export default function SettingsPage() {
             </div>
           );
           return tile.available
-            ? <Link key={tile.label} href={tile.href}>{inner}</Link>
+            ? (
+              <Link
+                key={tile.label}
+                href={tile.href}
+                data-tour={tile.href === '/referrals' ? 'nav-referrals' : undefined}
+              >
+                {inner}
+              </Link>
+            )
             : <div key={tile.label}>{inner}</div>;
         })}
       </div>

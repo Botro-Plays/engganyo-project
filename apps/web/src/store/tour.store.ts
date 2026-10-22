@@ -12,6 +12,12 @@ export interface TourStep {
   selector: string;
   /** Navigate steps: pathname that completes the step. */
   expectedRoute?: string;
+  /** Two-hop steps: an intermediate pathname the step is also shown on before `expectedRoute`. */
+  viaRoute?: string;
+  /** Selector highlighted on `requiredRoute` for the first hop (`requiredRoute` -> `viaRoute`). */
+  viaSelector?: string;
+  /** Shown instead of `description` while the step is on `viaRoute`. */
+  viaDescription?: string;
   title: string;
   description: string;
   /** Shown instead of `description` when the target cannot be found. */
@@ -58,18 +64,72 @@ export const TOUR_STEPS: TourStep[] = [
     description: 'Missions are daily goals that earn bonus rewards. Click Missions to see today\u2019s goals.',
   },
   {
-    id: 'nav-forum',
+    id: 'nav-campaigns',
     type: 'navigate',
     requiredRoute: '/missions',
-    selector: '[data-tour="nav-forum"]',
-    expectedRoute: '/forum',
-    title: 'Join the community',
-    description: 'The Forum is where creators share tips and ask questions. Click Forum to finish the tour.',
+    selector: '[data-tour="nav-campaigns"]',
+    expectedRoute: '/campaigns',
+    title: 'My Campaigns',
+    description:
+      'Campaigns promote your content to other creators. Click My Campaigns to create one or manage yours.',
+  },
+  {
+    id: 'nav-leaderboard',
+    type: 'navigate',
+    requiredRoute: '/campaigns',
+    selector: '[data-tour="nav-leaderboard"]',
+    expectedRoute: '/leaderboard',
+    title: 'Leaderboard',
+    description:
+      'See how you rank against other creators. Click Leaderboard to view the public rankings.',
+  },
+  {
+    id: 'nav-store',
+    type: 'navigate',
+    requiredRoute: '/leaderboard',
+    selector: '[data-tour="nav-store"]',
+    expectedRoute: '/store',
+    title: 'Store',
+    description: 'Spend the credits you earn on store items. Click Store to see what is available.',
+  },
+  {
+    id: 'nav-wallet',
+    type: 'navigate',
+    requiredRoute: '/store',
+    selector: '[data-tour="nav-wallet"]',
+    expectedRoute: '/wallet',
+    title: 'Wallet',
+    description:
+      'Your Wallet shows your balance, earnings, and transactions. Click Wallet to take a look.',
+  },
+  {
+    id: 'nav-referrals',
+    type: 'navigate',
+    requiredRoute: '/wallet',
+    viaRoute: '/settings',
+    viaSelector: '[data-tour="nav-settings"]',
+    selector: '[data-tour="nav-referrals"]',
+    expectedRoute: '/referrals',
+    title: 'Referrals',
+    description:
+      'Earn bonus credits by inviting friends. Referrals lives in your Settings — click Settings to open it.',
+    viaDescription: 'Now open Referrals to see your invite link and referral rewards.',
+    fallbackDescription:
+      'Referrals lives in your Settings. Press Go there to continue to your invite link.',
+  },
+  {
+    id: 'nav-dashboard',
+    type: 'navigate',
+    requiredRoute: '/referrals',
+    selector: '[data-tour="nav-dashboard"]',
+    expectedRoute: '/dashboard',
+    title: 'Back to your Dashboard',
+    description: 'That is the tour. Click Dashboard to head back and start earning.',
   },
 ];
 
 interface PersistedTourState {
-  version: 1;
+  version: 2;
   userId: string;
   status: TourStatus;
   step: number;
@@ -84,7 +144,7 @@ function readUserTour(userId: string): PersistedTourState | null {
     if (!raw) return null;
     const p = JSON.parse(raw) as Partial<PersistedTourState>;
     if (
-      p.version !== 1 ||
+      p.version !== 2 ||
       p.userId !== userId ||
       !p.status ||
       !STATUSES.includes(p.status) ||
@@ -95,7 +155,7 @@ function readUserTour(userId: string): PersistedTourState | null {
     ) {
       return null;
     }
-    return { version: 1, userId, status: p.status, step: p.step };
+    return { version: 2, userId, status: p.status, step: p.step };
   } catch {
     return null;
   }
@@ -117,6 +177,8 @@ interface TourState {
   startTour: () => void;
   /** Advances only if the tour is active and still on `expectedStep` (exactly-once guard). */
   nextStep: (expectedStep: number) => void;
+  /** Moves back only if the tour is active and still on `expectedStep` (exactly-once guard). */
+  prevStep: (expectedStep: number) => void;
   skipTour: () => void;
   /** Explicit user action (Replay): the only way back to `active` after skip/completion. */
   resetTour: () => void;
@@ -127,7 +189,7 @@ export const useTourStore = create<TourState>()((set, get) => {
     const { userId } = get();
     if (!userId) return;
     set({ status, step });
-    writeUserTour({ version: 1, userId, status, step });
+    writeUserTour({ version: 2, userId, status, step });
   };
 
   return {
@@ -152,6 +214,12 @@ export const useTourStore = create<TourState>()((set, get) => {
       const next = step + 1;
       if (next >= TOUR_STEPS.length) commit('completed', TOUR_STEPS.length);
       else commit('active', next);
+    },
+
+    prevStep: (expectedStep) => {
+      const { status, step } = get();
+      if (status !== 'active' || step !== expectedStep || step === 0) return;
+      commit('active', step - 1);
     },
 
     skipTour: () => {

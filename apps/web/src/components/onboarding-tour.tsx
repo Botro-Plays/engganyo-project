@@ -21,8 +21,14 @@ const HEADER_ALLOWANCE = 72;
 const MOBILE_NAV_HEIGHT = 72;
 
 const NAV_TARGETS: Record<string, string> = {
+  '/dashboard': 'nav-dashboard',
   '/tasks': 'nav-tasks',
   '/missions': 'nav-missions',
+  '/campaigns': 'nav-campaigns',
+  '/leaderboard': 'nav-leaderboard',
+  '/store': 'nav-store',
+  '/wallet': 'nav-wallet',
+  '/settings': 'nav-settings',
   '/forum': 'nav-forum',
 };
 
@@ -252,9 +258,9 @@ function createStepController(opts: {
   };
 
   const focusInitial = () => {
-    const btn = getTooltip()?.querySelector<HTMLElement>(
-      step.type === 'info' ? '[data-tour-action="primary"]' : '[data-tour-action="skip"]',
-    );
+    const btn =
+      getTooltip()?.querySelector<HTMLElement>('[data-tour-action="primary"]') ??
+      getTooltip()?.querySelector<HTMLElement>('[data-tour-action="skip"]');
     btn?.focus();
   };
 
@@ -505,6 +511,7 @@ export function OnboardingTour() {
   const syncWithUser = useTourStore((s) => s.syncWithUser);
   const startTour = useTourStore((s) => s.startTour);
   const nextStep = useTourStore((s) => s.nextStep);
+  const prevStep = useTourStore((s) => s.prevStep);
   const skipTour = useTourStore((s) => s.skipTour);
 
   const [mounted, setMounted] = useState(false);
@@ -519,7 +526,10 @@ export function OnboardingTour() {
   const prevStatusRef = useRef(status);
 
   const step: TourStep | undefined = status === 'active' && stepIndex < TOUR_STEPS.length ? TOUR_STEPS[stepIndex] : undefined;
-  const shouldShow = mounted && !!step && pathname === step.requiredRoute;
+  // Two-hop steps show on `requiredRoute` (highlighting `viaSelector`), then on `viaRoute`
+  // (highlighting `selector`), and finally complete when `expectedRoute` is reached.
+  const onVia = !!step?.viaRoute && pathname === step.viaRoute;
+  const shouldShow = mounted && !!step && (pathname === step.requiredRoute || pathname === step.viaRoute);
   const stepId = step?.id;
 
   useEffect(() => setMounted(true), []);
@@ -547,12 +557,16 @@ export function OnboardingTour() {
     if (pathname !== step.requiredRoute && pathname !== step.expectedRoute) nav.cancelPending();
   }, [pathname, step, stepIndex, nextStep]);
 
-  // One controller per visible step. It owns suppression, observers, target and listeners.
+  // One controller per visible step phase. It owns suppression, observers, target and listeners.
+  // On a two-hop step's `viaRoute`, the highlighted target is `selector`; on `requiredRoute` it
+  // is `viaSelector` (the element leading to `viaRoute`).
   useEffect(() => {
     if (!shouldShow || !step || !navRef.current) return;
     if (!previousFocusRef.current) previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const phaseStep =
+      onVia || !step.viaSelector ? step : { ...step, selector: step.viaSelector };
     const controller = createStepController({
-      step,
+      step: phaseStep,
       nav: navRef.current,
       onState: setUi,
       getTooltip: () => tooltipRef.current,
@@ -564,9 +578,9 @@ export function OnboardingTour() {
       setUi(null);
       setPos(null);
     };
-    // Re-create only when the visible step changes.
+    // Re-create only when the visible step or hop phase changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldShow, stepId]);
+  }, [shouldShow, stepId, onVia]);
 
   // Move focus into the tooltip when a step first renders.
   const tooltipReady = shouldShow && !!ui;
@@ -707,13 +721,32 @@ export function OnboardingTour() {
     : null;
   const panel = 'fixed z-[70] bg-black/60';
   const missing = ui.missing || !hole;
-  const description = missing ? step.fallbackDescription ?? step.description : step.description;
+  const description = missing
+    ? step.fallbackDescription ?? step.description
+    : onVia
+      ? step.viaDescription ?? step.description
+      : step.description;
 
   const handleGoThere = () => {
-    if (!step.expectedRoute) return;
+    const dest = onVia || !step.viaRoute ? step.expectedRoute : step.viaRoute;
+    if (!dest) return;
     navRef.current?.click(step.id);
-    router.push(step.expectedRoute);
+    router.push(dest);
   };
+
+  // Back returns to the previous step, routing to that step's page when it differs.
+  const handleBack = () => {
+    const prev = stepIndex > 0 ? TOUR_STEPS[stepIndex - 1] : undefined;
+    if (!prev) return;
+    navRef.current?.cancelPending();
+    prevStep(stepIndex);
+    if (pathname !== prev.requiredRoute) router.push(prev.requiredRoute);
+  };
+
+  const isLastStep = stepIndex === TOUR_STEPS.length - 1;
+  const primaryLabel =
+    step.type === 'info' ? 'Next' : missing ? 'Go there' : isLastStep ? 'Finish' : 'Next';
+  const handlePrimary = step.type === 'info' ? () => nextStep(stepIndex) : handleGoThere;
 
   return (
     <>
@@ -761,35 +794,35 @@ export function OnboardingTour() {
                 Click the highlighted link to continue. With the keyboard, press Tab to reach it, then Enter.
               </p>
             )}
-            <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                {stepIndex > 0 && (
+                  <button
+                    type="button"
+                    data-tour-action="back"
+                    onClick={handleBack}
+                    className={`min-h-[44px] rounded-md px-3 text-sm text-zinc-400 hover:text-white ${focusRing}`}
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  type="button"
+                  data-tour-action="skip"
+                  onClick={handleSkip}
+                  className={`min-h-[44px] rounded-md px-3 text-sm text-zinc-400 hover:text-white ${focusRing}`}
+                >
+                  Skip tour
+                </button>
+              </div>
               <button
                 type="button"
-                data-tour-action="skip"
-                onClick={handleSkip}
-                className={`min-h-[44px] rounded-md px-3 text-sm text-zinc-400 hover:text-white ${focusRing}`}
+                data-tour-action="primary"
+                onClick={handlePrimary}
+                className={`min-h-[44px] rounded-md bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 ${focusRing}`}
               >
-                Skip tour
+                {primaryLabel}
               </button>
-              {step.type === 'info' && (
-                <button
-                  type="button"
-                  data-tour-action="primary"
-                  onClick={() => nextStep(stepIndex)}
-                  className={`min-h-[44px] rounded-md bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 ${focusRing}`}
-                >
-                  Got it
-                </button>
-              )}
-              {step.type === 'navigate' && missing && (
-                <button
-                  type="button"
-                  data-tour-action="primary"
-                  onClick={handleGoThere}
-                  className={`min-h-[44px] rounded-md bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 ${focusRing}`}
-                >
-                  Go there
-                </button>
-              )}
             </div>
           </div>
         </>,
