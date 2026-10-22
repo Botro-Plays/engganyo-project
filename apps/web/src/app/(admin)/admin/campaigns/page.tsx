@@ -12,7 +12,7 @@ import { formatCredits, creditLabel, formatDate, formatRelativeTime } from '@/li
 import type { ApiResponse } from '@/types';
 
 const TASK_TYPES = [
-  'YOUTUBE_SUBSCRIBE','YOUTUBE_LIKE','YOUTUBE_COMMENT','YOUTUBE_WATCH',
+  // YouTube engagement task types are disabled for platform-policy compliance.
   'TIKTOK_FOLLOW','TIKTOK_LIKE','TIKTOK_COMMENT',
   'INSTAGRAM_FOLLOW','INSTAGRAM_LIKE','INSTAGRAM_COMMENT',
   'TWITTER_FOLLOW','TWITTER_LIKE','TWITTER_RETWEET',

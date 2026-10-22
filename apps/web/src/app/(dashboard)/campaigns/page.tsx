@@ -35,6 +35,11 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   GOOGLE_REVIEW: 'GOOGLE',
 };
 
+// Rewarded YouTube engagement is disabled for platform-policy compliance.
+const DISABLED_TASK_TYPES = new Set([
+  'YOUTUBE_SUBSCRIBE', 'YOUTUBE_LIKE', 'YOUTUBE_COMMENT', 'YOUTUBE_WATCH',
+]);
+
 const ALL_TASK_TYPES = [
   { value: 'YOUTUBE_SUBSCRIBE',    label: 'YouTube · Subscribe' },
   { value: 'YOUTUBE_LIKE',         label: 'YouTube · Like' },
@@ -209,6 +214,7 @@ export default function CampaignsPage() {
   // Platforms tracked in oAuthConfig — all others (TRUSTPILOT, GOOGLE, unmapped) are always shown
   const MANAGED_PLATFORMS = new Set(['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE']);
   const TASK_TYPES = ALL_TASK_TYPES.filter((t) => {
+    if (DISABLED_TASK_TYPES.has(t.value)) return false;
     const platform = TASK_TYPE_TO_PLATFORM[t.value];
     if (!platform || !MANAGED_PLATFORMS.has(platform)) return true; // not managed by oAuthConfig → always show
     return enabledPlatforms === null || enabledPlatforms.includes(platform);
@@ -394,6 +400,7 @@ export default function CampaignsPage() {
                   {form.formState.errors.taskType && (
                     <p className="text-xs text-red-400 mt-1">{form.formState.errors.taskType.message}</p>
                   )}
+                  <p className="text-[10px] text-zinc-600 mt-1">YouTube engagement tasks are disabled for platform-policy compliance.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-400 mb-1.5">Target URL</label>

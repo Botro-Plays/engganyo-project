@@ -18,6 +18,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { StoreService } from '../store/store.service';
+import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -97,6 +98,7 @@ export class TasksService {
     });
 
     if (!campaign) throw new NotFoundException('Campaign not found');
+    assertEngagementTaskAllowed(campaign.taskType);
     if (campaign.userId === userId && !campaign.isPlatformTask) {
       throw new BadRequestException('Cannot assign your own campaign');
     }
@@ -339,6 +341,7 @@ export class TasksService {
     });
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
+    assertEngagementTaskAllowed(completion.campaign.taskType);
 
     // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
     if (completion.campaign.userId === userId) {
@@ -564,6 +567,7 @@ export class TasksService {
     });
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
+    assertEngagementTaskAllowed(completion.campaign.taskType);
 
     // ── Ownership enforcement: campaign owners cannot complete their own tasks unless it's a platform task ──
     if (completion.campaign.userId === userId && !completion.campaign.isPlatformTask) {
