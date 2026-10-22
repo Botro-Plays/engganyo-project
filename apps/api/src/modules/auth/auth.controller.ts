@@ -23,14 +23,14 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { UserRateLimit } from '../../common/guards/user-rate-limit.guard';
+import { UserRateLimitGuard, UserRateLimit } from '../../common/guards/user-rate-limit.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
 @ApiTags('auth')
 @Controller({ path: 'auth' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, UserRateLimitGuard)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
