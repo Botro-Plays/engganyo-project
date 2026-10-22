@@ -416,6 +416,10 @@ export class AuthService {
       this.clearRefreshCookie(res);
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+    if (payload.purpose !== 'refresh') {
+      this.clearRefreshCookie(res);
+      throw new UnauthorizedException('Invalid token purpose');
+    }
 
     const session = await this.prisma.userSession.findUnique({
       where: { refreshToken },
@@ -628,11 +632,11 @@ export class AuthService {
 
   private async generateTokens(payload: JwtPayload): Promise<TokenPair> {
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
+      this.jwtService.signAsync({ ...payload, purpose: 'access' }, {
         secret: this.configService.get<string>('jwt.accessSecret'),
         expiresIn: this.configService.get<string>('jwt.accessExpiresIn', '15m'),
       }),
-      this.jwtService.signAsync(payload, {
+      this.jwtService.signAsync({ ...payload, purpose: 'refresh' }, {
         secret: this.configService.get<string>('jwt.refreshSecret'),
         expiresIn: this.configService.get<string>('jwt.refreshExpiresIn', '7d'),
       }),

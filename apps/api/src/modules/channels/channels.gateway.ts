@@ -63,6 +63,11 @@ export class ChannelsGateway
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.get<string>('jwt.accessSecret'),
       });
+      if ((payload as { purpose?: string }).purpose !== 'access') {
+        this.logger.warn('Channel socket rejected: wrong token purpose');
+        client.disconnect(true);
+        return;
+      }
       const userId = payload.sub as string;
       const role = payload.role as string | undefined;
       if (!userId) {

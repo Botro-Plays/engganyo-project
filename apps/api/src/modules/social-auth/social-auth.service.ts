@@ -224,7 +224,7 @@ export class SocialAuthService {
 
     // Encode userId + platform in a short-lived state JWT (10 min)
     const state = this.jwt.sign(
-      { userId, platform } as OAuthState,
+      { userId, platform, purpose: 'oauth_state' } as OAuthState & { purpose: string },
       { expiresIn: '10m' },
     );
 
@@ -253,8 +253,11 @@ export class SocialAuthService {
     // Validate state JWT
     let payload: OAuthState;
     try {
-      payload = this.jwt.verify<OAuthState>(state);
+      payload = this.jwt.verify<OAuthState & { purpose?: string }>(state);
     } catch {
+      return `${frontendUrl}/settings/connected-accounts?error=invalid_state`;
+    }
+    if ((payload as { purpose?: string }).purpose !== 'oauth_state') {
       return `${frontendUrl}/settings/connected-accounts?error=invalid_state`;
     }
 
