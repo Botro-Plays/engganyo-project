@@ -18,6 +18,7 @@ import { SocialAuthService } from '../social-auth/social-auth.service';
 import { EmailService } from '../email/email.service';
 import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -162,6 +163,7 @@ export class AdminService {
   }
 
   async createPlatformTask(adminId: string, dto: CreatePlatformTaskDto) {
+    assertEngagementTaskAllowed(dto.taskType);
     const campaign = await this.prisma.campaign.create({
       data: {
         userId: adminId,
@@ -608,6 +610,7 @@ export class AdminService {
         campaign: {
           select: {
             id: true,
+            taskType: true,
             creditPerTask: true,
             completedSlots: true,
             totalSlots: true,
@@ -618,6 +621,9 @@ export class AdminService {
     if (!completion) throw new NotFoundException('Submission not found');
     if (completion.status !== CompletionStatus.SUBMITTED) {
       throw new BadRequestException(`Submission is already ${completion.status.toLowerCase()}`);
+    }
+    if (dto.action === 'approve') {
+      assertEngagementTaskAllowed(completion.campaign.taskType);
     }
 
     const now = new Date();

@@ -197,16 +197,9 @@ async function main(): Promise<void> {
   console.log(`✅ Seeded ${configs.length} platform configs`);
 
   // ─── Sample Platform Campaigns ──────────────────────────────
+  // NOTE: rewarded YouTube engagement tasks are disabled for platform-policy
+  // compliance — no YOUTUBE_* campaigns may be seeded.
   const sampleCampaigns = [
-    {
-      title: 'Subscribe to Engganyo on YouTube',
-      description: 'Help us grow our YouTube channel! Subscribe and turn on notifications.',
-      taskType: TaskType.YOUTUBE_SUBSCRIBE,
-      targetUrl: 'https://youtube.com/@engganyo',
-      totalSlots: 100,
-      creditPerTask: 50,
-      proofInstructions: 'Take a screenshot showing you are subscribed and paste the URL.',
-    },
     {
       title: 'Follow Engganyo on TikTok',
       description: 'Follow our TikTok account for daily creator tips and platform updates.',
@@ -233,15 +226,6 @@ async function main(): Promise<void> {
       totalSlots: 150,
       creditPerTask: 25,
       proofInstructions: 'Screenshot showing you are following @engganyo.',
-    },
-    {
-      title: 'Like our YouTube Introduction Video',
-      description: 'Watch and like our intro video to help with YouTube reach.',
-      taskType: TaskType.YOUTUBE_LIKE,
-      targetUrl: 'https://youtube.com/watch?v=example',
-      totalSlots: 300,
-      creditPerTask: 20,
-      proofInstructions: 'Screenshot the video page showing your like.',
     },
     {
       title: 'Retweet our Platform Launch Post',

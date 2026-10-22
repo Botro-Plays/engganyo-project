@@ -15,6 +15,7 @@ import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -150,6 +151,9 @@ export class CampaignsService {
   }
 
   async create(userId: string, userRole: string, dto: CreateCampaignDto) {
+    // Rewarded-engagement policy gate (checked before any spend)
+    assertEngagementTaskAllowed(dto.taskType);
+
     const totalCost = dto.totalSlots * dto.creditPerTask;
     const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
@@ -347,7 +351,7 @@ export class CampaignsService {
   ) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { userId: true, creditPerTask: true, completedSlots: true, totalSlots: true },
+      select: { userId: true, taskType: true, creditPerTask: true, completedSlots: true, totalSlots: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
@@ -360,6 +364,9 @@ export class CampaignsService {
     if (completion.campaignId !== campaignId) throw new ForbiddenException('Submission does not belong to this campaign');
     if (completion.status !== CompletionStatus.SUBMITTED) {
       throw new BadRequestException('Submission is not pending review');
+    }
+    if (dto.action === 'approve') {
+      assertEngagementTaskAllowed(campaign.taskType);
     }
 
     // ── Ownership enforcement: campaign owners cannot receive rewards for their own tasks ──
