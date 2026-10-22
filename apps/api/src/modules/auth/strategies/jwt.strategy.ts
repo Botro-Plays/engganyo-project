@@ -23,6 +23,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<JwtPayload> {
+    if (payload.purpose !== 'access') {
+      throw new UnauthorizedException('Invalid token purpose');
+    }
     const cacheKey = `jwt:user:${payload.sub}`;
     const cached = await this.redisService.getJson<{
       id: string;
