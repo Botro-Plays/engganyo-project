@@ -1,11 +1,13 @@
 /**
  * Campaign cancellation must be atomic and refund only funded pools:
- * - the campaign row is locked FOR UPDATE inside the transaction, so
- *   reads/counters used for the refund are protected and assignments
- *   serialize against it
+ * - the campaign row is locked FOR UPDATE inside the transaction, and
+ *   each locked counter is validated (nonneg integers, no oversubscription,
+ *   valid credit_per_task) — malformed rows fail closed for manual review
  * - an atomic status claim prevents concurrent double-refunds
- * - refunds resolve only against a verified, owner-wallet,
- *   COMPLETED SPEND_CAMPAIGN_CREATE debit (resolveFundedRefund)
+ * - funding resolution distinguishes ABSENT funding (audited no-refund
+ *   cancel) from MALFORMED funding (wrong wallet, bad status/direction,
+ *   inconsistent amounts → manual review). Pool is bounded separately
+ *   from the retained fee; prior validated refunds reduce capacity
  * - cancellation, wallet credit, ledger entry, and audit share one tx
  */
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
@@ -29,30 +31,43 @@ const lockedRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const makeTx = (overrides: Record<string, unknown> = {}) => ({
-  $queryRaw: jest.fn().mockResolvedValue([lockedRow()]),
+type TxOpts = {
+  funding?: Array<Record<string, unknown>>;
+  priorRefunds?: Array<Record<string, unknown>>;
+  row?: Array<Record<string, unknown>>;
+} & Record<string, unknown>;
+
+const goodFunding = (amount = -525) => [
+  { amount, status: 'COMPLETED', wallet: { userId: 'owner' } },
+];
+
+const makeTx = (opts: TxOpts = {}) => ({
+  $queryRaw: jest.fn().mockResolvedValue(opts.row ?? [lockedRow()]),
   campaign: {
     updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     create: jest.fn().mockResolvedValue({ id: 'new-campaign-id' }),
-    ...(overrides['campaign'] as object | undefined),
+    ...(opts['campaign'] as object | undefined),
   },
   transaction: {
-    findMany: jest.fn().mockResolvedValue([]),
-    aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
-    ...(overrides['transaction'] as object | undefined),
+    findMany: jest.fn().mockImplementation(({ where }: { where: { type: string } }) =>
+      Promise.resolve(
+        where.type === 'SPEND_CAMPAIGN_CREATE'
+          ? (opts.funding ?? [])
+          : (opts.priorRefunds ?? []),
+      ),
+    ),
+    ...(opts['transaction'] as object | undefined),
   },
   auditLog: { create: jest.fn().mockResolvedValue({}) },
   taskCompletion: {
     count: jest.fn().mockResolvedValue(0),
-    ...(overrides['taskCompletion'] as object | undefined),
+    ...(opts['taskCompletion'] as object | undefined),
   },
   user: { update: jest.fn().mockResolvedValue({}) },
   platformRevenue: { create: jest.fn().mockResolvedValue({}) },
 });
 
 const campaignRow = () => ({ id: 'c1', userId: 'owner', title: 'Funded campaign', feeAmount: 25 });
-// Pool 10×50 = 500 + 25 fee = 525 debited at creation
-const FUNDING_TX = [{ amount: -525 }];
 
 describe('CampaignsService — cancellation funding & atomicity', () => {
   let prisma: Record<string, jest.Mock>;
@@ -81,11 +96,16 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
       eventsService as never,
       mockService() as never,
     );
+    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
   });
+
+  const wire = (tx: unknown) => {
+    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+  };
 
   it('debits the wallet inside the creation transaction, linked to the new campaign', async () => {
     const tx = makeTx();
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    wire(tx);
     prisma.user = { findUnique: jest.fn().mockResolvedValue({ id: 'u1' }) } as never;
     prisma.wallet = { findUnique: jest.fn().mockResolvedValue({ lifetimeSpent: 0 }) } as never;
     prisma.platformConfig = { findMany: jest.fn().mockResolvedValue([]) } as never;
@@ -116,9 +136,8 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
   });
 
   it('owner cancel on a funded campaign: lock + atomic claim + ledgered refund + audit in one tx', async () => {
-    const tx = makeTx({ transaction: { findMany: jest.fn().mockResolvedValue(FUNDING_TX) } });
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    const tx = makeTx({ funding: goodFunding() });
+    wire(tx);
 
     const result = await service.cancel('owner', 'c1');
 
@@ -143,9 +162,8 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
   });
 
   it('owner cancel on an unfunded campaign cancels + audits without minting credits', async () => {
-    const tx = makeTx(); // transaction.findMany → [] (no funding debit)
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    const tx = makeTx(); // no linked funding rows at all
+    wire(tx);
 
     const result = await service.cancel('owner', 'c1');
 
@@ -159,10 +177,54 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
     expect(result.refundAmount).toBe(0);
   });
 
-  it('funding smaller than the computed refund fails closed — no credit', async () => {
-    const tx = makeTx({ transaction: { findMany: jest.fn().mockResolvedValue([{ amount: -100 }]) } });
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+  it.each([
+    ['negative pending_slots', { pending_slots: -1 }],
+    ['negative completed_slots', { completed_slots: -1 }],
+    ['oversubscribed counters', { completed_slots: 6, pending_slots: 5 }],
+    ['zero credit_per_task', { credit_per_task: 0 }],
+    ['non-integer total_slots', { total_slots: 10.5 }],
+  ])('locked counters %s fail closed — no claim, no credit', async (_label, row) => {
+    const tx = makeTx({ row: [lockedRow(row)], funding: goodFunding() });
+    wire(tx);
+
+    await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign counters');
+    expect(tx.campaign.updateMany).not.toHaveBeenCalled();
+    expect(walletService.credit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['wrong wallet', [{ amount: -525, status: 'COMPLETED', wallet: { userId: 'other' } }]],
+    ['non-COMPLETED status', [{ amount: -525, status: 'PENDING', wallet: { userId: 'owner' } }]],
+    ['positive amount', [{ amount: 525, status: 'COMPLETED', wallet: { userId: 'owner' } }]],
+    ['debit below pool', [{ amount: -400, status: 'COMPLETED', wallet: { userId: 'owner' } }]],
+    ['debit covering fee only', [{ amount: -25, status: 'COMPLETED', wallet: { userId: 'owner' } }]],
+  ])('malformed funding (%s) → manual review, not silent no-refund', async (_label, funding) => {
+    const tx = makeTx({ funding });
+    wire(tx);
+
+    await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('prior refund reduces capacity — over-refunding fails closed', async () => {
+    const tx = makeTx({
+      funding: goodFunding(),
+      priorRefunds: [{ amount: 200, status: 'COMPLETED', wallet: { userId: 'owner' } }],
+    });
+    wire(tx);
+
+    // poolFunded 500 − prior 200 = 300 < requested 500
+    await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
+    expect(walletService.credit).not.toHaveBeenCalled();
+  });
+
+  it('malformed prior refund row fails closed rather than being ignored', async () => {
+    const tx = makeTx({
+      funding: goodFunding(),
+      priorRefunds: [{ amount: 200, status: 'PENDING', wallet: { userId: 'owner' } }],
+    });
+    wire(tx);
 
     await expect(service.cancel('owner', 'c1')).rejects.toThrow('Inconsistent campaign funding ledger');
     expect(walletService.credit).not.toHaveBeenCalled();
@@ -171,20 +233,17 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
   it('concurrent cancel loses the status claim and cannot double-refund', async () => {
     const tx = makeTx({
       campaign: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      transaction: { findMany: jest.fn().mockResolvedValue(FUNDING_TX) },
+      funding: goodFunding(),
     });
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    wire(tx);
 
     await expect(service.cancel('owner', 'c1')).rejects.toThrow(BadRequestException);
     expect(walletService.credit).not.toHaveBeenCalled();
   });
 
   it('locked read of a CANCELLED campaign fails before any refund work', async () => {
-    const tx = makeTx();
-    (tx.$queryRaw as jest.Mock).mockResolvedValue([lockedRow({ status: 'CANCELLED' })]);
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    const tx = makeTx({ row: [lockedRow({ status: 'CANCELLED' })] });
+    wire(tx);
 
     await expect(service.cancel('owner', 'c1')).rejects.toThrow(BadRequestException);
     expect(tx.campaign.updateMany).not.toHaveBeenCalled();
@@ -193,8 +252,7 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
 
   it('cancel with existing completions is refused under the lock', async () => {
     const tx = makeTx({ taskCompletion: { count: jest.fn().mockResolvedValue(2) } });
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    wire(tx);
 
     await expect(service.cancel('owner', 'c1')).rejects.toThrow(ForbiddenException);
     expect(walletService.credit).not.toHaveBeenCalled();
@@ -222,12 +280,16 @@ describe('AdminService — cancellation funding & atomicity', () => {
       mockService() as never,
       mockService() as never,
     );
+    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
   });
 
-  it('funded campaign: lock + status + ledgered refund + audit share one tx', async () => {
-    const tx = makeTx({ transaction: { findMany: jest.fn().mockResolvedValue(FUNDING_TX) } });
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
+  const wire = (tx: unknown) => {
     prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+  };
+
+  it('funded campaign: lock + status + ledgered refund + audit share one tx', async () => {
+    const tx = makeTx({ funding: goodFunding() });
+    wire(tx);
 
     const result = await service.cancelUserCampaign('admin1', 'c1', 'cleanup');
 
@@ -251,8 +313,7 @@ describe('AdminService — cancellation funding & atomicity', () => {
 
   it('unfunded campaign: cancels and audits, but issues no credits and writes refundSkippedUnfunded', async () => {
     const tx = makeTx();
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    wire(tx);
 
     const result = await service.cancelUserCampaign('admin1', 'c1');
 
@@ -267,11 +328,26 @@ describe('AdminService — cancellation funding & atomicity', () => {
     expect(result.refunded).toBe(0);
   });
 
+  it.each([
+    ['negative pending_slots', { pending_slots: -3 }, null],
+    ['oversubscribed counters', { completed_slots: 8, pending_slots: 3 }, null],
+    ['wrong-wallet funding', null, [{ amount: -525, status: 'COMPLETED', wallet: { userId: 'intruder' } }]],
+    ['non-COMPLETED funding', null, [{ amount: -525, status: 'FAILED', wallet: { userId: 'owner' } }]],
+    ['debit below pool', null, [{ amount: -300, status: 'COMPLETED', wallet: { userId: 'owner' } }]],
+  ])('bad state (%s) fails closed — no credit, no audit', async (_label, row, funding) => {
+    const tx = makeTx({ row: row ? [lockedRow(row)] : undefined, funding: funding ?? goodFunding() });
+    wire(tx);
+
+    await expect(service.cancelUserCampaign('admin1', 'c1')).rejects.toThrow(BadRequestException);
+    // The claim may have executed in the mock, but the tx throws → rollback;
+    // the observable assertions are: no refund credit and no audit row.
+    expect(walletService.credit).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('repeat cancel fails at the locked status check — cannot refund twice', async () => {
-    const tx = makeTx();
-    (tx.$queryRaw as jest.Mock).mockResolvedValue([lockedRow({ status: 'CANCELLED' })]);
-    prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
-    prisma.$transaction = jest.fn((cb: (t: unknown) => unknown) => cb(tx)) as never;
+    const tx = makeTx({ row: [lockedRow({ status: 'CANCELLED' })] });
+    wire(tx);
 
     await expect(service.cancelUserCampaign('admin1', 'c1')).rejects.toThrow(BadRequestException);
     expect(walletService.credit).not.toHaveBeenCalled();

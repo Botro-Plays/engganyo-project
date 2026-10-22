@@ -19,7 +19,7 @@ import { EmailService } from '../email/email.service';
 import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
-import { resolveFundedRefund } from '../campaigns/campaign-funding';
+import { assertValidCampaignCounters, resolveFundedRefund } from '../campaigns/campaign-funding';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -369,11 +369,10 @@ export class AdminService {
         throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
       }
 
+      assertValidCampaignCounters(row);
+
       // Calculate refund: only for unused pool slots (fee is retained by platform)
       refundableSlots = row.total_slots - row.completed_slots - row.pending_slots;
-      if (refundableSlots < 0) {
-        throw new BadRequestException('Inconsistent campaign counters — manual review required.');
-      }
       const refundAmount = refundableSlots * row.credit_per_task;
 
       const claimed = await tx.campaign.updateMany({

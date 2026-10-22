@@ -248,7 +248,63 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.audits).toHaveLength(1);
   });
 
-  it('cancellation racing assignment: never refunds a consumed slot, never assigns on a cancelled campaign', async () => {
+  it('forced order: assignment first → owner cancel refuses (active completion)', async () => {
+    const owner = await makeUser();
+    const worker = await makeUser();
+    const campaign = await makeFundedCampaign(owner.id);
+
+    await tasks.assignTask(worker.id, campaign.id, 'ADMIN');
+    await expect(campaigns.cancel(owner.id, campaign.id)).rejects.toThrow();
+
+    const s = await state(campaign.id, owner.id);
+    expect(s.campaign.status).toBe(CampaignStatus.ACTIVE);
+    expect(s.campaign.pendingSlots).toBe(1);
+    expect(s.completions).toHaveLength(1);
+    expect(s.refunds).toHaveLength(0);
+    expect(s.walletRow.balance).toBe(475);
+    expect(s.user.creditBalance).toBe(475);
+  });
+
+  it('forced order: assignment first → admin cancel keeps the pending slot consumed and refunds only the free pool', async () => {
+    const owner = await makeUser();
+    const worker = await makeUser();
+    const adminUser = await makeUser('SUPER_ADMIN');
+    const campaign = await makeFundedCampaign(owner.id);
+
+    await tasks.assignTask(worker.id, campaign.id, 'ADMIN');
+    const result = await admin.cancelUserCampaign(adminUser.id, campaign.id, 'review');
+
+    // Defined behavior: the in-flight assignment remains the worker's — its
+    // slot is NOT refunded. Refund = (10 − 0 − 1) × 50 = 450.
+    const s = await state(campaign.id, owner.id);
+    expect(result.refunded).toBe(450);
+    expect(s.campaign.status).toBe(CampaignStatus.CANCELLED);
+    expect(s.campaign.pendingSlots).toBe(1);
+    expect(s.completions).toHaveLength(1);
+    expect(s.refunds).toHaveLength(1);
+    expect(s.refunds[0].amount).toBe(450);
+    expect(s.walletRow.balance).toBe(925);
+    expect(s.user.creditBalance).toBe(925);
+  });
+
+  it('forced order: cancellation first → assignment cannot claim a refunded slot', async () => {
+    const owner = await makeUser();
+    const worker = await makeUser();
+    const campaign = await makeFundedCampaign(owner.id);
+
+    await campaigns.cancel(owner.id, campaign.id);
+    await expect(tasks.assignTask(worker.id, campaign.id, 'ADMIN')).rejects.toThrow();
+
+    const s = await state(campaign.id, owner.id);
+    expect(s.campaign.status).toBe(CampaignStatus.CANCELLED);
+    expect(s.campaign.pendingSlots).toBe(0);
+    expect(s.completions).toHaveLength(0);
+    expect(s.refunds).toHaveLength(1);
+    expect(s.refunds[0].amount).toBe(500);
+    expect(s.walletRow.balance).toBe(975);
+  });
+
+  it('concurrent cancel/assign: never refunds a consumed slot, never assigns on a cancelled campaign', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeFundedCampaign(owner.id);

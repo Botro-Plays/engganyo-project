@@ -16,7 +16,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
-import { resolveFundedRefund } from './campaign-funding';
+import { assertValidCampaignCounters, resolveFundedRefund } from './campaign-funding';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -524,7 +524,7 @@ export class CampaignsService {
   async cancel(userId: string, campaignId: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { id: true, userId: true, title: true },
+      select: { id: true, userId: true, title: true, feeAmount: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
@@ -551,6 +551,7 @@ export class CampaignsService {
       if (!(cancellableStatuses as string[]).includes(row.status)) {
         throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
       }
+      assertValidCampaignCounters(row);
 
       // Completion count under the lock — no new assignment can interleave.
       const completionCount = await tx.taskCompletion.count({ where: { campaignId } });
@@ -562,9 +563,6 @@ export class CampaignsService {
 
       // Refund uncompleted and non-pending slots (pool only, fee is kept)
       const refundableSlots = row.total_slots - row.completed_slots - row.pending_slots;
-      if (refundableSlots < 0) {
-        throw new BadRequestException('Inconsistent campaign counters — manual review required.');
-      }
       const refundAmount = refundableSlots * row.credit_per_task;
 
       const claimed = await tx.campaign.updateMany({
