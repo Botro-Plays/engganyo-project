@@ -806,9 +806,10 @@ export class AuthService {
       throw new BadRequestException('reCAPTCHA token is required');
     }
 
+    const envSecret = this.configService.get<string>('app.recaptcha.secret', '');
     const secret = cfg.version === 'v2'
-      ? (cfg.v2SecretKey || this.configService.get<string>('recaptcha.secret', ''))
-      : (cfg.v3SecretKey || this.configService.get<string>('recaptcha.secret', ''));
+      ? (cfg.v2SecretKey || envSecret)
+      : (cfg.v3SecretKey || envSecret);
 
     // Fail closed: enabled without a usable configuration is an outage, not a bypass.
     if (!secret) {
@@ -832,7 +833,7 @@ export class AuthService {
       throw new ServiceUnavailableException('Human verification is temporarily unavailable. Please try again.');
     }
 
-    if (!data.success) {
+    if (data.success !== true) {
       this.logger.warn(`reCAPTCHA rejected (${expectedAction}): ${(data['error-codes'] ?? []).join(', ') || 'unsuccessful'}`);
       throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
     }
@@ -847,12 +848,13 @@ export class AuthService {
 
     if (cfg.version === 'v2') return; // v2 is interactive: success + hostname suffice
 
-    // v3: require an explicit score at/above threshold and the expected action.
-    if (typeof data.score !== 'number' || data.score < this.recaptchaMinScore) {
+    // v3: require a finite in-range score at/above threshold and the
+    // expected action; malformed provider responses are rejected.
+    if (typeof data.score !== 'number' || !Number.isFinite(data.score) || data.score < this.recaptchaMinScore || data.score > 1) {
       this.logger.warn(`reCAPTCHA score rejected (${expectedAction})`);
       throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
     }
-    if (data.action !== expectedAction) {
+    if (typeof data.action !== 'string' || data.action !== expectedAction) {
       this.logger.warn(`reCAPTCHA action mismatch (${expectedAction})`);
       throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
     }

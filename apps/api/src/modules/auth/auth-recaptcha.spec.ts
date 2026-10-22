@@ -4,13 +4,14 @@ import { JwtService } from '@nestjs/jwt';
 
 import { AuthService } from './auth.service';
 
+const configValues: Record<string, unknown> = {
+  'app.frontendUrl': 'https://engganyo.com',
+  'app.nodeEnv': 'test',
+  'app.recaptcha.secret': '',
+};
+
 const config = {
-  get: (key: string, fallback?: unknown) =>
-    ({
-      'app.frontendUrl': 'https://engganyo.com',
-      'app.nodeEnv': 'test',
-      'recaptcha.secret': '',
-    })[key] ?? fallback,
+  get: (key: string, fallback?: unknown) => configValues[key] ?? fallback,
 } as ConfigService;
 
 const prismaStub = {
@@ -48,6 +49,7 @@ const VALID = { success: true, score: 0.9, action: 'login', hostname: 'engganyo.
 describe('reCAPTCHA enforcement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    configValues['app.recaptcha.secret'] = '';
     global.fetch = fetchMock as never;
     prismaStub.platformConfig.findMany.mockResolvedValue(configRows(true));
   });
@@ -100,7 +102,13 @@ describe('reCAPTCHA enforcement', () => {
   it.each([
     ['low score', { score: 0.3 }],
     ['missing score', { score: undefined }],
-  ])('rejects a v3 token with %s', async (_label, overrides) => {
+    ['string score', { score: '0.9' }],
+    ['NaN score', { score: NaN }],
+    ['infinite score', { score: Infinity }],
+    ['out-of-range score', { score: 1.5 }],
+    ['negative score', { score: -0.1 }],
+    ['non-string action', { action: 7 }],
+  ])('rejects a malformed v3 response: %s', async (_label, overrides) => {
     fetchMock.mockResolvedValue(siteverify({ ...VALID, ...overrides }));
     await expect(makeService().assertRecaptcha('tok', 'login')).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -126,6 +134,24 @@ describe('reCAPTCHA enforcement', () => {
   it('accepts the www hostname for the same site', async () => {
     fetchMock.mockResolvedValue(siteverify({ ...VALID, hostname: 'www.engganyo.com' }));
     await expect(makeService().assertRecaptcha('tok', 'login')).resolves.toBeUndefined();
+  });
+
+  it('verifies with an environment-only secret when no database secret is configured', async () => {
+    prismaStub.platformConfig.findMany.mockResolvedValue([
+      { key: 'recaptcha_enabled', value: true },
+      { key: 'recaptcha_v3_secret_key', value: '' },
+    ]);
+    configValues['app.recaptcha.secret'] = 'env-secret';
+    fetchMock.mockResolvedValue(siteverify(VALID));
+    await expect(makeService().assertRecaptcha('tok', 'login')).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].body).toContain(`secret=${encodeURIComponent('env-secret')}`);
+  });
+
+  it('prefers the database secret over the environment secret', async () => {
+    configValues['app.recaptcha.secret'] = 'env-secret';
+    fetchMock.mockResolvedValue(siteverify(VALID));
+    await expect(makeService().assertRecaptcha('tok', 'login')).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].body).toContain(`secret=${encodeURIComponent('secret-key')}`);
   });
 
   it('accepts a valid v2 token (interactive: success + hostname)', async () => {
