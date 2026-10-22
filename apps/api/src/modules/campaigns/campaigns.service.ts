@@ -197,12 +197,6 @@ export class CampaignsService {
       }
     }
 
-    // Debit pool + fee upfront
-    await this.walletService.debit(userId, totalDebit, {
-      type: TransactionType.SPEND_CAMPAIGN_CREATE,
-      description: `Campaign: ${dto.title} (includes ${feeAmount} platform fee)`,
-    });
-
     const campaign = await this.prisma.$transaction(async (tx) => {
       const created = await tx.campaign.create({
         select: CAMPAIGN_SELECT,
@@ -228,6 +222,15 @@ export class CampaignsService {
           status: CampaignStatus.ACTIVE,
         },
       });
+
+      // Debit pool + fee inside the same transaction so the campaign can never
+      // exist unfunded, and the funding ledger row is linked to the campaign.
+      await this.walletService.debit(userId, totalDebit, {
+        type: TransactionType.SPEND_CAMPAIGN_CREATE,
+        description: `Campaign: ${dto.title} (includes ${feeAmount} platform fee)`,
+        referenceId: created.id,
+        referenceType: 'campaign',
+      }, tx);
 
       await tx.platformRevenue.create({
         data: {
@@ -558,23 +561,41 @@ export class CampaignsService {
     const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
     const refundAmount = refundableSlots * campaign.creditPerTask;
 
-    await this.prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
+    let actualRefund = 0;
+    await this.prisma.$transaction(async (tx) => {
+      // Atomic status claim: only one caller can transition the campaign out of
+      // a cancellable status — prevents concurrent double-refunds.
+      const claimed = await tx.campaign.updateMany({
+        where: { id: campaignId, status: { in: cancellableStatuses } },
+        data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
+      }
+
+      // Funding provenance: refund only against a verified funding debit.
+      const fundingTx = await tx.transaction.count({
+        where: {
+          type: TransactionType.SPEND_CAMPAIGN_CREATE,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        },
+      });
+      actualRefund = fundingTx > 0 ? refundAmount : 0;
+
+      if (actualRefund > 0) {
+        await this.walletService.credit(userId, actualRefund, {
+          type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+          description: `Refund for cancelled campaign: ${campaign.title}`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
+      }
     });
 
     this.eventsService.emitToUser(userId, 'campaign:updated', { campaignId, status: CampaignStatus.CANCELLED });
 
-    if (refundAmount > 0) {
-      await this.walletService.credit(userId, refundAmount, {
-        type: TransactionType.REFUND_CAMPAIGN_CANCEL,
-        description: `Refund for cancelled campaign: ${campaign.title}`,
-        referenceId: campaignId,
-        referenceType: 'campaign',
-      });
-    }
-
-    return { refundAmount };
+    return { refundAmount: actualRefund };
   }
 
   // ─── Public browse (for task marketplace) ─────────────────

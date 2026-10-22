@@ -371,20 +371,39 @@ export class AdminService {
     const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
     const refundAmount = refundableSlots * campaign.creditPerTask;
 
+    let actualRefund = 0;
     await this.prisma.$transaction(async (tx) => {
-      await tx.campaign.update({
-        where: { id: campaignId },
+      // Atomic status claim: prevents concurrent double-refunds.
+      const claimed = await tx.campaign.updateMany({
+        where: { id: campaignId, status: { in: cancellableStatuses } },
         data: {
           status: CampaignStatus.CANCELLED,
           cancelledAt: new Date(),
         },
       });
+      if (claimed.count !== 1) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
+      }
 
-      if (refundAmount > 0) {
-        await tx.user.update({
-          where: { id: campaign.userId },
-          data: { creditBalance: { increment: refundAmount } },
-        });
+      // Funding provenance: refund only against a verified funding debit —
+      // campaigns created outside the funded create() flow (e.g. seeds or
+      // platform tasks) have no pool to refund.
+      const fundingTx = await tx.transaction.count({
+        where: {
+          type: TransactionType.SPEND_CAMPAIGN_CREATE,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        },
+      });
+      actualRefund = fundingTx > 0 ? refundAmount : 0;
+
+      if (actualRefund > 0) {
+        await this.walletService.credit(campaign.userId, actualRefund, {
+          type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+          description: `Admin refund for cancelled campaign: ${campaign.title}`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
       }
 
       await tx.auditLog.create({
@@ -403,7 +422,8 @@ export class AdminService {
           },
           newValue: {
             status: CampaignStatus.CANCELLED,
-            refunded: refundAmount,
+            refunded: actualRefund,
+            refundSkippedUnfunded: fundingTx === 0 && refundAmount > 0,
             feeRetained: campaign.feeAmount,
           },
         },
@@ -412,7 +432,7 @@ export class AdminService {
 
     return {
       message: 'Campaign cancelled successfully',
-      refunded: refundAmount,
+      refunded: actualRefund,
       refundableSlots,
       feeRetained: campaign.feeAmount,
       reason: reason || null,
