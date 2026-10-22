@@ -183,6 +183,25 @@ describe('A03 — mounted proof-access stack', () => {
     expect(res.status).toBe(401);
   });
 
+  it('401s a soft-deleted (deletedAt set) account — lookup excludes it like JwtStrategy', async () => {
+    // With { deletedAt: null } in the predicate, a soft-deleted row resolves
+    // to null — the otherwise ACTIVE account cannot retrieve proof bytes.
+    prisma.user.findUnique.mockResolvedValue(null);
+    const res = await get(
+      '/uploads/proofs/owner-user/comp-1/secret.webp',
+      accessToken({ sub: 'owner-user' }),
+    );
+    expect(res.status).toBe(401);
+    expect(prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'owner-user',
+          deletedAt: null,
+        }),
+      }),
+    );
+  });
+
   it.each(['SUSPENDED', 'BANNED', 'DEACTIVATED'])(
     '401s a %s account even with a valid token',
     async (status) => {

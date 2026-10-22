@@ -79,10 +79,11 @@ export function createProofAccessHandler(
     }
 
     // Fresh, trusted account state — a stale JWT role never grants access.
+    // Soft-deleted users are excluded, consistent with JwtStrategy.
     let user: { role: string; status: string } | null;
     try {
       user = await prisma.user.findUnique({
-        where: { id: payload.sub },
+        where: { id: payload.sub, deletedAt: null },
         select: { role: true, status: true },
       });
     } catch {
