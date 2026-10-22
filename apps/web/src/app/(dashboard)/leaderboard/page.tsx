@@ -9,6 +9,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { formatCredits, getLevelProgress } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { UserLink } from '@/components/user-link';
@@ -185,6 +186,15 @@ export default function LeaderboardPage() {
     enabled: mainTab === 'referrals',
   });
 
+  // Equipped avatar frames for every visible list — one batched request
+  const cosmeticsMap = useCosmeticsMap([
+    ...(lbData ?? []).map((e) => e.id),
+    ...(achLbData ?? []).map((e) => e.id),
+    ...(missionLbData ?? []).map((e) => e.id),
+    ...(vipLbData ?? []).map((e) => e.id),
+    ...(refLbData ?? []).map((e) => e.userId),
+  ]);
+
   const levelInfo = stats ? getLevelProgress(stats.xp) : null;
 
   const renderRankList = <T extends { rank: number; id: string; username: string; displayName: string | null; avatarUrl: string | null; level: number; currentStreak: number }>(
@@ -203,7 +213,7 @@ export default function LeaderboardPage() {
             <div className={`w-7 text-center font-bold text-sm ${rankColor}`}>
               {entry.rank <= 3 ? <Trophy className="w-4 h-4 mx-auto" /> : entry.rank}
             </div>
-            <UserLink user={entry} showAvatar size="md" />
+            <UserLink user={entry} cosmetics={cosmeticsMap[entry.id]} showAvatar size="md" />
             <div className="flex-1 min-w-0">
               {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
               <p className="text-xs text-zinc-500">Lvl {entry.level}</p>
@@ -405,7 +415,7 @@ export default function LeaderboardPage() {
                     <div className={`w-7 text-center font-bold text-sm ${rankColor}`}>
                       {entry.rank <= 3 ? <Trophy className="w-4 h-4 mx-auto" /> : entry.rank}
                     </div>
-                    <UserLink user={entry} showAvatar size="md" />
+                    <UserLink user={entry} cosmetics={cosmeticsMap[entry.id]} showAvatar size="md" />
                     <div className="flex-1 min-w-0">
                       {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
                       <p className="text-xs text-zinc-500">Lvl {entry.level}</p>
@@ -459,7 +469,7 @@ export default function LeaderboardPage() {
                     <div className={`w-7 text-center font-bold text-sm ${rankColor}`}>
                       {entry.rank <= 3 ? <Trophy className="w-4 h-4 mx-auto" /> : entry.rank}
                     </div>
-                    <UserLink user={{ ...entry, id: entry.userId }} showAvatar size="md" />
+                    <UserLink user={{ ...entry, id: entry.userId }} cosmetics={cosmeticsMap[entry.userId]} showAvatar size="md" />
                     <div className="flex-1 min-w-0">
                       {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
                     </div>

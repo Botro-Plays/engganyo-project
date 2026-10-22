@@ -17,6 +17,7 @@ import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, formatDate } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { PlatformSelect } from '@/components/platform-select';
 import type { ApiResponse } from '@/types';
 
@@ -288,6 +289,8 @@ export default function CampaignsPage() {
     },
     enabled: !!reviewingCampaign,
   });
+
+  const cosmeticsMap = useCosmeticsMap((submissions?.items ?? []).map((s) => s.user?.id));
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -830,7 +833,7 @@ export default function CampaignsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <UserLink user={s.user} />
+                          <UserLink user={s.user} cosmetics={cosmeticsMap[s.user.id]} />
                           {s.escalated && (
                             <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">Escalated</span>
                           )}

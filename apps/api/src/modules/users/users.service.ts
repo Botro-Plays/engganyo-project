@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
-import { SocialPlatform } from '@prisma/client';
+import { SocialPlatform, StoreCategory } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -174,6 +174,35 @@ export class UsersService {
 
     await this.redisService.invalidateUserCaches(userId);
     return this.getMe(userId);
+  }
+
+  // ─── Batch: equipped cosmetics for many users ──────────────
+  // Used by list surfaces (leaderboard, forum, search, chat) to render avatar
+  // frames. Single findMany across all IDs — no per-user queries.
+
+  async getEquippedCosmeticsForUsers(userIds: string[]) {
+    const ids = [...new Set(userIds.filter((id) => typeof id === 'string' && id.length > 0))].slice(0, 100);
+    if (ids.length === 0) return {};
+
+    const rows = await this.prisma.userInventory.findMany({
+      where: {
+        userId: { in: ids },
+        equipped: true,
+        item: { category: StoreCategory.COSMETIC },
+      },
+      select: {
+        userId: true,
+        id: true,
+        equipped: true,
+        item: { select: { id: true, name: true, category: true, metadata: true } },
+      },
+    });
+
+    const map: Record<string, Array<Omit<(typeof rows)[number], 'userId'>>> = {};
+    for (const { userId, ...entry } of rows) {
+      (map[userId] ??= []).push(entry);
+    }
+    return map;
   }
 
   // ─── Get public profile ────────────────────────────────────

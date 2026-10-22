@@ -6,6 +6,7 @@ import { MessageSquare, Plus, ThumbsUp, MessageCircle, Eye, Lock, Pin } from 'lu
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { formatRelativeTime } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import type { ApiResponse } from '@/types';
@@ -68,6 +69,9 @@ export default function ForumPage() {
       return res.data.data;
     },
   });
+
+  // Equipped avatar frames for all visible topic authors — one batched request
+  const cosmeticsMap = useCosmeticsMap((data?.items ?? []).map((t) => t.author?.id));
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -146,7 +150,7 @@ export default function ForumPage() {
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  <UserLink user={topic.author} size="md" />
+                  <UserLink user={topic.author} cosmetics={cosmeticsMap[topic.author.id]} size="md" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

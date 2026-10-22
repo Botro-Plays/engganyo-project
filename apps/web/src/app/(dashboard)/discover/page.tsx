@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
+import { resolveCosmeticStyles } from '@/lib/cosmetics';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 
@@ -127,6 +129,8 @@ export default function DiscoverPage() {
     staleTime: 120_000,
   });
 
+  const cosmeticsMap = useCosmeticsMap((leaderboard?.items ?? []).map((u) => u.id));
+
   return (
     <div className="space-y-10">
       {/* Header */}
@@ -148,14 +152,19 @@ export default function DiscoverPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {(leaderboard?.items ?? []).slice(0, 5).map((u, idx) => (
+            {(leaderboard?.items ?? []).slice(0, 5).map((u, idx) => {
+              const frame = resolveCosmeticStyles(cosmeticsMap[u.id]);
+              return (
               <Link
                 key={u.id}
                 href={`/users/${u.username}`}
                 className="card-glass rounded-xl p-4 flex flex-col items-center text-center hover:border-brand-500/30 border border-surface-border transition-colors gap-2"
               >
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+                  <div
+                    className={`w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden ${frame.frameClass}`}
+                    style={frame.frameStyle}
+                  >
                     {u.avatarUrl
                       ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
                       : (u.displayName?.[0] ?? u.username[0]).toUpperCase()}
@@ -176,7 +185,8 @@ export default function DiscoverPage() {
                   </div>
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

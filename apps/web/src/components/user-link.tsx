@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { getInitials } from '@/lib/utils';
+import { resolveCosmeticStyles, type EquippedCosmetic } from '@/lib/cosmetics';
 
 interface UserLinkProps {
   user: {
@@ -10,14 +11,17 @@ interface UserLinkProps {
     displayName?: string | null;
     avatarUrl?: string | null;
   };
+  /** Equipped cosmetics (e.g. avatar_frame) resolved from useCosmeticsMap */
+  cosmetics?: EquippedCosmetic[];
   showAvatar?: boolean;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function UserLink({ user, showAvatar = true, size = 'sm', className }: UserLinkProps) {
+export function UserLink({ user, cosmetics, showAvatar = true, size = 'sm', className }: UserLinkProps) {
   const name = user.displayName ?? user.username;
   const avatarSize = size === 'md' ? 'w-8 h-8 text-xs' : 'w-6 h-6 text-[10px]';
+  const { frameClass, frameStyle } = resolveCosmeticStyles(cosmetics);
 
   return (
     <Link
@@ -26,7 +30,8 @@ export function UserLink({ user, showAvatar = true, size = 'sm', className }: Us
     >
       {showAvatar && (
         <div
-          className={`${avatarSize} rounded-full bg-gradient-brand flex items-center justify-center text-white font-bold shrink-0 overflow-hidden`}
+          className={`${avatarSize} rounded-full bg-gradient-brand flex items-center justify-center text-white font-bold shrink-0 overflow-hidden ${frameClass}`}
+          style={frameStyle}
         >
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt={name} className="w-full h-full object-cover" />

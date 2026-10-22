@@ -6,6 +6,7 @@ import { Search, X, User, Megaphone, MessageSquare, Loader2 } from 'lucide-react
 import { apiClient } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { UserLink } from './user-link';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import Link from 'next/link';
 
 interface SearchResult {
@@ -57,6 +58,8 @@ export function SearchBar() {
     enabled: query.trim().length >= 2,
     staleTime: 30_000,
   });
+
+  const cosmeticsMap = useCosmeticsMap((data?.users ?? []).map((u) => u.id));
 
   // Keyboard shortcut: Cmd/Ctrl+K to focus
   useEffect(() => {
@@ -157,7 +160,7 @@ export function SearchBar() {
                       onClick={() => setOpen(false)}
                       className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
                     >
-                      <UserLink user={u} size="sm" />
+                      <UserLink user={u} cosmetics={cosmeticsMap[u.id]} size="sm" />
                       <span className="text-xs text-zinc-500 ml-auto">Lvl {u.level}</span>
                     </Link>
                   ))}

@@ -318,6 +318,13 @@ export class StoreService implements OnModuleInit {
       throw err;
     }
 
+    // Cosmetics auto-equip on purchase, so the cached profile (which includes
+    // equippedCosmetics) is now stale. Non-critical: a failed invalidation must
+    // not fail an already-committed purchase.
+    if (item.category === StoreCategory.COSMETIC) {
+      await this.invalidateProfileCache(userId);
+    }
+
     // ── Step 4: Emit real-time notification ─────────────────
     void this.notificationsService.createNotification(
       userId,
@@ -555,6 +562,7 @@ export class StoreService implements OnModuleInit {
     if (inventory.equipped) {
       // Unequip
       await this.prisma.userInventory.update({ where: { id: inventoryId }, data: { equipped: false } });
+      await this.invalidateProfileCache(userId);
       return { inventoryId, equipped: false, itemName: inventory.item.name };
     }
 
@@ -573,7 +581,19 @@ export class StoreService implements OnModuleInit {
     }
 
     await this.prisma.userInventory.update({ where: { id: inventoryId }, data: { equipped: true } });
+    await this.invalidateProfileCache(userId);
     return { inventoryId, equipped: true, itemName: inventory.item.name };
+  }
+
+  /**
+   * Drop cached profile data (equippedCosmetics is embedded in `user:profile`)
+   * after an equip-state change. Non-critical — a cache failure must not turn a
+   * successful equip/unequip into an error.
+   */
+  private async invalidateProfileCache(userId: string): Promise<void> {
+    await this.redisService.invalidateUserCaches(userId).catch((err: unknown) => {
+      this.logger.error(`Failed to invalidate caches for user ${userId} after equip change`, err);
+    });
   }
 
   // ─── Loot box reveal ───────────────────────────────────────

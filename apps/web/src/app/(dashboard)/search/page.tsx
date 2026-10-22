@@ -7,6 +7,7 @@ import { Search, User, Megaphone, MessageSquare, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { creditLabel } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import Link from 'next/link';
 
 interface SearchResult {
@@ -57,6 +58,8 @@ function SearchContent() {
     },
     enabled: q.trim().length >= 2,
   });
+
+  const cosmeticsMap = useCosmeticsMap((data?.users ?? []).map((u) => u.id));
 
   const total = (data?.users.length ?? 0) + (data?.campaigns.length ?? 0) + (data?.topics.length ?? 0);
 
@@ -116,7 +119,7 @@ function SearchContent() {
             {(tab === 'all' || tab === 'users') && data?.users.map((u) => (
               <div key={u.id} className="card-glass rounded-xl p-4">
                 <div className="flex items-center gap-3">
-                  <UserLink user={u} />
+                  <UserLink user={u} cosmetics={cosmeticsMap[u.id]} />
                   <span className="text-xs text-zinc-500 ml-auto">Lvl {u.level} · {u.xp.toLocaleString()} XP</span>
                 </div>
               </div>

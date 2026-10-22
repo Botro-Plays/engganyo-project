@@ -70,11 +70,11 @@ export function resolveCosmeticStyles(cosmetics: EquippedCosmetic[] | undefined)
 
   const frameMeta = frame?.item.metadata as Record<string, unknown> | undefined;
   const frameStyle = (frameMeta?.['style'] as string | undefined) ?? 'gold';
-  const frameDef = FRAME_STYLES[frameStyle] ?? FRAME_STYLES['gold'];
+  const frameDef = frame ? (FRAME_STYLES[frameStyle] ?? FRAME_STYLES['gold']) : undefined;
 
   return {
     themeCardClass,
-    frameClass: frameDef.cls,
-    frameStyle: frameDef.style,
+    frameClass: frameDef?.cls ?? '',
+    frameStyle: frameDef?.style ?? {},
   };
 }

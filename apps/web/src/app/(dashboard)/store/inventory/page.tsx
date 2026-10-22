@@ -112,6 +112,7 @@ export default function InventoryPage() {
       addToast(`${data?.itemName ?? 'Cosmetic'} ${action}!`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
       void queryClient.invalidateQueries({ queryKey: ['users', 'me'] });
+      void queryClient.invalidateQueries({ queryKey: ['cosmetics'], type: 'all' });
       setEquippingId(null);
     },
     onError: (err) => {

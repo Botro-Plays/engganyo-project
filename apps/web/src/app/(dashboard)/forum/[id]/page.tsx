@@ -9,6 +9,8 @@ import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatRelativeTime } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
+import type { EquippedCosmetic } from '@/lib/cosmetics';
 import { MentionTextarea } from '@/components/mention-textarea';
 import { renderContentWithMentions } from '@/lib/render-content';
 import { ReportModal } from '@/components/report-modal';
@@ -127,6 +129,15 @@ export default function ForumTopicPage() {
       return res.data.data;
     },
   });
+
+  // Equipped avatar frames for the topic author + every reply author — one batched request
+  const cosmeticsMap = useCosmeticsMap([
+    data?.author?.id,
+    ...(data?.replies ?? []).flatMap((r) => [
+      r.author?.id,
+      ...(r.childReplies ?? []).map((c) => c.author?.id),
+    ]),
+  ]);
 
   const { data: topicReactions } = useQuery<ForumReaction[]>({
     queryKey: ['forum', 'topic', params.id, 'reactions'],
@@ -285,7 +296,7 @@ export default function ForumTopicPage() {
       <div className="card-glass rounded-xl p-6 mb-6">
         <div className="flex items-start gap-4 mb-4">
           <div className="flex-shrink-0">
-            <UserLink user={data.author} size="md" />
+            <UserLink user={data.author} cosmetics={cosmeticsMap[data.author.id]} size="md" />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -426,6 +437,7 @@ export default function ForumTopicPage() {
           <div key={reply.id}>
             <ReplyCard
               reply={reply}
+              cosmetics={cosmeticsMap[reply.author.id]}
               currentUserId={currentUser?.id}
               isTopicLocked={isLocked}
               editingReplyId={editingReplyId}
@@ -446,6 +458,7 @@ export default function ForumTopicPage() {
                   <ReplyCard
                     key={child.id}
                     reply={child}
+                    cosmetics={cosmeticsMap[child.author.id]}
                     currentUserId={currentUser?.id}
                     isTopicLocked={isLocked}
                     editingReplyId={editingReplyId}
@@ -543,6 +556,7 @@ export default function ForumTopicPage() {
 
 interface ReplyCardProps {
   reply: ForumReply;
+  cosmetics?: EquippedCosmetic[];
   currentUserId?: string;
   isTopicLocked: boolean;
   editingReplyId: string | null;
@@ -561,7 +575,7 @@ interface ReplyCardProps {
 }
 
 function ReplyCard({
-  reply, currentUserId, isTopicLocked,
+  reply, cosmetics, currentUserId, isTopicLocked,
   editingReplyId, editContent, setEditContent, setEditingReplyId,
   onEditReply, onUpdateReply, onDeleteReply, onReact, onReply, onReport,
   updatePending, isChild = false, parentReply,
@@ -584,7 +598,7 @@ function ReplyCard({
       )}
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0">
-          <UserLink user={reply.author} size={isChild ? 'sm' : 'md'} />
+          <UserLink user={reply.author} cosmetics={cosmetics} size={isChild ? 'sm' : 'md'} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-2">

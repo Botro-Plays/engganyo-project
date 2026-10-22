@@ -33,6 +33,8 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
+import { resolveCosmeticStyles } from '@/lib/cosmetics';
 import type { ApiResponse } from '@/types';
 
 const navItems = [
@@ -102,6 +104,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })();
   });
   useRefetchOnVisible([['wallet', 'me']]);
+
+  // Equipped cosmetics (avatar frame) for the header avatar — one batched query
+  const cosmeticsMap = useCosmeticsMap([user?.id]);
+  const headerFrame = resolveCosmeticStyles(user ? cosmeticsMap[user.id] : undefined);
 
   const mobileNavItems = [
     ...baseMobileNavItems,
@@ -204,10 +210,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <img
                       src={user.avatarUrl}
                       alt={user.displayName ?? user.username}
-                      className="w-8 h-8 rounded-full object-cover"
+                      className={`w-8 h-8 rounded-full object-cover ${headerFrame.frameClass}`}
+                      style={headerFrame.frameStyle}
                     />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold">
+                    <div
+                      className={`w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold ${headerFrame.frameClass}`}
+                      style={headerFrame.frameStyle}
+                    >
                       {(user.displayName ?? user.username).charAt(0).toUpperCase()}
                     </div>
                   )}

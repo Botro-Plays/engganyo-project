@@ -96,6 +96,8 @@ export default function StorePage() {
       addToast(`Purchased ${data?.item?.name ?? 'item'} successfully!`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['store'], type: 'all' });
       void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['cosmetics'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['users', 'me'] });
       setPurchasingId(null);
     },
     onError: (err: unknown) => {

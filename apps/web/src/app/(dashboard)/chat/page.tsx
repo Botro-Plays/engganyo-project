@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { connectChannelSocket, disconnectChannelSocket } from '@/lib/channel-socket';
+import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
+import { resolveCosmeticStyles } from '@/lib/cosmetics';
 import { formatRelativeTime } from '@/lib/utils';
 import {
   Send,
@@ -122,6 +124,9 @@ export default function ChatPage() {
       setMessages(initialMessages);
     }
   }, [initialMessages]);
+
+  // Equipped avatar frames for all visible message senders — one batched request
+  const cosmeticsMap = useCosmeticsMap(messages.map((m) => m.user?.id));
 
   // ─── Socket setup ──────────────────────────────────────────
   useEffect(() => {
@@ -426,10 +431,15 @@ export default function ChatPage() {
               ) : messages.length === 0 ? (
                 <p className="text-center text-zinc-600 text-sm">No messages yet. Be the first to say hello!</p>
               ) : (
-                messages.map((msg) => (
+                messages.map((msg) => {
+                  const frame = resolveCosmeticStyles(cosmeticsMap[msg.user?.id]);
+                  return (
                   <div key={msg.id} className="flex gap-3 group">
                     {/* Avatar */}
-                    <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                    <div
+                      className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold ${frame.frameClass}`}
+                      style={frame.frameStyle}
+                    >
                       {msg.user.displayName?.[0] ?? msg.user.username[0] ?? '?'}
                     </div>
 
@@ -489,7 +499,8 @@ export default function ChatPage() {
                       )}
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
 
               {/* Typing indicator */}
