@@ -51,6 +51,12 @@ const mockPrisma = {
   },
 };
 
+// Transaction callbacks receive the same mock so tx.* calls hit the
+// per-model jest fns above.
+(mockPrisma as Record<string, unknown>).withTransaction = jest.fn(
+  (cb: (tx: typeof mockPrisma) => Promise<unknown>) => cb(mockPrisma),
+);
+
 const mockRedis = {
   incrWithExpiry: jest.fn().mockResolvedValue(1),
   ttl: jest.fn().mockResolvedValue(0),
@@ -270,8 +276,8 @@ describe('ChannelsService', () => {
 
       const result = await service.sendTip('user-1', 'user-2', 100, 'msg-1');
 
-      expect(mockWalletService.debit).toHaveBeenCalledWith('user-1', 100, expect.any(Object));
-      expect(mockWalletService.credit).toHaveBeenCalledWith('user-2', 100, expect.any(Object));
+      expect(mockWalletService.debit).toHaveBeenCalledWith('user-1', 100, expect.any(Object), mockPrisma);
+      expect(mockWalletService.credit).toHaveBeenCalledWith('user-2', 100, expect.any(Object), mockPrisma);
       expect(mockEventsService.emitToUser).toHaveBeenCalledWith('user-2', 'tip:received', expect.any(Object));
       expect(mockNotificationsService.createNotification).toHaveBeenCalled();
     });
