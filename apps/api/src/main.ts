@@ -7,6 +7,7 @@ import { WinstonModule } from 'nest-winston';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import * as path from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Response } from 'express';
 
@@ -15,7 +16,7 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { SerializationInterceptor } from './common/interceptors/serialization.interceptor';
-import { createProofAccessMiddleware } from './common/middleware/proof-access.middleware';
+import { createProofAccessHandler } from './common/middleware/proof-access.middleware';
 import { createWinstonConfig } from './config/logger.config';
 import { PrismaService } from './database/prisma.service';
 
@@ -63,27 +64,26 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser(configService.get<string>('app.cookieSecret')));
 
   // ─── Static File Serving (Uploads) ─────────────────────────
-  // Proof downloads require a valid purpose:'access' token authorized for the
-  // requested resource (proof owner, the owning campaign's reviewer, or admin).
-  // Avatars are public — filenames are UUID-based (unguessable), so no auth needed.
+  // Only avatars are served statically — proofs are NOT part of the public
+  // uploads tree. Proof downloads go through an authenticated, authorized
+  // handler (valid purpose:'access' token, current DB role/status, resource
+  // ownership/reviewer/admin authorization, contained file resolution,
+  // private no-store caching). Avatars stay public: UUID filenames only.
   const jwtAccessSecret = configService.get<string>('jwt.accessSecret', '');
   app.use(
     '/uploads/proofs',
-    createProofAccessMiddleware(
+    createProofAccessHandler(
       new JwtService(),
       app.get(PrismaService),
       jwtAccessSecret,
+      path.resolve(process.cwd(), 'uploads', 'proofs'),
     ),
   );
 
-  app.useStaticAssets('uploads', {
-    prefix: '/uploads/',
-    setHeaders: (res: Response, path: string) => {
-      if (path.includes('/proofs/')) {
-        res.setHeader('Cache-Control', 'private, max-age=86400'); // private: auth required
-      } else {
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // public: avatars
-      }
+  app.useStaticAssets(path.resolve(process.cwd(), 'uploads', 'avatars'), {
+    prefix: '/uploads/avatars/',
+    setHeaders: (res: Response) => {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
     },
   });
 
