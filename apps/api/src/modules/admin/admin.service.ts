@@ -19,6 +19,7 @@ import { EmailService } from '../email/email.service';
 import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
+import { resolveFundedRefund } from '../campaigns/campaign-funding';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -343,17 +344,7 @@ export class AdminService {
   async cancelUserCampaign(adminId: string, campaignId: string, reason?: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        status: true,
-        totalSlots: true,
-        completedSlots: true,
-        pendingSlots: true,
-        creditPerTask: true,
-        feeAmount: true,
-      },
+      select: { id: true, userId: true, title: true, feeAmount: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
 
@@ -363,17 +354,28 @@ export class AdminService {
       CampaignStatus.DRAFT,
       CampaignStatus.PENDING_REVIEW,
     ];
-    if (!cancellableStatuses.includes(campaign.status)) {
-      throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
-    }
-
-    // Calculate refund: only for unused pool slots (fee is retained by platform)
-    const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
-    const refundAmount = refundableSlots * campaign.creditPerTask;
 
     let actualRefund = 0;
+    let refundableSlots = 0;
     await this.prisma.$transaction(async (tx) => {
-      // Atomic status claim: prevents concurrent double-refunds.
+      // Lock the campaign row — serializes against assignments claiming slots.
+      const [row] = await tx.$queryRaw<Array<{
+        status: string; total_slots: number; completed_slots: number;
+        pending_slots: number; credit_per_task: number;
+      }>>`SELECT status::text AS status, total_slots, completed_slots, pending_slots, credit_per_task
+          FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      if (!row) throw new NotFoundException('Campaign not found');
+      if (!(cancellableStatuses as string[]).includes(row.status)) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
+      }
+
+      // Calculate refund: only for unused pool slots (fee is retained by platform)
+      refundableSlots = row.total_slots - row.completed_slots - row.pending_slots;
+      if (refundableSlots < 0) {
+        throw new BadRequestException('Inconsistent campaign counters — manual review required.');
+      }
+      const refundAmount = refundableSlots * row.credit_per_task;
+
       const claimed = await tx.campaign.updateMany({
         where: { id: campaignId, status: { in: cancellableStatuses } },
         data: {
@@ -382,20 +384,13 @@ export class AdminService {
         },
       });
       if (claimed.count !== 1) {
-        throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
       }
 
       // Funding provenance: refund only against a verified funding debit —
       // campaigns created outside the funded create() flow (e.g. seeds or
       // platform tasks) have no pool to refund.
-      const fundingTx = await tx.transaction.count({
-        where: {
-          type: TransactionType.SPEND_CAMPAIGN_CREATE,
-          referenceId: campaignId,
-          referenceType: 'campaign',
-        },
-      });
-      actualRefund = fundingTx > 0 ? refundAmount : 0;
+      actualRefund = await resolveFundedRefund(tx, campaign, refundAmount);
 
       if (actualRefund > 0) {
         await this.walletService.credit(campaign.userId, actualRefund, {
@@ -414,7 +409,7 @@ export class AdminService {
           entityId: campaignId,
           oldValue: {
             title: campaign.title,
-            status: campaign.status,
+            status: row.status,
             refundableSlots,
             refundAmount,
             feeRetained: campaign.feeAmount,
@@ -423,7 +418,7 @@ export class AdminService {
           newValue: {
             status: CampaignStatus.CANCELLED,
             refunded: actualRefund,
-            refundSkippedUnfunded: fundingTx === 0 && refundAmount > 0,
+            refundSkippedUnfunded: refundAmount > 0 && actualRefund === 0,
             feeRetained: campaign.feeAmount,
           },
         },

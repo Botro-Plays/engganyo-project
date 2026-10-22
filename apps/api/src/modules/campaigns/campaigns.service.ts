@@ -16,6 +16,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
+import { resolveFundedRefund } from './campaign-funding';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -523,16 +524,7 @@ export class CampaignsService {
   async cancel(userId: string, campaignId: string) {
     const campaign = await this.prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: {
-        id: true,
-        userId: true,
-        title: true,
-        status: true,
-        totalSlots: true,
-        completedSlots: true,
-        pendingSlots: true,
-        creditPerTask: true,
-      },
+      select: { id: true, userId: true, title: true },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     if (campaign.userId !== userId) throw new ForbiddenException('Not your campaign');
@@ -543,45 +535,48 @@ export class CampaignsService {
       CampaignStatus.DRAFT,
       CampaignStatus.PENDING_REVIEW,
     ];
-    if (!cancellableStatuses.includes(campaign.status)) {
-      throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
-    }
-
-    // Block cancellation if any completions exist
-    const completionCount = await this.prisma.taskCompletion.count({
-      where: { campaignId },
-    });
-    if (completionCount > 0) {
-      throw new ForbiddenException(
-        'Cannot cancel a campaign that has active or completed tasks. Contact admin for assistance.',
-      );
-    }
-
-    // Refund uncompleted and non-pending slots (pool only, fee is kept)
-    const refundableSlots = campaign.totalSlots - campaign.completedSlots - campaign.pendingSlots;
-    const refundAmount = refundableSlots * campaign.creditPerTask;
 
     let actualRefund = 0;
     await this.prisma.$transaction(async (tx) => {
-      // Atomic status claim: only one caller can transition the campaign out of
-      // a cancellable status — prevents concurrent double-refunds.
+      // Lock the campaign row for the whole transaction. This serializes
+      // against assignments (which claim slots via an UPDATE on the same row):
+      // an assignment either commits first (and is then visible below) or
+      // blocks and fails against the CANCELLED status.
+      const [row] = await tx.$queryRaw<Array<{
+        status: string; total_slots: number; completed_slots: number;
+        pending_slots: number; credit_per_task: number;
+      }>>`SELECT status::text AS status, total_slots, completed_slots, pending_slots, credit_per_task
+          FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      if (!row) throw new NotFoundException('Campaign not found');
+      if (!(cancellableStatuses as string[]).includes(row.status)) {
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
+      }
+
+      // Completion count under the lock — no new assignment can interleave.
+      const completionCount = await tx.taskCompletion.count({ where: { campaignId } });
+      if (completionCount > 0) {
+        throw new ForbiddenException(
+          'Cannot cancel a campaign that has active or completed tasks. Contact admin for assistance.',
+        );
+      }
+
+      // Refund uncompleted and non-pending slots (pool only, fee is kept)
+      const refundableSlots = row.total_slots - row.completed_slots - row.pending_slots;
+      if (refundableSlots < 0) {
+        throw new BadRequestException('Inconsistent campaign counters — manual review required.');
+      }
+      const refundAmount = refundableSlots * row.credit_per_task;
+
       const claimed = await tx.campaign.updateMany({
         where: { id: campaignId, status: { in: cancellableStatuses } },
         data: { status: CampaignStatus.CANCELLED, cancelledAt: new Date() },
       });
       if (claimed.count !== 1) {
-        throw new BadRequestException(`Cannot cancel a campaign with status ${campaign.status}`);
+        throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
       }
 
       // Funding provenance: refund only against a verified funding debit.
-      const fundingTx = await tx.transaction.count({
-        where: {
-          type: TransactionType.SPEND_CAMPAIGN_CREATE,
-          referenceId: campaignId,
-          referenceType: 'campaign',
-        },
-      });
-      actualRefund = fundingTx > 0 ? refundAmount : 0;
+      actualRefund = await resolveFundedRefund(tx, campaign, refundAmount);
 
       if (actualRefund > 0) {
         await this.walletService.credit(userId, actualRefund, {
@@ -591,6 +586,26 @@ export class CampaignsService {
           referenceType: 'campaign',
         }, tx);
       }
+
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'campaign.cancelled',
+          entityType: 'Campaign',
+          entityId: campaignId,
+          oldValue: {
+            title: campaign.title,
+            status: row.status,
+            refundableSlots,
+            refundAmount,
+          },
+          newValue: {
+            status: CampaignStatus.CANCELLED,
+            refunded: actualRefund,
+            refundSkippedUnfunded: refundAmount > 0 && actualRefund === 0,
+          },
+        },
+      });
     });
 
     this.eventsService.emitToUser(userId, 'campaign:updated', { campaignId, status: CampaignStatus.CANCELLED });
