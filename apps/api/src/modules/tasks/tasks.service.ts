@@ -19,6 +19,7 @@ import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { StoreService } from '../store/store.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
+import { claimCompletionForVerification } from './task-completion-verify';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -453,11 +454,14 @@ export class TasksService {
     const shouldAutoVerify = apiVerified === true ? true : completion.campaign.autoVerify;
 
     if (shouldAutoVerify) {
-      // ── Auto-verify: credits paid immediately ──────────────
+      // ── Auto-verify: claim + counters + credit in ONE transaction ──
       await this.prisma.withTransaction(async (tx) => {
-        await tx.taskCompletion.update({
-          where: { id: completion.id },
-          data: {
+        await claimCompletionForVerification(tx, {
+          completionId: completion.id,
+          campaignId,
+          completerUserId: userId,
+          fromStatuses: submittable,
+          setData: {
             status: CompletionStatus.VERIFIED,
             proofUrl: dto.proofUrl,
             proofHash: dto.proofHash,
@@ -471,33 +475,16 @@ export class TasksService {
           },
         });
 
-        const newCompleted = completion.campaign.completedSlots + 1;
-        const isFull = newCompleted >= completion.campaign.totalSlots;
-
-        await tx.campaign.update({
-          where: { id: campaignId },
-          data: {
-            completedSlots: { increment: 1 },
-            pendingSlots: { decrement: 1 },
-            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
-          },
-        });
-
-        await tx.userProfile.updateMany({
-          where: { userId },
-          data: { totalTasksDone: { increment: 1 } },
-        });
+        await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+          type: TransactionType.EARN_TASK_COMPLETION,
+          description: `Task verified`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
       });
 
       void this.referralsService.qualifyReferral(userId).catch(() => null);
       void this.referralsService.checkMilestones(userId).catch(() => null);
-
-      await this.walletService.credit(userId, completion.campaign.creditPerTask, {
-        type: TransactionType.EARN_TASK_COMPLETION,
-        description: `Task verified`,
-        referenceId: campaignId,
-        referenceType: 'campaign',
-      });
 
       await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
       await this.gamificationService.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
@@ -605,11 +592,14 @@ export class TasksService {
     );
 
     if (apiVerified === true) {
-      // ── Auto-verify: credits paid immediately ──────────────
+      // ── Auto-verify: claim + counters + credit in ONE transaction ──
       await this.prisma.withTransaction(async (tx) => {
-        await tx.taskCompletion.update({
-          where: { id: completion.id },
-          data: {
+        await claimCompletionForVerification(tx, {
+          completionId: completion.id,
+          campaignId,
+          completerUserId: userId,
+          fromStatuses: recheckable,
+          setData: {
             status: CompletionStatus.VERIFIED,
             submittedAt: now,
             verifiedAt: now,
@@ -618,33 +608,16 @@ export class TasksService {
           },
         });
 
-        const newCompleted = completion.campaign.completedSlots + 1;
-        const isFull = newCompleted >= completion.campaign.totalSlots;
-
-        await tx.campaign.update({
-          where: { id: campaignId },
-          data: {
-            completedSlots: { increment: 1 },
-            pendingSlots: { decrement: 1 },
-            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
-          },
-        });
-
-        await tx.userProfile.updateMany({
-          where: { userId },
-          data: { totalTasksDone: { increment: 1 } },
-        });
+        await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+          type: TransactionType.EARN_TASK_COMPLETION,
+          description: `Task verified`,
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
       });
 
       void this.referralsService.qualifyReferral(userId).catch(() => null);
       void this.referralsService.checkMilestones(userId).catch(() => null);
-
-      await this.walletService.credit(userId, completion.campaign.creditPerTask, {
-        type: TransactionType.EARN_TASK_COMPLETION,
-        description: `Task verified`,
-        referenceId: campaignId,
-        referenceType: 'campaign',
-      });
 
       await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
       await this.gamificationService.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
