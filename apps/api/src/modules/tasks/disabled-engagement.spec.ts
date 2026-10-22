@@ -6,6 +6,8 @@
  */
 import { BadRequestException } from '@nestjs/common';
 import { CompletionStatus } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   DISABLED_ENGAGEMENT_TASK_TYPES,
   DISABLED_ENGAGEMENT_MESSAGE,
@@ -44,6 +46,20 @@ describe('assertEngagementTaskAllowed', () => {
 
   it('covers exactly the four YouTube engagement types', () => {
     expect([...DISABLED_ENGAGEMENT_TASK_TYPES].sort()).toEqual([...YOUTUBE_TYPES].sort());
+  });
+});
+
+describe('seed.ts — no disabled engagement tasks can be recreated', () => {
+  const seedPath = path.resolve(__dirname, '../../../prisma/seed.ts');
+  const seedSource = fs.readFileSync(seedPath, 'utf8');
+
+  it.each(YOUTUBE_TYPES)('seed.ts assigns no %s campaign', (taskType) => {
+    // A seeded campaign would appear as `taskType: TaskType.<NAME>`
+    expect(seedSource).not.toContain(`TaskType.${taskType}`);
+  });
+
+  it('seed.ts references no YOUTUBE task type at all', () => {
+    expect(seedSource).not.toMatch(/TaskType\.YOUTUBE_/);
   });
 });
 
