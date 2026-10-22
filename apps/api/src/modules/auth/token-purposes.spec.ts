@@ -1,10 +1,13 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole, UserStatus } from '@prisma/client';
+import { authenticator } from '@otplib/preset-default';
+import type { Response } from 'express';
 import type { Socket } from 'socket.io';
 
 import jwtConfig from '../../config/jwt.config';
+import { AuthService } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EventsGateway } from '../events/events.gateway';
@@ -21,12 +24,14 @@ const config = {
       'jwt.accessSecret': ACCESS_SECRET,
       'jwt.refreshSecret': REFRESH_SECRET,
       'jwt.twoFactorSecret': TWO_FACTOR_SECRET,
+      'jwt.refreshExpiresIn': '7d',
       'app.twoFactorEncryptionKey': 'test-enc-key',
     })[key] ?? fallback,
 } as ConfigService;
 
 const prismaStub = {
-  user: { findUnique: jest.fn() },
+  user: { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+  userSession: { create: jest.fn().mockResolvedValue({}) },
   twoFactorCode: { findFirst: jest.fn() },
   twoFactorBackupCode: { count: jest.fn(), findMany: jest.fn() },
 };
@@ -166,29 +171,64 @@ describe('A01: token purpose separation', () => {
     expect(channelsClient.data.userId).toBe('user-1');
   });
 
-  it('2FA challenge → access token: full path works end to end', async () => {
-    const service = makeTwoFactorService();
-    const challenge = await service.generateTwoFactorToken('user-1');
-    const userId = await service.validateTwoFactorToken(challenge);
-
-    // completeTwoFactorLogin then issues an access token for that sub.
-    const accessToken = jwt.sign(
-      { ...ACCESS_PAYLOAD, sub: userId, purpose: 'access' },
-      { secret: ACCESS_SECRET },
+  it('exercises the real completeTwoFactorLogin flow', async () => {
+    const twoFactor = makeTwoFactorService();
+    const authService = new AuthService(
+      prismaStub as never, jwt, config,
+      {} as never, { recordIp: jest.fn() } as never,
+      twoFactor, {} as never, redisStub as never, {} as never,
     );
 
-    redisStub.getJson.mockResolvedValue(null);
-    prismaStub.user.findUnique.mockResolvedValue({
-      id: 'user-1', email: 'u@x.com', username: 'u',
-      role: UserRole.USER, status: UserStatus.ACTIVE,
-    });
-    const decoded = jwt.verify<JwtPayload>(accessToken, { secret: ACCESS_SECRET });
-    await expect(makeStrategy().validate(decoded)).resolves.toMatchObject({ sub: 'user-1' });
+    // Real TOTP secret encrypted through the service's own helper.
+    const totpSecret = authenticator.generateSecret(20);
+    const encryptedSecret = (twoFactor as unknown as { encrypt(t: string): string }).encrypt(totpSecret);
+    const dbUser = {
+      id: 'user-1', email: 'u@x.com', username: 'u', displayName: null,
+      avatarUrl: null, bio: null, role: UserRole.USER, status: UserStatus.ACTIVE,
+      xp: 0, level: 1, vp: 0, vipTierId: null, creditBalance: 0,
+      reputationScore: 0, twoFactorTotpSecret: encryptedSecret,
+      twoFactorEmailEnabled: false,
+    };
+    prismaStub.user.findUnique.mockResolvedValue(dbUser);
+    prismaStub.user.update.mockResolvedValue(dbUser);
+    const res = { cookie: jest.fn(), clearCookie: jest.fn() } as unknown as Response & { cookie: jest.Mock };
 
+    const challenge = await twoFactor.generateTwoFactorToken('user-1');
+
+    // Invalid OTP: rejection, no tokens issued, no session, no cookie.
+    await expect(
+      authService.completeTwoFactorLogin(challenge, '000000', 'totp', res),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(res.cookie).not.toHaveBeenCalled();
+    expect(prismaStub.userSession.create).not.toHaveBeenCalled();
+
+    // Valid OTP: real issuance path produces purpose-stamped tokens.
+    const code = authenticator.generate(totpSecret);
+    const result = await authService.completeTwoFactorLogin(challenge, code, 'totp', res);
+    expect(prismaStub.userSession.create).toHaveBeenCalledTimes(1);
+
+    const accessToken = result.accessToken;
+    const refreshToken = res.cookie.mock.calls[0][1] as string;
+
+    // Access token: signed with access secret, purpose 'access', accepted by
+    // its consumers (HTTP strategy and sockets).
+    const accessPayload = jwt.verify<JwtPayload>(accessToken, { secret: ACCESS_SECRET });
+    expect(accessPayload.purpose).toBe('access');
+    expect(() => jwt.verify(accessToken, { secret: REFRESH_SECRET })).toThrow();
+    expect(() => jwt.verify(accessToken, { secret: TWO_FACTOR_SECRET })).toThrow();
+    redisStub.getJson.mockResolvedValue(null);
+    await expect(makeStrategy().validate(accessPayload)).resolves.toMatchObject({ sub: 'user-1' });
     const client = fakeSocket(accessToken);
     await makeEventsGateway().handleConnection(client);
     expect(client.disconnect).not.toHaveBeenCalled();
     expect(client.join).toHaveBeenCalledWith('user:user-1');
+
+    // Refresh token: signed with refresh secret, purpose 'refresh', verified
+    // by the refresh path's own check — and unusable as an access token.
+    const refreshPayload = jwt.verify<JwtPayload>(refreshToken, { secret: REFRESH_SECRET });
+    expect(refreshPayload.purpose).toBe('refresh');
+    expect(() => jwt.verify(refreshToken, { secret: ACCESS_SECRET })).toThrow();
+    await expect(makeStrategy().validate(refreshPayload)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
 
