@@ -177,21 +177,42 @@ base.beforeAll(async () => {
         [probeBody.data.user, probeBody.data.accessToken],
       );
       const probePage = await probeCtx.newPage();
-      // Observe which API the web app ACTUALLY calls — the only reliable
-      // way to prove the browser target belongs to this stack (shared
-      // JWT secrets/Redis can otherwise mask a mismatch).
+      const baseUrl = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
+      const expected = new URL(apiBaseUrl());
+      // Browser↔API proof must be an OBSERVED, successful authenticated
+      // request — wait for /auth/me explicitly; zero API traffic or an
+      // auth rejection both fail loudly. Origin AND path boundary are
+      // compared on parsed URLs (a sibling prefix like /api-v2 must not
+      // sneak through).
       const apiCalls: string[] = [];
       probePage.on('request', (r) => {
         if (/\/api\//.test(r.url())) apiCalls.push(r.url());
       });
-      const baseUrl = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
+      const meResponse = probePage.waitForResponse(
+        (r) => r.url().includes('/auth/me'),
+        { timeout: 15_000 },
+      );
       await probePage.goto(`${baseUrl}/settings`, { waitUntil: 'domcontentloaded' });
-      await probePage.waitForTimeout(4000); // auth rehydration fires /api calls
-      const expected = apiBaseUrl();
-      if (apiCalls.length > 0 && !apiCalls.every((u) => u.startsWith(expected))) {
+      const me = await meResponse.catch(() => null);
+      if (!me) {
         throw new FixtureError(
-          `web app at ${baseUrl} calls ${apiCalls[0]} — expected API ${expected}; mismatched stacks`,
+          `no /auth/me observed on ${baseUrl} within 15s — cannot prove the browser talks to the expected API`,
         );
+      }
+      if (!me.ok()) {
+        throw new FixtureError(
+          `authenticated /auth/me rejected (HTTP ${me.status()}) by ${baseUrl} — session does not authenticate against this stack`,
+        );
+      }
+      for (const call of apiCalls) {
+        const u = new URL(call);
+        const boundaryOk =
+          u.pathname === expected.pathname || u.pathname.startsWith(`${expected.pathname}/`);
+        if (u.origin !== expected.origin || !boundaryOk) {
+          throw new FixtureError(
+            `web app at ${baseUrl} calls ${call} — expected API ${apiBaseUrl()}; mismatched stacks`,
+          );
+        }
       }
       await probeCtx.close();
     } finally {
