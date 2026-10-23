@@ -5,25 +5,28 @@
 #   1. PostgreSQL dump (pg_dump -Fc, from the running container)
 #   2. uploads volume (proof images etc.)
 #   3. recovery bundle (.env secrets + nginx TLS/CA material)
-# Each archive is AES-256-CBC encrypted (openssl, PBKDF2, 600k iterations)
-# BEFORE leaving the host, then shipped to $BACKUP_DEST via rclone. The
-# manifest hashes the ENCRYPTED blobs — the exact bytes that leave the host —
-# so tampering/corruption is detectable before decryption.
 #
-# Required env (set in ~/.backup.env or systemd EnvironmentFile — NEVER
-# committed to git):
-#   BACKUP_ENCRYPTION_KEY   passphrase for openssl encryption
-#   BACKUP_DEST             rclone remote path, e.g. r2:engganyo-backups
+# Encryption: age (https://age-encryption.org) — AUTHENTICATED encryption
+# (ChaCha20-Poly1305), asymmetric: backups encrypt TO a public recipient
+# key, so the VPS never holds the decryption key. Tampering fails at
+# decryption, not just at a hash check over an editable manifest.
+#
+# Required env (set in ~/.backup.env — NEVER committed to git):
+#   BACKUP_AGE_RECIPIENT   age public key (age1...) — public, safe on VPS
+#   BACKUP_DEST            rclone remote path, e.g. bkp:engganyo-backups
+#                          (local paths also work for rehearsals)
 # Optional:
 #   BACKUP_RETENTION_DAILY_DAYS    days to keep daily backups    (default 14)
 #   BACKUP_RETENTION_WEEKLY_DAYS   days to keep weekly backups   (default 56)
 #   BACKUP_KEEP_DAILY              min daily snapshots to keep   (default 7)
 #   BACKUP_KEEP_WEEKLY             min weekly snapshots to keep  (default 4)
 #   PROJECT_DIR                    repo checkout on the VPS      (default /opt/engganyo-project)
-#   PG_CONTAINER / DATABASE_NAME / DATABASE_USER                 (defaults match prod)
+#   PG_CONTAINER / API_CONTAINER / DATABASE_NAME / DATABASE_USER (defaults match prod)
 #
 # Retention keeps BOTH the newest KEEP snapshots AND anything newer than
 # the age limit — a prolonged backup outage cannot prune the last copy.
+# A LATEST pointer file records the last SUCCESSFUL run; restore-verify
+# prefers it over listing-based resolution.
 #
 # Intended: cron daily. Exits non-zero on ANY failure so a monitoring hook
 # can page.
@@ -38,12 +41,11 @@ RETENTION_DAILY="${BACKUP_RETENTION_DAILY_DAYS:-14}"
 RETENTION_WEEKLY="${BACKUP_RETENTION_WEEKLY_DAYS:-56}"
 KEEP_DAILY="${BACKUP_KEEP_DAILY:-7}"
 KEEP_WEEKLY="${BACKUP_KEEP_WEEKLY:-4}"
-PBKDF2_ITER="${BACKUP_PBKDF2_ITER:-600000}"
 
-: "${BACKUP_ENCRYPTION_KEY:?Set BACKUP_ENCRYPTION_KEY (passphrase for backup encryption)}"
+: "${BACKUP_AGE_RECIPIENT:?Set BACKUP_AGE_RECIPIENT (age public key, age1...)}"
 : "${BACKUP_DEST:?Set BACKUP_DEST (rclone remote:bucket/path)}"
-command -v rclone >/dev/null || { echo "rclone not installed"; exit 1; }
-command -v openssl >/dev/null || { echo "openssl not installed"; exit 1; }
+command -v rclone >/dev/null || { echo "rclone not installed (https://rclone.org/install/)"; exit 1; }
+command -v age >/dev/null || { echo "age not installed (https://github.com/FiloSottile/age#installation)"; exit 1; }
 
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 KIND="daily"; [ "$(date -u +%u)" = "7" ] && KIND="weekly"   # Sunday → weekly tier
@@ -59,7 +61,9 @@ docker exec "$PG_CONTAINER" \
 echo "  db.dump: $(stat -c%s "$STAGE/db.dump") bytes"
 
 # ─── 2. uploads volume ──────────────────────────────────────────────────
-docker exec "$API_CONTAINER" \
+# MSYS2_ARG_CONV_EXCL: keep container paths literal when run under
+# Git Bash on Windows; a no-op on Linux.
+MSYS2_ARG_CONV_EXCL='*' docker exec "$API_CONTAINER" \
   tar czf - -C /app/apps/api/uploads . \
   > "$STAGE/uploads.tar.gz"
 echo "  uploads.tar.gz: $(stat -c%s "$STAGE/uploads.tar.gz") bytes"
@@ -78,26 +82,24 @@ tar czf "$STAGE/recovery.tar.gz" -C "$PROJECT_DIR" \
   .env infra/nginx/ssl infra/scripts/init.sql
 echo "  recovery.tar.gz: $(stat -c%s "$STAGE/recovery.tar.gz") bytes"
 
-# ─── encrypt everything ─────────────────────────────────────────────────
-# -pbkdf2 -iter: strengthens the passphrase KDF. The SAME -iter value is
-# required to decrypt — it is recorded in meta.txt, not guessed.
-enc() { openssl enc -aes-256-cbc -pbkdf2 -iter "$PBKDF2_ITER" -salt \
-        -pass env:BACKUP_ENCRYPTION_KEY -in "$1" -out "$2"; }
-enc "$STAGE/db.dump"           "$STAGE/db.dump.enc"
-enc "$STAGE/uploads.tar.gz"    "$STAGE/uploads.tar.gz.enc"
-enc "$STAGE/recovery.tar.gz"   "$STAGE/recovery.tar.gz.enc"
+# ─── encrypt everything (age, authenticated) ────────────────────────────
+age -r "$BACKUP_AGE_RECIPIENT" -o "$STAGE/db.dump.age"         "$STAGE/db.dump"
+age -r "$BACKUP_AGE_RECIPIENT" -o "$STAGE/uploads.tar.gz.age"  "$STAGE/uploads.tar.gz"
+age -r "$BACKUP_AGE_RECIPIENT" -o "$STAGE/recovery.tar.gz.age" "$STAGE/recovery.tar.gz"
 rm "$STAGE/db.dump" "$STAGE/uploads.tar.gz" "$STAGE/recovery.tar.gz"
 
-# ─── manifest over the CIPHERTEXT (integrity of what leaves the host) ───
-( cd "$STAGE" && sha256sum db.dump.enc uploads.tar.gz.enc recovery.tar.gz.enc ) \
+# ─── manifest over the CIPHERTEXT (integrity + inventory; age provides
+#     authentication at decrypt — the manifest is a fast pre-check) ──────
+( cd "$STAGE" && sha256sum db.dump.age uploads.tar.gz.age recovery.tar.gz.age ) \
   > "$STAGE/manifest.sha256"
-printf 'timestamp=%s\ntier=%s\nschema=pg16-fc\npbkdf2_iter=%s\n' \
-  "$TS" "$KIND" "$PBKDF2_ITER" > "$STAGE/meta.txt"
+printf 'timestamp=%s\ntier=%s\nschema=pg16-fc\nencryption=age\n' "$TS" "$KIND" \
+  > "$STAGE/meta.txt"
 
 # ─── ship ────────────────────────────────────────────────────────────────
 RDIR="$BACKUP_DEST/$KIND/$TS"
 rclone copyto "$STAGE" "$RDIR"
-rclone copyto "$RDIR/meta.txt" "$BACKUP_DEST/LATEST.txt"
+# Pointer to the last SUCCESSFUL run, written only after upload succeeds.
+echo "$KIND/$TS" | rclone rcat "$BACKUP_DEST/LATEST"
 
 # ─── retention: age limit AND count floor ────────────────────────────────
 # Keep the newest KEEP snapshots unconditionally (a backup outage must not
@@ -107,7 +109,6 @@ prune_tier() {
   local tier="$1" max_age_days="$2" keep="$3"
   local dirs
   dirs="$(rclone lsf "$BACKUP_DEST/$tier" --dirs-only 2>/dev/null | tr -d '/' | sort -r)" || return 0
-  # candidates = everything except the newest $keep
   local candidates
   candidates="$(echo "$dirs" | tail -n "+$((keep + 1))")"
   local d age epoch
