@@ -321,6 +321,61 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     expect(loserRows[0].type).toBe(TransactionType.EARN_TASK_COMPLETION);
   });
 
+  it('same-user concurrent purchases of one cosmetic charge once and create one inventory row', async () => {
+    const buyer = await makeUser(500);
+    const item = await prisma.storeItem.create({
+      data: {
+        name: `${PREFIX}cosmetic`,
+        category: StoreCategory.COSMETIC,
+        creditCost: 100,
+        metadata: { cosmeticType: 'frame' },
+      },
+    });
+
+    const results = await Promise.allSettled([
+      store.purchaseItem(buyer.id, item.id, 1),
+      store.purchaseItem(buyer.id, item.id, 1),
+    ]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+
+    // Exactly one charge, one purchase, one inventory row.
+    expect((await balances(buyer.id)).wallet).toBe(400);
+    expect((await balances(buyer.id)).mirror).toBe(400);
+    expect(await prisma.userInventory.count({ where: { userId: buyer.id, itemId: item.id } })).toBe(1);
+    expect(await prisma.storePurchase.count({ where: { itemId: item.id } })).toBe(1);
+  });
+
+  it('same-user concurrent purchases cannot exceed maxOwnedPerUser', async () => {
+    const buyer = await makeUser(500);
+    const item = await prisma.storeItem.create({
+      data: {
+        name: `${PREFIX}capped`,
+        category: StoreCategory.BOOST,
+        creditCost: 100,
+        maxOwnedPerUser: 2,
+        metadata: {},
+      },
+    });
+
+    // Two concurrent buys of qty 2 — only the first may pass the cap.
+    const results = await Promise.allSettled([
+      store.purchaseItem(buyer.id, item.id, 2),
+      store.purchaseItem(buyer.id, item.id, 2),
+    ]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+
+    const inv = await prisma.userInventory.findFirstOrThrow({
+      where: { userId: buyer.id, itemId: item.id },
+    });
+    expect(inv.quantity).toBe(2); // never 4
+    expect((await balances(buyer.id)).wallet).toBe(300); // charged once
+    expect(await prisma.storePurchase.count({ where: { itemId: item.id } })).toBe(1);
+  });
+
   it('sold-out purchase debits nothing and writes no purchase row', async () => {
     const buyer = await makeUser(500);
     const item = await prisma.storeItem.create({

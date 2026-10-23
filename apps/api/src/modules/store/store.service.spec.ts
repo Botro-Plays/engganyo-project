@@ -128,25 +128,28 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
   let tx: Record<string, Record<string, jest.Mock>>;
 
   beforeEach(() => {
+    // purchaseItem now runs every check inside $transaction under a row
+    // lock on the item — the tx mock must carry all guarded reads.
     tx = {
-      storePurchase: { create: jest.fn().mockResolvedValue({ id: 'purchase-1' }) },
+      storeItem: { findUniqueOrThrow: jest.fn().mockResolvedValue({ ...GOLD_FRAME }) },
+      user: { findUnique: jest.fn().mockResolvedValue({ vipTier: null }) },
+      storePurchase: {
+        create: jest.fn().mockResolvedValue({ id: 'purchase-1' }),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
+      },
       userInventory: {
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockResolvedValue({ id: 'inv-new' }),
         update: jest.fn(),
         findFirst: jest.fn().mockResolvedValue(null),
+        aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
       },
     };
+    (tx as Record<string, jest.Mock | Record<string, jest.Mock>>).$executeRaw =
+      jest.fn().mockResolvedValue(1);
 
     prisma = {
-      storeItem: { findUnique: jest.fn().mockResolvedValue({ ...GOLD_FRAME }) },
-      userInventory: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
-        findMany: jest.fn(),
-        update: jest.fn(),
-      },
-      storePurchase: { aggregate: jest.fn() },
+      storeItem: { findUnique: jest.fn().mockResolvedValue({ id: GOLD_FRAME.id }) },
       $transaction: jest.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
     };
     redis = { invalidateUserCaches: jest.fn().mockResolvedValue(undefined) };
@@ -164,7 +167,7 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
   it('invalidates the user cache after a successful cosmetic purchase (auto-equip)', async () => {
     const result = await service.purchaseItem('user-1', GOLD_FRAME.id, 1);
 
-    expect(wallet.debit).toHaveBeenCalledWith('user-1', 500, expect.anything());
+    expect(wallet.debit).toHaveBeenCalledWith('user-1', 500, expect.anything(), tx);
     expect(tx.userInventory.create).toHaveBeenCalledWith({
       data: { userId: 'user-1', itemId: GOLD_FRAME.id, quantity: 1, equipped: true },
     });
@@ -178,13 +181,14 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
 
     await expect(service.purchaseItem('user-1', GOLD_FRAME.id, 1)).rejects.toThrow('db exploded');
 
-    // Refund path ran, but no post-success invalidation happened.
-    expect(wallet.credit).toHaveBeenCalledWith('user-1', 500, expect.objectContaining({ referenceType: 'refund' }));
+    // No compensating refund: the debit lives inside the same transaction,
+    // so a failed tx never produced one to refund.
+    expect(wallet.credit).not.toHaveBeenCalled();
     expect(redis.invalidateUserCaches).not.toHaveBeenCalled();
   });
 
   it('does NOT invalidate the cache when repurchasing an already-owned cosmetic', async () => {
-    (prisma.userInventory as Record<string, jest.Mock>).findFirst.mockResolvedValue({ id: 'inv-1' });
+    tx.userInventory.findFirst.mockResolvedValue({ id: 'inv-1' });
 
     await expect(service.purchaseItem('user-1', GOLD_FRAME.id, 1)).rejects.toThrow(BadRequestException);
     expect(wallet.debit).not.toHaveBeenCalled();
