@@ -8,6 +8,7 @@
  * the handshake race — on BOTH the notifications and channels namespaces.
  */
 import { createServer, type Server as HttpServer } from 'http';
+import { createHmac } from 'crypto';
 import { Server as IoServer, type Namespace } from 'socket.io';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import { JwtService } from '@nestjs/jwt';
@@ -24,14 +25,20 @@ const run = TEST_DB ? describe : describe.skip;
 const ACCESS_SECRET = 'socket-itest-access-secret';
 const PREFIX = `srev_${Date.now().toString(36)}_`;
 
-/** In-memory RedisService stand-in with real tombstone semantics. */
+/** In-memory RedisService stand-in with real tombstone semantics
+ *  (revocation instant in epoch seconds, matching RedisService). */
 class FakeRedis {
   private readonly map = new Map<string, string>();
   async get(key: string) { return this.map.get(key) ?? null; }
   async set(key: string, value: string) { this.map.set(key, value); }
   async del(key: string) { this.map.delete(key); }
-  async revokeSocketAuth(userId: string) { this.map.set(`auth:revoked:${userId}`, '1'); }
-  async isSocketAuthRevoked(userId: string) { return this.map.has(`auth:revoked:${userId}`); }
+  async revokeSocketAuth(userId: string) {
+    this.map.set(`auth:revoked-at:${userId}`, String(Math.floor(Date.now() / 1000)));
+  }
+  async socketAuthRevokedAt(userId: string) {
+    const v = this.map.get(`auth:revoked-at:${userId}`);
+    return v === undefined ? null : Number(v);
+  }
   async invalidateUserCaches() { /* no-op */ }
 }
 
@@ -190,17 +197,19 @@ run('Socket revocation — real socket.io + real PostgreSQL', () => {
 
   it('access-token expiry force-disconnects an established socket', async () => {
     const user = await makeUser();
+    // exp granularity is seconds — 2s guarantees ≥1s of runway after signing
+    // even when the token lands just before a second boundary.
     const socket = ioc(`http://127.0.0.1:${port}/notifications`, {
-      auth: { token: sign(user, 1) }, // expires in 1s
+      auth: { token: sign(user, 2) },
       transports: ['websocket'],
       reconnection: false,
     });
     clients.push(socket);
-    await sleep(400);
+    await sleep(500);
     expect(await memberCount(notifNs, user.id)).toBe(1);
 
     // Past exp the server must drop the connection on its own.
-    await sleep(1300);
+    await sleep(2300);
     expect(await memberCount(notifNs, user.id)).toBe(0);
     expect(socket.connected).toBe(false);
   });
@@ -234,12 +243,13 @@ run('Socket revocation — real socket.io + real PostgreSQL', () => {
     const token = sign(user);
 
     // Simulate the race: first tombstone check passes (pre-join), second
-    // (post-join) sees the revocation — the socket must be disconnected.
+    // (post-join) sees a revocation instant ≥ the token's iat — the socket
+    // must be disconnected.
     let calls = 0;
     const racyRedis = new FakeRedis();
-    jest.spyOn(racyRedis, 'isSocketAuthRevoked').mockImplementation(async () => {
+    jest.spyOn(racyRedis, 'socketAuthRevokedAt').mockImplementation(async () => {
       calls += 1;
-      return calls >= 2; // revoked "during" the join
+      return calls >= 2 ? Math.floor(Date.now() / 1000) : null;
     });
     const gw = new EventsGateway(config, jwt, eventsService, prisma as never, racyRedis as never);
     const raceNs = io.of('/notifications');
@@ -253,4 +263,69 @@ run('Socket revocation — real socket.io + real PostgreSQL', () => {
       raceNs.on('connection', (s) => void new EventsGateway(config, jwt, eventsService, prisma as never, redis as never).handleConnection(s));
     }
   });
+
+  it.each(['notifications', 'channels'] as const)(
+    'a fresh login after revocation reconnects on /%s — tombstone is not user-wide',
+    async (ns) => {
+      const user = await makeUser();
+      const token = sign(user);
+      const socket = ioc(`http://127.0.0.1:${port}/${ns}`, {
+        auth: { token },
+        transports: ['websocket'],
+        reconnection: false,
+      });
+      clients.push(socket);
+      await sleep(400);
+
+      await eventsService.disconnectUser(user.id);
+      await sleep(200);
+      // The revoked token stays rejected.
+      expect(await attempt(ns, user.id, token)).toBe(0);
+
+      // iat granularity is seconds — wait past the revocation second so the
+      // fresh token provably postdates the tombstone.
+      await sleep(1100);
+      const freshToken = sign(user);
+      expect(await attempt(ns, user.id, freshToken)).toBe(1);
+    },
+  );
+
+  it.each(['notifications', 'channels'] as const)(
+    'missing or malformed exp is rejected on /%s — no timer, no admission',
+    async (ns) => {
+      const user = await makeUser();
+      const base = { sub: user.id, email: 'x@x', username: 'u', role: user.role, purpose: 'access' };
+
+      const noExp = jwt.sign(base, { secret: ACCESS_SECRET }); // no expiresIn → no exp claim
+      expect(await attempt(ns, user.id, noExp)).toBe(0);
+
+      // jsonwebtoken validates exp at sign time, so craft the malformed
+      // token by hand — valid HS256 signature, non-numeric exp claim.
+      const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+      const data = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ ...base, exp: 'never' })}`;
+      const sig = createHmac('sha256', ACCESS_SECRET).update(data).digest('base64url');
+      expect(await attempt(ns, user.id, `${data}.${sig}`)).toBe(0);
+    },
+  );
+
+  it.each(['notifications', 'channels'] as const)(
+    'token elapsing mid-handshake is never admitted to a room on /%s',
+    async (ns) => {
+      const user = await makeUser();
+      const token = sign(user, 1); // expires in 1s
+
+      // Delay the first tombstone lookup past the token's exp, simulating a
+      // slow handshake — the final exp check must still reject the socket.
+      const spy = jest.spyOn(redis, 'socketAuthRevokedAt');
+      spy.mockImplementationOnce(async () => {
+        await sleep(1400);
+        return null;
+      });
+      try {
+        expect(await attempt(ns, user.id, token, 2200)).toBe(0);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
 });

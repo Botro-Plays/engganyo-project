@@ -45,10 +45,10 @@ const redisStub = {
   getJson: jest.fn(),
   setJson: jest.fn(),
   del: jest.fn(),
-  get: jest.fn().mockResolvedValue(null), // auth:revoked tombstone → none
+  get: jest.fn().mockResolvedValue(null), // auth:revoked-at tombstone → none
   set: jest.fn(),
   revokeSocketAuth: jest.fn().mockResolvedValue(undefined),
-  isSocketAuthRevoked: jest.fn().mockResolvedValue(false),
+  socketAuthRevokedAt: jest.fn().mockResolvedValue(null),
 };
 
 const jwt = new JwtService();
@@ -62,7 +62,10 @@ const ACCESS_PAYLOAD: JwtPayload = {
 };
 
 function accessSigned(payload: Record<string, unknown>): string {
-  return jwt.sign({ ...ACCESS_PAYLOAD, ...payload }, { secret: ACCESS_SECRET });
+  return jwt.sign(
+    { ...ACCESS_PAYLOAD, ...payload },
+    { secret: ACCESS_SECRET, expiresIn: '15m' },
+  );
 }
 
 function makeTwoFactorService() {
