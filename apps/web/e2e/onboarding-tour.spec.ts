@@ -1,7 +1,159 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
-test.use({ storageState: 'e2e/.auth/user.json' });
-test.describe.configure({ timeout: 60_000 });
+base.describe.configure({ timeout: 60_000 });
+
+// ── Dedicated per-test users ────────────────────────────────────────
+// This suite previously shared the seeded ADMIN account across all
+// parallel workers. Other specs mutating admin's server-side data
+// (purchases, equipment, notifications) could change the pages the tour
+// walks, and concurrent same-second logins for ONE user collide on the
+// sessions refresh-token uniqueness constraint (HTTP 409). Each test
+// therefore gets its own freshly-created user — deterministic per test
+// title so reruns and retries reuse the same account. Tour state itself
+// stays per-context localStorage; this removes the shared server-side
+// surface without touching application behaviour.
+const TOUR_PASSWORD = 'E2eTourPass1';
+const TOUR_TAG = 'e2e_t_'; // username prefix — greppable fixture marker
+
+// Same safety pattern as gold-frame.spec.ts: fixture writes only run
+// against databases whose name proves they are test/dev targets.
+const ALLOWED_DB_NAMES = new Set(['engganyo_test', 'engganyo_db']);
+
+let fixtureOk = true;
+let prismaClient: {
+  user: {
+    create: (a: { data: Record<string, unknown> }) => Promise<{ id: string }>;
+  };
+  $disconnect: () => Promise<void>;
+} | null = null;
+
+class Unavailable extends Error {}
+class FixtureError extends Error {}
+
+function apiEnv(): Record<string, string> {
+  try {
+    const envPath = path.resolve(__dirname, '../../api/.env');
+    const out: Record<string, string> = {};
+    for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+      if (m) out[m[1]] = m[2].trim().replace(/^"|"$/g, '');
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function sanitize(err: unknown): string {
+  return String((err as Error)?.message ?? err).replace(/:\/\/[^@/\s]+@/g, '://<redacted>@');
+}
+
+function dbNameOf(url: string): string {
+  return new URL(url).pathname.replace(/^\//, '').split('?')[0];
+}
+
+function apiBaseUrl(): string {
+  if (process.env['E2E_API_URL']) return process.env['E2E_API_URL'];
+  try {
+    const envPath = path.resolve(__dirname, '../.env.local');
+    const m = fs.readFileSync(envPath, 'utf-8').match(/^NEXT_PUBLIC_API_URL=(.*)$/m);
+    if (m) return m[1].trim().replace(/^"|"$/g, '');
+  } catch { /* fall through */ }
+  return 'http://localhost:3001/api';
+}
+
+// Per-test username derived from the test id — unique per test AND per
+// project, stable across retries of the same test.
+function tourUsername(testId: string): string {
+  const hash = require('crypto').createHash('sha1').update(testId).digest('hex').slice(0, 12);
+  return `${TOUR_TAG}${hash}`; // 6 + 12 = 18 chars, under the 20-char limit
+}
+
+base.beforeAll(async () => {
+  const env = apiEnv();
+  const dbUrl = process.env['TEST_DATABASE_URL'] ?? env['DATABASE_URL'];
+  try {
+    if (!dbUrl) throw new Unavailable('no DATABASE_URL/TEST_DATABASE_URL for tour-user fixture');
+    if (!ALLOWED_DB_NAMES.has(dbNameOf(dbUrl))) {
+      throw new FixtureError(`refusing fixture writes on database "${dbNameOf(dbUrl)}"`);
+    }
+    const { PrismaClient } = require('@prisma/client');
+    prismaClient = new PrismaClient({ datasources: { db: { url: dbUrl } } }) as never;
+    await (prismaClient as never as { $connect: () => Promise<void> }).$connect();
+  } catch (err) {
+    if (err instanceof FixtureError) throw err;
+    fixtureOk = false;
+    console.warn('[onboarding-tour] fixture unavailable, tests will skip:', sanitize(err));
+  }
+});
+
+// Fixture users are NOT deleted: usernames are deterministic per test
+// (bounded to one row per test), so reruns reuse them rather than
+// accumulating rows. Deleting users is also unsafe — RESTRICT FKs from
+// ip_records/user_sessions and others block it, and a prefix sweep
+// could hit another worker mid-test.
+base.afterAll(async () => {
+  await prismaClient?.$disconnect().catch(() => undefined);
+});
+
+// Per-test fixture: create (or reuse, on retry) a dedicated user, log
+// in via the API, and inject auth state before the app bundle reads
+// localStorage — no shared storageState file, no refresh-cookie
+// dependence (tests run well inside the access-token TTL).
+const test = base.extend<{ tourSession: void }>({
+  tourSession: [
+    async ({ page, request }, use, testInfo) => {
+      test.skip(!fixtureOk || !prismaClient, 'tour-user fixture backend not reachable');
+      const username = tourUsername(testInfo.testId);
+      const argon2 = require('argon2') as typeof import('argon2');
+      const passwordHash = await argon2.hash(TOUR_PASSWORD);
+      try {
+        await prismaClient!.user.create({
+          data: {
+            email: `${username}@itest.local`,
+            username,
+            passwordHash,
+            referralCode: `T${username.slice(6)}`,
+            status: 'ACTIVE',
+            wallet: { create: { balance: 0 } },
+            profile: { create: { isPublic: true } },
+          },
+        });
+      } catch (err) {
+        // P2002 → retry of the same test; the user already exists.
+        const code = (err as { code?: string })?.code;
+        if (code !== 'P2002') throw err;
+      }
+
+      const resp = await request.post(`${apiBaseUrl()}/auth/login`, {
+        data: { emailOrUsername: username, password: TOUR_PASSWORD },
+      });
+      if (!resp.ok()) {
+        throw new FixtureError(`tour user login failed: HTTP ${resp.status()}`);
+      }
+      const body = (await resp.json()) as {
+        data: { user: Record<string, unknown>; accessToken: string };
+      };
+      await page.context().addInitScript(
+        ([user, token]) => {
+          localStorage.setItem(
+            'engganyo-auth',
+            JSON.stringify({
+              state: { user, accessToken: token, isAuthenticated: true, adminPin: null },
+              version: 0,
+            }),
+          );
+          localStorage.setItem('access_token', token as string);
+        },
+        [body.data.user, body.data.accessToken],
+      );
+      await use();
+    },
+    { auto: true },
+  ],
+});
 
 // Dev-server route compiles and the tour's 5s target polling can make a step appear late.
 const SLOW = { timeout: 15_000 };

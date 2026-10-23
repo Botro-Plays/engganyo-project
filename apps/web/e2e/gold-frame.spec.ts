@@ -116,8 +116,20 @@ test.beforeAll(async () => {
       // the actual debit hits wallets.balance — keep both in sync).
       await client.$executeRaw`DELETE FROM user_inventory WHERE item_id = ${itemId} AND user_id = ${uid}`;
       await client.$executeRaw`DELETE FROM store_purchases WHERE item_id = ${itemId} AND user_id = ${uid}`;
-      await client.$executeRaw`UPDATE wallets SET balance = GREATEST(balance, 1000) WHERE user_id = ${uid}`;
-      await client.$executeRaw`UPDATE users SET credit_balance = GREATEST(credit_balance, 1000) WHERE username = ${ADMIN_USERNAME}`;
+      const walletRows =
+        await client.$executeRaw`UPDATE wallets SET balance = GREATEST(balance, 1000) WHERE user_id = ${uid}`;
+      if (walletRows !== 1) {
+        throw new FixtureError(
+          `wallet top-up affected ${walletRows} rows for "${ADMIN_USERNAME}" — expected exactly 1 (missing wallet row?)`,
+        );
+      }
+      const userRows =
+        await client.$executeRaw`UPDATE users SET credit_balance = GREATEST(credit_balance, 1000) WHERE username = ${ADMIN_USERNAME}`;
+      if (userRows !== 1) {
+        throw new FixtureError(
+          `user top-up affected ${userRows} rows for "${ADMIN_USERNAME}" — expected exactly 1`,
+        );
+      }
 
       // auth/me + profile are Redis-cached — delete only this user's keys so the
       // new balance/equipment shows. Never flush the database or other keys.
