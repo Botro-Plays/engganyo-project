@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth.store';
+import { shouldRetryRequest, shouldAttemptTokenRefresh } from '@/lib/retry-policy';
 
 function normalizeApiBaseUrl(input: string): string {
   // Ensure we always end up with .../api (not .../api/v1)
@@ -52,15 +53,20 @@ apiClient.interceptors.request.use(
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
-// Pre-session credential endpoints return 401 for expected failures (e.g. invalid
-// credentials). A refresh cannot help there and the redirect would discard the error.
-const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
+// Retry policy lives in retry-policy.ts (pure functions, node:test covered).
+// Only idempotent methods retry by default; mutations opt in via
+// `retryable: true` + server-side idempotency (A10).
+export interface RetryableRequestConfig {
+  retryable?: boolean;
+}
 
 function shouldRetry(error: AxiosError): boolean {
-  // Retry on network errors (no response) or 5xx server errors
-  if (!error.response) return true;
-  const status = error.response.status;
-  return status >= 500 && status < 600;
+  const cfg = error.config as (InternalAxiosRequestConfig & RetryableRequestConfig) | undefined;
+  return shouldRetryRequest({
+    method: cfg?.method,
+    retryable: cfg?.retryable,
+    status: error.response?.status ?? null,
+  });
 }
 
 function sleep(ms: number): Promise<void> {
@@ -114,9 +120,11 @@ apiClient.interceptors.response.use(
     }
 
     if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      !NO_REFRESH_RE.test(originalRequest.url ?? '')
+      shouldAttemptTokenRefresh({
+        status: error.response?.status ?? null,
+        alreadyRetriedWithFreshToken: !!originalRequest?._retry,
+        url: originalRequest?.url,
+      })
     ) {
       originalRequest._retry = true;
 
