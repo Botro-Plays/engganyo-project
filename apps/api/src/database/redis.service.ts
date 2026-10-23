@@ -146,6 +146,53 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.set(key, JSON.stringify(value), ttlSeconds);
   }
 
+  // ─── Socket auth revocation tombstones ──────────────────
+  // The tombstone stores the revocation INSTANT (epoch seconds), not a
+  // blanket block: a socket token is stale iff its `iat` is at-or-before
+  // that instant. A legitimate fresh login afterwards gets a newer `iat`
+  // and is NOT blocked. Handshakes check the tombstone before AND after
+  // joining the user room to close the revoke race.
+  // TTL mirrors the configured access-token lifetime — once every pre-
+  // revocation token has expired, the tombstone is dead weight. The
+  // lifetime is read from config, never hardcoded.
+
+  async revokeSocketAuth(userId: string): Promise<void> {
+    const ttl = this.socketAuthTombstoneTtlSeconds();
+    if (ttl === null) {
+      await this.set(`auth:revoked-at:${userId}`, String(Math.floor(Date.now() / 1000)));
+    } else {
+      await this.set(
+        `auth:revoked-at:${userId}`,
+        String(Math.floor(Date.now() / 1000)),
+        ttl,
+      );
+    }
+  }
+
+  async socketAuthRevokedAt(userId: string): Promise<number | null> {
+    const raw = await this.get(`auth:revoked-at:${userId}`);
+    if (raw === null) return null;
+    const ts = Number(raw);
+    return Number.isFinite(ts) ? ts : null;
+  }
+
+  private socketAuthTombstoneTtlSeconds(): number | null {
+    const value = String(this.configService.get<string>('jwt.accessExpiresIn', '15m')).trim();
+    const m = /^(\d+)([smhd])?$/.exec(value);
+    if (!m) {
+      // No guessed lifetime: an unparseable config yields a PERSISTENT
+      // tombstone. That fails closed — only pre-revocation tokens are
+      // blocked; fresh logins always carry a newer iat and pass.
+      this.logger.warn(
+        `jwt.accessExpiresIn '${value}' not parseable (expect Ns/Nm/Nh/Nd); ` +
+          `socket revocation tombstone will persist without TTL`,
+      );
+      return null;
+    }
+    const mult = { s: 1, m: 60, h: 3600, d: 86400 }[m[2] ?? 's'] ?? 1;
+    return Number(m[1]) * mult;
+  }
+
   // ─── User cache invalidation ─────────────────────────────
 
   async invalidateUserCaches(userId: string): Promise<void> {

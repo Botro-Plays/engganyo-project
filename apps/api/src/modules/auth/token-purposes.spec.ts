@@ -11,6 +11,7 @@ import { AuthService } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EventsGateway } from '../events/events.gateway';
+import { EventsService } from '../events/events.service';
 import { ChannelsGateway } from '../channels/channels.gateway';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
@@ -29,13 +30,26 @@ const config = {
     })[key] ?? fallback,
 } as ConfigService;
 
+const socketUser = {
+  id: 'user-1', email: 'u@x.com', username: 'u',
+  role: UserRole.USER, status: UserStatus.ACTIVE,
+};
+
 const prismaStub = {
-  user: { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+  user: { findUnique: jest.fn().mockResolvedValue(socketUser), update: jest.fn().mockResolvedValue({}) },
   userSession: { create: jest.fn().mockResolvedValue({}) },
   twoFactorCode: { findFirst: jest.fn() },
   twoFactorBackupCode: { count: jest.fn(), findMany: jest.fn() },
 };
-const redisStub = { getJson: jest.fn(), setJson: jest.fn(), del: jest.fn() };
+const redisStub = {
+  getJson: jest.fn(),
+  setJson: jest.fn(),
+  del: jest.fn(),
+  get: jest.fn().mockResolvedValue(null), // auth:revoked-at tombstone → none
+  set: jest.fn(),
+  revokeSocketAuth: jest.fn().mockResolvedValue(undefined),
+  socketAuthRevokedAt: jest.fn().mockResolvedValue(null),
+};
 
 const jwt = new JwtService();
 
@@ -48,7 +62,10 @@ const ACCESS_PAYLOAD: JwtPayload = {
 };
 
 function accessSigned(payload: Record<string, unknown>): string {
-  return jwt.sign({ ...ACCESS_PAYLOAD, ...payload }, { secret: ACCESS_SECRET });
+  return jwt.sign(
+    { ...ACCESS_PAYLOAD, ...payload },
+    { secret: ACCESS_SECRET, expiresIn: '15m' },
+  );
 }
 
 function makeTwoFactorService() {
@@ -66,12 +83,65 @@ function makeStrategy() {
 }
 
 function makeEventsGateway() {
-  return new EventsGateway(config, jwt, { setServer: jest.fn() } as never);
+  return new EventsGateway(
+    config, jwt, { setServer: jest.fn() } as never,
+    prismaStub as never, redisStub as never,
+  );
 }
 
 function makeChannelsGateway() {
-  return new ChannelsGateway(jwt, config, {} as never);
+  return new ChannelsGateway(
+    jwt, config, {} as never, {} as never,
+    prismaStub as never, redisStub as never,
+  );
 }
+
+describe('A09: socket revocation', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('channel sockets join a per-user room so they can be revoked', async () => {
+    const token = accessSigned({ purpose: 'access' });
+    const client = fakeSocket(token);
+    await makeChannelsGateway().handleConnection(client);
+    expect(client.disconnect).not.toHaveBeenCalled();
+    expect(client.join).toHaveBeenCalledWith('user:user-1');
+  });
+
+  it('EventsService.disconnectUser emits auth:revoked and force-disconnects on both namespaces', async () => {
+    const roomsEmit = jest.fn();
+    const roomsDisconnect = jest.fn().mockResolvedValue(undefined);
+    const makeServer = () => ({
+      to: jest.fn().mockReturnValue({ emit: roomsEmit }),
+      in: jest.fn().mockReturnValue({ disconnectSockets: roomsDisconnect }),
+    });
+    const events = new EventsService(redisStub as never);
+    events.setServer(makeServer() as never);
+    events.setChannelsServer(makeServer() as never);
+
+    await events.disconnectUser('user-1');
+
+    // Tombstone is written BEFORE sockets are disconnected (race closure).
+    expect(redisStub.revokeSocketAuth).toHaveBeenCalledWith('user-1');
+    expect(
+      redisStub.revokeSocketAuth.mock.invocationCallOrder[0]
+        < roomsEmit.mock.invocationCallOrder[0],
+    ).toBe(true);
+    expect(roomsEmit).toHaveBeenCalledWith('auth:revoked', { reason: 'auth:revoked' });
+    expect(roomsDisconnect).toHaveBeenCalledTimes(2); // notifications + channels
+  });
+
+  it('disconnectUser tolerates a missing channels server', async () => {
+    const disconnect = jest.fn().mockResolvedValue(undefined);
+    const events = new EventsService(redisStub as never);
+    events.setServer({
+      to: jest.fn().mockReturnValue({ emit: jest.fn() }),
+      in: jest.fn().mockReturnValue({ disconnectSockets: disconnect }),
+    } as never);
+
+    await expect(events.disconnectUser('user-1')).resolves.toBeUndefined();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+});
 
 function fakeSocket(token: string | undefined) {
   return {
@@ -79,7 +149,8 @@ function fakeSocket(token: string | undefined) {
     data: {} as { userId?: string },
     disconnect: jest.fn(),
     join: jest.fn(),
-  } as unknown as Socket & { disconnect: jest.Mock; join: jest.Mock; data: { userId?: string } };
+    once: jest.fn(),
+  } as unknown as Socket & { disconnect: jest.Mock; join: jest.Mock; once: jest.Mock; data: { userId?: string } };
 }
 
 describe('A01: token purpose separation', () => {
