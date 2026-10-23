@@ -14,7 +14,7 @@ This is the fresh-server guide for Ubuntu 24.04. Both project collaborators may 
 
 The API compiled dist and Next.js standalone build are inside the images. The VPS does not need Node.js/npm and does not compile the application. A successful push deploys automatically once this workflow is on main and the host is configured. Manual Run workflow remains available on main. Other branches cannot publish or deploy through this workflow. Running deployments are not cancelled by a later push; intermediate pending runs may be superseded by newer pushes.
 
-There is no owner-only actor restriction. A failing check prevents deployment, but a direct push has already changed main: coordinate fixes and do not bypass checks. Application security findings in AUDIT_2026-10-21.md still require separate repair before handling real payments.
+There is no owner-only actor restriction. A failing check prevents deployment, but a direct push has already changed main: coordinate fixes and do not bypass checks. Application security findings in AUDIT_2026-10-21.md still require separate repair before handling real payments; see AUDIT_REMEDIATION_STATUS.md for the live status of each finding.
 
 ## 1. Install Docker on the fresh VPS
 
@@ -263,19 +263,19 @@ curl -I https://engganyo.com/login
 
 The API health JSON must report status ok (inside data), and containers should be healthy. A green CI run alone is not a successful deploy: check the final Deploy to VPS job too.
 
-## Deferred reCAPTCHA (initial restricted deployment)
+## reCAPTCHA (enabled)
 
-reCAPTCHA is disabled for the first team-only deployment: `ENABLE_RECAPTCHA=false` in `.env`, and no `recaptcha_enabled` row exists in the fresh database (backend enforcement reads the `platformConfig` DB row, default off; the frontend reads the public config and skips token generation, so registration/login work without a widget). To activate later:
+reCAPTCHA v3 is enabled in production through the Server Config `platformConfig` rows (`recaptcha_v3_site_key`, `recaptcha_v3_secret_key`, `recaptcha_enabled=true`). The backend verifies tokens against the DB secret (action, hostname, and score are checked; see AUDIT_REMEDIATION_STATUS.md, reCAPTCHA hardening — deployed at merge `cd7093f`), and the public config supplies the site key, so **no rebuild is required** to change keys.
 
-1. In the admin server-config UI (`platformConfig` rows), set `recaptcha_v3_site_key`, `recaptcha_v3_secret_key`, and `recaptcha_enabled=true`. This is the supported runtime path — the backend verifies tokens against the DB secret, and the public config supplies the site key, so **no rebuild is required**.
-2. `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (Actions secret, baked at build) and `RECAPTCHA_SECRET` (`.env`) are only fallbacks used when the DB values are absent — set them if you want belt-and-suspenders defaults before the DB is configured.
-3. Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, score threshold, successful siteverify) plus working register/login.
+- `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (Actions secret, baked at build) and `RECAPTCHA_SECRET` (`.env`) are only fallbacks used when the DB values are absent.
+- To disable for troubleshooting, set `recaptcha_enabled=false` in the admin server-config UI; the frontend reads the public config and skips token generation, so registration/login work without a widget. Do not leave it disabled on the live deployment.
+- Verify a real production-hostname v3 token (hostname `engganyo.com`, expected action, score threshold, successful siteverify) plus working register/login after any change.
 
 ## Deferred external services (initial restricted deployment)
 
 - **Cloudflare Access**: a Zero Trust application covers `engganyo.com` and `www.engganyo.com` with an Allow policy for the two owner emails (one-time PIN login at `black-field-169f.cloudflareaccess.com`). Unauthenticated visitors get a 302 to the Access wall — the application itself is unreachable without Access. Remove or widen the policy before public launch.
-- **Outgoing email**: `SMTP_PASS` is unset, so email verification is configured but undeliverable. New registrations land in `PENDING_VERIFICATION` and cannot log in until SMTP is configured and they verify. The seeded admin accounts are created `ACTIVE` and log in normally — email verification status is checked via `UserStatus`, not a separate flag. Password-reset and 2FA-email flows are likewise unavailable until `SMTP_PASS` (Resend/SendGrid) is set. No startup or health-check dependency on SMTP exists; mail jobs simply fail/retry in the queue.
-- **Deferred**: reCAPTCHA (above), Grafana monitoring, HeiGIT routing, and any other optional integrations. None are required for startup, health checks, or the seeded-admin login.
+- **Outgoing email**: SMTP is configured (Brevo, sender `no-reply@engganyo.com`) and verification emails deliver. New registrations land in `PENDING_VERIFICATION` and cannot log in until they verify. The seeded admin accounts are created `ACTIVE` and log in normally — email verification status is checked via `UserStatus`, not a separate flag. Queued password-reset and 2FA-email flows are configured but have limited end-to-end evidence; verify them before relying on them. No startup or health-check dependency on SMTP exists; mail jobs fail/retry in the queue if SMTP is removed.
+- **Deferred**: Grafana monitoring, HeiGIT routing, and any other optional integrations. None are required for startup, health checks, or the seeded-admin login.
 
 ## Troubleshooting and operations
 
@@ -292,4 +292,4 @@ For compose operations after deployment, include both env files so recreation pr
 
 Do not enable the legacy auto-deploy.service at boot. Docker's restart policies restart existing services after reboot. The legacy script can bypass checks and select mutable latest images; it is not the automatic GitHub pipeline. If an old host had it enabled, disable it with systemctl disable --now auto-deploy as root.
 
-Back up PostgreSQL, uploads and encryption/environment material off-host and verify restoration. A failed update may leave services unavailable; keep the previous release tags and a pre-migration backup available. Coordinate database schema changes between both collaborators.
+Back up PostgreSQL, uploads and encryption/environment material off-host and verify restoration. Off-site backup scripts and a restore runbook are prepared on the unmerged `offsite-backup` branch (PR #17 — `infra/BACKUP-RESTORE.md`, `infra/scripts/backup-offsite.sh`, `infra/scripts/restore-verify.sh`) and have passed synthetic rehearsals, but backups remain **inactive** until a destination is selected and scoped credentials are provisioned. A failed update may leave services unavailable; keep the previous release tags and a pre-migration backup available. Coordinate database schema changes between both collaborators.
