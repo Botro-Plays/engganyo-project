@@ -165,158 +165,140 @@ export class StoreService implements OnModuleInit {
       throw new BadRequestException('Quantity must be between 1 and 99');
     }
 
-    const item = await this.prisma.storeItem.findUnique({
+    // Existence pre-check only — all eligibility revalidated under the lock.
+    const itemExists = await this.prisma.storeItem.findUnique({
       where: { id: itemId },
+      select: { id: true },
     });
-    if (!item) throw new NotFoundException('Item not found');
-    if (!item.isActive) throw new BadRequestException('Item is no longer available');
+    if (!itemExists) throw new NotFoundException('Item not found');
 
-    const now = new Date();
-    if (item.startsAt && now < item.startsAt) {
-      throw new BadRequestException('Item sale has not started yet');
-    }
-    if (item.endsAt && now > item.endsAt) {
-      throw new BadRequestException('Item sale has ended');
-    }
+    // ── Everything else runs inside ONE transaction under a row lock ──
+    // SELECT ... FOR UPDATE serializes purchases of the same item, so the
+    // VIP/cosmetic/ownership/stock guards below cannot be raced by a
+    // concurrent purchase. A failure anywhere rolls the debit back — no
+    // compensating refund path is needed.
+    const { purchase, walletTx, item } = await this.prisma.$transaction(async (tx) => {
+      // Lock the item row and re-read its current settings.
+      await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${itemId} FOR UPDATE`;
+      const item = await tx.storeItem.findUniqueOrThrow({ where: { id: itemId } });
 
-    // ── VIP tier requirement guard ────────────────────────────
-    if (item.requiredVipTierLevel !== null) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { vipTier: { select: { level: true } } },
-      });
-      const userLevel = user?.vipTier?.level ?? 0;
-      if (userLevel < item.requiredVipTierLevel) {
-        throw new BadRequestException(
-          `This item requires VIP Tier level ${item.requiredVipTierLevel}. Your current level is ${userLevel}.`,
-        );
+      if (!item.isActive) throw new BadRequestException('Item is no longer available');
+      const now = new Date();
+      if (item.startsAt && now < item.startsAt) {
+        throw new BadRequestException('Item sale has not started yet');
       }
-    }
-
-    // ── Cosmetic dedup guard ─────────────────────────────────
-    // Cosmetics are permanent (isConsumable: false) and can only be owned once.
-    // Check without consumedAt filter since cosmetics are never consumed.
-    if (item.category === StoreCategory.COSMETIC) {
-      const existingCosmetic = await this.prisma.userInventory.findFirst({
-        where: { userId, itemId },
-      });
-      if (existingCosmetic) {
-        throw new BadRequestException('You already own this cosmetic');
+      if (item.endsAt && now > item.endsAt) {
+        throw new BadRequestException('Item sale has ended');
       }
-    }
 
-    // ── Max owned per user guard ────────────────────────────
-    if (item.maxOwnedPerUser !== null) {
-      const ownedCount = await this.prisma.userInventory.aggregate({
-        where: { userId, itemId },
-        _sum: { quantity: true },
-      });
-      const currentTotal = ownedCount._sum.quantity ?? 0;
-      if (currentTotal + quantity > item.maxOwnedPerUser) {
-        throw new BadRequestException(
-          `Max ownership limit reached (${item.maxOwnedPerUser} total). You currently own ${currentTotal}.`,
-        );
-      }
-    }
-
-    const totalCost = item.creditCost * quantity;
-
-    // ── Step 1: Re-check limited qty (pre-debit, best effort) ──
-    if (item.isLimited && item.limitedQty !== null) {
-      const soldAgg = await this.prisma.storePurchase.aggregate({
-        where: { itemId },
-        _sum: { quantity: true },
-      });
-      const soldCount = soldAgg._sum.quantity ?? 0;
-      const remaining = item.limitedQty - soldCount;
-      if (remaining <= 0) throw new BadRequestException('Item is sold out');
-      if (quantity > remaining) throw new BadRequestException(`Only ${remaining} remaining`);
-    }
-
-    // ── Step 2: Debit wallet (optimistic-locking, own transaction) ──
-    const walletTx = await this.walletService.debit(userId, totalCost, {
-      type: TransactionType.SPEND_STORE_PURCHASE,
-      description: `Purchased ${quantity}x ${item.name}`,
-      referenceId: itemId,
-      referenceType: 'store_item',
-      metadata: { itemName: item.name, quantity, unitCost: item.creditCost },
-    });
-
-    // ── Step 3: Create purchase record + inventory atomically ──
-    // If this fails, we issue a refund to ensure no credits are lost.
-    let purchase;
-    try {
-      purchase = await this.prisma.$transaction(async (tx) => {
-        // Final limited-qty recheck inside tx with row lock to prevent oversell.
-        // SELECT ... FOR UPDATE serializes concurrent purchases of the same item.
-        if (item.isLimited && item.limitedQty !== null) {
-          await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${itemId} FOR UPDATE`;
-          const soldAgg = await tx.storePurchase.aggregate({
-            where: { itemId },
-            _sum: { quantity: true },
-          });
-          const soldCount = soldAgg._sum.quantity ?? 0;
-          if (item.limitedQty - soldCount < quantity) {
-            throw new BadRequestException('Item just sold out');
-          }
-        }
-
-        const p = await tx.storePurchase.create({
-          data: {
-            userId,
-            itemId,
-            transactionId: walletTx.id,
-            quantity,
-            creditCostAtPurchase: item.creditCost,
-          },
+      // ── VIP tier requirement guard ──────────────────────────
+      if (item.requiredVipTierLevel !== null) {
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { vipTier: { select: { level: true } } },
         });
+        const userLevel = user?.vipTier?.level ?? 0;
+        if (userLevel < item.requiredVipTierLevel) {
+          throw new BadRequestException(
+            `This item requires VIP Tier level ${item.requiredVipTierLevel}. Your current level is ${userLevel}.`,
+          );
+        }
+      }
 
-        if (item.category === StoreCategory.COSMETIC) {
-          // Cosmetics: create with equipped=true; unequip any other of same cosmeticType
-          const meta = item.metadata as Record<string, unknown>;
-          const cosmeticType = meta?.['cosmeticType'] as string | undefined;
-          if (cosmeticType) {
-            const otherEquipped = await tx.userInventory.findMany({
-              where: { userId, equipped: true },
-              include: { item: { select: { metadata: true } } },
-            });
-            for (const other of otherEquipped) {
-              const otherMeta = other.item.metadata as Record<string, unknown>;
-              if (otherMeta?.['cosmeticType'] === cosmeticType) {
-                await tx.userInventory.update({ where: { id: other.id }, data: { equipped: false } });
-              }
+      // ── Cosmetic dedup guard (under the lock — no double-charge) ──
+      if (item.category === StoreCategory.COSMETIC) {
+        const existingCosmetic = await tx.userInventory.findFirst({
+          where: { userId, itemId },
+        });
+        if (existingCosmetic) {
+          throw new BadRequestException('You already own this cosmetic');
+        }
+      }
+
+      // ── Max owned per user guard (under the lock) ──────────
+      if (item.maxOwnedPerUser !== null) {
+        const ownedCount = await tx.userInventory.aggregate({
+          where: { userId, itemId },
+          _sum: { quantity: true },
+        });
+        const currentTotal = ownedCount._sum.quantity ?? 0;
+        if (currentTotal + quantity > item.maxOwnedPerUser) {
+          throw new BadRequestException(
+            `Max ownership limit reached (${item.maxOwnedPerUser} total). You currently own ${currentTotal}.`,
+          );
+        }
+      }
+
+      // ── Limited-qty recheck under the lock ─────────────────
+      if (item.isLimited && item.limitedQty !== null) {
+        const soldAgg = await tx.storePurchase.aggregate({
+          where: { itemId },
+          _sum: { quantity: true },
+        });
+        const soldCount = soldAgg._sum.quantity ?? 0;
+        const remaining = item.limitedQty - soldCount;
+        if (remaining <= 0) throw new BadRequestException('Item is sold out');
+        if (remaining < quantity) {
+          throw new BadRequestException(`Only ${remaining} remaining`);
+        }
+      }
+
+      const totalCost = item.creditCost * quantity;
+
+      const walletTx = await this.walletService.debit(userId, totalCost, {
+        type: TransactionType.SPEND_STORE_PURCHASE,
+        description: `Purchased ${quantity}x ${item.name}`,
+        referenceId: itemId,
+        referenceType: 'store_item',
+        metadata: { itemName: item.name, quantity, unitCost: item.creditCost },
+      }, tx);
+
+      const p = await tx.storePurchase.create({
+        data: {
+          userId,
+          itemId,
+          transactionId: walletTx.id,
+          quantity,
+          creditCostAtPurchase: item.creditCost,
+        },
+      });
+
+      if (item.category === StoreCategory.COSMETIC) {
+        // Cosmetics: create with equipped=true; unequip any other of same cosmeticType
+        const meta = item.metadata as Record<string, unknown>;
+        const cosmeticType = meta?.['cosmeticType'] as string | undefined;
+        if (cosmeticType) {
+          const otherEquipped = await tx.userInventory.findMany({
+            where: { userId, equipped: true },
+            include: { item: { select: { metadata: true } } },
+          });
+          for (const other of otherEquipped) {
+            const otherMeta = other.item.metadata as Record<string, unknown>;
+            if (otherMeta?.['cosmeticType'] === cosmeticType) {
+              await tx.userInventory.update({ where: { id: other.id }, data: { equipped: false } });
             }
           }
-          await tx.userInventory.create({ data: { userId, itemId, quantity: 1, equipped: true } });
-        } else {
-          // Consumables: stack into an existing unconsumed row or create a new one
-          const existing = await tx.userInventory.findFirst({
-            where: { userId, itemId, consumedAt: null },
-          });
-          if (existing) {
-            await tx.userInventory.update({
-              where: { id: existing.id },
-              data: { quantity: { increment: quantity } },
-            });
-          } else {
-            await tx.userInventory.create({ data: { userId, itemId, quantity } });
-          }
         }
+        await tx.userInventory.create({ data: { userId, itemId, quantity: 1, equipped: true } });
+      } else {
+        // Consumables: stack into an existing unconsumed row or create a new one
+        const existing = await tx.userInventory.findFirst({
+          where: { userId, itemId, consumedAt: null },
+        });
+        if (existing) {
+          await tx.userInventory.update({
+            where: { id: existing.id },
+            data: { quantity: { increment: quantity } },
+          });
+        } else {
+          await tx.userInventory.create({ data: { userId, itemId, quantity } });
+        }
+      }
 
-        return p;
-      });
-    } catch (err) {
-      // Refund wallet if record creation fails
-      await this.walletService.credit(userId, totalCost, {
-        type: TransactionType.EARN_ACHIEVEMENT,
-        description: `Refund: failed purchase of ${item.name}`,
-        referenceId: walletTx.id,
-        referenceType: 'refund',
-      }).catch((refundErr: unknown) => {
-        this.logger.error(`CRITICAL: Failed to refund ${totalCost} credits to user ${userId} after purchase failure`, refundErr);
-      });
-      throw err;
-    }
+      return { purchase: p, walletTx, item };
+    });
+
+    const totalCost = item.creditCost * quantity;
 
     // Cosmetics auto-equip on purchase, so the cached profile (which includes
     // equippedCosmetics) is now stale. Non-critical: a failed invalidation must
@@ -325,7 +307,7 @@ export class StoreService implements OnModuleInit {
       await this.invalidateProfileCache(userId);
     }
 
-    // ── Step 4: Emit real-time notification ─────────────────
+    // ── Post-commit: notifications/events are non-transactional ──
     void this.notificationsService.createNotification(
       userId,
       NotificationType.CREDIT_SPENT,

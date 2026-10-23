@@ -549,32 +549,36 @@ export class ChannelsService implements OnModuleInit {
       throw new BadRequestException(validation.reason);
     }
 
-    // Debit from sender
-    const debitTx = await this.walletService.debit(fromUserId, amount, {
-      type: TransactionType.SPEND_TIP,
-      description: `Tip to user ${toUserId}`,
-      referenceId: messageId ?? undefined,
-      referenceType: 'tip',
+    // Debit + credit + message link in ONE transaction — a failure
+    // between them can no longer strand credits mid-transfer.
+    const { debitTx, creditTx } = await this.prisma.withTransaction(async (tx) => {
+      const d = await this.walletService.debit(fromUserId, amount, {
+        type: TransactionType.SPEND_TIP,
+        description: `Tip to user ${toUserId}`,
+        referenceId: messageId ?? undefined,
+        referenceType: 'tip',
+      }, tx);
+
+      const c = await this.walletService.credit(toUserId, amount, {
+        type: TransactionType.EARN_TIP,
+        description: `Tip from user ${fromUserId}`,
+        referenceId: messageId ?? undefined,
+        referenceType: 'tip',
+      }, tx);
+
+      // Link tip to message if applicable
+      if (messageId) {
+        await tx.channelMessage.update({
+          where: { id: messageId },
+          data: { tipTransactionId: d.id },
+        });
+      }
+
+      return { debitTx: d, creditTx: c };
     });
 
-    // Credit to recipient
-    const creditTx = await this.walletService.credit(toUserId, amount, {
-      type: TransactionType.EARN_TIP,
-      description: `Tip from user ${fromUserId}`,
-      referenceId: messageId ?? undefined,
-      referenceType: 'tip',
-    });
-
-    // Record tip in 48h sliding window budget
+    // Record tip in 48h sliding window budget (Redis — non-transactional)
     await this.recordTipInWindow(fromUserId, amount);
-
-    // Link tip to message if applicable
-    if (messageId) {
-      await this.prisma.channelMessage.update({
-        where: { id: messageId },
-        data: { tipTransactionId: debitTx.id },
-      });
-    }
 
     // Emit real-time notifications
     this.eventsService.emitToUser(toUserId, 'tip:received', {
@@ -750,22 +754,31 @@ export class ChannelsService implements OnModuleInit {
     });
     const senderName = sender?.displayName ?? sender?.username ?? 'Someone';
 
+    // All debits and credits in ONE transaction — a mid-loop failure can
+    // no longer distribute a partial rain.
+    await this.prisma.withTransaction(async (tx) => {
+      for (let i = 0; i < selected.length; i++) {
+        const recipient = selected[i];
+        const amount = baseAmount + (i === selected.length - 1 ? remainder : 0);
+
+        await this.walletService.debit(userId, amount, {
+          type: TransactionType.SPEND_TIP,
+          description: `Rain to ${recipient.user.username}`,
+          referenceType: 'rain',
+        }, tx);
+
+        await this.walletService.credit(recipient.user.id, amount, {
+          type: TransactionType.EARN_TIP,
+          description: `Rain from ${senderName}`,
+          referenceType: 'rain',
+        }, tx);
+      }
+    });
+
     const recipientNames: string[] = [];
     for (let i = 0; i < selected.length; i++) {
       const recipient = selected[i];
       const amount = baseAmount + (i === selected.length - 1 ? remainder : 0);
-
-      await this.walletService.debit(userId, amount, {
-        type: TransactionType.SPEND_TIP,
-        description: `Rain to ${recipient.user.username}`,
-        referenceType: 'rain',
-      });
-
-      await this.walletService.credit(recipient.user.id, amount, {
-        type: TransactionType.EARN_TIP,
-        description: `Rain from ${senderName}`,
-        referenceType: 'rain',
-      });
 
       // Emit rain received event
       this.eventsService.emitToUser(recipient.user.id, 'rain:received', {
