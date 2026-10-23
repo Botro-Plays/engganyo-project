@@ -17,6 +17,7 @@ import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import { assertValidCampaignCounters, resolveFundedRefund } from './campaign-funding';
+import { claimCompletionForVerification, rejectCompletionAndReleaseSlot } from '../tasks/task-completion-verify';
 import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
@@ -381,12 +382,17 @@ export class CampaignsService {
     const now = new Date();
 
     if (dto.action === 'approve') {
-      const willBeFull = campaign.completedSlots + 1 >= campaign.totalSlots;
-
-      await this.prisma.$transaction(async (tx) => {
-        await tx.taskCompletion.update({
-          where: { id: completionId },
-          data: {
+      // ── Claim + counters + credit in ONE transaction ──
+      // The conditional completion claim prevents double-approval payouts;
+      // the counter UPDATE is guarded so completed can never exceed total
+      // and pending never goes negative.
+      const txResult = await this.prisma.$transaction(async (tx) => {
+        const res = await claimCompletionForVerification(tx, {
+          completionId,
+          campaignId,
+          completerUserId: completion.userId,
+          fromStatuses: [CompletionStatus.SUBMITTED],
+          setData: {
             status: CompletionStatus.VERIFIED,
             verifiedAt: now,
             verifiedBy: userId,
@@ -394,29 +400,32 @@ export class CampaignsService {
           },
         });
 
-        await tx.campaign.update({
-          where: { id: campaignId },
+        await this.walletService.credit(completion.userId, campaign.creditPerTask, {
+          type: TransactionType.EARN_TASK_COMPLETION,
+          description: 'Task approved by campaign creator',
+          referenceId: campaignId,
+          referenceType: 'campaign',
+        }, tx);
+
+        await tx.auditLog.create({
           data: {
-            completedSlots: { increment: 1 },
-            pendingSlots: { decrement: 1 },
-            ...(willBeFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+            userId,
+            action: 'submission.approved',
+            entityType: 'TaskCompletion',
+            entityId: completionId,
+            newValue: { creditsPaid: campaign.creditPerTask, reviewedBy: 'campaign_owner' },
           },
         });
 
-        await tx.userProfile.updateMany({
-          where: { userId: completion.userId },
-          data: { totalTasksDone: { increment: 1 } },
-        });
+        return res;
       });
+
+      // Only a real transition to COMPLETED justifies the campaign-full
+      // notification — an in-flight completion on a CANCELLED campaign
+      // fills the last slot without flipping the status.
+      const willBeFull = txResult.becameCompleted;
 
       void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
-
-      await this.walletService.credit(completion.userId, campaign.creditPerTask, {
-        type: TransactionType.EARN_TASK_COMPLETION,
-        description: 'Task approved by campaign creator',
-        referenceId: campaignId,
-        referenceType: 'campaign',
-      });
 
       await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
 
@@ -451,18 +460,26 @@ export class CampaignsService {
       return { reviewed: true, action: 'approve', creditsAwarded: campaign.creditPerTask };
     } else {
       await this.prisma.$transaction(async (tx) => {
-        await tx.taskCompletion.update({
-          where: { id: completionId },
-          data: {
+        await rejectCompletionAndReleaseSlot(tx, {
+          completionId,
+          campaignId,
+          fromStatuses: [CompletionStatus.SUBMITTED],
+          setData: {
             status: CompletionStatus.REJECTED,
             rejectionReason: dto.reason ?? 'Rejected by campaign creator',
             verifiedAt: now,
             verifiedBy: userId,
           },
         });
-        await tx.campaign.update({
-          where: { id: campaignId },
-          data: { pendingSlots: { decrement: 1 } },
+
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: 'submission.rejected',
+            entityType: 'TaskCompletion',
+            entityId: completionId,
+            newValue: { reason: dto.reason ?? 'Rejected by campaign creator', reviewedBy: 'campaign_owner' },
+          },
         });
       });
 

@@ -20,6 +20,7 @@ import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import { assertValidCampaignCounters, resolveFundedRefund } from '../campaigns/campaign-funding';
+import { claimCompletionForVerification, rejectCompletionAndReleaseSlot } from '../tasks/task-completion-verify';
 import type { ListUsersDto } from './dto/list-users.dto';
 import type { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import type { ReviewCampaignDto } from './dto/review-campaign.dto';
@@ -643,10 +644,14 @@ export class AdminService {
     const now = new Date();
 
     if (dto.action === 'approve') {
+      // ── Claim + counters + credit + audit in ONE transaction ──
       await this.prisma.withTransaction(async (tx) => {
-        await tx.taskCompletion.update({
-          where: { id: completionId },
-          data: {
+        await claimCompletionForVerification(tx, {
+          completionId,
+          campaignId: completion.campaign.id,
+          completerUserId: completion.userId,
+          fromStatuses: [CompletionStatus.SUBMITTED],
+          setData: {
             status: CompletionStatus.VERIFIED,
             verifiedAt: now,
             verifiedBy: adminId,
@@ -654,32 +659,25 @@ export class AdminService {
           },
         });
 
-        const newCompleted = completion.campaign.completedSlots + 1;
-        const isFull = newCompleted >= completion.campaign.totalSlots;
+        await this.walletService.credit(completion.userId, completion.campaign.creditPerTask, {
+          type: TransactionType.EARN_TASK_COMPLETION,
+          description: 'Task proof approved',
+          referenceId: completion.campaign.id,
+          referenceType: 'campaign',
+        }, tx);
 
-        await tx.campaign.update({
-          where: { id: completion.campaign.id },
+        await tx.auditLog.create({
           data: {
-            completedSlots: { increment: 1 },
-            pendingSlots: { decrement: 1 },
-            ...(isFull && { status: CampaignStatus.COMPLETED, completedAt: now }),
+            userId: adminId,
+            action: 'submission.approved',
+            entityType: 'TaskCompletion',
+            entityId: completionId,
+            newValue: { creditsPaid: completion.campaign.creditPerTask },
           },
-        });
-
-        await tx.userProfile.updateMany({
-          where: { userId: completion.userId },
-          data: { totalTasksDone: { increment: 1 } },
         });
       });
 
       void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
-
-      await this.walletService.credit(completion.userId, completion.campaign.creditPerTask, {
-        type: TransactionType.EARN_TASK_COMPLETION,
-        description: 'Task proof approved',
-        referenceId: completion.campaign.id,
-        referenceType: 'campaign',
-      });
 
       // Award VP for task completion (admin approval path)
       await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', completion.campaign.id);
@@ -692,43 +690,32 @@ export class AdminService {
         { campaignId: completion.campaign.id, completionId, creditsEarned: completion.campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
       ).catch(() => null);
 
-      await this.prisma.auditLog.create({
-        data: {
-          userId: adminId,
-          action: 'submission.approved',
-          entityType: 'TaskCompletion',
-          entityId: completionId,
-          newValue: { creditsPaid: completion.campaign.creditPerTask },
-        },
-      });
-
       this.eventsService.emitToAdmins('task:reviewed', { campaignId: completion.campaign.id, completionId, status: 'VERIFIED' });
 
       return { status: 'VERIFIED', creditsPaid: completion.campaign.creditPerTask };
     } else {
-      await this.prisma.taskCompletion.update({
-        where: { id: completionId },
-        data: {
-          status: CompletionStatus.REJECTED,
-          verifiedAt: now,
-          verifiedBy: adminId,
-          rejectionReason: dto.reason ?? 'Proof did not meet requirements',
-        },
-      });
+      await this.prisma.withTransaction(async (tx) => {
+        await rejectCompletionAndReleaseSlot(tx, {
+          completionId,
+          campaignId: completion.campaign.id,
+          fromStatuses: [CompletionStatus.SUBMITTED],
+          setData: {
+            status: CompletionStatus.REJECTED,
+            verifiedAt: now,
+            verifiedBy: adminId,
+            rejectionReason: dto.reason ?? 'Proof did not meet requirements',
+          },
+        });
 
-      await this.prisma.campaign.update({
-        where: { id: completion.campaign.id },
-        data: { pendingSlots: { decrement: 1 } },
-      });
-
-      await this.prisma.auditLog.create({
-        data: {
-          userId: adminId,
-          action: 'submission.rejected',
-          entityType: 'TaskCompletion',
-          entityId: completionId,
-          newValue: { reason: dto.reason },
-        },
+        await tx.auditLog.create({
+          data: {
+            userId: adminId,
+            action: 'submission.rejected',
+            entityType: 'TaskCompletion',
+            entityId: completionId,
+            newValue: { reason: dto.reason },
+          },
+        });
       });
 
       this.eventsService.emitToAdmins('task:reviewed', { campaignId: completion.campaign.id, completionId, status: 'REJECTED' });
