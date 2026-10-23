@@ -157,11 +157,16 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   // lifetime is read from config, never hardcoded.
 
   async revokeSocketAuth(userId: string): Promise<void> {
-    await this.set(
-      `auth:revoked-at:${userId}`,
-      String(Math.floor(Date.now() / 1000)),
-      this.socketAuthTombstoneTtlSeconds(),
-    );
+    const ttl = this.socketAuthTombstoneTtlSeconds();
+    if (ttl === null) {
+      await this.set(`auth:revoked-at:${userId}`, String(Math.floor(Date.now() / 1000)));
+    } else {
+      await this.set(
+        `auth:revoked-at:${userId}`,
+        String(Math.floor(Date.now() / 1000)),
+        ttl,
+      );
+    }
   }
 
   async socketAuthRevokedAt(userId: string): Promise<number | null> {
@@ -171,10 +176,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return Number.isFinite(ts) ? ts : null;
   }
 
-  private socketAuthTombstoneTtlSeconds(): number {
+  private socketAuthTombstoneTtlSeconds(): number | null {
     const value = String(this.configService.get<string>('jwt.accessExpiresIn', '15m')).trim();
     const m = /^(\d+)([smhd])?$/.exec(value);
-    if (!m) return 900;
+    if (!m) {
+      // No guessed lifetime: an unparseable config yields a PERSISTENT
+      // tombstone. That fails closed — only pre-revocation tokens are
+      // blocked; fresh logins always carry a newer iat and pass.
+      this.logger.warn(
+        `jwt.accessExpiresIn '${value}' not parseable (expect Ns/Nm/Nh/Nd); ` +
+          `socket revocation tombstone will persist without TTL`,
+      );
+      return null;
+    }
     const mult = { s: 1, m: 60, h: 3600, d: 86400 }[m[2] ?? 's'] ?? 1;
     return Number(m[1]) * mult;
   }

@@ -265,7 +265,7 @@ run('Socket revocation — real socket.io + real PostgreSQL', () => {
   });
 
   it.each(['notifications', 'channels'] as const)(
-    'a fresh login after revocation reconnects on /%s — tombstone is not user-wide',
+    'a fresh login after revocation reconnects on /%s once its iat exceeds the revocation second',
     async (ns) => {
       const user = await makeUser();
       const token = sign(user);
@@ -282,8 +282,19 @@ run('Socket revocation — real socket.io + real PostgreSQL', () => {
       // The revoked token stays rejected.
       expect(await attempt(ns, user.id, token)).toBe(0);
 
-      // iat granularity is seconds — wait past the revocation second so the
-      // fresh token provably postdates the tombstone.
+      // Same-second conservative rejection (deterministic): a token whose
+      // iat EQUALS the revocation instant is treated as stale — erring
+      // fresh-side would let a pre-revocation token survive.
+      const revokedAt = (await redis.socketAuthRevokedAt(user.id))!;
+      const sameSecToken = jwt.sign(
+        { sub: user.id, email: 'x@x', username: 'u', role: user.role, purpose: 'access',
+          iat: revokedAt, exp: revokedAt + 900 },
+        { secret: ACCESS_SECRET, noTimestamp: true },
+      );
+      expect(await attempt(ns, user.id, sameSecToken)).toBe(0);
+
+      // A token issued after the revocation second is accepted — a real
+      // fresh login recovers without waiting for an arbitrary timeout.
       await sleep(1100);
       const freshToken = sign(user);
       expect(await attempt(ns, user.id, freshToken)).toBe(1);

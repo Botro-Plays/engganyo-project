@@ -31,7 +31,13 @@ export function extractSocketToken(client: Socket): string | null {
 }
 
 /** Stale iff the token was issued at-or-before the revocation instant.
- *  A token without a finite `iat` cannot prove freshness → stale. */
+ *  A token without a finite `iat` cannot prove freshness → stale.
+ *
+ *  `iat` has second granularity: a login issued in the SAME second as
+ *  the revocation is conservatively treated as stale (erring fresh-side
+ *  would let a pre-revocation token survive). Fresh sessions are
+ *  therefore unblocked at the next second boundary — a ≤1s delay, not
+ *  an arbitrary timeout. */
 function isTokenStale(revokedAt: number | null, iat: number | undefined): boolean {
   if (revokedAt === null) return false;
   return !Number.isFinite(iat) || iat! <= revokedAt;
