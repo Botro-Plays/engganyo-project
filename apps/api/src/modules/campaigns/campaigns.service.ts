@@ -386,7 +386,7 @@ export class CampaignsService {
       // The conditional completion claim prevents double-approval payouts;
       // the counter UPDATE is guarded so completed can never exceed total
       // and pending never goes negative.
-      const { isFull: willBeFull } = await this.prisma.$transaction(async (tx) => {
+      const txResult = await this.prisma.$transaction(async (tx) => {
         const res = await claimCompletionForVerification(tx, {
           completionId,
           campaignId,
@@ -407,8 +407,23 @@ export class CampaignsService {
           referenceType: 'campaign',
         }, tx);
 
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: 'submission.approved',
+            entityType: 'TaskCompletion',
+            entityId: completionId,
+            newValue: { creditsPaid: campaign.creditPerTask, reviewedBy: 'campaign_owner' },
+          },
+        });
+
         return res;
       });
+
+      // Only a real transition to COMPLETED justifies the campaign-full
+      // notification — an in-flight completion on a CANCELLED campaign
+      // fills the last slot without flipping the status.
+      const willBeFull = txResult.becameCompleted;
 
       void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
 
@@ -454,6 +469,16 @@ export class CampaignsService {
             rejectionReason: dto.reason ?? 'Rejected by campaign creator',
             verifiedAt: now,
             verifiedBy: userId,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action: 'submission.rejected',
+            entityType: 'TaskCompletion',
+            entityId: completionId,
+            newValue: { reason: dto.reason ?? 'Rejected by campaign creator', reviewedBy: 'campaign_owner' },
           },
         });
       });
