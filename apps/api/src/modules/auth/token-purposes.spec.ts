@@ -11,6 +11,7 @@ import { AuthService } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EventsGateway } from '../events/events.gateway';
+import { EventsService } from '../events/events.service';
 import { ChannelsGateway } from '../channels/channels.gateway';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
@@ -70,8 +71,49 @@ function makeEventsGateway() {
 }
 
 function makeChannelsGateway() {
-  return new ChannelsGateway(jwt, config, {} as never);
+  return new ChannelsGateway(jwt, config, {} as never, {} as never);
 }
+
+describe('A09: socket revocation', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('channel sockets join a per-user room so they can be revoked', async () => {
+    const token = accessSigned({ purpose: 'access' });
+    const client = fakeSocket(token);
+    await makeChannelsGateway().handleConnection(client);
+    expect(client.disconnect).not.toHaveBeenCalled();
+    expect(client.join).toHaveBeenCalledWith('user:user-1');
+  });
+
+  it('EventsService.disconnectUser emits auth:revoked and force-disconnects on both namespaces', () => {
+    const roomsEmit = jest.fn();
+    const roomsDisconnect = jest.fn().mockResolvedValue(undefined);
+    const makeServer = () => ({
+      to: jest.fn().mockReturnValue({ emit: roomsEmit }),
+      in: jest.fn().mockReturnValue({ disconnectSockets: roomsDisconnect }),
+    });
+    const events = new EventsService();
+    events.setServer(makeServer() as never);
+    events.setChannelsServer(makeServer() as never);
+
+    events.disconnectUser('user-1');
+
+    expect(roomsEmit).toHaveBeenCalledWith('auth:revoked', { reason: 'auth:revoked' });
+    expect(roomsDisconnect).toHaveBeenCalledTimes(2); // notifications + channels
+  });
+
+  it('disconnectUser tolerates a missing channels server', () => {
+    const disconnect = jest.fn().mockResolvedValue(undefined);
+    const events = new EventsService();
+    events.setServer({
+      to: jest.fn().mockReturnValue({ emit: jest.fn() }),
+      in: jest.fn().mockReturnValue({ disconnectSockets: disconnect }),
+    } as never);
+
+    expect(() => events.disconnectUser('user-1')).not.toThrow();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+});
 
 function fakeSocket(token: string | undefined) {
   return {

@@ -5,6 +5,7 @@ import { ReportReason, TrustLevel, UserStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
+import { EventsService } from '../events/events.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
 import type { CreateReportDto } from './dto/create-report.dto';
@@ -41,6 +42,7 @@ export class AntiAbuseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    private readonly eventsService: EventsService,
     @InjectQueue(TRUST_SCORE_QUEUE) private readonly queue: Queue,
   ) {}
 
@@ -320,6 +322,11 @@ export class AntiAbuseService {
           where: { id: userId },
           data: { status: UserStatus.SUSPENDED },
         });
+
+        // Drop JWT/profile caches and live sockets — the suspended identity
+        // must stop authenticating immediately, not at cache expiry.
+        await this.redisService.invalidateUserCaches(userId);
+        this.eventsService.disconnectUser(userId);
 
         await this.prisma.auditLog.create({
           data: {

@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserRole } from '@prisma/client';
 
 import { ChannelsService } from './channels.service';
+import { EventsService } from '../events/events.service';
 
 // Simple JWT verification for socket auth
 function extractToken(client: Socket): string | null {
@@ -46,9 +47,11 @@ export class ChannelsGateway
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly channelsService: ChannelsService,
+    private readonly eventsService: EventsService,
   ) {}
 
   afterInit(server: Server) {
+    this.eventsService.setChannelsServer(server);
     this.logger.log('ChannelsGateway initialized');
   }
 
@@ -77,6 +80,8 @@ export class ChannelsGateway
       }
       client.data.userId = userId;
       client.data.role = role;
+      // Per-user room enables targeted revocation (disconnectUser).
+      await client.join(`user:${userId}`);
       this.logger.debug(`Channel socket connected: ${client.id} for user ${userId}`);
     } catch (err) {
       this.logger.warn(`Channel socket rejected: ${(err as Error).message}`);
