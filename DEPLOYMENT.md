@@ -292,4 +292,4 @@ For compose operations after deployment, include both env files so recreation pr
 
 Do not enable the legacy auto-deploy.service at boot. Docker's restart policies restart existing services after reboot. The legacy script can bypass checks and select mutable latest images; it is not the automatic GitHub pipeline. If an old host had it enabled, disable it with systemctl disable --now auto-deploy as root.
 
-Back up PostgreSQL, uploads and encryption/environment material off-host and verify restoration. A failed update may leave services unavailable; keep the previous release tags and a pre-migration backup available. Coordinate database schema changes between both collaborators.
+Back up PostgreSQL, uploads and encryption/environment material off-host and verify restoration — see infra/BACKUP-RESTORE.md for the scripts, retention policy, key recovery, and isolated restore test. A failed update may leave services unavailable; keep the previous release tags and a pre-migration backup available. Coordinate database schema changes between both collaborators.
