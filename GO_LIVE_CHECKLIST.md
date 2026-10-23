@@ -1,3 +1,6 @@
+> **⚠️ SUPERSEDED FOR GO-LIVE DECISIONS — see [`AUDIT_REMEDIATION_STATUS.md`](AUDIT_REMEDIATION_STATUS.md).**
+> This checklist predates the 2026-10-21 security audit and the VPS reformat/data loss. Its "Security ✅ Complete", "Revenue live", and "revenue-ready" claims are **no longer accurate**: real payments are disabled pending A02 provider verification, several audit findings remain open or unmerged, and the production data described below was lost with the old host. The content is retained as historical planning material; the remediation register is the authoritative source for launch blockers.
+
 > **⚠️ NOTE:** This is a checklist. For the current actionable task list, see **`PROJECT_TODO.md`** (single source of truth).
 
 # ENGGANYO — Go-Live Checklist
