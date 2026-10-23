@@ -232,6 +232,123 @@ describe('A01: token purpose separation', () => {
   });
 });
 
+describe('A11: JWT strategy requires ACTIVE status', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const accessPayload = { ...ACCESS_PAYLOAD, purpose: 'access' as const };
+
+  it.each([UserStatus.SUSPENDED, UserStatus.BANNED, UserStatus.DEACTIVATED, UserStatus.PENDING_VERIFICATION])(
+    'cached %s identity is rejected and the cache entry evicted',
+    async (status) => {
+      const strategy = makeStrategy();
+      redisStub.getJson.mockResolvedValue({
+        id: 'user-1', email: 'u@x.com', username: 'u',
+        role: UserRole.USER, status,
+      });
+
+      await expect(strategy.validate(accessPayload)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(redisStub.del).toHaveBeenCalledWith('jwt:user:user-1');
+      // Must not fall through to the DB lookup — the cache rejection is final.
+      expect(prismaStub.user.findUnique).not.toHaveBeenCalled();
+    },
+  );
+
+  it('cached ACTIVE identity is accepted', async () => {
+    const strategy = makeStrategy();
+    redisStub.getJson.mockResolvedValue({
+      id: 'user-1', email: 'u@x.com', username: 'u',
+      role: UserRole.USER, status: UserStatus.ACTIVE,
+    });
+    await expect(strategy.validate(accessPayload)).resolves.toMatchObject({
+      sub: 'user-1', status: UserStatus.ACTIVE,
+    });
+  });
+
+  it.each([UserStatus.SUSPENDED, UserStatus.BANNED, UserStatus.DEACTIVATED, UserStatus.PENDING_VERIFICATION])(
+    'database %s status is rejected on the uncached path',
+    async (status) => {
+      const strategy = makeStrategy();
+      redisStub.getJson.mockResolvedValue(null);
+      prismaStub.user.findUnique.mockResolvedValue({
+        id: 'user-1', email: 'u@x.com', username: 'u',
+        role: UserRole.USER, status,
+      });
+      await expect(strategy.validate(accessPayload)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(redisStub.setJson).not.toHaveBeenCalled();
+    },
+  );
+
+  it('missing user (soft-deleted or absent) is rejected', async () => {
+    const strategy = makeStrategy();
+    redisStub.getJson.mockResolvedValue(null);
+    prismaStub.user.findUnique.mockResolvedValue(null);
+    await expect(strategy.validate(accessPayload)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+});
+
+describe('I02: JWT access/refresh secret production validation', () => {
+  const env = { ...process.env };
+  const strong = 'a'.repeat(64);
+  const strong2 = 'b'.repeat(64);
+  const strong3 = 'c'.repeat(64);
+
+  beforeEach(() => {
+    process.env = { ...env, NODE_ENV: 'production' };
+    process.env['JWT_2FA_SECRET'] = strong3;
+  });
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  it.each([
+    ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'],
+    ['JWT_REFRESH_SECRET', 'JWT_ACCESS_SECRET'],
+  ])('%s missing in production fails startup', (missing, other) => {
+    delete process.env[missing];
+    process.env[other] = strong;
+    expect(() => jwtConfig()).toThrow(missing);
+  });
+
+  it.each([
+    ['JWT_ACCESS_SECRET'],
+    ['JWT_REFRESH_SECRET'],
+  ])('%s weak or placeholder in production fails startup', (key) => {
+    process.env[key] = 'dev-access-secret-min-64-chars-long-please';
+    process.env[key === 'JWT_ACCESS_SECRET' ? 'JWT_REFRESH_SECRET' : 'JWT_ACCESS_SECRET'] = strong;
+    expect(() => jwtConfig()).toThrow(key);
+
+    process.env[key] = 'short';
+    expect(() => jwtConfig()).toThrow(key);
+  });
+
+  it('reused access/refresh secrets fail startup', () => {
+    process.env['JWT_ACCESS_SECRET'] = strong;
+    process.env['JWT_REFRESH_SECRET'] = strong;
+    expect(() => jwtConfig()).toThrow('must differ');
+  });
+
+  it('access secret equal to 2FA secret fails startup', () => {
+    process.env['JWT_ACCESS_SECRET'] = strong3;
+    process.env['JWT_REFRESH_SECRET'] = strong2;
+    expect(() => jwtConfig()).toThrow();
+  });
+
+  it('three strong distinct secrets pass in production', () => {
+    process.env['JWT_ACCESS_SECRET'] = strong;
+    process.env['JWT_REFRESH_SECRET'] = strong2;
+    expect(jwtConfig()).toMatchObject({ accessSecret: strong, refreshSecret: strong2 });
+  });
+
+  it('dev defaults still apply outside production', () => {
+    process.env['NODE_ENV'] = 'development';
+    delete process.env['JWT_ACCESS_SECRET'];
+    delete process.env['JWT_REFRESH_SECRET'];
+    const cfg = jwtConfig();
+    expect(cfg.accessSecret).toBe('dev-access-secret-min-64-chars-long-please');
+    expect(cfg.refreshSecret).toBe('dev-refresh-secret-min-64-chars-long-please');
+  });
+});
+
 describe('A01: JWT_2FA_SECRET production validation', () => {
   const env = { ...process.env };
   const strong = 'a'.repeat(64);
