@@ -56,7 +56,23 @@ const RETRY_DELAY_MS = 1000;
 // credentials). A refresh cannot help there and the redirect would discard the error.
 const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
 
+// Only idempotent methods are retried by default. A network error or 5xx
+// may mean the request actually committed server-side; blindly retrying a
+// POST/PATCH/DELETE can duplicate deposits, purchases, or transfers (A10).
+// A mutation may opt in via `retryable: true` on the request config ONLY
+// when the endpoint is idempotent (idempotency key / conditional claim).
+export interface RetryableRequestConfig {
+  retryable?: boolean;
+}
+
+const SAFE_RETRY_METHODS = new Set(['get', 'head', 'options']);
+
 function shouldRetry(error: AxiosError): boolean {
+  const cfg = error.config as (InternalAxiosRequestConfig & RetryableRequestConfig) | undefined;
+  const method = cfg?.method?.toLowerCase() ?? 'get';
+  if (!SAFE_RETRY_METHODS.has(method) && cfg?.retryable !== true) {
+    return false;
+  }
   // Retry on network errors (no response) or 5xx server errors
   if (!error.response) return true;
   const status = error.response.status;
