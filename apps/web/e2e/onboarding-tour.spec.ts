@@ -4,47 +4,43 @@ import * as path from 'path';
 
 base.describe.configure({ timeout: 60_000 });
 
-// ── Dedicated per-test users ────────────────────────────────────────
+// ── Dedicated per-test users on an EXPLICITLY isolated stack ────────
 // This suite previously shared the seeded ADMIN account across all
 // parallel workers. Other specs mutating admin's server-side data
 // (purchases, equipment, notifications) could change the pages the tour
 // walks, and concurrent same-second logins for ONE user collide on the
-// sessions refresh-token uniqueness constraint (HTTP 409). Each test
-// therefore gets its own freshly-created user — deterministic per test
-// title so reruns and retries reuse the same account. Tour state itself
-// stays per-context localStorage; this removes the shared server-side
-// surface without touching application behaviour.
+// sessions refresh-token uniqueness constraint (HTTP 409 — tracked as a
+// separate auth repair, not patched here). Each test therefore gets its
+// own freshly-created user with a per-run identity, plus scoped cleanup.
+//
+// Safety: fixture writes REQUIRE E2E_DATABASE_URL — never the app .env
+// DATABASE_URL (production and dev share the "engganyo_db" name, so a
+// name check alone is insufficient). The URL must point at a loopback
+// host AND a database named in E2E_DB_NAMES, verified again server-side
+// via current_database(). A probe user proves the API under test shares
+// this database; the API URL used for logins must equal the web app's
+// configured API target (NEXT_PUBLIC_API_URL / E2E_API_URL).
+// In CI every fixture failure is fatal — nothing skips silently.
 const TOUR_PASSWORD = 'E2eTourPass1';
 const TOUR_TAG = 'e2e_t_'; // username prefix — greppable fixture marker
-
-// Same safety pattern as gold-frame.spec.ts: fixture writes only run
-// against databases whose name proves they are test/dev targets.
-const ALLOWED_DB_NAMES = new Set(['engganyo_test', 'engganyo_db']);
+const E2E_DB_NAMES = new Set(['engganyo_test']);
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const LOUD = !!process.env['CI']; // CI: fixture problems must fail loudly
+const RUN_ID = require('crypto').randomBytes(3).toString('hex') as string; // per-worker run identity
 
 let fixtureOk = true;
 let prismaClient: {
   user: {
     create: (a: { data: Record<string, unknown> }) => Promise<{ id: string }>;
   };
+  $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<number>;
+  $queryRawUnsafe: (query: string, ...values: unknown[]) => Promise<unknown>;
   $disconnect: () => Promise<void>;
 } | null = null;
+const createdUserIds: string[] = [];
 
 class Unavailable extends Error {}
 class FixtureError extends Error {}
-
-function apiEnv(): Record<string, string> {
-  try {
-    const envPath = path.resolve(__dirname, '../../api/.env');
-    const out: Record<string, string> = {};
-    for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m) out[m[1]] = m[2].trim().replace(/^"|"$/g, '');
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
 
 function sanitize(err: unknown): string {
   return String((err as Error)?.message ?? err).replace(/:\/\/[^@/\s]+@/g, '://<redacted>@');
@@ -54,78 +50,192 @@ function dbNameOf(url: string): string {
   return new URL(url).pathname.replace(/^\//, '').split('?')[0];
 }
 
-function apiBaseUrl(): string {
-  if (process.env['E2E_API_URL']) return process.env['E2E_API_URL'];
+/** The API URL the WEB APP under test was built/started with. */
+function webApiTarget(): string | null {
+  if (process.env['NEXT_PUBLIC_API_URL']) return process.env['NEXT_PUBLIC_API_URL'];
   try {
     const envPath = path.resolve(__dirname, '../.env.local');
     const m = fs.readFileSync(envPath, 'utf-8').match(/^NEXT_PUBLIC_API_URL=(.*)$/m);
     if (m) return m[1].trim().replace(/^"|"$/g, '');
   } catch { /* fall through */ }
-  return 'http://localhost:3001/api';
+  return null;
 }
 
-// Per-test username derived from the test id — unique per test AND per
-// project, stable across retries of the same test.
+/** The API URL this spec uses for fixture logins — must equal webApiTarget(). */
+function apiBaseUrl(): string {
+  return process.env['E2E_API_URL'] ?? webApiTarget() ?? 'http://localhost:3001/api';
+}
+
+/** Fixture DB identity checks — ALWAYS loud, never skipped. */
+function assertSafeDbUrl(raw: string): void {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new FixtureError('E2E_DATABASE_URL is not a valid URL');
+  }
+  if (!LOOPBACK_HOSTS.has(u.hostname)) {
+    throw new FixtureError(
+      `E2E_DATABASE_URL host "${u.hostname}" is not loopback — refusing fixture writes on a remote database`,
+    );
+  }
+  if (!E2E_DB_NAMES.has(dbNameOf(raw))) {
+    throw new FixtureError(
+      `E2E_DATABASE_URL database "${dbNameOf(raw)}" is not an isolated E2E name — refusing fixture writes`,
+    );
+  }
+}
+
+// Per-run username: unique per worker-run AND per test; retries reuse.
 function tourUsername(testId: string): string {
-  const hash = require('crypto').createHash('sha1').update(testId).digest('hex').slice(0, 12);
-  return `${TOUR_TAG}${hash}`; // 6 + 12 = 18 chars, under the 20-char limit
+  const hash = require('crypto').createHash('sha1').update(testId).digest('hex').slice(0, 7);
+  return `${TOUR_TAG}${RUN_ID}_${hash}`; // 6 + 6 + 1 + 7 = 20 chars (max)
+}
+
+async function createFixtureUser(username: string): Promise<string> {
+  const argon2 = require('argon2') as typeof import('argon2');
+  const passwordHash = await argon2.hash(TOUR_PASSWORD);
+  try {
+    const u = await prismaClient!.user.create({
+      data: {
+        email: `${username}@itest.local`,
+        username,
+        passwordHash,
+        referralCode: `T${username.slice(6).replace(/_/g, '')}`,
+        status: 'ACTIVE',
+        wallet: { create: { balance: 0 } },
+        profile: { create: { isPublic: true } },
+      },
+    });
+    createdUserIds.push(u.id);
+    return u.id;
+  } catch (err) {
+    // P2002 → retry of the same test within this run; user already exists.
+    const code = (err as { code?: string })?.code;
+    if (code !== 'P2002') throw err;
+    return '';
+  }
 }
 
 base.beforeAll(async () => {
-  const env = apiEnv();
-  const dbUrl = process.env['TEST_DATABASE_URL'] ?? env['DATABASE_URL'];
   try {
-    if (!dbUrl) throw new Unavailable('no DATABASE_URL/TEST_DATABASE_URL for tour-user fixture');
-    if (!ALLOWED_DB_NAMES.has(dbNameOf(dbUrl))) {
-      throw new FixtureError(`refusing fixture writes on database "${dbNameOf(dbUrl)}"`);
-    }
+    const dbUrl = process.env['E2E_DATABASE_URL'];
+    if (!dbUrl) throw new Unavailable('E2E_DATABASE_URL not set — required for tour-user fixtures');
+    assertSafeDbUrl(dbUrl);
+
     const { PrismaClient } = require('@prisma/client');
     prismaClient = new PrismaClient({ datasources: { db: { url: dbUrl } } }) as never;
     await (prismaClient as never as { $connect: () => Promise<void> }).$connect();
+
+    // Server-side identity: the connected database must be the one the URL named.
+    const idRows = (await prismaClient!.$queryRawUnsafe(
+      'SELECT current_database() AS db',
+    )) as Array<{ db: string }>;
+    if (!E2E_DB_NAMES.has(idRows[0]?.db ?? '')) {
+      throw new FixtureError(`connected database "${idRows[0]?.db}" is not an isolated E2E name`);
+    }
+
+    // Stack probes — the API, database, and browser target must all be
+    // the SAME isolated stack:
+    //  1. API↔DB: a user written to the E2E database must log in through
+    //     the API under test.
+    //  2. Browser↔API: that session must stay authenticated when the web
+    //     app at E2E_BASE_URL loads it — if the web build points at a
+    //     different API (different DB/JWT secrets), it logs the session
+    //     out and redirects to /login.
+    const probeName = `e2e_p_${RUN_ID}`;
+    await createFixtureUser(probeName);
+    const { request, chromium } = require('@playwright/test') as typeof import('@playwright/test');
+    const ctx = await request.newContext();
+    const probe = await ctx.post(`${apiBaseUrl()}/auth/login`, {
+      data: { emailOrUsername: probeName, password: TOUR_PASSWORD },
+    });
+    const probeOk = probe.ok();
+    const probeBody = (probeOk ? await probe.json() : null) as {
+      data: { user: Record<string, unknown>; accessToken: string };
+    } | null;
+    await ctx.dispose();
+    if (!probeOk || !probeBody) {
+      throw new FixtureError(
+        `API login for E2E-database user failed (HTTP ${probe.status()}) — API does not share the isolated stack`,
+      );
+    }
+    const probeBrowser = await chromium.launch();
+    try {
+      const probeCtx = await probeBrowser.newContext();
+      await probeCtx.addInitScript(
+        ([user, token]) => {
+          localStorage.setItem(
+            'engganyo-auth',
+            JSON.stringify({
+              state: { user, accessToken: token, isAuthenticated: true, adminPin: null },
+              version: 0,
+            }),
+          );
+          localStorage.setItem('access_token', token as string);
+        },
+        [probeBody.data.user, probeBody.data.accessToken],
+      );
+      const probePage = await probeCtx.newPage();
+      // Observe which API the web app ACTUALLY calls — the only reliable
+      // way to prove the browser target belongs to this stack (shared
+      // JWT secrets/Redis can otherwise mask a mismatch).
+      const apiCalls: string[] = [];
+      probePage.on('request', (r) => {
+        if (/\/api\//.test(r.url())) apiCalls.push(r.url());
+      });
+      const baseUrl = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
+      await probePage.goto(`${baseUrl}/settings`, { waitUntil: 'domcontentloaded' });
+      await probePage.waitForTimeout(4000); // auth rehydration fires /api calls
+      const expected = apiBaseUrl();
+      if (apiCalls.length > 0 && !apiCalls.every((u) => u.startsWith(expected))) {
+        throw new FixtureError(
+          `web app at ${baseUrl} calls ${apiCalls[0]} — expected API ${expected}; mismatched stacks`,
+        );
+      }
+      await probeCtx.close();
+    } finally {
+      await probeBrowser.close();
+    }
   } catch (err) {
-    if (err instanceof FixtureError) throw err;
+    if (err instanceof FixtureError) throw err; // safety violations are always fatal
+    if (LOUD) throw new FixtureError(`required E2E fixture unavailable: ${sanitize(err)}`);
     fixtureOk = false;
     console.warn('[onboarding-tour] fixture unavailable, tests will skip:', sanitize(err));
   }
 });
 
-// Fixture users are NOT deleted: usernames are deterministic per test
-// (bounded to one row per test), so reruns reuse them rather than
-// accumulating rows. Deleting users is also unsafe — RESTRICT FKs from
-// ip_records/user_sessions and others block it, and a prefix sweep
-// could hit another worker mid-test.
+// Scoped cleanup: remove ONLY the users this worker created. RESTRICT
+// FK children (ip_records, referrals, etc.) must go first; the rest
+// cascade. Never sweep by prefix — other workers own disjoint usernames.
 base.afterAll(async () => {
-  await prismaClient?.$disconnect().catch(() => undefined);
+  try {
+    if (prismaClient && createdUserIds.length > 0) {
+      const ids = createdUserIds;
+      await prismaClient.$executeRawUnsafe('DELETE FROM ip_records WHERE user_id = ANY($1)', ids);
+      await prismaClient.$executeRawUnsafe('DELETE FROM task_completions WHERE user_id = ANY($1)', ids);
+      await prismaClient.$executeRawUnsafe('DELETE FROM abuse_flags WHERE user_id = ANY($1)', ids);
+      await prismaClient.$executeRawUnsafe('DELETE FROM campaigns WHERE user_id = ANY($1)', ids);
+      await prismaClient.$executeRawUnsafe('DELETE FROM reports WHERE submitted_by_id = ANY($1)', ids);
+      await prismaClient.$executeRawUnsafe(
+        'DELETE FROM referrals WHERE referrer_id = ANY($1) OR referee_id = ANY($1)', ids,
+      );
+      await prismaClient.$executeRawUnsafe('DELETE FROM users WHERE id = ANY($1)', ids);
+    }
+  } finally {
+    await prismaClient?.$disconnect().catch(() => undefined);
+  }
 });
 
-// Per-test fixture: create (or reuse, on retry) a dedicated user, log
-// in via the API, and inject auth state before the app bundle reads
-// localStorage — no shared storageState file, no refresh-cookie
-// dependence (tests run well inside the access-token TTL).
+// Per-test fixture: dedicated user (per-run identity), API login, auth
+// state injected before the app bundle reads localStorage — no shared
+// storageState file, no refresh-cookie dependence.
 const test = base.extend<{ tourSession: void }>({
   tourSession: [
     async ({ page, request }, use, testInfo) => {
       test.skip(!fixtureOk || !prismaClient, 'tour-user fixture backend not reachable');
       const username = tourUsername(testInfo.testId);
-      const argon2 = require('argon2') as typeof import('argon2');
-      const passwordHash = await argon2.hash(TOUR_PASSWORD);
-      try {
-        await prismaClient!.user.create({
-          data: {
-            email: `${username}@itest.local`,
-            username,
-            passwordHash,
-            referralCode: `T${username.slice(6)}`,
-            status: 'ACTIVE',
-            wallet: { create: { balance: 0 } },
-            profile: { create: { isPublic: true } },
-          },
-        });
-      } catch (err) {
-        // P2002 → retry of the same test; the user already exists.
-        const code = (err as { code?: string })?.code;
-        if (code !== 'P2002') throw err;
-      }
+      await createFixtureUser(username);
 
       const resp = await request.post(`${apiBaseUrl()}/auth/login`, {
         data: { emailOrUsername: username, password: TOUR_PASSWORD },
@@ -157,6 +267,9 @@ const test = base.extend<{ tourSession: void }>({
 
 // Dev-server route compiles and the tour's 5s target polling can make a step appear late.
 const SLOW = { timeout: 15_000 };
+// Multi-route traversals additionally contend for dev-server route
+// compilation under parallel workers — same assertions, wider settle window.
+const NAV_SETTLE = { timeout: 30_000 };
 
 const dialog = (page: Page) => page.getByRole('dialog').filter({ hasText: /Step \d+ of 10/ });
 const nextButton = (page: Page) => dialog(page).getByRole('button', { name: 'Next' });
@@ -208,7 +321,7 @@ async function advanceToStep4(page: Page) {
   await expect(dialog(page)).toContainText('Step 2 of 10');
   await visibleNav(page, 'nav-tasks').click();
   await expect(page).toHaveURL(/\/tasks$/, SLOW);
-  await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+  await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
   await nextButton(page).click();
   await expect(dialog(page)).toContainText('Step 4 of 10');
 }
@@ -264,7 +377,7 @@ test.describe('Onboarding tour', () => {
     await visibleNav(page, 'nav-tasks').click();
 
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
     await expect(dialog(page)).toContainText('Browse available tasks');
     await nextButton(page).click(); // step 3 -> 4
 
@@ -280,7 +393,7 @@ test.describe('Onboarding tour', () => {
       await expect(visibleNav(page, nav)).toHaveClass(/tour-highlight-ring/);
       await visibleNav(page, nav).click();
       await expect(page).toHaveURL(new RegExp(`${url}$`), SLOW);
-      await expect(dialog(page)).toContainText(`Step ${stepNo} of 10`, SLOW);
+      await expect(dialog(page)).toContainText(`Step ${stepNo} of 10`, NAV_SETTLE);
       await expect(dialog(page)).toContainText(title);
     }
 
@@ -429,7 +542,7 @@ test.describe('Onboarding tour', () => {
 
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
 
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toHaveCount(0);
@@ -475,7 +588,7 @@ test.describe('Onboarding tour', () => {
     await visibleNav(page, 'nav-tasks').click();
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
 
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
     await expect(dialog(page)).toContainText('There are none right now');
     await expect(page.locator('.tour-highlight-ring')).toHaveCount(0);
     await nextButton(page).click();
@@ -493,7 +606,7 @@ test.describe('Onboarding tour', () => {
     await goThere.click();
 
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
     await expect.poll(() => readTourState(page)).toMatchObject({ status: 'active', step: 2 });
   });
 
@@ -582,7 +695,7 @@ test.describe('Onboarding tour', () => {
     await expect(dialog(page)).toContainText('Step 2 of 10');
     await nextButton(page).click();
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
 
     // Step 3 (info) -> step 4 stays on /tasks; each subsequent Next navigates.
     await nextButton(page).click();
@@ -590,7 +703,7 @@ test.describe('Onboarding tour', () => {
     for (const url of ['/missions', '/campaigns', '/leaderboard', '/store', '/wallet']) {
       await nextButton(page).click();
       await expect(page).toHaveURL(new RegExp(`${url}$`), SLOW);
-      await expect(dialog(page)).toContainText(/Step \d+ of 10/, SLOW);
+      await expect(dialog(page)).toContainText(/Step \d+ of 10/, NAV_SETTLE);
     }
 
     // Step 9 (Referrals) hops through Settings: Next -> /settings, Next -> /referrals.
@@ -627,7 +740,7 @@ test.describe('Onboarding tour', () => {
     await nextButton(page).click();
     await visibleNav(page, 'nav-tasks').click();
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
     await nextButton(page).click();
     await visibleNav(page, 'nav-missions').click();
     await expect(page).toHaveURL(/\/missions$/, SLOW);
@@ -707,6 +820,6 @@ test.describe('Onboarding tour (mobile)', () => {
 
     await tasksLink.click();
     await expect(page).toHaveURL(/\/tasks$/, SLOW);
-    await expect(dialog(page)).toContainText('Step 3 of 10', SLOW);
+    await expect(dialog(page)).toContainText('Step 3 of 10', NAV_SETTLE);
   });
 });

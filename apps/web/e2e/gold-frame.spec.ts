@@ -1,6 +1,4 @@
 import { test, expect } from '@playwright/test';
-import * as fs from 'fs';
-import * as path from 'path';
 
 test.use({ storageState: 'e2e/.auth/user.json' });
 test.describe.configure({ mode: 'serial' });
@@ -11,9 +9,11 @@ const ADMIN_USERNAME = 'admin';
 // Amber ring applied by resolveCosmeticStyles for the 'gold' avatar_frame style
 const FRAME_RING = '[class*="ring-amber-400"]';
 
-// The fixture writes ONLY to databases whose name proves they are test/dev
-// targets. Anything else fails loudly — never write to a production database.
-const ALLOWED_DB_NAMES = new Set(['engganyo_test', 'engganyo_db']);
+// The fixture writes ONLY to an explicitly-configured isolated E2E
+// database (E2E_DATABASE_URL, loopback host, dedicated name). The dev
+// and production databases share the "engganyo_db" name, so it must NOT
+// appear here — a name check alone cannot distinguish them.
+const ALLOWED_DB_NAMES = new Set(['engganyo_test']);
 // Redis targets must be loopback (CI service or local dev instance).
 const ALLOWED_REDIS_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
@@ -35,21 +35,6 @@ class Unavailable extends Error {}
 /** Fixture assertion / unsafe target — must always fail loudly, never skip. */
 class FixtureError extends Error {}
 
-/** Read-only parse of apps/api/.env — local dev fallback for DB/Redis URLs. */
-function apiEnv(): Record<string, string> {
-  try {
-    const envPath = path.resolve(__dirname, '../../api/.env');
-    const out: Record<string, string> = {};
-    for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m) out[m[1]] = m[2].trim().replace(/^"|"$/g, '');
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
 /** Never print credentials or connection strings — strip user:pass@ from messages. */
 function sanitize(err: unknown): string {
   return String((err as Error)?.message ?? err).replace(/:\/\/[^@/\s]+@/g, '://<redacted>@');
@@ -61,25 +46,29 @@ function dbNameOf(url: string): string {
 
 test.beforeAll(async () => {
   try {
-    const envFile = apiEnv();
-    const dbUrl =
-      process.env['E2E_DATABASE_URL'] ?? process.env['DATABASE_URL'] ?? envFile['DATABASE_URL'];
-    const redisUrl =
-      process.env['E2E_REDIS_URL'] ?? process.env['REDIS_URL'] ?? envFile['REDIS_URL'];
-    // URLs supplied via environment → managed (CI) environment: fixture failures
-    // must fail loudly rather than degrade to a silent skip.
-    const envProvided = Boolean(
-      process.env['E2E_DATABASE_URL'] ??
-        process.env['DATABASE_URL'] ??
-        process.env['E2E_REDIS_URL'] ??
-        process.env['REDIS_URL'],
-    );
+    // Explicit E2E configuration ONLY — never the application's own
+    // DATABASE_URL/REDIS_URL (env or apps/api/.env): production shares
+    // the "engganyo_db" name, so an implicit fallback can silently target
+    // a real database. Required fixtures fail loudly in CI (LOUD) and
+    // skip with a warning only for local availability problems.
+    const dbUrl = process.env['E2E_DATABASE_URL'];
+    const redisUrl = process.env['E2E_REDIS_URL'] ?? process.env['REDIS_URL'];
+    const LOUD = !!process.env['CI'];
 
     if (!dbUrl || !redisUrl) {
-      throw new Unavailable('no DATABASE_URL/REDIS_URL resolvable (env or apps/api/.env)');
+      const missing = [!dbUrl && 'E2E_DATABASE_URL', !redisUrl && 'E2E_REDIS_URL']
+        .filter(Boolean)
+        .join(', ');
+      const err = new Unavailable(`${missing} not set — required for gold-frame fixture writes`);
+      if (LOUD) throw new FixtureError(err.message);
+      throw err;
     }
 
     // ── Safety gates: refuse before any write ──
+    const dbHost = new URL(dbUrl).hostname;
+    if (!ALLOWED_REDIS_HOSTS.has(dbHost)) {
+      throw new FixtureError(`refusing writes on non-loopback database host "${dbHost}"`);
+    }
     const dbName = dbNameOf(dbUrl);
     if (!ALLOWED_DB_NAMES.has(dbName)) {
       throw new FixtureError(
@@ -103,6 +92,13 @@ test.beforeAll(async () => {
       prisma = client;
       redis = rdb;
 
+      // Server-side identity: the database we actually connected to must
+      // be the isolated E2E name — not merely what the URL claimed.
+      const idRows = (await client.$queryRaw`SELECT current_database() AS db`) as Array<{ db: string }>;
+      if (!ALLOWED_DB_NAMES.has(idRows[0]?.db ?? '')) {
+        throw new FixtureError(`connected database "${idRows[0]?.db}" is not an isolated E2E name`);
+      }
+
       const items = (await client.$queryRaw`SELECT id FROM store_items WHERE name = ${FRAME_NAME} LIMIT 1`) as Array<{ id: string }>;
       const itemId = items[0]?.id;
       if (!itemId) throw new FixtureError(`store item "${FRAME_NAME}" not found — seed missing?`);
@@ -110,6 +106,54 @@ test.beforeAll(async () => {
       const uidRows = (await client.$queryRaw`SELECT id FROM users WHERE username = ${ADMIN_USERNAME} LIMIT 1`) as Array<{ id: string }>;
       const uid = uidRows[0]?.id;
       if (!uid) throw new FixtureError(`user "${ADMIN_USERNAME}" not found — seed missing?`);
+
+      // Stack probe: the API under test must read THIS database — a login
+      // for the fixture user must return the same user id we just read.
+      // Guards against pointing the app at a different (e.g. dev) stack.
+      const apiUrl = process.env['E2E_API_URL'] ?? process.env['NEXT_PUBLIC_API_URL'];
+      if (apiUrl) {
+        const probe = await fetch(`${apiUrl}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            emailOrUsername: ADMIN_USERNAME,
+            password: process.env['E2E_TEST_PASSWORD'] ?? 'Admin@123456',
+          }),
+        });
+        if (!probe.ok) {
+          throw new FixtureError(`API login probe failed (HTTP ${probe.status}) — API not reachable on isolated stack`);
+        }
+        const probeBody = (await probe.json()) as { data?: { user?: { id?: string } } };
+        if (probeBody.data?.user?.id !== uid) {
+          throw new FixtureError('API login returned a different user id — API does not share the isolated E2E database');
+        }
+      } else {
+        throw new FixtureError('E2E_API_URL/NEXT_PUBLIC_API_URL not set — cannot verify the API shares the isolated stack');
+      }
+
+      // Browser-side alignment: the storageState produced by logging in
+      // through the WEB APP must carry the same user id — proves the
+      // web app's API target reads this same database.
+      try {
+        const state = JSON.parse(
+          (await import('fs')).readFileSync(
+            (await import('path')).resolve(__dirname, '.auth/user.json'),
+            'utf-8',
+          ),
+        ) as { origins?: Array<{ localStorage?: Array<{ name: string; value: string }> }> };
+        const auth = state.origins?.[0]?.localStorage?.find((e) => e.name === 'engganyo-auth');
+        const browserUid = auth
+          ? (JSON.parse(auth.value) as { state?: { user?: { id?: string } } }).state?.user?.id
+          : undefined;
+        if (browserUid && browserUid !== uid) {
+          throw new FixtureError(
+            'browser session user id differs from fixture DB user — web app targets a different stack',
+          );
+        }
+      } catch (err) {
+        if (err instanceof FixtureError) throw err;
+        // storageState unreadable → global-setup will fail loudly on its own.
+      }
 
       // Idempotent run: drop only this user's Gold Frame rows so the purchase
       // flow is real, then top up the wallet (UI reads users.credit_balance,
@@ -139,8 +183,10 @@ test.beforeAll(async () => {
         `engganyo:user:profile:${uid}`,
       );
     } catch (err) {
-      if (err instanceof FixtureError || envProvided) throw err;
-      throw new Unavailable(`fixture backend not reachable: ${sanitize(err)}`);
+      if (err instanceof FixtureError) throw err;
+      const e = new Unavailable(`fixture backend not reachable: ${sanitize(err)}`);
+      if (LOUD) throw new FixtureError(e.message);
+      throw e;
     }
   } catch (err) {
     if (err instanceof Unavailable) {

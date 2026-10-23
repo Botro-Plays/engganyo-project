@@ -245,6 +245,11 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
           E2E_TEST_EMAIL: admin@engganyo.com
           E2E_TEST_PASSWORD: Admin@123456
+          # Explicit isolated-stack config consumed by E2E fixture specs.
+          # Must match the postgres service + API under test in this job.
+          E2E_DATABASE_URL: postgresql://engganyo:testpassword@localhost:5432/engganyo_test
+          E2E_REDIS_URL: redis://localhost:6379
+          E2E_API_URL: http://localhost:3001/api
 
       - name: Upload test results
         if: always()
