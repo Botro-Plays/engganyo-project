@@ -30,13 +30,26 @@ const config = {
     })[key] ?? fallback,
 } as ConfigService;
 
+const socketUser = {
+  id: 'user-1', email: 'u@x.com', username: 'u',
+  role: UserRole.USER, status: UserStatus.ACTIVE,
+};
+
 const prismaStub = {
-  user: { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+  user: { findUnique: jest.fn().mockResolvedValue(socketUser), update: jest.fn().mockResolvedValue({}) },
   userSession: { create: jest.fn().mockResolvedValue({}) },
   twoFactorCode: { findFirst: jest.fn() },
   twoFactorBackupCode: { count: jest.fn(), findMany: jest.fn() },
 };
-const redisStub = { getJson: jest.fn(), setJson: jest.fn(), del: jest.fn() };
+const redisStub = {
+  getJson: jest.fn(),
+  setJson: jest.fn(),
+  del: jest.fn(),
+  get: jest.fn().mockResolvedValue(null), // auth:revoked tombstone → none
+  set: jest.fn(),
+  revokeSocketAuth: jest.fn().mockResolvedValue(undefined),
+  isSocketAuthRevoked: jest.fn().mockResolvedValue(false),
+};
 
 const jwt = new JwtService();
 
@@ -67,11 +80,17 @@ function makeStrategy() {
 }
 
 function makeEventsGateway() {
-  return new EventsGateway(config, jwt, { setServer: jest.fn() } as never);
+  return new EventsGateway(
+    config, jwt, { setServer: jest.fn() } as never,
+    prismaStub as never, redisStub as never,
+  );
 }
 
 function makeChannelsGateway() {
-  return new ChannelsGateway(jwt, config, {} as never, {} as never);
+  return new ChannelsGateway(
+    jwt, config, {} as never, {} as never,
+    prismaStub as never, redisStub as never,
+  );
 }
 
 describe('A09: socket revocation', () => {
@@ -85,32 +104,38 @@ describe('A09: socket revocation', () => {
     expect(client.join).toHaveBeenCalledWith('user:user-1');
   });
 
-  it('EventsService.disconnectUser emits auth:revoked and force-disconnects on both namespaces', () => {
+  it('EventsService.disconnectUser emits auth:revoked and force-disconnects on both namespaces', async () => {
     const roomsEmit = jest.fn();
     const roomsDisconnect = jest.fn().mockResolvedValue(undefined);
     const makeServer = () => ({
       to: jest.fn().mockReturnValue({ emit: roomsEmit }),
       in: jest.fn().mockReturnValue({ disconnectSockets: roomsDisconnect }),
     });
-    const events = new EventsService();
+    const events = new EventsService(redisStub as never);
     events.setServer(makeServer() as never);
     events.setChannelsServer(makeServer() as never);
 
-    events.disconnectUser('user-1');
+    await events.disconnectUser('user-1');
 
+    // Tombstone is written BEFORE sockets are disconnected (race closure).
+    expect(redisStub.revokeSocketAuth).toHaveBeenCalledWith('user-1');
+    expect(
+      redisStub.revokeSocketAuth.mock.invocationCallOrder[0]
+        < roomsEmit.mock.invocationCallOrder[0],
+    ).toBe(true);
     expect(roomsEmit).toHaveBeenCalledWith('auth:revoked', { reason: 'auth:revoked' });
     expect(roomsDisconnect).toHaveBeenCalledTimes(2); // notifications + channels
   });
 
-  it('disconnectUser tolerates a missing channels server', () => {
+  it('disconnectUser tolerates a missing channels server', async () => {
     const disconnect = jest.fn().mockResolvedValue(undefined);
-    const events = new EventsService();
+    const events = new EventsService(redisStub as never);
     events.setServer({
       to: jest.fn().mockReturnValue({ emit: jest.fn() }),
       in: jest.fn().mockReturnValue({ disconnectSockets: disconnect }),
     } as never);
 
-    expect(() => events.disconnectUser('user-1')).not.toThrow();
+    await expect(events.disconnectUser('user-1')).resolves.toBeUndefined();
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
 });
@@ -121,7 +146,8 @@ function fakeSocket(token: string | undefined) {
     data: {} as { userId?: string },
     disconnect: jest.fn(),
     join: jest.fn(),
-  } as unknown as Socket & { disconnect: jest.Mock; join: jest.Mock; data: { userId?: string } };
+    once: jest.fn(),
+  } as unknown as Socket & { disconnect: jest.Mock; join: jest.Mock; once: jest.Mock; data: { userId?: string } };
 }
 
 describe('A01: token purpose separation', () => {

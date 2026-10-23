@@ -150,7 +150,7 @@ export class AdminService {
     await this.redisService.invalidateUserCaches(userId);
     // Privilege change — force re-auth so sockets cannot ride the old token.
     if (dto.status !== UserStatus.ACTIVE) {
-      this.eventsService.disconnectUser(userId);
+      await this.eventsService.disconnectUser(userId);
     }
 
     await this.prisma.auditLog.create({
@@ -548,7 +548,7 @@ export class AdminService {
 
     // Role is baked into the socket handshake — disconnect so the client
     // reconnects under the new role instead of keeping stale privileges.
-    this.eventsService.disconnectUser(userId, 'user:role-changed');
+    await this.eventsService.disconnectUser(userId, 'user:role-changed');
     this.eventsService.emitToUser(userId, 'user:role-changed', { role: dto.role });
 
     await this.prisma.auditLog.create({
@@ -887,14 +887,14 @@ export class AdminService {
           data: { status: 'SUSPENDED' },
         });
         await this.redisService.invalidateUserCaches(targetUserId);
-        this.eventsService.disconnectUser(targetUserId);
+        await this.eventsService.disconnectUser(targetUserId);
       } else if (action === 'BAN') {
         await this.prisma.user.update({
           where: { id: targetUserId },
           data: { status: 'BANNED' },
         });
         await this.redisService.invalidateUserCaches(targetUserId);
-        this.eventsService.disconnectUser(targetUserId);
+        await this.eventsService.disconnectUser(targetUserId);
       }
 
       // Send notification to reported user

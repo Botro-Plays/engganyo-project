@@ -326,7 +326,7 @@ export class AntiAbuseService {
         // Drop JWT/profile caches and live sockets — the suspended identity
         // must stop authenticating immediately, not at cache expiry.
         await this.redisService.invalidateUserCaches(userId);
-        this.eventsService.disconnectUser(userId);
+        await this.eventsService.disconnectUser(userId);
 
         await this.prisma.auditLog.create({
           data: {

@@ -146,6 +146,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.set(key, JSON.stringify(value), ttlSeconds);
   }
 
+  // ─── Socket auth revocation tombstones ──────────────────
+  // A revoked socket must not be able to reconnect with the same unexpired
+  // token. The tombstone outlives the access-token TTL; handshakes check it
+  // before AND after joining the user room to close the revoke race.
+
+  async revokeSocketAuth(userId: string, ttlSeconds = 15 * 60): Promise<void> {
+    await this.set(`auth:revoked:${userId}`, '1', ttlSeconds);
+  }
+
+  async isSocketAuthRevoked(userId: string): Promise<boolean> {
+    return (await this.get(`auth:revoked:${userId}`)) !== null;
+  }
+
   // ─── User cache invalidation ─────────────────────────────
 
   async invalidateUserCaches(userId: string): Promise<void> {

@@ -16,17 +16,9 @@ import { UserRole } from '@prisma/client';
 
 import { ChannelsService } from './channels.service';
 import { EventsService } from '../events/events.service';
-
-// Simple JWT verification for socket auth
-function extractToken(client: Socket): string | null {
-  const authToken = client.handshake.auth?.token as string | undefined;
-  if (authToken) return authToken;
-  const queryToken = client.handshake.query?.token as string | undefined;
-  if (queryToken) return queryToken;
-  const header = client.handshake.headers.authorization;
-  if (header?.startsWith('Bearer ')) return header.substring(7);
-  return null;
-}
+import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
+import { authenticateSocket } from '../events/socket-auth.util';
 
 @WebSocketGateway({
   namespace: 'channels',
@@ -48,6 +40,8 @@ export class ChannelsGateway
     private readonly configService: ConfigService,
     private readonly channelsService: ChannelsService,
     private readonly eventsService: EventsService,
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
   ) {}
 
   afterInit(server: Server) {
@@ -56,37 +50,15 @@ export class ChannelsGateway
   }
 
   async handleConnection(client: Socket) {
-    try {
-      const token = extractToken(client);
-      if (!token) {
-        this.logger.warn('Channel socket rejected: no token');
-        client.disconnect(true);
-        return;
-      }
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('jwt.accessSecret'),
-      });
-      if ((payload as { purpose?: string }).purpose !== 'access') {
-        this.logger.warn('Channel socket rejected: wrong token purpose');
-        client.disconnect(true);
-        return;
-      }
-      const userId = payload.sub as string;
-      const role = payload.role as string | undefined;
-      if (!userId) {
-        this.logger.warn('Channel socket rejected: no userId in token');
-        client.disconnect(true);
-        return;
-      }
-      client.data.userId = userId;
-      client.data.role = role;
-      // Per-user room enables targeted revocation (disconnectUser).
-      await client.join(`user:${userId}`);
-      this.logger.debug(`Channel socket connected: ${client.id} for user ${userId}`);
-    } catch (err) {
-      this.logger.warn(`Channel socket rejected: ${(err as Error).message}`);
-      client.disconnect(true);
-    }
+    const auth = await authenticateSocket(client, {
+      jwtService: this.jwtService,
+      configService: this.configService,
+      prisma: this.prisma,
+      redisService: this.redisService,
+      logRejection: (msg) => this.logger.warn(`Channel socket rejected: ${msg}`),
+    });
+    if (!auth) return;
+    this.logger.debug(`Channel socket connected: ${client.id} for user ${auth.userId}`);
   }
 
   handleDisconnect(client: Socket) {
