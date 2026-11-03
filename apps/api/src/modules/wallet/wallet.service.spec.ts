@@ -56,6 +56,9 @@ describe('WalletService', () => {
 
   const prismaDepositMock = {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    create: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
   };
@@ -71,6 +74,20 @@ describe('WalletService', () => {
     update: jest.fn(),
   };
 
+  const prismaPlatformConfigMock = {
+    findMany: jest.fn().mockResolvedValue([
+      { key: 'usdt_bep20_enabled', value: true },
+      { key: 'usdt_bep20_wallet_address', value: '0xb6a1022f84f16a41a1f066f0e0fa6c89af8f941e' },
+      { key: 'usdt_base_enabled', value: true },
+      { key: 'usdt_base_wallet_address', value: '0xb6a1022f84f16a41a1f066f0e0fa6c89af8f941e' },
+    ]),
+    findUnique: jest.fn().mockResolvedValue({ value: 5000 }),
+  };
+
+  const prismaDepositPackageMock = {
+    findUnique: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -80,9 +97,18 @@ describe('WalletService', () => {
           useValue: {
             wallet: prismaWalletMock,
             deposit: prismaDepositMock,
+            depositPackage: prismaDepositPackageMock,
+            platformConfig: prismaPlatformConfigMock,
             transaction: prismaTransactionMock,
             user: prismaUserMock,
-            withTransaction: jest.fn(),
+            withTransaction: jest.fn((cb: (tx: unknown) => unknown) =>
+              cb({
+                wallet: prismaWalletMock,
+                deposit: prismaDepositMock,
+                transaction: prismaTransactionMock,
+                user: prismaUserMock,
+              }),
+            ),
           },
         },
         {
@@ -292,4 +318,112 @@ describe('WalletService', () => {
       expect(prismaDepositMock.update).not.toHaveBeenCalled();
     });
   });
+
+// ─── Crypto deposit binding (release gate) ──────────────────
+describe('crypto deposit binding', () => {
+  const VALID_HASH = '0x' + 'ab'.repeat(32);
+  const WALLET_A = '0x' + '11'.repeat(20);
+  const WALLET_B = '0x' + '22'.repeat(20);
+
+  const baseDeposit = {
+    id: 'dep-1',
+    userId: 'user-1',
+    method: DepositMethod.USDT_BEP20,
+    status: DepositStatus.PENDING,
+    amountFiat: 5,
+    paymentRef: null,
+    userWalletAddress: WALLET_A,
+    createdAt: new Date(),
+    package: { usdAmount: 5 },
+  };
+
+  beforeEach(() => {
+    prismaDepositPackageMock.findUnique.mockResolvedValue({ id: 'pkg-1', isActive: true, usdAmount: 5, bonusCredits: 0 });
+    prismaDepositMock.findFirst = jest.fn().mockResolvedValue(null); // no pending deposit
+    prismaDepositMock.findMany = jest.fn().mockResolvedValue([]);
+  });
+
+  describe('initiate', () => {
+    it('rejects crypto deposits without a declared wallet address', async () => {
+      await expect(
+        service.initiateDeposit('user-1', { packageId: 'pkg-1', method: 'USDT_BEP20' } as never),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('normalizes a mixed-case txHash to lowercase before storing', async () => {
+      const mixed = '0x' + 'AB'.repeat(32);
+      prismaDepositMock.create = jest.fn().mockResolvedValue(baseDeposit);
+      await service.initiateDeposit('user-1', { packageId: 'pkg-1', method: 'USDT_BEP20', txHash: mixed, userWalletAddress: WALLET_A } as never);
+      expect(prismaDepositMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ paymentRef: VALID_HASH }) }),
+      );
+    });
+
+    it('maps a paymentRef unique collision (casing variant of a claimed hash) to a 400', async () => {
+      prismaDepositMock.create = jest.fn().mockRejectedValue({ code: 'P2002' });
+      await expect(
+        service.initiateDeposit('user-2', { packageId: 'pkg-1', method: 'USDT_BEP20', txHash: '0x' + 'AB'.repeat(32), userWalletAddress: WALLET_B } as never),
+      ).rejects.toThrow('already been submitted');
+    });
+  });
+
+  describe('submitTxHash', () => {
+    it('rejects a hash claim on another account\'s deposit', async () => {
+      prismaDepositMock.findUnique.mockResolvedValue(baseDeposit);
+      await expect(service.submitTxHash('attacker', 'dep-1', VALID_HASH)).rejects.toThrow('Not your deposit');
+      expect(prismaDepositMock.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('stores the hash lowercased so casing variants cannot double-claim', async () => {
+      prismaDepositMock.findUnique.mockResolvedValue(baseDeposit);
+      prismaDepositMock.updateMany.mockResolvedValue({ count: 1 });
+      await service.submitTxHash('user-1', 'dep-1', '0x' + 'AB'.repeat(32));
+      expect(prismaDepositMock.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ paymentRef: VALID_HASH }) }),
+      );
+    });
+
+    it('rejects submissions when the paying wallet is unknown and not supplied', async () => {
+      prismaDepositMock.findUnique.mockResolvedValue({ ...baseDeposit, userWalletAddress: null });
+      await expect(service.submitTxHash('user-1', 'dep-1', VALID_HASH)).rejects.toThrow('wallet address');
+    });
+
+    it('accepts a wallet address at submission for legacy deposits', async () => {
+      prismaDepositMock.findUnique.mockResolvedValue({ ...baseDeposit, userWalletAddress: null });
+      prismaDepositMock.updateMany.mockResolvedValue({ count: 1 });
+      await service.submitTxHash('user-1', 'dep-1', VALID_HASH, WALLET_A);
+      expect(prismaDepositMock.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userWalletAddress: WALLET_A }) }),
+      );
+    });
+
+    it('maps a concurrent duplicate-hash claim (P2002) to a 400', async () => {
+      prismaDepositMock.findUnique.mockResolvedValue(baseDeposit);
+      prismaDepositMock.updateMany.mockRejectedValue({ code: 'P2002' });
+      await expect(service.submitTxHash('user-1', 'dep-1', VALID_HASH)).rejects.toThrow('already been submitted');
+    });
+  });
+
+  describe('verifyCryptoDeposit', () => {
+    const processing = { ...baseDeposit, status: DepositStatus.PROCESSING, paymentRef: VALID_HASH };
+
+    it('refuses to verify a deposit with no declared wallet', async () => {
+      prismaDepositMock.findUnique.mockResolvedValue({ ...processing, userWalletAddress: null });
+      await expect(service.verifyCryptoDeposit('user-1', 'dep-1')).rejects.toThrow('wallet');
+    });
+
+    it('binds the declared wallet and deposit creation time to on-chain verification', async () => {
+      const cryptoMock = (service as never as { cryptoVerification: { verifyDeposit: jest.Mock } }).cryptoVerification;
+      cryptoMock.verifyDeposit.mockResolvedValueOnce({ valid: false, error: 'forced for binding assertion' });
+      prismaDepositMock.findUnique.mockResolvedValue(processing);
+      await service.verifyCryptoDeposit('user-1', 'dep-1');
+      expect(cryptoMock.verifyDeposit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedFromAddress: WALLET_A,
+          notBeforeTimestamp: Math.floor(processing.createdAt.getTime() / 1000),
+        }),
+      );
+    });
+  });
+});
 });

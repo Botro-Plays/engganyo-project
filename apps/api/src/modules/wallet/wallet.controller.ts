@@ -79,7 +79,7 @@ export class WalletController {
     @Param('id') id: string,
     @Body() dto: SubmitTxHashDto,
   ) {
-    return this.walletService.submitTxHash(user.sub, id, dto.txHash);
+    return this.walletService.submitTxHash(user.sub, id, dto.txHash, dto.userWalletAddress);
   }
 
   @Post('deposit/:id/verify')
