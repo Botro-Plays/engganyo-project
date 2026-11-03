@@ -313,7 +313,11 @@ export class WalletService {
         creditsTotal: creditsBase + pkg.bonusCredits,
         label: pkg.label,
         isPopular: pkg.isPopular,
+        methods: pkg.methods,
         phpEquivalent: Math.ceil(pkg.usdAmount * usdToPhp),
+        // Exact amount the PayMongo checkout will charge — mirrors
+        // initiateDeposit's Math.max(1, …) clamp so UI and provider agree.
+        phpAmount: Math.max(1, parseFloat((pkg.usdAmount * usdToPhp).toFixed(2))),
         usdToPhp,
       };
     });
