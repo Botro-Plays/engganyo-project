@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, INestApplication, InternalServerErrorException } from '@nestjs/common';
 import { DepositMethod, DepositStatus, UserRole, UserStatus } from '@prisma/client';
 
 import { PayMongoController } from './paymongo.controller';
@@ -10,24 +10,26 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 describe('PayMongoController', () => {
   let controller: PayMongoController;
 
-  const createPaymentLinkMock = jest.fn<
-    ReturnType<PayMongoService['createPaymentLink']>,
-    Parameters<PayMongoService['createPaymentLink']>
+  const createCheckoutSessionMock = jest.fn<
+    ReturnType<PayMongoService['createCheckoutSession']>,
+    Parameters<PayMongoService['createCheckoutSession']>
   >();
   const getDepositForUserMock = jest.fn<
     ReturnType<WalletService['getDepositForUser']>,
     Parameters<WalletService['getDepositForUser']>
   >();
 
-  const paymongoService: Pick<PayMongoService, 'createPaymentLink'> = {
-    createPaymentLink: createPaymentLinkMock,
+  const processWebhookEventMock = jest.fn();
+  const paymongoService: Pick<PayMongoService, 'createCheckoutSession' | 'processWebhookEvent'> = {
+    createCheckoutSession: createCheckoutSessionMock,
+    processWebhookEvent: processWebhookEventMock,
   };
   const walletService: Pick<WalletService, 'getDepositForUser'> = {
     getDepositForUser: getDepositForUserMock,
   };
 
   beforeEach(async () => {
-    createPaymentLinkMock.mockReset();
+    createCheckoutSessionMock.mockReset();
     getDepositForUserMock.mockReset();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -68,6 +70,7 @@ describe('PayMongoController', () => {
     amountFiat: 50,
     currency: 'PHP',
     creditsToAward: 500,
+    creditsAwarded: 0,
     bonusCredits: 0,
     ...overrides,
   });
@@ -78,7 +81,7 @@ describe('PayMongoController', () => {
     await expect(controller.createLink(user, { depositId: 'dep-1' })).rejects.toThrow(ForbiddenException);
 
     expect(getDepositForUserMock).toHaveBeenCalledWith('user-1', 'dep-1');
-    expect(createPaymentLinkMock).not.toHaveBeenCalled();
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when deposit is not PayMongo', async () => {
@@ -86,7 +89,7 @@ describe('PayMongoController', () => {
 
     await expect(controller.createLink(user, { depositId: 'dep-1' })).rejects.toThrow(BadRequestException);
 
-    expect(createPaymentLinkMock).not.toHaveBeenCalled();
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when deposit status is terminal', async () => {
@@ -94,17 +97,17 @@ describe('PayMongoController', () => {
 
     await expect(controller.createLink(user, { depositId: 'dep-1' })).rejects.toThrow(BadRequestException);
 
-    expect(createPaymentLinkMock).not.toHaveBeenCalled();
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
-  it('creates payment link with derived amount and description', async () => {
+  it('creates checkout session with derived amount and description', async () => {
     getDepositForUserMock.mockResolvedValue(makeDeposit({ amountFiat: 123.45, creditsToAward: 1500 }));
 
-    createPaymentLinkMock.mockResolvedValue({ linkId: 'link-1', checkoutUrl: 'https://paymongo.test/link-1' });
+    createCheckoutSessionMock.mockResolvedValue({ linkId: 'link-1', checkoutUrl: 'https://paymongo.test/link-1' });
 
     const result = await controller.createLink(user, { depositId: 'dep-1' });
 
-    expect(createPaymentLinkMock).toHaveBeenCalledWith(
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
       'dep-1',
       12345,
       expect.stringContaining('1500'),
@@ -116,16 +119,46 @@ describe('PayMongoController', () => {
   it('uses PHP 1.00 minimum when derived amount is below PayMongo threshold', async () => {
     getDepositForUserMock.mockResolvedValue(makeDeposit({ id: 'dep-min', amountFiat: 0.75, creditsToAward: 50 }));
 
-    createPaymentLinkMock.mockResolvedValue({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
+    createCheckoutSessionMock.mockResolvedValue({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
 
     const result = await controller.createLink(user, { depositId: 'dep-min' });
 
-    expect(createPaymentLinkMock).toHaveBeenCalledWith(
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
       'dep-min',
       100,
       expect.stringContaining('50'),
       'PHP',
     );
     expect(result).toEqual({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
+  });
+
+  it('webhook returns 500 (retryable) when payment evidence cannot be verified', async () => {
+    processWebhookEventMock.mockRejectedValueOnce(
+      new InternalServerErrorException('payment pay_x could not be verified for deposit dep-1'),
+    );
+
+    let app: INestApplication | undefined;
+    try {
+      const moduleRef = await Test.createTestingModule({
+        controllers: [PayMongoController],
+        providers: [
+          { provide: PayMongoService, useValue: paymongoService },
+          { provide: WalletService, useValue: walletService },
+        ],
+      }).compile();
+      app = moduleRef.createNestApplication({ rawBody: true });
+      await app.init();
+      const server = await app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      const res = await fetch(`http://127.0.0.1:${port}/paymongo/webhook`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'paymongo-signature': 't=1,li=sig' },
+        body: JSON.stringify({ data: { attributes: { type: 'payment.paid' } } }),
+      });
+      expect(res.status).toBe(500);
+    } finally {
+      await app?.close();
+    }
   });
 });

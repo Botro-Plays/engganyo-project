@@ -63,6 +63,6 @@ export class PayMongoController {
     }
     const description = `Engganyo credits — ${deposit.creditsToAward} credits`;
 
-    return this.paymongoService.createPaymentLink(deposit.id, amountCents, description, deposit.currency ?? 'PHP');
+    return this.paymongoService.createCheckoutSession(deposit.id, amountCents, description, deposit.currency ?? 'PHP');
   }
 }

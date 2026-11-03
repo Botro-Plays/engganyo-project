@@ -522,6 +522,7 @@ export class WalletService {
         amountFiat: true,
         currency: true,
         creditsToAward: true,
+        creditsAwarded: true,
         bonusCredits: true,
       },
     });

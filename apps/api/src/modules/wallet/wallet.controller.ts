@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, UseGuards, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
@@ -68,6 +68,15 @@ export class WalletController {
   @ApiOperation({ summary: 'Get own deposit history' })
   getDeposits(@CurrentUser() user: JwtPayload, @Query() dto: ListDepositsDto) {
     return this.walletService.getUserDeposits(user.sub, dto);
+  }
+
+  @Get('deposit/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get a single deposit owned by the current user' })
+  async getDeposit(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    const deposit = await this.walletService.getDepositForUser(user.sub, id);
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    return deposit;
   }
 
   @Post('deposit/:id/tx-hash')

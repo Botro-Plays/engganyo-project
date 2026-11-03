@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus, NotificationType } from '@prisma/client';
@@ -123,6 +123,201 @@ export class PayMongoService {
     }
 
     return { linkId, checkoutUrl };
+  }
+
+  async createCheckoutSession(depositId: string, amountCents: number, description: string, currency: string) {
+    this.logger.log(
+      `Creating PayMongo checkout session for deposit ${depositId}, amountCents: ${amountCents}, currency: ${currency}`,
+    );
+
+    const secret = await this.getSecretKey();
+    if (!secret) throw new BadRequestException('PayMongo not configured');
+
+    // ── Idempotency: reuse a payable checkout that already exists ──────────
+    // Retries/concurrent calls must never mint a second session — a payment
+    // made against the first intent would be unmatchable forever.
+    const existing = await this.prisma.deposit.findUnique({
+      where: { id: depositId },
+      select: { paymentRef: true, gatewayData: true },
+    });
+    const existingGw = (existing?.gatewayData ?? {}) as Record<string, unknown>;
+    const existingUrl = existingGw.checkoutUrl as string | undefined;
+    if (existing?.paymentRef && existingUrl && !existing.paymentRef.startsWith('creating:')) {
+      this.logger.log(`Deposit ${depositId} already has payable checkout ${existing.paymentRef} — reusing`);
+      return { linkId: existing.paymentRef, checkoutUrl: existingUrl };
+    }
+
+    // ── Atomic claim: exactly one creator per deposit ──────────────────────
+    // A claim is exclusive: the predicate only admits an unclaimed row or a
+    // 'creating:' claim provably stale (> CLAIM_TTL). An active claim can
+    // never be overwritten — the timestamp is persisted in updatedAt so age
+    // is evaluated by Postgres itself.
+    const CLAIM_TTL_MS = 60_000;
+    const claimTag = `creating:${crypto.randomUUID()}`;
+    const staleBefore = new Date(Date.now() - CLAIM_TTL_MS);
+    const claimed = await this.prisma.deposit.updateMany({
+      where: {
+        id: depositId,
+        method: DepositMethod.PAYMONGO,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        OR: [
+          { paymentRef: null },
+          {
+            paymentRef: { startsWith: 'creating:' },
+            updatedAt: { lt: staleBefore },
+          },
+        ],
+      },
+      data: { paymentRef: claimTag, updatedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      // Another request prepared (or is preparing) the checkout — hand back
+      // the existing URL rather than create a second session.
+      const fresh = await this.prisma.deposit.findUnique({
+        where: { id: depositId },
+        select: { paymentRef: true, gatewayData: true },
+      });
+      const freshGw = (fresh?.gatewayData ?? {}) as Record<string, unknown>;
+      if (fresh?.paymentRef && freshGw.checkoutUrl && !fresh.paymentRef.startsWith('creating:')) {
+        this.logger.log(`Claim lost for ${depositId} — returning existing checkout ${fresh.paymentRef}`);
+        return { linkId: fresh.paymentRef, checkoutUrl: freshGw.checkoutUrl as string };
+      }
+      throw new BadRequestException('Checkout is being prepared — please retry in a moment');
+    }
+    const releaseClaim = () =>
+      this.prisma.deposit.updateMany({
+        where: { id: depositId, paymentRef: claimTag },
+        data: { paymentRef: null },
+      }).catch((e) => this.logger.warn(`Failed to release checkout claim for ${depositId}: ${String(e)}`));
+
+    let sessionId = '';
+    let checkoutUrl = '';
+    let paymentIntentId = '';
+    let attrs: Record<string, unknown> = {};
+
+    let amount = Math.round(amountCents);
+    if (amount < 100) {
+      this.logger.warn(`Checkout session amount below minimum (${amount} cents). Clamping to PHP 1.00 for deposit ${depositId}.`);
+      amount = 100;
+    }
+    const normalizedCurrency = currency?.trim().toUpperCase() || 'PHP';
+    const webUrl = (process.env['FRONTEND_URL'] ?? 'http://localhost:3000').replace(/\/$/, '');
+
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/checkout_sessions`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+        headers: {
+          Authorization: this.authHeader(secret),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              send_email_receipt: false,
+              show_description: true,
+              show_line_items: true,
+              description,
+              line_items: [{ name: 'Engganyo credits', amount, currency: normalizedCurrency, quantity: 1 }],
+              payment_method_types: ['qrph', 'gcash', 'card', 'paymaya'],
+              success_url: `${webUrl}/payment/return?status=success&deposit=${depositId}`,
+              cancel_url: `${webUrl}/payment/return?status=cancelled&deposit=${depositId}`,
+              metadata: { depositId },
+            },
+          },
+        }),
+      });
+    } catch (err) {
+      await releaseClaim();
+      this.logger.error(`PayMongo checkout session fetch error: ${String(err)}`);
+      Sentry.captureException(err instanceof Error ? err : new Error(`PayMongo fetch error: ${String(err)}`), {
+        extra: { depositId, amountCents, currency },
+      });
+      throw new BadRequestException(`Failed to connect to PayMongo: ${String(err)}`);
+    }
+
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      await releaseClaim();
+      this.logger.error(`PayMongo checkout session creation failed: ${JSON.stringify(json)}`);
+      Sentry.captureMessage(`PayMongo checkout session creation failed: ${res.status}`, {
+        level: 'error',
+        extra: { depositId, amountCents, currency, response: json },
+      });
+      throw new BadRequestException('Failed to create PayMongo checkout session');
+    }
+
+    const data = json.data as Record<string, unknown> | undefined;
+    sessionId = (data?.id as string) ?? '';
+    attrs = (data?.attributes ?? {}) as Record<string, unknown>;
+    checkoutUrl = (attrs.checkout_url as string) ?? '';
+    const paymentIntent = attrs.payment_intent as Record<string, unknown> | undefined;
+    paymentIntentId = (paymentIntent?.id as string) ?? '';
+    if (!sessionId || !checkoutUrl) {
+      await releaseClaim();
+      throw new BadRequestException('PayMongo checkout session response missing required fields');
+    }
+
+    // A session URL must never be handed to the browser without a verified
+    // pi_* intent — our subscribed payment.paid event correlates exclusively by
+    // payment_intent_id, so a session without one could be paid but never
+    // settle. If creation omits the intent (or returns a malformed one),
+    // retrieve the session once to pick it up; if it is still absent or
+    // malformed, fail recoverably and release the claim so the deposit stays
+    // eligible for a clean retry.
+    if (!paymentIntentId.startsWith('pi_')) {
+      const recovered = await this.fetchCheckoutSessionIntent(sessionId);
+      paymentIntentId = recovered?.startsWith('pi_') ? recovered : '';
+    }
+    if (!paymentIntentId.startsWith('pi_')) {
+      this.logger.error(`Checkout session ${sessionId} has no valid payment_intent even after retrieval — refusing handoff`);
+      Sentry.captureMessage('PayMongo checkout session missing payment_intent', {
+        level: 'error',
+        extra: { depositId, sessionId },
+      });
+      await releaseClaim();
+      throw new BadRequestException('PayMongo checkout session could not be initialized — please retry');
+    }
+
+    // checkout_session.payment.paid is not a subscribable event on our account —
+    // session payments settle via payment.paid, whose payment object carries
+    // attributes.payment_intent_id. Store the intent as paymentRef so the
+    // existing payment.paid correlation matches (session id kept for tracing).
+    // Persistence is conditioned on still owning THIS exact claim — a stale
+    // reclaim by another request must never let us overwrite the winner's ref
+    // or hand out our URL.
+    try {
+      const persisted = await this.prisma.deposit.updateMany({
+        where: { id: depositId, paymentRef: claimTag },
+        data: {
+          paymentRef: paymentIntentId,
+          gatewayData: { ...existingGw, checkoutUrl, kind: 'checkout_session', sessionId, paymentIntentId },
+        },
+      });
+      if (persisted.count === 0) {
+        this.logger.warn(`Deposit ${depositId}: claim lost before persist — returning owner state instead`);
+        const fresh = await this.prisma.deposit.findUnique({
+          where: { id: depositId },
+          select: { paymentRef: true, gatewayData: true },
+        });
+        const freshGw = (fresh?.gatewayData ?? {}) as Record<string, unknown>;
+        if (fresh?.paymentRef && freshGw.checkoutUrl && !fresh.paymentRef.startsWith('creating:')) {
+          return { linkId: fresh.paymentRef, checkoutUrl: freshGw.checkoutUrl as string };
+        }
+        throw new BadRequestException('Checkout was replaced during preparation — please retry');
+      }
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      await releaseClaim();
+      this.logger.error(`Failed to update deposit ${depositId} with session paymentRef: ${String(err)}`);
+      Sentry.captureException(err instanceof Error ? err : new Error('Failed to update deposit with PayMongo session ref'), {
+        extra: { depositId, sessionId, paymentIntentId, checkoutUrl },
+      });
+      throw new BadRequestException(`PayMongo session created but failed to update deposit: ${String(err)}`);
+    }
+
+    return { linkId: paymentIntentId, checkoutUrl };
   }
 
   async archiveLink(linkId: string) {
@@ -287,94 +482,153 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
 
-      if (deposit.status === DepositStatus.COMPLETED || deposit.status === DepositStatus.CANCELLED) {
-        this.logger.warn(`link.payment.paid: deposit ${deposit.id} already ${deposit.status}`);
-        return { received: true, action: 'ignored' };
-      }
-
-      // Atomic claim — prevents double-processing on concurrent webhook deliveries
-      const claimed = await this.prisma.deposit.updateMany({
-        where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
-        data: { status: DepositStatus.PROCESSING },
-      });
-      if (claimed.count === 0) {
-        this.logger.warn(`link.payment.paid: deposit ${deposit.id} already claimed by concurrent request`);
-        return { received: true, action: 'ignored' };
-      }
-
-      try {
-        await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
-        this.logger.log(`Deposit ${deposit.id} completed via link.payment.paid`);
-        return { received: true, action: 'completed', depositId: deposit.id };
-      } catch (err) {
-        if (err instanceof BadRequestException || err instanceof NotFoundException) {
-          this.logger.warn(
-            `link.payment.paid: deposit ${deposit.id} could not be completed (${err.message}). Treating as ignored.`,
-          );
-          return { received: true, action: 'ignored' };
-        }
-        Sentry.captureException(err instanceof Error ? err : new Error('Unexpected error in link.payment.paid'), {
-          extra: { depositId: deposit.id, eventType, paymentId },
-        });
-        throw err;
-      }
+      return this.settlePaidDeposit(deposit, paymentId, 'link.payment.paid');
     }
 
-    // payment.paid — payment object is eventData; find deposit by matching link ID stored in paymentRef
+    // checkout_session.payment.paid — Checkout Sessions (return-URL flow) emit
+    // this event; the session object is eventData and metadata.depositId is ours.
+    if (eventType === 'checkout_session.payment.paid') {
+      const sessionId = (eventData?.id as string | undefined) ?? undefined;
+      const sAttrs = eventData?.attributes as Record<string, unknown> | undefined;
+      const metadata = sAttrs?.metadata as Record<string, unknown> | undefined;
+      const depositId = metadata?.depositId as string | undefined;
+      const payments = sAttrs?.payments as Array<Record<string, unknown>> | undefined;
+      const paymentIntent = sAttrs?.payment_intent as Record<string, unknown> | undefined;
+      const paymentId = (payments?.[0]?.id as string | undefined) ?? (paymentIntent?.id as string | undefined);
+
+      this.logger.log(
+        `checkout_session.payment.paid: depositId=${depositId ?? 'none'}, session=${sessionId ?? 'none'}, paymentId=${paymentId ?? 'none'}`,
+      );
+
+      let deposit = depositId
+        ? await this.prisma.deposit.findUnique({ where: { id: depositId } })
+        : null;
+
+      if (!deposit) {
+        // paymentRef holds the payment intent id for sessions (cs_ kept in
+        // gatewayData) — match on either the intent or the raw session id.
+        const refCandidates = [paymentIntent?.id, sessionId].filter(Boolean) as string[];
+        for (const ref of refCandidates) {
+          deposit = await this.prisma.deposit.findFirst({
+            where: {
+              paymentRef: ref,
+              method: DepositMethod.PAYMONGO,
+            },
+          });
+          if (deposit) {
+            this.logger.log(`checkout_session.payment.paid: matched deposit ${deposit.id} via paymentRef ${ref}`);
+            break;
+          }
+        }
+      }
+
+      if (!deposit) {
+        this.logger.warn('checkout_session.payment.paid: could not match session event to any pending deposit');
+        return { received: true, action: 'ignored' };
+      }
+
+      // Verified evidence — the session's payments[] carry the actual paid
+      // amount/currency; line_items only describe the request and are never
+      // trusted. Missing fields fall back to a provider fetch.
+      const paymentAttrs = payments?.[0]?.attributes as Record<string, unknown> | undefined;
+      const verdict = await this.verifyPaidEvidence(
+        deposit,
+        {
+          paymentId,
+          intentId: (paymentIntent?.id as string | undefined) ?? (paymentAttrs?.payment_intent_id as string | undefined),
+          amountCents: paymentAttrs?.amount as number | undefined,
+          currency: paymentAttrs?.currency as string | undefined,
+        },
+        'checkout_session.payment.paid',
+      );
+      if (verdict === 'mismatch') {
+        return { received: true, action: 'ignored' };
+      }
+      if (verdict === 'unverified') {
+        throw new InternalServerErrorException(`session payment ${paymentId ?? 'unknown'} could not be verified for deposit ${deposit.id}`);
+      }
+
+      return this.settlePaidDeposit(deposit, paymentId, 'checkout_session.payment.paid');
+    }
+
+    // payment.paid — payment object is eventData. Sessions settle here: the
+    // payment's attributes.payment_intent_id matches the stored paymentRef.
+    // depositId hints (metadata/external reference/reference_number) may
+    // correlate legacy links but must NEVER override a conflicting intent match.
     if (eventType === 'payment.paid' || eventType === 'payment.success') {
       const paymentAttrs = eventData?.attributes as Record<string, unknown> | undefined;
       const paymentId = eventData?.id as string | undefined;
-      const origin = paymentAttrs?.origin as string | undefined;
-
-      this.logger.log(`payment.paid: paymentId=${paymentId}, origin=${origin}`);
-      this.logger.log(`Full payment attributes: ${JSON.stringify(paymentAttrs)}`);
-
-      // When paid via a link, find the deposit whose paymentRef is the link ID.
-      // PayMongo does not pass our custom field back; match by payment_intent_id or remarks.
-      // Safest: look for any PENDING PAYMONGO deposit with no completion yet and match amount.
+      const intentId = paymentAttrs?.payment_intent_id as string | undefined;
+      const paidAmountCents = paymentAttrs?.amount as number | undefined;
+      const paidCurrency = paymentAttrs?.currency as string | undefined;
       const metadata = paymentAttrs?.metadata as Record<string, unknown> | undefined;
       const metadataDepositId = metadata?.depositId as string | undefined;
       const referenceNumber = paymentAttrs?.reference_number as string | undefined;
       const externalRef = paymentAttrs?.external_reference_number as string | undefined;
       const candidateDepositId = externalRef ?? metadataDepositId ?? referenceNumber;
+
       this.logger.log(
-        `payment.paid identifiers: externalRef=${externalRef ?? 'none'}, reference=${referenceNumber ?? 'none'}, metadata.depositId=${metadataDepositId ?? 'none'}`,
+        `payment.paid: paymentId=${paymentId ?? 'none'}, intent=${intentId ?? 'none'}, amount=${paidAmountCents ?? 'none'} ${paidCurrency ?? ''}, hint=${candidateDepositId ?? 'none'}`,
       );
 
-      // Try direct depositId match (external_reference_number should be our depositId for newly created links)
-      if (candidateDepositId) {
-        const depositById = await this.prisma.deposit.findUnique({ where: { id: candidateDepositId } });
-        if (depositById && depositById.method === DepositMethod.PAYMONGO && depositById.status !== DepositStatus.COMPLETED && depositById.status !== DepositStatus.CANCELLED) {
-          this.logger.log(`Found deposit ${depositById.id} via external_reference_number`);
-          try {
-            await this.walletService.completeDeposit(depositById.id, { paymentRef: paymentId });
-            return { received: true, action: 'completed', depositId: depositById.id };
-          } catch (err) {
-            if (err instanceof BadRequestException || err instanceof NotFoundException) {
-              this.logger.warn(
-                `payment.paid: deposit ${depositById.id} could not be completed (${err.message}). Treating as ignored.`,
-              );
-              return { received: true, action: 'ignored' };
-            }
-            Sentry.captureException(err instanceof Error ? err : new Error('Unexpected error in payment.paid'), {
-              extra: { depositId: depositById.id, eventType, paymentId },
-            });
-            throw err;
+      if (!paymentId) {
+        this.logger.warn('payment.paid: event has no provider payment id — cannot verify, ignoring');
+        return { received: true, action: 'ignored' };
+      }
+
+      // 1) Intent-first correlation — authoritative for sessions.
+      let deposit = intentId
+        ? await this.prisma.deposit.findFirst({
+            where: { paymentRef: intentId, method: DepositMethod.PAYMONGO },
+          })
+        : null;
+
+      if (deposit && candidateDepositId && candidateDepositId !== deposit.id) {
+        this.logger.warn(
+          `payment.paid: reference hint ${candidateDepositId} conflicts with intent match ${deposit.id} — intent wins`,
+        );
+      }
+
+      // 2) Legacy correlation — depositId hints may LOCATE a deposit but never
+      // AUTHORIZE a session deposit (pi_* paymentRef). For those, settlement
+      // still requires the verified intent to equal the stored reference
+      // (enforced in verifyPaidEvidence — event intent, else provider fetch).
+      if (!deposit && candidateDepositId) {
+        const byId = await this.prisma.deposit.findUnique({ where: { id: candidateDepositId } });
+        if (byId && byId.method === DepositMethod.PAYMONGO) {
+          deposit = byId;
+          if (byId.paymentRef?.startsWith('pi_')) {
+            this.logger.warn(
+              `payment.paid: hint located session deposit ${byId.id} — verified intent still required (intent=${intentId ?? 'none'})`,
+            );
+          } else {
+            this.logger.log(`payment.paid: matched link deposit ${byId.id} via reference`);
           }
         }
       }
 
-      const intentId = paymentAttrs?.payment_intent_id as string | undefined;
-      if (intentId) {
+      if (!deposit) {
         this.logger.warn(
-          `payment.paid: no matching deposit found for payment_intent_id ${intentId} (payment ${paymentId})`,
+          `payment.paid: could not match payment ${paymentId} to any deposit (intent=${intentId ?? 'none'}, hint=${candidateDepositId ?? 'none'})`,
         );
+        return { received: true, action: 'ignored' };
       }
 
-      this.logger.warn(
-        `payment.paid: could not match payment ${paymentId} to any pending deposit (external_reference=${externalRef ?? 'none'})`,
+      // 3) Verified evidence — event fields, provider fetch for what it omits.
+      const verdict = await this.verifyPaidEvidence(
+        deposit,
+        { paymentId, intentId, amountCents: paidAmountCents, currency: paidCurrency },
+        'payment.paid',
       );
-      return { received: true, action: 'ignored' };
+      if (verdict === 'mismatch') {
+        return { received: true, action: 'ignored' };
+      }
+      if (verdict === 'unverified') {
+        // Leave wallet/ledger untouched; retryable — PayMongo redelivers on 5xx.
+        throw new InternalServerErrorException(`payment ${paymentId} could not be verified for deposit ${deposit.id}`);
+      }
+
+      return this.settlePaidDeposit(deposit, paymentId, 'payment.paid');
     }
 
     if (eventType === 'payment.failed') {
@@ -468,6 +722,151 @@ export class PayMongoService {
   }
 
   /**
+   * Retrieve a checkout session's payment_intent id when the create response
+   * omitted it. Returns null on any failure or when still absent.
+   */
+  private async fetchCheckoutSessionIntent(sessionId: string): Promise<string | null> {
+    try {
+      const secret = await this.getSecretKey();
+      if (!secret) return null;
+      const res = await fetch(`${this.baseUrl}/checkout_sessions/${sessionId}`, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: this.authHeader(secret) },
+      });
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const attrs = ((json.data as Record<string, unknown> | undefined)?.attributes ?? {}) as Record<string, unknown>;
+      const intent = (attrs.payment_intent as Record<string, unknown> | undefined)?.id;
+      return (intent as string) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fetch a payment from PayMongo for out-of-band verification when the signed
+   * event omits amount/currency details. Returns null on any failure.
+   */
+  private async fetchProviderPayment(paymentId: string): Promise<{ amount?: number; currency?: string; paymentIntentId?: string } | null> {
+    try {
+      const secret = await this.getSecretKey();
+      if (!secret) return null;
+      const res = await fetch(`${this.baseUrl}/payments/${paymentId}`, {
+        headers: { Authorization: this.authHeader(secret) },
+      });
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const attrs = ((json.data as Record<string, unknown> | undefined)?.attributes ?? {}) as Record<string, unknown>;
+      return {
+        amount: attrs.amount as number | undefined,
+        currency: attrs.currency as string | undefined,
+        paymentIntentId: attrs.payment_intent_id as string | undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Verify a paid event against a matched deposit before crediting.
+   * Requires the provider payment id; event amount/currency are checked
+   * exactly, falling back to a provider fetch when the event omits them.
+   * Returns 'mismatch' for verified differences, 'unverified' when evidence
+   * cannot be obtained (caller must NOT credit), 'ok' when confirmed.
+   */
+  private async verifyPaidEvidence(
+    deposit: { id: string; amountFiat: number; currency: string | null; paymentRef: string | null },
+    evidence: { paymentId?: string; intentId?: string; amountCents?: number; currency?: string },
+    tag: string,
+  ): Promise<'ok' | 'mismatch' | 'unverified'> {
+    let { amountCents, currency, intentId } = evidence;
+    const intentBound = Boolean(deposit.paymentRef?.startsWith('pi_'));
+
+    // A session deposit REQUIRES verified intent equality — fetch the payment
+    // when the event omits it (or when amount/currency are missing anyway).
+    if (amountCents == null || !currency || (intentBound && !intentId)) {
+      if (!evidence.paymentId) return 'unverified';
+      const fetched = await this.fetchProviderPayment(evidence.paymentId);
+      if (!fetched) {
+        this.logger.error(`${tag}: could not retrieve payment ${evidence.paymentId} for deposit ${deposit.id} — not crediting`);
+        return 'unverified';
+      }
+      amountCents = amountCents ?? fetched.amount;
+      currency = currency ?? fetched.currency;
+      intentId = intentId ?? fetched.paymentIntentId;
+    }
+
+    // Session deposits are bound to a specific payment intent — the verified
+    // intent must equal the stored reference. Absent (even after a provider
+    // fetch) or different intent means no settlement.
+    if (intentBound) {
+      if (!intentId) {
+        this.logger.warn(`${tag}: no payment intent available for session deposit ${deposit.id} — not crediting`);
+        return 'unverified';
+      }
+      if (intentId !== deposit.paymentRef) {
+        this.logger.warn(`${tag}: intent mismatch on deposit ${deposit.id} (${intentId} vs stored ${deposit.paymentRef})`);
+        return 'mismatch';
+      }
+    }
+    if (amountCents == null || !currency) return 'unverified';
+
+    const expectedCents = Math.round(deposit.amountFiat * 100);
+    if (Number(amountCents) !== expectedCents) {
+      this.logger.warn(`${tag}: amount mismatch on deposit ${deposit.id} (paid ${amountCents} vs expected ${expectedCents})`);
+      return 'mismatch';
+    }
+    if (deposit.currency && currency.toUpperCase() !== deposit.currency.toUpperCase()) {
+      this.logger.warn(`${tag}: currency mismatch on deposit ${deposit.id} (${currency} vs ${deposit.currency})`);
+      return 'mismatch';
+    }
+    return 'ok';
+  }
+
+  /**
+   * Shared settle path for paid events (Payment Links + Checkout Sessions).
+   * Terminal COMPLETED stays ignored; CANCELLED deposits may still be
+   * reconciled when verified payment evidence arrives late — the payer's
+   * money must never be discarded because of a local cancel/age cutoff.
+   */
+  private async settlePaidDeposit(deposit: { id: string; status: DepositStatus }, paymentId: string | undefined, tag: string) {
+    if (deposit.status === DepositStatus.COMPLETED) {
+      this.logger.warn(`${tag}: deposit ${deposit.id} already COMPLETED`);
+      return { received: true, action: 'ignored' };
+    }
+    if (deposit.status === DepositStatus.CANCELLED) {
+      this.logger.warn(`${tag}: deposit ${deposit.id} was locally cancelled — reconciling verified paid event`);
+    }
+
+    // Atomic claim — prevents double-processing on concurrent webhook deliveries
+    const claimed = await this.prisma.deposit.updateMany({
+      where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING, DepositStatus.CANCELLED] } },
+      data: { status: DepositStatus.PROCESSING },
+    });
+    if (claimed.count === 0) {
+      this.logger.warn(`${tag}: deposit ${deposit.id} already claimed by concurrent request`);
+      return { received: true, action: 'ignored' };
+    }
+
+    try {
+      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
+      this.logger.log(`Deposit ${deposit.id} completed via ${tag}`);
+      return { received: true, action: 'completed', depositId: deposit.id };
+    } catch (err) {
+      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+        this.logger.warn(
+          `${tag}: deposit ${deposit.id} could not be completed (${err.message}). Treating as ignored.`,
+        );
+        return { received: true, action: 'ignored' };
+      }
+      Sentry.captureException(err instanceof Error ? err : new Error(`Unexpected error in ${tag}`), {
+        extra: { depositId: deposit.id, paymentId },
+      });
+      throw err;
+    }
+  }
+
+  /**
    * Every 5 minutes: find PENDING/PROCESSING PayMongo deposits whose link
    * has actually expired (gatewayData.expiredAt passed) and cancel them.
    * QR expiry (qrph.expired) auto-refreshes — we only cancel when the link itself is dead.
@@ -484,7 +883,7 @@ export class PayMongoService {
         status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
         gatewayData: { path: ['expiredAt'], lt: now.toISOString() },
       },
-      select: { id: true, paymentRef: true },
+      select: { id: true, paymentRef: true, gatewayData: true },
     });
 
     // 2. Old deposits without expiredAt (created before this feature) — fallback to createdAt + 30min
@@ -495,17 +894,29 @@ export class PayMongoService {
         createdAt: { lt: thirtyMinAgo },
         NOT: { gatewayData: { path: ['expiredAt'], string_contains: '' } },
       },
-      select: { id: true, paymentRef: true },
+      select: { id: true, paymentRef: true, gatewayData: true },
     });
 
-    const allExpired = [...expiredWithData, ...expiredOld];
-    if (allExpired.length === 0) return;
+    // Checkout Sessions are excluded from legacy link cleanup — local age
+    // alone must not discard a session deposit whose paid event may arrive
+    // late. Sessions expire via provider-confirmed state instead.
+    const allExpired = [...expiredWithData, ...expiredOld].filter(
+      (d) => (d.gatewayData as Record<string, unknown> | null)?.kind !== 'checkout_session',
+    );
 
-    this.logger.log(`Found ${allExpired.length} PayMongo deposit(s) with expired links — cancelling`);
+    if (allExpired.length === 0) {
+      // Still check sessions — this cron also owns provider-confirmed
+      // session expiry and must run even when no legacy links are due.
+      await this.expireProviderDeadSessions();
+      return;
+    }
+
+    this.logger.log(`Found ${allExpired.length} PayMongo link deposit(s) with expired links — cancelling`);
 
     for (const deposit of allExpired) {
       try {
-        if (deposit.paymentRef) {
+        // Only Payment Links can be archived — session/intent refs can't.
+        if (deposit.paymentRef?.startsWith('link_')) {
           await this.archiveLink(deposit.paymentRef);
         }
         // Atomic status update — skip if a webhook completed this deposit after our findMany
@@ -526,6 +937,58 @@ export class PayMongoService {
         Sentry.captureException(err instanceof Error ? err : new Error(`Failed to auto-cancel PayMongo deposit`), {
           extra: { depositId: deposit.id, paymentRef: deposit.paymentRef },
         });
+      }
+    }
+
+    await this.expireProviderDeadSessions();
+  }
+
+  /**
+   * Checkout Sessions can't be archived and have no local expiry — ask the
+   * provider whether each stale session deposit is still payable. Only a
+   * provider-confirmed dead session cancels the deposit; a live or unknown
+   * session is left alone so a late payment.paid can still settle it.
+   */
+  private async expireProviderDeadSessions() {
+    const staleAfter = new Date(Date.now() - 60 * 60 * 1000); // 1 hour
+    const stale = await this.prisma.deposit.findMany({
+      where: {
+        method: DepositMethod.PAYMONGO,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        createdAt: { lt: staleAfter },
+        gatewayData: { path: ['kind'], equals: 'checkout_session' },
+      },
+      select: { id: true, gatewayData: true },
+      take: 20,
+    });
+    if (stale.length === 0) return;
+
+    const secret = await this.getSecretKey();
+    if (!secret) return;
+
+    for (const deposit of stale) {
+      const sessionId = (deposit.gatewayData as Record<string, unknown> | null)?.sessionId as string | undefined;
+      if (!sessionId) continue;
+      try {
+        const res = await fetch(`${this.baseUrl}/checkout_sessions/${sessionId}`, {
+          headers: { Authorization: this.authHeader(secret) },
+        });
+        if (!res.ok) continue; // can't confirm — leave it
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        const attrs = ((json.data as Record<string, unknown> | undefined)?.attributes ?? {}) as Record<string, unknown>;
+        const payments = attrs.payments as unknown[] | undefined;
+        const isDead = Boolean(attrs.expired_at) || attrs.status === 'expired' || attrs.status === 'cancelled';
+        if (payments?.length || !isDead) continue; // paid or still payable — never touch
+
+        const cancelled = await this.prisma.deposit.updateMany({
+          where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
+          data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayMongo checkout session expired' },
+        });
+        if (cancelled.count) {
+          this.logger.log(`Session deposit ${deposit.id} auto-cancelled — provider confirms session ${sessionId} dead`);
+        }
+      } catch (err) {
+        this.logger.warn(`Session expiry check failed for deposit ${deposit.id}: ${String(err)}`);
       }
     }
   }

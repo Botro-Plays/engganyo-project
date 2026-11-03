@@ -655,7 +655,9 @@ export default function WalletPage() {
     onSuccess: (data) => {
       setFiatCheckoutUrl(data?.checkoutUrl ?? null);
       if (data?.checkoutUrl) {
-        window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
+        // Same-tab navigation — the Checkout Session carries success/cancel
+        // return URLs back to /payment/return.
+        window.location.assign(data.checkoutUrl);
       }
     },
     onError: (err) => setDepositError(getApiErrorMessage(err)),
