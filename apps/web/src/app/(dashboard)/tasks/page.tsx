@@ -480,20 +480,29 @@ export default function TasksPage() {
         <p className="text-zinc-400 text-sm mt-1">Complete engagement tasks to earn credits.</p>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="flex gap-1 p-1 bg-surface-hover rounded-lg w-fit">
+      {/* ── P2P journeys: Find tasks / My tasks / My campaigns ── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
+        <div role="tablist" aria-label="Task journeys" className="flex gap-1 p-1 bg-surface-hover rounded-lg w-fit overflow-x-auto">
           {(['browse', 'mine'] as const).map((t) => (
             <button
               key={t}
+              role="tab"
+              aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              className={`px-4 py-2.5 min-h-11 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                 tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
               }`}
             >
-              {t === 'browse' ? 'Browse Tasks' : 'My Tasks'}
+              {t === 'browse' ? 'Find tasks' : 'My tasks'}
             </button>
           ))}
+          <Link
+            href="/campaigns"
+            className="px-4 py-2.5 min-h-11 rounded-md text-sm font-medium text-zinc-400 hover:text-white transition-all whitespace-nowrap flex items-center gap-1.5"
+          >
+            My campaigns
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
         {limitsData && typeof limitsData.dailyLimit === 'number' && (
           <div className="flex items-center gap-2 text-xs">
@@ -570,6 +579,20 @@ export default function TasksPage() {
                         {task.targetUrl.slice(0, 40)}{task.targetUrl.length > 40 ? '…' : ''}
                         <ExternalLink className="w-3 h-3 shrink-0" />
                       </a>
+                      {/* What proof the creator requires — visible BEFORE accepting */}
+                      {task.requiresProof && (
+                        <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
+                          <p className="text-[11px] font-medium text-amber-300 flex items-center gap-1">
+                            <Upload className="w-3 h-3 shrink-0" />
+                            Proof required: screenshot/manual review
+                          </p>
+                          {task.proofInstructions && (
+                            <p className="mt-0.5 text-[11px] leading-snug text-amber-300/70 line-clamp-2">
+                              {task.proofInstructions}
+                            </p>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-xs text-zinc-500 mb-3">
                         <span>{available} slots left</span>
                         <UserLink user={task.user} showAvatar={false} />
@@ -614,7 +637,7 @@ export default function TasksPage() {
                             <button
                               onClick={() => assignMutation.mutate(task.id)}
                               disabled={assigningIds.has(task.id) || available <= 0}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="flex-1 flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               {assigningIds.has(task.id) ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -673,7 +696,7 @@ export default function TasksPage() {
               <button
                 key={f}
                 onClick={() => setMyFilter(f)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 py-2 min-h-11 rounded-md text-xs font-medium transition-all ${
                   myFilter === f
                     ? 'bg-brand-500 text-white'
                     : 'bg-surface-hover text-zinc-400 hover:text-white border border-surface-border'
@@ -720,7 +743,8 @@ export default function TasksPage() {
                           <span className="text-xs font-semibold text-green-400 shrink-0">+{formatCredits(task.campaign.creditPerTask)}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span className={`text-xs ${st.color}`}>{st.label} · {formatRelativeTime(task.assignedAt)}</span>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded border border-current/20 text-[10px] font-semibold uppercase tracking-wide ${st.color}`}>{st.label}</span>
+                          <span className="text-xs text-zinc-500">{formatRelativeTime(task.assignedAt)}</span>
                           <span className="text-[10px] text-zinc-600">by <Link href={`/users/${task.campaign.user.username}`} className="text-zinc-500 hover:text-brand-300 transition-colors">@{task.campaign.user.username}</Link></span>
                           <a
                             href={task.campaign.targetUrl}
@@ -795,7 +819,7 @@ export default function TasksPage() {
                           ) : (
                             <button
                               onClick={() => { setSubmitting(task); setSubmitError(null); proofForm.reset(); setRecheckResult(null); }}
-                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
+                              className="flex items-center gap-1.5 text-xs px-4 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
                             >
                               <Send className="w-3 h-3" /> Submit
                             </button>
@@ -844,8 +868,8 @@ export default function TasksPage() {
 
       {/* ── Submit proof modal ── */}
       {submitting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md card-glass rounded-2xl p-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md card-glass rounded-t-2xl sm:rounded-2xl p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-white">
                 {submitting.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? 'Subscribe & Verify' :
