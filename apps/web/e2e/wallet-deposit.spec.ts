@@ -192,18 +192,18 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await expect(paymongoMethod).toBeVisible({ timeout: 5_000 });
     await paymongoMethod.click();
 
-    // Step 3: proceed to PayMongo
+    // Step 3: proceed to PayMongo — Checkout Sessions hand off in the SAME tab.
+    // Stub the provider domain so the navigation can complete inside the test.
+    await page.route('**/checkout.paymongo.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<html><title>PayMongo Checkout</title></html>' }),
+    );
     const proceedBtn = page.getByRole('button', { name: /proceed to paymongo/i });
     await expect(proceedBtn).toBeVisible({ timeout: 5_000 });
     await proceedBtn.click();
 
-    // Verify "Deposit Submitted" state appears
-    await expect(page.getByText(/deposit submitted/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/complete your payment in the paymongo checkout page/i)).toBeVisible();
-    await expect(page.getByText(MOCK_DEPOSIT_ID)).toBeVisible();
-
-    // Verify "Open PayMongo Checkout" button is shown
-    await expect(page.getByRole('button', { name: /open paymongo checkout/i })).toBeVisible();
+    // Same-tab navigation hands off to the mocked Checkout Session URL
+    await page.waitForURL(/checkout\.paymongo\.com\/test-link/, { timeout: 10_000 });
+    await expect(page).toHaveURL(MOCK_CHECKOUT_URL);
   });
 
   test('select package → PayPal → deposit created', async ({ page }) => {
