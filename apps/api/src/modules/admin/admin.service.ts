@@ -1996,12 +1996,19 @@ export class AdminService {
     return this.prisma.depositPackage.findMany({ orderBy: { sortOrder: 'asc' } });
   }
 
-  async createDepositPackage(dto: { usdAmount: number; bonusCredits?: number; label?: string; isPopular?: boolean; sortOrder?: number }) {
-    const minUsd = await this.prisma.platformConfig.findUnique({ where: { key: 'min_deposit_usd' } });
-    const minDepositUsd = (minUsd?.value as number) ?? 1;
-    if (dto.usdAmount < minDepositUsd) {
-      throw new BadRequestException(`Package USD amount must be at least $${minDepositUsd} (current minimum deposit)`);
+  private validatePackageMethods(dto: { usdAmount: number; methods?: string[] }, minDepositUsd: number) {
+    // Packages restricted to PAYMONGO may go below the USD minimum down to
+    // PayMongo's ₱1 provider floor (~$0.02) — used for the internal test round.
+    const paymongoOnly = (dto.methods?.length ?? 0) > 0 && dto.methods!.every((m) => m === 'PAYMONGO');
+    const floor = paymongoOnly ? 0.01 : minDepositUsd;
+    if (dto.usdAmount < floor) {
+      throw new BadRequestException(`Package USD amount must be at least $${floor} (current minimum deposit)`);
     }
+  }
+
+  async createDepositPackage(dto: { usdAmount: number; bonusCredits?: number; label?: string; isPopular?: boolean; sortOrder?: number; methods?: string[] }) {
+    const minUsd = await this.prisma.platformConfig.findUnique({ where: { key: 'min_deposit_usd' } });
+    this.validatePackageMethods(dto, (minUsd?.value as number) ?? 1);
     return this.prisma.depositPackage.create({
       data: {
         usdAmount: dto.usdAmount,
@@ -2009,19 +2016,20 @@ export class AdminService {
         label: dto.label ?? null,
         isPopular: dto.isPopular ?? false,
         sortOrder: dto.sortOrder ?? 0,
+        methods: dto.methods ?? [],
       },
     });
   }
 
-  async updateDepositPackage(id: string, dto: { usdAmount?: number; bonusCredits?: number; label?: string; isPopular?: boolean; isActive?: boolean; sortOrder?: number }) {
+  async updateDepositPackage(id: string, dto: { usdAmount?: number; bonusCredits?: number; label?: string; isPopular?: boolean; isActive?: boolean; sortOrder?: number; methods?: string[] }) {
     const pkg = await this.prisma.depositPackage.findUnique({ where: { id } });
     if (!pkg) throw new NotFoundException('Package not found');
-    if (dto.usdAmount !== undefined) {
+    if (dto.usdAmount !== undefined || dto.methods !== undefined) {
       const minUsd = await this.prisma.platformConfig.findUnique({ where: { key: 'min_deposit_usd' } });
-      const minDepositUsd = (minUsd?.value as number) ?? 1;
-      if (dto.usdAmount < minDepositUsd) {
-        throw new BadRequestException(`Package USD amount must be at least $${minDepositUsd} (current minimum deposit)`);
-      }
+      this.validatePackageMethods(
+        { usdAmount: dto.usdAmount ?? pkg.usdAmount, methods: dto.methods ?? pkg.methods },
+        (minUsd?.value as number) ?? 1,
+      );
     }
     return this.prisma.depositPackage.update({ where: { id }, data: dto });
   }

@@ -44,6 +44,8 @@ interface TransactionsResponse {
 }
 
 interface DepositPackage {
+  methods: string[];
+  phpAmount?: number;
   id: string;
   usdAmount: number;
   bonusCredits: number;
@@ -552,7 +554,12 @@ export default function WalletPage() {
     const minUsd = depositOptions.pricing.minDepositUsd ?? 1;
     const minPhp = depositOptions.pricing.minDepositPhp ?? 50;
     return (method: string) => {
-      if (method === 'PAYMONGO') return selectedPackage.phpEquivalent >= minPhp;
+      if (method === 'PAYMONGO') {
+        // PAYMONGO-only packages use the provider's ₱1 floor (mirrors server rule)
+        const paymongoOnly =
+          selectedPackage.methods?.length > 0 && selectedPackage.methods.every((m) => m === 'PAYMONGO');
+        return (selectedPackage.phpAmount ?? selectedPackage.phpEquivalent) >= (paymongoOnly ? 1 : minPhp);
+      }
       return selectedPackage.usdAmount >= minUsd;
     };
   }, [depositOptions, selectedPackage]);
@@ -1076,9 +1083,12 @@ export default function WalletPage() {
                         if (!meta) return null;
                         const isPhp = key === 'PAYMONGO';
                         const displayAmount = isPhp
-                          ? `₱${selectedPackage.phpEquivalent.toLocaleString()}`
+                          ? `₱${(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()}`
                           : `$${selectedPackage.usdAmount} USDT`;
-                        const available = methodAvailable(key);
+                        const available =
+                          methodAvailable(key) &&
+                          (!(selectedPackage.methods?.length) ||
+                            selectedPackage.methods!.includes(key));
                         const minLabel = isPhp
                           ? `Min ₱${depositOptions?.pricing.minDepositPhp ?? 50}`
                           : `Min $${depositOptions?.pricing.minDepositUsd ?? 1}`;
@@ -1363,7 +1373,7 @@ export default function WalletPage() {
                           <p>Package: <span className="text-white font-medium">{selectedPackage.usdAmount} USD</span></p>
                           <p>You get: <span className="text-brand-300 font-medium">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
                           {selectedMethod === 'PAYMONGO' && (
-                            <p>Amount: <span className="text-white">~{selectedPackage.phpEquivalent.toLocaleString()} PHP</span></p>
+                            <p>Amount: <span className="text-white">~{(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()} PHP</span></p>
                           )}
                         </div>
                       </div>

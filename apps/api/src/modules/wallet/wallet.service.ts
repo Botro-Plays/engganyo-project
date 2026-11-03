@@ -313,7 +313,11 @@ export class WalletService {
         creditsTotal: creditsBase + pkg.bonusCredits,
         label: pkg.label,
         isPopular: pkg.isPopular,
+        methods: pkg.methods,
         phpEquivalent: Math.ceil(pkg.usdAmount * usdToPhp),
+        // Exact amount the PayMongo checkout will charge — mirrors
+        // initiateDeposit's Math.max(1, …) clamp so UI and provider agree.
+        phpAmount: Math.max(1, parseFloat((pkg.usdAmount * usdToPhp).toFixed(2))),
         usdToPhp,
       };
     });
@@ -377,6 +381,12 @@ export class WalletService {
     }
 
     const { creditsPerUsd, usdToPhp, minDepositUsd, minDepositPhp } = options.pricing;
+    // Package method allowlist — empty means all methods (e.g. a PAYMONGO-only
+    // ₱1 test package cannot be used via PayPal or crypto).
+    if (pkg.methods?.length && !pkg.methods.includes(method)) {
+      throw new BadRequestException('This package is not available for the selected payment method');
+    }
+
     const isPhp = method === 'PAYMONGO';
     const rawAmountPhp = parseFloat((pkg.usdAmount * usdToPhp).toFixed(2));
     const amountFiat = isPhp ? Math.max(1, rawAmountPhp) : pkg.usdAmount;
@@ -385,8 +395,12 @@ export class WalletService {
     if (!isPhp && pkg.usdAmount < minDepositUsd) {
       throw new BadRequestException(`Minimum deposit is $${minDepositUsd} USD`);
     }
-    if (isPhp && amountFiat < minDepositPhp) {
-      throw new BadRequestException(`Minimum deposit is ₱${minDepositPhp} PHP`);
+    // PayMongo-only packages use the provider floor (₱1) instead of the
+    // configured PHP minimum — internal test packages rely on this.
+    const effectiveMinPhp =
+      pkg.methods?.length && pkg.methods.every((m) => m === 'PAYMONGO') ? 1 : minDepositPhp;
+    if (isPhp && amountFiat < effectiveMinPhp) {
+      throw new BadRequestException(`Minimum deposit is ₱${effectiveMinPhp} PHP`);
     }
     const currency   = isPhp ? 'PHP' : 'USD';
     const creditsBase   = Math.floor(pkg.usdAmount * creditsPerUsd);
