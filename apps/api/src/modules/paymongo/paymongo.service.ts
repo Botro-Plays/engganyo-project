@@ -188,16 +188,34 @@ export class PayMongoService {
     const attrs = (data?.attributes ?? {}) as Record<string, unknown>;
     const checkoutUrl = (attrs.checkout_url as string) ?? '';
     const paymentIntent = attrs.payment_intent as Record<string, unknown> | undefined;
-    const paymentIntentId = (paymentIntent?.id as string) ?? '';
+    let paymentIntentId = (paymentIntent?.id as string) ?? '';
     if (!sessionId || !checkoutUrl) {
       throw new BadRequestException('PayMongo checkout session response missing required fields');
+    }
+
+    // A session URL must never be handed to the browser without a verified
+    // pi_* intent — our subscribed payment.paid event correlates exclusively by
+    // payment_intent_id, so a session without one could be paid but never
+    // settle. If creation omits the intent, retrieve the session once to pick
+    // it up; if it is still absent, fail recoverably and leave the deposit
+    // eligible for a clean retry (nothing is persisted).
+    if (!paymentIntentId) {
+      paymentIntentId = (await this.fetchCheckoutSessionIntent(sessionId)) ?? '';
+    }
+    if (!paymentIntentId) {
+      this.logger.error(`Checkout session ${sessionId} has no payment_intent even after retrieval — refusing handoff`);
+      Sentry.captureMessage('PayMongo checkout session missing payment_intent', {
+        level: 'error',
+        extra: { depositId, sessionId },
+      });
+      throw new BadRequestException('PayMongo checkout session could not be initialized — please retry');
     }
 
     // checkout_session.payment.paid is not a subscribable event on our account —
     // session payments settle via payment.paid, whose payment object carries
     // attributes.payment_intent_id. Store the intent as paymentRef so the
     // existing payment.paid correlation matches (session id kept for tracing).
-    const paymentRef = paymentIntentId || sessionId;
+    const paymentRef = paymentIntentId;
     try {
       await this.prisma.deposit.update({
         where: { id: depositId },
@@ -616,6 +634,27 @@ export class PayMongoService {
       extra: { eventType, eventData },
     });
     return { received: true, action: 'ignored', eventType };
+  }
+
+  /**
+   * Retrieve a checkout session's payment_intent id when the create response
+   * omitted it. Returns null on any failure or when still absent.
+   */
+  private async fetchCheckoutSessionIntent(sessionId: string): Promise<string | null> {
+    try {
+      const secret = await this.getSecretKey();
+      if (!secret) return null;
+      const res = await fetch(`${this.baseUrl}/checkout_sessions/${sessionId}`, {
+        headers: { Authorization: this.authHeader(secret) },
+      });
+      if (!res.ok) return null;
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const attrs = ((json.data as Record<string, unknown> | undefined)?.attributes ?? {}) as Record<string, unknown>;
+      const intent = (attrs.payment_intent as Record<string, unknown> | undefined)?.id;
+      return (intent as string) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**

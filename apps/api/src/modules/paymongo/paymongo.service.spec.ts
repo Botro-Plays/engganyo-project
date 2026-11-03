@@ -17,6 +17,7 @@ describe('PayMongoService', () => {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   } as unknown as PrismaService;
@@ -596,5 +597,80 @@ describe('PayMongoService', () => {
     const second = await service.processWebhookEvent(makeSessionPaymentPaidEvent(), 't=226,li=sig');
     expect(second).toEqual({ received: true, action: 'ignored' });
     expect(walletServiceMock.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  // ── createCheckoutSession: never hand off a URL without a verified pi_* ──
+  const sessionCreateResponse = (overrides: Record<string, unknown> = {}) => ({
+    data: {
+      id: 'cs_new1',
+      attributes: {
+        checkout_url: 'https://checkout.paymongo.com/new1',
+        payment_intent: { id: 'pi_new1' },
+        ...overrides,
+      },
+    },
+  });
+
+  it('persists the payment intent before returning the checkout URL', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => sessionCreateResponse(),
+    } as never);
+    try {
+      const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
+      expect(result).toEqual({ linkId: 'pi_new1', checkoutUrl: 'https://checkout.paymongo.com/new1' });
+      expect(prismaMock.deposit.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'dep-1' },
+          data: expect.objectContaining({ paymentRef: 'pi_new1' }),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('recovers a missing intent via session retrieval before handoff', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch' as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => sessionCreateResponse({ payment_intent: undefined }),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { attributes: { payment_intent: { id: 'pi_recovered' } } } }),
+      } as never);
+    try {
+      const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
+      expect(result.linkId).toBe('pi_recovered');
+      expect(prismaMock.deposit.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paymentRef: 'pi_recovered' }),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('refuses handoff when the intent is absent in both create and retrieval (recoverable)', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch' as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => sessionCreateResponse({ payment_intent: undefined }),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { attributes: { payment_intent: null } } }),
+      } as never);
+    try {
+      await expect(service.createCheckoutSession('dep-1', 100, 'desc', 'PHP')).rejects.toThrow(
+        BadRequestException,
+      );
+      // Nothing persisted — deposit stays eligible for a clean retry.
+      expect(prismaMock.deposit.update).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
