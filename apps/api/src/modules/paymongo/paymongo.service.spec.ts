@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DepositMethod, DepositStatus } from '@prisma/client';
 
 import { PayMongoService } from './paymongo.service';
@@ -16,6 +16,7 @@ describe('PayMongoService', () => {
     deposit: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   } as unknown as PrismaService;
@@ -426,7 +427,7 @@ describe('PayMongoService', () => {
     try {
       await expect(
         service.processWebhookEvent(makeSessionPaymentPaidEvent({ amount: undefined, currency: undefined }), 't=212,li=sig'),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(InternalServerErrorException);
       expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
@@ -481,5 +482,119 @@ describe('PayMongoService', () => {
 
     expect(result).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
     expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
+  });
+
+  it('verifies intent via provider fetch when the event omits it (session deposit)', async () => {
+    // Hint locates the deposit; only the fetched intent authorizes it.
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { attributes: { amount: 100, currency: 'PHP', payment_intent_id: 'pi_sess1' } } }),
+    } as never);
+    try {
+      const result = await service.processWebhookEvent(
+        makeSessionPaymentPaidEvent({ payment_intent_id: undefined, metadata: { depositId: 'dep-123' } }),
+        't=220,li=sig',
+      );
+      expect(result).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
+      expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('refuses settlement when neither event nor provider yields an intent (500-retryable)', async () => {
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { attributes: { amount: 100, currency: 'PHP' } } }),
+    } as never);
+    try {
+      await expect(
+        service.processWebhookEvent(
+          makeSessionPaymentPaidEvent({ payment_intent_id: undefined, metadata: { depositId: 'dep-123' } }),
+          't=221,li=sig',
+        ),
+      ).rejects.toThrow(InternalServerErrorException);
+      expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('does not authorize a session deposit via a metadata depositId hint alone', async () => {
+    // Event carries the deposit's own id as metadata but a foreign intent →
+    // hint path must not rescue it.
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+
+    const result = await service.processWebhookEvent(
+      makeSessionPaymentPaidEvent({ payment_intent_id: 'pi_foreign', metadata: { depositId: 'dep-123' } }),
+      't=222,li=sig',
+    );
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('expires provider-dead sessions even when no legacy links are due', async () => {
+    (prismaMock.deposit.findMany as jest.Mock)
+      .mockResolvedValueOnce([]) // expiredWithData
+      .mockResolvedValueOnce([]) // expiredOld — zero legacy links
+      .mockResolvedValueOnce([
+        { id: 'dep-sess', gatewayData: { kind: 'checkout_session', sessionId: 'cs_dead1' } },
+      ]); // stale sessions
+    (prismaMock.deposit.updateMany as jest.Mock).mockResolvedValueOnce({ count: 1 });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { attributes: { expired_at: 1730000000, payments: [] } } }),
+    } as never);
+    try {
+      await service.cancelExpiredPayMongoDeposits();
+      expect(prismaMock.deposit.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'dep-sess' }),
+          data: expect.objectContaining({ status: DepositStatus.CANCELLED }),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('leaves still-payable sessions open (provider says active)', async () => {
+    (prismaMock.deposit.findMany as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'dep-sess', gatewayData: { kind: 'checkout_session', sessionId: 'cs_live1' } },
+      ]);
+    const cancelSpy = prismaMock.deposit.updateMany as jest.Mock;
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { attributes: { status: 'active', payments: [] } } }),
+    } as never);
+    try {
+      await service.cancelExpiredPayMongoDeposits();
+      expect(cancelSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('settles a delayed verified paid event on a stale session deposit exactly once', async () => {
+    // Deposit still PENDING past the stale window; paid event arrives late.
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+    const first = await service.processWebhookEvent(makeSessionPaymentPaidEvent(), 't=225,li=sig');
+    expect(first).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
+
+    // Redelivery after completion → ignored, no second credit.
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({
+      ...pendingPhpDeposit,
+      status: DepositStatus.COMPLETED,
+    });
+    const second = await service.processWebhookEvent(makeSessionPaymentPaidEvent(), 't=226,li=sig');
+    expect(second).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).toHaveBeenCalledTimes(1);
   });
 });

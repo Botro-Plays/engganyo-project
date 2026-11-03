@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, INestApplication, InternalServerErrorException } from '@nestjs/common';
 import { DepositMethod, DepositStatus, UserRole, UserStatus } from '@prisma/client';
 
 import { PayMongoController } from './paymongo.controller';
@@ -19,8 +19,10 @@ describe('PayMongoController', () => {
     Parameters<WalletService['getDepositForUser']>
   >();
 
-  const paymongoService: Pick<PayMongoService, 'createCheckoutSession'> = {
+  const processWebhookEventMock = jest.fn();
+  const paymongoService: Pick<PayMongoService, 'createCheckoutSession' | 'processWebhookEvent'> = {
     createCheckoutSession: createCheckoutSessionMock,
+    processWebhookEvent: processWebhookEventMock,
   };
   const walletService: Pick<WalletService, 'getDepositForUser'> = {
     getDepositForUser: getDepositForUserMock,
@@ -128,5 +130,35 @@ describe('PayMongoController', () => {
       'PHP',
     );
     expect(result).toEqual({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
+  });
+
+  it('webhook returns 500 (retryable) when payment evidence cannot be verified', async () => {
+    processWebhookEventMock.mockRejectedValueOnce(
+      new InternalServerErrorException('payment pay_x could not be verified for deposit dep-1'),
+    );
+
+    let app: INestApplication | undefined;
+    try {
+      const moduleRef = await Test.createTestingModule({
+        controllers: [PayMongoController],
+        providers: [
+          { provide: PayMongoService, useValue: paymongoService },
+          { provide: WalletService, useValue: walletService },
+        ],
+      }).compile();
+      app = moduleRef.createNestApplication({ rawBody: true });
+      await app.init();
+      const server = await app.listen(0);
+      const port = (server.address() as { port: number }).port;
+
+      const res = await fetch(`http://127.0.0.1:${port}/paymongo/webhook`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'paymongo-signature': 't=1,li=sig' },
+        body: JSON.stringify({ data: { attributes: { type: 'payment.paid' } } }),
+      });
+      expect(res.status).toBe(500);
+    } finally {
+      await app?.close();
+    }
   });
 });

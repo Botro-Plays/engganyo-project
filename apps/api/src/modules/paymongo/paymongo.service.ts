@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { createHmac } from 'crypto';
 import { DepositMethod, DepositStatus, NotificationType } from '@prisma/client';
@@ -442,7 +442,7 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
       if (verdict === 'unverified') {
-        throw new BadRequestException(`session payment ${paymentId ?? 'unknown'} could not be verified for deposit ${deposit.id}`);
+        throw new InternalServerErrorException(`session payment ${paymentId ?? 'unknown'} could not be verified for deposit ${deposit.id}`);
       }
 
       return this.settlePaidDeposit(deposit, paymentId, 'checkout_session.payment.paid');
@@ -486,17 +486,28 @@ export class PayMongoService {
         );
       }
 
-      // 2) Legacy correlation — depositId hints only when the intent matched nothing.
+      // 2) Legacy correlation — depositId hints may LOCATE a deposit but never
+      // AUTHORIZE a session deposit (pi_* paymentRef). For those, settlement
+      // still requires the verified intent to equal the stored reference
+      // (enforced in verifyPaidEvidence — event intent, else provider fetch).
       if (!deposit && candidateDepositId) {
         const byId = await this.prisma.deposit.findUnique({ where: { id: candidateDepositId } });
         if (byId && byId.method === DepositMethod.PAYMONGO) {
           deposit = byId;
-          this.logger.log(`payment.paid: matched deposit ${byId.id} via reference`);
+          if (byId.paymentRef?.startsWith('pi_')) {
+            this.logger.warn(
+              `payment.paid: hint located session deposit ${byId.id} — verified intent still required (intent=${intentId ?? 'none'})`,
+            );
+          } else {
+            this.logger.log(`payment.paid: matched link deposit ${byId.id} via reference`);
+          }
         }
       }
 
       if (!deposit) {
-        this.logger.warn(`payment.paid: could not match payment ${paymentId} to any deposit`);
+        this.logger.warn(
+          `payment.paid: could not match payment ${paymentId} to any deposit (intent=${intentId ?? 'none'}, hint=${candidateDepositId ?? 'none'})`,
+        );
         return { received: true, action: 'ignored' };
       }
 
@@ -511,7 +522,7 @@ export class PayMongoService {
       }
       if (verdict === 'unverified') {
         // Leave wallet/ledger untouched; retryable — PayMongo redelivers on 5xx.
-        throw new BadRequestException(`payment ${paymentId} could not be verified for deposit ${deposit.id}`);
+        throw new InternalServerErrorException(`payment ${paymentId} could not be verified for deposit ${deposit.id}`);
       }
 
       return this.settlePaidDeposit(deposit, paymentId, 'payment.paid');
@@ -644,8 +655,11 @@ export class PayMongoService {
     tag: string,
   ): Promise<'ok' | 'mismatch' | 'unverified'> {
     let { amountCents, currency, intentId } = evidence;
+    const intentBound = Boolean(deposit.paymentRef?.startsWith('pi_'));
 
-    if (amountCents == null || !currency || !intentId) {
+    // A session deposit REQUIRES verified intent equality — fetch the payment
+    // when the event omits it (or when amount/currency are missing anyway).
+    if (amountCents == null || !currency || (intentBound && !intentId)) {
       if (!evidence.paymentId) return 'unverified';
       const fetched = await this.fetchProviderPayment(evidence.paymentId);
       if (!fetched) {
@@ -657,11 +671,18 @@ export class PayMongoService {
       intentId = intentId ?? fetched.paymentIntentId;
     }
 
-    // Session deposits are bound to a specific payment intent stored in
-    // paymentRef — when both are known they must agree.
-    if (intentId && deposit.paymentRef && deposit.paymentRef.startsWith('pi_') && intentId !== deposit.paymentRef) {
-      this.logger.warn(`${tag}: intent mismatch on deposit ${deposit.id} (${intentId} vs stored ${deposit.paymentRef})`);
-      return 'mismatch';
+    // Session deposits are bound to a specific payment intent — the verified
+    // intent must equal the stored reference. Absent (even after a provider
+    // fetch) or different intent means no settlement.
+    if (intentBound) {
+      if (!intentId) {
+        this.logger.warn(`${tag}: no payment intent available for session deposit ${deposit.id} — not crediting`);
+        return 'unverified';
+      }
+      if (intentId !== deposit.paymentRef) {
+        this.logger.warn(`${tag}: intent mismatch on deposit ${deposit.id} (${intentId} vs stored ${deposit.paymentRef})`);
+        return 'mismatch';
+      }
     }
     if (amountCents == null || !currency) return 'unverified';
 
@@ -757,7 +778,13 @@ export class PayMongoService {
     const allExpired = [...expiredWithData, ...expiredOld].filter(
       (d) => (d.gatewayData as Record<string, unknown> | null)?.kind !== 'checkout_session',
     );
-    if (allExpired.length === 0) return;
+
+    if (allExpired.length === 0) {
+      // Still check sessions — this cron also owns provider-confirmed
+      // session expiry and must run even when no legacy links are due.
+      await this.expireProviderDeadSessions();
+      return;
+    }
 
     this.logger.log(`Found ${allExpired.length} PayMongo link deposit(s) with expired links — cancelling`);
 
