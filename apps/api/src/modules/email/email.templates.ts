@@ -33,11 +33,11 @@ function baseLayout(content: string, previewText: string): string {
           <tr>
             <td align="center" style="padding-bottom:32px;">
               <a href="https://engganyo.com" target="_blank" style="display:inline-block;text-decoration:none;">
-                <img src="https://engganyo.com/logo-horizontal.svg"
+                <img src="https://raw.githubusercontent.com/Botro-Plays/engganyo-project/main/apps/web/public/logo-square.png"
                      alt="Engganyo"
-                     width="160"
+                     width="40"
                      height="40"
-                     style="display:block;border:0;height:auto;max-width:160px;" />
+                     style="display:block;border:0;height:auto;" />
               </a>
             </td>
           </tr>
