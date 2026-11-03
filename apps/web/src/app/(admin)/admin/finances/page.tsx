@@ -29,6 +29,7 @@ interface DepositPackage {
   isPopular: boolean;
   isActive: boolean;
   sortOrder: number;
+  methods: string[];
 }
 
 interface DepositUser { id: string; username: string; displayName: string | null; email: string }
@@ -165,7 +166,7 @@ export default function FinancesPage() {
 
   // Package management
   const [editingPkg, setEditingPkg] = useState<DepositPackage | null>(null);
-  const [pkgForm, setPkgForm] = useState({ usdAmount: '', bonusCredits: '0', label: '', isPopular: false, sortOrder: '0' });
+  const [pkgForm, setPkgForm] = useState({ usdAmount: '', bonusCredits: '0', label: '', isPopular: false, sortOrder: '0', methods: [] as string[] });
   const [showPkgForm, setShowPkgForm] = useState(false);
 
   const { data: pkgs, isLoading: pkgsLoading } = useQuery({
@@ -182,7 +183,7 @@ export default function FinancesPage() {
   const createPkgMutation = useMutation({
     mutationFn: async (data: { usdAmount: number; bonusCredits: number; label?: string; isPopular: boolean; sortOrder: number }) =>
       apiClient.post('admin/finances/packages', data),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'deposit-packages'] }); setShowPkgForm(false); setPkgForm({ usdAmount: '', bonusCredits: '0', label: '', isPopular: false, sortOrder: '0' }); setNotice({ type: 'success', msg: 'Package created.' }); setTimeout(() => setNotice(null), 3000); },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'deposit-packages'] }); setShowPkgForm(false); setPkgForm({ usdAmount: '', bonusCredits: '0', label: '', isPopular: false, sortOrder: '0', methods: [] }); setNotice({ type: 'success', msg: 'Package created.' }); setTimeout(() => setNotice(null), 3000); },
     onError: (err) => setNotice({ type: 'error', msg: getApiErrorMessage(err) }),
   });
 
@@ -200,13 +201,13 @@ export default function FinancesPage() {
   });
 
   const handlePkgSave = () => {
-    const data = { usdAmount: parseFloat(pkgForm.usdAmount), bonusCredits: parseInt(pkgForm.bonusCredits), label: pkgForm.label || undefined, isPopular: pkgForm.isPopular, sortOrder: parseInt(pkgForm.sortOrder) };
+    const data = { usdAmount: parseFloat(pkgForm.usdAmount), bonusCredits: parseInt(pkgForm.bonusCredits), label: pkgForm.label || undefined, isPopular: pkgForm.isPopular, sortOrder: parseInt(pkgForm.sortOrder), methods: pkgForm.methods };
     if (editingPkg) updatePkgMutation.mutate({ id: editingPkg.id, data });
     else createPkgMutation.mutate(data);
   };
 
-  const openEdit = (p: DepositPackage) => { setEditingPkg(p); setPkgForm({ usdAmount: String(p.usdAmount), bonusCredits: String(p.bonusCredits), label: p.label ?? '', isPopular: p.isPopular, sortOrder: String(p.sortOrder) }); setShowPkgForm(true); };
-  const openCreate = () => { setEditingPkg(null); setPkgForm({ usdAmount: '', bonusCredits: '0', label: '', isPopular: false, sortOrder: '0' }); setShowPkgForm(true); };
+  const openEdit = (p: DepositPackage) => { setEditingPkg(p); setPkgForm({ usdAmount: String(p.usdAmount), bonusCredits: String(p.bonusCredits), label: p.label ?? '', isPopular: p.isPopular, sortOrder: String(p.sortOrder), methods: p.methods ?? [] }); setShowPkgForm(true); };
+  const openCreate = () => { setEditingPkg(null); setPkgForm({ usdAmount: '', bonusCredits: '0', label: '', isPopular: false, sortOrder: '0', methods: [] }); setShowPkgForm(true); };
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['admin', 'finance-stats'],
@@ -369,6 +370,20 @@ export default function FinancesPage() {
                 <label className="block text-xs text-zinc-500 mb-1">Badge Label (optional, e.g. &ldquo;Best Value&rdquo;)</label>
                 <input type="text" value={pkgForm.label} onChange={(e) => setPkgForm({ ...pkgForm, label: e.target.value })}
                   placeholder="e.g. Best Value" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1.5">Allowed methods <span className="text-zinc-600">(none checked = all)</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {(['PAYMONGO', 'PAYPAL', 'USDT_BEP20', 'USDT_BASE'] as const).map((m) => (
+                    <label key={m} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                      pkgForm.methods.includes(m) ? 'bg-brand-500/10 border-brand-500/40 text-brand-300' : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+                    }`}>
+                      <input type="checkbox" className="hidden" checked={pkgForm.methods.includes(m)}
+                        onChange={() => setPkgForm({ ...pkgForm, methods: pkgForm.methods.includes(m) ? pkgForm.methods.filter((x) => x !== m) : [...pkgForm.methods, m] })} />
+                      {METHOD_CFG[m]?.label ?? m}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

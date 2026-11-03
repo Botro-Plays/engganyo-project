@@ -1078,7 +1078,10 @@ export default function WalletPage() {
                         const displayAmount = isPhp
                           ? `₱${selectedPackage.phpEquivalent.toLocaleString()}`
                           : `$${selectedPackage.usdAmount} USDT`;
-                        const available = methodAvailable(key);
+                        const available =
+                          methodAvailable(key) &&
+                          (!(selectedPackage as { methods?: string[] }).methods?.length ||
+                            (selectedPackage as { methods?: string[] }).methods!.includes(key));
                         const minLabel = isPhp
                           ? `Min ₱${depositOptions?.pricing.minDepositPhp ?? 50}`
                           : `Min $${depositOptions?.pricing.minDepositUsd ?? 1}`;

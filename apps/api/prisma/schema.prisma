@@ -1110,6 +1110,7 @@ model AnalyticsSnapshot {
 model DepositPackage {
   id           String    @id @default(cuid())
   usdAmount    Float     @map("usd_amount")      // e.g. 10.00
+  methods      String[]  @default([])            // Allowed payment methods; empty = all methods
   bonusCredits Int       @default(0) @map("bonus_credits")
   label        String?                            // e.g. "Most Popular"
   isPopular    Boolean   @default(false) @map("is_popular")
