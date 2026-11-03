@@ -211,7 +211,10 @@ export class PayPalService {
       const captured = parseFloat(capturedValue);
       const expected = deposit?.amountFiat ?? 0;
       if (expected > 0 && Math.abs(captured - expected) > 0.01) {
-        this.logger.warn(`PayPal amount mismatch: expected ${expected}, got ${captured}`);
+        this.logger.warn(`PayPal amount mismatch: expected ${expected}, got ${captured} — deposit NOT completed`);
+        throw new BadRequestException(
+          `Captured amount ${captured} does not match expected ${expected}`,
+        );
       }
     }
 
@@ -382,6 +385,19 @@ export class PayPalService {
       if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
       if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
         return { received: true, action: 'ignored_wrong_status', depositId: deposit.id };
+      }
+
+      // Verify the captured amount matches what the deposit expects before
+      // crediting — a mismatched capture must not settle the wallet.
+      const capturedValue = (resource?.amount as { value?: string } | undefined)?.value;
+      if (capturedValue) {
+        const captured = parseFloat(capturedValue);
+        if (deposit.amountFiat > 0 && Math.abs(captured - deposit.amountFiat) > 0.01) {
+          this.logger.warn(
+            `PAYMENT.CAPTURE.COMPLETED amount mismatch for deposit ${deposit.id}: expected ${deposit.amountFiat}, got ${captured} — not completing`,
+          );
+          return { received: true, action: 'ignored_amount_mismatch', depositId: deposit.id };
+        }
       }
 
       await this.walletService.completeDeposit(deposit.id, { paymentRef: orderId });
