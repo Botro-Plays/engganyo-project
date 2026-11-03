@@ -619,9 +619,8 @@ describe('PayMongoService', () => {
     try {
       const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
       expect(result).toEqual({ linkId: 'pi_new1', checkoutUrl: 'https://checkout.paymongo.com/new1' });
-      expect(prismaMock.deposit.update).toHaveBeenCalledWith(
+      expect(prismaMock.deposit.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'dep-1' },
           data: expect.objectContaining({ paymentRef: 'pi_new1' }),
         }),
       );
@@ -643,7 +642,7 @@ describe('PayMongoService', () => {
     try {
       const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
       expect(result.linkId).toBe('pi_recovered');
-      expect(prismaMock.deposit.update).toHaveBeenCalledWith(
+      expect(prismaMock.deposit.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ paymentRef: 'pi_recovered' }),
         }),
@@ -667,8 +666,10 @@ describe('PayMongoService', () => {
       await expect(service.createCheckoutSession('dep-1', 100, 'desc', 'PHP')).rejects.toThrow(
         BadRequestException,
       );
-      // Nothing persisted — deposit stays eligible for a clean retry.
-      expect(prismaMock.deposit.update).not.toHaveBeenCalled();
+      // No pi_* ever persisted — deposit stays eligible for a clean retry.
+      expect(prismaMock.deposit.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ paymentRef: expect.stringMatching(/^pi_/) }) }),
+      );
     } finally {
       fetchSpy.mockRestore();
     }
@@ -687,7 +688,7 @@ describe('PayMongoService', () => {
     try {
       const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
       expect(result.linkId).toBe('pi_recovered');
-      expect(prismaMock.deposit.update).toHaveBeenCalledWith(
+      expect(prismaMock.deposit.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ paymentRef: 'pi_recovered' }) }),
       );
     } finally {
@@ -706,7 +707,7 @@ describe('PayMongoService', () => {
 
     expect(result).toEqual({ linkId: 'pi_a1', checkoutUrl: 'https://checkout.paymongo.com/a1' });
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(prismaMock.deposit.update).not.toHaveBeenCalled();
+    expect(prismaMock.deposit.updateMany).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
@@ -752,5 +753,96 @@ describe('PayMongoService', () => {
     await expect(service.createCheckoutSession('dep-1', 100, 'desc', 'PHP')).rejects.toThrow(
       'Checkout is being prepared',
     );
+  });
+
+  // ── Exclusive-claim predicate, faithfully evaluated against a shared row ──
+  interface FakeRow { paymentRef: string | null; updatedAt: Date; gatewayData: Record<string, unknown> }
+  const evalPredicate = (
+    where: { OR?: Array<Record<string, unknown>>; paymentRef?: unknown },
+    row: FakeRow,
+  ): boolean => {
+    const conds = where.OR ?? [{ paymentRef: where.paymentRef }];
+    return conds.some((c) => {
+      if (c.paymentRef === null) return row.paymentRef === null;
+      if (typeof c.paymentRef === 'string') return row.paymentRef === c.paymentRef;
+      const sw = (c.paymentRef as { startsWith?: string } | undefined)?.startsWith;
+      const lt = (c.updatedAt as { lt?: Date } | undefined)?.lt;
+      if (sw) return Boolean(row.paymentRef?.startsWith(sw)) && (!lt || row.updatedAt < lt);
+      return row.paymentRef === c.paymentRef;
+    });
+  };
+
+  it('exclusive claim: A holds it during provider call — B cannot steal, retry returns A URL', async () => {
+    const row: FakeRow = { paymentRef: null, updatedAt: new Date(), gatewayData: {} };
+    (prismaMock.deposit.findUnique as jest.Mock).mockImplementation(async () => ({ ...row }));
+    (prismaMock.deposit.updateMany as jest.Mock).mockImplementation(async ({ where, data }: { where: { OR?: Array<Record<string, unknown>>; paymentRef?: unknown }; data: Record<string, unknown> }) => {
+      if (!evalPredicate(where, row)) return { count: 0 };
+      if (typeof data.paymentRef === 'string') row.paymentRef = data.paymentRef;
+      row.updatedAt = (data.updatedAt as Date) ?? new Date();
+      if (data.gatewayData) row.gatewayData = data.gatewayData as Record<string, unknown>;
+      return { count: 1 };
+    });
+
+    // Pause A mid-provider-call after its claim succeeds.
+    let resolveAFetch: (v: unknown) => void = () => {};
+    const fetchSpy = jest.spyOn(global, 'fetch' as never)
+      .mockImplementationOnce(() => new Promise((r) => { resolveAFetch = r as (v: unknown) => void; }) as never);
+
+    const promiseA = service.createCheckoutSession('dep-A', 100, 'desc', 'PHP');
+    await new Promise((r) => setTimeout(r, 50)); // let A claim + reach fetch
+    expect(row.paymentRef).toMatch(/^creating:/);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // A's create request in flight
+
+    // B tries — the exclusive predicate refuses (fresh creating: claim).
+    await expect(service.createCheckoutSession('dep-A', 100, 'desc', 'PHP')).rejects.toThrow(
+      'Checkout is being prepared',
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // B never called the provider
+
+    // A finishes — persists with ownership check.
+    resolveAFetch({ ok: true, json: async () => sessionCreateResponse() });
+    const resultA = await promiseA;
+    expect(resultA.checkoutUrl).toBe('https://checkout.paymongo.com/new1');
+    expect(row.paymentRef).toBe('pi_new1');
+
+    // B retries — reuse path returns A's URL, still zero extra provider calls.
+    const resultB = await service.createCheckoutSession('dep-A', 100, 'desc', 'PHP');
+    expect(resultB.checkoutUrl).toBe('https://checkout.paymongo.com/new1');
+    expect(resultB.linkId).toBe('pi_new1');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+  });
+
+  it('stale claim reclaim: old owner can never overwrite or return its URL', async () => {
+    const row: FakeRow = {
+      paymentRef: 'creating:old',
+      updatedAt: new Date(Date.now() - 120_000), // stale > TTL
+      gatewayData: {},
+    };
+    (prismaMock.deposit.findUnique as jest.Mock).mockImplementation(async () => ({ ...row }));
+    (prismaMock.deposit.updateMany as jest.Mock).mockImplementation(async ({ where, data }: { where: { OR?: Array<Record<string, unknown>>; paymentRef?: unknown }; data: Record<string, unknown> }) => {
+      if (!evalPredicate(where, row)) return { count: 0 };
+      if (typeof data.paymentRef === 'string') row.paymentRef = data.paymentRef;
+      row.updatedAt = (data.updatedAt as Date) ?? new Date();
+      if (data.gatewayData) row.gatewayData = data.gatewayData as Record<string, unknown>;
+      return { count: 1 };
+    });
+
+    // B reclaims the stale row and persists its session.
+    const fetchSpy = jest.spyOn(global, 'fetch' as never)
+      .mockResolvedValueOnce({ ok: true, json: async () => sessionCreateResponse({ checkout_url: 'https://checkout.paymongo.com/b', payment_intent: { id: 'pi_b' } }) } as never);
+    const resultB = await service.createCheckoutSession('dep-A', 100, 'desc', 'PHP');
+    expect(resultB.linkId).toBe('pi_b');
+    expect(row.paymentRef).toBe('pi_b');
+
+    // Old owner's late persist attempt is conditioned on paymentRef='creating:old'
+    // — predicate fails (row now pi_b), so it can never overwrite or return its URL.
+    const oldOwnerPersist = await (prismaMock.deposit.updateMany as jest.Mock)({
+      where: { paymentRef: 'creating:old' },
+      data: { paymentRef: 'pi_old', gatewayData: { checkoutUrl: 'https://checkout.paymongo.com/old' } },
+    });
+    expect(oldOwnerPersist.count).toBe(0);
+    expect(row.paymentRef).toBe('pi_b'); // winner untouched
+    fetchSpy.mockRestore();
   });
 });

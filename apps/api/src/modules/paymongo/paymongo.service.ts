@@ -148,15 +148,27 @@ export class PayMongoService {
     }
 
     // ── Atomic claim: exactly one creator per deposit ──────────────────────
+    // A claim is exclusive: the predicate only admits an unclaimed row or a
+    // 'creating:' claim provably stale (> CLAIM_TTL). An active claim can
+    // never be overwritten — the timestamp is persisted in updatedAt so age
+    // is evaluated by Postgres itself.
+    const CLAIM_TTL_MS = 60_000;
     const claimTag = `creating:${crypto.randomUUID()}`;
+    const staleBefore = new Date(Date.now() - CLAIM_TTL_MS);
     const claimed = await this.prisma.deposit.updateMany({
       where: {
         id: depositId,
         method: DepositMethod.PAYMONGO,
         status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
-        OR: [{ paymentRef: null }, { paymentRef: { startsWith: 'creating:' } }],
+        OR: [
+          { paymentRef: null },
+          {
+            paymentRef: { startsWith: 'creating:' },
+            updatedAt: { lt: staleBefore },
+          },
+        ],
       },
-      data: { paymentRef: claimTag },
+      data: { paymentRef: claimTag, updatedAt: new Date() },
     });
     if (claimed.count === 0) {
       // Another request prepared (or is preparing) the checkout — hand back
@@ -195,6 +207,7 @@ export class PayMongoService {
     try {
       res = await fetch(`${this.baseUrl}/checkout_sessions`, {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           Authorization: this.authHeader(secret),
           'Content-Type': 'application/json',
@@ -271,15 +284,31 @@ export class PayMongoService {
     // session payments settle via payment.paid, whose payment object carries
     // attributes.payment_intent_id. Store the intent as paymentRef so the
     // existing payment.paid correlation matches (session id kept for tracing).
+    // Persistence is conditioned on still owning THIS exact claim — a stale
+    // reclaim by another request must never let us overwrite the winner's ref
+    // or hand out our URL.
     try {
-      await this.prisma.deposit.update({
-        where: { id: depositId },
+      const persisted = await this.prisma.deposit.updateMany({
+        where: { id: depositId, paymentRef: claimTag },
         data: {
           paymentRef: paymentIntentId,
           gatewayData: { ...existingGw, checkoutUrl, kind: 'checkout_session', sessionId, paymentIntentId },
         },
       });
+      if (persisted.count === 0) {
+        this.logger.warn(`Deposit ${depositId}: claim lost before persist — returning owner state instead`);
+        const fresh = await this.prisma.deposit.findUnique({
+          where: { id: depositId },
+          select: { paymentRef: true, gatewayData: true },
+        });
+        const freshGw = (fresh?.gatewayData ?? {}) as Record<string, unknown>;
+        if (fresh?.paymentRef && freshGw.checkoutUrl && !fresh.paymentRef.startsWith('creating:')) {
+          return { linkId: fresh.paymentRef, checkoutUrl: freshGw.checkoutUrl as string };
+        }
+        throw new BadRequestException('Checkout was replaced during preparation — please retry');
+      }
     } catch (err) {
+      if (err instanceof BadRequestException) throw err;
       await releaseClaim();
       this.logger.error(`Failed to update deposit ${depositId} with session paymentRef: ${String(err)}`);
       Sentry.captureException(err instanceof Error ? err : new Error('Failed to update deposit with PayMongo session ref'), {
@@ -701,6 +730,7 @@ export class PayMongoService {
       const secret = await this.getSecretKey();
       if (!secret) return null;
       const res = await fetch(`${this.baseUrl}/checkout_sessions/${sessionId}`, {
+        signal: AbortSignal.timeout(10_000),
         headers: { Authorization: this.authHeader(secret) },
       });
       if (!res.ok) return null;
