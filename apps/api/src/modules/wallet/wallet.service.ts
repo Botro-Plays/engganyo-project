@@ -341,7 +341,7 @@ export class WalletService {
 
     if (!pkg || !pkg.isActive) throw new BadRequestException('Deposit package not found or unavailable');
 
-    const { method, txHash, userWalletAddress } = dto;
+    const { method } = dto;
     const methodConfigs: Record<string, { enabled: boolean; walletAddress?: string | null }> = {
       PAYMONGO:   options.paymongo,
       PAYPAL:     options.paypal,
@@ -350,6 +350,31 @@ export class WalletService {
     };
     const cfg = methodConfigs[method as string];
     if (!cfg?.enabled) throw new BadRequestException(`${method} deposits are not currently available`);
+
+    const isCryptoMethod = method === 'USDT_BEP20' || method === 'USDT_BASE';
+    // Crypto deposits must declare the paying wallet up front — it is bound
+    // against the on-chain Transfer `from` during verification so other
+    // accounts cannot claim public tx hashes.
+    let userWalletAddress: string | null = null;
+    if (isCryptoMethod) {
+      if (!dto.userWalletAddress || !/^0x[a-fA-F0-9]{40}$/.test(dto.userWalletAddress.trim())) {
+        throw new BadRequestException('A valid EVM wallet address is required for crypto deposits');
+      }
+      userWalletAddress = dto.userWalletAddress.trim();
+    } else {
+      userWalletAddress = dto.userWalletAddress?.trim() ?? null;
+    }
+    // Normalize tx hashes: chain identifiers are case-insensitive but the
+    // paymentRef unique column is case-sensitive — casing variants must not
+    // allow the same transaction to be claimed twice.
+    let txHash: string | null = null;
+    if (dto.txHash) {
+      const normalized = dto.txHash.trim().toLowerCase();
+      if (!/^0x[a-f0-9]{64}$/.test(normalized)) {
+        throw new BadRequestException('Invalid transaction hash format. Expected 0x followed by 64 hexadecimal characters.');
+      }
+      txHash = normalized;
+    }
 
     const { creditsPerUsd, usdToPhp, minDepositUsd, minDepositPhp } = options.pricing;
     const isPhp = method === 'PAYMONGO';
@@ -367,22 +392,30 @@ export class WalletService {
     const creditsBase   = Math.floor(pkg.usdAmount * creditsPerUsd);
     const creditsToAward = creditsBase + pkg.bonusCredits;
 
-    const deposit = await this.prisma.deposit.create({
-      data: {
-        userId,
-        packageId: pkg.id,
-        method: method as DepositMethod,
-        status: txHash ? DepositStatus.PROCESSING : DepositStatus.PENDING,
-        amountFiat,
-        currency,
-        creditsToAward,
-        bonusCredits: pkg.bonusCredits,
-        creditsAwarded: 0,
-        exchangeRate: isPhp ? usdToPhp : null,
-        paymentRef: txHash ?? null,
-        userWalletAddress: userWalletAddress ?? null,
-      },
-    });
+    let deposit;
+    try {
+      deposit = await this.prisma.deposit.create({
+        data: {
+          userId,
+          packageId: pkg.id,
+          method: method as DepositMethod,
+          status: txHash ? DepositStatus.PROCESSING : DepositStatus.PENDING,
+          amountFiat,
+          currency,
+          creditsToAward,
+          bonusCredits: pkg.bonusCredits,
+          creditsAwarded: 0,
+          exchangeRate: isPhp ? usdToPhp : null,
+          paymentRef: txHash ?? null,
+          userWalletAddress,
+        },
+      });
+    } catch (err) {
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('This transaction hash has already been submitted');
+      }
+      throw err;
+    }
 
     const isCrypto = method === 'USDT_BEP20' || method === 'USDT_BASE';
     const cryptoCfg = method === 'USDT_BEP20' ? options.usdtBep20 : options.usdtBase;
@@ -649,7 +682,7 @@ export class WalletService {
 
   // ─── Submit txHash for an existing PENDING crypto deposit ──
 
-  async submitTxHash(userId: string, depositId: string, txHash: string) {
+  async submitTxHash(userId: string, depositId: string, txHash: string, userWalletAddress?: string) {
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit) throw new NotFoundException('Deposit not found');
     if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
@@ -661,19 +694,39 @@ export class WalletService {
     }
 
     // Validate txHash format: must be 0x + 64 hex characters
-    const normalized = txHash.trim();
-    if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
+    const normalized = txHash.trim().toLowerCase();
+    if (!/^0x[a-f0-9]{64}$/.test(normalized)) {
       throw new BadRequestException('Invalid transaction hash format. Expected 0x followed by 64 hexadecimal characters.');
     }
 
+    // Every crypto deposit must carry the paying wallet so verification can
+    // bind the Transfer `from` to this account. Older PENDING deposits may
+    // lack it — accept it on submission.
+    let walletAddress = deposit.userWalletAddress;
+    if (!walletAddress) {
+      if (!userWalletAddress || !/^0x[a-fA-F0-9]{40}$/.test(userWalletAddress.trim())) {
+        throw new BadRequestException('Provide the EVM wallet address you will pay from so the transaction can be verified');
+      }
+      walletAddress = userWalletAddress.trim();
+    }
+
     // Atomic update: ensure deposit is still PENDING before flipping to PROCESSING
-    const claimed = await this.prisma.deposit.updateMany({
-      where: { id: depositId, status: DepositStatus.PENDING },
-      data: {
-        status: DepositStatus.PROCESSING,
-        paymentRef: normalized,
-      },
-    });
+    let claimed;
+    try {
+      claimed = await this.prisma.deposit.updateMany({
+        where: { id: depositId, status: DepositStatus.PENDING },
+        data: {
+          status: DepositStatus.PROCESSING,
+          paymentRef: normalized,
+          userWalletAddress: walletAddress,
+        },
+      });
+    } catch (err) {
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('This transaction hash has already been submitted');
+      }
+      throw err;
+    }
 
     if (claimed.count === 0) {
       throw new BadRequestException('Deposit status changed. Please refresh and try again.');
@@ -720,6 +773,9 @@ export class WalletService {
     if (!platformWallet) {
       throw new BadRequestException('Platform wallet address not configured for this network');
     }
+    if (!deposit.userWalletAddress) {
+      throw new BadRequestException('No paying wallet is declared on this deposit — it cannot be verified. Submit the wallet address you paid from.');
+    }
 
     const expectedAmount = deposit.package?.usdAmount ?? deposit.amountFiat;
 
@@ -728,6 +784,8 @@ export class WalletService {
       txHash: deposit.paymentRef,
       expectedAmountUsd: expectedAmount,
       platformWalletAddress: platformWallet,
+      expectedFromAddress: deposit.userWalletAddress,
+      notBeforeTimestamp: Math.floor(deposit.createdAt.getTime() / 1000),
     });
 
     if (result.valid) {
@@ -833,6 +891,11 @@ export class WalletService {
           continue;
         }
 
+        if (!deposit.userWalletAddress) {
+          this.logger.warn(`Crypto deposit ${deposit.id} has no declared wallet address; skipping verification`);
+          continue;
+        }
+
         const expectedAmount = deposit.package?.usdAmount ?? deposit.amountFiat;
 
         const result = await this.cryptoVerification.verifyDeposit({
@@ -840,6 +903,8 @@ export class WalletService {
           txHash: deposit.paymentRef!,
           expectedAmountUsd: expectedAmount,
           platformWalletAddress: platformWallet,
+          expectedFromAddress: deposit.userWalletAddress,
+          notBeforeTimestamp: Math.floor(deposit.createdAt.getTime() / 1000),
         });
 
         if (result.valid) {

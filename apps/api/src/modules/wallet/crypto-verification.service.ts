@@ -56,8 +56,17 @@ export class CryptoVerificationService {
     txHash: string;
     expectedAmountUsd: number;
     platformWalletAddress: string;
+    // Wallet address declared on the deposit at initiation. When provided the
+    // on-chain Transfer `from` MUST equal it — this binds the payment to the
+    // account that created the deposit and blocks hash-theft claims by other
+    // accounts (tx hashes are public on-chain).
+    expectedFromAddress?: string;
+    // Unix seconds. Reject transactions whose block was mined BEFORE the
+    // deposit was initiated — an attacker cannot claim transfers that already
+    // existed when they created their deposit.
+    notBeforeTimestamp?: number;
   }): Promise<VerificationResult> {
-    const { method, txHash, expectedAmountUsd, platformWalletAddress } = params;
+    const { method, txHash, expectedAmountUsd, platformWalletAddress, expectedFromAddress, notBeforeTimestamp } = params;
 
     const network = method === 'USDT_BEP20' ? 'BSC' : 'BASE';
     const contractAddress = USDT_CONTRACT[network];
@@ -140,7 +149,39 @@ export class CryptoVerificationService {
       const rawValue = matchingParsed.args[2] as bigint;
       const value = ethers.formatUnits(rawValue, decimals);
 
-      // 5. Verify amount (with tolerance)
+      // 5. Bind payment origin to the wallet declared on the deposit
+      if (
+        expectedFromAddress &&
+        fromAddress.toLowerCase() !== expectedFromAddress.toLowerCase()
+      ) {
+        return {
+          valid: false,
+          error: 'Transaction was not sent from the wallet declared on this deposit',
+          txHash,
+          blockNumber: receipt.blockNumber,
+          confirmations,
+          fromAddress,
+          toAddress,
+        };
+      }
+
+      // 6. Reject transfers mined before the deposit was initiated
+      if (notBeforeTimestamp !== undefined) {
+        const block = await provider.getBlock(receipt.blockNumber);
+        if (block && block.timestamp < notBeforeTimestamp) {
+          return {
+            valid: false,
+            error: 'Transaction was mined before this deposit was initiated',
+            txHash,
+            blockNumber: receipt.blockNumber,
+            confirmations,
+            fromAddress,
+            toAddress,
+          };
+        }
+      }
+
+      // 7. Verify amount (with tolerance)
       const amountOnChain = parseFloat(value);
       const diff = Math.abs(amountOnChain - expectedAmountUsd) / expectedAmountUsd;
 
@@ -197,9 +238,11 @@ export class CryptoVerificationService {
     txHash: string;
     expectedAmountUsd: number;
     platformWalletAddress: string;
+    expectedFromAddress?: string;
+    notBeforeTimestamp?: number;
     rpcUrl: string;
   }): Promise<VerificationResult> {
-    const { method, txHash, expectedAmountUsd, platformWalletAddress, rpcUrl } = params;
+    const { method, txHash, expectedAmountUsd, platformWalletAddress, expectedFromAddress, notBeforeTimestamp, rpcUrl } = params;
     const network = method === 'USDT_BEP20' ? 'BSC' : 'BASE';
     const contractAddress = USDT_CONTRACT[network];
     const provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -266,6 +309,37 @@ export class CryptoVerificationService {
       const toAddress = matchingParsed.args[1] as string;
       const rawValue = matchingParsed.args[2] as bigint;
       const value = ethers.formatUnits(rawValue, decimals);
+
+      if (
+        expectedFromAddress &&
+        fromAddress.toLowerCase() !== expectedFromAddress.toLowerCase()
+      ) {
+        return {
+          valid: false,
+          error: 'Transaction was not sent from the wallet declared on this deposit',
+          txHash,
+          blockNumber: receipt.blockNumber,
+          confirmations,
+          fromAddress,
+          toAddress,
+        };
+      }
+
+      if (notBeforeTimestamp !== undefined) {
+        const block = await provider.getBlock(receipt.blockNumber);
+        if (block && block.timestamp < notBeforeTimestamp) {
+          return {
+            valid: false,
+            error: 'Transaction was mined before this deposit was initiated',
+            txHash,
+            blockNumber: receipt.blockNumber,
+            confirmations,
+            fromAddress,
+            toAddress,
+          };
+        }
+      }
+
       const amountOnChain = parseFloat(value);
       const diff = Math.abs(amountOnChain - expectedAmountUsd) / expectedAmountUsd;
 
