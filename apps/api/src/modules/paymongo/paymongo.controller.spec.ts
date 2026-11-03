@@ -68,6 +68,7 @@ describe('PayMongoController', () => {
     amountFiat: 50,
     currency: 'PHP',
     creditsToAward: 500,
+    creditsAwarded: 0,
     bonusCredits: 0,
     ...overrides,
   });

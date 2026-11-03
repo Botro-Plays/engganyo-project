@@ -20,6 +20,16 @@ describe('PayMongoService', () => {
     },
   } as unknown as PrismaService;
 
+  // A legacy Payment Link deposit — paymentRef is the link_ id.
+  const linkDeposit = {
+    id: 'dep-123',
+    method: DepositMethod.PAYMONGO,
+    status: DepositStatus.PENDING,
+    amountFiat: 1,
+    currency: 'PHP',
+    paymentRef: 'link_123',
+  };
+
   const walletServiceMock = {
     completeDeposit: jest.fn(),
   } as unknown as WalletService;
@@ -57,6 +67,8 @@ describe('PayMongoService', () => {
           data: {
             id: 'pay_123',
             attributes: {
+              amount: 100,
+              currency: 'PHP',
               external_reference_number: 'dep-123',
               payment_intent_id: 'pi_123',
               origin: 'link',
@@ -136,11 +148,7 @@ describe('PayMongoService', () => {
   };
 
   it('completes matching deposit for payment.paid via external_reference_number', async () => {
-    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
-      id: 'dep-123',
-      method: DepositMethod.PAYMONGO,
-      status: DepositStatus.PENDING,
-    });
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...linkDeposit });
 
     const rawBody = makePaymentPaidEvent();
 
@@ -151,11 +159,7 @@ describe('PayMongoService', () => {
 
   it('falls back to linkId match when depositId missing in link event', async () => {
     (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce(null);
-    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({
-      id: 'dep-123',
-      method: DepositMethod.PAYMONGO,
-      status: DepositStatus.PENDING,
-    });
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...linkDeposit });
 
     const rawBody = makeLinkPaymentPaidEvent({ external_reference_number: undefined, reference_number: undefined });
 
@@ -172,11 +176,7 @@ describe('PayMongoService', () => {
   });
 
   it('completes matching deposit for payment.paid via metadata depositId when external reference absent', async () => {
-    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
-      id: 'dep-123',
-      method: DepositMethod.PAYMONGO,
-      status: DepositStatus.PENDING,
-    });
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...linkDeposit });
 
     const rawBody = makePaymentPaidEvent({ external_reference_number: undefined, metadata: { depositId: 'dep-123' } });
 
@@ -186,11 +186,7 @@ describe('PayMongoService', () => {
   });
 
   it('completes deposit via link.payment.paid using reference_number metadata', async () => {
-    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
-      id: 'dep-123',
-      method: DepositMethod.PAYMONGO,
-      status: DepositStatus.PENDING,
-    });
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...linkDeposit });
 
     const rawBody = makeLinkPaymentPaidEvent();
 
@@ -200,11 +196,7 @@ describe('PayMongoService', () => {
   });
 
   it('ignores link.payment.paid when completion rejects with BadRequestException', async () => {
-    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
-      id: 'dep-123',
-      method: DepositMethod.PAYMONGO,
-      status: DepositStatus.PENDING,
-    });
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...linkDeposit });
 
     (walletServiceMock.completeDeposit as jest.Mock).mockRejectedValueOnce(new BadRequestException('cancelled'));
 
@@ -230,11 +222,7 @@ describe('PayMongoService', () => {
   });
 
   it('ignores payment.paid when completion rejects with NotFoundException', async () => {
-    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
-      id: 'dep-123',
-      method: DepositMethod.PAYMONGO,
-      status: DepositStatus.PENDING,
-    });
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...linkDeposit });
 
     (walletServiceMock.completeDeposit as jest.Mock).mockRejectedValueOnce(new NotFoundException('missing'));
 
@@ -256,7 +244,9 @@ describe('PayMongoService', () => {
             id: 'cs_abc123',
             attributes: {
               metadata: { depositId: 'dep-123' },
-              payments: [{ id: 'pay_sess1' }],
+              payments: [
+                { id: 'pay_sess1', attributes: { amount: 100, currency: 'PHP', payment_intent_id: 'pi_sess1' } },
+              ],
               payment_intent: { id: 'pi_sess1' },
               line_items: [{ amount: 100, currency: 'PHP', quantity: 1 }],
             },
@@ -278,6 +268,7 @@ describe('PayMongoService', () => {
     status: DepositStatus.PENDING,
     amountFiat: 1,
     currency: 'PHP',
+    paymentRef: 'pi_sess1',
   };
 
   it('completes deposit on checkout_session.payment.paid via metadata.depositId', async () => {
@@ -299,7 +290,6 @@ describe('PayMongoService', () => {
       where: {
         paymentRef: 'pi_sess1',
         method: DepositMethod.PAYMONGO,
-        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
       },
     });
     expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess1' });
@@ -309,7 +299,7 @@ describe('PayMongoService', () => {
     (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
 
     const result = await service.processWebhookEvent(
-      makeSessionPaidEvent({ line_items: [{ amount: 5000, currency: 'PHP', quantity: 1 }] }),
+      makeSessionPaidEvent({ payments: [{ id: 'pay_sess1', attributes: { amount: 5000, currency: 'PHP' } }] }),
       't=102,li=sig',
     );
 
@@ -321,7 +311,7 @@ describe('PayMongoService', () => {
     (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
 
     const result = await service.processWebhookEvent(
-      makeSessionPaidEvent({ line_items: [{ amount: 100, currency: 'USD', quantity: 1 }] }),
+      makeSessionPaidEvent({ payments: [{ id: 'pay_sess1', attributes: { amount: 100, currency: 'USD' } }] }),
       't=103,li=sig',
     );
 
@@ -381,7 +371,6 @@ describe('PayMongoService', () => {
       where: {
         paymentRef: 'pi_sess1',
         method: DepositMethod.PAYMONGO,
-        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
       },
     });
     expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
@@ -403,5 +392,94 @@ describe('PayMongoService', () => {
 
     expect(result).toEqual({ received: true, action: 'ignored' });
     expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('ignores payment.paid with no provider payment id', async () => {
+    const event = JSON.parse(makeSessionPaymentPaidEvent());
+    (event.data.attributes.data as any).id = undefined;
+    const result = await service.processWebhookEvent(JSON.stringify(event), 't=210,li=sig');
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('verifies via provider fetch when the event omits amount/currency', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { attributes: { amount: 100, currency: 'PHP', payment_intent_id: 'pi_sess1' } } }),
+    } as never);
+    try {
+      const result = await service.processWebhookEvent(
+        makeSessionPaymentPaidEvent({ amount: undefined, currency: undefined }),
+        't=211,li=sig',
+      );
+      expect(result).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
+      expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('throws (retryable) when the event omits fields and the provider fetch fails', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never).mockResolvedValueOnce({ ok: false } as never);
+    try {
+      await expect(
+        service.processWebhookEvent(makeSessionPaymentPaidEvent({ amount: undefined, currency: undefined }), 't=212,li=sig'),
+      ).rejects.toThrow(BadRequestException);
+      expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('intent match wins over a conflicting metadata depositId', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+
+    const result = await service.processWebhookEvent(
+      makeSessionPaymentPaidEvent({ metadata: { depositId: 'dep-victim-999' } }),
+      't=213,li=sig',
+    );
+
+    expect(result).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
+    expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
+    // The hinted deposit was never touched
+    expect(prismaMock.deposit.findUnique).not.toHaveBeenCalledWith({ where: { id: 'dep-victim-999' } });
+  });
+
+  it('rejects a different payment intent for an intent-bound deposit', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    // No deposit matches the foreign intent → hint path must not rescue it.
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+
+    const result = await service.processWebhookEvent(
+      makeSessionPaymentPaidEvent({ payment_intent_id: 'pi_foreign', metadata: { depositId: 'dep-123' } }),
+      't=214,li=sig',
+    );
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('ignores a concurrent second delivery (claim lost)', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+    (prismaMock.deposit.updateMany as jest.Mock).mockResolvedValueOnce({ count: 0 });
+
+    const result = await service.processWebhookEvent(makeSessionPaymentPaidEvent(), 't=215,li=sig');
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a valid paid event that arrives after a local cancel', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({
+      ...pendingPhpDeposit,
+      status: DepositStatus.CANCELLED,
+    });
+
+    const result = await service.processWebhookEvent(makeSessionPaymentPaidEvent(), 't=216,li=sig');
+
+    expect(result).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
+    expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
   });
 });
