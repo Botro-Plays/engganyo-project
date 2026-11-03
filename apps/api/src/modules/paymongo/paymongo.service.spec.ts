@@ -673,4 +673,84 @@ describe('PayMongoService', () => {
       fetchSpy.mockRestore();
     }
   });
+
+  it('rejects a malformed (non-pi_) intent and recovers it via retrieval', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch' as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => sessionCreateResponse({ payment_intent: { id: 'notanintent' } }),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { attributes: { payment_intent: { id: 'pi_recovered' } } } }),
+      } as never);
+    try {
+      const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
+      expect(result.linkId).toBe('pi_recovered');
+      expect(prismaMock.deposit.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ paymentRef: 'pi_recovered' }) }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('reuses the existing session URL on sequential retry — no new session', async () => {
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
+      paymentRef: 'pi_a1',
+      gatewayData: { kind: 'checkout_session', sessionId: 'cs_a1', checkoutUrl: 'https://checkout.paymongo.com/a1' },
+    });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never);
+
+    const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
+
+    expect(result).toEqual({ linkId: 'pi_a1', checkoutUrl: 'https://checkout.paymongo.com/a1' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(prismaMock.deposit.update).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('reuses a legacy link_* checkout on retry (preserved settlement path)', async () => {
+    (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce({
+      paymentRef: 'link_leg1',
+      gatewayData: { checkoutUrl: 'https://pm.link/leg1', expiredAt: '2030-01-01T00:00:00Z' },
+    });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never);
+
+    const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
+
+    expect(result).toEqual({ linkId: 'link_leg1', checkoutUrl: 'https://pm.link/leg1' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('returns the existing URL when a concurrent request wins the claim', async () => {
+    // First read: no checkout yet. Claim update loses (count 0). Re-read:
+    // winner already persisted pi_* + URL.
+    (prismaMock.deposit.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ paymentRef: null, gatewayData: {} })
+      .mockResolvedValueOnce({
+        paymentRef: 'pi_winner',
+        gatewayData: { kind: 'checkout_session', sessionId: 'cs_w', checkoutUrl: 'https://checkout.paymongo.com/w' },
+      });
+    (prismaMock.deposit.updateMany as jest.Mock).mockResolvedValueOnce({ count: 0 });
+    const fetchSpy = jest.spyOn(global, 'fetch' as never);
+
+    const result = await service.createCheckoutSession('dep-1', 100, 'desc', 'PHP');
+
+    expect(result).toEqual({ linkId: 'pi_winner', checkoutUrl: 'https://checkout.paymongo.com/w' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('tells the loser to retry when the winner is still preparing', async () => {
+    (prismaMock.deposit.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ paymentRef: null, gatewayData: {} })
+      .mockResolvedValueOnce({ paymentRef: 'creating:other', gatewayData: {} });
+    (prismaMock.deposit.updateMany as jest.Mock).mockResolvedValueOnce({ count: 0 });
+
+    await expect(service.createCheckoutSession('dep-1', 100, 'desc', 'PHP')).rejects.toThrow(
+      'Checkout is being prepared',
+    );
+  });
 });

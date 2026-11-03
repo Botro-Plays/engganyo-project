@@ -133,6 +133,56 @@ export class PayMongoService {
     const secret = await this.getSecretKey();
     if (!secret) throw new BadRequestException('PayMongo not configured');
 
+    // ── Idempotency: reuse a payable checkout that already exists ──────────
+    // Retries/concurrent calls must never mint a second session — a payment
+    // made against the first intent would be unmatchable forever.
+    const existing = await this.prisma.deposit.findUnique({
+      where: { id: depositId },
+      select: { paymentRef: true, gatewayData: true },
+    });
+    const existingGw = (existing?.gatewayData ?? {}) as Record<string, unknown>;
+    const existingUrl = existingGw.checkoutUrl as string | undefined;
+    if (existing?.paymentRef && existingUrl && !existing.paymentRef.startsWith('creating:')) {
+      this.logger.log(`Deposit ${depositId} already has payable checkout ${existing.paymentRef} — reusing`);
+      return { linkId: existing.paymentRef, checkoutUrl: existingUrl };
+    }
+
+    // ── Atomic claim: exactly one creator per deposit ──────────────────────
+    const claimTag = `creating:${crypto.randomUUID()}`;
+    const claimed = await this.prisma.deposit.updateMany({
+      where: {
+        id: depositId,
+        method: DepositMethod.PAYMONGO,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+        OR: [{ paymentRef: null }, { paymentRef: { startsWith: 'creating:' } }],
+      },
+      data: { paymentRef: claimTag },
+    });
+    if (claimed.count === 0) {
+      // Another request prepared (or is preparing) the checkout — hand back
+      // the existing URL rather than create a second session.
+      const fresh = await this.prisma.deposit.findUnique({
+        where: { id: depositId },
+        select: { paymentRef: true, gatewayData: true },
+      });
+      const freshGw = (fresh?.gatewayData ?? {}) as Record<string, unknown>;
+      if (fresh?.paymentRef && freshGw.checkoutUrl && !fresh.paymentRef.startsWith('creating:')) {
+        this.logger.log(`Claim lost for ${depositId} — returning existing checkout ${fresh.paymentRef}`);
+        return { linkId: fresh.paymentRef, checkoutUrl: freshGw.checkoutUrl as string };
+      }
+      throw new BadRequestException('Checkout is being prepared — please retry in a moment');
+    }
+    const releaseClaim = () =>
+      this.prisma.deposit.updateMany({
+        where: { id: depositId, paymentRef: claimTag },
+        data: { paymentRef: null },
+      }).catch((e) => this.logger.warn(`Failed to release checkout claim for ${depositId}: ${String(e)}`));
+
+    let sessionId = '';
+    let checkoutUrl = '';
+    let paymentIntentId = '';
+    let attrs: Record<string, unknown> = {};
+
     let amount = Math.round(amountCents);
     if (amount < 100) {
       this.logger.warn(`Checkout session amount below minimum (${amount} cents). Clamping to PHP 1.00 for deposit ${depositId}.`);
@@ -166,6 +216,7 @@ export class PayMongoService {
         }),
       });
     } catch (err) {
+      await releaseClaim();
       this.logger.error(`PayMongo checkout session fetch error: ${String(err)}`);
       Sentry.captureException(err instanceof Error ? err : new Error(`PayMongo fetch error: ${String(err)}`), {
         extra: { depositId, amountCents, currency },
@@ -175,6 +226,7 @@ export class PayMongoService {
 
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
+      await releaseClaim();
       this.logger.error(`PayMongo checkout session creation failed: ${JSON.stringify(json)}`);
       Sentry.captureMessage(`PayMongo checkout session creation failed: ${res.status}`, {
         level: 'error',
@@ -184,30 +236,34 @@ export class PayMongoService {
     }
 
     const data = json.data as Record<string, unknown> | undefined;
-    const sessionId = (data?.id as string) ?? '';
-    const attrs = (data?.attributes ?? {}) as Record<string, unknown>;
-    const checkoutUrl = (attrs.checkout_url as string) ?? '';
+    sessionId = (data?.id as string) ?? '';
+    attrs = (data?.attributes ?? {}) as Record<string, unknown>;
+    checkoutUrl = (attrs.checkout_url as string) ?? '';
     const paymentIntent = attrs.payment_intent as Record<string, unknown> | undefined;
-    let paymentIntentId = (paymentIntent?.id as string) ?? '';
+    paymentIntentId = (paymentIntent?.id as string) ?? '';
     if (!sessionId || !checkoutUrl) {
+      await releaseClaim();
       throw new BadRequestException('PayMongo checkout session response missing required fields');
     }
 
     // A session URL must never be handed to the browser without a verified
     // pi_* intent — our subscribed payment.paid event correlates exclusively by
     // payment_intent_id, so a session without one could be paid but never
-    // settle. If creation omits the intent, retrieve the session once to pick
-    // it up; if it is still absent, fail recoverably and leave the deposit
-    // eligible for a clean retry (nothing is persisted).
-    if (!paymentIntentId) {
-      paymentIntentId = (await this.fetchCheckoutSessionIntent(sessionId)) ?? '';
+    // settle. If creation omits the intent (or returns a malformed one),
+    // retrieve the session once to pick it up; if it is still absent or
+    // malformed, fail recoverably and release the claim so the deposit stays
+    // eligible for a clean retry.
+    if (!paymentIntentId.startsWith('pi_')) {
+      const recovered = await this.fetchCheckoutSessionIntent(sessionId);
+      paymentIntentId = recovered?.startsWith('pi_') ? recovered : '';
     }
-    if (!paymentIntentId) {
-      this.logger.error(`Checkout session ${sessionId} has no payment_intent even after retrieval — refusing handoff`);
+    if (!paymentIntentId.startsWith('pi_')) {
+      this.logger.error(`Checkout session ${sessionId} has no valid payment_intent even after retrieval — refusing handoff`);
       Sentry.captureMessage('PayMongo checkout session missing payment_intent', {
         level: 'error',
         extra: { depositId, sessionId },
       });
+      await releaseClaim();
       throw new BadRequestException('PayMongo checkout session could not be initialized — please retry');
     }
 
@@ -215,16 +271,16 @@ export class PayMongoService {
     // session payments settle via payment.paid, whose payment object carries
     // attributes.payment_intent_id. Store the intent as paymentRef so the
     // existing payment.paid correlation matches (session id kept for tracing).
-    const paymentRef = paymentIntentId;
     try {
       await this.prisma.deposit.update({
         where: { id: depositId },
         data: {
-          paymentRef,
-          gatewayData: { checkoutUrl, kind: 'checkout_session', sessionId, paymentIntentId },
+          paymentRef: paymentIntentId,
+          gatewayData: { ...existingGw, checkoutUrl, kind: 'checkout_session', sessionId, paymentIntentId },
         },
       });
     } catch (err) {
+      await releaseClaim();
       this.logger.error(`Failed to update deposit ${depositId} with session paymentRef: ${String(err)}`);
       Sentry.captureException(err instanceof Error ? err : new Error('Failed to update deposit with PayMongo session ref'), {
         extra: { depositId, sessionId, paymentIntentId, checkoutUrl },
@@ -232,7 +288,7 @@ export class PayMongoService {
       throw new BadRequestException(`PayMongo session created but failed to update deposit: ${String(err)}`);
     }
 
-    return { linkId: paymentRef, checkoutUrl };
+    return { linkId: paymentIntentId, checkoutUrl };
   }
 
   async archiveLink(linkId: string) {
