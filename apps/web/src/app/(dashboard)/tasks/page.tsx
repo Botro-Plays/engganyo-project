@@ -16,7 +16,6 @@ import { UserLink } from '@/components/user-link';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
-import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 import { useAuthStore } from '@/store/auth.store';
@@ -156,19 +155,16 @@ export default function TasksPage() {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuthStore();
 
-  // Refetch when tab becomes visible after background
-  useRefetchOnVisible([['tasks'], ['social-accounts'], ['public-config'], ['tasks', 'limits']]);
-
   // Real-time: refresh tasks on backend events
   useSocketEvent('task:assigned', () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
   });
   useSocketEvent('task:completed', () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
   });
   useSocketEvent('task:reviewed', () => {
-    void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
-    void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
+    void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
   });
 
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
@@ -206,8 +202,8 @@ export default function TasksPage() {
         return new Set<string>();
       }
     },
-    enabled: !!user && isAuthenticated,
-    staleTime: 0, // Disable stale time to always fetch fresh data
+    enabled: tab === 'browse' && !!user && isAuthenticated,
+    staleTime: 60_000,
   });
 
   // Defensive normalization: React Query doesn't preserve Set/Map during serialization
@@ -284,7 +280,7 @@ export default function TasksPage() {
         return { items: [], meta: { total: 0, page: 1, totalPages: 1, hasNext: false, hasPrev: false } };
       }
     },
-    enabled: tab === 'browse',
+    enabled: tab === 'browse' && isAuthenticated,
     refetchInterval: 60_000,
   });
 
@@ -307,7 +303,7 @@ export default function TasksPage() {
         return { items: [], meta: { total: 0, page: 1, totalPages: 1, hasNext: false, hasPrev: false } };
       }
     },
-    enabled: tab === 'mine',
+    enabled: tab === 'mine' && isAuthenticated,
     refetchInterval: 60_000,
   });
 
@@ -331,7 +327,7 @@ export default function TasksPage() {
       return { previousBrowse };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setAssignError(null);
     },
     onError: (err, _campaignId, context) => {
@@ -382,8 +378,8 @@ export default function TasksPage() {
         notes: data.notes || undefined,
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'], type: 'all' });
-      void queryClient.invalidateQueries({ queryKey: ['wallet'], type: 'all' });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       proofForm.reset();
       setSubmitting(null);
       setSubmitError(null);
