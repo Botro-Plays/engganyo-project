@@ -69,6 +69,7 @@ function PaymentReturnContent() {
       }
       setDeposit(found);
       if (found.status === 'COMPLETED') {
+        // Server-confirmed — always wins over the URL hint.
         setView('success');
         return;
       }
@@ -76,9 +77,15 @@ function PaymentReturnContent() {
         setView('cancelled');
         return;
       }
+      if (hint === 'cancelled') {
+        // User chose "cancel" — show that immediately, but keep polling in the
+        // background in case the payment actually settled before they backed out.
+        setView('cancelled');
+        return;
+      }
       if (Date.now() >= deadline.current) {
         // Still pending server confirmation — tell the user it's on its way.
-        setView(hint === 'cancelled' ? 'cancelled' : 'not-found');
+        setView('not-found');
         return;
       }
       setView('confirming');

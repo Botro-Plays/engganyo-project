@@ -257,6 +257,7 @@ describe('PayMongoService', () => {
             attributes: {
               metadata: { depositId: 'dep-123' },
               payments: [{ id: 'pay_sess1' }],
+              payment_intent: { id: 'pi_sess1' },
               line_items: [{ amount: 100, currency: 'PHP', quantity: 1 }],
             },
           },
@@ -264,7 +265,7 @@ describe('PayMongoService', () => {
       },
     };
     const sAttrs = (event.data.attributes as any).data.attributes;
-    for (const key of ['metadata', 'payments', 'line_items']) {
+    for (const key of ['metadata', 'payments', 'line_items', 'payment_intent']) {
       if (key in overrides) sAttrs[key] = overrides[key];
     }
     if ('id' in overrides) (event.data.attributes as any).data.id = overrides.id;
@@ -288,7 +289,7 @@ describe('PayMongoService', () => {
     expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess1' });
   });
 
-  it('falls back to paymentRef sessionId match when metadata missing', async () => {
+  it('falls back to paymentRef (payment intent) match when metadata missing', async () => {
     (prismaMock.deposit.findUnique as jest.Mock).mockResolvedValueOnce(null);
     (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
 
@@ -296,7 +297,7 @@ describe('PayMongoService', () => {
 
     expect(prismaMock.deposit.findFirst).toHaveBeenCalledWith({
       where: {
-        paymentRef: 'cs_abc123',
+        paymentRef: 'pi_sess1',
         method: DepositMethod.PAYMONGO,
         status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
       },
@@ -335,6 +336,70 @@ describe('PayMongoService', () => {
     });
 
     const result = await service.processWebhookEvent(makeSessionPaidEvent(), 't=104,li=sig');
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  // payment.paid is the actual settling event for Checkout Sessions — the
+  // session emits a payment object whose payment_intent_id matches paymentRef.
+  const makeSessionPaymentPaidEvent = (overrides: Record<string, unknown> = {}) => {
+    const event: Record<string, any> = {
+      data: {
+        attributes: {
+          type: 'payment.paid',
+          livemode: true,
+          data: {
+            id: 'pay_sess_pay1',
+            attributes: {
+              amount: 100,
+              currency: 'PHP',
+              payment_intent_id: 'pi_sess1',
+              origin: 'checkout_session',
+            },
+          },
+        },
+      },
+    };
+    const pAttrs = (event.data.attributes as any).data.attributes;
+    for (const key of ['amount', 'currency', 'payment_intent_id', 'external_reference_number', 'metadata', 'reference_number']) {
+      if (key in overrides) {
+        if (overrides[key] === undefined) delete pAttrs[key];
+        else pAttrs[key] = overrides[key];
+      }
+    }
+    return JSON.stringify(event);
+  };
+
+  it('settles a session payment via payment.paid + payment_intent_id correlation', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+
+    const result = await service.processWebhookEvent(makeSessionPaymentPaidEvent(), 't=200,li=sig');
+
+    expect(result).toEqual({ received: true, action: 'completed', depositId: 'dep-123' });
+    expect(prismaMock.deposit.findFirst).toHaveBeenCalledWith({
+      where: {
+        paymentRef: 'pi_sess1',
+        method: DepositMethod.PAYMONGO,
+        status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+      },
+    });
+    expect(walletServiceMock.completeDeposit).toHaveBeenCalledWith('dep-123', { paymentRef: 'pay_sess_pay1' });
+  });
+
+  it('ignores a session payment on amount mismatch via payment.paid', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+
+    const result = await service.processWebhookEvent(makeSessionPaymentPaidEvent({ amount: 5000 }), 't=201,li=sig');
+
+    expect(result).toEqual({ received: true, action: 'ignored' });
+    expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('ignores a session payment on currency mismatch via payment.paid', async () => {
+    (prismaMock.deposit.findFirst as jest.Mock).mockResolvedValueOnce({ ...pendingPhpDeposit });
+
+    const result = await service.processWebhookEvent(makeSessionPaymentPaidEvent({ currency: 'USD' }), 't=202,li=sig');
 
     expect(result).toEqual({ received: true, action: 'ignored' });
     expect(walletServiceMock.completeDeposit).not.toHaveBeenCalled();
