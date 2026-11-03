@@ -10,24 +10,24 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 describe('PayMongoController', () => {
   let controller: PayMongoController;
 
-  const createPaymentLinkMock = jest.fn<
-    ReturnType<PayMongoService['createPaymentLink']>,
-    Parameters<PayMongoService['createPaymentLink']>
+  const createCheckoutSessionMock = jest.fn<
+    ReturnType<PayMongoService['createCheckoutSession']>,
+    Parameters<PayMongoService['createCheckoutSession']>
   >();
   const getDepositForUserMock = jest.fn<
     ReturnType<WalletService['getDepositForUser']>,
     Parameters<WalletService['getDepositForUser']>
   >();
 
-  const paymongoService: Pick<PayMongoService, 'createPaymentLink'> = {
-    createPaymentLink: createPaymentLinkMock,
+  const paymongoService: Pick<PayMongoService, 'createCheckoutSession'> = {
+    createCheckoutSession: createCheckoutSessionMock,
   };
   const walletService: Pick<WalletService, 'getDepositForUser'> = {
     getDepositForUser: getDepositForUserMock,
   };
 
   beforeEach(async () => {
-    createPaymentLinkMock.mockReset();
+    createCheckoutSessionMock.mockReset();
     getDepositForUserMock.mockReset();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -78,7 +78,7 @@ describe('PayMongoController', () => {
     await expect(controller.createLink(user, { depositId: 'dep-1' })).rejects.toThrow(ForbiddenException);
 
     expect(getDepositForUserMock).toHaveBeenCalledWith('user-1', 'dep-1');
-    expect(createPaymentLinkMock).not.toHaveBeenCalled();
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when deposit is not PayMongo', async () => {
@@ -86,7 +86,7 @@ describe('PayMongoController', () => {
 
     await expect(controller.createLink(user, { depositId: 'dep-1' })).rejects.toThrow(BadRequestException);
 
-    expect(createPaymentLinkMock).not.toHaveBeenCalled();
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when deposit status is terminal', async () => {
@@ -94,17 +94,17 @@ describe('PayMongoController', () => {
 
     await expect(controller.createLink(user, { depositId: 'dep-1' })).rejects.toThrow(BadRequestException);
 
-    expect(createPaymentLinkMock).not.toHaveBeenCalled();
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
-  it('creates payment link with derived amount and description', async () => {
+  it('creates checkout session with derived amount and description', async () => {
     getDepositForUserMock.mockResolvedValue(makeDeposit({ amountFiat: 123.45, creditsToAward: 1500 }));
 
-    createPaymentLinkMock.mockResolvedValue({ linkId: 'link-1', checkoutUrl: 'https://paymongo.test/link-1' });
+    createCheckoutSessionMock.mockResolvedValue({ linkId: 'link-1', checkoutUrl: 'https://paymongo.test/link-1' });
 
     const result = await controller.createLink(user, { depositId: 'dep-1' });
 
-    expect(createPaymentLinkMock).toHaveBeenCalledWith(
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
       'dep-1',
       12345,
       expect.stringContaining('1500'),
@@ -116,11 +116,11 @@ describe('PayMongoController', () => {
   it('uses PHP 1.00 minimum when derived amount is below PayMongo threshold', async () => {
     getDepositForUserMock.mockResolvedValue(makeDeposit({ id: 'dep-min', amountFiat: 0.75, creditsToAward: 50 }));
 
-    createPaymentLinkMock.mockResolvedValue({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
+    createCheckoutSessionMock.mockResolvedValue({ linkId: 'link-min', checkoutUrl: 'https://paymongo.test/link-min' });
 
     const result = await controller.createLink(user, { depositId: 'dep-min' });
 
-    expect(createPaymentLinkMock).toHaveBeenCalledWith(
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
       'dep-min',
       100,
       expect.stringContaining('50'),
