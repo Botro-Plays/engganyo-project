@@ -83,6 +83,37 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; ico
   REFUNDED:   { label: 'Refunded',   color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: AlertCircle },
 };
 
+const PROVIDER_CARD_CFG: Record<string, { title: string; color: string; accent: string }> = {
+  PAYPAL:   { title: 'PayPal',   color: 'text-sky-400',     accent: 'border-sky-500/30' },
+  PAYMONGO: { title: 'PayMongo', color: 'text-emerald-400', accent: 'border-emerald-500/30' },
+};
+
+// One monetary figure row inside a provider card. `verified` distinguishes a
+// provider-reported zero from missing data — never substituted silently.
+function SettlementFigure({ label, figs, count, currencyHint, prominent }: {
+  label: string; figs: SettlementFig[]; count: number; currencyHint?: string; prominent?: boolean;
+}) {
+  const covered = figs.reduce((n, f) => n + f.count, 0);
+  const partial = covered < count;
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-right">
+        {figs.length === 0 ? (
+          <span className="text-xs text-zinc-600 italic">unavailable</span>
+        ) : (
+          figs.map((f) => (
+            <span key={f.currency} className={`block ${prominent ? 'text-base font-semibold text-white' : 'text-sm text-zinc-300'}`}>
+              {f.currency === 'USD' ? '$' : f.currency === 'PHP' ? '₱' : `${f.currency} `}{f.total.toFixed(2)}
+              <span className="text-[10px] text-zinc-500 ml-1">{f.currency !== currencyHint ? f.currency : ''}{partial ? ` · ${f.count}/${count}` : f.count > 1 ? ` · ${f.count}` : ''}</span>
+            </span>
+          ))
+        )}
+      </span>
+    </div>
+  );
+}
+
 const METHOD_CFG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   PAYMONGO:   { label: 'PayMongo',     color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: CreditCard },
   PAYPAL:     { label: 'PayPal',       color: 'text-blue-400',    bg: 'bg-blue-500/10',    icon: Wallet },
@@ -303,6 +334,78 @@ export default function FinancesPage() {
         </div>
       )}
 
+      {/* ── Provider settlement — dedicated cards per provider ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {(['PAYPAL', 'PAYMONGO'] as const).map((provider) => {
+          const rows = (settlementSummary ?? []).filter((r) => r.method === provider);
+          const cfg = PROVIDER_CARD_CFG[provider];
+          const totalDeposits = rows.reduce((n, r) => n + r.count, 0);
+          return (
+            <div key={provider} className={`card-glass rounded-xl p-5 border ${cfg.accent}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`text-sm font-semibold ${cfg.color}`}>{cfg.title} settlement</h3>
+                {settlementSummary && (
+                  <span className="text-xs text-zinc-500">
+                    {rows.length === 0 ? 'no settled deposits' : `${totalDeposits} deposit${totalDeposits === 1 ? '' : 's'}`}
+                  </span>
+                )}
+              </div>
+              {!settlementSummary ? (
+                <div className="space-y-2 animate-pulse">
+                  {[1, 2, 3].map((i) => <div key={i} className="h-4 bg-zinc-700/40 rounded" />)}
+                </div>
+              ) : rows.length === 0 ? (
+                <p className="text-xs text-zinc-600">No settled {cfg.title} deposits yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {rows.map((r) => (
+                    <div key={`${r.method}-${r.currency}`} className="space-y-1.5">
+                      {rows.length > 1 && (
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-600">charged in {r.currency}</p>
+                      )}
+                      <SettlementFigure
+                        label="Gross charged"
+                        figs={[{ currency: r.currency, total: r.gross, count: r.count }]}
+                        count={r.count}
+                        currencyHint={r.currency}
+                      />
+                      <SettlementFigure
+                        label="Actual fees deducted"
+                        figs={r.fees}
+                        count={r.count}
+                        currencyHint={r.currency}
+                      />
+                      <div className="pt-1 border-t border-surface-border/60">
+                        <SettlementFigure
+                          label="Net received"
+                          figs={r.nets}
+                          count={r.count}
+                          currencyHint={r.currency}
+                          prominent
+                        />
+                      </div>
+                      {r.converted.length > 0 && (
+                        <div className="pt-0.5">
+                          <SettlementFigure
+                            label="Converted receivable"
+                            figs={r.converted}
+                            count={r.count}
+                          />
+                          <p className="text-[10px] text-zinc-600 mt-0.5">settled in the provider&apos;s payout currency — not counted in net</p>
+                        </div>
+                      )}
+                      {(r.feePartial || r.netPartial || r.convertedPartial) && (
+                        <p className="text-[10px] text-amber-400/80">partial — some deposits lack provider figures (counts shown per figure)</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       {/* ── Package management ── */}
       <div className="card-glass rounded-xl border border-surface-border">
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
@@ -515,22 +618,7 @@ export default function FinancesPage() {
       )}
 
       {/* Deposits table */}
-            {settlementSummary && settlementSummary.length > 0 && (
-        <div className="card-glass rounded-xl p-4 mb-4">
-          <h3 className="text-sm font-semibold text-white mb-3">Provider Settlement</h3>
-          <div className="space-y-1.5">
-            {settlementSummary.map((g) => (
-              <div key={`${g.method}-${g.currency}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
-                <span className="text-zinc-400 w-20">{g.method}</span>
-                <span className="text-zinc-300">gross {g.currency} {g.gross.toFixed(2)}</span>
-                {g.fees.map((f) => <span key={`f-${f.currency}`} className="text-zinc-500">fee {f.currency} {f.total.toFixed(2)}{g.feePartial && ` (${f.count}/${g.count})`}</span>)}
-                {g.nets.map((n) => <span key={`n-${n.currency}`} className="text-zinc-300">net {n.currency} {n.total.toFixed(2)}{g.netPartial && ` (${n.count}/${g.count})`}</span>)}
-                {g.converted.map((c) => <span key={`c-${c.currency}`} className="text-zinc-500">recv {c.currency} {c.total.toFixed(2)}{g.convertedPartial && ` (${c.count}/${g.count})`}</span>)}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
 
 <div className="card-glass rounded-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-surface-border">
