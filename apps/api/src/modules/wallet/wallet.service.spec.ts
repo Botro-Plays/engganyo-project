@@ -320,6 +320,112 @@ describe('WalletService', () => {
   });
 
 // ─── Crypto deposit binding (release gate) ──────────────────
+
+  describe('PayMongo PHP minimum / package charge consistency', () => {
+    const currencyMock = () => (service as unknown as { currency: { getUsdToPhp: jest.Mock } }).currency;
+
+    const DEFAULT_CONFIGS = [
+      { key: 'usdt_bep20_enabled', value: true },
+      { key: 'usdt_bep20_wallet_address', value: '0xb6a1022f84f16a41a1f066f0e0fa6c89af8f941e' },
+      { key: 'usdt_base_enabled', value: true },
+      { key: 'usdt_base_wallet_address', value: '0xb6a1022f84f16a41a1f066f0e0fa6c89af8f941e' },
+    ];
+    afterEach(() => {
+      prismaPlatformConfigMock.findMany.mockResolvedValue(DEFAULT_CONFIGS);
+    });
+
+    const pkg = (over: Record<string, unknown> = {}) => ({
+      id: 'pkg-1',
+      usdAmount: 1,
+      label: null,
+      isActive: true,
+      isPopular: false,
+      bonusCredits: 0,
+      methods: [] as string[],
+      sortOrder: 1,
+      ...over,
+    });
+
+    it('$1 package at rate 63.46 qualifies — derived min equals the exact charge', async () => {
+      currencyMock().getUsdToPhp.mockResolvedValue(63.46);
+      const options = await service.getDepositOptions();
+      expect(options.pricing.minDepositPhp).toBeCloseTo(63.46, 2);
+      // Charge uses identical rounding — 6346c >= 6346c.
+      prismaPlatformConfigMock.findMany.mockResolvedValue([
+        ...DEFAULT_CONFIGS,
+        { key: 'paymongo_enabled', value: true },
+      ]);
+      prismaDepositPackageMock.findUnique.mockResolvedValue(pkg());
+      prismaDepositMock.findFirst.mockResolvedValue(null);
+      prismaDepositMock.create.mockResolvedValue({ id: 'dep-x' });
+      const res = await service.initiateDeposit('user-1', { method: 'PAYMONGO', packageId: 'pkg-1' } as never);
+      expect(prismaDepositMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ amountFiat: 63.46, currency: 'PHP' }) }),
+      );
+      expect(res).toBeTruthy();
+    });
+
+    it('explicitly configured ₱64 minimum is still enforced', async () => {
+      currencyMock().getUsdToPhp.mockResolvedValue(63.46);
+      prismaPlatformConfigMock.findMany.mockResolvedValue([
+        ...DEFAULT_CONFIGS,
+        { key: 'paymongo_enabled', value: true },
+        { key: 'min_deposit_php', value: 64 },
+        { key: 'min_deposit_usd', value: 1 },
+      ]);
+      const options = await service.getDepositOptions();
+      expect(options.pricing.minDepositPhp).toBe(64);
+      prismaDepositPackageMock.findUnique.mockResolvedValue(pkg());
+      prismaDepositMock.findFirst.mockResolvedValue(null);
+      await expect(
+        service.initiateDeposit('user-1', { method: 'PAYMONGO', packageId: 'pkg-1' } as never),
+      ).rejects.toThrow('Minimum deposit is ₱64 PHP');
+    });
+
+    it('₱1 PayMongo-only package bypasses the derived minimum', async () => {
+      currencyMock().getUsdToPhp.mockResolvedValue(63.46);
+      prismaPlatformConfigMock.findMany.mockResolvedValue([
+        ...DEFAULT_CONFIGS,
+        { key: 'paymongo_enabled', value: true },
+      ]);
+      prismaDepositPackageMock.findUnique.mockResolvedValue(
+        pkg({ usdAmount: 0.01, methods: ['PAYMONGO'] }),
+      );
+      prismaDepositMock.findFirst.mockResolvedValue(null);
+      prismaDepositMock.create.mockResolvedValue({ id: 'dep-y' });
+      await service.initiateDeposit('user-1', { method: 'PAYMONGO', packageId: 'pkg-1' } as never);
+      expect(prismaDepositMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ amountFiat: 1, currency: 'PHP' }) }),
+      );
+    });
+
+    it('half-centavo boundary: $1 at rate 60.025 — displayed charge, checkout charge, and floor agree', async () => {
+      currencyMock().getUsdToPhp.mockResolvedValue(60.025);
+      const options = await service.getDepositOptions();
+      // 6002.5 centavos → one integer-centavo rounding for floor AND charge.
+      expect(options.pricing.minDepositPhp).toBeCloseTo(60.03, 2);
+      prismaPlatformConfigMock.findMany.mockResolvedValue([
+        ...DEFAULT_CONFIGS,
+        { key: 'paymongo_enabled', value: true },
+      ]);
+      prismaDepositPackageMock.findUnique.mockResolvedValue(pkg());
+      prismaDepositMock.findFirst.mockResolvedValue(null);
+      prismaDepositMock.create.mockResolvedValue({ id: 'dep-z' });
+      await service.initiateDeposit('user-1', { method: 'PAYMONGO', packageId: 'pkg-1' } as never);
+      expect(prismaDepositMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ amountFiat: 60.03, currency: 'PHP' }) }),
+      );
+    });
+
+    it('rate change before checkout re-derives the quoted charge and minimum', async () => {
+      currencyMock().getUsdToPhp.mockResolvedValueOnce(63.46).mockResolvedValueOnce(60.0);
+      const first = await service.getDepositOptions();
+      const second = await service.getDepositOptions();
+      expect(first.pricing.minDepositPhp).toBeCloseTo(63.46, 2);
+      expect(second.pricing.minDepositPhp).toBeCloseTo(60.0, 2);
+    });
+  });
+
 describe('crypto deposit binding', () => {
   const VALID_HASH = '0x' + 'ab'.repeat(32);
   const WALLET_A = '0x' + '11'.repeat(20);

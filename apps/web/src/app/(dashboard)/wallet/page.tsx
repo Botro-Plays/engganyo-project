@@ -274,6 +274,7 @@ export default function WalletPage() {
   const [depositResult, setDepositResult] = useState<{ deposit: DepositRecord; instructions: DepositInstructions } | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
+  const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
 
@@ -748,6 +749,16 @@ export default function WalletPage() {
             setDepositError('Failed to get deposit ID');
             return;
           }
+          // Rate may have moved between the displayed quote and deposit
+          // creation — surface the updated charge and require confirmation
+          // before opening checkout. After creation the stored amount is
+          // authoritative for checkout, retries, and settlement.
+          const stored = data?.deposit?.amountFiat;
+          const shown = selectedPackage.phpAmount ?? selectedPackage.phpEquivalent;
+          if (typeof stored === 'number' && typeof shown === 'number' && Math.abs(stored - shown) > 0.005) {
+            setRateChangePending({ depositId, newAmount: stored });
+            return;
+          }
           paymongoLinkMutation.mutate({ depositId });
         },
       },
@@ -1043,7 +1054,7 @@ export default function WalletPage() {
                             <span className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold bg-emerald-500 text-white rounded-full">{pkg.label.toUpperCase()}</span>
                           )}
                           <p className="text-2xl font-bold text-white mb-0.5">${pkg.usdAmount}</p>
-                          <p className="text-xs text-zinc-500 mb-2">≈ ₱{pkg.phpEquivalent.toLocaleString()}</p>
+                          <p className="text-xs text-zinc-500 mb-2">₱{(pkg.phpAmount ?? pkg.phpEquivalent).toLocaleString()}</p>
                           <p className="text-base font-semibold text-brand-300">{pkg.creditsTotal.toLocaleString()}</p>
                           <p className="text-xs text-zinc-500">credits</p>
                           {pkg.bonusCredits > 0 && (
@@ -1085,9 +1096,12 @@ export default function WalletPage() {
                         const meta = METHOD_META[key];
                         if (!meta) return null;
                         const isPhp = key === 'PAYMONGO';
+                        const isCryptoMethod = key === 'USDT_BEP20' || key === 'USDT_BASE';
                         const displayAmount = isPhp
                           ? `₱${(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()}`
-                          : `$${selectedPackage.usdAmount} USDT`;
+                          : isCryptoMethod
+                            ? `${selectedPackage.usdAmount} USDT`
+                            : `$${selectedPackage.usdAmount.toFixed(2)} USD`;
                         const available =
                           methodAvailable(key) &&
                           (!(selectedPackage.methods?.length) ||
@@ -1227,7 +1241,7 @@ export default function WalletPage() {
                         )}
                         {fiatCheckoutUrl && (
                           <button
-                            onClick={() => window.open(fiatCheckoutUrl, '_blank', 'noopener,noreferrer')}
+                            onClick={() => window.location.assign(fiatCheckoutUrl)}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-medium transition-all w-full justify-center"
                           >
                             <ExternalLink className="w-4 h-4" />
@@ -1376,7 +1390,7 @@ export default function WalletPage() {
                           <p>Package: <span className="text-white font-medium">{selectedPackage.usdAmount} USD</span></p>
                           <p>You get: <span className="text-brand-300 font-medium">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
                           {selectedMethod === 'PAYMONGO' && (
-                            <p>Amount: <span className="text-white">~{(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()} PHP</span></p>
+                            <p>Amount: <span className="text-white">₱{(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()}</span></p>
                           )}
                         </div>
                       </div>
@@ -1385,10 +1399,10 @@ export default function WalletPage() {
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-xs">
                             <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                            <p className="text-zinc-300">Checkout link opened in a new tab. Complete payment there.</p>
+                            <p className="text-zinc-300">Checkout link ready. Continue in this tab to complete payment.</p>
                           </div>
                           <button
-                            onClick={() => window.open(fiatCheckoutUrl, '_blank', 'noopener,noreferrer')}
+                            onClick={() => window.location.assign(fiatCheckoutUrl)}
                             className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-all w-full justify-center"
                           >
                             <ExternalLink className="w-4 h-4" /> Open Checkout Again
@@ -1407,6 +1421,44 @@ export default function WalletPage() {
                           )}
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* Rate-change confirmation — the stored deposit amount is
+                      authoritative; user must confirm before checkout opens. */}
+                  {rateChangePending && (
+                    <div className="mt-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm space-y-2">
+                      <p className="text-amber-300">
+                        The exchange rate changed — the charge is now <span className="font-semibold">₱{rateChangePending.newAmount.toLocaleString()}</span> instead of ₱{(selectedPackage?.phpAmount ?? selectedPackage?.phpEquivalent ?? 0).toLocaleString()}.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const { depositId } = rateChangePending;
+                            setRateChangePending(null);
+                            paymongoLinkMutation.mutate({ depositId });
+                          }}
+                          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold transition-all"
+                        >
+                          Pay ₱{rateChangePending.newAmount.toLocaleString()} — continue
+                        </button>
+                        <button
+                          onClick={() => {
+                            const { depositId } = rateChangePending;
+                            setRateChangePending(null);
+                            // Declining the revised quote must free the slot —
+                            // cancel the pending deposit via the same guarded
+                            // path used elsewhere, or the user is blocked by a
+                            // stale PENDING row.
+                            cancelDepositMutation.mutate(depositId, {
+                              onError: () => setDepositError('Could not cancel the deposit — please cancel it from Deposit History.'),
+                            });
+                          }}
+                          className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   )}
 
