@@ -278,7 +278,7 @@ export default function WalletPage() {
   const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
   const [ownershipProof, setOwnershipProof] = useState<{ nonce: string; signature: string } | null>(null);
   // A sent-but-unregistered transfer: hash bound to its network, wallet, package.
-  const [unresolvedSend, setUnresolvedSend] = useState<{ hash: string; depositId: string; network: string; chainId: number; wallet: string; packageId: string; method: string; amountUsd: number } | null>(null);
+  const [unresolvedSend, setUnresolvedSend] = useState<{ hash: string | null; depositId: string; network: string; chainId: number; wallet: string; packageId: string; method: string; amountUsd: number } | null>(null);
   const [signingOwnership, setSigningOwnership] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
@@ -650,6 +650,10 @@ export default function WalletPage() {
     }
     if (!depositId) { setDepositError('Could not open the deposit — try again'); return; }
 
+    // Persist the open intent BEFORE requesting the transfer — a rejection or
+    // preflight failure retries against this same deposit (proof already used).
+    persistSend({ hash: null, depositId, network: cryptoCfg.network, chainId: cryptoCfg.chainId, wallet: evmWallet.address, packageId: selectedPackage.id, method: selectedMethod!, amountUsd: selectedPackage.usdAmount });
+
     // 2) Request the transfer against the established deposit.
     const hash = await evmWallet.sendUsdt(
       cryptoCfg.walletAddress,
@@ -657,7 +661,15 @@ export default function WalletPage() {
       selectedPackage.usdAmount,
       cryptoCfg.chainId,
     );
-    if (!hash) return; // user rejected / pre-send error — deposit stays PENDING, no hash to recover
+    if (!hash) {
+      // sendOutcome guides the surface:
+      // 'cancelled'/'preflight' → certain no broadcast — safe to retry on this deposit
+      // 'uncertain' → RPC/disconnect — may have broadcast; check wallet, do NOT resend
+      if (evmWallet.sendOutcome === 'uncertain') {
+        setDepositError('Could not confirm the transfer — check your wallet activity before retrying. If it broadcast, recover with your transaction hash below.');
+      }
+      return; // intent persists — retry does not re-initiate or re-sign
+    }
 
     const sent = { hash, depositId, network: cryptoCfg.network, chainId: cryptoCfg.chainId, wallet: evmWallet.address, packageId: selectedPackage.id, method: selectedMethod!, amountUsd: selectedPackage.usdAmount };
     persistSend(sent);
@@ -718,6 +730,14 @@ export default function WalletPage() {
   // Resume the ORIGINAL transfer on the ORIGINAL deposit — never initiates
   // a second deposit and never re-sends. If the hash already registered
   // (lost response), the deposit is already PROCESSING → verify resumes it.
+  const abandonIntent = async () => {
+    const id = unresolvedSend?.depositId;
+    persistSend(null);
+    if (id && !unresolvedSend?.hash) {
+      try { await cancelDepositMutation.mutateAsync(id); } catch { /* best effort */ }
+    }
+  };
+
   const resumeTransfer = async () => {
     if (!unresolvedSend) return;
     setDepositError(null);
@@ -726,11 +746,24 @@ export default function WalletPage() {
       setDepositError(`Reconnect the original wallet ${unresolvedSend.wallet.slice(0, 8)}…${unresolvedSend.wallet.slice(-6)} — this transfer is bound to it.`);
       return;
     }
-    try {
-      await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: unresolvedSend.hash });
-    } catch {
-      // Already registered (lost response earlier) or state moved on — the
-      // verify step resumes the existing deposit either way.
+    // Open intent (no hash yet) — retry the send on the SAME deposit. Wallet and
+    // chain are checked before broadcasting; a chain switch is handled inside sendUsdt.
+    if (!unresolvedSend.hash) {
+      if (!evmWallet.address) { setDepositError('Connect the wallet that opened this deposit first.'); return; }
+      const hash = await evmWallet.sendUsdt(cryptoCfg!.walletAddress!, cryptoCfg!.contractAddress!, unresolvedSend.amountUsd, unresolvedSend.chainId);
+      if (!hash) return;
+      persistSend({ ...unresolvedSend, hash });
+      try {
+        await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: hash });
+      } catch { /* fall through to verify */ }
+    }
+    if (unresolvedSend.hash) {
+      try {
+        await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: unresolvedSend.hash });
+      } catch {
+        // Already registered (lost response earlier) or state moved on — the
+        // verify step resumes the existing deposit either way.
+      }
     }
     try {
       const out = await verifyDepositMutation.mutateAsync({ depositId: unresolvedSend.depositId });
@@ -1442,9 +1475,13 @@ export default function WalletPage() {
                                 <div role="status" className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
                                   <p className="flex items-start gap-1.5 text-xs text-amber-300">
                                     <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                    Transfer submitted on {unresolvedSend.network} — Engganyo could not register or confirm it yet.
+                                    {unresolvedSend.hash
+                                      ? <>Transfer submitted on {unresolvedSend.network} — Engganyo could not register or confirm it yet.</>
+                                      : <>Deposit opened on {unresolvedSend.network} — the transfer wasn&apos;t sent. Retry uses this deposit.</>}
                                   </p>
-                                  <p className="text-[11px] text-zinc-500 font-mono break-all pl-5">{unresolvedSend.hash}</p>
+                                  {unresolvedSend.hash && (
+                                    <p className="text-[11px] text-zinc-500 font-mono break-all pl-5">{unresolvedSend.hash}</p>
+                                  )}
                                   <p className="text-[11px] text-zinc-600 pl-5">Bound to this transfer: {unresolvedSend.amountUsd} USDT · {unresolvedSend.network} · wallet {unresolvedSend.wallet.slice(0,8)}…{unresolvedSend.wallet.slice(-6)}</p>
                                   <div className="flex flex-wrap gap-2 pl-5">
                                     <button
@@ -1453,7 +1490,7 @@ export default function WalletPage() {
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-medium transition-all disabled:opacity-50"
                                     >
                                       {initiateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                                      Retry registration
+                                      {unresolvedSend.hash ? 'Retry registration' : 'Resume send'}
                                     </button>
                                     <button
                                       onClick={() => void proveOwnershipFor(unresolvedSend.depositId, unresolvedSend.wallet, unresolvedSend.method).then(() => resumeTransfer())}
@@ -1462,11 +1499,19 @@ export default function WalletPage() {
                                       <ShieldCheck className="w-3 h-3" />Prove ownership again
                                     </button>
                                     <button
-                                      onClick={() => { setCryptoMode('manual'); setManualTxHash(unresolvedSend.hash); setDepositError(null); }}
+                                      onClick={() => void abandonIntent()}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-zinc-200 text-xs transition-all"
+                                    >
+                                      Abandon deposit
+                                    </button>
+                                    {unresolvedSend.hash && (
+                                    <button
+                                      onClick={() => { setCryptoMode('manual'); setManualTxHash(unresolvedSend.hash!); setDepositError(null); }}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-zinc-200 text-xs transition-all"
                                     >
                                       Use manual option
                                     </button>
+                                    )}
                                   </div>
                                   <p className="text-[10px] text-zinc-600 pl-5">Do not send again — this exact transfer is retained. Sending is disabled until it resolves.</p>
                                 </div>
