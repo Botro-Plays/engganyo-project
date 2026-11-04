@@ -66,13 +66,46 @@ export class PayPalService {
   }
 
   async createOrder(depositId: string, amount: number, currency: string) {
+    // Reuse a payable order — retries/concurrent calls must not mint a second.
+    const existing = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true } });
+    const exGw = (existing?.gatewayData ?? {}) as Record<string, unknown>;
+    if (existing?.paymentRef && exGw.approvalUrl && !existing.paymentRef.startsWith('creating:')) {
+      this.logger.log(`Deposit ${depositId} already has PayPal order ${existing.paymentRef} — reusing`);
+      return { orderId: existing.paymentRef, approvalUrl: exGw.approvalUrl as string };
+    }
     const cfg = await this.getConfig();
     if (!cfg) throw new BadRequestException('PayPal not configured');
 
-    const accessToken = await this.getAccessToken(cfg);
+    // Atomic claim — only an unclaimed row or a provably stale claim may be
+    // acquired; an active `creating:` claim is never overwritten.
+    const claimTag = `creating:${crypto.randomUUID()}`;
+    const staleBefore = new Date(Date.now() - 60_000);
+    const claim = await this.prisma.deposit.updateMany({
+      where: {
+        id: depositId,
+        OR: [
+          { paymentRef: null },
+          { paymentRef: { startsWith: 'creating:' }, updatedAt: { lt: staleBefore } },
+        ],
+      },
+      data: { paymentRef: claimTag },
+    });
+    if (claim.count === 0) {
+      const row = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true } });
+      const gw = (row?.gatewayData ?? {}) as Record<string, unknown>;
+      if (row?.paymentRef && gw.approvalUrl && !row.paymentRef.startsWith('creating:')) {
+        return { orderId: row.paymentRef, approvalUrl: gw.approvalUrl as string };
+      }
+      throw new BadRequestException('PayPal checkout is being prepared — please retry in a moment');
+    }
+    const releaseClaim = () =>
+      this.prisma.deposit.updateMany({ where: { id: depositId, paymentRef: claimTag }, data: { paymentRef: null } }).catch((e) => this.logger.warn(`claim release failed for ${depositId}: ${e}`));
+
+    const accessToken = await this.getAccessToken(cfg).catch(async (e) => { await releaseClaim(); throw e; });
 
     const res = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders`, {
       method: 'POST',
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
@@ -88,8 +121,8 @@ export class PayPalService {
           description: `Engganyo deposit ${depositId}`,
         }],
         application_context: {
-          return_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/wallet?paypal=success`,
-          cancel_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/wallet?paypal=cancel&depositId=${depositId}`,
+          return_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/payment/return?status=success&method=paypal&deposit=${depositId}`,
+          cancel_url: `${process.env['FRONTEND_URL'] ?? 'http://localhost:3000'}/payment/return?status=cancelled&method=paypal&deposit=${depositId}`,
           brand_name: 'Engganyo',
         },
       }),
@@ -98,6 +131,7 @@ export class PayPalService {
     const json = (await res.json()) as Record<string, unknown>;
     if (!res.ok) {
       this.logger.error(`PayPal create order failed: ${JSON.stringify(json)}`);
+      await releaseClaim();
       throw new BadRequestException('Failed to create PayPal order');
     }
 
@@ -106,16 +140,28 @@ export class PayPalService {
     const approvalUrl = links?.find((l) => l.rel === 'approve')?.href ?? '';
 
     if (!orderId || !approvalUrl) {
+      await releaseClaim();
       throw new BadRequestException('PayPal order response missing required fields');
     }
 
-    await this.prisma.deposit.update({
-      where: { id: depositId },
+    // Ownership-conditioned persist — if we lost the claim (reclaimed stale
+    // while the provider call was in flight), never overwrite the winner.
+    const persisted = await this.prisma.deposit.updateMany({
+      where: { id: depositId, paymentRef: claimTag },
       data: {
         paymentRef: orderId,
         gatewayData: { approvalUrl, mode: cfg.mode, createdAt: new Date().toISOString() },
       },
     });
+    if (persisted.count === 0) {
+      const row = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true } });
+      const gw = (row?.gatewayData ?? {}) as Record<string, unknown>;
+      if (row?.paymentRef && gw.approvalUrl && !row.paymentRef.startsWith('creating:')) {
+        this.logger.warn(`Deposit ${depositId} claim lost — returning persisted winner ${row.paymentRef}`);
+        return { orderId: row.paymentRef, approvalUrl: gw.approvalUrl as string };
+      }
+      throw new BadRequestException('PayPal checkout could not be confirmed — please retry');
+    }
 
     return { orderId, approvalUrl };
   }
@@ -207,15 +253,18 @@ export class PayPalService {
       throw new BadRequestException('PayPal capture missing deposit reference');
     }
 
-    if (capturedValue) {
-      const captured = parseFloat(capturedValue);
-      const expected = deposit?.amountFiat ?? 0;
-      if (expected > 0 && Math.abs(captured - expected) > 0.01) {
-        this.logger.warn(`PayPal amount mismatch: expected ${expected}, got ${captured} — deposit NOT completed`);
-        throw new BadRequestException(
-          `Captured amount ${captured} does not match expected ${expected}`,
-        );
-      }
+    const capturedCurrency = (payments?.captures?.[0]?.amount as Record<string, unknown> | undefined)?.currency_code as string | undefined;
+    if (!capturedValue || Math.abs(parseFloat(capturedValue) - (deposit?.amountFiat ?? -1)) > 0.005) {
+      this.logger.warn(`PayPal amount mismatch: expected ${deposit?.amountFiat}, got ${capturedValue} — deposit NOT completed`);
+      throw new BadRequestException('PayPal capture amount does not match deposit');
+    }
+    if (capturedCurrency && deposit?.currency && capturedCurrency.toUpperCase() !== deposit.currency.toUpperCase()) {
+      this.logger.warn(`PayPal currency mismatch: ${capturedCurrency} vs ${deposit.currency} — deposit NOT completed`);
+      throw new BadRequestException('PayPal capture currency does not match deposit');
+    }
+    if (referenceId !== deposit?.id) {
+      this.logger.warn(`PayPal reference ${referenceId} != matched deposit ${deposit?.id} — deposit NOT completed`);
+      throw new BadRequestException('PayPal capture reference mismatch');
     }
 
     await this.walletService.completeDeposit(referenceId, { paymentRef: orderId });
@@ -378,7 +427,7 @@ export class PayPalService {
       }
     }
 
-    // ── PAYMENT.CAPTURE.COMPLETED → complete deposit if not already done ──
+    // ── PAYMENT.CAPTURE.COMPLETED → verify + complete deposit if not already done ──
     if (eventType === 'PAYMENT.CAPTURE.COMPLETED') {
       const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
       if (!deposit) return { received: true, action: 'ignored_no_deposit' };
@@ -387,17 +436,24 @@ export class PayPalService {
         return { received: true, action: 'ignored_wrong_status', depositId: deposit.id };
       }
 
-      // Verify the captured amount matches what the deposit expects before
+      // Verify the captured amount + currency match the deposit before
       // crediting — a mismatched capture must not settle the wallet.
-      const capturedValue = (resource?.amount as { value?: string } | undefined)?.value;
+      const resAmount = resource?.amount as { value?: string; currency_code?: string } | undefined;
+      const capturedValue = resAmount?.value;
+      const paidCurrency = resAmount?.currency_code;
       if (capturedValue) {
-        const captured = parseFloat(capturedValue);
-        if (deposit.amountFiat > 0 && Math.abs(captured - deposit.amountFiat) > 0.01) {
+        if (Math.abs(parseFloat(capturedValue) - deposit.amountFiat) > 0.005) {
           this.logger.warn(
-            `PAYMENT.CAPTURE.COMPLETED amount mismatch for deposit ${deposit.id}: expected ${deposit.amountFiat}, got ${captured} — not completing`,
+            `PAYMENT.CAPTURE.COMPLETED amount mismatch for deposit ${deposit.id}: expected ${deposit.amountFiat}, got ${capturedValue} — not completing`,
           );
           return { received: true, action: 'ignored_amount_mismatch', depositId: deposit.id };
         }
+      }
+      if (paidCurrency && deposit.currency && paidCurrency.toUpperCase() !== deposit.currency.toUpperCase()) {
+        this.logger.warn(
+          `PAYMENT.CAPTURE.COMPLETED currency mismatch for deposit ${deposit.id}: ${paidCurrency} vs ${deposit.currency} — not completing`,
+        );
+        return { received: true, action: 'ignored_amount_mismatch', depositId: deposit.id };
       }
 
       await this.walletService.completeDeposit(deposit.id, { paymentRef: orderId });

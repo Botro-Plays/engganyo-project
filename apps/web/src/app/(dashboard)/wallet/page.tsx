@@ -688,7 +688,8 @@ export default function WalletPage() {
     onSuccess: (data) => {
       setFiatCheckoutUrl(data?.approvalUrl ?? null);
       if (data?.approvalUrl) {
-        window.open(data.approvalUrl, '_blank', 'noopener,noreferrer');
+        // Same-tab navigation — PayPal returns to /payment/return.
+        window.location.assign(data.approvalUrl);
       }
     },
     onError: (err) => setDepositError(getApiErrorMessage(err)),

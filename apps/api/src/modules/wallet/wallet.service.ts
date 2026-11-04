@@ -524,6 +524,7 @@ export class WalletService {
         creditsToAward: true,
         creditsAwarded: true,
         bonusCredits: true,
+        paymentRef: true,
       },
     });
   }
