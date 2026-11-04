@@ -105,7 +105,7 @@ function SettlementFigure({ label, figs, count, currencyHint, prominent }: {
           figs.map((f) => (
             <span key={f.currency} className={`block ${prominent ? 'text-base font-semibold text-white' : 'text-sm text-zinc-300'}`}>
               {f.currency === 'USD' ? '$' : f.currency === 'PHP' ? '₱' : `${f.currency} `}{f.total.toFixed(2)}
-              <span className="text-[10px] text-zinc-500 ml-1">{f.currency !== currencyHint ? f.currency : ''}{partial ? ` · ${f.count}/${count}` : f.count > 1 ? ` · ${f.count}` : ''}</span>
+              <span className="text-[10px] text-zinc-500 ml-1">{f.currency !== currencyHint ? f.currency : ''}{partial ? ` · ${f.count} of ${count} deposits` : f.count > 1 ? ` · ${f.count} deposits` : ''}</span>
             </span>
           ))
         )}
@@ -260,9 +260,10 @@ export default function FinancesPage() {
     refetchInterval: 15_000,
   });
 
-  const { data: settlementSummary } = useQuery({
+  const { data: settlementSummary, isLoading: settlementLoading, isError: settlementError, isRefetchError: settlementRefetchError, refetch: refetchSettlement } = useQuery({
     queryKey: ['admin', 'finances-settlement'],
     queryFn: async () => (await apiClient.get<ApiResponse<SettlementRow[]>>('admin/finances/settlement-summary')).data.data,
+    retry: 1,
   });
 
   const { data: deposits, isLoading: depositsLoading } = useQuery({
@@ -350,14 +351,22 @@ export default function FinancesPage() {
                   </span>
                 )}
               </div>
-              {!settlementSummary ? (
+              {settlementLoading && !settlementSummary ? (
                 <div className="space-y-2 animate-pulse">
                   {[1, 2, 3].map((i) => <div key={i} className="h-4 bg-zinc-700/40 rounded" />)}
+                </div>
+              ) : settlementError && !settlementSummary ? (
+                <div className="flex items-center justify-between gap-2 py-2">
+                  <p className="text-xs text-zinc-500">Couldn't load settlement totals</p>
+                  <button onClick={() => void refetchSettlement()} className="text-xs text-amber-400 hover:text-amber-300 underline">Retry</button>
                 </div>
               ) : rows.length === 0 ? (
                 <p className="text-xs text-zinc-600">No settled {cfg.title} deposits yet.</p>
               ) : (
                 <div className="space-y-4">
+                  {settlementRefetchError && settlementSummary && (
+                    <p className="text-[10px] text-amber-400/80">refresh failed — showing last loaded figures</p>
+                  )}
                   {rows.map((r) => (
                     <div key={`${r.method}-${r.currency}`} className="space-y-1.5">
                       {rows.length > 1 && (
