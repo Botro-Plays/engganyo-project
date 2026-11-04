@@ -264,7 +264,12 @@ export class WalletService {
     const map = Object.fromEntries(configs.map((c) => [c.key, c.value]));
     const creditsPerUsd = (map['credits_per_usd'] as number) ?? 5000;
     const minDepositUsd = (map['min_deposit_usd'] as number) ?? 1;
-    const minDepositPhp = (map['min_deposit_php'] as number) ?? Math.ceil(minDepositUsd * usdToPhp);
+    // Derived PHP minimum uses the SAME centavo rounding as the package
+    // charge (phpAmount = (usd*rate).toFixed(2)) so a package priced at the
+    // USD floor always qualifies. An explicitly configured min_deposit_php
+    // still overrides. Computed in integer centavos to avoid float drift.
+    const minDepositPhp = (map['min_deposit_php'] as number)
+      ?? Math.round(minDepositUsd * usdToPhp * 100) / 100;
 
     return {
       paymongo:  { enabled: Boolean(map['paymongo_enabled'] ?? false),  publicKey: (map['paymongo_public_key'] as string) ?? null },

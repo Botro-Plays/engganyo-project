@@ -49,7 +49,7 @@ async function mockDepositApis(page: import('@playwright/test').Page) {
       headers: CORS_HEADERS,
       contentType: 'application/json',
       body: apiResponse({
-        pricing: { creditsPerUsd: 100, minDepositUsd: 1, minDepositPhp: 50, usdToPhp: 58 },
+        pricing: { creditsPerUsd: 100, minDepositUsd: 1, minDepositPhp: 63.46, usdToPhp: 63.46 },
         paymongo: { enabled: true, publicKey: 'pk_test_paymongo' },
         paypal: { enabled: true, clientId: 'test_paypal_client', mode: 'sandbox' },
         usdtBep20: { enabled: true, walletAddress: '0x1234567890123456789012345678901234567890', contractAddress: '0x55d398326f99059fF775485246999027B3197955', chainId: 56, network: 'BSC', minAmount: 1 },
@@ -64,9 +64,10 @@ async function mockDepositApis(page: import('@playwright/test').Page) {
       headers: CORS_HEADERS,
       contentType: 'application/json',
       body: apiResponse([
-        { id: 'pkg-e2e-1', usdAmount: 5,  creditsBase: 500,  creditsTotal: 500,  bonusCredits: 0,    phpEquivalent: 290,  usdToPhp: 58, label: null,         isPopular: false, isActive: true },
-        { id: 'pkg-e2e-2', usdAmount: 10, creditsBase: 1000, creditsTotal: 1100, bonusCredits: 100,  phpEquivalent: 580,  usdToPhp: 58, label: 'Best Value', isPopular: true,  isActive: true },
-        { id: 'pkg-e2e-3', usdAmount: 50, creditsBase: 5000, creditsTotal: 6000, bonusCredits: 1000, phpEquivalent: 2900, usdToPhp: 58, label: null,         isPopular: false, isActive: true },
+        { id: 'pkg-e2e-0', usdAmount: 1,  creditsBase: 100,  creditsTotal: 100,  bonusCredits: 0,    phpEquivalent: 64,   phpAmount: 63.46, usdToPhp: 63.46, label: null,         isPopular: false, isActive: true },
+        { id: 'pkg-e2e-1', usdAmount: 5,  creditsBase: 500,  creditsTotal: 500,  bonusCredits: 0,    phpEquivalent: 317,  phpAmount: 317.3, usdToPhp: 63.46, label: null,         isPopular: false, isActive: true },
+        { id: 'pkg-e2e-2', usdAmount: 10, creditsBase: 1000, creditsTotal: 1100, bonusCredits: 100,  phpEquivalent: 635,  phpAmount: 634.6, usdToPhp: 63.46, label: 'Best Value', isPopular: true,  isActive: true },
+        { id: 'pkg-e2e-3', usdAmount: 50, creditsBase: 5000, creditsTotal: 6000, bonusCredits: 1000, phpEquivalent: 3173, phpAmount: 3173, usdToPhp: 63.46, label: null,         isPopular: false, isActive: true },
       ]),
     });
   });
@@ -202,6 +203,38 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await proceedBtn.click();
 
     // Same-tab navigation hands off to the mocked Checkout Session URL
+    await page.waitForURL(/checkout\.paymongo\.com\/test-link/, { timeout: 10_000 });
+    await expect(page).toHaveURL(MOCK_CHECKOUT_URL);
+  });
+
+  test('$1 package at derived ₱63.46 floor → PayMongo enabled → unpaid checkout', async ({ page }) => {
+    await mockInitiateDeposit(page, 'PAYMONGO');
+    await mockPaymongoLink(page);
+
+    await page.goto('/wallet');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/wallet/);
+    const depositTab = page.getByRole('button', { name: /deposit credits/i });
+    await expect(depositTab).toBeVisible({ timeout: 5_000 });
+    await depositTab.click();
+    await page.waitForLoadState('networkidle');
+
+    await waitForPackageButton(page, /\$1/);
+    const packageCard = page.locator('#deposit-card button').filter({ hasText: /\$1/ }).first();
+    await packageCard.click();
+
+    // PayMongo must be ENABLED (not "Min ₱") at the derived floor.
+    const paymongoMethod = page.getByText(/GCash \/ Cards|PayMongo/i).first();
+    await expect(paymongoMethod).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/min ₱/i)).not.toBeVisible();
+    await paymongoMethod.click();
+
+    await page.route('**/checkout.paymongo.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<html><title>PayMongo Checkout</title></html>' }),
+    );
+    const proceedBtn = page.getByRole('button', { name: /proceed to paymongo/i });
+    await expect(proceedBtn).toBeVisible({ timeout: 5_000 });
+    await proceedBtn.click();
     await page.waitForURL(/checkout\.paymongo\.com\/test-link/, { timeout: 10_000 });
     await expect(page).toHaveURL(MOCK_CHECKOUT_URL);
   });
