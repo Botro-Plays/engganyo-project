@@ -48,18 +48,27 @@ describe('PayPalService', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  const captureResponse = (over: Record<string, unknown> = {}) => ({
+  const verifiedOrder = (over: Record<string, unknown> = {}, unitOver: Record<string, unknown> = {}) => ({
+    id: 'ORDER-123',
+    status: 'COMPLETED',
+    purchase_units: [
+      {
+        reference_id: 'dep-1',
+        payments: { captures: [{ id: 'CAP-1', status: 'COMPLETED', amount: { value: '1.00', currency_code: 'USD' } }] },
+        ...unitOver,
+      },
+    ],
+    ...over,
+  });
+
+  const captureResponse = (over: Record<string, unknown> = {}, unitOver: Record<string, unknown> = {}) => ({
     ok: true,
-    json: async () => ({
-      status: 'COMPLETED',
-      purchase_units: [
-        {
-          reference_id: 'dep-1',
-          payments: { captures: [{ amount: { value: '1.00', currency_code: 'USD' } }] },
-        },
-      ],
-      ...over,
-    }),
+    json: async () => verifiedOrder(over, unitOver),
+  });
+
+  const alreadyCapturedError = () => ({
+    ok: false,
+    json: async () => ({ name: 'UNPROCESSABLE_ENTITY', details: [{ issue: 'ORDER_ALREADY_CAPTURED' }] }),
   });
 
   it('captureOrder verifies capture + credits the deposit', async () => {
@@ -74,18 +83,17 @@ describe('PayPalService', () => {
   });
 
   it.each([
-    ['amount mismatch', { payments: { captures: [{ amount: { value: '5.00', currency_code: 'USD' } }] }, reference_id: 'dep-1' }],
-    ['currency mismatch', { payments: { captures: [{ amount: { value: '1.00', currency_code: 'PHP' } }] }, reference_id: 'dep-1' }],
-    ['foreign reference', { payments: { captures: [{ amount: { value: '1.00', currency_code: 'USD' } }] }, reference_id: 'dep-OTHER' }],
-  ])('rejects capture with %s — wallet untouched', async (_n, unit) => {
+    ['amount mismatch', { payments: { captures: [{ id: 'CAP-1', status: 'COMPLETED', amount: { value: '5.00', currency_code: 'USD' } }] } }],
+    ['currency mismatch', { payments: { captures: [{ id: 'CAP-1', status: 'COMPLETED', amount: { value: '1.00', currency_code: 'PHP' } }] } }],
+    ['foreign reference', { reference_id: 'dep-OTHER' }],
+    ['missing capture', { payments: { captures: [] } }],
+    ['incomplete capture', { payments: { captures: [{ id: 'CAP-1', status: 'PENDING', amount: { value: '1.00', currency_code: 'USD' } }] } }],
+  ])('rejects capture with %s — wallet untouched', async (_n, unitOver) => {
     prisma.deposit.findUnique.mockResolvedValue(deposit());
     prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
     (fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'COMPLETED', purchase_units: [unit] }),
-      });
+      .mockResolvedValueOnce(captureResponse({}, unitOver));
     await expect(service.captureOrder('ORDER-123')).rejects.toThrow(BadRequestException);
     expect(walletService.completeDeposit).not.toHaveBeenCalled();
   });
@@ -206,18 +214,65 @@ describe('PayPalService', () => {
 
   // ── Lost response after capture ──
 
-  it('lost response: PROCESSING deposit retry re-attempts provider and recovers via ORDER_ALREADY_CAPTURED', async () => {
+  it('lost response: PROCESSING deposit retry re-attempts provider and recovers via verified ORDER_ALREADY_CAPTURED', async () => {
     // First attempt timed out after PayPal captured; deposit stuck PROCESSING.
-    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    prisma.deposit.findUnique
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.PROCESSING })) // initial lookup
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.PROCESSING })) // freshDeposit in recovery
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.COMPLETED })); // settled read-back
     (fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) }) // token
-      .mockResolvedValueOnce({ // capture POST → 422 already captured
-        ok: false,
-        json: async () => ({ name: 'UNPROCESSABLE_ENTITY', details: [{ issue: 'ORDER_ALREADY_CAPTURED' }] }),
-      });
+      .mockResolvedValueOnce(alreadyCapturedError()) // capture POST → 422 already captured
+      .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder() }); // GET /orders → verified capture
     const out = await service.captureOrder('ORDER-123', 'user-1');
     expect(out.status).toBe('COMPLETED');
     expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['wrong amount', {}, { payments: { captures: [{ id: 'CAP-1', status: 'COMPLETED', amount: { value: '9.99', currency_code: 'USD' } }] } }],
+    ['wrong currency', {}, { payments: { captures: [{ id: 'CAP-1', status: 'COMPLETED', amount: { value: '1.00', currency_code: 'PHP' } }] } }],
+    ['mismatched order id', { id: 'ORDER-OTHER' }, {}],
+    ['mismatched reference', {}, { reference_id: 'dep-OTHER' }],
+    ['missing capture', {}, { payments: { captures: [] } }],
+    ['incomplete capture', {}, { payments: { captures: [{ id: 'CAP-1', status: 'PENDING', amount: { value: '1.00', currency_code: 'USD' } }] } }],
+  ])('ORDER_ALREADY_CAPTURED recovery rejects %s — wallet untouched', async (_n, orderOver, unitOver) => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce(alreadyCapturedError())
+      .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder(orderOver, unitOver) });
+    await expect(service.captureOrder('ORDER-123', 'user-1')).rejects.toThrow(BadRequestException);
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('ORDER_ALREADY_CAPTURED with unavailable order lookup is retryable — wallet untouched', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce(alreadyCapturedError())
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) }); // GET /orders down
+    await expect(service.captureOrder('ORDER-123', 'user-1')).rejects.toThrow('retry');
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('first response fails verification; retry sees ALREADY_CAPTURED with same bad evidence → zero credit', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const badUnit = { payments: { captures: [{ id: 'CAP-1', status: 'COMPLETED', amount: { value: '9.99', currency_code: 'USD' } }] } };
+    (fetch as jest.Mock)
+      // Attempt 1: capture succeeds at PayPal but evidence mismatches → reject.
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce(captureResponse({}, badUnit))
+      // Attempt 2 (retry): provider says already captured; GET order returns
+      // the same mismatched capture → still rejected, zero credit.
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce(alreadyCapturedError())
+      .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder({}, badUnit) });
+    await expect(service.captureOrder('ORDER-123', 'user-1')).rejects.toThrow(BadRequestException);
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    await expect(service.captureOrder('ORDER-123', 'user-1')).rejects.toThrow(BadRequestException);
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
   });
 
   it('lost response: signed webhook settles a PROCESSING deposit once', async () => {

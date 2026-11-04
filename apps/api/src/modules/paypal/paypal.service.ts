@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException, UnauthorizedException, forwardRef, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../database/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -169,6 +169,47 @@ export class PayPalService {
     return { orderId, approvalUrl };
   }
 
+  // ─── Capture verification — single path for normal capture AND recovery ──
+  // Verifies an Orders v2 resource (capture response or GET /orders result):
+  // order id, purchase-unit reference, provider capture id + COMPLETED status,
+  // exact expected amount and currency. Throws → caller must not credit.
+  private assertVerifiedCapture(
+    deposit: { id: string; amountFiat: number; currency: string },
+    orderId: string,
+    order: Record<string, unknown>,
+  ): void {
+    if ((order.id as string | undefined) !== orderId) {
+      this.logger.warn(`PayPal order id mismatch: expected ${orderId}, got ${order.id} — deposit NOT completed`);
+      throw new BadRequestException('PayPal order ID mismatch');
+    }
+    if ((order.status as string | undefined) !== 'COMPLETED') {
+      throw new BadRequestException(`PayPal order status: ${order.status}`);
+    }
+    const units = order.purchase_units as Array<Record<string, unknown>> | undefined;
+    const referenceId = units?.[0]?.reference_id as string | undefined;
+    if (!referenceId) {
+      throw new BadRequestException('PayPal capture missing deposit reference');
+    }
+    const captures = (units?.[0]?.payments as { captures?: Array<Record<string, unknown>> } | undefined)?.captures;
+    const capture = captures?.[0];
+    if (!capture || !(capture.id as string | undefined) || (capture.status as string | undefined) !== 'COMPLETED') {
+      throw new BadRequestException('PayPal capture missing or not completed');
+    }
+    const amount = capture.amount as { value?: string; currency_code?: string } | undefined;
+    if (!amount?.value || Math.abs(parseFloat(amount.value) - deposit.amountFiat) > 0.005) {
+      this.logger.warn(`PayPal amount mismatch: expected ${deposit.amountFiat}, got ${amount?.value} — deposit NOT completed`);
+      throw new BadRequestException('PayPal capture amount does not match deposit');
+    }
+    if (amount.currency_code && deposit.currency && amount.currency_code.toUpperCase() !== deposit.currency.toUpperCase()) {
+      this.logger.warn(`PayPal currency mismatch: ${amount.currency_code} vs ${deposit.currency} — deposit NOT completed`);
+      throw new BadRequestException('PayPal capture currency does not match deposit');
+    }
+    if (referenceId !== deposit.id) {
+      this.logger.warn(`PayPal reference ${referenceId} != matched deposit ${deposit.id} — deposit NOT completed`);
+      throw new BadRequestException('PayPal capture reference mismatch');
+    }
+  }
+
   async captureOrder(orderId: string, userId?: string) {
     const cfg = await this.getConfig();
     if (!cfg) throw new BadRequestException('PayPal not configured');
@@ -220,10 +261,11 @@ export class PayPalService {
 
     const res = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${orderId}/capture`, {
       method: 'POST',
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'PayPal-Request-Id': `capture-${orderId}-${Date.now()}`,
+        'PayPal-Request-Id': `capture-${orderId}`,
       },
     });
 
@@ -237,49 +279,41 @@ export class PayPalService {
         name === 'UNPROCESSABLE_ENTITY' &&
         details.some((d) => d.issue === 'ORDER_ALREADY_CAPTURED');
       if (isAlreadyCaptured && deposit) {
-        this.logger.log(`PayPal order ${orderId} already captured at gateway — completing deposit`);
-        const freshDeposit = await this.prisma.deposit.findUnique({
-          where: { paymentRef: orderId },
-        });
+        // Lost-response recovery: retrieve the stored order and apply the SAME
+        // verification as the normal capture path before settling anything.
+        const orderRes = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${orderId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10_000),
+        }).catch(() => null);
+        if (!orderRes || !orderRes.ok) {
+          // Evidence unavailable — keep the deposit recoverable; caller retries.
+          throw new InternalServerErrorException('Could not verify captured PayPal order — retry');
+        }
+        const orderJson = (await orderRes.json()) as Record<string, unknown>;
+        this.assertVerifiedCapture(deposit, orderId, orderJson); // throws → wallet untouched
+
+        const freshDeposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
         if (freshDeposit && (freshDeposit.status === DepositStatus.PENDING || freshDeposit.status === DepositStatus.PROCESSING)) {
           await this.walletService.completeDeposit(freshDeposit.id, { paymentRef: orderId });
         }
-        return { depositId: deposit.id, orderId, status: 'COMPLETED' };
+        // Report the real local state — COMPLETED only if settlement is confirmed.
+        const settled = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId }, select: { status: true } });
+        if (settled?.status === DepositStatus.COMPLETED) {
+          this.logger.log(`PayPal order ${orderId} recovered via ORDER_ALREADY_CAPTURED — deposit settled`);
+          return { depositId: deposit.id, orderId, status: 'COMPLETED' };
+        }
+        return { depositId: deposit.id, orderId, status: 'PROCESSING' };
       }
       this.logger.error(`PayPal capture failed: ${JSON.stringify(json)}`);
       throw new BadRequestException('Failed to capture PayPal order');
     }
 
-    const status = json.status as string;
-    const purchaseUnits = json.purchase_units as Array<Record<string, unknown>> | undefined;
-    const referenceId = purchaseUnits?.[0]?.reference_id as string | undefined;
-    const payments = purchaseUnits?.[0]?.payments as { captures?: Array<{ amount?: { value?: string } }> } | undefined;
-    const capturedValue = payments?.captures?.[0]?.amount?.value;
+    // deposit was ownership-checked above — non-null here.
+    const dep = deposit as { id: string; amountFiat: number; currency: string };
+    this.assertVerifiedCapture(dep, orderId, json);
 
-    if (status !== 'COMPLETED') {
-      throw new BadRequestException(`PayPal order status: ${status}`);
-    }
-
-    if (!referenceId) {
-      throw new BadRequestException('PayPal capture missing deposit reference');
-    }
-
-    const capturedCurrency = (payments?.captures?.[0]?.amount as Record<string, unknown> | undefined)?.currency_code as string | undefined;
-    if (!capturedValue || Math.abs(parseFloat(capturedValue) - (deposit?.amountFiat ?? -1)) > 0.005) {
-      this.logger.warn(`PayPal amount mismatch: expected ${deposit?.amountFiat}, got ${capturedValue} — deposit NOT completed`);
-      throw new BadRequestException('PayPal capture amount does not match deposit');
-    }
-    if (capturedCurrency && deposit?.currency && capturedCurrency.toUpperCase() !== deposit.currency.toUpperCase()) {
-      this.logger.warn(`PayPal currency mismatch: ${capturedCurrency} vs ${deposit.currency} — deposit NOT completed`);
-      throw new BadRequestException('PayPal capture currency does not match deposit');
-    }
-    if (referenceId !== deposit?.id) {
-      this.logger.warn(`PayPal reference ${referenceId} != matched deposit ${deposit?.id} — deposit NOT completed`);
-      throw new BadRequestException('PayPal capture reference mismatch');
-    }
-
-    await this.walletService.completeDeposit(referenceId, { paymentRef: orderId });
-    return { depositId: referenceId, orderId, status };
+    await this.walletService.completeDeposit(dep.id, { paymentRef: orderId });
+    return { depositId: dep.id, orderId, status: json.status as string };
   }
 
   // ─── Cancel / Void an order (best-effort) ───────────────────
