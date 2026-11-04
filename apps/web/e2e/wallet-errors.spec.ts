@@ -1,6 +1,24 @@
 import { test, expect } from '@playwright/test';
 
-test.use({ storageState: 'e2e/.auth/user.json' });
+const AUTH_LS = JSON.stringify({
+  state: {
+    user: { id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 },
+    accessToken: 'e2e-mock-token',
+    isAuthenticated: true,
+    adminPin: null,
+  },
+  version: 0,
+});
+test.use({
+  storageState: {
+    cookies: [],
+    origins: [{ origin: 'http://localhost:3000', localStorage: [
+      { name: 'access_token', value: 'e2e-mock-token' },
+      { name: 'engganyo-auth', value: AUTH_LS },
+      { name: 'cookie-consent', value: 'accepted' },
+    ] }],
+  },
+});
 
 const CORS_ORIGIN = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
 const CORS_HEADERS = {
@@ -46,7 +64,13 @@ async function injectWallet(page: import('@playwright/test').Page, scenario: str
         }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getCode') return '0x6080';
-        throw err(`Unsupported method ${method}`, 'UNSUPPORTED_OPERATION');
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_maxPriorityFeePerGas') return '0x3b9aca00';
+        if (method === 'eth_getBlockByNumber') return { number: '0x1234', hash: '0x' + '00'.repeat(32), parentHash: '0x' + '00'.repeat(32), nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), logsBloom: '0x' + '00'.repeat(256), transactionsRoot: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), miner: '0x' + '00'.repeat(20), difficulty: '0x0', totalDifficulty: '0x0', extraData: '0x', size: '0x0', gasLimit: '0x1c9c380', gasUsed: '0x0', timestamp: '0x654321', transactions: [], uncles: [], baseFeePerGas: '0x2540be400' };
+        if (method === 'eth_feeHistory') return { baseFeePerGas: ['0x2540be400', '0x2540be400'], gasUsedRatio: [0.5], oldestBlock: '0x1234', reward: [['0x3b9aca00']] };
+        if (method === 'eth_getTransactionByHash') return null;
+        return '0x0';
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -55,6 +79,14 @@ async function injectWallet(page: import('@playwright/test').Page, scenario: str
 }
 
 async function mockApis(page: import('@playwright/test').Page) {
+  const user = { id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 };
+  await page.route('**/api/auth/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(user) }));
+  const emptyList = { items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } };
+  await page.route('**/api/wallet/transactions**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(emptyList) }));
+  await page.route('**/api/notifications**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(emptyList) }));
+  await page.route('**/api/store/active-effects', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
+  await page.route('**/api/users/cosmetics**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
+  await page.route('**/api/auth/public-config', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
   await page.route('**/api/wallet/deposit/options', (r) => r.fulfill({
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse({
@@ -68,7 +100,7 @@ async function mockApis(page: import('@playwright/test').Page) {
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse([{ id: 'pkg-1', usdAmount: 1, creditsBase: 100, creditsTotal: 100, bonusCredits: 0, phpEquivalent: 64, phpAmount: 63.46, usdToPhp: 63.46, label: null, isPopular: false, isActive: true }]),
   }));
-  await page.route('**/api/wallet/deposits*', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ items: [], total: 0 }) }));
+  await page.route('**/api/wallet/deposits*', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } }) }));
   await page.route('**/api/wallet/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ balance: 100, pendingBalance: 0 }) }));
   await page.route('**/api/wallet/crypto/challenge', (r) => r.fulfill({
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
@@ -92,7 +124,7 @@ test.describe('crypto wallet error surface', () => {
     await mockApis(page);
     await reachSendStep(page);
     await page.getByRole('button', { name: /^2\. Send / }).click();
-    const alert = page.getByRole('alert');
+    const alert = page.locator('#deposit-card').getByRole('alert');
     await expect(alert).toContainText('Not enough USDT on BNB Smart Chain');
     await expect(alert).toContainText(/funded wallet|add USDT/i);
     // raw provider payloads never reach the UI
@@ -106,7 +138,7 @@ test.describe('crypto wallet error surface', () => {
     await mockApis(page);
     await reachSendStep(page);
     await page.getByRole('button', { name: /^2\. Send / }).click();
-    await expect(page.getByRole('alert')).toContainText(/Not enough BNB.*network fees/);
+    await expect(page.locator('#deposit-card').getByRole('alert')).toContainText(/Not enough BNB.*network fees/);
   });
 
   test('user rejection → cancelled message, no funds moved', async ({ page }) => {
@@ -114,6 +146,6 @@ test.describe('crypto wallet error surface', () => {
     await mockApis(page);
     await reachSendStep(page);
     await page.getByRole('button', { name: /^2\. Send / }).click();
-    await expect(page.getByRole('alert')).toContainText(/cancelled|rejected/i);
+    await expect(page.locator('#deposit-card').getByRole('alert')).toContainText(/cancelled|rejected/i);
   });
 });

@@ -435,3 +435,52 @@ test('deposit-creation failure before wallet call — retry succeeds without rel
   await page.waitForTimeout(2000);
   expect(await page.evaluate(() => (window as unknown as { __sendCount?: number }).__sendCount ?? 0)).toBe(1);
 });
+
+// Wallet that reverts at eth_estimateGas with the screenshot's exact revert —
+// provably pre-broadcast → friendly error + retry on the same deposit.
+async function injectGasRevertWallet(page: import('@playwright/test').Page, chainIdHex: string) {
+  await page.addInitScript((chain) => {
+    const ADDR = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
+    (window as unknown as { ethereum: unknown }).ethereum = {
+      isMetaMask: true,
+      request: async ({ method, params }: { method: string; params?: Array<Record<string, string>> }) => {
+        if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [ADDR];
+        if (method === 'eth_chainId') return chain;
+        if (method === 'net_version') return String(parseInt(chain, 16));
+        if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
+        if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
+        if (method === 'eth_estimateGas') throw Object.assign(new Error('execution reverted: BEP20: transfer amount exceeds balance'), { code: 'CALL_EXCEPTION', data: '0x08c379a0' });
+        if (method === 'eth_sendTransaction') { (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1; return '0x' + 'cd'.repeat(32); }
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_getCode') return '0x1234';
+        if (method === 'eth_getTransactionByHash') return null;
+        return '0x0';
+      },
+      on: () => undefined,
+      removeListener: () => undefined,
+    };
+  }, chainIdHex);
+}
+
+test('gas-estimation revert is pre-broadcast — friendly error + retry on same deposit (BSC)', async ({ page }) => {
+  const failState = { fail: false };
+  await injectGasRevertWallet(page, '0x38');
+  await mockApis(page, 56, failState);
+  await page.goto('/wallet');
+  await page.getByRole('button', { name: /deposit credits/i }).click();
+  await page.locator('#deposit-card button').filter({ hasText: '$1' }).first().click();
+  await page.getByText(/BNB Smart Chain|BEP20/i).first().click();
+  await page.getByRole('button', { name: /connect wallet/i }).first().click();
+  await page.getByRole('button', { name: /verify wallet ownership/i }).click();
+  await page.getByRole('button', { name: /^2\. Send / }).click();
+
+  const card = page.locator('#deposit-card');
+  // estimateGas revert → preflight → friendly USDT message + Resume send on the same deposit
+  await expect(card.getByText(/Not enough USDT on BNB Smart Chain/i)).toBeVisible({ timeout: 10_000 });
+  await expect(card.getByText(/Deposit opened on/i)).toBeVisible();
+  await expect(card.getByRole('button', { name: /resume send/i })).toBeVisible();
+  // and sendTransaction was never reached
+  expect(await page.evaluate(() => (window as unknown as { __sendCount?: number }).__sendCount ?? 0)).toBe(0);
+});

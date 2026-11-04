@@ -383,20 +383,47 @@ export function useEvmWallet() {
       } catch {
         // balance pre-check unreachable â€” let the transfer attempt classify the real error
       }
-      const tx = await contract.transfer(toAddr, amountBN) as { hash: string };
-      setTxHash(tx.hash);
+      // 3) gas estimation — a revert here is provably pre-broadcast, so its
+      //    classification stays 'preflight' regardless of the error text.
+      try {
+        await (contract as unknown as { transfer: { estimateGas: (to: string, a: bigint) => Promise<bigint> } }).transfer.estimateGas(toAddr, amountBN);
+      } catch (err: unknown) {
+        const c = classifyEvmError(err, targetChainId);
+        setSendOutcome('preflight');
+        setError(c.message);
+        setErrorHint(c.hint ?? null);
+        setState('error');
+        return { hash: null, outcome: 'preflight' };
+      }
+
+      // 4) broadcast — a structured 4001/ACTION_REJECTED is explicit user
+      //    cancellation (no dispatch). Anything else may have broadcast.
+      let txHash: string;
+      try {
+        const tx = await contract.transfer(toAddr, amountBN) as { hash: string };
+        txHash = tx.hash;
+      } catch (err: unknown) {
+        const e = err as { code?: string | number };
+        const code = typeof e?.code === 'string' ? e.code : String(e?.code ?? '');
+        const cancelled = code === '4001' || code === 'ACTION_REJECTED';
+        const c = classifyEvmError(err, targetChainId);
+        const outcome: SendOutcome = cancelled ? 'cancelled' : 'uncertain';
+        setSendOutcome(outcome);
+        setError(c.message);
+        setErrorHint(c.hint ?? null);
+        setState('error');
+        return { hash: null, outcome };
+      }
+      setTxHash(txHash);
       setSendOutcome('sent');
       setState('submitted');
-      return { hash: tx.hash, outcome: 'sent' };
+      return { hash: txHash, outcome: 'sent' };
     } catch (err: unknown) {
       const c = classifyEvmError(err, targetChainId);
-      // Confirmed pre-broadcast: user cancelled or a revert/preflight failure —
-      // the wallet never broadcast. Uncertain: RPC/disconnect mid-request —
-      // the transfer may have broadcast; resend is unsafe.
-      const cancelled = /cancelled|rejected|denied/i.test(c.message);
-      // Only confirmed pre-broadcast failures are safe to retry — anything
-      // unknown (RPC, generic, disconnect) may have broadcast → recovery only.
-      const outcome: SendOutcome = cancelled ? 'cancelled' : c.preflight ? 'preflight' : 'uncertain';
+      const e = err as { code?: string | number };
+      const code = typeof e?.code === 'string' ? e.code : String(e?.code ?? '');
+      const cancelled = code === '4001' || code === 'ACTION_REJECTED';
+      const outcome: SendOutcome = cancelled ? 'cancelled' : 'uncertain';
       setSendOutcome(outcome);
       setError(c.message);
       setErrorHint(c.hint ?? null);
