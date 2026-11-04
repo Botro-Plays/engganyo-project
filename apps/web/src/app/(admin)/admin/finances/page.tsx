@@ -60,10 +60,12 @@ interface DepositItem {
   package: { id: string; usdAmount: number; label: string | null } | null;
   user: DepositUser;
 }
+interface SettlementFig { currency: string; total: number; count: number }
 interface SettlementRow {
   method: string; currency: string; gross: number; count: number;
-  fee: number; feeCurrency: string | null; net: number; netCurrency: string | null;
-  withSettlement: number; converted: number; convertedCur: string | null; partial: boolean;
+  fees: SettlementFig[]; nets: SettlementFig[]; converted: SettlementFig[];
+  feeCount: number; netCount: number; convertedCount: number;
+  feePartial: boolean; netPartial: boolean; convertedPartial: boolean;
 }
 
 interface DepositsResponse {
@@ -521,10 +523,9 @@ export default function FinancesPage() {
               <div key={`${g.method}-${g.currency}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
                 <span className="text-zinc-400 w-20">{g.method}</span>
                 <span className="text-zinc-300">gross {g.currency} {g.gross.toFixed(2)}</span>
-                <span className="text-zinc-500">fee {g.feeCurrency ?? g.currency} {g.fee.toFixed(2)}</span>
-                <span className="text-zinc-300">net {g.netCurrency ?? g.currency} {g.net.toFixed(2)}</span>
-                {g.converted > 0 && <span className="text-zinc-500">recv {g.convertedCur} {g.converted.toFixed(2)}</span>}
-                {g.partial && <span className="text-amber-500/80">covers {g.withSettlement}/{g.count} settled</span>}
+                {g.fees.map((f) => <span key={`f-${f.currency}`} className="text-zinc-500">fee {f.currency} {f.total.toFixed(2)}{g.feePartial && ` (${f.count}/${g.count})`}</span>)}
+                {g.nets.map((n) => <span key={`n-${n.currency}`} className="text-zinc-300">net {n.currency} {n.total.toFixed(2)}{g.netPartial && ` (${n.count}/${g.count})`}</span>)}
+                {g.converted.map((c) => <span key={`c-${c.currency}`} className="text-zinc-500">recv {c.currency} {c.total.toFixed(2)}{g.convertedPartial && ` (${c.count}/${g.count})`}</span>)}
               </div>
             ))}
           </div>

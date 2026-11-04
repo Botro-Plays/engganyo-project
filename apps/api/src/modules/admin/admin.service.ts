@@ -1934,9 +1934,10 @@ export class AdminService {
 
   // ─── Settlement reporting ────────────────────────────────────────
 
-  // Provider-level gross/fee/net grouped by method+currency. Only rows with
-  // provider-reported figures feed fee/net totals; converted receivable is
-  // reported separately and never added into net totals.
+  // Provider-level settlement totals: gross grouped by method+deposit
+  // currency; fee/net/converted each grouped by their OWN reported currency.
+  // Converted receivables stay separate from net. Verified zeros count as
+  // data (providerFee=0 contributes); only null is "missing".
   async getSettlementSummary() {
     const rows = await this.prisma.deposit.findMany({
       where: { status: DepositStatus.COMPLETED, method: { in: [DepositMethod.PAYPAL, DepositMethod.PAYMONGO] } },
@@ -1947,56 +1948,70 @@ export class AdminService {
         providerConverted: true, providerConvertedCur: true,
       },
     });
+    type Fig = { currency: string; total: number; count: number };
     const groups = new Map<string, {
       method: string; currency: string; gross: number; count: number;
-      fee: number; feeCurrency: string | null; net: number; netCurrency: string | null;
-      withSettlement: number; converted: number; convertedCur: string | null;
+      fees: Fig[]; nets: Fig[]; converted: Fig[];
+      feeCount: number; netCount: number; convertedCount: number;
     }>();
+    const bump = (list: Fig[], currency: string, amount: number) => {
+      const f = list.find((x) => x.currency === currency);
+      if (f) { f.total += amount; f.count++; } else list.push({ currency, total: amount, count: 1 });
+    };
     for (const d of rows) {
       const key = `${d.method}|${d.currency}`;
-      if (!groups.has(key)) groups.set(key, { method: d.method, currency: d.currency, gross: 0, count: 0, fee: 0, feeCurrency: null, net: 0, netCurrency: null, withSettlement: 0, converted: 0, convertedCur: null });
+      if (!groups.has(key)) groups.set(key, { method: d.method, currency: d.currency, gross: 0, count: 0, fees: [], nets: [], converted: [], feeCount: 0, netCount: 0, convertedCount: 0 });
       const g = groups.get(key)!;
       g.count++; g.gross += d.amountFiat;
-      if (d.providerFee != null) { g.fee += d.providerFee; g.feeCurrency = d.providerFeeCurrency; }
-      if (d.providerNet != null) { g.net += d.providerNet; g.netCurrency = d.providerNetCurrency; }
-      if (d.providerConverted != null) { g.converted += d.providerConverted; g.convertedCur = d.providerConvertedCur; }
-      if (d.providerFee != null || d.providerNet != null) g.withSettlement++;
+      if (d.providerFee != null) { bump(g.fees, d.providerFeeCurrency ?? d.currency, d.providerFee); g.feeCount++; }
+      if (d.providerNet != null) { bump(g.nets, d.providerNetCurrency ?? d.currency, d.providerNet); g.netCount++; }
+      if (d.providerConverted != null) { bump(g.converted, d.providerConvertedCur ?? d.currency, d.providerConverted); g.convertedCount++; }
     }
-    return Array.from(groups.values()).map((g) => ({ ...g, partial: g.withSettlement < g.count }));
+    return Array.from(groups.values()).map((g) => ({
+      ...g,
+      feePartial: g.feeCount < g.count,
+      netPartial: g.netCount < g.count,
+      convertedPartial: g.convertedCount < g.count,
+    }));
   }
 
   // Bounded, retryable backfill: fill missing settlement figures for
   // COMPLETED deposits from read-only provider records. Verifies the
-  // provider record belongs to the deposit; touches only settlement fields.
+  // provider record belongs to the deposit (PayPal reference_id, PayMongo
+  // stored pay_* ref), writes ONLY fields still missing, conditioned on
+  // completed status + unchanged paymentRef. Scans up to 4x the limit so
+  // unavailable records can't starve later deposits.
   async backfillSettlement(limit = 25) {
     const rows = await this.prisma.deposit.findMany({
       where: {
         status: DepositStatus.COMPLETED,
-        providerFee: null,
-        providerNet: null,
-        OR: [{ method: DepositMethod.PAYPAL, paymentRef: { not: null } }, { method: DepositMethod.PAYMONGO, paymentRef: { startsWith: 'pay_' } }],
+        OR: [{ providerFee: null }, { providerNet: null }, { providerConverted: null, method: DepositMethod.PAYPAL }],
+        AND: [{ OR: [{ method: DepositMethod.PAYPAL, paymentRef: { not: null } }, { method: DepositMethod.PAYMONGO, paymentRef: { startsWith: 'pay_' } }] }],
       },
       orderBy: { completedAt: 'desc' },
-      take: Math.min(limit, 100),
-      select: { id: true, method: true, paymentRef: true },
+      take: Math.min(limit * 4, 400),
+      select: { id: true, method: true, paymentRef: true, providerFee: true, providerNet: true, providerConverted: true },
     });
     let updated = 0; const skipped: string[] = []; const failed: string[] = [];
     for (const d of rows) {
+      if (updated >= limit) break;
       try {
         const st: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string; converted?: number; convertedCurrency?: string } | undefined =
           d.method === DepositMethod.PAYPAL
             ? await this.payPalService.getOrderSettlement(d.paymentRef!, d.id)
             : await this.payMongoService.getPaymentSettlement(d.paymentRef!);
-        if (!st || (st.fee == null && st.net == null)) { skipped.push(d.id); continue; }
-        await this.prisma.deposit.updateMany({
-          where: { id: d.id },
-          data: {
-            providerFee: st.fee ?? null, providerFeeCurrency: st.feeCurrency ?? null,
-            providerNet: st.net ?? null, providerNetCurrency: st.netCurrency ?? null,
-            providerConverted: st.converted ?? null, providerConvertedCur: st.convertedCurrency ?? null,
-          },
+        if (!st) { skipped.push(d.id); continue; }
+        const data: Record<string, unknown> = {};
+        if (d.providerFee == null && st.fee != null) { data.providerFee = st.fee; data.providerFeeCurrency = st.feeCurrency ?? null; }
+        if (d.providerNet == null && st.net != null) { data.providerNet = st.net; data.providerNetCurrency = st.netCurrency ?? null; }
+        if (d.providerConverted == null && st.converted != null) { data.providerConverted = st.converted; data.providerConvertedCur = st.convertedCurrency ?? null; }
+        if (Object.keys(data).length === 0) { skipped.push(d.id); continue; }
+        // Conditional write — status + paymentRef must be unchanged.
+        const res = await this.prisma.deposit.updateMany({
+          where: { id: d.id, status: DepositStatus.COMPLETED, paymentRef: d.paymentRef },
+          data,
         });
-        updated++;
+        if (res.count > 0) updated++; else skipped.push(d.id);
       } catch { failed.push(d.id); }
     }
     return { scanned: rows.length, updated, skipped: skipped.length, failed: failed.length, skippedIds: skipped, failedIds: failed };
