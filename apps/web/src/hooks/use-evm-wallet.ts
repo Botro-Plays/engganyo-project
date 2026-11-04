@@ -241,6 +241,24 @@ export function useEvmWallet() {
     }
   }, []);
 
+  // personal_sign — proves wallet ownership WITHOUT sending a transaction.
+  const signMessage = useCallback(async (message: string): Promise<string | null> => {
+    const ethereum = getActiveProvider(activeProviderRef);
+    if (!ethereum || !address) { setError('Wallet not connected'); setState('error'); return null; }
+    try {
+      setError(null);
+      const { ethers } = await import('ethers');
+      const provider = new ethers.BrowserProvider(ethereum);
+      const signer = await provider.getSigner();
+      const sig = await signer.signMessage(message);
+      return sig;
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : 'Signing failed';
+      setError(raw.includes('user rejected') || raw.includes('rejected') ? 'Signature rejected by user' : raw);
+      return null;
+    }
+  }, [address]);
+
   const fetchUsdtBalance = useCallback(async (walletAddr: string, contractAddress: string): Promise<string> => {
     const ethereum = getActiveProvider(activeProviderRef);
     if (!ethereum) return '0';
@@ -338,6 +356,6 @@ export function useEvmWallet() {
   return {
     state, address, chainId, txHash, error, usdtBalance,
     isAvailable, providers,
-    connect, switchChain, sendUsdt, fetchUsdtBalance, waitForTransaction, reset,
+    connect, switchChain, sendUsdt, signMessage, fetchUsdtBalance, waitForTransaction, reset,
   };
 }
