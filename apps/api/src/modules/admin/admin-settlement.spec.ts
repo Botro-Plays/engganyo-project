@@ -15,6 +15,10 @@ describe('settlement summary + backfill', () => {
     providerFee: null, providerFeeCurrency: null, providerNet: null, providerNetCurrency: null,
     providerConverted: null, providerConvertedCur: null, ...over,
   });
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 'd1', method: DepositMethod.PAYPAL, paymentRef: 'ORD1', completedAt: new Date('2026-01-01'),
+    providerFee: null, providerNet: null, providerConverted: null, ...over,
+  });
 
   it('groups each figure by its own currency; converted receivables separate per currency', async () => {
     prisma.deposit.findMany.mockResolvedValue([
@@ -24,25 +28,26 @@ describe('settlement summary + backfill', () => {
     const [g] = await svc.getSettlementSummary();
     expect(g.gross).toBe(2);
     expect(g.fees).toEqual([{ currency: 'USD', total: 0.68, count: 2 }]);
+    expect(g.nets[0].total).toBeCloseTo(1.32, 5);
     expect(g.converted.map((c) => c.currency).sort()).toEqual(['EUR', 'PHP']);
   });
 
   it('per-figure coverage: verified zero counts, null is missing', async () => {
     prisma.deposit.findMany.mockResolvedValue([
-      dep({ providerFee: 0, providerFeeCurrency: 'USD', providerNet: null, providerConverted: 40.5, providerConvertedCur: 'PHP' }),
+      dep({ providerFee: 0, providerFeeCurrency: 'USD', providerConverted: 40.5, providerConvertedCur: 'PHP' }),
       dep(),
     ]);
     const [g] = await svc.getSettlementSummary();
-    expect(g.feeCount).toBe(1); expect(g.fees[0].total).toBe(0); // verified zero retained
+    expect(g.feeCount).toBe(1); expect(g.fees[0].total).toBe(0);
     expect(g.netCount).toBe(0); expect(g.netPartial).toBe(true);
     expect(g.convertedCount).toBe(1); expect(g.convertedPartial).toBe(true);
   });
 
-  it('partial backfill writes only missing fields, conditioned on status+ref; skips unavailable', async () => {
+  it('backfill writes only missing figures, each conditioned on still-null + status + ref', async () => {
     prisma.deposit.findMany.mockResolvedValue([
-      { id: 'd1', method: DepositMethod.PAYPAL, paymentRef: 'ORD1', providerFee: 0.34, providerNet: null, providerConverted: null },
-      { id: 'd2', method: DepositMethod.PAYPAL, paymentRef: 'ORD2', providerFee: null, providerNet: null, providerConverted: null },
-      { id: 'd3', method: DepositMethod.PAYMONGO, paymentRef: 'pay_x', providerFee: null, providerNet: null, providerConverted: null },
+      row({ id: 'd1', providerFee: 0.34 }),               // fee already set — only net/converted missing
+      row({ id: 'd2', paymentRef: 'ORD2' }),              // provider unavailable → skip
+      row({ id: 'd3', method: DepositMethod.PAYMONGO, paymentRef: 'pay_x' }),
     ]);
     paypal.getOrderSettlement
       .mockResolvedValueOnce({ fee: 0.34, feeCurrency: 'USD', net: 0.66, netCurrency: 'USD', converted: 40.5, convertedCurrency: 'PHP' })
@@ -51,15 +56,55 @@ describe('settlement summary + backfill', () => {
     prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
     const out = await svc.backfillSettlement(10);
     expect(out.updated).toBe(2); expect(out.skipped).toBe(1);
-    // d1 had fee already — only missing net/converted written
-    expect(prisma.deposit.updateMany).toHaveBeenNthCalledWith(1, {
-      where: { id: 'd1', status: DepositStatus.COMPLETED, paymentRef: 'ORD1' },
-      data: { providerNet: 0.66, providerNetCurrency: 'USD', providerConverted: 40.5, providerConvertedCur: 'PHP' },
-    });
-    // writes are settlement-fields only — no balance/status mutation
-    for (const call of prisma.deposit.updateMany.mock.calls) {
-      expect(Object.keys(call[0].data)).not.toContain('status');
-      expect(call[0].where.status).toBe(DepositStatus.COMPLETED);
-    }
+    // d1: providerFee preserved (not re-written); net+converted written each with a null-condition
+    const calls = prisma.deposit.updateMany.mock.calls.map((c) => c[0]);
+    const d1writes = calls.filter((c) => c.where.id === 'd1');
+    expect(d1writes.map((w) => Object.keys(w.where))).not.toContainEqual(expect.arrayContaining(['providerFee']));
+    expect(d1writes.some((w) => w.where.providerNet === null && w.where.status === DepositStatus.COMPLETED && w.where.paymentRef === 'ORD1')).toBe(true);
+    for (const c of calls) expect(Object.keys(c.data)).not.toContain('status');
+  });
+
+  it('overlapping run: a concurrently-filled fee is preserved while this run fills the missing net', async () => {
+    prisma.deposit.findMany.mockResolvedValue([row({ id: 'd9', paymentRef: 'ORD9' })]);
+    paypal.getOrderSettlement.mockResolvedValueOnce({ fee: 0.30, feeCurrency: 'USD', net: 0.70, netCurrency: 'USD' });
+    // fee write loses the race (count 0 → another run already set it); net write wins.
+    prisma.deposit.updateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 });
+    const out = await svc.backfillSettlement(10);
+    expect(out.updated).toBe(1);
+    const [feeCall, netCall] = prisma.deposit.updateMany.mock.calls.map((c) => c[0]);
+    expect(feeCall.where.providerFee).toBeNull();
+    expect(netCall.where.providerNet).toBeNull();
+    expect(netCall.data).toEqual({ providerNet: 0.70, providerNetCurrency: 'USD' });
+  });
+
+  it('unavailable records cannot starve older deposits — cursor continues past the scan cap', async () => {
+    const mkPage = (n: number, tag: string) => Array.from({ length: n }, (_, i) =>
+      row({ id: `${tag}${i}`, paymentRef: `ORD${tag}${i}` }));
+    prisma.deposit.findMany
+      .mockResolvedValueOnce(mkPage(100, 'a'))
+      .mockResolvedValueOnce(mkPage(100, 'b'))
+      .mockResolvedValueOnce(mkPage(100, 'c'))
+      .mockResolvedValueOnce(mkPage(100, 'd'))
+      .mockResolvedValueOnce(mkPage(100, 'e'));          // 500 scanned → cap hit
+    paypal.getOrderSettlement.mockResolvedValue(undefined);
+    const first = await svc.backfillSettlement(25);
+    expect(first.scanned).toBe(500);
+    expect(first.updated).toBe(0);
+    expect(first.nextCursor).toBeTruthy();               // continuation cursor returned
+
+    prisma.deposit.findMany.mockReset();
+    const eligible = row({ id: 'old', paymentRef: 'ORDold', completedAt: new Date('2025-12-01') });
+    prisma.deposit.findMany.mockResolvedValueOnce([eligible]);
+    paypal.getOrderSettlement.mockResolvedValueOnce({ fee: 0.34, feeCurrency: 'USD', net: 0.66, netCurrency: 'USD' });
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const second = await svc.backfillSettlement(25, first.nextCursor!);
+    expect(second.updated).toBe(1);
+    // cursor applied — the query carried a completedAt condition
+    const secondCallWhere = prisma.deposit.findMany.mock.calls[0][0].where;
+    expect(JSON.stringify(secondCallWhere)).toContain('completedAt');
+    const eligibleCalls = prisma.deposit.updateMany.mock.calls.map((c) => c[0]).filter((c) => c.where.id === 'old');
+    expect(eligibleCalls.length).toBeGreaterThan(0);
   });
 });

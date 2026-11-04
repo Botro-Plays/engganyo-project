@@ -363,8 +363,8 @@ export class AdminController {
 
   @Post('finances/settlement/backfill')
   @ApiOperation({ summary: 'Backfill provider settlement figures from provider records' })
-  backfillSettlement(@Query('limit') limit?: string) {
-    return this.adminService.backfillSettlement(limit ? parseInt(limit, 10) : 25);
+  backfillSettlement(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    return this.adminService.backfillSettlement(limit ? parseInt(limit, 10) : 25, cursor);
   }
 
   @Patch('finances/deposits/:id')
