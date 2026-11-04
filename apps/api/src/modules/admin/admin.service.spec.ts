@@ -9,6 +9,7 @@ import { EmailService } from '../email/email.service';
 import { WeeklyDigestService } from '../email/weekly-digest.service';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
+import { PayPalService } from '../paypal/paypal.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -147,6 +148,7 @@ describe('AdminService', () => {
         { provide: WeeklyDigestService, useValue: mockWeeklyDigestService },
         { provide: ReferralsService, useValue: mockReferralsService },
         { provide: PayMongoService, useValue: mockPayMongoService },
+        { provide: PayPalService, useValue: {} },
         { provide: GamificationService, useValue: mockGamificationService },
       ],
     }).compile();
