@@ -355,6 +355,18 @@ export class AdminController {
     return this.adminService.listDeposits(Number(page), Number(limit), status, method, userId);
   }
 
+  @Get('finances/settlement-summary')
+  @ApiOperation({ summary: 'Provider settlement totals (gross/fee/net by method+currency)' })
+  getSettlementSummary() {
+    return this.adminService.getSettlementSummary();
+  }
+
+  @Post('finances/settlement/backfill')
+  @ApiOperation({ summary: 'Backfill provider settlement figures from provider records' })
+  backfillSettlement(@Query('limit') limit?: string, @Query('cursor') cursor?: string) {
+    return this.adminService.backfillSettlement(limit ? parseInt(limit, 10) : 25, cursor);
+  }
+
   @Patch('finances/deposits/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Review a deposit — approve, fail, or refund' })

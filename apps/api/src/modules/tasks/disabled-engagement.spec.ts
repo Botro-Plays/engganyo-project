@@ -220,7 +220,9 @@ describe('AdminService — disabled YouTube engagement', () => {
       mockService() as never, // email
       mockService() as never, // weeklyDigest
       mockService() as never, // referrals
-      mockService() as never, // payMongo
+      mockService() as never, // payMongo,
+      mockService() as never,
+
     );
   });
 

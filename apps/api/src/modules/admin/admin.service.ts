@@ -13,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
 import { GamificationService, VP_REWARDS } from '../gamification/gamification.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PayPalService } from '../paypal/paypal.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { EmailService } from '../email/email.service';
@@ -46,6 +47,8 @@ export class AdminService {
     private readonly referralsService: ReferralsService,
     @Inject(forwardRef(() => PayMongoService))
     private readonly payMongoService: PayMongoService,
+    @Inject(forwardRef(() => PayPalService))
+    private readonly payPalService: PayPalService,
   ) {}
 
   // ─── Users ────────────────────────────────────────────────
@@ -1926,6 +1929,133 @@ export class AdminService {
       this.prisma.deposit.count({ where }),
     ]);
     return { items, meta: { total, page, limit, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
+  }
+
+
+  // ─── Settlement reporting ────────────────────────────────────────
+
+  // Provider-level settlement totals: gross grouped by method+deposit
+  // currency; fee/net/converted each grouped by their OWN reported currency.
+  // Converted receivables stay separate from net. Verified zeros count as
+  // data (providerFee=0 contributes); only null is "missing".
+  async getSettlementSummary() {
+    const rows = await this.prisma.deposit.findMany({
+      where: { status: DepositStatus.COMPLETED, method: { in: [DepositMethod.PAYPAL, DepositMethod.PAYMONGO] } },
+      select: {
+        method: true, currency: true, amountFiat: true,
+        providerFee: true, providerFeeCurrency: true,
+        providerNet: true, providerNetCurrency: true,
+        providerConverted: true, providerConvertedCur: true,
+      },
+    });
+    type Fig = { currency: string; total: number; count: number };
+    const groups = new Map<string, {
+      method: string; currency: string; gross: number; count: number;
+      fees: Fig[]; nets: Fig[]; converted: Fig[];
+      feeCount: number; netCount: number; convertedCount: number;
+    }>();
+    const bump = (list: Fig[], currency: string, amount: number) => {
+      const f = list.find((x) => x.currency === currency);
+      if (f) { f.total += amount; f.count++; } else list.push({ currency, total: amount, count: 1 });
+    };
+    for (const d of rows) {
+      const key = `${d.method}|${d.currency}`;
+      if (!groups.has(key)) groups.set(key, { method: d.method, currency: d.currency, gross: 0, count: 0, fees: [], nets: [], converted: [], feeCount: 0, netCount: 0, convertedCount: 0 });
+      const g = groups.get(key)!;
+      g.count++; g.gross += d.amountFiat;
+      if (d.providerFee != null) { bump(g.fees, d.providerFeeCurrency ?? d.currency, d.providerFee); g.feeCount++; }
+      if (d.providerNet != null) { bump(g.nets, d.providerNetCurrency ?? d.currency, d.providerNet); g.netCount++; }
+      if (d.providerConverted != null) { bump(g.converted, d.providerConvertedCur ?? d.currency, d.providerConverted); g.convertedCount++; }
+    }
+    return Array.from(groups.values()).map((g) => ({
+      ...g,
+      feePartial: g.feeCount < g.count,
+      netPartial: g.netCount < g.count,
+      convertedPartial: g.convertedCount < g.count,
+    }));
+  }
+
+  // Bounded, cursor-paginated backfill: fills missing settlement figures on
+  // COMPLETED deposits from read-only provider records. Each figure's write is
+  // conditioned on that field still being NULL at write time (+ COMPLETED and
+  // unchanged paymentRef) — an overlapping run's data is preserved, never
+  // overwritten. Amount and currency are written together per figure. Status,
+  // wallet, and ledger are untouched. Pages through candidates with a
+  // continuation cursor (completedAt,id) so unavailable records can never
+  // starve older deposits; skipped/failed records stay eligible on retry.
+  async backfillSettlement(limit = 25, cursor?: string) {
+    const PAGE = 100;
+    const MAX_SCAN = 500;
+    const decode = (c: string | undefined | null): { t: string; id: string } | null => {
+      if (!c) return null;
+      try { return JSON.parse(Buffer.from(c, 'base64').toString('utf8')); } catch { return null; }
+    };
+    const encode = (t: Date | null, id: string) =>
+      Buffer.from(JSON.stringify({ t: (t ?? new Date(0)).toISOString(), id })).toString('base64');
+
+    let updated = 0, scanned = 0;
+    const skipped: string[] = []; const failed: string[] = [];
+    let cursorCond: Prisma.DepositWhereInput | null = null;
+    const start = decode(cursor);
+    if (start) {
+      cursorCond = { OR: [{ completedAt: { lt: new Date(start.t) } }, { completedAt: new Date(start.t), id: { lt: start.id } }] };
+    }
+    let nextCursor: string | null = null;
+
+    while (scanned < MAX_SCAN && updated < limit) {
+      const rows = await this.prisma.deposit.findMany({
+        where: {
+          status: DepositStatus.COMPLETED,
+          AND: [
+            {
+              OR: [
+                { method: DepositMethod.PAYPAL, paymentRef: { not: null }, OR: [{ providerFee: null }, { providerNet: null }, { providerConverted: null }] },
+                { method: DepositMethod.PAYMONGO, paymentRef: { startsWith: 'pay_' }, OR: [{ providerFee: null }, { providerNet: null }] },
+              ],
+            },
+            ...(cursorCond ? [cursorCond] : []),
+          ],
+        },
+        orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+        take: PAGE,
+        select: { id: true, method: true, paymentRef: true, completedAt: true, providerFee: true, providerNet: true, providerConverted: true },
+      });
+      if (rows.length === 0) { nextCursor = null; break; }
+
+      // The continuation cursor tracks the last deposit actually EXAMINED —
+      // never the last fetched row — so rows fetched but never looked at
+      // (limit reached mid-page) stay reachable on the next call.
+      let lastExamined: { completedAt: Date | null; id: string } | null = null;
+      for (const d of rows) {
+        if (updated >= limit || scanned >= MAX_SCAN) break;
+        lastExamined = d;
+        scanned++;
+        try {
+          const st: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string; converted?: number; convertedCurrency?: string } | undefined =
+            d.method === DepositMethod.PAYPAL
+              ? await this.payPalService.getOrderSettlement(d.paymentRef!, d.id)
+              : await this.payMongoService.getPaymentSettlement(d.paymentRef!);
+          if (!st) { skipped.push(d.id); continue; }
+          const writes: Array<{ where: Prisma.DepositWhereInput; data: Record<string, unknown> }> = [];
+          if (d.providerFee == null && st.fee != null) writes.push({ where: { id: d.id, status: DepositStatus.COMPLETED, paymentRef: d.paymentRef, providerFee: null }, data: { providerFee: st.fee, providerFeeCurrency: st.feeCurrency ?? null } });
+          if (d.providerNet == null && st.net != null) writes.push({ where: { id: d.id, status: DepositStatus.COMPLETED, paymentRef: d.paymentRef, providerNet: null }, data: { providerNet: st.net, providerNetCurrency: st.netCurrency ?? null } });
+          if (d.providerConverted == null && st.converted != null) writes.push({ where: { id: d.id, status: DepositStatus.COMPLETED, paymentRef: d.paymentRef, providerConverted: null }, data: { providerConverted: st.converted, providerConvertedCur: st.convertedCurrency ?? null } });
+          if (writes.length === 0) { skipped.push(d.id); continue; }
+          let wrote = 0;
+          for (const w of writes) { const r = await this.prisma.deposit.updateMany(w); if (r.count > 0) wrote++; }
+          if (wrote > 0) updated++; else skipped.push(d.id);
+        } catch { failed.push(d.id); }
+      }
+      // Advance cursor to the last examined row; a full page where every row
+      // was examined ends on the page's last row — equivalent, and correct.
+      if (lastExamined) {
+        nextCursor = encode(lastExamined.completedAt, lastExamined.id);
+        cursorCond = { OR: [{ completedAt: { lt: lastExamined.completedAt! } }, { completedAt: lastExamined.completedAt!, id: { lt: lastExamined.id } }] };
+      }
+      if (rows.length < PAGE && (!lastExamined || lastExamined.id === rows[rows.length - 1].id)) { nextCursor = null; break; }
+      if (updated >= limit || scanned >= MAX_SCAN) break;
+    }
+    return { scanned, updated, skipped: skipped.length, failed: failed.length, skippedIds: skipped, failedIds: failed, nextCursor };
   }
 
   async reviewDeposit(adminId: string, depositId: string, dto: { status: 'COMPLETED' | 'FAILED' | 'REFUNDED'; adminNotes?: string; paymentRef?: string }) {

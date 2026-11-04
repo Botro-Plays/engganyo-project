@@ -60,6 +60,14 @@ interface DepositItem {
   package: { id: string; usdAmount: number; label: string | null } | null;
   user: DepositUser;
 }
+interface SettlementFig { currency: string; total: number; count: number }
+interface SettlementRow {
+  method: string; currency: string; gross: number; count: number;
+  fees: SettlementFig[]; nets: SettlementFig[]; converted: SettlementFig[];
+  feeCount: number; netCount: number; convertedCount: number;
+  feePartial: boolean; netPartial: boolean; convertedPartial: boolean;
+}
+
 interface DepositsResponse {
   items: DepositItem[];
   meta: { total: number; page: number; limit: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
@@ -219,6 +227,11 @@ export default function FinancesPage() {
     queryKey: ['admin', 'finance-stats'],
     queryFn: async () => (await apiClient.get<ApiResponse<FinanceStats>>('admin/finances/stats')).data.data,
     refetchInterval: 15_000,
+  });
+
+  const { data: settlementSummary } = useQuery({
+    queryKey: ['admin', 'finances-settlement'],
+    queryFn: async () => (await apiClient.get<ApiResponse<SettlementRow[]>>('admin/finances/settlement-summary')).data.data,
   });
 
   const { data: deposits, isLoading: depositsLoading } = useQuery({
@@ -502,7 +515,24 @@ export default function FinancesPage() {
       )}
 
       {/* Deposits table */}
-      <div className="card-glass rounded-xl">
+            {settlementSummary && settlementSummary.length > 0 && (
+        <div className="card-glass rounded-xl p-4 mb-4">
+          <h3 className="text-sm font-semibold text-white mb-3">Provider Settlement</h3>
+          <div className="space-y-1.5">
+            {settlementSummary.map((g) => (
+              <div key={`${g.method}-${g.currency}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
+                <span className="text-zinc-400 w-20">{g.method}</span>
+                <span className="text-zinc-300">gross {g.currency} {g.gross.toFixed(2)}</span>
+                {g.fees.map((f) => <span key={`f-${f.currency}`} className="text-zinc-500">fee {f.currency} {f.total.toFixed(2)}{g.feePartial && ` (${f.count}/${g.count})`}</span>)}
+                {g.nets.map((n) => <span key={`n-${n.currency}`} className="text-zinc-300">net {n.currency} {n.total.toFixed(2)}{g.netPartial && ` (${n.count}/${g.count})`}</span>)}
+                {g.converted.map((c) => <span key={`c-${c.currency}`} className="text-zinc-500">recv {c.currency} {c.total.toFixed(2)}{g.convertedPartial && ` (${c.count}/${g.count})`}</span>)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+<div className="card-glass rounded-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-surface-border">
           <h2 className="font-semibold text-white">All Deposits</h2>
           <div className="flex items-center gap-2">
