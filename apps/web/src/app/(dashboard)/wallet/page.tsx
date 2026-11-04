@@ -473,6 +473,11 @@ export default function WalletPage() {
     setSelectedMethod(saved.method);
     setCryptoMode(saved.cryptoMode);
     setManualTxHash(saved.manualTxHash ?? '');
+  }, [packages, depositOptions]);
+
+  // Recover an in-flight or sent-but-unregistered transfer independently of
+  // the form snapshot — it must restore even if the package list reloads.
+  useEffect(() => {
     try {
       const pendingSend = localStorage.getItem('engganyo-pending-send');
       if (pendingSend) {
@@ -482,7 +487,7 @@ export default function WalletPage() {
         setUnresolvedSend(rec);
       }
     } catch { /* ignore corrupt state */ }
-  }, [packages, depositOptions]);
+  }, []);
 
   // ─── Persist deposit form to sessionStorage ──────────────
   useEffect(() => {
@@ -645,13 +650,15 @@ export default function WalletPage() {
     //    wallet, chain and package — so a sent hash always has a home.
     let depositId: string | null = null;
     try {
-      const initiated = await initiateMutation.mutateAsync({
+      // Direct call — the mutation's onSuccess would show the manual 'Deposit
+      // Submitted' view before the transfer is even requested.
+      const initiated = (await apiClient.post<ApiResponse<{ deposit: DepositRecord; instructions: DepositInstructions }>>('wallet/deposit/initiate', {
         packageId: selectedPackage.id,
         method: selectedMethod!,
         userWalletAddress: evmWallet.address,
         challengeNonce: ownershipProof?.nonce,
         signature: ownershipProof?.signature,
-      });
+      })).data.data;
       depositId = initiated?.deposit?.id ?? null;
     } catch (err) {
       setDepositError(getApiErrorMessage(err));
@@ -1446,64 +1453,7 @@ export default function WalletPage() {
                       {cryptoMode === 'auto' ? (
                         /* Auto: connect wallet → send USDT */
                         <div className="space-y-3">
-                          {evmWallet.state === 'idle' || evmWallet.state === 'error' ? (
-                            <div className="space-y-3">
-                              {evmWallet.providers.length > 0 ? (
-                                <>
-                                  <p className="text-xs text-zinc-400">Detected wallets — select one to connect:</p>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {evmWallet.providers.map((p) => (
-                                      <button
-                                        key={p.info.rdns}
-                                        onClick={() => void evmWallet.connect(p.info.rdns).then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
-                                        className="flex items-center gap-3 p-3 rounded-xl border border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left"
-                                      >
-                                        <img
-                                          src={p.info.icon}
-                                          alt={p.info.name}
-                                          className="w-8 h-8 rounded-md shrink-0"
-                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                                        />
-                                        <span className="text-sm font-medium text-white">{p.info.name}</span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                </>
-                              ) : evmWallet.isAvailable ? (
-                                <button
-                                  onClick={() => void evmWallet.connect().then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
-                                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium transition-all"
-                                >
-                                  <LinkIcon className="w-4 h-4" />Connect Wallet
-                                </button>
-                              ) : (
-                                <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs">
-                                  <AlertCircle className="w-4 h-4 shrink-0" />
-                                  No EVM wallet detected. Install <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">MetaMask</a> or use Brave Wallet.
-                                </div>
-                              )}
-                            </div>
-                          ) : evmWallet.state === 'connecting' || evmWallet.state === 'switching_chain' ? (
-                            <div className="flex items-center gap-2 text-sm text-zinc-400">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              {evmWallet.state === 'switching_chain' ? 'Switching network...' : 'Connecting wallet...'}
-                            </div>
-                          ) : (evmWallet.state === 'connected' || evmWallet.state === 'sending') && (
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-xs">
-                                <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
-                                <div>
-                                  <p className="text-zinc-300 font-mono">{evmWallet.address?.slice(0, 8)}…{evmWallet.address?.slice(-6)}</p>
-                                  {evmWallet.usdtBalance && <p className="text-zinc-500">Balance: {parseFloat(evmWallet.usdtBalance).toFixed(2)} USDT</p>}
-                                </div>
-                              </div>
-                              <div className="p-3 rounded-lg bg-zinc-800/60 border border-surface-border text-xs text-zinc-400 space-y-1">
-                                <p>Network: <span className="text-white">{cryptoCfg?.network}</span></p>
-                                <p>Sending: <span className="text-white font-semibold">{selectedPackage.usdAmount} USDT</span></p>
-                                <p className="text-zinc-600">To: {cryptoCfg?.walletAddress?.slice(0,10)}…{cryptoCfg?.walletAddress?.slice(-8)}</p>
-                                <p className="text-zinc-600">A small amount of {cryptoCfg?.chainId === 56 ? 'BNB' : 'ETH'} is needed for gas.</p>
-                              </div>
-                              {unresolvedSend ? (
+                          {unresolvedSend ? (
                                 <div role="status" className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
                                   <p className="flex items-start gap-1.5 text-xs text-amber-300">
                                     <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -1574,7 +1524,64 @@ export default function WalletPage() {
                                   </div>
                                   <p className="text-[10px] text-zinc-600 pl-5">Do not send again — this exact transfer is retained. Sending is disabled until it resolves.</p>
                                 </div>
-                              ) : !ownershipProof ? (
+                              ) : evmWallet.state === 'idle' || evmWallet.state === 'error' ? (
+                            <div className="space-y-3">
+                              {evmWallet.providers.length > 0 ? (
+                                <>
+                                  <p className="text-xs text-zinc-400">Detected wallets — select one to connect:</p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {evmWallet.providers.map((p) => (
+                                      <button
+                                        key={p.info.rdns}
+                                        onClick={() => void evmWallet.connect(p.info.rdns).then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
+                                        className="flex items-center gap-3 p-3 rounded-xl border border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left"
+                                      >
+                                        <img
+                                          src={p.info.icon}
+                                          alt={p.info.name}
+                                          className="w-8 h-8 rounded-md shrink-0"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                        <span className="text-sm font-medium text-white">{p.info.name}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : evmWallet.isAvailable ? (
+                                <button
+                                  onClick={() => void evmWallet.connect().then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
+                                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium transition-all"
+                                >
+                                  <LinkIcon className="w-4 h-4" />Connect Wallet
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs">
+                                  <AlertCircle className="w-4 h-4 shrink-0" />
+                                  No EVM wallet detected. Install <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">MetaMask</a> or use Brave Wallet.
+                                </div>
+                              )}
+                            </div>
+                          ) : evmWallet.state === 'connecting' || evmWallet.state === 'switching_chain' ? (
+                            <div className="flex items-center gap-2 text-sm text-zinc-400">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              {evmWallet.state === 'switching_chain' ? 'Switching network...' : 'Connecting wallet...'}
+                            </div>
+                          ) : (unresolvedSend || evmWallet.state === 'connected' || evmWallet.state === 'sending') && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-xs">
+                                <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
+                                <div>
+                                  <p className="text-zinc-300 font-mono">{evmWallet.address?.slice(0, 8)}…{evmWallet.address?.slice(-6)}</p>
+                                  {evmWallet.usdtBalance && <p className="text-zinc-500">Balance: {parseFloat(evmWallet.usdtBalance).toFixed(2)} USDT</p>}
+                                </div>
+                              </div>
+                              <div className="p-3 rounded-lg bg-zinc-800/60 border border-surface-border text-xs text-zinc-400 space-y-1">
+                                <p>Network: <span className="text-white">{cryptoCfg?.network}</span></p>
+                                <p>Sending: <span className="text-white font-semibold">{selectedPackage.usdAmount} USDT</span></p>
+                                <p className="text-zinc-600">To: {cryptoCfg?.walletAddress?.slice(0,10)}…{cryptoCfg?.walletAddress?.slice(-8)}</p>
+                                <p className="text-zinc-600">A small amount of {cryptoCfg?.chainId === 56 ? 'BNB' : 'ETH'} is needed for gas.</p>
+                              </div>
+{!ownershipProof ? (
                                 <div className="space-y-1.5">
                                   <button
                                     onClick={() => void signOwnership()}

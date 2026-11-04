@@ -286,7 +286,7 @@ export function useEvmWallet() {
   const gasSymbol = (id: number) => CHAIN_CONFIGS[id]?.nativeCurrency?.symbol ?? 'native token';
   const fail = (msg: string, hint?: string) => { setError(msg); setErrorHint(hint ?? null); };
 
-  const classifyEvmError = useCallback((raw: unknown, chain: number, action: 'signature' | 'transfer' = 'transfer'): { message: string; hint?: string } => {
+  const classifyEvmError = useCallback((raw: unknown, chain: number, action: 'signature' | 'transfer' = 'transfer'): { message: string; hint?: string; preflight?: boolean } => {
     const e = raw as { code?: unknown; message?: string; shortMessage?: string;
       info?: { error?: { message?: string; data?: unknown } }; error?: { message?: string; data?: unknown };
       reason?: string; data?: unknown; action?: string };
@@ -307,16 +307,16 @@ export function useEvmWallet() {
         : { message: 'You cancelled the transfer in your wallet.', hint: 'No funds moved â€” press Send again when ready.' };
     }
     if (txt.includes('transfer amount exceeds balance') || (txt.includes('exceeds') && txt.includes('balance') && (txt.includes('transfer') || txt.includes('bep20') || txt.includes('erc20')))) {
-      return { message: `Not enough USDT on ${net}.`, hint: 'Reconnect a funded wallet or add USDT, then try again.' };
+      return { message: `Not enough USDT on ${net}.`, hint: 'Reconnect a funded wallet or add USDT, then try again.', preflight: true };
     }
     if (txt.includes('insufficient funds') || txt.includes('insufficient allowance') || txt.includes('insufficient balance') || txt.includes('exceeds allowance')) {
-      return { message: `Not enough ${gas} on ${net} to pay network fees.`, hint: `Add a small amount of ${gas} to your wallet, then retry.` };
+      return { message: `Not enough ${gas} on ${net} to pay network fees.`, hint: `Add a small amount of ${gas} to your wallet, then retry.`, preflight: true };
     }
     if (txt.includes('execution reverted') || txt.includes('call_exception') || txt.includes('missing revert data') || txt.includes('transfer failed')) {
-      return { message: `The USDT contract rejected this transfer on ${net}.`, hint: 'Check the token balance and selected network, then try again.' };
+      return { message: `The USDT contract rejected this transfer on ${net}.`, hint: 'Check the token balance and selected network, then try again.', preflight: true };
     }
     if (txt.includes('chain mismatch') || txt.includes('wrong chain') || txt.includes('unsupported chain')) {
-      return { message: `Your wallet is on the wrong network.`, hint: `Switch to ${net} in your wallet, then try again.` };
+      return { message: `Your wallet is on the wrong network.`, hint: `Switch to ${net} in your wallet, then try again.`, preflight: true };
     }
     if (txt.includes('disconnected') || txt.includes('account changed') || txt.includes('not connected')) {
       return { message: 'Wallet disconnected mid-request.', hint: 'Reconnect your wallet and start the deposit again â€” ownership must be re-verified.' };
@@ -393,9 +393,10 @@ export function useEvmWallet() {
       // Confirmed pre-broadcast: user cancelled or a revert/preflight failure —
       // the wallet never broadcast. Uncertain: RPC/disconnect mid-request —
       // the transfer may have broadcast; resend is unsafe.
-      const net = /reach|network|rpc|disconnect|timeout|timed out|unreachable/i.test(c.message + (c.hint ?? ''));
       const cancelled = /cancelled|rejected|denied/i.test(c.message);
-      const outcome: SendOutcome = cancelled ? 'cancelled' : net ? 'uncertain' : 'preflight';
+      // Only confirmed pre-broadcast failures are safe to retry — anything
+      // unknown (RPC, generic, disconnect) may have broadcast → recovery only.
+      const outcome: SendOutcome = cancelled ? 'cancelled' : c.preflight ? 'preflight' : 'uncertain';
       setSendOutcome(outcome);
       setError(c.message);
       setErrorHint(c.hint ?? null);

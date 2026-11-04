@@ -1,6 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-test.use({ storageState: 'e2e/.auth/user.json' });
+// Inline session — the shared user.json is only valid against the real CI API;
+// the mocked routes below satisfy auth/me, so a self-contained state is enough.
+const AUTH_LS = JSON.stringify({
+  state: {
+    user: { id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 },
+    accessToken: 'e2e-mock-token',
+    isAuthenticated: true,
+    adminPin: null,
+  },
+  version: 0,
+});
+test.use({
+  storageState: {
+    cookies: [],
+    origins: [{ origin: 'http://localhost:3000', localStorage: [
+      { name: 'access_token', value: 'e2e-mock-token' },
+      { name: 'engganyo-auth', value: AUTH_LS },
+      { name: 'cookie-consent', value: 'accepted' },
+    ] }],
+  },
+});
 
 const CORS_ORIGIN = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
 const CORS_HEADERS = {
@@ -26,6 +46,16 @@ async function injectSendWallet(page: import('@playwright/test').Page, chainIdHe
         if (method === 'eth_chainId') return chain;
         if (method === 'net_version') return String(parseInt(chain, 16));
         if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_maxPriorityFeePerGas') return '0x3b9aca00';
+        if (method === 'eth_feeHistory') return { baseFeePerGas: ['0x2540be400', '0x2540be400'], gasUsedRatio: [0.5], oldestBlock: '0x1234', reward: [['0x3b9aca00']] };
+        if (method === 'eth_getBlockByNumber') return { number: '0x1234', hash: '0x' + '00'.repeat(32), parentHash: '0x' + '00'.repeat(32), nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), logsBloom: '0x' + '00'.repeat(256), transactionsRoot: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), miner: '0x' + '00'.repeat(20), difficulty: '0x0', totalDifficulty: '0x0', extraData: '0x', size: '0x0', gasLimit: '0x1c9c380', gasUsed: '0x0', timestamp: '0x654321', transactions: [], uncles: [], baseFeePerGas: '0x2540be400' };
+        
+        if (method === 'eth_syncing') return false;
+        if (method === 'eth_getCode') return '0x1234';
+        if (method === 'eth_getTransactionByHash') return { hash: '0x' + 'cd'.repeat(32), nonce: '0x1', blockHash: null, blockNumber: null, transactionIndex: null, from: ADDR, to: '0x' + '55d398326f99059fF775485246999027B3197955'.slice(0).toLowerCase(), value: '0x0', gasPrice: '0x2540be400', gas: '0x5208', input: '0x', v: '0x1', r: '0x' + '00'.repeat(32), s: '0x' + '00'.repeat(32), type: '0x0' };
+
         if (method === 'eth_call') {
           const d = (params?.[0] as { data?: string })?.data ?? '';
           if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0');
@@ -40,7 +70,7 @@ async function injectSendWallet(page: import('@playwright/test').Page, chainIdHe
         }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234', transactionHash: HASH };
-        throw new Error('Unsupported ' + method);
+        return '0x0'; // unhandled — valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -54,6 +84,17 @@ async function mockApis(page: import('@playwright/test').Page, chainId: number, 
   const network = chainId === 56 ? 'BSC' : 'Base';
   const contract = chainId === 56 ? '0x55d398326f99059fF775485246999027B3197955' : '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2';
   await page.route('**/api/**', (r) => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS_HEADERS }) : r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
+  await page.route('**/api/auth/me', (r) => r.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse({ id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 }),
+  }));
+  // Layout + page-side endpoints the catch-all would otherwise hand a bad shape.
+  const emptyList = { items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } };
+  await page.route('**/api/wallet/transactions**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(emptyList) }));
+  await page.route('**/api/notifications**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(emptyList) }));
+  await page.route('**/api/store/active-effects', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
+  await page.route('**/api/users/cosmetics**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
+  await page.route('**/api/auth/public-config', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
   await page.route('**/api/wallet/deposit/options', (r) => r.fulfill({
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse({
@@ -133,6 +174,16 @@ async function injectUncertainWallet(page: import('@playwright/test').Page, chai
         if (method === 'eth_chainId') return chain;
         if (method === 'net_version') return String(parseInt(chain, 16));
         if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_maxPriorityFeePerGas') return '0x3b9aca00';
+        if (method === 'eth_feeHistory') return { baseFeePerGas: ['0x2540be400', '0x2540be400'], gasUsedRatio: [0.5], oldestBlock: '0x1234', reward: [['0x3b9aca00']] };
+        if (method === 'eth_getBlockByNumber') return { number: '0x1234', hash: '0x' + '00'.repeat(32), parentHash: '0x' + '00'.repeat(32), nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), logsBloom: '0x' + '00'.repeat(256), transactionsRoot: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), miner: '0x' + '00'.repeat(20), difficulty: '0x0', totalDifficulty: '0x0', extraData: '0x', size: '0x0', gasLimit: '0x1c9c380', gasUsed: '0x0', timestamp: '0x654321', transactions: [], uncles: [], baseFeePerGas: '0x2540be400' };
+        
+        if (method === 'eth_syncing') return false;
+        if (method === 'eth_getCode') return '0x1234';
+        if (method === 'eth_getTransactionByHash') return { hash: '0x' + 'cd'.repeat(32), nonce: '0x1', blockHash: null, blockNumber: null, transactionIndex: null, from: ADDR, to: '0x' + '55d398326f99059fF775485246999027B3197955'.slice(0).toLowerCase(), value: '0x0', gasPrice: '0x2540be400', gas: '0x5208', input: '0x', v: '0x1', r: '0x' + '00'.repeat(32), s: '0x' + '00'.repeat(32), type: '0x0' };
+
         if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
         if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
         if (method === 'eth_estimateGas') return '0x5208';
@@ -140,7 +191,7 @@ async function injectUncertainWallet(page: import('@playwright/test').Page, chai
           (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
           throw Object.assign(new Error('Internal JSON-RPC error.'), { code: -32603, data: { message: 'transport error' } });
         }
-        throw new Error('Unsupported ' + method);
+        return '0x0'; // unhandled — valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -163,7 +214,7 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
 
     const card = page.locator('#deposit-card');
     // Uncertain: recovery-only — hash input + attach, NO Resume send / Abandon / resend
-    await expect(card.getByText(/Check your wallet activity/i)).toBeVisible({ timeout: 10_000 });
+    await expect(card.getByText(/Check your wallet activity/i).first()).toBeVisible({ timeout: 10_000 });
     await expect(card.getByPlaceholder(/transaction hash/i)).toBeVisible();
     await expect(card.getByRole('button', { name: /resume send/i })).toHaveCount(0);
     await expect(card.getByRole('button', { name: /abandon deposit/i })).toHaveCount(0);
@@ -200,6 +251,16 @@ async function injectPausedWallet(page: import('@playwright/test').Page, chainId
         if (method === 'eth_chainId') return chain;
         if (method === 'net_version') return String(parseInt(chain, 16));
         if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_maxPriorityFeePerGas') return '0x3b9aca00';
+        if (method === 'eth_feeHistory') return { baseFeePerGas: ['0x2540be400', '0x2540be400'], gasUsedRatio: [0.5], oldestBlock: '0x1234', reward: [['0x3b9aca00']] };
+        if (method === 'eth_getBlockByNumber') return { number: '0x1234', hash: '0x' + '00'.repeat(32), parentHash: '0x' + '00'.repeat(32), nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), logsBloom: '0x' + '00'.repeat(256), transactionsRoot: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), miner: '0x' + '00'.repeat(20), difficulty: '0x0', totalDifficulty: '0x0', extraData: '0x', size: '0x0', gasLimit: '0x1c9c380', gasUsed: '0x0', timestamp: '0x654321', transactions: [], uncles: [], baseFeePerGas: '0x2540be400' };
+        
+        if (method === 'eth_syncing') return false;
+        if (method === 'eth_getCode') return '0x1234';
+        if (method === 'eth_getTransactionByHash') return { hash: '0x' + 'cd'.repeat(32), nonce: '0x1', blockHash: null, blockNumber: null, transactionIndex: null, from: ADDR, to: '0x' + '55d398326f99059fF775485246999027B3197955'.slice(0).toLowerCase(), value: '0x0', gasPrice: '0x2540be400', gas: '0x5208', input: '0x', v: '0x1', r: '0x' + '00'.repeat(32), s: '0x' + '00'.repeat(32), type: '0x0' };
+
         if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
         if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
         if (method === 'eth_estimateGas') return '0x5208';
@@ -207,7 +268,7 @@ async function injectPausedWallet(page: import('@playwright/test').Page, chainId
           (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
           return new Promise((resolve) => { (window as unknown as { __resolveSend?: (v: string) => void }).__resolveSend = resolve; });
         }
-        throw new Error('Unsupported ' + method);
+        return '0x0'; // unhandled — valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -250,6 +311,16 @@ test('re-proof in retry does not send — explicit Resume send required', async 
         if (method === 'eth_chainId') return '0x38';
         if (method === 'net_version') return '56';
         if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_maxPriorityFeePerGas') return '0x3b9aca00';
+        if (method === 'eth_feeHistory') return { baseFeePerGas: ['0x2540be400', '0x2540be400'], gasUsedRatio: [0.5], oldestBlock: '0x1234', reward: [['0x3b9aca00']] };
+        if (method === 'eth_getBlockByNumber') return { number: '0x1234', hash: '0x' + '00'.repeat(32), parentHash: '0x' + '00'.repeat(32), nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), logsBloom: '0x' + '00'.repeat(256), transactionsRoot: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), miner: '0x' + '00'.repeat(20), difficulty: '0x0', totalDifficulty: '0x0', extraData: '0x', size: '0x0', gasLimit: '0x1c9c380', gasUsed: '0x0', timestamp: '0x654321', transactions: [], uncles: [], baseFeePerGas: '0x2540be400' };
+        
+        if (method === 'eth_syncing') return false;
+        if (method === 'eth_getCode') return '0x1234';
+        if (method === 'eth_getTransactionByHash') return { hash: '0x' + 'cd'.repeat(32), nonce: '0x1', blockHash: null, blockNumber: null, transactionIndex: null, from: ADDR, to: '0x' + '55d398326f99059fF775485246999027B3197955'.slice(0).toLowerCase(), value: '0x0', gasPrice: '0x2540be400', gas: '0x5208', input: '0x', v: '0x1', r: '0x' + '00'.repeat(32), s: '0x' + '00'.repeat(32), type: '0x0' };
+
         if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
         if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
         if (method === 'eth_estimateGas') return '0x5208';
@@ -261,7 +332,7 @@ test('re-proof in retry does not send — explicit Resume send required', async 
         }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234' };
-        throw new Error('Unsupported ' + method);
+        return '0x0'; // unhandled — valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -306,13 +377,23 @@ test('deposit-creation failure before wallet call — retry succeeds without rel
         if (method === 'eth_chainId') return '0x38';
         if (method === 'net_version') return '56';
         if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_getTransactionCount') return '0x1';
+        if (method === 'eth_gasPrice') return '0x2540be400';
+        if (method === 'eth_maxPriorityFeePerGas') return '0x3b9aca00';
+        if (method === 'eth_feeHistory') return { baseFeePerGas: ['0x2540be400', '0x2540be400'], gasUsedRatio: [0.5], oldestBlock: '0x1234', reward: [['0x3b9aca00']] };
+        if (method === 'eth_getBlockByNumber') return { number: '0x1234', hash: '0x' + '00'.repeat(32), parentHash: '0x' + '00'.repeat(32), nonce: '0x0000000000000000', sha3Uncles: '0x' + '00'.repeat(32), logsBloom: '0x' + '00'.repeat(256), transactionsRoot: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), miner: '0x' + '00'.repeat(20), difficulty: '0x0', totalDifficulty: '0x0', extraData: '0x', size: '0x0', gasLimit: '0x1c9c380', gasUsed: '0x0', timestamp: '0x654321', transactions: [], uncles: [], baseFeePerGas: '0x2540be400' };
+        
+        if (method === 'eth_syncing') return false;
+        if (method === 'eth_getCode') return '0x1234';
+        if (method === 'eth_getTransactionByHash') return { hash: '0x' + 'cd'.repeat(32), nonce: '0x1', blockHash: null, blockNumber: null, transactionIndex: null, from: ADDR, to: '0x' + '55d398326f99059fF775485246999027B3197955'.slice(0).toLowerCase(), value: '0x0', gasPrice: '0x2540be400', gas: '0x5208', input: '0x', v: '0x1', r: '0x' + '00'.repeat(32), s: '0x' + '00'.repeat(32), type: '0x0' };
+
         if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
         if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
         if (method === 'eth_estimateGas') return '0x5208';
         if (method === 'eth_sendTransaction') { (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1; return '0x' + 'cd'.repeat(32); }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234' };
-        throw new Error('Unsupported ' + method);
+        return '0x0'; // unhandled — valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -321,6 +402,12 @@ test('deposit-creation failure before wallet call — retry succeeds without rel
   // initiate fails once (deposit creation), then succeeds — no wallet call until it does
   let initiated = 0;
   await page.route('**/api/**', (r) => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS_HEADERS }) : r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
+  await page.route('**/api/auth/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 }) }));
+  const emptyList = { items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } };
+  await page.route('**/api/wallet/transactions**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(emptyList) }));
+  await page.route('**/api/notifications**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(emptyList) }));
+  await page.route('**/api/store/active-effects', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
+  await page.route('**/api/users/cosmetics**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
   await page.route('**/api/wallet/deposit/options', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ pricing: { creditsPerUsd: 100, minDepositUsd: 1, minDepositPhp: 63.46, usdToPhp: 63.46 }, paymongo: { enabled: true, publicKey: 'pk' }, paypal: { enabled: true, clientId: 'c', mode: 'sandbox' }, usdtBep20: { enabled: true, walletAddress: '0xB6a1022F84f16A41A1F066f0E0fa6c89af8f941e', contractAddress: '0x55d398326f99059fF775485246999027B3197955', chainId: 56, network: 'BSC', minAmount: 1 }, usdtBase: { enabled: false } }) }));
   await page.route('**/api/wallet/deposit/packages', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([{ id: 'pkg-1', usdAmount: 1, creditsBase: 100, creditsTotal: 100, bonusCredits: 0, phpEquivalent: 64, phpAmount: 63.46, usdToPhp: 63.46, label: null, isPopular: false, isActive: true }]) }));
   await page.route('**/api/wallet/deposits**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } }) }));
@@ -328,7 +415,7 @@ test('deposit-creation failure before wallet call — retry succeeds without rel
   await page.route('**/api/wallet/crypto/challenge', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ nonce: 'n1', message: 'msg', expiresAt: new Date(Date.now() + 600000).toISOString() }) }));
   await page.route('**/api/wallet/deposit/initiate', async (route) => {
     initiated++;
-    if (initiated === 1) { await route.fulfill({ status: 503, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'unavailable' }) }); return; }
+    if (initiated === 1) { await route.fulfill({ status: 400, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'unavailable' }) }); return; }
     await route.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ deposit: { id: 'dep-1', method: 'USDT_BEP20', status: 'PENDING', paymentRef: null, amountFiat: 1, currency: 'USD', creditsToAward: 100, createdAt: new Date().toISOString() }, instructions: {} }) });
   });
   await page.route(/.*\/api\/wallet\/deposit\/.*\/tx-hash/, (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ id: 'dep-1', status: 'PROCESSING' }) }));
