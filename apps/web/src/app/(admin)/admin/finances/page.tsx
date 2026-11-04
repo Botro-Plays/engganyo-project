@@ -357,7 +357,7 @@ export default function FinancesPage() {
                 </div>
               ) : settlementError && !settlementSummary ? (
                 <div className="flex items-center justify-between gap-2 py-2">
-                  <p className="text-xs text-zinc-500">Couldn't load settlement totals</p>
+                  <p className="text-xs text-zinc-500">Couldn&rsquo;t load settlement totals</p>
                   <button onClick={() => void refetchSettlement()} className="text-xs text-amber-400 hover:text-amber-300 underline">Retry</button>
                 </div>
               ) : rows.length === 0 ? (
