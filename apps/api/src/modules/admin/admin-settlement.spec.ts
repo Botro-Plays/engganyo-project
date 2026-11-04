@@ -79,6 +79,33 @@ describe('settlement summary + backfill', () => {
     expect(netCall.data).toEqual({ providerNet: 0.70, providerNetCurrency: 'USD' });
   });
 
+  it('limit reached mid-page: cursor resumes at the last examined row, not the page end', async () => {
+    prisma.deposit.findMany.mockResolvedValueOnce([
+      row({ id: 'a', paymentRef: 'ORDa', completedAt: new Date('2026-01-02') }),
+      row({ id: 'b', paymentRef: 'ORDb', completedAt: new Date('2026-01-01') }),
+    ]);
+    paypal.getOrderSettlement.mockResolvedValueOnce({ fee: 0.34, feeCurrency: 'USD', net: 0.66, netCurrency: 'USD' });
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const first = await svc.backfillSettlement(1);
+    expect(first.updated).toBe(1);
+    expect(first.scanned).toBe(1);                       // only 'a' examined
+    expect(first.nextCursor).toBeTruthy();
+    // cursor must point at 'a', not page-end 'b'
+    const decoded = JSON.parse(Buffer.from(first.nextCursor!, 'base64').toString('utf8'));
+    expect(decoded.id).toBe('a');
+
+    prisma.deposit.findMany.mockReset();
+    prisma.deposit.findMany.mockResolvedValueOnce([row({ id: 'b', paymentRef: 'ORDb', completedAt: new Date('2026-01-01') })]);
+    paypal.getOrderSettlement.mockResolvedValueOnce({ fee: 0.34, feeCurrency: 'USD', net: 0.66, netCurrency: 'USD' });
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const second = await svc.backfillSettlement(1, first.nextCursor!);
+    expect(second.updated).toBe(1);
+    const ids = prisma.deposit.updateMany.mock.calls.map((c) => c[0].where.id);
+    expect(ids).toContain('b');
+    // the second call's where carried the cursor condition
+    expect(JSON.stringify(prisma.deposit.findMany.mock.calls[0][0].where)).toContain('completedAt');
+  });
+
   it('unavailable records cannot starve older deposits — cursor continues past the scan cap', async () => {
     const mkPage = (n: number, tag: string) => Array.from({ length: n }, (_, i) =>
       row({ id: `${tag}${i}`, paymentRef: `ORD${tag}${i}` }));

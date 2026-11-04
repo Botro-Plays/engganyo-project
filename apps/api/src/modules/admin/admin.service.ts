@@ -2021,12 +2021,15 @@ export class AdminService {
         select: { id: true, method: true, paymentRef: true, completedAt: true, providerFee: true, providerNet: true, providerConverted: true },
       });
       if (rows.length === 0) { nextCursor = null; break; }
-      scanned += rows.length;
-      const last = rows[rows.length - 1];
-      nextCursor = encode(last.completedAt, last.id);
 
+      // The continuation cursor tracks the last deposit actually EXAMINED —
+      // never the last fetched row — so rows fetched but never looked at
+      // (limit reached mid-page) stay reachable on the next call.
+      let lastExamined: { completedAt: Date | null; id: string } | null = null;
       for (const d of rows) {
-        if (updated >= limit) break;
+        if (updated >= limit || scanned >= MAX_SCAN) break;
+        lastExamined = d;
+        scanned++;
         try {
           const st: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string; converted?: number; convertedCurrency?: string } | undefined =
             d.method === DepositMethod.PAYPAL
@@ -2043,8 +2046,14 @@ export class AdminService {
           if (wrote > 0) updated++; else skipped.push(d.id);
         } catch { failed.push(d.id); }
       }
-      if (rows.length < PAGE || updated >= limit) break;
-      cursorCond = { OR: [{ completedAt: { lt: last.completedAt! } }, { completedAt: last.completedAt!, id: { lt: last.id } }] };
+      // Advance cursor to the last examined row; a full page where every row
+      // was examined ends on the page's last row — equivalent, and correct.
+      if (lastExamined) {
+        nextCursor = encode(lastExamined.completedAt, lastExamined.id);
+        cursorCond = { OR: [{ completedAt: { lt: lastExamined.completedAt! } }, { completedAt: lastExamined.completedAt!, id: { lt: lastExamined.id } }] };
+      }
+      if (rows.length < PAGE && (!lastExamined || lastExamined.id === rows[rows.length - 1].id)) { nextCursor = null; break; }
+      if (updated >= limit || scanned >= MAX_SCAN) break;
     }
     return { scanned, updated, skipped: skipped.length, failed: failed.length, skippedIds: skipped, failedIds: failed, nextCursor };
   }
