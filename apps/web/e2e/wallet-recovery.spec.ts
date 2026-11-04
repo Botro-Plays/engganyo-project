@@ -187,3 +187,53 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
     expect(attachCalls ?? 0).toBe(0); // attaching never re-sends
   });
 }
+
+// Wallet whose sendTransaction never resolves on the first call — simulates the
+// wallet request sitting in flight while the user clicks Send again.
+async function injectPausedWallet(page: import('@playwright/test').Page, chainIdHex: string) {
+  await page.addInitScript((chain) => {
+    const ADDR = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
+    (window as unknown as { ethereum: unknown }).ethereum = {
+      isMetaMask: true,
+      request: async ({ method, params }: { method: string; params?: Array<Record<string, string>> }) => {
+        if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [ADDR];
+        if (method === 'eth_chainId') return chain;
+        if (method === 'net_version') return String(parseInt(chain, 16));
+        if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
+        if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
+        if (method === 'eth_estimateGas') return '0x5208';
+        if (method === 'eth_sendTransaction') {
+          (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
+          return new Promise((resolve) => { (window as unknown as { __resolveSend?: (v: string) => void }).__resolveSend = resolve; });
+        }
+        throw new Error('Unsupported ' + method);
+      },
+      on: () => undefined,
+      removeListener: () => undefined,
+    };
+  }, chainIdHex);
+}
+
+test('in-flight wallet request blocks a second send — one sendTransaction total', async ({ page }) => {
+  const failState = { fail: false };
+  await injectPausedWallet(page, '0x38');
+  await mockApis(page, 56, failState);
+  await page.goto('/wallet');
+  await page.getByRole('button', { name: /deposit credits/i }).click();
+  await page.locator('#deposit-card button').filter({ hasText: '$1' }).first().click();
+  await page.getByText(/BNB Smart Chain|BEP20/i).first().click();
+  await page.getByRole('button', { name: /connect wallet/i }).first().click();
+  await page.getByRole('button', { name: /verify wallet ownership/i }).click();
+  await page.getByRole('button', { name: /^2\. Send / }).click();
+
+  // Wallet request is in flight — repeated interaction cannot issue another send
+  await page.waitForTimeout(800);
+  const card = page.locator('#deposit-card');
+  const sendBtn = card.getByRole('button', { name: /^2\. Send / });
+  await expect(card.getByText(/Wallet request in progress|wait/i).first()).toBeVisible();
+  if (await sendBtn.count()) await sendBtn.click({ force: true });
+  if (await sendBtn.count()) await sendBtn.click({ force: true });
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
+});

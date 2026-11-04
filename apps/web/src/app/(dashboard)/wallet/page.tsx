@@ -278,6 +278,7 @@ export default function WalletPage() {
   const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
   const [ownershipProof, setOwnershipProof] = useState<{ nonce: string; signature: string } | null>(null);
   // A sent-but-unregistered transfer: hash bound to its network, wallet, package.
+  const sendInFlightRef = useRef(false);
   const [unresolvedSend, setUnresolvedSend] = useState<{ hash: string | null; phase: 'sending' | 'retry' | 'uncertain' | 'sent'; depositId: string; network: string; chainId: number; wallet: string; packageId: string; method: string; amountUsd: number } | null>(null);
   const [signingOwnership, setSigningOwnership] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
@@ -636,6 +637,8 @@ export default function WalletPage() {
 
   const handleEvmSend = async () => {
     if (!selectedPackage || !cryptoCfg?.walletAddress || !evmWallet.address) return;
+    if (sendInFlightRef.current || unresolvedSend) return; // one wallet request at a time; recover existing intent instead
+    sendInFlightRef.current = true;
     setDepositError(null);
     // 1) Establish the deposit intent FIRST — bound to account, verified
     //    wallet, chain and package — so a sent hash always has a home.
@@ -729,6 +732,8 @@ export default function WalletPage() {
       // recovery path bound to THIS hash instead of a bare error.
       setDepositError('Your USDT transfer was submitted on-chain, but we could not register or confirm it yet.');
       console.error('[handleEvmSend] error:', err);
+    } finally {
+      sendInFlightRef.current = false;
     }
   };
 
@@ -751,12 +756,15 @@ export default function WalletPage() {
       setDepositError(`Reconnect the original wallet ${unresolvedSend.wallet.slice(0, 8)}…${unresolvedSend.wallet.slice(-6)} — this transfer is bound to it.`);
       return;
     }
-    // Open intent (no hash yet), confirmed pre-broadcast — retry the send on the
-    // SAME deposit. Uncertain phase is recovery-only and never reaches this block.
+    // Only 'retry' may broadcast again — sent/uncertain are recovery-only,
+    // 'sending' means a wallet request is already in flight.
     if (!unresolvedSend.hash) {
+      if (unresolvedSend.phase !== 'retry' || sendInFlightRef.current) return;
       if (!evmWallet.address) { setDepositError('Connect the wallet that opened this deposit first.'); return; }
+      sendInFlightRef.current = true;
       persistSend({ ...unresolvedSend, phase: 'sending' });
       const res = await evmWallet.sendUsdt(cryptoCfg!.walletAddress!, cryptoCfg!.contractAddress!, unresolvedSend.amountUsd, unresolvedSend.chainId);
+      sendInFlightRef.current = false;
       if (!res.hash) {
         persistSend({ ...unresolvedSend, hash: null, phase: res.outcome === 'uncertain' ? 'uncertain' : 'retry' });
         return;
@@ -1486,9 +1494,11 @@ export default function WalletPage() {
                                     <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                                     {unresolvedSend.phase === 'uncertain'
                                       ? <>Check your wallet activity — this transfer may have broadcast on {unresolvedSend.network}. If it did, attach the hash below to finish. Do not send again.</>
-                                      : unresolvedSend.hash
-                                        ? <>Transfer submitted on {unresolvedSend.network} — Engganyo could not register or confirm it yet.</>
-                                        : <>Deposit opened on {unresolvedSend.network} — the transfer wasn&apos;t sent. Retry uses this deposit.</>}
+                                      : unresolvedSend.phase === 'sending'
+                                        ? <>Wallet request in progress — check your wallet for the transfer prompt. Please wait.</>
+                                        : unresolvedSend.hash
+                                          ? <>Transfer submitted on {unresolvedSend.network} — Engganyo could not register or confirm it yet.</>
+                                          : <>Deposit opened on {unresolvedSend.network} — the transfer wasn&apos;t sent. Retry uses this deposit.</>}
                                   </p>
                                   {unresolvedSend.hash && (
                                     <p className="text-[11px] text-zinc-500 font-mono break-all pl-5">{unresolvedSend.hash}</p>
@@ -1512,7 +1522,7 @@ export default function WalletPage() {
                                   )}
                                   <p className="text-[11px] text-zinc-600 pl-5">Bound to this transfer: {unresolvedSend.amountUsd} USDT · {unresolvedSend.network} · wallet {unresolvedSend.wallet.slice(0,8)}…{unresolvedSend.wallet.slice(-6)}</p>
                                   <div className="flex flex-wrap gap-2 pl-5">
-                                    {unresolvedSend.phase !== 'uncertain' && (
+                                    {(unresolvedSend.phase === 'retry' || unresolvedSend.phase === 'sent') && (
                                     <button
                                       onClick={() => void resumeTransfer()}
                                       disabled={initiateMutation.isPending}
@@ -1523,7 +1533,7 @@ export default function WalletPage() {
                                     </button>
                                     )}
                                     <button
-                                      onClick={() => void proveOwnershipFor(unresolvedSend.depositId, unresolvedSend.wallet, unresolvedSend.method).then(() => { if (unresolvedSend.phase !== 'uncertain') void resumeTransfer(); })}
+                                      onClick={() => void proveOwnershipFor(unresolvedSend.depositId, unresolvedSend.wallet, unresolvedSend.method).then(() => { if (unresolvedSend.phase === 'retry' && !unresolvedSend.hash) void resumeTransfer(); })}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium transition-all"
                                     >
                                       <ShieldCheck className="w-3 h-3" />Prove ownership again
