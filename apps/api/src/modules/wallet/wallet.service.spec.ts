@@ -399,6 +399,24 @@ describe('WalletService', () => {
       );
     });
 
+    it('half-centavo boundary: $1 at rate 60.025 — displayed charge, checkout charge, and floor agree', async () => {
+      currencyMock().getUsdToPhp.mockResolvedValue(60.025);
+      const options = await service.getDepositOptions();
+      // 6002.5 centavos → one integer-centavo rounding for floor AND charge.
+      expect(options.pricing.minDepositPhp).toBeCloseTo(60.03, 2);
+      prismaPlatformConfigMock.findMany.mockResolvedValue([
+        ...DEFAULT_CONFIGS,
+        { key: 'paymongo_enabled', value: true },
+      ]);
+      prismaDepositPackageMock.findUnique.mockResolvedValue(pkg());
+      prismaDepositMock.findFirst.mockResolvedValue(null);
+      prismaDepositMock.create.mockResolvedValue({ id: 'dep-z' });
+      await service.initiateDeposit('user-1', { method: 'PAYMONGO', packageId: 'pkg-1' } as never);
+      expect(prismaDepositMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ amountFiat: 60.03, currency: 'PHP' }) }),
+      );
+    });
+
     it('rate change before checkout re-derives the quoted charge and minimum', async () => {
       currencyMock().getUsdToPhp.mockResolvedValueOnce(63.46).mockResolvedValueOnce(60.0);
       const first = await service.getDepositOptions();

@@ -249,6 +249,13 @@ export class WalletService {
 
   // ─── Deposit system ────────────────────────────────────────
 
+  // Single source of truth for USD→PHP charges: integer centavos so the
+  // package charge, derived PHP minimum, and checkout amount can never
+  // diverge at a half-centavo boundary.
+  private usdToPhpCentavos(usd: number, rate: number): number {
+    return Math.round(usd * rate * 100);
+  }
+
   async getDepositOptions() {
     const keys = [
       'paymongo_enabled', 'paymongo_public_key',
@@ -269,7 +276,7 @@ export class WalletService {
     // USD floor always qualifies. An explicitly configured min_deposit_php
     // still overrides. Computed in integer centavos to avoid float drift.
     const minDepositPhp = (map['min_deposit_php'] as number)
-      ?? Math.round(minDepositUsd * usdToPhp * 100) / 100;
+      ?? this.usdToPhpCentavos(minDepositUsd, usdToPhp) / 100;
 
     return {
       paymongo:  { enabled: Boolean(map['paymongo_enabled'] ?? false),  publicKey: (map['paymongo_public_key'] as string) ?? null },
@@ -322,7 +329,7 @@ export class WalletService {
         phpEquivalent: Math.ceil(pkg.usdAmount * usdToPhp),
         // Exact amount the PayMongo checkout will charge — mirrors
         // initiateDeposit's Math.max(1, …) clamp so UI and provider agree.
-        phpAmount: Math.max(1, parseFloat((pkg.usdAmount * usdToPhp).toFixed(2))),
+        phpAmount: Math.max(1, this.usdToPhpCentavos(pkg.usdAmount, usdToPhp) / 100),
         usdToPhp,
       };
     });
@@ -393,8 +400,9 @@ export class WalletService {
     }
 
     const isPhp = method === 'PAYMONGO';
-    const rawAmountPhp = parseFloat((pkg.usdAmount * usdToPhp).toFixed(2));
-    const amountFiat = isPhp ? Math.max(1, rawAmountPhp) : pkg.usdAmount;
+    const amountFiat = isPhp
+      ? Math.max(1, this.usdToPhpCentavos(pkg.usdAmount, usdToPhp) / 100)
+      : pkg.usdAmount;
 
     // ── Guard: minimum deposit amounts ──
     if (!isPhp && pkg.usdAmount < minDepositUsd) {

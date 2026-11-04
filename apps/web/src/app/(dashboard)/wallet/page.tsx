@@ -274,6 +274,7 @@ export default function WalletPage() {
   const [depositResult, setDepositResult] = useState<{ deposit: DepositRecord; instructions: DepositInstructions } | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
+  const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
 
@@ -746,6 +747,16 @@ export default function WalletPage() {
           const depositId = data?.deposit?.id;
           if (!depositId) {
             setDepositError('Failed to get deposit ID');
+            return;
+          }
+          // Rate may have moved between the displayed quote and deposit
+          // creation — surface the updated charge and require confirmation
+          // before opening checkout. After creation the stored amount is
+          // authoritative for checkout, retries, and settlement.
+          const stored = data?.deposit?.amountFiat;
+          const shown = selectedPackage.phpAmount ?? selectedPackage.phpEquivalent;
+          if (typeof stored === 'number' && typeof shown === 'number' && Math.abs(stored - shown) > 0.005) {
+            setRateChangePending({ depositId, newAmount: stored });
             return;
           }
           paymongoLinkMutation.mutate({ depositId });
@@ -1410,6 +1421,34 @@ export default function WalletPage() {
                           )}
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* Rate-change confirmation — the stored deposit amount is
+                      authoritative; user must confirm before checkout opens. */}
+                  {rateChangePending && (
+                    <div className="mt-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm space-y-2">
+                      <p className="text-amber-300">
+                        The exchange rate changed — the charge is now <span className="font-semibold">₱{rateChangePending.newAmount.toLocaleString()}</span> instead of ₱{(selectedPackage?.phpAmount ?? selectedPackage?.phpEquivalent ?? 0).toLocaleString()}.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const { depositId } = rateChangePending;
+                            setRateChangePending(null);
+                            paymongoLinkMutation.mutate({ depositId });
+                          }}
+                          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold transition-all"
+                        >
+                          Pay ₱{rateChangePending.newAmount.toLocaleString()} — continue
+                        </button>
+                        <button
+                          onClick={() => setRateChangePending(null)}
+                          className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-all"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   )}
 
