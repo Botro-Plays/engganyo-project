@@ -169,6 +169,26 @@ export class PayPalService {
     return { orderId, approvalUrl };
   }
 
+  // ─── Settlement figures from seller_receivable_breakdown ────────────────
+  private extractSettlement(order: Record<string, unknown>, captureId?: string) {
+    const units = order.purchase_units as Array<Record<string, unknown>> | undefined;
+    const captures = (units?.[0]?.payments as { captures?: Array<Record<string, unknown>> } | undefined)?.captures;
+    const capture = captureId ? captures?.find((c) => (c.id as string) === captureId) : captures?.[0];
+    const bd = capture?.seller_receivable_breakdown as Record<string, { value?: string; currency_code?: string }> | undefined;
+    if (!bd) return undefined;
+    const fee = bd.paypal_fee;
+    const net = bd.net_amount;
+    const recv = bd.receivable_amount;
+    return {
+      fee: fee?.value != null ? parseFloat(fee.value) : undefined,
+      feeCurrency: fee?.currency_code,
+      net: net?.value != null ? parseFloat(net.value) : undefined,
+      netCurrency: net?.currency_code,
+      converted: recv?.value != null ? parseFloat(recv.value) : undefined,
+      convertedCurrency: recv?.currency_code,
+    };
+  }
+
   // ─── Capture verification — single path for normal capture AND recovery ──
   // Verifies an Orders v2 resource (capture response or GET /orders result):
   // order id, purchase-unit reference, provider capture id + COMPLETED status,
@@ -297,7 +317,10 @@ export class PayPalService {
 
         const freshDeposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
         if (freshDeposit && (freshDeposit.status === DepositStatus.PENDING || freshDeposit.status === DepositStatus.PROCESSING)) {
-          await this.walletService.completeDeposit(freshDeposit.id, { paymentRef: orderId });
+          await this.walletService.completeDeposit(freshDeposit.id, {
+            paymentRef: orderId,
+            settlement: this.extractSettlement(orderJson),
+          });
         }
         // Report the real local state — COMPLETED only if settlement is confirmed.
         const settled = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId }, select: { status: true } });
@@ -315,7 +338,10 @@ export class PayPalService {
     const dep = deposit as { id: string; amountFiat: number; currency: string };
     this.assertVerifiedCapture(dep, orderId, json);
 
-    await this.walletService.completeDeposit(dep.id, { paymentRef: orderId });
+    await this.walletService.completeDeposit(dep.id, {
+      paymentRef: orderId,
+      settlement: this.extractSettlement(json),
+    });
     return { depositId: dep.id, orderId, status: json.status as string };
   }
 
@@ -508,8 +534,10 @@ export class PayPalService {
         return { received: true, action: 'ignored_wrong_status', depositId: target.id };
       }
 
+      let webhookSettlement: ReturnType<PayPalService['extractSettlement']>;
       if (hasFullEvidence) {
         // Signed event carries full capture evidence — verify directly.
+        webhookSettlement = this.extractSettlement({ purchase_units: [{ payments: { captures: [resource] } }] } as Record<string, unknown>, eventCaptureId);
         const paidCents = Math.round(evAmountCents * 100);
         const expectedCents = Math.round(target.amountFiat * 100);
         if (paidCents !== expectedCents) {
@@ -535,13 +563,17 @@ export class PayPalService {
         const orderJson = (await orderRes.json()) as Record<string, unknown>;
         try {
           this.assertVerifiedCapture(target, eventOrderId, orderJson, eventCaptureId);
+          webhookSettlement = this.extractSettlement(orderJson, eventCaptureId);
         } catch (e) {
           this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence conflict on ${target.id} (order ${eventOrderId}, capture ${eventCaptureId ?? 'unknown'}) — not completing`);
           return { received: true, action: 'ignored', depositId: target.id };
         }
       }
 
-      await this.walletService.completeDeposit(target.id, { paymentRef: eventOrderId });
+      await this.walletService.completeDeposit(target.id, {
+        paymentRef: eventOrderId,
+        settlement: webhookSettlement,
+      });
       return { received: true, action: 'completed', depositId: target.id };
     }
 

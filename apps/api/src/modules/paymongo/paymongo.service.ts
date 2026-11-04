@@ -482,7 +482,7 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
 
-      return this.settlePaidDeposit(deposit, paymentId, 'link.payment.paid');
+      return this.settlePaidDeposit(deposit, paymentId, 'link.payment.paid', this.extractSettlement(payments?.[0]?.attributes as Record<string, unknown> | undefined));
     }
 
     // checkout_session.payment.paid — Checkout Sessions (return-URL flow) emit
@@ -548,7 +548,7 @@ export class PayMongoService {
         throw new InternalServerErrorException(`session payment ${paymentId ?? 'unknown'} could not be verified for deposit ${deposit.id}`);
       }
 
-      return this.settlePaidDeposit(deposit, paymentId, 'checkout_session.payment.paid');
+      return this.settlePaidDeposit(deposit, paymentId, 'checkout_session.payment.paid', this.extractSettlement(paymentAttrs));
     }
 
     // payment.paid — payment object is eventData. Sessions settle here: the
@@ -628,7 +628,7 @@ export class PayMongoService {
         throw new InternalServerErrorException(`payment ${paymentId} could not be verified for deposit ${deposit.id}`);
       }
 
-      return this.settlePaidDeposit(deposit, paymentId, 'payment.paid');
+      return this.settlePaidDeposit(deposit, paymentId, 'payment.paid', this.extractSettlement(eventData?.attributes as Record<string, unknown> | undefined));
     }
 
     if (eventType === 'payment.failed') {
@@ -829,7 +829,22 @@ export class PayMongoService {
    * reconciled when verified payment evidence arrives late — the payer's
    * money must never be discarded because of a local cancel/age cutoff.
    */
-  private async settlePaidDeposit(deposit: { id: string; status: DepositStatus }, paymentId: string | undefined, tag: string) {
+  // Provider-reported settlement figures from a payment's attributes
+  // (centavos → pesos). Absent values stay null — never estimated.
+  private extractSettlement(attrs: Record<string, unknown> | undefined) {
+    if (!attrs) return undefined;
+    const fee = attrs['fee'];
+    const net = attrs['net_amount'];
+    if (fee == null && net == null) return undefined;
+    return {
+      fee: typeof fee === 'number' ? fee / 100 : undefined,
+      feeCurrency: 'PHP',
+      net: typeof net === 'number' ? net / 100 : undefined,
+      netCurrency: 'PHP',
+    };
+  }
+
+  private async settlePaidDeposit(deposit: { id: string; status: DepositStatus }, paymentId: string | undefined, tag: string, settlement?: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string }) {
     if (deposit.status === DepositStatus.COMPLETED) {
       this.logger.warn(`${tag}: deposit ${deposit.id} already COMPLETED`);
       return { received: true, action: 'ignored' };
@@ -849,7 +864,7 @@ export class PayMongoService {
     }
 
     try {
-      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId });
+      await this.walletService.completeDeposit(deposit.id, { paymentRef: paymentId, settlement });
       this.logger.log(`Deposit ${deposit.id} completed via ${tag}`);
       return { received: true, action: 'completed', depositId: deposit.id };
     } catch (err) {

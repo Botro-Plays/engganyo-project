@@ -610,7 +610,9 @@ export class WalletService {
 
   async completeDeposit(
     depositId: string,
-    opts: { paymentRef?: string; reviewedBy?: string; adminNotes?: string } = {},
+    opts: { paymentRef?: string; reviewedBy?: string; adminNotes?: string;
+            settlement?: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string;
+                           converted?: number; convertedCurrency?: string } } = {},
   ) {
     const { deposit, wallet, notification } = await this.prisma.withTransaction(async (tx) => {
       const existing = await tx.deposit.findUnique({ where: { id: depositId } });
@@ -641,6 +643,12 @@ export class WalletService {
           ...(opts.reviewedBy && { reviewedBy: opts.reviewedBy }),
           ...(opts.adminNotes && { adminNotes: opts.adminNotes }),
           ...(opts.paymentRef && { paymentRef: opts.paymentRef }),
+          ...(opts.settlement?.fee != null && { providerFee: opts.settlement.fee }),
+          ...(opts.settlement?.feeCurrency && { providerFeeCurrency: opts.settlement.feeCurrency }),
+          ...(opts.settlement?.net != null && { providerNet: opts.settlement.net }),
+          ...(opts.settlement?.netCurrency && { providerNetCurrency: opts.settlement.netCurrency }),
+          ...(opts.settlement?.converted != null && { providerConverted: opts.settlement.converted }),
+          ...(opts.settlement?.convertedCurrency && { providerConvertedCur: opts.settlement.convertedCurrency }),
         },
       });
 

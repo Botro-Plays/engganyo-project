@@ -45,6 +45,12 @@ interface DepositItem {
   exchangeRate: number | null;
   userWalletAddress: string | null;
   paymentRef: string | null;
+  providerFee: number | null;
+  providerFeeCurrency: string | null;
+  providerNet: number | null;
+  providerNetCurrency: string | null;
+  providerConverted: number | null;
+  providerConvertedCur: string | null;
   gatewayData: Record<string, unknown> | null;
   adminNotes: string | null;
   reviewedBy: string | null;
@@ -573,6 +579,17 @@ export default function FinancesPage() {
                             <p className="text-white font-medium">{dep.currency} {dep.amountFiat.toFixed(2)}</p>
                             {dep.exchangeRate && (
                               <p className="text-xs text-zinc-500">at ₱{dep.exchangeRate.toFixed(2)}/$1</p>
+                            )}
+                            {(dep.method === 'PAYPAL' || dep.method === 'PAYMONGO') && dep.status === 'COMPLETED' && (
+                              dep.providerFee != null || dep.providerNet != null ? (
+                                <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                                  {dep.providerFee != null && <>fee {dep.providerFeeCurrency} {dep.providerFee.toFixed(2)} · </>}
+                                  {dep.providerNet != null && <>net {dep.providerNetCurrency} {dep.providerNet.toFixed(2)}</>}
+                                  {dep.providerConverted != null && <> · recv {dep.providerConvertedCur} {dep.providerConverted.toFixed(2)}</>}
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-zinc-600 mt-0.5">settlement: unavailable</p>
+                              )
                             )}
                           </td>
                           <td className="px-4 py-3">

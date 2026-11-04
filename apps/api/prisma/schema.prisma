@@ -1141,6 +1141,13 @@ model Deposit {
   userWalletAddress String?         @map("user_wallet_address") // EVM wallet address used for crypto payment
   paymentRef        String?         @unique @map("payment_ref") // Gateway ref / TX hash
   gatewayData       Json?           @map("gateway_data")        // Raw webhook / gateway payload
+  // Provider-reported settlement figures (null until reported — never estimated)
+  providerFee          Float?        @map("provider_fee")
+  providerFeeCurrency  String?       @map("provider_fee_currency")
+  providerNet          Float?        @map("provider_net")
+  providerNetCurrency  String?       @map("provider_net_currency")
+  providerConverted    Float?        @map("provider_converted")       // e.g. PayPal PHP receivable
+  providerConvertedCur String?       @map("provider_converted_cur")
   adminNotes        String?         @map("admin_notes")
   reviewedBy        String?         @map("reviewed_by")
   completedAt       DateTime?       @map("completed_at")
