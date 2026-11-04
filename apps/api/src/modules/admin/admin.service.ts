@@ -2073,8 +2073,20 @@ export class AdminService {
           /* ignore archive errors — link may already be expired */
         }
       }
+      // Crypto approvals need evidence tying the transfer to this account:
+      // the claim hash (exclusive paymentRef or review evidence submittedHash).
+      // completeDeposit writes paymentRef atomically — the unique constraint
+      // stops a manual approval and automated settlement crediting the same
+      // transfer twice.
+      const isCrypto = deposit.method === DepositMethod.USDT_BEP20 || deposit.method === DepositMethod.USDT_BASE;
+      const gw = deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+        ? (deposit.gatewayData as Record<string, unknown>) : {};
+      const evidenceHash = dto.paymentRef ?? deposit.paymentRef ?? (typeof gw.submittedHash === 'string' ? gw.submittedHash : null);
+      if (isCrypto && !evidenceHash) {
+        throw new BadRequestException('Crypto approval requires a submitted transaction hash tying the transfer to this deposit');
+      }
       await this.walletService.completeDeposit(depositId, {
-        paymentRef: dto.paymentRef,
+        paymentRef: evidenceHash ?? undefined,
         reviewedBy: adminId,
         adminNotes: dto.adminNotes,
       });

@@ -1539,7 +1539,10 @@ export default function WalletPage() {
                 <div className="divide-y divide-surface-border">
                   {depositHistory.items.map((dep) => {
                     const meta = METHOD_META[dep.method] ?? { label: dep.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard, currency: '?' };
-                    const statusCfg = DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock };
+                    const underReview = dep.status === 'PROCESSING' && dep.gatewayData?.needsReview === true;
+                    const statusCfg = underReview
+                      ? { label: 'Under review', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', icon: ShieldCheck }
+                      : (DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock });
                     const StatusIcon = statusCfg.icon;
                     const canCancel = dep.status === 'PENDING' || dep.status === 'PROCESSING';
                     const isCancelling = cancelDepositMutation.isPending && cancelDepositMutation.variables === dep.id;
