@@ -640,6 +640,7 @@ export default function WalletPage() {
     if (sendInFlightRef.current || unresolvedSend) return; // one wallet request at a time; recover existing intent instead
     sendInFlightRef.current = true;
     setDepositError(null);
+    try {
     // 1) Establish the deposit intent FIRST — bound to account, verified
     //    wallet, chain and package — so a sent hash always has a home.
     let depositId: string | null = null;
@@ -732,7 +733,9 @@ export default function WalletPage() {
       // recovery path bound to THIS hash instead of a bare error.
       setDepositError('Your USDT transfer was submitted on-chain, but we could not register or confirm it yet.');
       console.error('[handleEvmSend] error:', err);
+    }
     } finally {
+      // 'uncertain'/'sent' records stay — the deposit may have been broadcast.
       sendInFlightRef.current = false;
     }
   };
@@ -763,16 +766,28 @@ export default function WalletPage() {
       if (!evmWallet.address) { setDepositError('Connect the wallet that opened this deposit first.'); return; }
       sendInFlightRef.current = true;
       persistSend({ ...unresolvedSend, phase: 'sending' });
-      const res = await evmWallet.sendUsdt(cryptoCfg!.walletAddress!, cryptoCfg!.contractAddress!, unresolvedSend.amountUsd, unresolvedSend.chainId);
-      sendInFlightRef.current = false;
-      if (!res.hash) {
-        persistSend({ ...unresolvedSend, hash: null, phase: res.outcome === 'uncertain' ? 'uncertain' : 'retry' });
-        return;
-      }
-      persistSend({ ...unresolvedSend, hash: res.hash, phase: 'sent' });
+      let sentHash: string | null = null;
       try {
-        await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: res.hash });
-      } catch { /* fall through to verify */ }
+        const res = await evmWallet.sendUsdt(cryptoCfg!.walletAddress!, cryptoCfg!.contractAddress!, unresolvedSend.amountUsd, unresolvedSend.chainId);
+        if (!res.hash) {
+          persistSend({ ...unresolvedSend, hash: null, phase: res.outcome === 'uncertain' ? 'uncertain' : 'retry' });
+          return;
+        }
+        sentHash = res.hash;
+        persistSend({ ...unresolvedSend, hash: res.hash, phase: 'sent' });
+      } catch (err) {
+        // Wallet call threw outside its own handling — outcome unknown → recovery-only.
+        persistSend({ ...unresolvedSend, hash: null, phase: 'uncertain' });
+        setDepositError('Could not confirm the transfer — check your wallet activity. If it broadcast, recover with your transaction hash below.');
+        return;
+      } finally {
+        sendInFlightRef.current = false;
+      }
+      if (sentHash) {
+        try {
+          await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: sentHash });
+        } catch { /* fall through to verify */ }
+      }
     }
     if (unresolvedSend.hash) {
       try {
@@ -1532,12 +1547,14 @@ export default function WalletPage() {
                                       {unresolvedSend.hash ? 'Retry registration' : 'Resume send'}
                                     </button>
                                     )}
+                                    {unresolvedSend.phase !== 'sending' && (
                                     <button
-                                      onClick={() => void proveOwnershipFor(unresolvedSend.depositId, unresolvedSend.wallet, unresolvedSend.method).then(() => { if (unresolvedSend.phase === 'retry' && !unresolvedSend.hash) void resumeTransfer(); })}
+                                      onClick={() => void proveOwnershipFor(unresolvedSend.depositId, unresolvedSend.wallet, unresolvedSend.method)}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium transition-all"
                                     >
                                       <ShieldCheck className="w-3 h-3" />Prove ownership again
                                     </button>
+                                    )}
                                     {unresolvedSend.phase === 'retry' && !unresolvedSend.hash && (
                                     <button
                                       onClick={() => void abandonIntent()}
