@@ -278,7 +278,7 @@ export default function WalletPage() {
   const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
   const [ownershipProof, setOwnershipProof] = useState<{ nonce: string; signature: string } | null>(null);
   // A sent-but-unregistered transfer: hash bound to its network, wallet, package.
-  const [unresolvedSend, setUnresolvedSend] = useState<{ hash: string; network: string; chainId: number; wallet: string; packageId: string; method: string; amountUsd: number } | null>(null);
+  const [unresolvedSend, setUnresolvedSend] = useState<{ hash: string; depositId: string; network: string; chainId: number; wallet: string; packageId: string; method: string; amountUsd: number } | null>(null);
   const [signingOwnership, setSigningOwnership] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
@@ -472,6 +472,10 @@ export default function WalletPage() {
     setSelectedMethod(saved.method);
     setCryptoMode(saved.cryptoMode);
     setManualTxHash(saved.manualTxHash ?? '');
+    try {
+      const pendingSend = localStorage.getItem('engganyo-pending-send');
+      if (pendingSend) setUnresolvedSend(JSON.parse(pendingSend));
+    } catch { /* ignore corrupt state */ }
   }, [packages, depositOptions]);
 
   // ─── Persist deposit form to sessionStorage ──────────────
@@ -575,8 +579,10 @@ export default function WalletPage() {
 
   // Ownership proof: a free personal_sign on a server-issued challenge.
   // Distinct from sending funds — it moves nothing on-chain.
-  const signOwnership = async (): Promise<boolean> => {
-    if (!evmWallet.address || !selectedMethod) return false;
+  // Returns the proof it just captured so callers can use it immediately —
+  // callers must NOT re-read ownershipProof state (stale within this render).
+  const signOwnership = async (): Promise<{ nonce: string; signature: string } | null> => {
+    if (!evmWallet.address || !selectedMethod) return null;
     setSigningOwnership(true);
     setDepositError(null);
     try {
@@ -584,14 +590,15 @@ export default function WalletPage() {
         'wallet/crypto/challenge',
         { method: selectedMethod, wallet: evmWallet.address },
       )).data.data;
-      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge — try again'); return false; }
+      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge — try again'); return null; }
       const signature = await evmWallet.signMessage(ch.message);
-      if (!signature) return false; // hook already shows rejection/error
-      setOwnershipProof({ nonce: ch.nonce, signature });
-      return true;
+      if (!signature) return null; // hook already shows rejection/error
+      const proof = { nonce: ch.nonce, signature };
+      setOwnershipProof(proof);
+      return proof;
     } catch (err) {
       setDepositError(getApiErrorMessage(err));
-      return false;
+      return null;
     } finally {
       setSigningOwnership(false);
     }
@@ -616,30 +623,50 @@ export default function WalletPage() {
     }
   };
 
+  const persistSend = (u: typeof unresolvedSend) => {
+    setUnresolvedSend(u);
+    if (u) localStorage.setItem('engganyo-pending-send', JSON.stringify(u));
+    else localStorage.removeItem('engganyo-pending-send');
+  };
+
   const handleEvmSend = async () => {
     if (!selectedPackage || !cryptoCfg?.walletAddress || !evmWallet.address) return;
+    setDepositError(null);
+    // 1) Establish the deposit intent FIRST — bound to account, verified
+    //    wallet, chain and package — so a sent hash always has a home.
+    let depositId: string | null = null;
+    try {
+      const initiated = await initiateMutation.mutateAsync({
+        packageId: selectedPackage.id,
+        method: selectedMethod!,
+        userWalletAddress: evmWallet.address,
+        challengeNonce: ownershipProof?.nonce,
+        signature: ownershipProof?.signature,
+      });
+      depositId = initiated?.deposit?.id ?? null;
+    } catch (err) {
+      setDepositError(getApiErrorMessage(err));
+      return; // nothing was sent — nothing to recover
+    }
+    if (!depositId) { setDepositError('Could not open the deposit — try again'); return; }
+
+    // 2) Request the transfer against the established deposit.
     const hash = await evmWallet.sendUsdt(
       cryptoCfg.walletAddress,
       cryptoCfg.contractAddress,
       selectedPackage.usdAmount,
       cryptoCfg.chainId,
     );
-    if (!hash) return;
-    setUnresolvedSend({ hash, network: cryptoCfg.network, chainId: cryptoCfg.chainId, wallet: evmWallet.address, packageId: selectedPackage.id, method: selectedMethod!, amountUsd: selectedPackage.usdAmount });
+    if (!hash) return; // user rejected / pre-send error — deposit stays PENDING, no hash to recover
 
-    // Create deposit record immediately with the txHash
+    const sent = { hash, depositId, network: cryptoCfg.network, chainId: cryptoCfg.chainId, wallet: evmWallet.address, packageId: selectedPackage.id, method: selectedMethod!, amountUsd: selectedPackage.usdAmount };
+    persistSend(sent);
+
+    // 3) Attach the hash to the SAME deposit, then confirm on-chain.
     try {
-      const result = await initiateMutation.mutateAsync({
-        packageId: selectedPackage.id,
-        method: selectedMethod!,
-        txHash: hash,
-        userWalletAddress: evmWallet.address ?? undefined,
-        challengeNonce: ownershipProof?.nonce,
-        signature: ownershipProof?.signature,
-      });
-      setDepositResult(result ?? null);
-      setDepositError(null);
-      setUnresolvedSend(null);
+      await submitTxHashMutation.mutateAsync({ depositId, txHash: hash });
+      setDepositResult({ deposit: { id: depositId } as DepositRecord, instructions: {} as DepositInstructions });
+      persistSend(null);
       clearPersistedForm();
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
@@ -662,7 +689,7 @@ export default function WalletPage() {
 
       const maxVerifyAttempts = 6;
       for (let attempt = 1; attempt <= maxVerifyAttempts; attempt++) {
-        const verifyResult = await verifyDepositMutation.mutateAsync({ depositId: result.deposit.id });
+        const verifyResult = await verifyDepositMutation.mutateAsync({ depositId });
         if (verifyResult.status === 'COMPLETED') {
           // Toast already shown by onSuccess; deposit completed
           return;
@@ -688,23 +715,29 @@ export default function WalletPage() {
     }
   };
 
-  // Retry registration for the unresolved transfer — never sends a new tx.
-  const retryRegistration = async () => {
+  // Resume the ORIGINAL transfer on the ORIGINAL deposit — never initiates
+  // a second deposit and never re-sends. If the hash already registered
+  // (lost response), the deposit is already PROCESSING → verify resumes it.
+  const resumeTransfer = async () => {
     if (!unresolvedSend) return;
     setDepositError(null);
+    // The transfer is bound to the wallet that sent it — reconnect it first.
+    if (evmWallet.address && evmWallet.address.toLowerCase() !== unresolvedSend.wallet.toLowerCase()) {
+      setDepositError(`Reconnect the original wallet ${unresolvedSend.wallet.slice(0, 8)}…${unresolvedSend.wallet.slice(-6)} — this transfer is bound to it.`);
+      return;
+    }
     try {
-      const result = await initiateMutation.mutateAsync({
-        packageId: unresolvedSend.packageId,
-        method: unresolvedSend.method,
-        txHash: unresolvedSend.hash,
-        userWalletAddress: unresolvedSend.wallet,
-        challengeNonce: ownershipProof?.nonce,
-        signature: ownershipProof?.signature,
-      });
-      setDepositResult(result ?? null);
-      setUnresolvedSend(null);
-      clearPersistedForm();
-      addToast('Transfer registered — verification will confirm it shortly.', 'success', 4000);
+      await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: unresolvedSend.hash });
+    } catch {
+      // Already registered (lost response earlier) or state moved on — the
+      // verify step resumes the existing deposit either way.
+    }
+    try {
+      const out = await verifyDepositMutation.mutateAsync({ depositId: unresolvedSend.depositId });
+      if (out.status === 'COMPLETED' || out.status === 'PROCESSING') {
+        persistSend(null);
+        addToast(out.status === 'COMPLETED' ? 'Deposit credited.' : 'Transfer recovered — verification in progress.', 'success', 4000);
+      }
     } catch (err) {
       const msg = getApiErrorMessage(err);
       if (/signature|challenge|expired|used|verified/i.test(msg)) {
@@ -1415,7 +1448,7 @@ export default function WalletPage() {
                                   <p className="text-[11px] text-zinc-600 pl-5">Bound to this transfer: {unresolvedSend.amountUsd} USDT · {unresolvedSend.network} · wallet {unresolvedSend.wallet.slice(0,8)}…{unresolvedSend.wallet.slice(-6)}</p>
                                   <div className="flex flex-wrap gap-2 pl-5">
                                     <button
-                                      onClick={() => void retryRegistration()}
+                                      onClick={() => void resumeTransfer()}
                                       disabled={initiateMutation.isPending}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-medium transition-all disabled:opacity-50"
                                     >
@@ -1423,7 +1456,7 @@ export default function WalletPage() {
                                       Retry registration
                                     </button>
                                     <button
-                                      onClick={() => void signOwnership().then((ok) => { if (ok) void retryRegistration(); })}
+                                      onClick={() => void proveOwnershipFor(unresolvedSend.depositId, unresolvedSend.wallet, unresolvedSend.method).then(() => resumeTransfer())}
                                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium transition-all"
                                     >
                                       <ShieldCheck className="w-3 h-3" />Prove ownership again

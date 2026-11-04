@@ -73,14 +73,21 @@ async function mockApis(page: import('@playwright/test').Page, chainId: number, 
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse({ nonce: 'n1', message: 'Engganyo wallet ownership verification\nAccount: u1', expiresAt: new Date(Date.now() + 600000).toISOString() }),
   }));
-  await page.route('**/api/wallet/deposit/initiate', async (route) => {
+  await page.route('**/api/wallet/deposit/initiate', (route) => route.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse({ deposit: { id: 'dep-reg-1', method: `USDT_${network === 'BSC' ? 'BEP20' : 'BASE'}`, status: 'PENDING', paymentRef: null, amountFiat: 1, currency: 'USD', creditsToAward: 100, createdAt: new Date().toISOString() }, instructions: {} }) }));
+  // The hash attach is what fails in the outage — the deposit itself exists.
+  await page.route(/.*\/api\/wallet\/deposit\/.*\/tx-hash/, async (route) => {
     if (failInitiate.fail) {
       await route.fulfill({ status: 503, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'Service temporarily unavailable' }) });
       return;
     }
     await route.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json',
-      body: apiResponse({ deposit: { id: 'dep-reg-1', method: `USDT_${network === 'BSC' ? 'BEP20' : 'BASE'}`, status: 'PROCESSING', paymentRef: HASH, amountFiat: 1, currency: 'USD', creditsToAward: 100, createdAt: new Date().toISOString() }, instructions: {} }) });
+      body: apiResponse({ id: 'dep-reg-1', status: 'PROCESSING', paymentRef: HASH }) });
   });
+  await page.route(/.*\/api\/wallet\/deposit\/.*\/verify/, (route) => route.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse({ status: 'COMPLETED', depositId: 'dep-reg-1' }) }));
   void network;
 }
 
