@@ -79,6 +79,17 @@ export class WalletController {
     return deposit;
   }
 
+  @Post('crypto/challenge')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60 } })
+  @ApiOperation({ summary: 'Issue a single-use wallet-ownership signature challenge' })
+  async createWalletChallenge(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: { method: 'USDT_BEP20' | 'USDT_BASE'; wallet: string; depositId?: string },
+  ) {
+    return this.walletService.createWalletChallenge(user.sub, dto.method, dto.wallet, dto.depositId);
+  }
+
   @Post('deposit/:id/tx-hash')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60 } })
@@ -88,7 +99,7 @@ export class WalletController {
     @Param('id') id: string,
     @Body() dto: SubmitTxHashDto,
   ) {
-    return this.walletService.submitTxHash(user.sub, id, dto.txHash, dto.userWalletAddress);
+    return this.walletService.submitTxHash(user.sub, id, dto.txHash, dto.userWalletAddress, dto.challengeNonce, dto.signature);
   }
 
   @Post('deposit/:id/verify')

@@ -21,4 +21,12 @@ export class InitiateDepositDto {
   @IsString()
   @IsOptional()
   userWalletAddress?: string;   // EVM wallet address
+
+  @IsString()
+  @IsOptional()
+  challengeNonce?: string;      // wallet-ownership challenge nonce
+
+  @IsString()
+  @IsOptional()
+  signature?: string;           // personal_sign of the challenge message
 }

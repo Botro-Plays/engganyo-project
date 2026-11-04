@@ -1148,6 +1148,7 @@ model Deposit {
   providerNetCurrency  String?       @map("provider_net_currency")
   providerConverted    Float?        @map("provider_converted")       // e.g. PayPal PHP receivable
   providerConvertedCur String?       @map("provider_converted_cur")
+  walletVerified      Boolean         @default(false) @map("wallet_verified") // signature-proven payer ownership
   adminNotes        String?         @map("admin_notes")
   reviewedBy        String?         @map("reviewed_by")
   completedAt       DateTime?       @map("completed_at")
@@ -1505,4 +1506,22 @@ model DailyRewardLog {
   @@index([userId])
   @@index([userId, createdAt])
   @@map("daily_reward_logs")
+}
+
+// Single-use, expiring signature challenge proving ownership of a declared
+// EVM wallet. Bound to account + chain (+ deposit when supplied). Consumed
+// atomically on signature verification.
+model WalletChallenge {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  wallet     String    // declared EVM address (lowercase)
+  chain      String    // "BSC" | "BASE"
+  depositId  String?   @map("deposit_id")
+  nonce      String    @unique
+  message    String    // full personal_sign payload shown to the wallet
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("wallet_challenges")
 }
