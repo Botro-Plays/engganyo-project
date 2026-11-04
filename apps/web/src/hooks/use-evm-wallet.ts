@@ -72,6 +72,7 @@ export function useEvmWallet() {
   const [chainId, setChainId] = useState<number | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<string | null>(null);
   const [providers, setProviders] = useState<Eip6963ProviderDetail[]>([]);
   const [isAvailable, setIsAvailable] = useState(false);
@@ -79,7 +80,7 @@ export function useEvmWallet() {
   // Remember the provider we actually connected to (EIP-6963 or legacy window.ethereum)
   const activeProviderRef = useRef<EthereumProvider | null>(null);
 
-  // ─── Wallet detection: EIP-6963 + legacy fallback ──────────────────
+  // â”€â”€â”€ Wallet detection: EIP-6963 + legacy fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -131,7 +132,7 @@ export function useEvmWallet() {
     };
   }, []);
 
-  // ─── Wallet event handlers ───────────────────────────────────────
+  // â”€â”€â”€ Wallet event handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleAccountsChanged = useCallback((accounts: unknown) => {
     const accs = accounts as string[];
     if (accs.length === 0) {
@@ -161,7 +162,7 @@ export function useEvmWallet() {
     }
   }, [handleAccountsChanged, handleChainChanged]);
 
-  // ─── Connect ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Connect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const connect = useCallback(async (rdns?: string): Promise<string | null> => {
     let ethereum: EthereumProvider | null = null;
 
@@ -241,7 +242,7 @@ export function useEvmWallet() {
     }
   }, []);
 
-  // personal_sign — proves wallet ownership WITHOUT sending a transaction.
+  // personal_sign â€” proves wallet ownership WITHOUT sending a transaction.
   const signMessage = useCallback(async (message: string): Promise<string | null> => {
     const ethereum = getActiveProvider(activeProviderRef);
     if (!ethereum || !address) { setError('Wallet not connected'); setState('error'); return null; }
@@ -253,8 +254,9 @@ export function useEvmWallet() {
       const sig = await signer.signMessage(message);
       return sig;
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : 'Signing failed';
-      setError(raw.includes('user rejected') || raw.includes('rejected') ? 'Signature rejected by user' : raw);
+      const c = classifyEvmError(err, chainId ?? 0, 'signature');
+      setError(c.message);
+      setErrorHint(c.hint ?? null);
       return null;
     }
   }, [address]);
@@ -276,6 +278,52 @@ export function useEvmWallet() {
     }
   }, []);
 
+  // Friendly, actionable error surface â€” raw provider/RPC payloads never reach the UI.
+  const chainLabel = (id: number) => CHAIN_CONFIGS[id]?.chainName ?? 'the selected network';
+  const gasSymbol = (id: number) => CHAIN_CONFIGS[id]?.nativeCurrency?.symbol ?? 'native token';
+  const fail = (msg: string, hint?: string) => { setError(msg); setErrorHint(hint ?? null); };
+
+  const classifyEvmError = useCallback((raw: unknown, chain: number, action: 'signature' | 'transfer' = 'transfer'): { message: string; hint?: string } => {
+    const e = raw as { code?: unknown; message?: string; shortMessage?: string;
+      info?: { error?: { message?: string; data?: unknown } }; error?: { message?: string; data?: unknown };
+      reason?: string; data?: unknown; action?: string };
+    // Ethers buries provider payloads in nested fields (info.error.data,
+    // error.data, receipt logs) â€” scan the serialisable error, minus stack.
+    let txt = '';
+    try {
+      const rest = { ...(e ?? {}) } as Record<string, unknown>;
+      delete rest.stack;
+      txt = JSON.stringify(rest, (k, v) => (v instanceof Error ? `${v.message}` : v)).toLowerCase();
+    } catch { txt = String(e?.message ?? '').toLowerCase(); }
+    const code = typeof e?.code === 'string' ? e.code : (e?.code != null ? String(e.code) : '');
+    const net = chainLabel(chain);
+    const gas = gasSymbol(chain);
+    if (code === '4001' || code === 'ACTION_REJECTED' || txt.includes('user rejected') || txt.includes('denied')) {
+      return action === 'signature'
+        ? { message: 'You cancelled the signature in your wallet.', hint: 'Ownership is unproven â€” sign again to continue, or use the manual option.' }
+        : { message: 'You cancelled the transfer in your wallet.', hint: 'No funds moved â€” press Send again when ready.' };
+    }
+    if (txt.includes('transfer amount exceeds balance') || (txt.includes('exceeds') && txt.includes('balance') && (txt.includes('transfer') || txt.includes('bep20') || txt.includes('erc20')))) {
+      return { message: `Not enough USDT on ${net}.`, hint: 'Reconnect a funded wallet or add USDT, then try again.' };
+    }
+    if (txt.includes('insufficient funds') || txt.includes('insufficient allowance') || txt.includes('insufficient balance') || txt.includes('exceeds allowance')) {
+      return { message: `Not enough ${gas} on ${net} to pay network fees.`, hint: `Add a small amount of ${gas} to your wallet, then retry.` };
+    }
+    if (txt.includes('execution reverted') || txt.includes('call_exception') || txt.includes('missing revert data') || txt.includes('transfer failed')) {
+      return { message: `The USDT contract rejected this transfer on ${net}.`, hint: 'Check the token balance and selected network, then try again.' };
+    }
+    if (txt.includes('chain mismatch') || txt.includes('wrong chain') || txt.includes('unsupported chain')) {
+      return { message: `Your wallet is on the wrong network.`, hint: `Switch to ${net} in your wallet, then try again.` };
+    }
+    if (txt.includes('disconnected') || txt.includes('account changed') || txt.includes('not connected')) {
+      return { message: 'Wallet disconnected mid-request.', hint: 'Reconnect your wallet and start the deposit again â€” ownership must be re-verified.' };
+    }
+    if (txt.includes('network') || txt.includes('timeout') || txt.includes('timed out') || txt.includes('failed to fetch') || txt.includes('unreachable') || code === 'NETWORK_ERROR' || code === 'TIMEOUT') {
+      return { message: `Could not reach ${net}.`, hint: 'Temporary network or RPC issue â€” check your connection and retry in a moment.' };
+    }
+    return { message: 'Something went wrong while sending.', hint: 'No funds were confirmed moved â€” try again, or use the manual option with your transaction hash if your wallet already sent it.' };
+  }, []);
+
   const sendUsdt = useCallback(async (
     toAddress: string,
     contractAddress: string,
@@ -295,20 +343,52 @@ export function useEvmWallet() {
       const { ethers } = await import('ethers');
       const provider = new ethers.BrowserProvider(ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(contractAddress, ERC20_ABI, signer);
+      const sender = (await signer.getAddress()).toLowerCase();
+      const safeAddr = (a: string) => { try { return ethers.getAddress(a); } catch { return a.toLowerCase(); } };
+      const toAddr = safeAddr(toAddress);
+      const contractAddr = safeAddr(contractAddress);
+
+      // Pre-checks before ever requesting the transfer:
+      // 1) sender must not be the platform destination (self-transfer makes no deposit)
+      if (sender === toAddr.toLowerCase()) {
+        fail('This wallet is the deposit destination.', 'Connect a different wallet account â€” the one that holds your USDT â€” and try again.');
+        setState('error');
+        return null;
+      }
+      // 2) on-chain checks: token balance and native gas balance
+      const contract = new ethers.Contract(contractAddr, ERC20_ABI, signer);
       const decimals = await contract.decimals() as bigint;
       const amountBN = ethers.parseUnits(amount.toString(), decimals);
-      const tx = await contract.transfer(toAddress, amountBN) as { hash: string };
+      try {
+        const [tokBal, gasBal] = await Promise.all([
+          contract.balanceOf(sender) as Promise<bigint>,
+          provider.getBalance(sender),
+        ]);
+        if (tokBal < amountBN) {
+          fail(`Not enough USDT on ${chainLabel(targetChainId)}.`, 'Reconnect a funded wallet or add USDT, then try again.');
+          setState('error');
+          return null;
+        }
+        if (gasBal === 0n) {
+          fail(`Not enough ${gasSymbol(targetChainId)} on ${chainLabel(targetChainId)} to pay network fees.`, `Add a small amount of ${gasSymbol(targetChainId)} to your wallet, then retry.`);
+          setState('error');
+          return null;
+        }
+      } catch {
+        // balance pre-check unreachable â€” let the transfer attempt classify the real error
+      }
+      const tx = await contract.transfer(toAddr, amountBN) as { hash: string };
       setTxHash(tx.hash);
       setState('submitted');
       return tx.hash;
     } catch (err: unknown) {
-      const raw = err instanceof Error ? err.message : 'Transaction failed';
-      setError(raw.includes('user rejected') ? 'Transaction rejected by user' : raw);
+      const c = classifyEvmError(err, targetChainId);
+      setError(c.message);
+      setErrorHint(c.hint ?? null);
       setState('error');
       return null;
     }
-  }, [chainId, switchChain]);
+  }, [chainId, switchChain, classifyEvmError]);
 
   const waitForTransaction = useCallback(async (txHash: string, confirmations = 1, timeoutMs = 120000): Promise<{ status: 'success' | 'failed' | 'timeout'; confirmations?: number }> => {
     const ethereum = getActiveProvider(activeProviderRef);
@@ -354,7 +434,7 @@ export function useEvmWallet() {
   }, [detachListeners]);
 
   return {
-    state, address, chainId, txHash, error, usdtBalance,
+    state, address, chainId, txHash, error, errorHint, usdtBalance,
     isAvailable, providers,
     connect, switchChain, sendUsdt, signMessage, fetchUsdtBalance, waitForTransaction, reset,
   };

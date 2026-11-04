@@ -1405,7 +1405,18 @@ export default function WalletPage() {
                           )}
 
                           {evmWallet.error && (
-                            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">{evmWallet.error}</div>
+                            <div role="alert" className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs space-y-1">
+                              <p className="flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{evmWallet.error}</p>
+                              {evmWallet.errorHint && <p className="text-red-300/80 pl-5">{evmWallet.errorHint}</p>}
+                              {evmWallet.txHash && (
+                                <button
+                                  onClick={() => { setCryptoMode('manual'); setManualTxHash(evmWallet.txHash!); setDepositError(null); }}
+                                  className="pl-5 text-amber-300 hover:text-amber-200 underline"
+                                >
+                                  Transfer already sent? Recover with your transaction hash
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       ) : (
