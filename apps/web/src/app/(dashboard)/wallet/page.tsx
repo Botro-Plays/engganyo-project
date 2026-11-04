@@ -78,6 +78,7 @@ interface DepositRecord {
   exchangeRate: number | null;
   paymentRef: string | null;
   adminNotes: string | null;
+  userWalletAddress: string | null;
   gatewayData: Record<string, unknown> | null;
   completedAt: string | null;
   createdAt: string;
@@ -275,6 +276,8 @@ export default function WalletPage() {
   const [depositError, setDepositError] = useState<string | null>(null);
   const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
   const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
+  const [ownershipProof, setOwnershipProof] = useState<{ nonce: string; signature: string } | null>(null);
+  const [signingOwnership, setSigningOwnership] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
 
@@ -488,7 +491,7 @@ export default function WalletPage() {
   }, [depositStep, selectedPackage, selectedMethod, cryptoMode, manualTxHash]);
 
   const initiateMutation = useMutation({
-    mutationFn: async (body: { packageId: string; method: string; txHash?: string; userWalletAddress?: string }) =>
+    mutationFn: async (body: { packageId: string; method: string; txHash?: string; userWalletAddress?: string; challengeNonce?: string; signature?: string }) =>
       (await apiClient.post<ApiResponse<{ deposit: DepositRecord; instructions: DepositInstructions }>>('wallet/deposit/initiate', body)).data.data,
     onSuccess: (data) => {
       setDepositResult(data ?? null);
@@ -568,6 +571,49 @@ export default function WalletPage() {
   const isCrypto = selectedMethod === 'USDT_BEP20' || selectedMethod === 'USDT_BASE';
   const cryptoCfg = selectedMethod === 'USDT_BEP20' ? depositOptions?.usdtBep20 : depositOptions?.usdtBase;
 
+  // Ownership proof: a free personal_sign on a server-issued challenge.
+  // Distinct from sending funds — it moves nothing on-chain.
+  const signOwnership = async (): Promise<boolean> => {
+    if (!evmWallet.address || !selectedMethod) return false;
+    setSigningOwnership(true);
+    setDepositError(null);
+    try {
+      const ch = (await apiClient.post<ApiResponse<{ nonce: string; message: string; expiresAt: string }>>(
+        'wallet/crypto/challenge',
+        { method: selectedMethod, wallet: evmWallet.address },
+      )).data.data;
+      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge — try again'); return false; }
+      const signature = await evmWallet.signMessage(ch.message);
+      if (!signature) return false; // hook already shows rejection/error
+      setOwnershipProof({ nonce: ch.nonce, signature });
+      return true;
+    } catch (err) {
+      setDepositError(getApiErrorMessage(err));
+      return false;
+    } finally {
+      setSigningOwnership(false);
+    }
+  };
+
+  // Post-submission proof for a manual/under-review crypto deposit: fresh
+  // deposit-bound challenge → signature → walletVerified on that deposit.
+  const proveOwnershipFor = async (depositId: string, wallet: string, method: string) => {
+    setDepositError(null);
+    try {
+      const ch = (await apiClient.post<ApiResponse<{ nonce: string; message: string }>>(
+        'wallet/crypto/challenge', { method, wallet, depositId },
+      )).data.data;
+      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge'); return; }
+      const signature = await evmWallet.signMessage(ch.message);
+      if (!signature) return;
+      await apiClient.post(`wallet/deposit/${depositId}/prove-ownership`, { challengeNonce: ch.nonce, signature });
+      addToast('Wallet ownership verified — your deposit can now be credited on-chain.', 'success', 5000);
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+    } catch (err) {
+      setDepositError(getApiErrorMessage(err));
+    }
+  };
+
   const handleEvmSend = async () => {
     if (!selectedPackage || !cryptoCfg?.walletAddress || !evmWallet.address) return;
     const hash = await evmWallet.sendUsdt(
@@ -585,6 +631,8 @@ export default function WalletPage() {
         method: selectedMethod!,
         txHash: hash,
         userWalletAddress: evmWallet.address ?? undefined,
+        challengeNonce: ownershipProof?.nonce,
+        signature: ownershipProof?.signature,
       });
       setDepositResult(result ?? null);
       setDepositError(null);
@@ -1113,7 +1161,7 @@ export default function WalletPage() {
                           <button
                             key={key}
                             disabled={!available}
-                            onClick={() => { setSelectedMethod(key); setDepositStep(3); setDepositError(null); evmWallet.reset(); }}
+                            onClick={() => { setSelectedMethod(key); setDepositStep(3); setDepositError(null); setOwnershipProof(null); evmWallet.reset(); }}
                             className={`w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all ${
                               available
                                 ? 'border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 cursor-pointer'
@@ -1322,16 +1370,37 @@ export default function WalletPage() {
                                 <p>Network: <span className="text-white">{cryptoCfg?.network}</span></p>
                                 <p>Sending: <span className="text-white font-semibold">{selectedPackage.usdAmount} USDT</span></p>
                                 <p className="text-zinc-600">To: {cryptoCfg?.walletAddress?.slice(0,10)}…{cryptoCfg?.walletAddress?.slice(-8)}</p>
+                                <p className="text-zinc-600">A small amount of {cryptoCfg?.chainId === 56 ? 'BNB' : 'ETH'} is needed for gas.</p>
                               </div>
-                              <button
-                                onClick={() => void handleEvmSend()}
-                                disabled={evmWallet.state === 'sending' || initiateMutation.isPending}
-                                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
-                              >
-                                {evmWallet.state === 'sending' || initiateMutation.isPending
-                                  ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
-                                  : <><Send className="w-4 h-4" />Send {selectedPackage.usdAmount} USDT</>}
-                              </button>
+                              {!ownershipProof ? (
+                                <div className="space-y-1.5">
+                                  <button
+                                    onClick={() => void signOwnership()}
+                                    disabled={signingOwnership}
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 text-emerald-300 text-sm font-medium transition-all"
+                                  >
+                                    {signingOwnership
+                                      ? <><Loader2 className="w-4 h-4 animate-spin" />Check your wallet…</>
+                                      : <><ShieldCheck className="w-4 h-4" />1. Verify wallet ownership</>}
+                                  </button>
+                                  <p className="text-[11px] text-zinc-600">Free signature — proves this wallet is yours. Not a transaction; nothing moves on-chain.</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-xs text-emerald-400">
+                                    <ShieldCheck className="w-4 h-4" />Wallet ownership verified
+                                  </div>
+                                  <button
+                                    onClick={() => void handleEvmSend()}
+                                    disabled={evmWallet.state === 'sending' || initiateMutation.isPending}
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                                  >
+                                    {evmWallet.state === 'sending' || initiateMutation.isPending
+                                      ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
+                                      : <><Send className="w-4 h-4" />2. Send {selectedPackage.usdAmount} USDT</>}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -1490,7 +1559,10 @@ export default function WalletPage() {
                 <div className="divide-y divide-surface-border">
                   {depositHistory.items.map((dep) => {
                     const meta = METHOD_META[dep.method] ?? { label: dep.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard, currency: '?' };
-                    const statusCfg = DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock };
+                    const underReview = dep.status === 'PROCESSING' && dep.gatewayData?.needsReview === true;
+                    const statusCfg = underReview
+                      ? { label: 'Under review', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', icon: ShieldCheck }
+                      : (DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock });
                     const StatusIcon = statusCfg.icon;
                     const canCancel = dep.status === 'PENDING' || dep.status === 'PROCESSING';
                     const isCancelling = cancelDepositMutation.isPending && cancelDepositMutation.variables === dep.id;
@@ -1513,9 +1585,17 @@ export default function WalletPage() {
                                   {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                 </button>
                               </div>
-                              <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`}>
+                              <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`} title={underReview ? 'Payment found on-chain but the sending wallet is not proven to be yours' : undefined}>
                                 <StatusIcon className="w-3 h-3" />{statusCfg.label}
                               </span>
+                              {underReview && dep.userWalletAddress && (
+                                <button
+                                  onClick={() => void proveOwnershipFor(dep.id, dep.userWalletAddress!, dep.method)}
+                                  className="mt-1 flex items-center gap-1 text-[11px] text-amber-300 hover:text-amber-200 underline"
+                                >
+                                  Prove sending wallet
+                                </button>
+                              )}
                             </div>
                             <p className="text-xs text-zinc-500 mt-0.5">
                               <span className="font-medium text-white">{dep.currency} {dep.amountFiat.toFixed(2)}</span>

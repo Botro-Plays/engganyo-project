@@ -16,6 +16,7 @@ import { EventsService } from '../events/events.service';
 import { PayMongoService } from '../paymongo/paymongo.service';
 import { PayPalService } from '../paypal/paypal.service';
 import { CryptoVerificationService } from './crypto-verification.service';
+import { verifyMessage as ethersVerifyMessage, randomBytes } from 'ethers';
 import { GamificationService, VP_REWARDS } from '../gamification/gamification.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import type { GetTransactionsDto } from './dto/get-transactions.dto';
@@ -372,11 +373,23 @@ export class WalletService {
     // against the on-chain Transfer `from` during verification so other
     // accounts cannot claim public tx hashes.
     let userWalletAddress: string | null = null;
+    let walletVerified = false;
     if (isCryptoMethod) {
       if (!dto.userWalletAddress || !/^0x[a-fA-F0-9]{40}$/.test(dto.userWalletAddress.trim())) {
         throw new BadRequestException('A valid EVM wallet address is required for crypto deposits');
       }
       userWalletAddress = dto.userWalletAddress.trim();
+      // Connected-wallet path: a valid signature on a fresh challenge proves
+      // the account controls the declared wallet — marks the deposit verified.
+      // Without one, the deposit stays unverified: it may still submit a hash
+      // (manual transfers), but on-chain match routes to review, not credit.
+      if (dto.signature && dto.challengeNonce) {
+        await this.consumeWalletChallenge({
+          userId, nonce: dto.challengeNonce, signature: dto.signature,
+          wallet: userWalletAddress, chain: this.cryptoChainOf(method), depositId: null,
+        });
+        walletVerified = true;
+      }
     } else {
       userWalletAddress = dto.userWalletAddress?.trim() ?? null;
     }
@@ -427,13 +440,18 @@ export class WalletService {
           packageId: pkg.id,
           method: method as DepositMethod,
           status: txHash ? DepositStatus.PROCESSING : DepositStatus.PENDING,
+          walletVerified,
+          // Exclusive claim only for ownership-verified payers — an unverified
+          // manual submission must not squat the globally-unique paymentRef and
+          // block the rightful payer. Evidence stays in gatewayData for review.
+          ...(txHash && walletVerified ? { paymentRef: txHash } : {}),
+          ...(txHash && !walletVerified ? { gatewayData: { submittedHash: txHash, manualClaim: true } } : {}),
           amountFiat,
           currency,
           creditsToAward,
           bonusCredits: pkg.bonusCredits,
           creditsAwarded: 0,
           exchangeRate: isPhp ? usdToPhp : null,
-          paymentRef: txHash ?? null,
           userWalletAddress,
         },
       });
@@ -612,7 +630,11 @@ export class WalletService {
     depositId: string,
     opts: { paymentRef?: string; reviewedBy?: string; adminNotes?: string;
             settlement?: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string;
-                           converted?: number; convertedCurrency?: string } } = {},
+                           converted?: number; convertedCurrency?: string };
+            // CAS guard: the claim this settle was verified against must be
+            // unchanged — protects against stale RPC results settling a
+            // replaced claim. Covers paymentRef and gatewayData.submittedHash.
+            guard?: { claimHash: string; userWalletAddress: string; walletVerified: boolean } } = {},
   ) {
     const { deposit, wallet, notification } = await this.prisma.withTransaction(async (tx) => {
       const existing = await tx.deposit.findUnique({ where: { id: depositId } });
@@ -635,6 +657,14 @@ export class WalletService {
         where: {
           id: depositId,
           status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+          ...(opts.guard && {
+            userWalletAddress: opts.guard.userWalletAddress,
+            walletVerified: opts.guard.walletVerified,
+            OR: [
+              { paymentRef: opts.guard.claimHash },
+              { AND: [{ paymentRef: null }, { gatewayData: { path: ['submittedHash'], equals: opts.guard.claimHash } }] },
+            ],
+          }),
         },
         data: {
           status: DepositStatus.COMPLETED,
@@ -719,7 +749,106 @@ export class WalletService {
 
   // ─── Submit txHash for an existing PENDING crypto deposit ──
 
-  async submitTxHash(userId: string, depositId: string, txHash: string, userWalletAddress?: string) {
+  // ─── Wallet-ownership signature challenges ─────────────────
+  // A connected wallet proves ownership by signing a server-issued,
+  // expiring, single-use challenge bound to the account, wallet, chain,
+  // and (when supplied) the deposit. Reuse across deposits/accounts/
+  // chains is impossible — each field is checked before consume.
+
+  private cryptoChainOf(method: string): 'BSC' | 'BASE' {
+    return method === 'USDT_BEP20' ? 'BSC' : 'BASE';
+  }
+
+  async createWalletChallenge(userId: string, method: 'USDT_BEP20' | 'USDT_BASE', wallet: string, depositId?: string) {
+    const addr = wallet.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      throw new BadRequestException('Provide the EVM wallet address you will sign from');
+    }
+    if (depositId) {
+      const dep = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+      if (!dep || dep.userId !== userId) throw new BadRequestException('Deposit not found');
+    }
+    const chain = this.cryptoChainOf(method);
+    const nonce = randomBytes(16).reduce((h, b) => h + b.toString(16).padStart(2, '0'), '');
+    const expiresAt = new Date(Date.now() + 10 * 60_000);
+    const message = [
+      'Engganyo wallet ownership verification',
+      `Account: ${userId}`,
+      `Wallet: ${addr.toLowerCase()}`,
+      `Chain: ${chain}`,
+      `Deposit: ${depositId ?? '(new deposit)'}`,
+      `Nonce: ${nonce}`,
+      `Expires: ${expiresAt.toISOString()}`,
+    ].join('\n');
+    const ch = await this.prisma.walletChallenge.create({
+      data: { userId, wallet: addr.toLowerCase(), chain, depositId: depositId ?? null, nonce, message, expiresAt },
+    });
+    return { nonce: ch.nonce, message: ch.message, expiresAt: ch.expiresAt };
+  }
+
+  // Verify signature + atomically consume. Throws on any mismatch.
+  private async consumeWalletChallenge(params: {
+    userId: string; nonce: string; signature: string; wallet: string; chain: 'BSC' | 'BASE'; depositId?: string | null;
+  }): Promise<void> {
+    const { userId, nonce, signature, wallet, chain, depositId } = params;
+    const ch = await this.prisma.walletChallenge.findUnique({ where: { nonce } });
+    if (!ch || ch.userId !== userId || ch.wallet !== wallet.toLowerCase() || ch.chain !== chain) {
+      throw new BadRequestException('Invalid wallet verification challenge');
+    }
+    if (depositId !== undefined && (ch.depositId ?? null) !== (depositId ?? null)) {
+      throw new BadRequestException('Challenge was issued for a different deposit');
+    }
+    if (ch.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('Wallet verification challenge expired — request a new one');
+    }
+    let recovered: string;
+    try {
+      recovered = ethersVerifyMessage(ch.message, signature);
+    } catch {
+      throw new BadRequestException('Could not verify wallet signature');
+    }
+    if (recovered.toLowerCase() !== ch.wallet) {
+      throw new BadRequestException('Signature does not match the declared wallet');
+    }
+    // Single-use: consume atomically — a concurrent second consume wins 0 rows.
+    const consumed = await this.prisma.walletChallenge.updateMany({
+      where: { nonce, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (consumed.count === 0) {
+      throw new BadRequestException('Wallet verification challenge already used');
+    }
+  }
+
+  // Post-submission ownership proof: a fresh challenge bound to THIS
+  // deposit + the declared sending wallet upgrades an unverified manual
+  // claim to verified — the only way a manual transfer earns auto-credit.
+  async proveWalletOwnership(userId: string, depositId: string, challengeNonce: string, signature: string) {
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit || deposit.userId !== userId) throw new BadRequestException('Deposit not found');
+    const isCrypto = deposit.method === DepositMethod.USDT_BEP20 || deposit.method === DepositMethod.USDT_BASE;
+    if (!isCrypto) throw new BadRequestException('Ownership proof applies to crypto deposits');
+    if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
+      throw new BadRequestException(`Cannot verify ownership for a ${deposit.status} deposit`);
+    }
+    if (deposit.walletVerified) return { verified: true, depositId };
+    if (!deposit.userWalletAddress) {
+      throw new BadRequestException('No sending wallet is declared on this deposit');
+    }
+    await this.consumeWalletChallenge({
+      userId, nonce: challengeNonce, signature,
+      wallet: deposit.userWalletAddress, chain: this.cryptoChainOf(deposit.method), depositId: deposit.id,
+    });
+    const upgraded = await this.prisma.deposit.updateMany({
+      where: { id: depositId, walletVerified: false, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
+      data: { walletVerified: true },
+    });
+    if (upgraded.count === 0) throw new BadRequestException('Deposit state changed — try again');
+    this.eventsService.emitToUser(userId, 'deposit:updated', { depositId, status: deposit.status, walletVerified: true });
+    return { verified: true, depositId };
+  }
+
+  async submitTxHash(userId: string, depositId: string, txHash: string, userWalletAddress?: string, challengeNonce?: string, signature?: string) {
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit) throw new NotFoundException('Deposit not found');
     if (deposit.userId !== userId) throw new BadRequestException('Not your deposit');
@@ -747,6 +876,24 @@ export class WalletService {
       walletAddress = userWalletAddress.trim();
     }
 
+    // A fresh signature on a deposit-bound challenge upgrades this deposit to
+    // wallet-verified — required before any on-chain match can auto-credit.
+    let walletVerified = deposit.walletVerified;
+    if (!walletVerified && signature && challengeNonce) {
+      await this.consumeWalletChallenge({
+        userId, nonce: challengeNonce, signature,
+        wallet: walletAddress, chain: this.cryptoChainOf(deposit.method), depositId: deposit.id,
+      });
+      walletVerified = true;
+    }
+
+    // Verified payers take the exclusive paymentRef; unverified submissions
+    // keep the hash as review evidence in gatewayData without reserving it —
+    // a manual claim must never block the ownership-verified payer.
+    const claimData: Prisma.DepositUpdateManyMutationInput = walletVerified
+      ? { paymentRef: normalized }
+      : { gatewayData: { submittedHash: normalized, manualClaim: true } };
+
     // Atomic update: ensure deposit is still PENDING before flipping to PROCESSING
     let claimed;
     try {
@@ -754,8 +901,9 @@ export class WalletService {
         where: { id: depositId, status: DepositStatus.PENDING },
         data: {
           status: DepositStatus.PROCESSING,
-          paymentRef: normalized,
           userWalletAddress: walletAddress,
+          walletVerified,
+          ...claimData,
         },
       });
     } catch (err) {
@@ -775,6 +923,68 @@ export class WalletService {
   }
 
   // ─── Frontend-triggered crypto deposit verification ────────
+
+  // A claim that can never verify (wrong sender, or the tx predates this
+  // deposit) must release the reserved hash — otherwise an invalid claim
+  // permanently blocks the rightful owner from submitting it on their own
+  // deposit. The release is conditioned on the deposit still holding the
+  // same claim so a concurrent resubmission is untouched.
+  private isTerminalClaimFailure(error?: string): boolean {
+    return !!error && (
+      error.includes('not sent from the wallet declared') ||
+      error.includes('mined before this deposit was initiated')
+    );
+  }
+
+  private async releaseCryptoClaim(depositId: string, claimHash: string) {
+    // Verified-claim release: null the exclusive ref (conditional on it being
+    // unchanged). Unverified-claim release: clear the gatewayData evidence and
+    // revert — the rightful payer's claim is untouched either way.
+    const released = await this.prisma.deposit.updateMany({
+      where: { id: depositId, status: DepositStatus.PROCESSING, paymentRef: claimHash },
+      data: { status: DepositStatus.PENDING, paymentRef: null },
+    });
+    if (released.count === 0) {
+      const dep = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+      if (dep?.status === DepositStatus.PROCESSING) {
+        const gw = dep.gatewayData && typeof dep.gatewayData === 'object' && !Array.isArray(dep.gatewayData)
+          ? { ...(dep.gatewayData as Prisma.JsonObject) } : {};
+        delete gw.submittedHash;
+        delete gw.manualClaim;
+        await this.prisma.deposit.updateMany({
+          where: { id: depositId, status: DepositStatus.PROCESSING, gatewayData: { path: ['submittedHash'], equals: claimHash } },
+          data: { status: DepositStatus.PENDING, gatewayData: gw as Prisma.InputJsonValue },
+        });
+      }
+    }
+  }
+
+  // Persist needsReview + the on-chain sender so admin can adjudicate an
+  // otherwise-valid transfer that lacks a wallet-ownership proof.
+  private claimCondition(claimHash: string): Prisma.DepositWhereInput {
+    return {
+      OR: [
+        { paymentRef: claimHash },
+        { AND: [{ paymentRef: null }, { gatewayData: { path: ['submittedHash'], equals: claimHash } }] },
+      ],
+    };
+  }
+
+  private async flagNeedsReview(deposit: { id: string; userId: string; gatewayData: unknown }, claimHash: string, fromAddress?: string) {
+    await this.prisma.deposit.updateMany({
+      where: { id: deposit.id, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
+      data: {
+        gatewayData: {
+          ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+            ? (deposit.gatewayData as Prisma.JsonObject)
+            : {}),
+          needsReview: true,
+          ...(fromAddress && { claimedFrom: fromAddress }),
+        } as Prisma.InputJsonValue,
+      },
+    });
+    this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.PROCESSING, needsReview: true });
+  }
 
   async verifyCryptoDeposit(userId: string, depositId: string) {
     const deposit = await this.prisma.deposit.findUnique({
@@ -797,7 +1007,11 @@ export class WalletService {
     if (deposit.status === DepositStatus.FAILED) {
       throw new BadRequestException('Deposit has failed');
     }
-    if (deposit.status !== DepositStatus.PROCESSING || !deposit.paymentRef) {
+    const gw = deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+      ? (deposit.gatewayData as Prisma.JsonObject)
+      : {};
+    const claimHash = deposit.paymentRef ?? (typeof gw.submittedHash === 'string' ? gw.submittedHash : null);
+    if (deposit.status !== DepositStatus.PROCESSING || !claimHash) {
       throw new BadRequestException('Deposit must be in PROCESSING status with a transaction hash to verify');
     }
 
@@ -818,7 +1032,7 @@ export class WalletService {
 
     const result = await this.cryptoVerification.verifyDeposit({
       method: deposit.method as 'USDT_BEP20' | 'USDT_BASE',
-      txHash: deposit.paymentRef,
+      txHash: claimHash,
       expectedAmountUsd: expectedAmount,
       platformWalletAddress: platformWallet,
       expectedFromAddress: deposit.userWalletAddress,
@@ -826,17 +1040,32 @@ export class WalletService {
     });
 
     if (result.valid) {
-      this.logger.log(`Frontend-triggered verification: auto-completing crypto deposit ${deposit.id}`);
-      await this.completeDeposit(deposit.id, { paymentRef: deposit.paymentRef });
-      return { status: 'COMPLETED', depositId, txHash: deposit.paymentRef, message: 'Deposit verified and completed' };
+      if (deposit.walletVerified) {
+        this.logger.log(`Frontend-triggered verification: auto-completing crypto deposit ${deposit.id}`);
+        await this.completeDeposit(deposit.id, {
+          paymentRef: claimHash,
+          guard: { claimHash, userWalletAddress: deposit.userWalletAddress!, walletVerified: true },
+        });
+        return { status: 'COMPLETED', depositId, txHash: claimHash, message: 'Deposit verified and completed' };
+      }
+      // Valid transfer but ownership never proven — route to review, not credit.
+      await this.flagNeedsReview(deposit, claimHash, result.fromAddress);
+      return {
+        status: 'PROCESSING', depositId, txHash: claimHash, needsReview: true,
+        message: 'On-chain payment found but wallet ownership was not proven — routed to review',
+      };
+    }
+    if (this.isTerminalClaimFailure(result.error)) {
+      await this.releaseCryptoClaim(deposit.id, claimHash);
+      return { status: 'PENDING', depositId, message: result.error + ' — the hash was released; resubmit the correct wallet' };
     }
 
     // If still waiting for confirmations, persist them to gatewayData and tell the user to wait
     if (result.error?.includes('Waiting for confirmations')) {
       const minConfirmations = 12;
       if (result.confirmations !== undefined) {
-        await this.prisma.deposit.update({
-          where: { id: depositId },
+        await this.prisma.deposit.updateMany({
+          where: { id: depositId, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
           data: {
             gatewayData: {
               ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
@@ -857,7 +1086,7 @@ export class WalletService {
       return {
         status: 'PROCESSING',
         depositId,
-        txHash: deposit.paymentRef,
+        txHash: claimHash,
         message: result.error,
         confirmations: result.confirmations,
         minConfirmations: result.confirmations !== undefined ? minConfirmations : undefined,
@@ -867,8 +1096,8 @@ export class WalletService {
     // For any other failure, persist error details and return without marking FAILED
     // (only the cron job should mark deposits as FAILED to avoid race conditions)
     if (result.confirmations !== undefined || result.error) {
-      await this.prisma.deposit.update({
-        where: { id: depositId },
+      await this.prisma.deposit.updateMany({
+        where: { id: depositId, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
         data: {
           gatewayData: {
             ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
@@ -891,7 +1120,7 @@ export class WalletService {
     return {
       status: 'PROCESSING',
       depositId,
-      txHash: deposit.paymentRef,
+      txHash: claimHash,
       message: result.error ?? 'Verification failed',
       confirmations: result.confirmations,
       minConfirmations: result.confirmations !== undefined ? 12 : undefined,
@@ -906,7 +1135,10 @@ export class WalletService {
       where: {
         method: { in: [DepositMethod.USDT_BEP20, DepositMethod.USDT_BASE] },
         status: DepositStatus.PROCESSING,
-        paymentRef: { not: null },
+        OR: [
+          { paymentRef: { not: null } },
+          { gatewayData: { path: ['submittedHash'], not: Prisma.JsonNull } },
+        ],
       },
       include: { package: { select: { usdAmount: true } } },
     });
@@ -935,9 +1167,14 @@ export class WalletService {
 
         const expectedAmount = deposit.package?.usdAmount ?? deposit.amountFiat;
 
+        const cronGw = deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
+          ? (deposit.gatewayData as Prisma.JsonObject) : {};
+        const claimHash = deposit.paymentRef ?? (typeof cronGw.submittedHash === 'string' ? cronGw.submittedHash : null);
+        if (!claimHash) continue;
+
         const result = await this.cryptoVerification.verifyDeposit({
           method: deposit.method as 'USDT_BEP20' | 'USDT_BASE',
-          txHash: deposit.paymentRef!,
+          txHash: claimHash,
           expectedAmountUsd: expectedAmount,
           platformWalletAddress: platformWallet,
           expectedFromAddress: deposit.userWalletAddress,
@@ -945,14 +1182,27 @@ export class WalletService {
         });
 
         if (result.valid) {
-          this.logger.log(`Auto-completing crypto deposit ${deposit.id} (tx: ${deposit.paymentRef})`);
-          await this.completeDeposit(deposit.id, { paymentRef: deposit.paymentRef! });
+          if (deposit.walletVerified) {
+            this.logger.log(`Auto-completing crypto deposit ${deposit.id} (tx: ${claimHash})`);
+            await this.completeDeposit(deposit.id, {
+              paymentRef: claimHash,
+              guard: { claimHash, userWalletAddress: deposit.userWalletAddress!, walletVerified: true },
+            });
+          } else {
+            await this.flagNeedsReview(deposit, claimHash, result.fromAddress);
+            this.logger.warn(`Crypto deposit ${deposit.id} verified on-chain but wallet ownership unproven — needs review`);
+          }
         } else {
+          if (this.isTerminalClaimFailure(result.error)) {
+            await this.releaseCryptoClaim(deposit.id, claimHash);
+            this.logger.warn(`Crypto deposit ${deposit.id} claim released (terminal mismatch) — hash freed`);
+            continue;
+          }
           this.logger.warn(`Crypto deposit ${deposit.id} verification failed: ${result.error}`);
           // Persist confirmation count so UI can show X/12 progress
           if (result.confirmations !== undefined) {
-            await this.prisma.deposit.update({
-              where: { id: deposit.id },
+            await this.prisma.deposit.updateMany({
+              where: { id: deposit.id, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
               data: {
                 gatewayData: {
                   ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
