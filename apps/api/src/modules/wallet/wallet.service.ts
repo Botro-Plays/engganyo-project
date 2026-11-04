@@ -808,6 +808,34 @@ export class WalletService {
     }
   }
 
+  // Post-submission ownership proof: a fresh challenge bound to THIS
+  // deposit + the declared sending wallet upgrades an unverified manual
+  // claim to verified — the only way a manual transfer earns auto-credit.
+  async proveWalletOwnership(userId: string, depositId: string, challengeNonce: string, signature: string) {
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit || deposit.userId !== userId) throw new BadRequestException('Deposit not found');
+    const isCrypto = deposit.method === DepositMethod.USDT_BEP20 || deposit.method === DepositMethod.USDT_BASE;
+    if (!isCrypto) throw new BadRequestException('Ownership proof applies to crypto deposits');
+    if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
+      throw new BadRequestException(`Cannot verify ownership for a ${deposit.status} deposit`);
+    }
+    if (deposit.walletVerified) return { verified: true, depositId };
+    if (!deposit.userWalletAddress) {
+      throw new BadRequestException('No sending wallet is declared on this deposit');
+    }
+    await this.consumeWalletChallenge({
+      userId, nonce: challengeNonce, signature,
+      wallet: deposit.userWalletAddress, chain: this.cryptoChainOf(deposit.method), depositId: deposit.id,
+    });
+    const upgraded = await this.prisma.deposit.updateMany({
+      where: { id: depositId, walletVerified: false, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
+      data: { walletVerified: true },
+    });
+    if (upgraded.count === 0) throw new BadRequestException('Deposit state changed — try again');
+    this.eventsService.emitToUser(userId, 'deposit:updated', { depositId, status: deposit.status, walletVerified: true });
+    return { verified: true, depositId };
+  }
+
   async submitTxHash(userId: string, depositId: string, txHash: string, userWalletAddress?: string, challengeNonce?: string, signature?: string) {
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit) throw new NotFoundException('Deposit not found');

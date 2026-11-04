@@ -78,6 +78,7 @@ interface DepositRecord {
   exchangeRate: number | null;
   paymentRef: string | null;
   adminNotes: string | null;
+  userWalletAddress: string | null;
   gatewayData: Record<string, unknown> | null;
   completedAt: string | null;
   createdAt: string;
@@ -591,6 +592,25 @@ export default function WalletPage() {
       return false;
     } finally {
       setSigningOwnership(false);
+    }
+  };
+
+  // Post-submission proof for a manual/under-review crypto deposit: fresh
+  // deposit-bound challenge → signature → walletVerified on that deposit.
+  const proveOwnershipFor = async (depositId: string, wallet: string, method: string) => {
+    setDepositError(null);
+    try {
+      const ch = (await apiClient.post<ApiResponse<{ nonce: string; message: string }>>(
+        'wallet/crypto/challenge', { method, wallet, depositId },
+      )).data.data;
+      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge'); return; }
+      const signature = await evmWallet.signMessage(ch.message);
+      if (!signature) return;
+      await apiClient.post(`wallet/deposit/${depositId}/prove-ownership`, { challengeNonce: ch.nonce, signature });
+      addToast('Wallet ownership verified — your deposit can now be credited on-chain.', 'success', 5000);
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
+    } catch (err) {
+      setDepositError(getApiErrorMessage(err));
     }
   };
 
@@ -1565,9 +1585,17 @@ export default function WalletPage() {
                                   {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                 </button>
                               </div>
-                              <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`}>
+                              <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${statusCfg.bg} ${statusCfg.color}`} title={underReview ? 'Payment found on-chain but the sending wallet is not proven to be yours' : undefined}>
                                 <StatusIcon className="w-3 h-3" />{statusCfg.label}
                               </span>
+                              {underReview && dep.userWalletAddress && (
+                                <button
+                                  onClick={() => void proveOwnershipFor(dep.id, dep.userWalletAddress!, dep.method)}
+                                  className="mt-1 flex items-center gap-1 text-[11px] text-amber-300 hover:text-amber-200 underline"
+                                >
+                                  Prove sending wallet
+                                </button>
+                              )}
                             </div>
                             <p className="text-xs text-zinc-500 mt-0.5">
                               <span className="font-medium text-white">{dep.currency} {dep.amountFiat.toFixed(2)}</span>

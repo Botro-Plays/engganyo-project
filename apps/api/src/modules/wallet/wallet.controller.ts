@@ -110,6 +110,18 @@ export class WalletController {
     return this.walletService.verifyCryptoDeposit(user.sub, id);
   }
 
+  @Post('deposit/:id/prove-ownership')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60 } })
+  @ApiOperation({ summary: 'Prove sending-wallet ownership via a fresh deposit-bound challenge' })
+  async proveOwnership(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: { challengeNonce: string; signature: string },
+  ) {
+    return this.walletService.proveWalletOwnership(user.sub, id, dto.challengeNonce, dto.signature);
+  }
+
   @Delete('deposit/:id/cancel')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60 } })

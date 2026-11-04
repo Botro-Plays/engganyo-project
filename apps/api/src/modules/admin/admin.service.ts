@@ -2078,15 +2078,38 @@ export class AdminService {
       // completeDeposit writes paymentRef atomically — the unique constraint
       // stops a manual approval and automated settlement crediting the same
       // transfer twice.
+      // Crypto approvals must follow the same verified on-chain path as
+      // automatic settlement — a hash alone never authorizes credit. The
+      // deposit needs wallet-ownership proof (signature challenge), and
+      // verifyCryptoDeposit re-checks chain, token, recipient, amount,
+      // sender, timing, and confirmations before the atomic exclusive settle.
       const isCrypto = deposit.method === DepositMethod.USDT_BEP20 || deposit.method === DepositMethod.USDT_BASE;
       const gw = deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
         ? (deposit.gatewayData as Record<string, unknown>) : {};
-      const evidenceHash = dto.paymentRef ?? deposit.paymentRef ?? (typeof gw.submittedHash === 'string' ? gw.submittedHash : null);
-      if (isCrypto && !evidenceHash) {
-        throw new BadRequestException('Crypto approval requires a submitted transaction hash tying the transfer to this deposit');
+      const storedClaim = deposit.paymentRef ?? (typeof gw.submittedHash === 'string' ? gw.submittedHash : null);
+      if (isCrypto) {
+        if (dto.paymentRef && storedClaim && dto.paymentRef.trim().toLowerCase() !== storedClaim.toLowerCase()) {
+          throw new BadRequestException('Provided transaction reference conflicts with the submitted evidence on this deposit');
+        }
+        if (!deposit.walletVerified) {
+          throw new BadRequestException('Sending-wallet ownership is not proven — the payer must complete wallet verification before credit can be approved');
+        }
+        const outcome = await this.walletService.verifyCryptoDeposit(deposit.userId, depositId);
+        if (outcome.status !== 'COMPLETED') {
+          return { status: outcome.status, needsReview: outcome.needsReview ?? false, message: outcome.message ?? 'On-chain verification did not confirm the transfer' };
+        }
+        // Credit landed through the verified path — annotate the review.
+        await this.prisma.deposit.updateMany({
+          where: { id: depositId, status: DepositStatus.COMPLETED },
+          data: {
+            ...(dto.adminNotes && { adminNotes: dto.adminNotes }),
+            reviewedBy: adminId,
+          },
+        });
+        return { status: 'COMPLETED', depositId };
       }
       await this.walletService.completeDeposit(depositId, {
-        paymentRef: evidenceHash ?? undefined,
+        paymentRef: dto.paymentRef ?? storedClaim ?? undefined,
         reviewedBy: adminId,
         adminNotes: dto.adminNotes,
       });

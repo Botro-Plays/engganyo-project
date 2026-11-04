@@ -135,3 +135,62 @@ describe('settlement summary + backfill', () => {
     expect(eligibleCalls.length).toBeGreaterThan(0);
   });
 });
+
+
+describe('crypto approval gate — evidence before credit', () => {
+  const prisma = { deposit: { findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() } };
+  const walletSvc = { verifyCryptoDeposit: jest.fn(), completeDeposit: jest.fn() };
+  const paypal = { getOrderSettlement: jest.fn() };
+  const paymongo = { getPaymentSettlement: jest.fn(), archiveLink: jest.fn() };
+  let svc: AdminService;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    svc = new AdminService(prisma as never, {} as never, walletSvc as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, paymongo as never, paypal as never);
+  });
+  const atkDeposit = (over: Record<string, unknown> = {}) => ({
+    id: 'dep-atk', userId: 'attacker', method: DepositMethod.USDT_BEP20, status: DepositStatus.PROCESSING,
+    paymentRef: null, walletVerified: false, userWalletAddress: '0x' + '11'.repeat(20),
+    gatewayData: { submittedHash: '0x' + 'ab'.repeat(32), needsReview: true }, ...over,
+  });
+
+  it('dangerous order: attacker submits real hash first; admin approval produces zero credit', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(atkDeposit());
+    await expect(svc.reviewDeposit('admin-1', 'dep-atk', { status: 'COMPLETED' } as never))
+      .rejects.toThrow('ownership is not proven');
+    expect(walletSvc.verifyCryptoDeposit).not.toHaveBeenCalled();
+    expect(walletSvc.completeDeposit).not.toHaveBeenCalled(); // zero credits, zero ledger
+  });
+
+  it('verified payer path: approval delegates to the same on-chain verified settle', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(atkDeposit({ id: 'dep-vic', userId: 'victim', walletVerified: true }));
+    walletSvc.verifyCryptoDeposit.mockResolvedValue({ status: 'COMPLETED', depositId: 'dep-vic' });
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const out = await svc.reviewDeposit('admin-1', 'dep-vic', { status: 'COMPLETED' } as never) as unknown as { status: string };
+    expect(out.status).toBe('COMPLETED');
+    expect(walletSvc.verifyCryptoDeposit).toHaveBeenCalledWith('victim', 'dep-vic');
+    expect(walletSvc.completeDeposit).not.toHaveBeenCalled(); // credit via verified path only
+  });
+
+  it('on-chain re-check failure at approval → no credit, stays in review', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(atkDeposit({ walletVerified: true }));
+    walletSvc.verifyCryptoDeposit.mockResolvedValue({ status: 'PROCESSING', needsReview: true, message: 'No USDT transfer to platform wallet' });
+    const out = await svc.reviewDeposit('admin-1', 'dep-atk', { status: 'COMPLETED' } as never) as unknown as { needsReview: boolean };
+    expect(out.needsReview).toBe(true);
+    expect(walletSvc.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('admin reference conflicting with submitted evidence is rejected', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(atkDeposit({ walletVerified: true }));
+    await expect(svc.reviewDeposit('admin-1', 'dep-atk', { status: 'COMPLETED', paymentRef: '0x' + 'ff'.repeat(32) } as never))
+      .rejects.toThrow('conflicts');
+    expect(walletSvc.verifyCryptoDeposit).not.toHaveBeenCalled();
+  });
+
+  it('mixed-case admin ref matching the stored claim is allowed to proceed', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(atkDeposit({ walletVerified: true }));
+    walletSvc.verifyCryptoDeposit.mockResolvedValue({ status: 'COMPLETED', depositId: 'dep-atk' });
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const out = await svc.reviewDeposit('admin-1', 'dep-atk', { status: 'COMPLETED', paymentRef: '0x' + 'AB'.repeat(32) } as never) as unknown as { status: string };
+    expect(out.status).toBe('COMPLETED');
+  });
+});
