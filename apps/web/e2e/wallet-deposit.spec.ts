@@ -90,7 +90,11 @@ async function mockInitiateDeposit(page: import('@playwright/test').Page, method
           packageId: postData.packageId,
           method: postData.method,
           status: hasTxHash ? 'PROCESSING' : 'PENDING',
-          amountFiat: method === 'PAYMONGO' ? 290 : 5,
+          // Stored charge must equal the package's server-calculated phpAmount
+          // or the rate-change confirmation gate intercepts the flow.
+          amountFiat: method === 'PAYMONGO'
+            ? { 'pkg-e2e-0': 63.46, 'pkg-e2e-1': 317.3, 'pkg-e2e-2': 634.6, 'pkg-e2e-3': 3173 }[postData.packageId as string] ?? 63.46
+            : { 'pkg-e2e-0': 1 }[postData.packageId as string] ?? 5,
           currency: method === 'PAYMONGO' ? 'PHP' : 'USD',
           creditsToAward: 500,
           paymentRef: normalizedTxHash ?? null,
