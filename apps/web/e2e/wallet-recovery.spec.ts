@@ -1,0 +1,115 @@
+import { test, expect } from '@playwright/test';
+
+test.use({ storageState: 'e2e/.auth/user.json' });
+
+const CORS_ORIGIN = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
+const CORS_HEADERS = {
+  'access-control-allow-origin': CORS_ORIGIN,
+  'access-control-allow-credentials': 'true',
+  'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'access-control-allow-headers': 'Content-Type, Authorization',
+};
+function apiResponse<T>(data: T) {
+  return JSON.stringify({ success: true, data, timestamp: new Date().toISOString() });
+}
+
+// Wallet that returns a hash on send — the transfer "sent" but registration
+// will fail server-side. Counts send attempts to prove no resend happens.
+async function injectSendWallet(page: import('@playwright/test').Page, chainIdHex: string) {
+  await page.addInitScript((chain) => {
+    const ADDR = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
+    const HASH = '0x' + 'cd'.repeat(32);
+    (window as unknown as { ethereum: unknown }).ethereum = {
+      isMetaMask: true,
+      request: async ({ method, params }: { method: string; params?: Array<Record<string, string>> }) => {
+        if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [ADDR];
+        if (method === 'eth_chainId') return chain;
+        if (method === 'net_version') return String(parseInt(chain, 16));
+        if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_call') {
+          const d = (params?.[0] as { data?: string })?.data ?? '';
+          if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0');
+          if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; // 10 USDT
+          return '0x0';
+        }
+        if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
+        if (method === 'eth_estimateGas') return '0x5208';
+        if (method === 'eth_sendTransaction') {
+          (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
+          return HASH;
+        }
+        if (method === 'eth_blockNumber') return '0x1234';
+        if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234', transactionHash: HASH };
+        throw new Error('Unsupported ' + method);
+      },
+      on: () => undefined,
+      removeListener: () => undefined,
+    };
+  }, chainIdHex);
+}
+
+const HASH = '0x' + 'cd'.repeat(32);
+
+async function mockApis(page: import('@playwright/test').Page, chainId: number, failInitiate: { fail: boolean }) {
+  const network = chainId === 56 ? 'BSC' : 'Base';
+  const contract = chainId === 56 ? '0x55d398326f99059fF775485246999027B3197955' : '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2';
+  await page.route('**/api/**', (r) => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS_HEADERS }) : r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
+  await page.route('**/api/wallet/deposit/options', (r) => r.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse({
+      pricing: { creditsPerUsd: 100, minDepositUsd: 1, minDepositPhp: 63.46, usdToPhp: 63.46 },
+      paymongo: { enabled: true, publicKey: 'pk' }, paypal: { enabled: true, clientId: 'c', mode: 'sandbox' },
+      usdtBep20: { enabled: true, walletAddress: '0xB6a1022F84f16A41A1F066f0E0fa6c89af8f941e', contractAddress: '0x55d398326f99059fF775485246999027B3197955', chainId: 56, network: 'BSC', minAmount: 1 },
+      usdtBase: { enabled: true, walletAddress: '0xB6a1022F84f16A41A1F066f0E0fa6c89af8f941e', contractAddress: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', chainId: 8453, network: 'Base', minAmount: 1 },
+    }),
+  }));
+  await page.route('**/api/wallet/deposit/packages', (r) => r.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse([{ id: 'pkg-1', usdAmount: 1, creditsBase: 100, creditsTotal: 100, bonusCredits: 0, phpEquivalent: 64, phpAmount: 63.46, usdToPhp: 63.46, label: null, isPopular: false, isActive: true }]),
+  }));
+  await page.route('**/api/wallet/deposits**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } }) }));
+  await page.route('**/api/wallet/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ balance: 1000 }) }));
+  await page.route('**/api/wallet/crypto/challenge', (r) => r.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse({ nonce: 'n1', message: 'Engganyo wallet ownership verification\nAccount: u1', expiresAt: new Date(Date.now() + 600000).toISOString() }),
+  }));
+  await page.route('**/api/wallet/deposit/initiate', async (route) => {
+    if (failInitiate.fail) {
+      await route.fulfill({ status: 503, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'Service temporarily unavailable' }) });
+      return;
+    }
+    await route.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+      body: apiResponse({ deposit: { id: 'dep-reg-1', method: `USDT_${network === 'BSC' ? 'BEP20' : 'BASE'}`, status: 'PROCESSING', paymentRef: HASH, amountFiat: 1, currency: 'USD', creditsToAward: 100, createdAt: new Date().toISOString() }, instructions: {} }) });
+  });
+  void network;
+}
+
+for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base']] as const) {
+  test(`sent-but-unregistered transfer shows hash + recovery on ${label}`, async ({ page }) => {
+    const failState = { fail: true };
+    await injectSendWallet(page, hex);
+    await mockApis(page, chainId, failState);
+    await page.goto('/wallet');
+    await page.getByRole('button', { name: /deposit credits/i }).click();
+    await page.locator('#deposit-card button').filter({ hasText: '$1' }).first().click();
+    await page.getByText(new RegExp(chainId === 56 ? 'BNB Smart Chain|BEP20' : 'Base', 'i')).first().click();
+    await page.getByRole('button', { name: /connect wallet/i }).first().click();
+    await page.getByRole('button', { name: /verify wallet ownership/i }).click();
+    await page.getByRole('button', { name: /^2\. Send / }).click();
+
+    // Recovery block: submitted notice + hash + binding + retry — no second send
+    const card = page.locator('#deposit-card');
+    await expect(card.getByText(/Transfer submitted on/)).toBeVisible({ timeout: 10_000 });
+    await expect(card.getByText(HASH.slice(0, 20))).toBeVisible();
+    await expect(card.getByText(new RegExp(`Bound to this transfer.*${label === 'BSC' ? 'BSC' : 'Base'}`))).toBeVisible();
+    await expect(card.getByRole('button', { name: /retry registration/i })).toBeVisible();
+    await expect(card.getByText(/Do not send again/i)).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
+
+    // Recovery succeeds after the transient failure — still no resend
+    failState.fail = false;
+    await card.getByRole('button', { name: /retry registration/i }).click();
+    await expect(card.getByText(/Transfer submitted on/)).toHaveCount(0, { timeout: 10_000 });
+    expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
+  });
+}

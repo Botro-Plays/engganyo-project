@@ -277,6 +277,8 @@ export default function WalletPage() {
   const [fiatCheckoutUrl, setFiatCheckoutUrl] = useState<string | null>(null);
   const [rateChangePending, setRateChangePending] = useState<{ depositId: string; newAmount: number } | null>(null);
   const [ownershipProof, setOwnershipProof] = useState<{ nonce: string; signature: string } | null>(null);
+  // A sent-but-unregistered transfer: hash bound to its network, wallet, package.
+  const [unresolvedSend, setUnresolvedSend] = useState<{ hash: string; network: string; chainId: number; wallet: string; packageId: string; method: string; amountUsd: number } | null>(null);
   const [signingOwnership, setSigningOwnership] = useState(false);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
   const [expandedDepositId, setExpandedDepositId] = useState<string | null>(null);
@@ -623,6 +625,7 @@ export default function WalletPage() {
       cryptoCfg.chainId,
     );
     if (!hash) return;
+    setUnresolvedSend({ hash, network: cryptoCfg.network, chainId: cryptoCfg.chainId, wallet: evmWallet.address, packageId: selectedPackage.id, method: selectedMethod!, amountUsd: selectedPackage.usdAmount });
 
     // Create deposit record immediately with the txHash
     try {
@@ -636,6 +639,7 @@ export default function WalletPage() {
       });
       setDepositResult(result ?? null);
       setDepositError(null);
+      setUnresolvedSend(null);
       clearPersistedForm();
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
@@ -677,8 +681,37 @@ export default function WalletPage() {
       // Exhausted retries without completion
       addToast('Deposit is confirmed on-chain but verification is still processing. It will complete automatically shortly.', 'info', 6000);
     } catch (err) {
-      // Log for debugging; mutation onError callbacks already show UI toasts
+      // The transfer was sent but registration/verification failed — surface the
+      // recovery path bound to THIS hash instead of a bare error.
+      setDepositError('Your USDT transfer was submitted on-chain, but we could not register or confirm it yet.');
       console.error('[handleEvmSend] error:', err);
+    }
+  };
+
+  // Retry registration for the unresolved transfer — never sends a new tx.
+  const retryRegistration = async () => {
+    if (!unresolvedSend) return;
+    setDepositError(null);
+    try {
+      const result = await initiateMutation.mutateAsync({
+        packageId: unresolvedSend.packageId,
+        method: unresolvedSend.method,
+        txHash: unresolvedSend.hash,
+        userWalletAddress: unresolvedSend.wallet,
+        challengeNonce: ownershipProof?.nonce,
+        signature: ownershipProof?.signature,
+      });
+      setDepositResult(result ?? null);
+      setUnresolvedSend(null);
+      clearPersistedForm();
+      addToast('Transfer registered — verification will confirm it shortly.', 'success', 4000);
+    } catch (err) {
+      const msg = getApiErrorMessage(err);
+      if (/signature|challenge|expired|used|verified/i.test(msg)) {
+        setDepositError('Your ownership proof expired — sign again to prove this wallet is yours (no new transfer needed).');
+      } else {
+        setDepositError(msg);
+      }
     }
   };
 
@@ -1372,7 +1405,39 @@ export default function WalletPage() {
                                 <p className="text-zinc-600">To: {cryptoCfg?.walletAddress?.slice(0,10)}…{cryptoCfg?.walletAddress?.slice(-8)}</p>
                                 <p className="text-zinc-600">A small amount of {cryptoCfg?.chainId === 56 ? 'BNB' : 'ETH'} is needed for gas.</p>
                               </div>
-                              {!ownershipProof ? (
+                              {unresolvedSend ? (
+                                <div role="status" className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+                                  <p className="flex items-start gap-1.5 text-xs text-amber-300">
+                                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                    Transfer submitted on {unresolvedSend.network} — Engganyo could not register or confirm it yet.
+                                  </p>
+                                  <p className="text-[11px] text-zinc-500 font-mono break-all pl-5">{unresolvedSend.hash}</p>
+                                  <p className="text-[11px] text-zinc-600 pl-5">Bound to this transfer: {unresolvedSend.amountUsd} USDT · {unresolvedSend.network} · wallet {unresolvedSend.wallet.slice(0,8)}…{unresolvedSend.wallet.slice(-6)}</p>
+                                  <div className="flex flex-wrap gap-2 pl-5">
+                                    <button
+                                      onClick={() => void retryRegistration()}
+                                      disabled={initiateMutation.isPending}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-medium transition-all disabled:opacity-50"
+                                    >
+                                      {initiateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                      Retry registration
+                                    </button>
+                                    <button
+                                      onClick={() => void signOwnership().then((ok) => { if (ok) void retryRegistration(); })}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-medium transition-all"
+                                    >
+                                      <ShieldCheck className="w-3 h-3" />Prove ownership again
+                                    </button>
+                                    <button
+                                      onClick={() => { setCryptoMode('manual'); setManualTxHash(unresolvedSend.hash); setDepositError(null); }}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-zinc-200 text-xs transition-all"
+                                    >
+                                      Use manual option
+                                    </button>
+                                  </div>
+                                  <p className="text-[10px] text-zinc-600 pl-5">Do not send again — this exact transfer is retained. Sending is disabled until it resolves.</p>
+                                </div>
+                              ) : !ownershipProof ? (
                                 <div className="space-y-1.5">
                                   <button
                                     onClick={() => void signOwnership()}
