@@ -102,6 +102,10 @@ async function mockApis(page: import('@playwright/test').Page) {
   }));
   await page.route('**/api/wallet/deposits*', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0, hasNext: false, hasPrev: false } }) }));
   await page.route('**/api/wallet/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ balance: 100, pendingBalance: 0 }) }));
+  await page.route('**/api/wallet/deposit/initiate', (r) => r.fulfill({
+    status: 200, headers: CORS_HEADERS, contentType: 'application/json',
+    body: apiResponse({ deposit: { id: 'dep-1', method: 'USDT_BEP20', status: 'PENDING', paymentRef: null, amountFiat: 1, currency: 'USD', creditsToAward: 100, createdAt: new Date().toISOString() }, instructions: {} }),
+  }));
   await page.route('**/api/wallet/crypto/challenge', (r) => r.fulfill({
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse({ nonce: 'n-1', message: 'Engganyo wallet ownership verification\nAccount: u1', expiresAt: new Date(Date.now() + 600000).toISOString() }),
