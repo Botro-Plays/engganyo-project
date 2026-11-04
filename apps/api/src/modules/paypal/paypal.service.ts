@@ -65,9 +65,12 @@ export class PayPalService {
     return json.access_token;
   }
 
-  async createOrder(depositId: string, amount: number, currency: string) {
+  async createOrder(depositId: string, amount: number, currency: string, userId?: string) {
     // Reuse a payable order — retries/concurrent calls must not mint a second.
-    const existing = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true } });
+    const existing = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true, userId: true } });
+    if (!existing || (userId && existing.userId !== userId)) {
+      throw new NotFoundException('Deposit not found');
+    }
     const exGw = (existing?.gatewayData ?? {}) as Record<string, unknown>;
     if (existing?.paymentRef && exGw.approvalUrl && !existing.paymentRef.startsWith('creating:')) {
       this.logger.log(`Deposit ${depositId} already has PayPal order ${existing.paymentRef} — reusing`);
@@ -166,7 +169,7 @@ export class PayPalService {
     return { orderId, approvalUrl };
   }
 
-  async captureOrder(orderId: string) {
+  async captureOrder(orderId: string, userId?: string) {
     const cfg = await this.getConfig();
     if (!cfg) throw new BadRequestException('PayPal not configured');
 
@@ -174,6 +177,10 @@ export class PayPalService {
     let deposit = await this.prisma.deposit.findUnique({
       where: { paymentRef: orderId },
     });
+    // A foreign account must not trigger capture or read its status.
+    if (!deposit || (userId && deposit.userId !== userId)) {
+      throw new NotFoundException('Deposit not found');
+    }
     if (deposit?.status === DepositStatus.COMPLETED) {
       this.logger.log(`PayPal order ${orderId} already captured — skipping`);
       return { depositId: deposit.id, orderId, status: 'COMPLETED' };
@@ -201,8 +208,12 @@ export class PayPalService {
         }
       }
     } else if (deposit?.status === DepositStatus.PROCESSING) {
-      this.logger.log(`PayPal order ${orderId} already in PROCESSING — skipping duplicate capture`);
-      return { depositId: deposit.id, orderId, status: 'PROCESSING' };
+      // A PROCESSING deposit may mean a lost provider response — re-attempt
+      // the capture so we can recover the existing capture via
+      // ORDER_ALREADY_CAPTURED rather than waiting only on the webhook.
+      // Concurrent calls are safe: PayPal captures an order once, and
+      // completeDeposit is atomic.
+      this.logger.log(`PayPal order ${orderId} is PROCESSING — re-attempting capture for recovery`);
     }
 
     const accessToken = await this.getAccessToken(cfg);

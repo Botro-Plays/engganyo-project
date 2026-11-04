@@ -89,8 +89,10 @@ function PaymentReturnContent() {
         if (found) {
           setDeposit(found);
           // PayPal: the browser return triggers the capture on the order
-          // stored in paymentRef. Best-effort — settlement is server-verified.
-          if (found.method === 'PAYPAL' && found.status === 'PENDING' && found.paymentRef) {
+          // stored in paymentRef — but only on a success return; an explicit
+          // cancel return never initiates capture. Best-effort — settlement
+          // is server-verified and polling continues either way.
+          if (found.method === 'PAYPAL' && found.status === 'PENDING' && found.paymentRef && hint === 'success') {
             apiClient.post(`paypal/capture/${found.paymentRef}`).catch(() => {});
           }
         }

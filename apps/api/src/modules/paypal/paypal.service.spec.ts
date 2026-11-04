@@ -203,4 +203,71 @@ describe('PayPalService', () => {
     // Simulate old owner finishing its conditional persist — count=0, no overwrite.
     expect(row.paymentRef).toBe('ORDER-B');
   });
+
+  // ── Lost response after capture ──
+
+  it('lost response: PROCESSING deposit retry re-attempts provider and recovers via ORDER_ALREADY_CAPTURED', async () => {
+    // First attempt timed out after PayPal captured; deposit stuck PROCESSING.
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) }) // token
+      .mockResolvedValueOnce({ // capture POST → 422 already captured
+        ok: false,
+        json: async () => ({ name: 'UNPROCESSABLE_ENTITY', details: [{ issue: 'ORDER_ALREADY_CAPTURED' }] }),
+      });
+    const out = await service.captureOrder('ORDER-123', 'user-1');
+    expect(out.status).toBe('COMPLETED');
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  it('lost response: signed webhook settles a PROCESSING deposit once', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    const out = await signedWebhook(captureEvent());
+    expect(out.action).toBe('completed');
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+    // Webhook redelivery — no second credit.
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.COMPLETED }));
+    const dup = await signedWebhook(captureEvent());
+    expect(dup.action).toBe('already_completed');
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  it('webhook-then-capture and capture-then-webhook each settle exactly once', async () => {
+    // Order 1: webhook first, then browser capture → early COMPLETED return.
+    prisma.deposit.findUnique
+      .mockResolvedValueOnce(deposit()) // webhook lookup
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.COMPLETED })); // capture lookup
+    await signedWebhook(captureEvent());
+    const out = await service.captureOrder('ORDER-123', 'user-1');
+    expect(out.status).toBe('COMPLETED');
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Order / capture binding ──
+
+  it('signed event for a foreign order (same amount) cannot credit this deposit', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(null); // no deposit for ORDER-FOREIGN
+    const out = await signedWebhook({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'ORDER-FOREIGN', amount: { value: '1.00', currency_code: 'USD' } } });
+    expect(out.action).toBe('ignored_no_deposit');
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('foreign account cannot trigger capture on another user’s order', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit()); // userId: user-1
+    await expect(service.captureOrder('ORDER-123', 'user-OTHER')).rejects.toThrow('Deposit not found');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('foreign account cannot create/read an order for another user’s deposit', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    await expect(service.createOrder('dep-1', 1, 'USD', 'user-OTHER')).rejects.toThrow('Deposit not found');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('unknown order id cannot trigger capture at all', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(null);
+    await expect(service.captureOrder('ORDER-UNKNOWN', 'user-1')).rejects.toThrow('Deposit not found');
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
