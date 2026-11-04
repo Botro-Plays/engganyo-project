@@ -8,7 +8,7 @@ describe('PayPalService', () => {
     deposit: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
   };
   const walletService = { completeDeposit: jest.fn() };
-  const eventsService = {};
+  const eventsService = { emitToUser: jest.fn() };
   let service: PayPalService;
 
   const deposit = (over: Record<string, unknown> = {}) => ({
@@ -389,5 +389,76 @@ describe('PayPalService', () => {
     const out = await signedWebhook({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'CAP-1', status: 'COMPLETED', amount: { value: 'Infinity', currency_code: 'USD' }, supplementary_data: { related_ids: { order_id: 'ORDER-123' } } } });
     expect(out.action).toBe('completed'); // event evidence insufficient → provider lookup verified instead
     expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  // ── PENDING / DENIED transitions: production-shaped events + concurrency ──
+
+  const pendingEvent = (over: Record<string, unknown> = {}) => ({
+    event_type: 'PAYMENT.CAPTURE.PENDING',
+    resource: {
+      id: 'CAP-PEND-9',
+      status: 'PENDING',
+      amount: { value: '1.00', currency_code: 'USD' },
+      supplementary_data: { related_ids: { order_id: 'ORDER-123' } },
+      ...over,
+    },
+  });
+  const deniedEvent = (over: Record<string, unknown> = {}) => ({
+    event_type: 'PAYMENT.CAPTURE.DENIED',
+    resource: {
+      id: 'CAP-DENY-7',
+      status: 'DENIED',
+      amount: { value: '1.00', currency_code: 'USD' },
+      supplementary_data: { related_ids: { order_id: 'ORDER-123' } },
+      ...over,
+    },
+  });
+
+  it('PENDING marks the deposit PROCESSING and emits once (distinct capture/order ids)', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const out = await signedWebhook(pendingEvent());
+    expect(out.action).toBe('marked_processing');
+    expect(eventsService.emitToUser).toHaveBeenCalledWith('user-1', 'deposit:updated', { depositId: 'dep-1', status: 'PROCESSING' });
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('DENIED marks the deposit FAILED and emits once', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
+    prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
+    const out = await signedWebhook(deniedEvent());
+    expect(out.action).toBe('marked_failed');
+    expect(eventsService.emitToUser).toHaveBeenCalledWith('user-1', 'deposit:updated', { depositId: 'dep-1', status: 'FAILED' });
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('PENDING racing a concurrent COMPLETED transition → zero-row write, stays COMPLETED, no emit, no extra credit', async () => {
+    prisma.deposit.findUnique
+      .mockResolvedValueOnce(deposit()) // initial read: PENDING
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.COMPLETED })); // fresh read
+    prisma.deposit.updateMany.mockResolvedValue({ count: 0 }); // concurrent settle won
+    const out = await signedWebhook(pendingEvent());
+    expect(out.action).toBe('already_completed');
+    expect(eventsService.emitToUser).not.toHaveBeenCalled();
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('DENIED racing a concurrent COMPLETED transition → zero-row write, stays COMPLETED, no emit', async () => {
+    prisma.deposit.findUnique
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.PROCESSING }))
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.COMPLETED }));
+    prisma.deposit.updateMany.mockResolvedValue({ count: 0 });
+    const out = await signedWebhook(deniedEvent());
+    expect(out.action).toBe('already_completed');
+    expect(eventsService.emitToUser).not.toHaveBeenCalled();
+  });
+
+  it('capture events without related order id leave the deposit untouched', async () => {
+    const noOrder = { supplementary_data: { related_ids: {} } };
+    for (const evt of [pendingEvent(noOrder), deniedEvent(noOrder)]) {
+      const out = await signedWebhook(evt);
+      expect(out.action).toBe('ignored_no_order_id');
+    }
+    expect(prisma.deposit.updateMany).not.toHaveBeenCalled();
   });
 });

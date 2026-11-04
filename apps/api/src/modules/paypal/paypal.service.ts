@@ -483,11 +483,13 @@ export class PayPalService {
     if (eventType === 'PAYMENT.CAPTURE.COMPLETED') {
       // For CAPTURE events `resource` is the capture object: resource.id is
       // the provider capture id; the order id lives in supplementary_data.
-      const eventOrderId = relatedOrderId ?? orderId;
+      const eventOrderId = relatedOrderId;
       const eventCaptureId = resource?.id as string | undefined;
-      const deposit = eventOrderId
-        ? await this.prisma.deposit.findUnique({ where: { paymentRef: eventOrderId } })
-        : undefined;
+      if (!eventOrderId) {
+        this.logger.warn(`PAYMENT.CAPTURE.COMPLETED missing order id (capture ${eventCaptureId ?? 'unknown'}) — deposit untouched`);
+        return { received: true, action: 'ignored_no_order_id' };
+      }
+      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: eventOrderId } });
       const resAmount = resource?.amount as { value?: string; currency_code?: string } | undefined;
       const evValue = resAmount?.value;
       const evCurrency = resAmount?.currency_code;
@@ -499,10 +501,6 @@ export class PayPalService {
         Number.isFinite(evAmountCents) &&
         !!evCurrency;
 
-      if (!eventOrderId) {
-        this.logger.warn(`PAYMENT.CAPTURE.COMPLETED missing order correlation (capture ${eventCaptureId ?? 'unknown'})`);
-        return { received: true, action: 'ignored_no_order_id' };
-      }
       const target = deposit;
       if (!target) return { received: true, action: 'ignored_no_deposit' };
       if (target.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: target.id };
@@ -547,31 +545,57 @@ export class PayPalService {
       return { received: true, action: 'completed', depositId: target.id };
     }
 
-    // ── PAYMENT.CAPTURE.PENDING → mark deposit processing ──
+    // ── PAYMENT.CAPTURE.PENDING → mark deposit processing (conditional write) ──
     if (eventType === 'PAYMENT.CAPTURE.PENDING') {
-      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
+      const evOrderId = relatedOrderId;
+      const evCaptureId = resource?.id as string | undefined;
+      if (!evOrderId) {
+        this.logger.warn(`PAYMENT.CAPTURE.PENDING missing order id (capture ${evCaptureId ?? 'unknown'}) — deposit untouched`);
+        return { received: true, action: 'ignored_no_order_id' };
+      }
+      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: evOrderId } });
       if (!deposit) return { received: true, action: 'ignored_no_deposit' };
       if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
       if (deposit.status === DepositStatus.PROCESSING) return { received: true, action: 'already_processing', depositId: deposit.id };
 
-      await this.prisma.deposit.update({
-        where: { id: deposit.id },
+      // Conditional write — a concurrent COMPLETED/browser settle between the
+      // read above and this update must affect zero rows.
+      const transitioned = await this.prisma.deposit.updateMany({
+        where: { id: deposit.id, status: DepositStatus.PENDING },
         data: { status: DepositStatus.PROCESSING },
       });
+      if (transitioned.count === 0) {
+        const fresh = await this.prisma.deposit.findUnique({ where: { id: deposit.id }, select: { status: true } });
+        this.logger.log(`PAYMENT.CAPTURE.PENDING arrived after ${fresh?.status} on ${deposit.id} (capture ${evCaptureId ?? 'unknown'}) — no transition`);
+        return { received: true, action: fresh?.status === DepositStatus.COMPLETED ? 'already_completed' : 'ignored_wrong_status', depositId: deposit.id };
+      }
       this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.PROCESSING });
       return { received: true, action: 'marked_processing', depositId: deposit.id };
     }
 
-    // ── PAYMENT.CAPTURE.DENIED → mark deposit failed ──
+    // ── PAYMENT.CAPTURE.DENIED → mark deposit failed (conditional write) ──
     if (eventType === 'PAYMENT.CAPTURE.DENIED') {
-      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
+      const evOrderId = relatedOrderId;
+      const evCaptureId = resource?.id as string | undefined;
+      if (!evOrderId) {
+        this.logger.warn(`PAYMENT.CAPTURE.DENIED missing order id (capture ${evCaptureId ?? 'unknown'}) — deposit untouched`);
+        return { received: true, action: 'ignored_no_order_id' };
+      }
+      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: evOrderId } });
       if (!deposit) return { received: true, action: 'ignored_no_deposit' };
       if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
 
-      await this.prisma.deposit.update({
-        where: { id: deposit.id },
+      // Conditional write — only PENDING/PROCESSING may transition to FAILED;
+      // a concurrent settle between read and update affects zero rows.
+      const transitioned = await this.prisma.deposit.updateMany({
+        where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
         data: { status: DepositStatus.FAILED },
       });
+      if (transitioned.count === 0) {
+        const fresh = await this.prisma.deposit.findUnique({ where: { id: deposit.id }, select: { status: true } });
+        this.logger.log(`PAYMENT.CAPTURE.DENIED arrived after ${fresh?.status} on ${deposit.id} (capture ${evCaptureId ?? 'unknown'}) — no transition`);
+        return { received: true, action: fresh?.status === DepositStatus.COMPLETED ? 'already_completed' : 'ignored_wrong_status', depositId: deposit.id };
+      }
       this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.FAILED });
       return { received: true, action: 'marked_failed', depositId: deposit.id };
     }
@@ -583,10 +607,15 @@ export class PayPalService {
       if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
       if (deposit.status === DepositStatus.CANCELLED) return { received: true, action: 'already_cancelled', depositId: deposit.id };
 
-      await this.prisma.deposit.update({
-        where: { id: deposit.id },
+      const transitioned = await this.prisma.deposit.updateMany({
+        where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
         data: { status: DepositStatus.CANCELLED, adminNotes: 'PayPal order voided' },
       });
+      if (transitioned.count === 0) {
+        const fresh = await this.prisma.deposit.findUnique({ where: { id: deposit.id }, select: { status: true } });
+        this.logger.log(`CHECKOUT.ORDER.VOIDED arrived after ${fresh?.status} on ${deposit.id} — no transition`);
+        return { received: true, action: fresh?.status === DepositStatus.COMPLETED ? 'already_completed' : 'ignored_wrong_status', depositId: deposit.id };
+      }
       this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.CANCELLED });
       return { received: true, action: 'marked_cancelled', depositId: deposit.id };
     }
