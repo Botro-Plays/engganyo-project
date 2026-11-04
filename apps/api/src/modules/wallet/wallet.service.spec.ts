@@ -521,6 +521,11 @@ describe('crypto deposit binding', () => {
   describe('verifyCryptoDeposit', () => {
     const processing = { ...baseDeposit, status: DepositStatus.PROCESSING, paymentRef: VALID_HASH };
 
+    beforeEach(() => {
+      prismaDepositMock.updateMany.mockReset().mockResolvedValue({ count: 1 });
+      prismaDepositMock.update.mockReset().mockResolvedValue({});
+    });
+
     it('refuses to verify a deposit with no declared wallet', async () => {
       prismaDepositMock.findUnique.mockResolvedValue({ ...processing, userWalletAddress: null });
       await expect(service.verifyCryptoDeposit('user-1', 'dep-1')).rejects.toThrow('wallet');
@@ -651,7 +656,7 @@ describe('crypto deposit binding', () => {
       const out = await service.verifyCryptoDeposit('attacker', 'dep-1');
       expect(out.needsReview).toBe(true);
       expect(completeSpy).not.toHaveBeenCalled();
-      expect(prismaDepositMock.update).toHaveBeenCalledWith(
+      expect(prismaDepositMock.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ gatewayData: expect.objectContaining({ needsReview: true, claimedFrom: WALLET_A }) }) }),
       );
     });
@@ -663,7 +668,7 @@ describe('crypto deposit binding', () => {
       const completeSpy = jest.spyOn(service, 'completeDeposit').mockResolvedValue({} as never);
       const out = await service.verifyCryptoDeposit('user-1', 'dep-1');
       expect(out.status).toBe('COMPLETED');
-      expect(completeSpy).toHaveBeenCalledWith('dep-1', { paymentRef: VALID_HASH });
+      expect(completeSpy).toHaveBeenCalledWith('dep-1', expect.objectContaining({ paymentRef: VALID_HASH, guard: expect.objectContaining({ claimHash: VALID_HASH }) }));
     });
 
     it('sender mismatch releases the reserved hash so the rightful owner can claim it', async () => {
@@ -788,6 +793,61 @@ describe('crypto deposit binding', () => {
       });
       await service.submitTxHash('user-1', 'dep-vic', '0x' + 'ab'.repeat(32), PAYER_ADDR, ch.nonce, signature);
       expect(claimedRefs.has(VALID_HASH)).toBe(true);
+    });
+  });
+
+  describe('stale RPC result — CAS settlement guard', () => {
+    beforeEach(() => {
+      prismaDepositMock.findUnique.mockReset();
+      prismaDepositMock.update.mockReset().mockResolvedValue({});
+      prismaDepositMock.updateMany.mockReset().mockResolvedValue({ count: 1 });
+      prismaWalletMock.findUnique.mockReset().mockResolvedValue({ id: 'w1', balance: 0 });
+      prismaWalletMock.updateMany.mockReset().mockResolvedValue({ count: 1 });
+      prismaTransactionMock.create.mockReset().mockResolvedValue({});
+    });
+    const depA = { ...baseDeposit, id: 'dep-1', status: DepositStatus.PROCESSING, paymentRef: '0x' + 'aa'.repeat(32), userWalletAddress: PAYER_ADDR, walletVerified: true };
+    const HASH_A = '0x' + 'aa'.repeat(32);
+    const HASH_B = '0x' + 'bb'.repeat(32);
+
+    it('stale valid result for released claim A cannot settle or touch claim B', async () => {
+      const cryptoMock = (service as never as { cryptoVerification: { verifyDeposit: jest.Mock } }).cryptoVerification;
+      // Deposit currently holds claim B — claim A was released mid-flight.
+      prismaDepositMock.findUnique.mockResolvedValue({ ...depA, paymentRef: HASH_B });
+      // A paused verifier for A, then B submitted; stale A result returns.
+      cryptoMock.verifyDeposit.mockResolvedValueOnce({ valid: true, txHash: HASH_A, fromAddress: PAYER_ADDR, confirmations: 20 });
+      // Guard semantics: the settle's updateMany matches only when the WHERE
+      // still covers the verified claim — HASH_B ≠ HASH_A → 0 rows.
+      const completeSpy = jest.spyOn(service, 'completeDeposit').mockResolvedValue({} as never);
+      const out = await service.verifyCryptoDeposit('user-1', 'dep-1');
+      expect(out.status).toBe('COMPLETED'); // B verifies+credits once
+      const guard = (completeSpy.mock.calls[0][1] as { guard?: { claimHash: string } }).guard;
+      expect(guard?.claimHash).toBe(HASH_B); // settle carries the CURRENT claim
+    });
+
+    it('a stale verify result for a released claim leaves the new claim and ledger untouched', async () => {
+      const cryptoMock = (service as never as { cryptoVerification: { verifyDeposit: jest.Mock } }).cryptoVerification;
+      // Deposit was read with claim A before the RPC call.
+      prismaDepositMock.findUnique.mockResolvedValue({ ...depA, paymentRef: HASH_A });
+      cryptoMock.verifyDeposit.mockResolvedValueOnce({ valid: true, txHash: HASH_A, fromAddress: PAYER_ADDR, confirmations: 20 });
+      // Mid-flight: A released and B claimed — DB no longer matches A's guard.
+      // updateMany returns 0 rows for any where carrying paymentRef HASH_A.
+      prismaDepositMock.updateMany.mockImplementation(({ where }) =>
+        Promise.resolve({ count: JSON.stringify(where).includes(HASH_A) ? 0 : 1 }));
+      await expect(service.verifyCryptoDeposit('user-1', 'dep-1')).rejects.toThrow('no longer pending');
+      expect(prismaTransactionMock.create).not.toHaveBeenCalled(); // zero ledger
+    });
+    it('ownership-upgraded manual claim: guard covers gatewayData.submittedHash', async () => {
+      // Deposit holds claim in gatewayData (manual, later verified).
+      const depManual = { ...depA, paymentRef: null, walletVerified: true, gatewayData: { submittedHash: HASH_B } };
+      prismaDepositMock.findUnique.mockResolvedValue(depManual);
+      const cryptoMock = (service as never as { cryptoVerification: { verifyDeposit: jest.Mock } }).cryptoVerification;
+      cryptoMock.verifyDeposit.mockResolvedValueOnce({ valid: true, txHash: HASH_B, fromAddress: PAYER_ADDR, confirmations: 20 });
+      const completeSpy = jest.spyOn(service, 'completeDeposit').mockResolvedValue({} as never);
+      const out = await service.verifyCryptoDeposit('user-1', 'dep-1');
+      expect(out.status).toBe('COMPLETED');
+      // guard carried the gatewayData claim — OR covers submittedHash
+      const call = completeSpy.mock.calls[0][1] as { guard?: { claimHash: string } };
+      expect(call.guard?.claimHash).toBe(HASH_B);
     });
   });
 });

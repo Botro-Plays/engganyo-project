@@ -630,7 +630,11 @@ export class WalletService {
     depositId: string,
     opts: { paymentRef?: string; reviewedBy?: string; adminNotes?: string;
             settlement?: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string;
-                           converted?: number; convertedCurrency?: string } } = {},
+                           converted?: number; convertedCurrency?: string };
+            // CAS guard: the claim this settle was verified against must be
+            // unchanged — protects against stale RPC results settling a
+            // replaced claim. Covers paymentRef and gatewayData.submittedHash.
+            guard?: { claimHash: string; userWalletAddress: string; walletVerified: boolean } } = {},
   ) {
     const { deposit, wallet, notification } = await this.prisma.withTransaction(async (tx) => {
       const existing = await tx.deposit.findUnique({ where: { id: depositId } });
@@ -653,6 +657,14 @@ export class WalletService {
         where: {
           id: depositId,
           status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] },
+          ...(opts.guard && {
+            userWalletAddress: opts.guard.userWalletAddress,
+            walletVerified: opts.guard.walletVerified,
+            OR: [
+              { paymentRef: opts.guard.claimHash },
+              { AND: [{ paymentRef: null }, { gatewayData: { path: ['submittedHash'], equals: opts.guard.claimHash } }] },
+            ],
+          }),
         },
         data: {
           status: DepositStatus.COMPLETED,
@@ -940,7 +952,7 @@ export class WalletService {
         delete gw.submittedHash;
         delete gw.manualClaim;
         await this.prisma.deposit.updateMany({
-          where: { id: depositId, status: DepositStatus.PROCESSING },
+          where: { id: depositId, status: DepositStatus.PROCESSING, gatewayData: { path: ['submittedHash'], equals: claimHash } },
           data: { status: DepositStatus.PENDING, gatewayData: gw as Prisma.InputJsonValue },
         });
       }
@@ -949,9 +961,18 @@ export class WalletService {
 
   // Persist needsReview + the on-chain sender so admin can adjudicate an
   // otherwise-valid transfer that lacks a wallet-ownership proof.
-  private async flagNeedsReview(deposit: { id: string; userId: string; gatewayData: unknown }, fromAddress?: string) {
-    await this.prisma.deposit.update({
-      where: { id: deposit.id },
+  private claimCondition(claimHash: string): Prisma.DepositWhereInput {
+    return {
+      OR: [
+        { paymentRef: claimHash },
+        { AND: [{ paymentRef: null }, { gatewayData: { path: ['submittedHash'], equals: claimHash } }] },
+      ],
+    };
+  }
+
+  private async flagNeedsReview(deposit: { id: string; userId: string; gatewayData: unknown }, claimHash: string, fromAddress?: string) {
+    await this.prisma.deposit.updateMany({
+      where: { id: deposit.id, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
       data: {
         gatewayData: {
           ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
@@ -1021,11 +1042,14 @@ export class WalletService {
     if (result.valid) {
       if (deposit.walletVerified) {
         this.logger.log(`Frontend-triggered verification: auto-completing crypto deposit ${deposit.id}`);
-        await this.completeDeposit(deposit.id, { paymentRef: claimHash });
+        await this.completeDeposit(deposit.id, {
+          paymentRef: claimHash,
+          guard: { claimHash, userWalletAddress: deposit.userWalletAddress!, walletVerified: true },
+        });
         return { status: 'COMPLETED', depositId, txHash: claimHash, message: 'Deposit verified and completed' };
       }
       // Valid transfer but ownership never proven — route to review, not credit.
-      await this.flagNeedsReview(deposit, result.fromAddress);
+      await this.flagNeedsReview(deposit, claimHash, result.fromAddress);
       return {
         status: 'PROCESSING', depositId, txHash: claimHash, needsReview: true,
         message: 'On-chain payment found but wallet ownership was not proven — routed to review',
@@ -1040,8 +1064,8 @@ export class WalletService {
     if (result.error?.includes('Waiting for confirmations')) {
       const minConfirmations = 12;
       if (result.confirmations !== undefined) {
-        await this.prisma.deposit.update({
-          where: { id: depositId },
+        await this.prisma.deposit.updateMany({
+          where: { id: depositId, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
           data: {
             gatewayData: {
               ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
@@ -1072,8 +1096,8 @@ export class WalletService {
     // For any other failure, persist error details and return without marking FAILED
     // (only the cron job should mark deposits as FAILED to avoid race conditions)
     if (result.confirmations !== undefined || result.error) {
-      await this.prisma.deposit.update({
-        where: { id: depositId },
+      await this.prisma.deposit.updateMany({
+        where: { id: depositId, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
         data: {
           gatewayData: {
             ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
@@ -1159,10 +1183,13 @@ export class WalletService {
 
         if (result.valid) {
           if (deposit.walletVerified) {
-            this.logger.log(`Auto-completing crypto deposit ${deposit.id} (tx: ${deposit.paymentRef})`);
-            await this.completeDeposit(deposit.id, { paymentRef: claimHash });
+            this.logger.log(`Auto-completing crypto deposit ${deposit.id} (tx: ${claimHash})`);
+            await this.completeDeposit(deposit.id, {
+              paymentRef: claimHash,
+              guard: { claimHash, userWalletAddress: deposit.userWalletAddress!, walletVerified: true },
+            });
           } else {
-            await this.flagNeedsReview(deposit, result.fromAddress);
+            await this.flagNeedsReview(deposit, claimHash, result.fromAddress);
             this.logger.warn(`Crypto deposit ${deposit.id} verified on-chain but wallet ownership unproven — needs review`);
           }
         } else {
@@ -1174,8 +1201,8 @@ export class WalletService {
           this.logger.warn(`Crypto deposit ${deposit.id} verification failed: ${result.error}`);
           // Persist confirmation count so UI can show X/12 progress
           if (result.confirmations !== undefined) {
-            await this.prisma.deposit.update({
-              where: { id: deposit.id },
+            await this.prisma.deposit.updateMany({
+              where: { id: deposit.id, status: DepositStatus.PROCESSING, ...this.claimCondition(claimHash) },
               data: {
                 gatewayData: {
                   ...(deposit.gatewayData && typeof deposit.gatewayData === 'object' && !Array.isArray(deposit.gatewayData)
