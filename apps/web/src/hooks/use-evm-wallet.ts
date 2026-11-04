@@ -66,6 +66,8 @@ function getActiveProvider(ref: React.RefObject<EthereumProvider | null>): Ether
   return ref.current ?? getEthereum();
 }
 
+export type SendOutcome = 'sent' | 'cancelled' | 'preflight' | 'uncertain';
+
 export function useEvmWallet() {
   const [state, setState] = useState<EvmWalletState>('idle');
   const [address, setAddress] = useState<string | null>(null);
@@ -330,15 +332,15 @@ export function useEvmWallet() {
     contractAddress: string,
     amount: number,
     targetChainId: number,
-  ): Promise<string | null> => {
+  ): Promise<{ hash: string | null; outcome: SendOutcome }> => {
     const ethereum = getActiveProvider(activeProviderRef);
-    if (!ethereum) { setError('Wallet not available'); setState('error'); return null; }
+    if (!ethereum) { setError('Wallet not available'); setState('error'); return { hash: null, outcome: 'uncertain' }; }
     try {
       setState('sending');
       setError(null);
       if (chainId !== targetChainId) {
         const switched = await switchChain(targetChainId);
-        if (!switched) return null;
+        if (!switched) return { hash: null, outcome: 'uncertain' };
         setState('sending');
       }
       const { ethers } = await import('ethers');
@@ -355,7 +357,7 @@ export function useEvmWallet() {
         setSendOutcome('preflight');
         fail('This wallet is the deposit destination.', 'Connect a different wallet account â€” the one that holds your USDT â€” and try again.');
         setState('error');
-        return null;
+        return { hash: null, outcome: 'preflight' };
       }
       // 2) on-chain checks: token balance and native gas balance
       const contract = new ethers.Contract(contractAddr, ERC20_ABI, signer);
@@ -370,13 +372,13 @@ export function useEvmWallet() {
           setSendOutcome('preflight');
           fail(`Not enough USDT on ${chainLabel(targetChainId)}.`, 'Reconnect a funded wallet or add USDT, then try again.');
           setState('error');
-          return null;
+          return { hash: null, outcome: 'preflight' };
         }
         if (gasBal === 0n) {
           setSendOutcome('preflight');
           fail(`Not enough ${gasSymbol(targetChainId)} on ${chainLabel(targetChainId)} to pay network fees.`, `Add a small amount of ${gasSymbol(targetChainId)} to your wallet, then retry.`);
           setState('error');
-          return null;
+          return { hash: null, outcome: 'preflight' };
         }
       } catch {
         // balance pre-check unreachable â€” let the transfer attempt classify the real error
@@ -385,7 +387,7 @@ export function useEvmWallet() {
       setTxHash(tx.hash);
       setSendOutcome('sent');
       setState('submitted');
-      return tx.hash;
+      return { hash: tx.hash, outcome: 'sent' };
     } catch (err: unknown) {
       const c = classifyEvmError(err, targetChainId);
       // Confirmed pre-broadcast: user cancelled or a revert/preflight failure —
@@ -393,11 +395,12 @@ export function useEvmWallet() {
       // the transfer may have broadcast; resend is unsafe.
       const net = /reach|network|rpc|disconnect|timeout|timed out|unreachable/i.test(c.message + (c.hint ?? ''));
       const cancelled = /cancelled|rejected|denied/i.test(c.message);
-      setSendOutcome(cancelled ? 'cancelled' : net ? 'uncertain' : 'preflight');
+      const outcome: SendOutcome = cancelled ? 'cancelled' : net ? 'uncertain' : 'preflight';
+      setSendOutcome(outcome);
       setError(c.message);
       setErrorHint(c.hint ?? null);
       setState('error');
-      return null;
+      return { hash: null, outcome };
     }
   }, [chainId, switchChain, classifyEvmError]);
 

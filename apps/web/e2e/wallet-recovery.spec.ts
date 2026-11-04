@@ -120,3 +120,70 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
     expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
   });
 }
+
+// Wallet that throws an RPC error on send — the request reached the wallet but
+// no hash was returned. Outcome is uncertain: may or may not have broadcast.
+async function injectUncertainWallet(page: import('@playwright/test').Page, chainIdHex: string) {
+  await page.addInitScript((chain) => {
+    const ADDR = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
+    (window as unknown as { ethereum: unknown }).ethereum = {
+      isMetaMask: true,
+      request: async ({ method, params }: { method: string; params?: Array<Record<string, string>> }) => {
+        if (method === 'eth_requestAccounts' || method === 'eth_accounts') return [ADDR];
+        if (method === 'eth_chainId') return chain;
+        if (method === 'net_version') return String(parseInt(chain, 16));
+        if (method === 'eth_getBalance') return '0x2386f26fc10000';
+        if (method === 'eth_call') { const d = (params?.[0] as { data?: string })?.data ?? ''; if (d.startsWith('0x313ce567')) return '0x' + (18).toString(16).padStart(64, '0'); if (d.startsWith('0x70a08231')) return '0x8ac7230489e80000'; return '0x0'; }
+        if (method === 'personal_sign') return '0x' + 'ab'.repeat(65);
+        if (method === 'eth_estimateGas') return '0x5208';
+        if (method === 'eth_sendTransaction') {
+          (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
+          throw Object.assign(new Error('Internal JSON-RPC error.'), { code: -32603, data: { message: 'transport error' } });
+        }
+        throw new Error('Unsupported ' + method);
+      },
+      on: () => undefined,
+      removeListener: () => undefined,
+    };
+  }, chainIdHex);
+}
+
+for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base']] as const) {
+  test(`uncertain send on ${label} is recovery-only — no resend before or after refresh`, async ({ page }) => {
+    const failState = { fail: false };
+    await injectUncertainWallet(page, hex);
+    await mockApis(page, chainId, failState);
+    await page.goto('/wallet');
+    await page.getByRole('button', { name: /deposit credits/i }).click();
+    await page.locator('#deposit-card button').filter({ hasText: '$1' }).first().click();
+    await page.getByText(new RegExp(chainId === 56 ? 'BNB Smart Chain|BEP20' : 'Base', 'i')).first().click();
+    await page.getByRole('button', { name: /connect wallet/i }).first().click();
+    await page.getByRole('button', { name: /verify wallet ownership/i }).click();
+    await page.getByRole('button', { name: /^2\. Send / }).click();
+
+    const card = page.locator('#deposit-card');
+    // Uncertain: recovery-only — hash input + attach, NO Resume send / Abandon / resend
+    await expect(card.getByText(/Check your wallet activity/i)).toBeVisible({ timeout: 10_000 });
+    await expect(card.getByPlaceholder(/transaction hash/i)).toBeVisible();
+    await expect(card.getByRole('button', { name: /resume send/i })).toHaveCount(0);
+    await expect(card.getByRole('button', { name: /abandon deposit/i })).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
+
+    // Survives refresh — still recovery-only, still no resend
+    await page.reload();
+    await page.getByRole('button', { name: /deposit credits/i }).click();
+    await page.locator('#deposit-card button').filter({ hasText: '$1' }).first().click();
+    await page.getByText(new RegExp(chainId === 56 ? 'BNB Smart Chain|BEP20' : 'Base', 'i')).first().click();
+    const card2 = page.locator('#deposit-card');
+    await expect(card2.getByText(/Check your wallet activity/i)).toBeVisible({ timeout: 10_000 });
+    await expect(card2.getByRole('button', { name: /resume send/i })).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBeUndefined();
+
+    // Attach the hash from wallet activity → binds to the original deposit
+    await card2.getByPlaceholder(/transaction hash/i).fill(HASH);
+    await card2.getByRole('button', { name: /attach hash/i }).click();
+    await expect(card2.getByText(/Transfer submitted on/)).toBeVisible({ timeout: 10_000 });
+    const attachCalls = await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount);
+    expect(attachCalls ?? 0).toBe(0); // attaching never re-sends
+  });
+}
