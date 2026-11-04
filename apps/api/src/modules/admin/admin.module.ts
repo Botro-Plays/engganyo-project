@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bull';
 
 import { WalletModule } from '../wallet/wallet.module';
 import { PayMongoModule } from '../paymongo/paymongo.module';
+import { PayPalModule } from '../paypal/paypal.module';
 import { AuthModule } from '../auth/auth.module';
 import { EventsModule } from '../events/events.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -16,6 +17,7 @@ import { AdminService } from './admin.service';
   imports: [
     WalletModule,
     forwardRef(() => PayMongoModule),
+    forwardRef(() => PayPalModule),
     AuthModule,
     EventsModule,
     NotificationsModule,

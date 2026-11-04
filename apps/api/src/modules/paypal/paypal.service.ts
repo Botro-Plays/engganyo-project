@@ -345,6 +345,23 @@ export class PayPalService {
     return { depositId: dep.id, orderId, status: json.status as string };
   }
 
+  // Read-only settlement lookup for backfill — verifies the order's
+  // reference matches the deposit before returning figures.
+  async getOrderSettlement(orderId: string, depositId: string) {
+    const cfg = await this.getConfig();
+    if (!cfg) return undefined;
+    const accessToken = await this.getAccessToken(cfg);
+    const res = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${orderId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    if (!res || !res.ok) return undefined;
+    const order = (await res.json()) as Record<string, unknown>;
+    const units = order.purchase_units as Array<Record<string, unknown>> | undefined;
+    if ((order.id as string) !== orderId || units?.[0]?.reference_id !== depositId) return undefined;
+    return this.extractSettlement(order);
+  }
+
   // ─── Cancel / Void an order (best-effort) ───────────────────
 
   async cancelOrder(orderId: string) {

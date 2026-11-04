@@ -73,6 +73,8 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
       mockService() as never, mockService() as never, mockService() as never,
       mockService() as never, mockService() as never, mockService() as never,
       mockService() as never, mockService() as never,
+      mockService() as never,
+
     );
     const tasksSvc = new TasksService(
       client as never, mockService() as never, walletSvc as never,

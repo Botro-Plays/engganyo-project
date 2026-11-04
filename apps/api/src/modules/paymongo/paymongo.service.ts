@@ -823,6 +823,19 @@ export class PayMongoService {
     return 'ok';
   }
 
+  // Read-only settlement lookup for backfill — GET /payments/{id}.
+  async getPaymentSettlement(paymentId: string) {
+    const secret = await this.getSecretKey();
+    if (!secret) return undefined;
+    const res = await fetch(`${this.baseUrl}/payments/${paymentId}`, {
+      headers: { Authorization: this.authHeader(secret) },
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    if (!res || !res.ok) return undefined;
+    const json = (await res.json()) as { data?: { attributes?: Record<string, unknown> } };
+    return this.extractSettlement(json.data?.attributes);
+  }
+
   /**
    * Shared settle path for paid events (Payment Links + Checkout Sessions).
    * Terminal COMPLETED stays ignored; CANCELLED deposits may still be
