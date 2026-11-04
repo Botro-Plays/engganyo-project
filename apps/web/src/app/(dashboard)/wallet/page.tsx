@@ -1443,7 +1443,17 @@ export default function WalletPage() {
                           Pay ₱{rateChangePending.newAmount.toLocaleString()} — continue
                         </button>
                         <button
-                          onClick={() => setRateChangePending(null)}
+                          onClick={() => {
+                            const { depositId } = rateChangePending;
+                            setRateChangePending(null);
+                            // Declining the revised quote must free the slot —
+                            // cancel the pending deposit via the same guarded
+                            // path used elsewhere, or the user is blocked by a
+                            // stale PENDING row.
+                            cancelDepositMutation.mutate(depositId, {
+                              onError: () => setDepositError('Could not cancel the deposit — please cancel it from Deposit History.'),
+                            });
+                          }}
                           className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-all"
                         >
                           Cancel
