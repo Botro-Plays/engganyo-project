@@ -177,6 +177,7 @@ export class PayPalService {
     deposit: { id: string; amountFiat: number; currency: string },
     orderId: string,
     order: Record<string, unknown>,
+    expectedCaptureId?: string,
   ): void {
     if ((order.id as string | undefined) !== orderId) {
       this.logger.warn(`PayPal order id mismatch: expected ${orderId}, got ${order.id} — deposit NOT completed`);
@@ -191,7 +192,9 @@ export class PayPalService {
       throw new BadRequestException('PayPal capture missing deposit reference');
     }
     const captures = (units?.[0]?.payments as { captures?: Array<Record<string, unknown>> } | undefined)?.captures;
-    const capture = captures?.[0];
+    const capture = expectedCaptureId
+      ? captures?.find((c) => (c.id as string | undefined) === expectedCaptureId)
+      : captures?.[0];
     if (!capture || !(capture.id as string | undefined) || (capture.status as string | undefined) !== 'COMPLETED') {
       throw new BadRequestException('PayPal capture missing or not completed');
     }
@@ -439,7 +442,11 @@ export class PayPalService {
 
     const eventType = payload.event_type as string;
     const resource = payload.resource as Record<string, unknown> | undefined;
-    const orderId = resource?.id as string | undefined;
+    // CAPTURE events carry the order id in supplementary_data.related_ids;
+    // ORDER events carry it as resource.id. Take whichever correlates.
+    const relatedOrderId = ((resource?.supplementary_data as Record<string, unknown> | undefined)
+      ?.related_ids as Record<string, unknown> | undefined)?.order_id as string | undefined;
+    const orderId = (resource?.id as string | undefined) ?? relatedOrderId;
 
     this.logger.log(`PayPal webhook event: ${eventType}, orderId: ${orderId}`);
 
@@ -474,35 +481,70 @@ export class PayPalService {
 
     // ── PAYMENT.CAPTURE.COMPLETED → verify + complete deposit if not already done ──
     if (eventType === 'PAYMENT.CAPTURE.COMPLETED') {
-      const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId } });
-      if (!deposit) return { received: true, action: 'ignored_no_deposit' };
-      if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
-      if (deposit.status !== DepositStatus.PENDING && deposit.status !== DepositStatus.PROCESSING) {
-        return { received: true, action: 'ignored_wrong_status', depositId: deposit.id };
+      // For CAPTURE events `resource` is the capture object: resource.id is
+      // the provider capture id; the order id lives in supplementary_data.
+      const eventOrderId = relatedOrderId ?? orderId;
+      const eventCaptureId = resource?.id as string | undefined;
+      const deposit = eventOrderId
+        ? await this.prisma.deposit.findUnique({ where: { paymentRef: eventOrderId } })
+        : undefined;
+      const resAmount = resource?.amount as { value?: string; currency_code?: string } | undefined;
+      const evValue = resAmount?.value;
+      const evCurrency = resAmount?.currency_code;
+      const evStatus = resource?.status as string | undefined;
+      const evAmountCents = evValue != null && evValue !== '' ? Number(evValue) : NaN;
+      const hasFullEvidence =
+        !!eventCaptureId &&
+        evStatus === 'COMPLETED' &&
+        Number.isFinite(evAmountCents) &&
+        !!evCurrency;
+
+      if (!eventOrderId) {
+        this.logger.warn(`PAYMENT.CAPTURE.COMPLETED missing order correlation (capture ${eventCaptureId ?? 'unknown'})`);
+        return { received: true, action: 'ignored_no_order_id' };
+      }
+      const target = deposit;
+      if (!target) return { received: true, action: 'ignored_no_deposit' };
+      if (target.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: target.id };
+      if (target.status !== DepositStatus.PENDING && target.status !== DepositStatus.PROCESSING) {
+        return { received: true, action: 'ignored_wrong_status', depositId: target.id };
       }
 
-      // Verify the captured amount + currency match the deposit before
-      // crediting — a mismatched capture must not settle the wallet.
-      const resAmount = resource?.amount as { value?: string; currency_code?: string } | undefined;
-      const capturedValue = resAmount?.value;
-      const paidCurrency = resAmount?.currency_code;
-      if (capturedValue) {
-        if (Math.abs(parseFloat(capturedValue) - deposit.amountFiat) > 0.005) {
-          this.logger.warn(
-            `PAYMENT.CAPTURE.COMPLETED amount mismatch for deposit ${deposit.id}: expected ${deposit.amountFiat}, got ${capturedValue} — not completing`,
-          );
-          return { received: true, action: 'ignored_amount_mismatch', depositId: deposit.id };
+      if (hasFullEvidence) {
+        // Signed event carries full capture evidence — verify directly.
+        const paidCents = Math.round(evAmountCents * 100);
+        const expectedCents = Math.round(target.amountFiat * 100);
+        if (paidCents !== expectedCents) {
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED amount mismatch on ${target.id}: ${evValue} vs ${target.amountFiat} (capture ${eventCaptureId}) — not completing`);
+          return { received: true, action: 'ignored_amount_mismatch', depositId: target.id };
+        }
+        if (target.currency && evCurrency!.toUpperCase() !== target.currency.toUpperCase()) {
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED currency mismatch on ${target.id}: ${evCurrency} vs ${target.currency} (capture ${eventCaptureId}) — not completing`);
+          return { received: true, action: 'ignored_amount_mismatch', depositId: target.id };
+        }
+      } else {
+        // Signed event lacks verifiable evidence — retrieve the order and
+        // verify the completed capture against the event's capture id.
+        const accessToken = await this.getAccessToken(cfg);
+        const orderRes = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${eventOrderId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10_000),
+        }).catch(() => null);
+        if (!orderRes || !orderRes.ok) {
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence lookup unavailable for ${eventOrderId} (capture ${eventCaptureId ?? 'unknown'}) — retryable`);
+          throw new InternalServerErrorException('Could not verify PayPal capture evidence — retry');
+        }
+        const orderJson = (await orderRes.json()) as Record<string, unknown>;
+        try {
+          this.assertVerifiedCapture(target, eventOrderId, orderJson, eventCaptureId);
+        } catch (e) {
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence conflict on ${target.id} (order ${eventOrderId}, capture ${eventCaptureId ?? 'unknown'}) — not completing`);
+          return { received: true, action: 'ignored', depositId: target.id };
         }
       }
-      if (paidCurrency && deposit.currency && paidCurrency.toUpperCase() !== deposit.currency.toUpperCase()) {
-        this.logger.warn(
-          `PAYMENT.CAPTURE.COMPLETED currency mismatch for deposit ${deposit.id}: ${paidCurrency} vs ${deposit.currency} — not completing`,
-        );
-        return { received: true, action: 'ignored_amount_mismatch', depositId: deposit.id };
-      }
 
-      await this.walletService.completeDeposit(deposit.id, { paymentRef: orderId });
-      return { received: true, action: 'completed', depositId: deposit.id };
+      await this.walletService.completeDeposit(target.id, { paymentRef: eventOrderId });
+      return { received: true, action: 'completed', depositId: target.id };
     }
 
     // ── PAYMENT.CAPTURE.PENDING → mark deposit processing ──

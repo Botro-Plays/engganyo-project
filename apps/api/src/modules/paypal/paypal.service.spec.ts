@@ -116,9 +116,15 @@ describe('PayPalService', () => {
     expect(walletService.completeDeposit).not.toHaveBeenCalled();
   });
 
-  const captureEvent = (value = '1.00', currency = 'USD') => ({
+  const captureEvent = (value = '1.00', currency = 'USD', over: Record<string, unknown> = {}) => ({
     event_type: 'PAYMENT.CAPTURE.COMPLETED',
-    resource: { id: 'ORDER-123', amount: { value, currency_code: currency } },
+    resource: {
+      id: 'CAP-1',
+      status: 'COMPLETED',
+      amount: { value, currency_code: currency },
+      supplementary_data: { related_ids: { order_id: 'ORDER-123' } },
+      ...over,
+    },
   });
 
   const signedWebhook = async (payload: unknown) => {
@@ -302,7 +308,7 @@ describe('PayPalService', () => {
 
   it('signed event for a foreign order (same amount) cannot credit this deposit', async () => {
     prisma.deposit.findUnique.mockResolvedValue(null); // no deposit for ORDER-FOREIGN
-    const out = await signedWebhook({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'ORDER-FOREIGN', amount: { value: '1.00', currency_code: 'USD' } } });
+    const out = await signedWebhook(captureEvent('1.00', 'USD', { supplementary_data: { related_ids: { order_id: 'ORDER-FOREIGN' } } }));
     expect(out.action).toBe('ignored_no_deposit');
     expect(walletService.completeDeposit).not.toHaveBeenCalled();
   });
@@ -324,5 +330,64 @@ describe('PayPalService', () => {
     prisma.deposit.findUnique.mockResolvedValue(null);
     await expect(service.captureOrder('ORDER-UNKNOWN', 'user-1')).rejects.toThrow('Deposit not found');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  // ── CAPTURE.COMPLETED evidence rules ──
+
+  it.each([
+    ['missing amount', captureEvent('1.00', 'USD', { amount: undefined })],
+    ['missing currency', captureEvent('1.00', '', { amount: { value: '1.00' } })],
+    ['malformed amount', captureEvent('not-a-number')],
+    ['missing capture id', captureEvent('1.00', 'USD', { id: undefined })],
+    ['missing status', captureEvent('1.00', 'USD', { status: undefined })],
+  ])('insufficient evidence (%s) → provider lookup verifies then settles once', async (_n, payload) => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder() });
+    const out = await signedWebhook(payload);
+    expect(out.action).toBe('completed');
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  it('insufficient evidence + mismatched capture id in retrieved order → ignored, zero credit', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder({}, { payments: { captures: [{ id: 'CAP-OTHER', status: 'COMPLETED', amount: { value: '1.00', currency_code: 'USD' } }] } }) });
+    const out = await signedWebhook(captureEvent('1.00', 'USD', { id: 'CAP-DIFF', status: undefined, amount: undefined }));
+    expect(out.action).toBe('ignored');
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('insufficient evidence + unavailable lookup → retryable, wallet untouched', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
+    await expect(signedWebhook(captureEvent('1.00', 'USD', { amount: undefined }))).rejects.toThrow('retry');
+    expect(walletService.completeDeposit).not.toHaveBeenCalled();
+  });
+
+  it('webhook-first then browser capture → one credit; browser-first then webhook → one credit', async () => {
+    // Webhook-first.
+    prisma.deposit.findUnique
+      .mockResolvedValueOnce(deposit()) // webhook lookup
+      .mockResolvedValueOnce(deposit({ status: DepositStatus.COMPLETED })); // browser lookup
+    await signedWebhook(captureEvent());
+    const out = await service.captureOrder('ORDER-123', 'user-1');
+    expect(out.status).toBe('COMPLETED');
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
+  });
+
+  it('non-finite amount (Infinity) rejected via lookup path — zero credit when evidence missing', async () => {
+    prisma.deposit.findUnique.mockResolvedValue(deposit());
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder() });
+    // Infinity serializes oddly — send via raw payload to simulate malformed number
+    const out = await signedWebhook({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'CAP-1', status: 'COMPLETED', amount: { value: 'Infinity', currency_code: 'USD' }, supplementary_data: { related_ids: { order_id: 'ORDER-123' } } } });
+    expect(out.action).toBe('completed'); // event evidence insufficient → provider lookup verified instead
+    expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
   });
 });
