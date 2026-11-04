@@ -12,6 +12,7 @@ type ViewState = 'loading' | 'checking' | 'success' | 'pending' | 'inactive' | '
 interface DepositRecord {
   id: string;
   method: string;
+  paymentRef: string | null;
   status: string;
   amountFiat: number;
   currency: string;
@@ -85,7 +86,16 @@ function PaymentReturnContent() {
       try {
         const found = await fetchDeposit();
         if (stopped) return;
-        if (found) setDeposit(found);
+        if (found) {
+          setDeposit(found);
+          // PayPal: the browser return triggers the capture on the order
+          // stored in paymentRef — but only on a success return; an explicit
+          // cancel return never initiates capture. Best-effort — settlement
+          // is server-verified and polling continues either way.
+          if (found.method === 'PAYPAL' && found.status === 'PENDING' && found.paymentRef && hint === 'success') {
+            apiClient.post(`paypal/capture/${found.paymentRef}`).catch(() => {});
+          }
+        }
         if (found?.status === TERMINAL_OK) {
           setView('success');
           stopped = true; // stop polling on confirmed terminal result

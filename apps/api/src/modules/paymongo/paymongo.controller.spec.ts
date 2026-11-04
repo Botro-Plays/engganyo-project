@@ -72,6 +72,7 @@ describe('PayMongoController', () => {
     creditsToAward: 500,
     creditsAwarded: 0,
     bonusCredits: 0,
+    paymentRef: 'pi_test',
     ...overrides,
   });
 

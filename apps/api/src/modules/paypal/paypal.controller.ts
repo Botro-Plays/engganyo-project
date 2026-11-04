@@ -20,7 +20,7 @@ export class PayPalController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: { depositId: string; amount: number; currency: string },
   ) {
-    return this.paypalService.createOrder(dto.depositId, dto.amount, dto.currency);
+    return this.paypalService.createOrder(dto.depositId, dto.amount, dto.currency, user.sub);
   }
 
   @Post('capture/:orderId')
@@ -32,7 +32,7 @@ export class PayPalController {
     @CurrentUser() user: JwtPayload,
     @Param('orderId') orderId: string,
   ) {
-    return this.paypalService.captureOrder(orderId);
+    return this.paypalService.captureOrder(orderId, user.sub);
   }
 
   @Post('webhook')

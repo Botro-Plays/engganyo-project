@@ -230,17 +230,18 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await expect(paypalMethod).toBeVisible({ timeout: 5_000 });
     await paypalMethod.click();
 
-    // Step 3: proceed to PayPal
+    // Step 3: proceed to PayPal — same-tab handoff like PayMongo.
+    // Stub the provider domain so the navigation can complete inside the test.
+    await page.route('**/www.paypal.com/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<html><title>PayPal Checkout</title></html>' }),
+    );
     const proceedBtn = page.getByRole('button', { name: /proceed to paypal/i });
     await expect(proceedBtn).toBeVisible({ timeout: 5_000 });
     await proceedBtn.click();
 
-    // Verify "Deposit Submitted" state appears
-    await expect(page.getByText(/deposit submitted/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/complete your payment in the paypal checkout page/i)).toBeVisible();
-
-    // Verify "Open PayPal Checkout" button is shown
-    await expect(page.getByRole('button', { name: /open paypal checkout/i })).toBeVisible();
+    // Same-tab handoff: the app navigates to the PayPal approval URL.
+    await page.waitForURL(/paypal\.com\/checkout\/test-order/, { timeout: 10_000 });
+    await expect(page).toHaveURL(MOCK_PAYPAL_URL);
   });
 
   test('select package → USDT (manual) → submit txHash → deposit processing', async ({ page }) => {
