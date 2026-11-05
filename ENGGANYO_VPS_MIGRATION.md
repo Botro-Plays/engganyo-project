@@ -736,3 +736,9 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Verified 390/1440: actionable (server-counted, beyond first page), review-only, empty, slow (loading shot), failed (error after client retries — apiClient retries 5xx ×3 + react-query ×1 ≈ 8 calls worst case), welcome-hidden.
 - Screenshots: `docs/screenshots/design-slice/dash-sum-*` (12 files).
 - Idle-session requests: 0 polling; +1 summary call on dashboard load.
+
+#### PR #38 update — live socket refresh (`4e127e9`)
+
+- Dashboard subscribes to `task:assigned`/`task:completed`/`task:reviewed` → invalidates `['tasks']` prefix (summary + cached lists). Previously the key only refreshed when Tasks/Discover were mounted.
+- Verified vs fake socket.io server: `task:reviewed` REJECTED flipped card "2 submissions" → "1 submission" live, no navigation/focus change; ~10s idle post-event → zero periodic summary calls; welcome still 0 calls.
+- Dev StrictMode double-mount produced 3 summary calls (initial + 2 invalidation dedup misses); prod single-mount = initial + 1.
