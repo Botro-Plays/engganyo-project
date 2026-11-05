@@ -806,11 +806,11 @@ Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers;
 - Post-deploy: `GET /api/health` → ok (db+redis, 4ms); `engganyo.com` + `www` → 200; `/tasks` auth-gates to `/login` at 390px and 1440px (Playwright smoke, screenshots `docs/screenshots/design-slice/prod-tasks-{390,1440}.png`).
 - Authenticated Find tasks smoke (grid, accept-last-task panel persistence, new-tab target, submit clears panel) verified pre-merge in the controlled test env at both widths; prod interactive acceptance intentionally not exercised — it would create task/wallet records, which are restricted to the controlled environment per review policy.
 
-### Design revision — PR #41 (Ready for design review)
+### Design revision — PR #41 (Ready for owner design review)
 
-- **Branch** `feat/design-revision-landing-shell`, **head** `facd604407262ab308c4cbd149eaf28b48adb8ff`, **draft PR** https://github.com/Botro-Plays/engganyo-project/pull/41
+- **Branch** `feat/design-revision-landing-shell`, **head** `4e4edd45ef540f3fe8fb0fc835cc6bcced9a033f`, **draft PR** https://github.com/Botro-Plays/engganyo-project/pull/41
 - Branched from `main` after PR #40 merged. No merge conflicts; no dependency on PRs #39/#40 beyond base branch.
-- Two commits: `43912f8` (initial redesign), `facd604` (a11y fix + dead query removal + authenticated screenshots).
+- Three commits: `43912f8` (initial redesign), `facd604` (a11y fix + dead query removal + authenticated screenshots), `4e4edd4` (matched before/after comparison screenshots + drawer scroll safety).
 
 **Problems addressed (owner feedback):**
 1. Landing page still felt like the old site "in white" — generic hero with equal-weight feature cards, no concrete task example.
@@ -848,10 +848,24 @@ Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers;
 
 **Before baseline clarification:** The correct before is the deployed PR #40 `c1e4d4d` (engganyo.com). It already had "Find a task. Earn credits." — the visual problem was the light-theme centered layout with equal-weight sections and no concrete task/proof/reward example. Screenshots captured from production.
 
-**Verification (`facd604`):**
+**Verification (`4e4edd4`):**
 - `tsc --noEmit` clean; `next build` clean — 59 routes, 0 errors
-- Screenshots: `before-prod-landing-{390,1440}.png` (from engganyo.com); `after-landing-{390,1440}.png`, `after-dashboard-{390,1440}.png`, `after-more-drawer-390.png`, `after-tasks-browse-{390,1440}.png`, `after-tasks-accepted-{390,1440}.png`, `after-mytasks-{390,1440}.png` (authenticated dev, mock API)
-- Request count: dashboard −1 (`public-stats` removed); Find tasks identical to PR #40 baseline
+- Screenshots: `docs/screenshots/design-slice/` (landing + authenticated dev, mock API)
+- **Matched comparison set** `docs/screenshots/design-slice/compare/`:
+  - `before-dashboard-{390,1440}.png` — c1e4d4d baseline (flat sidebar, "Here's what's happening", 6 equal stat cards)
+  - `after-dashboard-{390,1440}-clean.png` — PR redesign (grouped sidebar, "What can you do now?", next-action hero card, 4-col strip)
+  - `before-mobile-nav-390.png` — c1e4d4d horizontal scroll nav (items truncated)
+  - `after-more-drawer-390-clean.png` — PR bottom-sheet grid (9 secondary destinations)
+  - `before-tasks-{390,1440}.png` / `after-tasks-{390,1440}.png` — Find tasks (unchanged from PR #40)
+  - `walk-01..walk-04, walk-06.png` — task journey walkthrough (390px)
+  - `drawer-short-568.png` — short-viewport scroll safety (390×568)
+- **Request counts** (same fixture, same mock API, Playwright):
+  - Baseline `c1e4d4d` dashboard initial load: **24 requests**
+  - PR `4e4edd4` dashboard initial load: **17 requests**  **delta: −7**
+  - Confirmed removed: `analytics/public-stats` (Platform Pulse query). Remaining delta from Platform Pulse–related refetches.
+  - Find tasks load: identical across both versions.
+- **Drawer accessibility** (all checks pass, Playwright 390px headless):
+  - Focus enters Close button on open; Tab wraps full cycle; Shift+Tab wraps to Settings; Escape + backdrop tap close and restore focus to More button; Forum selection dismisses drawer; touch targets ≥ 44×44 px (all 9 links); short viewport 390×568: drawer bottom edge 511 px ≤ 568 px, all 9 destinations reachable.
 - UI UX Pro Max skill: `.agents/skills/` absent from disk; script unavailable; guidance applied from system context; documented per AGENTS.md
 
 **Not in this PR:** Find tasks card/panel (unchanged from PR #40); task/proof/wallet APIs (unchanged); 1v1 challenges and visitor analytics (proposal stage); PR #36 Gmail logo, funded BSC/Base, PayPal hosted-return (tracked separately).
