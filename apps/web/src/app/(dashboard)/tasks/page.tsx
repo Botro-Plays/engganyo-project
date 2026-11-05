@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useMemo } from 'react';
+import { Suspense, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -192,6 +192,10 @@ function TasksPageInner() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assigningIds, setAssigningIds] = useState<Set<string>>(new Set());
+  const assignInFlight = useRef(false);
+  // Completion returned by a successful assign — pinned above the browse grid
+  // so the user can open the target and submit proof without leaving Find tasks.
+  const [justAccepted, setJustAccepted] = useState<MyTask | null>(null);
   const [reporting, setReporting] = useState<{ userId: string; label: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -343,6 +347,7 @@ function TasksPageInner() {
   const assignMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/assign`),
     onMutate: async (campaignId) => {
+      assignInFlight.current = true;
       setAssigningIds((prev) => new Set(prev).add(campaignId));
       // Optimistically remove the assigned task from browse cache
       await queryClient.cancelQueries({ queryKey: ['tasks', 'browse'], type: 'all' });
@@ -372,6 +377,7 @@ function TasksPageInner() {
       }
     },
     onSettled: (_data, _err, campaignId) => {
+      assignInFlight.current = false;
       setAssigningIds((prev) => {
         const next = new Set(prev);
         next.delete(campaignId);
@@ -409,7 +415,9 @@ function TasksPageInner() {
         proofHash: uploadedProofHash || undefined,
         notes: data.notes || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
+      // The pinned card is only for the task just submitted.
+      setJustAccepted((j) => (j && j.campaign.id === vars.campaignId ? null : j));
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       proofForm.reset();
@@ -574,6 +582,51 @@ function TasksPageInner() {
               <span className="font-semibold text-amber-300">Disclaimer:</span> Completing tasks on Engganyo may violate the Terms of Service of third-party platforms (YouTube, Instagram, TikTok, X, Facebook, etc.) and could result in account warnings, restrictions, or permanent bans. Participate at your own risk. Engganyo is not responsible for any account actions taken by third-party platforms.
             </p>
           </div>
+          {justAccepted && (
+            <div className="card-glass rounded-xl p-4 mb-4 border-brand-500/30 bg-brand-500/5">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Task accepted — you can start now</p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">
+                    {justAccepted.campaign.title} · +{formatCredits(justAccepted.campaign.creditPerTask)} {creditLabel(justAccepted.campaign.creditPerTask)} on approval
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <a
+                      href={justAccepted.campaign.targetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
+                    >
+                      Open {PLATFORM_LABEL[getPlatform(justAccepted.campaign.taskType)] ?? 'task'}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    {!DISABLED_TASK_TYPES.has(justAccepted.campaign.taskType) && (
+                      <button
+                        onClick={() => { setSubmitting(justAccepted); setSubmitError(null); proofForm.reset(); setRecheckResult(null); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
+                      >
+                        <Send className="w-3.5 h-3.5" /> Submit proof
+                      </button>
+                    )}
+                    <Link
+                      href="/tasks?tab=mine"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-zinc-400 hover:text-white text-xs font-medium transition-colors"
+                    >
+                      Track in My tasks
+                    </Link>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setJustAccepted(null)}
+                  aria-label="Dismiss"
+                  className="text-zinc-500 hover:text-white transition-colors p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           {browseLoading ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -595,39 +648,42 @@ function TasksPageInner() {
                   const isOwner = user?.id === task.user.id;
                   return (
                     <div key={task.id} className="card-glass rounded-xl p-5 flex flex-col">
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${platformColor}`}>
+                      {/* Reading order: required action → reward → proof → action button */}
+                      <p className="text-sm font-semibold text-white mb-1 line-clamp-2">{task.title}</p>
+                      <p className="text-lg font-bold text-green-400 leading-tight mb-2">
+                        +{formatCredits(task.creditPerTask)}
+                        <span className="text-[11px] font-medium text-green-400/70 ml-1">{creditLabel(task.creditPerTask)}</span>
+                      </p>
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${platformColor}`}>
                           {TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
                         </span>
-                        <span className="text-xs font-bold text-green-400 shrink-0">
-                          +{formatCredits(task.creditPerTask)} {creditLabel(task.creditPerTask)}
-                        </span>
+                        <a
+                          href={task.targetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={task.targetUrl}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-brand-300 hover:text-brand-200 transition-colors"
+                        >
+                          Open {PLATFORM_LABEL[platform] ?? 'link'}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
                       </div>
-                      <p className="text-sm font-semibold text-white mb-1 line-clamp-2 flex-1">{task.title}</p>
-                      <a
-                        href={task.targetUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-400 transition-colors mb-3 truncate"
-                      >
-                        {task.targetUrl.slice(0, 40)}{task.targetUrl.length > 40 ? '…' : ''}
-                        <ExternalLink className="w-3 h-3 shrink-0" />
-                      </a>
                       {/* What proof the creator requires — visible BEFORE accepting */}
-                      {task.requiresProof && (
-                        <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-2">
-                          <p className="text-[11px] font-medium text-amber-300 flex items-center gap-1">
-                            <Upload className="w-3 h-3 shrink-0" />
-                            Proof required: screenshot/manual review
-                          </p>
-                          {task.proofInstructions && (
-                            <p className="mt-0.5 text-[11px] leading-snug text-amber-300/70 line-clamp-2">
-                              {task.proofInstructions}
-                            </p>
-                          )}
-                        </div>
+                      {task.requiresProof ? (
+                        <p className="text-[11px] leading-snug text-amber-300/90 flex items-start gap-1.5 mb-3">
+                          <Upload className="w-3.5 h-3.5 shrink-0 mt-px" />
+                          <span>
+                            <span className="font-medium">Proof required</span>
+                            {task.proofInstructions && (
+                              <span className="text-amber-300/60"> — {task.proofInstructions}</span>
+                            )}
+                          </span>
+                        </p>
+                      ) : (
+                        <div className="mb-3" />
                       )}
-                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3">
+                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 mt-auto">
                         <span>{available} slots left</span>
                         <UserLink user={task.user} showAvatar={false} />
                       </div>
@@ -657,20 +713,35 @@ function TasksPageInner() {
                           const myStatus = myTaskStatusMap.get(task.id);
                           if (myStatus) {
                             const isDone = myStatus === 'VERIFIED' || myStatus === 'REJECTED';
-                            return (
-                              <div className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium ${
-                                isDone
-                                  ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                              }`}>
-                                {isDone ? 'Task done' : 'Task accepted'}
-                              </div>
+                            const cls = `flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium ${
+                              isDone
+                                ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                                : 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20'
+                            }`;
+                            return isDone ? (
+                              <div className={cls}>{'Task done'}</div>
+                            ) : (
+                              <Link href="/tasks?tab=mine" className={cls} title="Resume in My tasks">
+                                Task accepted — resume
+                              </Link>
                             );
                           }
+                          // Single acceptance in flight across the grid: per-call
+                          // mutate callbacks share one observer, so a second
+                          // accept could overwrite the first call's onSuccess
+                          // and drop its post-accept panel.
                           return (
                             <button
-                              onClick={() => assignMutation.mutate(task.id)}
-                              disabled={assigningIds.has(task.id) || available <= 0}
+                              onClick={() => {
+                                if (assignInFlight.current || assignMutation.isPending) return;
+                                assignMutation.mutate(task.id, {
+                                  onSuccess: (res) => {
+                                    const c = res?.data?.data as MyTask | undefined;
+                                    if (c?.id && c?.campaign) setJustAccepted(c);
+                                  },
+                                });
+                              }}
+                              disabled={assigningIds.size > 0 || available <= 0}
                               className="flex-1 flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               {assigningIds.has(task.id) ? (
