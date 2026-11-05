@@ -709,3 +709,10 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Verified: `next build` 59 routes clean, landing 100 kB first load, 0 client API requests, CTA contrast 5.70:1, screenshots `docs/screenshots/design-slice/` at 390/1440.
 - Pending repo records split to `docs/repo-records` branch (AGENTS.md, migration log, .devin workflow, evidence screenshots).
 - Queued slices: dashboard/P2P pages, auth, wallet, payment return, secondary pages. Email Gmail check (PR #36) + funded BSC/Base + PayPal hosted-return remain deferred.
+
+#### PR #37 fix — tasks tab/nav alignment (`b12644f`)
+
+- Bug: `/tasks?tab=mine` → `/tasks` left My tasks rendered while Find tasks was highlighted (effect ignored missing/unknown tab values).
+- Fix: tab derived from `searchParams` — missing/unknown → Find tasks; tab clicks only `router.replace`.
+- Verified in-browser at 1440px + 390px (mocked API): deep link, Find↔My nav clicks, Back/Forward, `?tab=bogus` — `aria-selected`, `aria-current`, visible tab, and fetched list always agree; only the active list endpoint fetches.
+- Screenshots: `docs/screenshots/design-slice/tasks-nav-{390,1440}.png`.
