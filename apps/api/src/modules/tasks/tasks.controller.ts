@@ -27,6 +27,13 @@ export class TasksController {
     return this.tasksService.browseTasks(user.sub, dto);
   }
 
+  @Get('my/summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Compact task counts for dashboard next-action card' })
+  getMyTasksSummary(@CurrentUser() user: JwtPayload) {
+    return this.tasksService.getMyTasksSummary(user.sub);
+  }
+
   @Get('my')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get my assigned and completed tasks' })
