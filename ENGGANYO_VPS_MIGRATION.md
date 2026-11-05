@@ -750,3 +750,11 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Live smoke: `GET /api/health` → ok (db+redis, 4ms); `/dashboard`, `/tasks`, `/tasks?tab=mine` → 200.
 - Next-action card link targets verified pre-merge in-browser: actionable/review → `/tasks?tab=mine`, confirmed empty → `/tasks`. Auth-gated prod render deferred to first signed-in check.
 - Design slice 3 opened: PR #39 `feat/design-p2p-journey` head `79814d9` — My tasks status strip (shared `tasks/my/summary`), actionable-first ordering, status icons, campaign "Manual review" chip. Verified mocked at 390/1440; +1 request on My tasks only; submit-proof and creator-review modals exercised. Ready for review.
+
+#### PR #39 update — expiry consistency + server ordering + journey e2e (`82aa10e`)
+
+- `getMyTasks` orders actionable-first (ASSIGNED/IN_PROGRESS unexpired → SUBMITTED → rest) before pagination via lightweight field scan + ordered hydration — same rule as `tasks/my/summary`; ordering now holds across pages.
+- My tasks treats ASSIGNED/IN_PROGRESS past `expiresAt` as expired for badge/filter/controls (null expiry stays eligible); server submit validation unchanged.
+- Mobile fix: submit-proof modal bottom clearance so fixed nav doesn't cover the submit button.
+- Verified with stateful mock API + socket.io at 390/1440: expired fixture excluded from strip/order/submit; accept→upload→submit→creator-approve flips worker row to Verified live via `task:reviewed`, no reload. Strip/request counts unchanged except +1 shared summary on My tasks.
+- Gap: no local Postgres — server ordering not executed against a real DB; relies on CI/E2E.
