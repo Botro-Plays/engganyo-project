@@ -112,7 +112,7 @@ test.describe('landing page', () => {
   // covered by code review; here we assert the page loads and the anchor link works.
   test('"How it works" navigates to the #how-it-works section', async ({ page }) => {
     await page.goto('/');
-    const link = page.getByRole('link', { name: 'How it works' });
+    const link = page.getByRole('navigation').getByRole('link', { name: 'How it works' });
     await link.scrollIntoViewIfNeeded();
     await link.click();
     await expect(page).toHaveURL(/#how-it-works$/);
