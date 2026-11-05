@@ -303,97 +303,72 @@ function DashboardPageInner() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">
-          {isWelcome && user ? `Welcome, @${user.username}! 🎉` : 'Dashboard'}
-        </h1>
-        <p className="text-zinc-400 text-sm mt-1">
-          {isWelcome ? "You've earned 200 welcome credits to get started." : "Here's what's happening with your account."}
+      {/* ── Greeting + next action ─────────────────────────── */}
+      <div className="mb-6">
+        <p className="text-sm text-zinc-500 mb-0.5">
+          {isWelcome ? "Welcome to Engganyo" : `Good to see you${user ? `, @${user.username}` : ''}`}
         </p>
+        <h1 className="text-2xl font-bold text-white">
+          {isWelcome ? "You have 200 credits to start." : "What can you do now?"}
+        </h1>
         {user?.referredBy && (
           <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
             <Crown className="w-3 h-3 text-amber-400" />
             Referred by <Link href={`/users/${user.referredBy.username}`} className="text-brand-400 hover:text-brand-300 transition-colors">@{user.referredBy.username}</Link>
           </p>
         )}
-        {user?.referralCode && (
-          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
-            <Link2 className="w-3 h-3 text-sky-400" />
-            Your referral code: <span className="text-sky-400 font-mono">{user.referralCode}</span>
-          </p>
-        )}
       </div>
 
-      {/* Next useful action */}
+      {/* Next useful action — primary hero card */}
       {!isWelcome && (
         <Link
           href={nextAction.href}
-          className="card-glass rounded-2xl px-5 py-4 mb-8 flex items-center gap-4 group hover:border-brand-500/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          className={`block rounded-2xl p-5 sm:p-6 mb-6 group transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+            nextAction.muted
+              ? 'card-glass hover:border-zinc-600'
+              : 'bg-brand-500/10 border border-brand-500/25 hover:bg-brand-500/15 hover:border-brand-500/40'
+          }`}
         >
-          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${nextAction.muted ? 'bg-surface-hover border-surface-border' : 'bg-brand-500/15 border-brand-500/25'}`}>
-            <CheckSquare className={`w-5 h-5 ${nextAction.muted ? 'text-zinc-500' : 'text-brand-300'}`} />
+          <div className="flex items-center gap-4">
+            <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${nextAction.muted ? 'bg-surface-hover border-surface-border' : 'bg-brand-500/20 border-brand-500/30'}`}>
+              <CheckSquare className={`w-5 h-5 ${nextAction.muted ? 'text-zinc-500' : 'text-brand-300'}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`font-semibold text-base ${nextAction.muted ? 'text-zinc-300' : 'text-white'}`}>{nextAction.title}</p>
+              <p className="text-sm text-zinc-400 mt-0.5 leading-snug">{nextAction.body}</p>
+            </div>
+            <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-semibold transition-colors ${nextAction.muted ? 'text-zinc-400 group-hover:text-zinc-300' : 'text-brand-300 group-hover:text-brand-200'}`}>
+              {nextAction.cta}
+              <ChevronRight className="w-4 h-4" />
+            </span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className={`text-sm font-semibold ${nextAction.muted ? 'text-zinc-300' : 'text-white'}`}>{nextAction.title}</p>
-            <p className="text-xs text-zinc-400 mt-0.5">{nextAction.body}</p>
-          </div>
-          <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-medium transition-colors ${nextAction.muted ? 'text-zinc-400 group-hover:text-zinc-300' : 'text-brand-300 group-hover:text-brand-200'}`}>
-            {nextAction.cta}
-            <ChevronRight className="w-4 h-4" />
-          </span>
         </Link>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statCards.map((s) => (
-          <div key={s.label} className="card-glass rounded-xl p-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-zinc-500">{s.label}</p>
-              {s.icon && <s.icon className={`w-4 h-4 ${s.color}`} />}
+      {/* ── Compact 4-metric strip ─────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {statCards.slice(0, 4).map((s) => (
+          <div key={s.label} className="card-glass rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[11px] text-zinc-500 uppercase tracking-wide font-medium">{s.label}</p>
+              {s.icon && <s.icon className={`w-3.5 h-3.5 ${s.color}`} />}
             </div>
-            <p className={`text-2xl font-bold ${s.color}`}>{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}</p>
+            <p className={`text-xl font-bold tabular-nums ${s.color}`}>{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}</p>
             {s.progress !== undefined && (
-              <>
-                <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-400 rounded-full transition-all" style={{ width: `${s.progress}%` }} />
-                </div>
-              </>
+              <div className="mt-1.5 h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-400 rounded-full transition-all" style={{ width: `${s.progress}%` }} />
+              </div>
             )}
-            <p className="text-xs text-zinc-600 mt-0.5">{s.sub}</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5 truncate">{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Platform Pulse */}
-      {publicStats && (
-        <div className="card-glass rounded-xl p-4 mb-8">
-          <div className="flex flex-wrap items-center gap-4 sm:gap-8">
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-brand-400" />
-              <span className="text-xs text-zinc-500">Members</span>
-              <span className="text-sm font-semibold text-white">{publicStats.totalUsers.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs text-zinc-500">Tasks done</span>
-              <span className="text-sm font-semibold text-white">{publicStats.totalTaskCompletions.toLocaleString()}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-sky-400" />
-              <span className="text-xs text-zinc-500">Countries</span>
-              <span className="text-sm font-semibold text-white">{publicStats.totalCountries}</span>
-            </div>
-            <Link href="/leaderboard" className="ml-auto text-xs text-brand-400 hover:text-brand-300 transition-colors flex items-center gap-1">
-              Leaderboard <ChevronRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </div>
-      )}
-
+      {/* ── Bonuses row (secondary to the task action) ────── */}
+      <div className="grid sm:grid-cols-2 gap-4 mb-6">
       {/* Daily Reward Card (dedicated module) */}
       {gamStats && (
-        <div className="card-glass rounded-xl p-6 mb-8" data-tour="daily-reward">
+        <div className="card-glass rounded-xl p-4" data-tour="daily-reward">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
@@ -523,42 +498,33 @@ function DashboardPageInner() {
 
       {/* Spin the Wheel (Sprint 3) */}
       {wheelStatus && (
-        <div className="card-glass rounded-xl p-6 mb-8">
+        <div className="card-glass rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                <RotateCcw className="w-5 h-5 text-purple-400" />
+              <div className="w-9 h-9 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                <RotateCcw className="w-4 h-4 text-purple-400" />
               </div>
               <div>
-                <h2 className="font-semibold text-white">Spin the Wheel</h2>
+                <h2 className="font-semibold text-white text-sm">Spin the Wheel</h2>
                 <p className="text-xs text-zinc-500">
                   {wheelStatus.freeSpinAvailable
-                    ? 'Free spin available today!'
-                    : `${wheelStatus.paidSpinsRemaining} paid spins left (${wheelStatus.costPerSpin} credits each)`}
+                    ? 'Free spin available!'
+                    : `${wheelStatus.paidSpinsRemaining} paid left`}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {spinResult && (
-                <span className="text-xs text-green-400 hidden sm:inline">
-                  Last: {spinResult.prize}
-                </span>
-              )}
-              <button
-                onClick={() => setWheelOpen(true)}
-                disabled={!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0}
-                className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <RotateCcw className="w-4 h-4" /> Spin
-              </button>
-            </div>
+            <button
+              onClick={() => setWheelOpen(true)}
+              disabled={!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0}
+              className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Spin
+            </button>
           </div>
           {spinError && <p className="text-xs text-red-400 mt-3">{spinError}</p>}
-          {!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0 && !spinResult && (
-            <p className="text-xs text-zinc-500 mt-3">No spins remaining today. Come back tomorrow!</p>
-          )}
         </div>
       )}
+      </div>{/* end bonuses grid */}
 
       <SpinWheelModal
         open={wheelOpen}
@@ -583,7 +549,8 @@ function DashboardPageInner() {
         }}
       />
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      {/* ── Activity + stats ──────────────────────────────── */}
+      <div className="grid lg:grid-cols-2 gap-6 mt-6">
         {/* Activity sparkline */}
         <div className="card-glass rounded-xl p-6">
           <h2 className="font-semibold text-white mb-1">Task Activity</h2>
