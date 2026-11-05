@@ -129,6 +129,20 @@ function DashboardPageInner() {
     refetchInterval: 60_000,
   });
 
+  // Up-next: tasks awaiting action or review — powers the next-action card.
+  // Shares the tasks/my endpoint; key prefix 'tasks' picks up existing invalidations.
+  const { data: upNext } = useQuery({
+    queryKey: ['tasks', 'up-next'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{
+        items: Array<{ id: string; status: string; campaign: { creditPerTask: number } }>;
+      }>>('tasks/my?page=1&limit=20');
+      return res.data.data;
+    },
+    enabled: !!user,
+    refetchInterval: 60_000,
+  });
+
   const rewardMutation = useMutation({
     mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward'),
     onSuccess: (res) => {
@@ -206,6 +220,32 @@ function DashboardPageInner() {
 
   const levelInfo = gamStats ? getLevelProgress(gamStats.xp) : null;
 
+  // Next useful action — derived from live task state, no extra fetch beyond up-next.
+  const upNextItems = upNext?.items ?? [];
+  const actionableTasks = upNextItems.filter((t) => t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS');
+  const inReviewTasks = upNextItems.filter((t) => t.status === 'SUBMITTED');
+  const actionableCredits = actionableTasks.reduce((sum, t) => sum + (t.campaign?.creditPerTask ?? 0), 0);
+  const nextAction = actionableTasks.length > 0
+    ? {
+        title: `${actionableTasks.length} task${actionableTasks.length === 1 ? '' : 's'} ready to finish`,
+        body: `Complete ${actionableTasks.length === 1 ? 'it' : 'them'} and submit proof to earn${actionableCredits > 0 ? ` up to +${formatCredits(actionableCredits)} ${creditLabel(actionableCredits)}` : ' credits'}.`,
+        href: '/tasks?tab=mine',
+        cta: 'Go to My tasks',
+      }
+    : inReviewTasks.length > 0
+      ? {
+          title: `${inReviewTasks.length} submission${inReviewTasks.length === 1 ? '' : 's'} awaiting review`,
+          body: 'Creators are checking your proof. Credits are released as soon as each one is approved.',
+          href: '/tasks?tab=mine',
+          cta: 'Track My tasks',
+        }
+      : {
+          title: 'Find tasks to earn credits',
+          body: 'Browse open tasks, complete them with proof, and get reviewed by the creator.',
+          href: '/tasks',
+          cta: 'Find tasks',
+        };
+
   const statCards = [
     {
       label: 'Credits',
@@ -271,6 +311,26 @@ function DashboardPageInner() {
           </p>
         )}
       </div>
+
+      {/* Next useful action */}
+      {!isWelcome && (
+        <Link
+          href={nextAction.href}
+          className="card-glass rounded-2xl px-5 py-4 mb-8 flex items-center gap-4 group hover:border-brand-500/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/25 flex items-center justify-center shrink-0">
+            <CheckSquare className="w-5 h-5 text-brand-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">{nextAction.title}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">{nextAction.body}</p>
+          </div>
+          <span className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-brand-300 group-hover:text-brand-200 transition-colors">
+            {nextAction.cta}
+            <ChevronRight className="w-4 h-4" />
+          </span>
+        </Link>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
