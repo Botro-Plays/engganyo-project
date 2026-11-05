@@ -655,6 +655,33 @@ export class TasksService {
 
   // ─── Get my tasks ──────────────────────────────────────────
 
+  // Compact counts for the dashboard next-action card. Actionable mirrors what
+  // My tasks can actually submit: ASSIGNED/IN_PROGRESS and not past expiresAt
+  // (EXPIRED/CANCELLED/DISPUTED/etc. are excluded server-side).
+  async getMyTasksSummary(userId: string) {
+    const now = new Date();
+    const actionableWhere = {
+      userId,
+      status: { in: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    };
+    const [actionable, awaitingReview, creditRows] = await Promise.all([
+      this.prisma.taskCompletion.count({ where: actionableWhere }),
+      this.prisma.taskCompletion.count({
+        where: { userId, status: CompletionStatus.SUBMITTED },
+      }),
+      this.prisma.taskCompletion.findMany({
+        where: actionableWhere,
+        select: { campaign: { select: { creditPerTask: true } } },
+      }),
+    ]);
+    const actionableCredits = creditRows.reduce(
+      (sum, row) => sum + (row.campaign?.creditPerTask ?? 0),
+      0,
+    );
+    return { actionable, actionableCredits, awaitingReview };
+  }
+
   async getMyTasks(userId: string, dto: ListMyTasksDto) {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;

@@ -59,7 +59,7 @@ function DashboardPageInner() {
   const [wheelOpen, setWheelOpen] = useState(false);
 
   // Refetch when tab becomes visible after background
-  useRefetchOnVisible([['my-stats'], ['gamification', 'stats']]);
+  useRefetchOnVisible([['my-stats'], ['gamification', 'stats'], ['tasks', 'up-next']]);
 
   // Real-time: refresh gamification stats on backend events
   useSocketEvent('level:up', () => {
@@ -129,18 +129,19 @@ function DashboardPageInner() {
     refetchInterval: 60_000,
   });
 
-  // Up-next: tasks awaiting action or review — powers the next-action card.
-  // Shares the tasks/my endpoint; key prefix 'tasks' picks up existing invalidations.
-  const { data: upNext } = useQuery({
+  // Up-next summary: server-computed counts over the user's full eligible task
+  // set (no browser pagination). 'tasks' key prefix picks up socket invalidations.
+  const { data: upNext, isLoading: upNextLoading, isError: upNextError } = useQuery({
     queryKey: ['tasks', 'up-next'],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{
-        items: Array<{ id: string; status: string; campaign: { creditPerTask: number } }>;
-      }>>('tasks/my?page=1&limit=20');
+        actionable: number;
+        actionableCredits: number;
+        awaitingReview: number;
+      }>>('tasks/my/summary');
       return res.data.data;
     },
-    enabled: !!user,
-    refetchInterval: 60_000,
+    enabled: !!user && !isWelcome,
   });
 
   const rewardMutation = useMutation({
@@ -220,31 +221,35 @@ function DashboardPageInner() {
 
   const levelInfo = gamStats ? getLevelProgress(gamStats.xp) : null;
 
-  // Next useful action — derived from live task state, no extra fetch beyond up-next.
-  const upNextItems = upNext?.items ?? [];
-  const actionableTasks = upNextItems.filter((t) => t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS');
-  const inReviewTasks = upNextItems.filter((t) => t.status === 'SUBMITTED');
-  const actionableCredits = actionableTasks.reduce((sum, t) => sum + (t.campaign?.creditPerTask ?? 0), 0);
-  const nextAction = actionableTasks.length > 0
-    ? {
-        title: `${actionableTasks.length} task${actionableTasks.length === 1 ? '' : 's'} ready to finish`,
-        body: `Complete ${actionableTasks.length === 1 ? 'it' : 'them'} and submit proof to earn${actionableCredits > 0 ? ` up to +${formatCredits(actionableCredits)} ${creditLabel(actionableCredits)}` : ' credits'}.`,
-        href: '/tasks?tab=mine',
-        cta: 'Go to My tasks',
-      }
-    : inReviewTasks.length > 0
-      ? {
-          title: `${inReviewTasks.length} submission${inReviewTasks.length === 1 ? '' : 's'} awaiting review`,
-          body: 'Creators are checking your proof. Credits are released as soon as each one is approved.',
-          href: '/tasks?tab=mine',
-          cta: 'Track My tasks',
-        }
-      : {
-          title: 'Find tasks to earn credits',
-          body: 'Browse open tasks, complete them with proof, and get reviewed by the creator.',
-          href: '/tasks',
-          cta: 'Find tasks',
-        };
+  // Next useful action — from the server summary; states stay distinct:
+  // loading / request failure / confirmed data (actionable → review → empty).
+  const nextAction = upNextLoading
+    ? { title: 'Checking your tasks…', body: 'Loading your task status.', href: '/tasks', cta: 'Open Tasks', muted: true }
+    : upNextError || !upNext
+      ? { title: 'Task status unavailable', body: 'We could not load your task summary. Open My tasks to see your work.', href: '/tasks?tab=mine', cta: 'Open My tasks', muted: true }
+      : upNext.actionable > 0
+        ? {
+            title: `${upNext.actionable} task${upNext.actionable === 1 ? '' : 's'} ready to finish`,
+            body: `Complete ${upNext.actionable === 1 ? 'it' : 'them'} and submit proof to earn${upNext.actionableCredits > 0 ? ` up to +${formatCredits(upNext.actionableCredits)} ${creditLabel(upNext.actionableCredits)}` : ' credits'}.`,
+            href: '/tasks?tab=mine',
+            cta: 'Go to My tasks',
+            muted: false,
+          }
+        : upNext.awaitingReview > 0
+          ? {
+              title: `${upNext.awaitingReview} submission${upNext.awaitingReview === 1 ? '' : 's'} awaiting review`,
+              body: 'Creators are checking your proof. Credits are released as soon as each one is approved.',
+              href: '/tasks?tab=mine',
+              cta: 'Track My tasks',
+              muted: false,
+            }
+          : {
+              title: 'Find tasks to earn credits',
+              body: 'Browse open tasks, complete them with proof, and get reviewed by the creator.',
+              href: '/tasks',
+              cta: 'Find tasks',
+              muted: false,
+            };
 
   const statCards = [
     {
@@ -318,14 +323,14 @@ function DashboardPageInner() {
           href={nextAction.href}
           className="card-glass rounded-2xl px-5 py-4 mb-8 flex items-center gap-4 group hover:border-brand-500/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         >
-          <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/25 flex items-center justify-center shrink-0">
-            <CheckSquare className="w-5 h-5 text-brand-300" />
+          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${nextAction.muted ? 'bg-surface-hover border-surface-border' : 'bg-brand-500/15 border-brand-500/25'}`}>
+            <CheckSquare className={`w-5 h-5 ${nextAction.muted ? 'text-zinc-500' : 'text-brand-300'}`} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white">{nextAction.title}</p>
+            <p className={`text-sm font-semibold ${nextAction.muted ? 'text-zinc-300' : 'text-white'}`}>{nextAction.title}</p>
             <p className="text-xs text-zinc-400 mt-0.5">{nextAction.body}</p>
           </div>
-          <span className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-brand-300 group-hover:text-brand-200 transition-colors">
+          <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-medium transition-colors ${nextAction.muted ? 'text-zinc-400 group-hover:text-zinc-300' : 'text-brand-300 group-hover:text-brand-200'}`}>
             {nextAction.cta}
             <ChevronRight className="w-4 h-4" />
           </span>
