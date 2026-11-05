@@ -11,7 +11,7 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 224 76% 58%;
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 4.8% 15.9%;
     --secondary-foreground: 0 0% 98%;
@@ -23,7 +23,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 226 30% 17%;
     --input: 226 30% 17%;
-    --ring: 224 76% 58%;
+    --ring: 262 83% 58%;
   }
 
   .light {
@@ -33,7 +33,7 @@
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 224 76% 50%;
+    --primary: 262 83% 50%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
@@ -45,7 +45,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 224 76% 50%;
+    --ring: 262 83% 50%;
   }
 }
 
@@ -67,7 +67,7 @@
 
 @layer utilities {
   .text-gradient {
-    background: linear-gradient(135deg, #3b62f5 0%, #d946ef 100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #d946ef 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

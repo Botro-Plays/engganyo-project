@@ -9,6 +9,10 @@ import {
   Star,
   TrendingUp,
   Globe,
+  Instagram,
+  BadgeCheck,
+  Camera,
+  ListChecks,
 } from 'lucide-react';
 import { LandingNavbar } from '@/components/landing-navbar';
 
@@ -36,8 +40,8 @@ const jsonLd = {
     {
       '@type': 'WebPage',
       url: 'https://engganyo.com',
-      name: 'Engganyo — Collaborative Creator Growth',
-      description: 'Grow your social presence through real human engagement. Earn credits, complete tasks, and build a genuine creator community.',
+      name: 'Engganyo — Find a task. Earn credits.',
+      description: 'A marketplace where creators post small engagement tasks and earn credits for completing them with proof. Creators review every submission before credits are released.',
     },
   ],
 };
@@ -76,6 +80,11 @@ async function getPublicStats(): Promise<PublicStats | null> {
   }
 }
 
+const primaryCta =
+  'inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 py-3.5 rounded-xl font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm';
+const secondaryCta =
+  'inline-flex items-center justify-center gap-2 text-surface-warm-ink hover:text-brand-600 px-8 py-3.5 rounded-xl border border-surface-warm-border bg-white hover:border-brand-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm';
+
 export default async function LandingPage() {
   const stats = await getPublicStats();
   return (
@@ -85,158 +94,214 @@ export default async function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <main className="relative min-h-screen bg-surface text-white overflow-x-hidden">
-        {/* Hero gradient */}
-        <div className="absolute inset-0 bg-gradient-hero pointer-events-none" />
-
+      <main className="min-h-screen bg-surface-warm text-surface-warm-ink overflow-x-hidden">
         {/* Navbar — client component handles mobile hamburger */}
         <LandingNavbar />
 
-        {/* Hero Section */}
-        <section className="relative z-10 pt-14 pb-20 sm:pt-20 sm:pb-28 md:pt-24 md:pb-32 px-4 sm:px-6 text-center max-w-5xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 text-xs font-medium mb-6 sm:mb-8">
-            <Star className="w-3 h-3" />
-            Creator Growth Platform
-          </div>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-5 sm:mb-6 leading-tight">
-            Grow your audience
-            <br />
-            <span className="text-gradient">the right way</span>
-          </h1>
-
-          <p className="text-base sm:text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto mb-7 sm:mb-8 leading-relaxed">
-            Engganyo is a community-driven platform where real creators help each other grow.
-            Earn credits by engaging with others, then use them to promote your own content.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 px-2 sm:px-0">
-            <Link
-              href="/register"
-              className="flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 py-3.5 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg shadow-brand-500/25"
-            >
-              Start growing for free
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="#how-it-works"
-              className="flex items-center justify-center gap-2 text-zinc-400 hover:text-white px-8 py-3.5 rounded-xl border border-surface-border hover:border-zinc-600 transition-all"
-            >
-              See how it works
-            </Link>
-          </div>
-
-          {/* Social proof — only shown when stats were successfully fetched */}
-          {stats && (
-            <div className="mt-12 sm:mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-500 text-sm">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-brand-400" />
-                <span><strong className="text-white">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-accent-400" />
-                <span><strong className="text-white">{stats.totalTaskCompletions.toLocaleString()}+</strong> tasks completed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-green-400" />
-                <span><strong className="text-white">{stats.totalCountries.toLocaleString()}+</strong> countries</span>
-              </div>
+        {/* Hero */}
+        <section className="relative z-10 pt-10 pb-14 sm:pt-16 sm:pb-20 px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-200 bg-brand-50 text-brand-700 text-xs font-medium mb-6">
+              <Star className="w-3 h-3" />
+              Task marketplace for creators
             </div>
-          )}
-        </section>
 
-        {/* Features Grid */}
-        <section id="features" className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6 max-w-7xl mx-auto">
-          <div className="text-center mb-10 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Everything you need to grow</h2>
-            <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto">
-              A complete ecosystem built for serious creators who want sustainable, genuine growth.
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-5 leading-tight">
+              Find a task.
+              <br />
+              <span className="text-brand-600">Earn credits.</span>
+            </h1>
+
+            <p className="text-base sm:text-lg text-surface-warm-muted max-w-2xl mx-auto mb-8 leading-relaxed">
+              Engganyo is a marketplace where creators post small engagement tasks —
+              follows, likes, comments, subscribes — and earn credits for completing
+              them with proof. Every submission is reviewed by the creator before
+              credits are released.
             </p>
-          </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {features.map((feature) => (
-              <div
-                key={feature.title}
-                className="card-glass rounded-2xl p-5 sm:p-6 hover:border-brand-500/30 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-gradient-brand flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <feature.Icon className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="font-semibold text-base sm:text-lg mb-2">{feature.title}</h3>
-                <p className="text-zinc-400 text-sm leading-relaxed">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* How it works */}
-        <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6 max-w-4xl mx-auto">
-          <div className="text-center mb-10 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">How Engganyo works</h2>
-            <p className="text-zinc-400 text-base sm:text-lg">Simple, transparent, and fair for everyone.</p>
-          </div>
-
-          <div className="space-y-5 sm:space-y-6">
-            {steps.map((step, i) => (
-              <div key={step.title} className="flex gap-4 sm:gap-6 items-start">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-brand-400 font-bold text-sm">{i + 1}</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-base sm:text-lg mb-1">{step.title}</h3>
-                  <p className="text-zinc-400 text-sm leading-relaxed">{step.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* About Section */}
-        <section id="about" className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6 max-w-4xl mx-auto">
-          <div className="text-center mb-10 sm:mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">About Engganyo</h2>
-            <p className="text-zinc-400 text-base sm:text-lg">A platform built for creators, by creators.</p>
-          </div>
-
-          <div className="card-glass rounded-2xl p-5 sm:p-8 space-y-4">
-            <p className="text-zinc-300 text-sm sm:text-base leading-relaxed">
-              <strong className="text-white">Engganyo</strong> is a creator growth platform designed to help content creators increase their audience engagement through authentic, community-driven interactions. Our platform enables creators to earn credits by completing engagement tasks for other creators, then use those credits to promote their own content across multiple social media platforms including YouTube, TikTok, Instagram, Twitter, Twitch, and Spotify.
-            </p>
-            <p className="text-zinc-300 text-sm sm:text-base leading-relaxed">
-              Unlike traditional engagement services that rely on bots or fake accounts, Engganyo uses a credit-based economy combined with advanced anti-abuse protection and trust scoring to ensure that all engagement comes from real, verified human users. Creators can set up campaigns for specific engagement types (subscribes, likes, follows, comments, etc.) and set their own pricing, while task earners earn credits by completing these tasks with proper verification.
-            </p>
-            <p className="text-zinc-300 text-sm sm:text-base leading-relaxed">
-              Our mission is to create a fair, transparent ecosystem where creators can grow their audiences organically while helping others do the same. We believe in genuine engagement over vanity metrics, and our platform is built to facilitate meaningful connections between creators in similar niches.
-            </p>
-            <div className="pt-2">
-              <Link href="/about" className="inline-flex items-center text-brand-400 hover:text-brand-300 text-sm font-medium transition-colors">
-                Learn more about us
-                <ArrowRight className="w-4 h-4 ml-1" />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 px-2 sm:px-0">
+              <Link href="/register" className={primaryCta}>
+                Create free account
+                <ArrowRight className="w-4 h-4" />
               </Link>
+              <Link href="#how-it-works" className={secondaryCta}>
+                See how it works
+              </Link>
+            </div>
+
+            {/* Social proof — only shown when stats were successfully fetched */}
+            {stats && (
+              <div className="mt-12 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-surface-warm-muted text-sm">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-brand-500" />
+                  <span><strong className="text-surface-warm-ink">{stats.totalUsers.toLocaleString()}+</strong> creators</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-accent-500" />
+                  <span><strong className="text-surface-warm-ink">{stats.totalTaskCompletions.toLocaleString()}+</strong> tasks completed</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-green-600" />
+                  <span><strong className="text-surface-warm-ink">{stats.totalCountries.toLocaleString()}+</strong> countries</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Representative task */}
+        <section className="relative z-10 py-14 sm:py-20 px-4 sm:px-6 bg-surface-warm-50 border-y border-surface-warm-border">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8 sm:mb-10">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-3">What a task looks like</h2>
+              <p className="text-surface-warm-muted text-base sm:text-lg max-w-xl mx-auto">
+                Every task shows its reward, exactly what to do, and the proof the
+                creator needs before credits are released.
+              </p>
+            </div>
+
+            <figure className="bg-white rounded-2xl border border-surface-warm-border shadow-sm overflow-hidden max-w-xl mx-auto">
+              <figcaption className="sr-only">Example task: follow and like an Instagram account</figcaption>
+              <div className="flex items-center gap-3 px-5 sm:px-6 py-4 border-b border-surface-warm-border">
+                <div className="w-10 h-10 rounded-lg bg-gradient-brand flex items-center justify-center shrink-0">
+                  <Instagram className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm sm:text-base truncate">Follow @auroracreates and like their latest post</p>
+                  <p className="text-xs text-surface-warm-muted">Posted by a creator campaign · Instagram</p>
+                </div>
+                <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-50 border border-brand-200 text-brand-700 text-xs font-semibold">
+                  +25 credits
+                </span>
+              </div>
+              <dl className="px-5 sm:px-6 py-5 space-y-4 text-sm">
+                <div className="flex gap-3">
+                  <ListChecks className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" aria-hidden />
+                  <div>
+                    <dt className="font-medium text-surface-warm-ink">What to do</dt>
+                    <dd className="text-surface-warm-muted mt-0.5">Follow the account, then like their most recent post.</dd>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Camera className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" aria-hidden />
+                  <div>
+                    <dt className="font-medium text-surface-warm-ink">Proof needed</dt>
+                    <dd className="text-surface-warm-muted mt-0.5">A screenshot showing the follow and the like.</dd>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <BadgeCheck className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" aria-hidden />
+                  <div>
+                    <dt className="font-medium text-surface-warm-ink">Review</dt>
+                    <dd className="text-surface-warm-muted mt-0.5">The creator checks your proof, then credits are released.</dd>
+                  </div>
+                </div>
+              </dl>
+            </figure>
+          </div>
+        </section>
+
+        {/* Creator review */}
+        <section id="how-it-works" className="relative z-10 py-14 sm:py-20 px-4 sm:px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-10 sm:mb-14">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-3">How creator review works</h2>
+              <p className="text-surface-warm-muted text-base sm:text-lg max-w-2xl mx-auto">
+                Credits are never automatic. A real creator looks at your proof first.
+              </p>
+            </div>
+
+            <ol className="grid sm:grid-cols-3 gap-6 sm:gap-8">
+              {reviewSteps.map((step, i) => (
+                <li key={step.title} className="text-center sm:text-left">
+                  <div className="w-10 h-10 rounded-full bg-brand-500/10 border border-brand-200 flex items-center justify-center mb-4 mx-auto sm:mx-0">
+                    <span className="text-brand-600 font-bold text-sm">{i + 1}</span>
+                  </div>
+                  <h3 className="font-semibold text-base mb-1.5">{step.title}</h3>
+                  <p className="text-surface-warm-muted text-sm leading-relaxed">{step.description}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* Features */}
+        <section id="features" className="relative z-10 py-14 sm:py-20 px-4 sm:px-6 bg-surface-warm-50 border-y border-surface-warm-border">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-10 sm:mb-14">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-3">Built for real creators</h2>
+              <p className="text-surface-warm-muted text-base sm:text-lg max-w-2xl mx-auto">
+                A complete ecosystem for earning credits and growing your own channels.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {features.map((feature) => (
+                <div
+                  key={feature.title}
+                  className="bg-white rounded-2xl border border-surface-warm-border p-5 sm:p-6 hover:border-brand-300 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-brand-50 border border-brand-100 flex items-center justify-center mb-4">
+                    <feature.Icon className="w-5 h-5 text-brand-600" />
+                  </div>
+                  <h3 className="font-semibold text-base sm:text-lg mb-2">{feature.title}</h3>
+                  <p className="text-surface-warm-muted text-sm leading-relaxed">{feature.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* About */}
+        <section id="about" className="relative z-10 py-14 sm:py-20 px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8 sm:mb-10">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-3">About Engganyo</h2>
+              <p className="text-surface-warm-muted text-base sm:text-lg">A platform built for creators, by creators.</p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-surface-warm-border p-5 sm:p-8 space-y-4">
+              <p className="text-surface-warm-ink text-sm sm:text-base leading-relaxed">
+                <strong>Engganyo</strong> is a creator growth platform designed to help content creators increase their audience engagement through authentic, community-driven interactions. Our platform enables creators to earn credits by completing engagement tasks for other creators, then use those credits to promote their own content across multiple social media platforms including YouTube, TikTok, Instagram, Twitter, Twitch, and Spotify.
+              </p>
+              <p className="text-surface-warm-ink text-sm sm:text-base leading-relaxed">
+                Unlike traditional engagement services that rely on bots or fake accounts, Engganyo uses a credit-based economy combined with advanced anti-abuse protection and trust scoring to ensure that all engagement comes from real, verified human users. Creators can set up campaigns for specific engagement types (subscribes, likes, follows, comments, etc.) and set their own pricing, while task earners earn credits by completing these tasks with proper verification.
+              </p>
+              <p className="text-surface-warm-ink text-sm sm:text-base leading-relaxed">
+                Our mission is to create a fair, transparent ecosystem where creators can grow their audiences organically while helping others do the same. We believe in genuine engagement over vanity metrics, and our platform is built to facilitate meaningful connections between creators in similar niches.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/about"
+                  className="inline-flex items-center text-brand-600 hover:text-brand-500 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                >
+                  Learn more about us
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </Link>
+              </div>
             </div>
           </div>
         </section>
 
         {/* CTA */}
-        <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6">
-          <div className="max-w-3xl mx-auto text-center card-glass rounded-3xl px-6 py-12 sm:px-12 sm:py-14 md:p-16">
-            <Trophy className="w-10 h-10 sm:w-12 sm:h-12 text-brand-400 mx-auto mb-5 sm:mb-6" />
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to start growing?</h2>
-            <p className="text-zinc-400 mb-7 sm:mb-8 text-sm sm:text-base">
-              Join thousands of creators already building their audience on Engganyo.
+        <section className="relative z-10 py-14 sm:py-20 px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto text-center bg-brand-950 rounded-3xl px-6 py-12 sm:px-12 sm:py-14">
+            <Trophy className="w-10 h-10 sm:w-12 sm:h-12 text-brand-300 mx-auto mb-5 sm:mb-6" />
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">Ready to earn your first credits?</h2>
+            <p className="text-brand-200 mb-8 text-sm sm:text-base">
+              Create a free account, browse open tasks, and submit your first proof today.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/register"
-                className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg shadow-brand-500/25 text-base sm:text-lg"
+                className="inline-flex items-center gap-2 bg-white hover:bg-brand-50 text-brand-700 px-8 sm:px-10 py-3.5 sm:py-4 rounded-xl font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-950 text-base"
               >
                 Create free account
                 <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </Link>
               <Link
                 href="#how-it-works"
-                className="inline-flex items-center text-zinc-400 hover:text-white text-sm font-medium transition-colors"
+                className="inline-flex items-center text-brand-200 hover:text-white text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 rounded"
               >
                 Learn how it works
               </Link>
@@ -245,19 +310,18 @@ export default async function LandingPage() {
         </section>
 
         {/* Footer */}
-        <footer className="relative z-10 border-t border-surface-border py-10 sm:py-12 px-4 sm:px-6">
+        <footer className="relative z-10 border-t border-surface-warm-border py-10 sm:py-12 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <img src="/logo-square.svg" alt="Engganyo" className="w-6 h-6" />
-              <span className="font-semibold text-sm">Engganyo</span>
+              <img src="/logo-horizontal.svg" alt="Engganyo" className="h-7" />
             </div>
-            <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-zinc-500 text-sm">
-              <Link href="/about" className="hover:text-white transition-colors">About</Link>
-              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
-              <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+            <p className="text-surface-warm-muted text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-surface-warm-muted text-sm">
+              <Link href="/about" className="hover:text-surface-warm-ink transition-colors">About</Link>
+              <Link href="/faq" className="hover:text-surface-warm-ink transition-colors">FAQ</Link>
+              <Link href="/contact" className="hover:text-surface-warm-ink transition-colors">Contact</Link>
+              <Link href="/privacy" className="hover:text-surface-warm-ink transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-surface-warm-ink transition-colors">Terms of Service</Link>
             </div>
           </div>
         </footer>
@@ -295,25 +359,21 @@ const features = [
   {
     Icon: Globe,
     title: 'Global Community',
-    description: 'Connect with creators from 50+ countries who share your passion and goals.',
+    description: 'Connect with creators from around the world who share your passion and goals.',
   },
 ];
 
-const steps = [
+const reviewSteps = [
   {
-    title: 'Create your account',
-    description: 'Sign up, verify your email, and get 200 welcome credits to start with.',
+    title: 'Complete the task',
+    description: 'Do exactly what the task asks — follow, like, comment, or subscribe — on the listed platform.',
   },
   {
-    title: 'Complete tasks to earn credits',
-    description: 'Browse available tasks, complete them manually, submit proof, and get credited when verified.',
+    title: 'Submit proof',
+    description: 'Attach a screenshot or link showing you finished. The creator sees it with your submission.',
   },
   {
-    title: 'Launch your campaign',
-    description: 'Spend credits to create a campaign. Set your target platform, URL, slots, and price per completion.',
-  },
-  {
-    title: 'Watch your audience grow',
-    description: 'Real creators complete your tasks, your engagement grows, and everyone benefits.',
+    title: 'Creator approves',
+    description: 'The campaign owner reviews your proof. Approved tasks release credits to your wallet instantly.',
   },
 ];

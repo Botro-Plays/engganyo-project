@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { ReportModal } from '@/components/report-modal';
 import { UserLink } from '@/components/user-link';
 
@@ -151,9 +152,11 @@ const proofSchema = z.object({
 });
 type ProofFormData = z.infer<typeof proofSchema>;
 
-export default function TasksPage() {
+function TasksPageInner() {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuthStore();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Real-time: refresh tasks on backend events
   useSocketEvent('task:assigned', () => {
@@ -167,7 +170,10 @@ export default function TasksPage() {
     void queryClient.invalidateQueries({ queryKey: ['wallet'] });
   });
 
-  const [tab, setTab] = useState<'browse' | 'mine'>('browse');
+  // Tab is derived from the URL so sidebar nav, aria state, and the visible
+  // list can never disagree: /tasks and unknown tab values mean Find tasks.
+  const tabParam = searchParams.get('tab');
+  const tab: 'browse' | 'mine' = tabParam === 'mine' ? 'mine' : 'browse';
   const [browsePage, setBrowsePage] = useState(1);
   const [myPage, setMyPage] = useState(1);
   const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'done'>('all');
@@ -488,7 +494,9 @@ export default function TasksPage() {
               key={t}
               role="tab"
               aria-selected={tab === t}
-              onClick={() => setTab(t)}
+              onClick={() =>
+                router.replace(t === 'mine' ? '/tasks?tab=mine' : '/tasks', { scroll: false })
+              }
               className={`px-4 py-2.5 min-h-11 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                 tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
               }`}
@@ -1112,5 +1120,13 @@ export default function TasksPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TasksPage() {
+  return (
+    <Suspense fallback={null}>
+      <TasksPageInner />
+    </Suspense>
   );
 }
