@@ -699,3 +699,13 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Landing structure inspected: `apps/web/src/app/page.tsx` (319 lines — jsonLd, PublicStats fetch from `/analytics/public-stats`, LandingNavbar), `landing-navbar.tsx` (94), `(dashboard)/layout.tsx` (297). Tailwind tokens at `tailwind.config.ts` — brand 500 `#3b62f5` → re-map to violet; surface palette present (warm off-white + deep ink to add).
 - Build order: tokens (tailwind.config + CSS vars) → landing (off-white, "Find a task. Earn credits.", representative task preview, creator-review explainer, primary CTA) → signed-in shell (deep ink, nav priority: Find tasks/My tasks/My campaigns/Wallet) → screenshots 390+1440 → PR.
 - Email PR #36 (`faebd96`) merged-ready; Gmail inbox check pending user-provided address.
+
+### Design slice 1 — landing + shell (PR #37, Ready for review)
+
+- Branch `feat/design-tokens-landing-shell`, head `f54e8f8`. PR #37 opened; diff scoped to 6 code files + 4 screenshots.
+- Tokens `144fd01`: brand → logo violet (`#7c3aed`), new `surface-warm*` scale, deep-ink unchanged.
+- Landing rewritten warm off-white: "Find a task. Earn credits.", representative task card (+25 credits / action / proof / review), creator-review explainer, real stats only, preserved logo SVGs.
+- Shell: nav priority Dashboard → Find tasks / My tasks (`/tasks?tab=mine` deep-link, URL-synced tabs) / My campaigns / Wallet; query-aware active states + aria-current + focus rings.
+- Verified: `next build` 59 routes clean, landing 100 kB first load, 0 client API requests, CTA contrast 5.70:1, screenshots `docs/screenshots/design-slice/` at 390/1440.
+- Pending repo records split to `docs/repo-records` branch (AGENTS.md, migration log, .devin workflow, evidence screenshots).
+- Queued slices: dashboard/P2P pages, auth, wallet, payment return, secondary pages. Email Gmail check (PR #36) + funded BSC/Base + PayPal hosted-return remain deferred.
