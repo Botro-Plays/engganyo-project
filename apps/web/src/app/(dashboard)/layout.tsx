@@ -22,7 +22,7 @@ import {
   MoreHorizontal,
   X,
 } from 'lucide-react';
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -203,7 +203,15 @@ function SidebarNavWithQuery() {
   );
 }
 
-function BottomNavWithQuery({ onMore, moreActive }: { onMore: () => void; moreActive: boolean }) {
+function BottomNavWithQuery({
+  onMore,
+  moreActive,
+  moreButtonRef,
+}: {
+  onMore: () => void;
+  moreActive: boolean;
+  moreButtonRef: React.RefObject<HTMLButtonElement>;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   return (
@@ -216,9 +224,11 @@ function BottomNavWithQuery({ onMore, moreActive }: { onMore: () => void; moreAc
         />
       ))}
       <button
+        ref={moreButtonRef}
         onClick={onMore}
         aria-label="More navigation options"
         aria-expanded={moreActive}
+        aria-controls="more-nav-drawer"
         className={`flex flex-col items-center gap-0.5 flex-1 py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${moreActive ? 'text-brand-300' : 'text-zinc-500'}`}
       >
         {moreActive ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
@@ -268,6 +278,48 @@ interface WalletData {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Close drawer on Escape; restore focus to More button
+  const closeDrawer = useCallback(() => {
+    setMoreOpen(false);
+    // 150 ms lets the React state flush and bottom nav re-render before we focus
+    setTimeout(() => moreButtonRef.current?.focus(), 150);
+  }, []);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    // 80 ms lets the Suspense boundary inside the drawer resolve before we look for focusable targets
+    const timer = setTimeout(() => {
+      const firstFocusable = drawerRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      firstFocusable?.focus();
+    }, 80);
+
+    // Escape key closes drawer
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') { e.preventDefault(); closeDrawer(); return; }
+      // Focus trap — wrap Tab within drawer
+      if (e.key !== 'Tab' || !drawerRef.current) return;
+      const focusable = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute('disabled'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => { clearTimeout(timer); document.removeEventListener('keydown', onKeyDown); };
+  }, [moreOpen, closeDrawer]);
 
   // Real-time credit balance in sidebar
   const { data: wallet } = useQuery({
@@ -430,43 +482,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* ── Mobile bottom navigation ───────────────────────── */}
         {/* Fixed 5-item bar; More opens a bottom-sheet grid */}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface/95 border-t border-surface-border backdrop-blur-sm" data-tour-scope aria-label="Mobile navigation">
-          <div className="flex items-stretch px-1 py-1 safe-bottom">
+        <nav
+          className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface/95 border-t border-surface-border backdrop-blur-sm"
+          data-tour-scope
+          aria-label="Mobile navigation"
+        >
+          <div className="flex items-stretch px-1 py-1">
             <Suspense fallback={null}>
-              <BottomNavWithQuery onMore={() => setMoreOpen((o) => !o)} moreActive={moreOpen} />
+              <BottomNavWithQuery
+                onMore={() => setMoreOpen((o) => !o)}
+                moreActive={moreOpen}
+                moreButtonRef={moreButtonRef}
+              />
             </Suspense>
           </div>
         </nav>
 
-        {/* More drawer — slides up over the bottom nav */}
+        {/* More drawer — backdrop (decorative) separate from dialog (accessible) */}
         {moreOpen && (
-          <div
-            className="fixed inset-0 z-40 md:hidden"
-            onClick={() => setMoreOpen(false)}
-            aria-hidden="true"
-          >
+          <>
+            {/* Decorative backdrop — aria-hidden so AT ignores it */}
             <div
-              className="absolute bottom-[57px] left-0 right-0 bg-surface border-t border-surface-border shadow-2xl rounded-t-2xl"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-40 md:hidden bg-black/40"
+              onClick={closeDrawer}
+              aria-hidden="true"
+            />
+            {/* Dialog — elevated above backdrop, fully accessible */}
+            <div
+              id="more-nav-drawer"
+              ref={drawerRef}
               role="dialog"
               aria-modal="true"
               aria-label="More navigation"
+              className="fixed bottom-[57px] left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border shadow-2xl rounded-t-2xl animate-fade-in"
             >
               <div className="flex items-center justify-between px-4 pt-3 pb-1">
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">More</p>
                 <button
-                  onClick={() => setMoreOpen(false)}
-                  className="p-1 rounded-lg text-zinc-500 hover:text-white transition-colors"
-                  aria-label="Close"
+                  onClick={closeDrawer}
+                  className="p-2 rounded-lg text-zinc-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                  aria-label="Close more navigation"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
               <Suspense fallback={null}>
-                <MoreDrawerWithQuery onClose={() => setMoreOpen(false)} adminHref={adminHref} />
+                <MoreDrawerWithQuery onClose={closeDrawer} adminHref={adminHref} />
               </Suspense>
             </div>
-          </div>
+          </>
         )}
 
         <OnboardingTour />

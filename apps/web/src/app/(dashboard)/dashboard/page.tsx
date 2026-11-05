@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package, Users, Link2, ChevronRight, Crown, Globe, TrendingUp } from 'lucide-react';
+import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package, Users, Link2, ChevronRight, Crown } from 'lucide-react';
 import { SpinWheelModal } from '@/components/spin-wheel-modal';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
@@ -175,20 +175,6 @@ function DashboardPageInner() {
       return res.data.data;
     },
     refetchInterval: 30_000,
-  });
-
-  const { data: publicStats } = useQuery<{
-    totalUsers: number;
-    totalTaskCompletions: number;
-    totalCountries: number;
-  }>({
-    queryKey: ['analytics', 'public-stats'],
-    queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<{ totalUsers: number; totalTaskCompletions: number; totalCountries: number }>>('analytics/public-stats');
-      return res.data.data;
-    },
-    refetchInterval: 300_000,
-    staleTime: 300_000,
   });
 
   const { data: rewardLog } = useQuery({
