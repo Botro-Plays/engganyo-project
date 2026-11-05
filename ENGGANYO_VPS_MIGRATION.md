@@ -805,3 +805,43 @@ Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers;
 - Merged via merge commit **`c1e4d4d`**; Deploy run **`42013409595` all green** (CI API, CI Web, E2E, build+push, deploy to VPS).
 - Post-deploy: `GET /api/health` → ok (db+redis, 4ms); `engganyo.com` + `www` → 200; `/tasks` auth-gates to `/login` at 390px and 1440px (Playwright smoke, screenshots `docs/screenshots/design-slice/prod-tasks-{390,1440}.png`).
 - Authenticated Find tasks smoke (grid, accept-last-task panel persistence, new-tab target, submit clears panel) verified pre-merge in the controlled test env at both widths; prod interactive acceptance intentionally not exercised — it would create task/wallet records, which are restricted to the controlled environment per review policy.
+
+### Design revision — PR #41 (Ready for design review)
+
+- **Branch** `feat/design-revision-landing-shell`, **head** `43912f8`, **draft PR** https://github.com/Botro-Plays/engganyo-project/pull/41
+- Branched from `main` after PR #40 merged. No merge conflicts; no dependency on PRs #39/#40 beyond base branch.
+
+**Problems addressed (owner feedback):**
+1. Landing page still felt like the old site "in white" — generic hero with equal-weight feature cards, no concrete task example.
+2. Signed-in app still felt like a generic dashboard — 6 stat cards all competing equally, 13-item scrolling mobile nav, no clear "What do I do now?" answer.
+
+**Landing page (`apps/web/src/app/page.tsx`):**
+- H1 changed from "Grow your audience the right way" to "Find a task. Earn credits." (the actual product tagline)
+- Two-column hero: headline + CTA left; a live task-card mock right showing TikTok·Follow +15 credits, proof badge, Accept button, and a 3-step mini-flow (Accept → Open & do → Submit proof) beneath it, with a "Creator approved · +15 credits" confirmation row
+- Social proof stats (members / tasks verified / countries) below CTAs, rendered only when API responds within 3 s (Promise.race timeout — page renders without stats if API is unreachable)
+- "Two ways to participate" section: numbered earner + creator flows in side-by-side cards, each answering a distinct visitor question
+- "Built for real engagement" trust grid: creator-reviewed, anti-abuse, real community
+- Bottom CTA: "Start with 200 credits. No card needed."
+- JSON-LD schema, footer links, and all public API behaviour preserved
+
+**Shell navigation (`apps/web/src/app/(dashboard)/layout.tsx`):**
+- Desktop sidebar items now grouped under section labels Work / Community / Progress
+- Mobile: 13-item horizontal scroll replaced with **5-item fixed bottom bar** (Home, Find, My tasks, Campaigns, Wallet) + More button (6th slot) that opens a **bottom-sheet grid** of all secondary destinations; sheet closes on backdrop tap or item selection
+- Full keyboard focus-visible ring on all interactive elements; aria-current for active items
+
+**Dashboard (`apps/web/src/app/(dashboard)/dashboard/page.tsx`):**
+- Greeting changed to "What can you do now?" — explicit intent
+- Next-action card (from PR #38 socket-aware summary) **promoted to primary hero** — larger padding, brand tint when active, muted when loading/error
+- 6-card stat grid condensed to compact 4-col strip with uppercase micro-labels (Credits, Tasks Verified, Campaigns, Level)
+- Platform Pulse removed (community stats belong on landing, not inside the personal shell)
+- Daily Reward and Spin the Wheel placed side-by-side in a secondary 2-col bonus row
+- All queries, socket listeners, gamification logic, and interactions preserved unchanged
+
+**Verification:**
+- `tsc --noEmit` clean
+- `next build` clean — 59 routes, 0 errors, warnings pre-existing
+- Landing page screenshots at 390px and 1440px captured (`docs/screenshots/design-slice/after-landing-{390,1440}.png`)
+- Before screenshots also committed (`before-landing-{390,1440}.png`, `before-tasks-unauth-{390,1440}.png`)
+- Dashboard and navigation changes are behind authentication; authenticated screenshots deferred to staging spot-check per review policy
+
+**Not in this PR:** Find tasks card/panel behaviour (unchanged from PR #40); task/proof/wallet APIs (unchanged); 1v1 challenges and visitor analytics (proposal stage); PR #36 Gmail logo, funded BSC/Base, PayPal hosted-return (tracked separately).
