@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useMemo, useEffect } from 'react';
+import { Suspense, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -170,13 +170,10 @@ function TasksPageInner() {
     void queryClient.invalidateQueries({ queryKey: ['wallet'] });
   });
 
-  const [tab, setTab] = useState<'browse' | 'mine'>(
-    searchParams.get('tab') === 'mine' ? 'mine' : 'browse',
-  );
-  useEffect(() => {
-    const t = searchParams.get('tab');
-    if (t === 'mine' || t === 'browse') setTab(t);
-  }, [searchParams]);
+  // Tab is derived from the URL so sidebar nav, aria state, and the visible
+  // list can never disagree: /tasks and unknown tab values mean Find tasks.
+  const tabParam = searchParams.get('tab');
+  const tab: 'browse' | 'mine' = tabParam === 'mine' ? 'mine' : 'browse';
   const [browsePage, setBrowsePage] = useState(1);
   const [myPage, setMyPage] = useState(1);
   const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'done'>('all');
@@ -497,10 +494,9 @@ function TasksPageInner() {
               key={t}
               role="tab"
               aria-selected={tab === t}
-              onClick={() => {
-                setTab(t);
-                router.replace(t === 'mine' ? '/tasks?tab=mine' : '/tasks', { scroll: false });
-              }}
+              onClick={() =>
+                router.replace(t === 'mine' ? '/tasks?tab=mine' : '/tasks', { scroll: false })
+              }
               className={`px-4 py-2.5 min-h-11 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                 tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
               }`}
