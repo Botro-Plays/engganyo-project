@@ -758,3 +758,26 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Mobile fix: submit-proof modal bottom clearance so fixed nav doesn't cover the submit button.
 - Verified with stateful mock API + socket.io at 390/1440: expired fixture excluded from strip/order/submit; accept→upload→submit→creator-approve flips worker row to Verified live via `task:reviewed`, no reload. Strip/request counts unchanged except +1 shared summary on My tasks.
 - Gap: no local Postgres — server ordering not executed against a real DB; relies on CI/E2E.
+
+#### PR #39 update — real-Postgres ordering verification (`361ddab`)
+
+- Ordering moved fully into SQL: `ORDER BY` with `CASE` actionability rank (same rule as summary) → `assignedAt DESC` → `id` tiebreak, applied **before** `skip`/`take`. Page-local sort removed. Cost bounded — single indexed query, no full-history hydration.
+- New `my-tasks-ordering.integration.spec.ts` against embedded PostgreSQL (isolated, port 55432, 48 migrations): >1 page of tasks, older actionable work, expired ASSIGNED fixture (stored status stays ASSIGNED), null-expiry eligible, tied timestamps — adjacent pages contain each task exactly once; status filter preserves ordering. 2/2 pass; combined tasks suites 59 tests pass.
+- Timestamp pitfall fixed during test: `timestamp without time zone` vs JS `Date` param caused false-expired rows — ordering now compares against DB `CURRENT_TIMESTAMP`.
+- PR #39 remains Ready for review at `361ddab` pending merge decision.
+
+### Design slice 4 — Find tasks card order + post-accept panel (PR #40, Ready for review)
+
+- Branch `feat/design-find-tasks`, head `ea5322f`. **Depends on PR #39 — merge #39 first.**
+- Card reading order: action (title) → reward → platform/open link → proof → slots/meta → button. Grid `sm:2 / lg:3` cols, mobile 1.
+- Post-accept: pinned "Task accepted — start now" panel above grid with Open {platform} (`target=_blank`, stays on /tasks), Submit proof (existing modal/API), My tasks link; clears on submit. 'Task accepted' browse state links to My tasks for resume.
+- Verified vs stateful mock API + socket.io (Chromium, 390/1440): accept failure shows error + card stays; double-click → 1 assign request; accept → pinned panel + new tab opens + page stays; submit → pinned clears, My tasks shows Submitted. `tsc` clean, `next build` clean (59 routes).
+- Screenshots `docs/screenshots/design-slice/find-{before,after}-*.png`.
+- Gap: verified against mock mirroring API contracts, not a live backend; real-backend spot check on staging recommended.
+
+### Proposals recorded for review (no implementation yet)
+
+- `docs/proposals/1v1-p2p-challenges.md` — public-by-default 1v1 challenges w/ optional private+password, atomic single-slot claim, 0%-launch platform fee snapshotted at publish, escrow-style reserve, full lifecycle + test plan.
+- `docs/proposals/visitor-analytics.md` — admin traffic dashboard: request/visit/est-unique definitions, bot+health exclusion, CF-header geo/IP attribution, first-party beacon + nightly aggregation, 90d raw / 24mo aggregate retention, role-gated IP detail.
+
+Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers; PayPal hosted-return observation.
