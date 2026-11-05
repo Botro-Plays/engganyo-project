@@ -727,3 +727,12 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Branch `feat/design-dashboard-journey`, head `4778dcb`. Dashboard leads with next-action card: finish tasks (credit potential) / awaiting review / find tasks → correct `/tasks` tab. Reuses `tasks/my` (+1 request); hidden on welcome flow.
 - Verified mocked at 390/1440; screenshots `docs/screenshots/design-slice/dash-next-*`.
 - Queued: auth, wallet, payment return, secondary pages. PR #36 Gmail check + funded BSC/Base + PayPal hosted-return deferred.
+
+#### PR #38 update — server-side summary + card states (`f95f5f2`)
+
+- New `GET /tasks/my/summary`: `{actionable, actionableCredits, awaitingReview}` over the full eligible set — ASSIGNED/IN_PROGRESS with `expiresAt` in future; expired/cancelled/disputed excluded consistently with My tasks. No browser pagination.
+- Card states: loading ("Checking your tasks…"), error ("Task status unavailable" → My tasks, muted), confirmed actionable/review/empty. Find tasks only on confirmed empty.
+- Fetch gated on `!isWelcome` (0 calls during welcome — verified); polling removed — refresh via `tasks` socket invalidations + refetch-on-visible.
+- Verified 390/1440: actionable (server-counted, beyond first page), review-only, empty, slow (loading shot), failed (error after client retries — apiClient retries 5xx ×3 + react-query ×1 ≈ 8 calls worst case), welcome-hidden.
+- Screenshots: `docs/screenshots/design-slice/dash-sum-*` (12 files).
+- Idle-session requests: 0 polling; +1 summary call on dashboard load.
