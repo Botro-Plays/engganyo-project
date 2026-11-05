@@ -95,10 +95,10 @@ const config: Config = {
         shimmer: 'shimmer 1.5s infinite',
       },
       backgroundImage: {
-        'gradient-brand': 'linear-gradient(135deg, #3b62f5 0%, #d946ef 100%)',
+        'gradient-brand': 'linear-gradient(135deg, #7c3aed 0%, #d946ef 100%)',
         'gradient-card': 'linear-gradient(145deg, #161b2e 0%, #1a2035 100%)',
         'gradient-hero':
-          'radial-gradient(ellipse 80% 80% at 50% -20%,rgba(59,98,245,0.3),rgba(255,255,255,0))',
+          'radial-gradient(ellipse 80% 80% at 50% -20%,rgba(124,58,237,0.16),rgba(255,255,255,0))',
       },
     },
   },

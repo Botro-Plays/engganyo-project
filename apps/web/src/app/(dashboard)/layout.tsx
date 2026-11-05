@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   ListTodo,
@@ -19,6 +19,7 @@ import {
   MessageCircle,
   Bell,
   ShoppingBag,
+  type LucideIcon,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { formatCredits } from '@/lib/utils';
@@ -28,7 +29,7 @@ import { NotificationBell } from '@/components/notification-bell';
 import { SearchBar } from '@/components/search-bar';
 import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import { OnboardingTour, TourReplayButton, tourNavAttr } from '@/components/onboarding-tour';
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
@@ -37,10 +38,13 @@ import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { resolveCosmeticStyles } from '@/lib/cosmetics';
 import type { ApiResponse } from '@/types';
 
+// P2P journey items are prioritized: Find tasks, My tasks, My campaigns, Wallet.
+// Hrefs may carry a query (e.g. /tasks?tab=mine) for tab deep-links.
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/tasks', icon: ListTodo, label: 'Tasks' },
-  { href: '/campaigns', icon: Megaphone, label: 'My Campaigns' },
+  { href: '/tasks', icon: ListTodo, label: 'Find tasks' },
+  { href: '/tasks?tab=mine', icon: ListTodo, label: 'My tasks' },
+  { href: '/campaigns', icon: Megaphone, label: 'My campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/chat', icon: MessageCircle, label: 'Chat' },
@@ -54,7 +58,8 @@ const navItems = [
 
 const baseMobileNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Home' },
-  { href: '/tasks', icon: ListTodo, label: 'Tasks' },
+  { href: '/tasks', icon: ListTodo, label: 'Find tasks' },
+  { href: '/tasks?tab=mine', icon: ListTodo, label: 'My tasks' },
   { href: '/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/wallet', icon: Wallet, label: 'Wallet' },
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
@@ -76,6 +81,129 @@ function canAccessAdmin(user: AuthUser | null): boolean {
   return user.twoFactorEnabled;
 }
 
+interface NavEntry {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+}
+
+function splitHref(href: string): { path: string; query: URLSearchParams | null } {
+  const [path, query] = href.split('?');
+  return { path, query: query ? new URLSearchParams(query) : null };
+}
+
+function pathnameMatches(pathname: string, path: string): boolean {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function queryMatches(query: URLSearchParams, searchParams: URLSearchParams | null): boolean {
+  for (const [k, v] of query) {
+    if (searchParams?.get(k) !== v) return false;
+  }
+  return true;
+}
+
+function isNavItemActive(
+  pathname: string,
+  searchParams: URLSearchParams | null,
+  items: NavEntry[],
+  item: NavEntry,
+): boolean {
+  const { path, query } = splitHref(item.href);
+  if (!pathnameMatches(pathname, path)) return false;
+  if (query) return queryMatches(query, searchParams);
+  // A plain-path item yields to a query-variant sibling that matches the
+  // current URL (e.g. Find tasks vs My tasks on /tasks?tab=mine).
+  const shadowed = items.some((other) => {
+    if (other === item) return false;
+    const o = splitHref(other.href);
+    return o.path === path && o.query !== null && queryMatches(o.query, searchParams);
+  });
+  return !shadowed;
+}
+
+function NavAnchor({
+  item,
+  active,
+  variant,
+}: {
+  item: NavEntry;
+  active: boolean;
+  variant: 'sidebar' | 'bottom';
+}) {
+  if (variant === 'sidebar') {
+    return (
+      <Link
+        href={item.href}
+        data-tour={tourNavAttr(item.href)}
+        aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+          active
+            ? 'bg-brand-500/15 text-brand-300 border border-brand-500/20'
+            : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+        }`}
+      >
+        <item.icon className="w-4 h-4 shrink-0" />
+        {item.label}
+      </Link>
+    );
+  }
+  return (
+    <Link
+      href={item.href}
+      data-tour={tourNavAttr(item.href)}
+      aria-current={active ? 'page' : undefined}
+      className={`flex flex-col items-center gap-0.5 min-w-[4.5rem] flex-shrink-0 py-1 rounded-lg transition-all snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+        active ? 'text-brand-300' : 'text-zinc-500'
+      }`}
+    >
+      <item.icon className="w-5 h-5" />
+      <span className="text-[10px] font-medium leading-tight whitespace-nowrap">{item.label}</span>
+    </Link>
+  );
+}
+
+function NavListWithQuery({ items, variant }: { items: NavEntry[]; variant: 'sidebar' | 'bottom' }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  return (
+    <>
+      {items.map((item) => (
+        <NavAnchor
+          key={item.href}
+          item={item}
+          variant={variant}
+          active={isNavItemActive(pathname, searchParams, items, item)}
+        />
+      ))}
+    </>
+  );
+}
+
+function NavListFallback({ items, variant }: { items: NavEntry[]; variant: 'sidebar' | 'bottom' }) {
+  const pathname = usePathname();
+  return (
+    <>
+      {items.map((item) => (
+        <NavAnchor
+          key={item.href}
+          item={item}
+          variant={variant}
+          active={isNavItemActive(pathname, null, items, item)}
+        />
+      ))}
+    </>
+  );
+}
+
+function NavList({ items, variant }: { items: NavEntry[]; variant: 'sidebar' | 'bottom' }) {
+  return (
+    <Suspense fallback={<NavListFallback items={items} variant={variant} />}>
+      <NavListWithQuery items={items} variant={variant} />
+    </Suspense>
+  );
+}
+
 interface WalletData {
   id: string;
   balance: number;
@@ -85,7 +213,6 @@ interface WalletData {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
   const { user, logout } = useAuthStore();
 
   // Real-time credit balance in sidebar
@@ -141,24 +268,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                data-tour={tourNavAttr(item.href)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                  isActive
-                    ? 'bg-brand-500/15 text-brand-300 border border-brand-500/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
-                }`}
-              >
-                <item.icon className="w-4 h-4 shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+          <NavList items={navItems} variant="sidebar" />
         </nav>
 
         {/* Bottom links */}
@@ -270,22 +380,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile bottom navigation — visible only below md breakpoint */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border" data-tour-scope>
         <div className="flex items-center overflow-x-auto scrollbar-hide px-1 py-2 snap-x">
-          {mobileNavItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                data-tour={tourNavAttr(item.href)}
-                className={`flex flex-col items-center gap-0.5 min-w-[4.5rem] flex-shrink-0 py-1 rounded-lg transition-all snap-start ${
-                  isActive ? 'text-brand-300' : 'text-zinc-500'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium leading-tight whitespace-nowrap">{item.label}</span>
-              </Link>
-            );
-          })}
+          <NavList items={mobileNavItems} variant="bottom" />
         </div>
       </nav>
 
