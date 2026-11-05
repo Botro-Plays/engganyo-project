@@ -92,6 +92,13 @@ function DashboardPageInner() {
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
   });
+  // Task-state events refresh the next-action summary (and any cached task
+  // lists) while the dashboard stays mounted — same events Tasks/Discover use.
+  const invalidateTasks = () => void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+  useSocketEvent('task:assigned', invalidateTasks);
+  useSocketEvent('task:completed', invalidateTasks);
+  useSocketEvent('task:reviewed', invalidateTasks);
+
   useSocketEvent('vip:tier-up', () => {
     void queryClient.invalidateQueries({ queryKey: ['gamification'] });
     void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
