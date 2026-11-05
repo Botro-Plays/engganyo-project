@@ -514,7 +514,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               role="dialog"
               aria-modal="true"
               aria-label="More navigation"
-              className="fixed bottom-[57px] left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border shadow-2xl rounded-t-2xl animate-fade-in"
+              className="fixed bottom-[57px] left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border shadow-2xl rounded-t-2xl animate-fade-in max-h-[calc(100dvh-130px)] overflow-y-auto"
             >
               <div className="flex items-center justify-between px-4 pt-3 pb-1">
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">More</p>
