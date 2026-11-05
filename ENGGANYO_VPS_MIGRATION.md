@@ -716,3 +716,14 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Fix: tab derived from `searchParams` — missing/unknown → Find tasks; tab clicks only `router.replace`.
 - Verified in-browser at 1440px + 390px (mocked API): deep link, Find↔My nav clicks, Back/Forward, `?tab=bogus` — `aria-selected`, `aria-current`, visible tab, and fetched list always agree; only the active list endpoint fetches.
 - Screenshots: `docs/screenshots/design-slice/tasks-nav-{390,1440}.png`.
+
+### PR #37 merged + deployed — `d196c0b` (run 41975061850, all green)
+
+- Head `b12644f` verified; `next build` clean (59 routes) pre-merge.
+- Live verified at 390/1440: warm landing `#faf9f7`, "Find a task. Earn credits.", task card, signup → `/register` ("Create your account"), `/tasks?tab=mine` → `/login` gate. Find↔My tab nav verified pre-merge in-browser both widths.
+
+### Design slice 2 — dashboard next-action (PR #38, Ready for review)
+
+- Branch `feat/design-dashboard-journey`, head `4778dcb`. Dashboard leads with next-action card: finish tasks (credit potential) / awaiting review / find tasks → correct `/tasks` tab. Reuses `tasks/my` (+1 request); hidden on welcome flow.
+- Verified mocked at 390/1440; screenshots `docs/screenshots/design-slice/dash-next-*`.
+- Queued: auth, wallet, payment return, secondary pages. PR #36 Gmail check + funded BSC/Base + PayPal hosted-return deferred.
