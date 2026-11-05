@@ -579,6 +579,51 @@ function TasksPageInner() {
               <span className="font-semibold text-amber-300">Disclaimer:</span> Completing tasks on Engganyo may violate the Terms of Service of third-party platforms (YouTube, Instagram, TikTok, X, Facebook, etc.) and could result in account warnings, restrictions, or permanent bans. Participate at your own risk. Engganyo is not responsible for any account actions taken by third-party platforms.
             </p>
           </div>
+          {justAccepted && (
+            <div className="card-glass rounded-xl p-4 mb-4 border-brand-500/30 bg-brand-500/5">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Task accepted — you can start now</p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">
+                    {justAccepted.campaign.title} · +{formatCredits(justAccepted.campaign.creditPerTask)} {creditLabel(justAccepted.campaign.creditPerTask)} on approval
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <a
+                      href={justAccepted.campaign.targetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
+                    >
+                      Open {PLATFORM_LABEL[getPlatform(justAccepted.campaign.taskType)] ?? 'task'}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    {!DISABLED_TASK_TYPES.has(justAccepted.campaign.taskType) && (
+                      <button
+                        onClick={() => { setSubmitting(justAccepted); setSubmitError(null); proofForm.reset(); setRecheckResult(null); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
+                      >
+                        <Send className="w-3.5 h-3.5" /> Submit proof
+                      </button>
+                    )}
+                    <Link
+                      href="/tasks?tab=mine"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-zinc-400 hover:text-white text-xs font-medium transition-colors"
+                    >
+                      Track in My tasks
+                    </Link>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setJustAccepted(null)}
+                  aria-label="Dismiss"
+                  className="text-zinc-500 hover:text-white transition-colors p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           {browseLoading ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -592,51 +637,6 @@ function TasksPageInner() {
             </div>
           ) : (
             <>
-              {justAccepted && (
-                <div className="card-glass rounded-xl p-4 mb-4 border-brand-500/30 bg-brand-500/5">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white">Task accepted — you can start now</p>
-                      <p className="text-xs text-zinc-400 truncate mt-0.5">
-                        {justAccepted.campaign.title} · +{formatCredits(justAccepted.campaign.creditPerTask)} {creditLabel(justAccepted.campaign.creditPerTask)} on approval
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
-                        <a
-                          href={justAccepted.campaign.targetUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
-                        >
-                          Open {PLATFORM_LABEL[getPlatform(justAccepted.campaign.taskType)] ?? 'task'}
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                        {!DISABLED_TASK_TYPES.has(justAccepted.campaign.taskType) && (
-                          <button
-                            onClick={() => { setSubmitting(justAccepted); setSubmitError(null); proofForm.reset(); setRecheckResult(null); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
-                          >
-                            <Send className="w-3.5 h-3.5" /> Submit proof
-                          </button>
-                        )}
-                        <Link
-                          href="/tasks?tab=mine"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-zinc-400 hover:text-white text-xs font-medium transition-colors"
-                        >
-                          Track in My tasks
-                        </Link>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setJustAccepted(null)}
-                      aria-label="Dismiss"
-                      className="text-zinc-500 hover:text-white transition-colors p-1"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-tour="task-browse-grid">
                 {browseData.items.map((task) => {
                   const platform = getPlatform(task.taskType);
