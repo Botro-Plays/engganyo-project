@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useMemo } from 'react';
+import { Suspense, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -192,6 +192,7 @@ function TasksPageInner() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assigningIds, setAssigningIds] = useState<Set<string>>(new Set());
+  const assignInFlight = useRef(false);
   // Completion returned by a successful assign — pinned above the browse grid
   // so the user can open the target and submit proof without leaving Find tasks.
   const [justAccepted, setJustAccepted] = useState<MyTask | null>(null);
@@ -346,6 +347,7 @@ function TasksPageInner() {
   const assignMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/assign`),
     onMutate: async (campaignId) => {
+      assignInFlight.current = true;
       setAssigningIds((prev) => new Set(prev).add(campaignId));
       // Optimistically remove the assigned task from browse cache
       await queryClient.cancelQueries({ queryKey: ['tasks', 'browse'], type: 'all' });
@@ -375,6 +377,7 @@ function TasksPageInner() {
       }
     },
     onSettled: (_data, _err, campaignId) => {
+      assignInFlight.current = false;
       setAssigningIds((prev) => {
         const next = new Set(prev);
         next.delete(campaignId);
@@ -723,15 +726,22 @@ function TasksPageInner() {
                               </Link>
                             );
                           }
+                          // Single acceptance in flight across the grid: per-call
+                          // mutate callbacks share one observer, so a second
+                          // accept could overwrite the first call's onSuccess
+                          // and drop its post-accept panel.
                           return (
                             <button
-                              onClick={() => assignMutation.mutate(task.id, {
-                                onSuccess: (res) => {
-                                  const c = res?.data?.data as MyTask | undefined;
-                                  if (c?.id && c?.campaign) setJustAccepted(c);
-                                },
-                              })}
-                              disabled={assigningIds.has(task.id) || available <= 0}
+                              onClick={() => {
+                                if (assignInFlight.current || assignMutation.isPending) return;
+                                assignMutation.mutate(task.id, {
+                                  onSuccess: (res) => {
+                                    const c = res?.data?.data as MyTask | undefined;
+                                    if (c?.id && c?.campaign) setJustAccepted(c);
+                                  },
+                                });
+                              }}
+                              disabled={assigningIds.size > 0 || available <= 0}
                               className="flex-1 flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               {assigningIds.has(task.id) ? (
