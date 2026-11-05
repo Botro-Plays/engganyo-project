@@ -54,9 +54,30 @@ Release credits**.
 
 ## Data model
 
-Re(sub)use `Campaign` with `totalSlots = 1` is tempting but wrong: campaigns are
-open-marketplace listings with pending-slot pools, targeting filters, and
-multi-completer semantics. Proposal: a dedicated `Challenge` model.
+### Why a dedicated `Challenge` model, not a one-slot `Campaign`
+
+`Campaign` is an open-marketplace listing: `totalSlots`/`pendingSlots` pools,
+multi-completer semantics, targeting filters, browse ranking, and campaign-level
+economics (`totalCost = totalSlots × creditPerTask`). Forcing `totalSlots = 1`
+would inherit all of that and still miss what challenges need:
+
+- **Different discovery**: challenges are personal duels, not inventory — they
+  need their own card treatment, expiry countdown, and "1 slot" affordance, not
+  slot-pool math.
+- **Different lifecycle**: a campaign's slot pool refills implicitly; a
+  challenge's single slot is consumed permanently on claim (see reopen rule
+  below). Campaign status transitions don't express OPEN → CLAIMED →
+  COMPLETED/EXPIRED.
+- **Different economics**: campaign fees are computed on `totalCost` at
+  creation; challenge fee is on a single reward with its own snapshot fields.
+- **Different access control**: private challenges need password gating on the
+  resource itself — campaigns have no visibility/password concept.
+- **Different abuse surface**: claim atomicity, self-claim, and
+  password-guess limits are challenge-specific invariants that would be bolted
+  onto campaign paths otherwise.
+
+The completion side **does** reuse `TaskCompletion` (proof pipeline, review,
+dispute, expiry) — only the offer side is new.
 
 ```prisma
 model Challenge {
@@ -102,8 +123,8 @@ CHECK constraint or app-level invariant).
 | Claim | Atomic: `UPDATE challenges SET status='CLAIMED', claimId=... WHERE id=? AND status='OPEN'` — one winner under concurrency (row lock / conditional update, not check-then-act). Self-claim blocked (`creatorId != claimerId`). |
 | Submit proof | Same proof upload + hash pipeline as campaigns. |
 | Creator approves | Reward released to claimer; fee recorded separately in the ledger (`PlatformRevenue` source `CHALLENGE_FEE`, or a dedicated ledger entry type). Completion → VERIFIED. |
-| Creator rejects | Claimer may dispute (existing `DISPUTED` status) → admin review, same as campaign rejections. On final rejection: challenge → COMPLETED (slot consumed, no re-list — decision: **no re-listing v1** to prevent reward farming; revisit if wanted). Reserved reward returned to creator; fee returned since it is only collected on settlement. |
-| Abandonment (claimer never submits before `expiresAt`) | Expiry job marks challenge EXPIRED; reserved credits return to creator in full (reward + fee — nothing was earned). |
+| Creator rejects | Claimer may dispute (existing `DISPUTED` status) → admin review, same as campaign rejections. On final rejection: challenge → COMPLETED (slot consumed). **Decision needed**: whether the slot reopens for a new claimer (see Open decisions). |
+| Abandonment (claimer never submits before `expiresAt`) | Expiry job marks challenge EXPIRED; reserved credits return to creator in full (reward + fee — nothing was earned). **Decision needed**: whether the challenge reopens to a new claimer or closes (see Open decisions). |
 | Creator cancels before claim | CANCELLED; full reserve returned. |
 | Creator cancels after claim | Not allowed — claim is binding; creator must review or let `reviewDeadline` escalate to admin (existing mechanism). |
 
@@ -154,11 +175,24 @@ CHECK constraint or app-level invariant).
 8. **UI**: create → review (reward/fee/total) → publish; claim → Open task →
    submit proof → creator review → credits, at 390px and 1440px.
 
-## Open decisions
+## Decisions needed before implementation
 
-- Re-listing after rejection/abandonment (proposal: no, v1).
-- Whether challenges appear in a dedicated "Challenges" tab vs mixed into Find
-  tasks with a chip (proposal: mixed + filter chip).
-- Minimum/maximum reward bounds (proposal: 10–500 credits at launch).
-- Whether private challenges can be claimed by link only, or also surfaced to
-  specific users.
+1. **Slot reopening** — when a claimed slot ends without an award (claimer
+   abandonment/expiry, creator rejection, or dispute lost by claimer), does the
+   challenge reopen to a new claimer or close permanently?
+   - *Proposal*: close permanently in v1 — reopening enables reward farming
+     (creator + rotating alt claimers) and complicates the "one duel" mental
+     model. Revisit if testers want retries.
+2. **Reserved credits after rejection/dispute** — on final rejection the
+   reserved *reward* returns to the creator (they never owed it — the claimer
+   failed to deliver), and the *fee* is also returned because fees are only
+   collected at settlement. On a dispute the reserve stays held until admin
+   resolves; admin uphold-rejection releases it the same way.
+   - *Confirm*: return both reward and fee to creator on any non-award close.
+3. **Re-listing vs new challenge** — if a challenge closes unawarded, the
+   creator can always create a fresh one; we do not mutate the original.
+4. **Private challenge redemption** — link-only, or also targeted to specific
+   users?
+5. **Reward bounds** — proposal: 10–500 credits at launch.
+6. **Discovery placement** — mixed into Find tasks with a "1v1" chip + filter,
+   vs a dedicated Challenges tab (proposal: mixed + filter).

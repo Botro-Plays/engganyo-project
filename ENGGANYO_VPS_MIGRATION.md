@@ -781,3 +781,12 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - `docs/proposals/visitor-analytics.md` — admin traffic dashboard: request/visit/est-unique definitions, bot+health exclusion, CF-header geo/IP attribution, first-party beacon + nightly aggregation, 90d raw / 24mo aggregate retention, role-gated IP detail.
 
 Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers; PayPal hosted-return observation.
+
+### Review round — PR #39 merged, PR #40 updated, proposals refined
+
+- **PR #39 merged** `ac767ec` (merge commit); deploy run `42001668666` all green; `GET /api/health` ok (db+redis). PR body updated to describe `getMyTasks` as a bounded ranked-ID query + count + page-sized detail fetch.
+- **PR #40 head `8a7fc5d`** — panel-independence fix: accepted-task panel moved out of the non-empty browse branch so it survives the empty state (regression: single available task → accept → empty list → panel visible → open target → submit → clears; verified 390/1440).
+- Branch updated against `main` post-#39 (merge `6470a16`, clean).
+- **Real-backend e2e** (local API `dist/main.js` + embedded PostgreSQL `engganyo_test` + real Redis 5.0.14.1 on :6390): register → seed trust/wallet → campaign create (fee 10 @10%) → assign 201 → proof upload (sharp→webp) → submit 200 SUBMITTED → creator review approve → worker VERIFIED +10cr, wallet 200→220. Browser journey at 390px and 1440px against the real API: accept → pinned panel → Open Telegram new tab → submit → SUBMITTED → VERIFIED after creator approval. Anti-abuse IP-sharing check verified working (distinct XFF required for creator/worker).
+- Test-env notes: local API needed real Redis (Bull queues crash without it — `MaxRetriesPerRequestError`); in-memory RedisService shim was tried first and abandoned after Bull crash. Rate limits reset per API restart; register limited 3/hr/IP.
+- **Proposals refined** (`docs/proposals/`): 1v1 challenges — dedicated-model rationale expanded, slot-reopen + reserved-credit decisions surfaced for review; visitor analytics — metric-source table clarifies beacon (visits/uniques/page views/bounce) vs edge/origin logs (requests/API counts/true bot split), phase-2 log ingestion added as open decision.

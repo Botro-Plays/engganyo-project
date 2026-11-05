@@ -14,29 +14,39 @@ Status: **proposal — awaiting review before implementation**
 **Gap**: there is no request/visit/unique-visitor measurement for the public
 site, and no route/referrer/device breakdown anywhere in the product.
 
-## Metric definitions
+## Metric definitions — and where each number can come from
 
-- **Request** — one HTTP request to a tracked surface (page document or API
-  call), excluding static assets (`/_next/static`, images, fonts) and health
-  checks (`/api/health`, uptime probes).
-- **Visit** — a session of activity: first tracked request starts a visit;
-  subsequent requests within **30 minutes** of the last activity join it.
-  Keyed by a first-party anonymous session cookie (`engganyo_vid`, 30-day
-  expiry, `SameSite=Lax`, no PII).
-- **Estimated unique visitor** — distinct `engganyo_vid` values in the range.
-  Estimate, not identity: cookie clearing, private mode, and shared devices
-  blur it. Labeled "est. uniques" in the UI.
+**Important limitation**: the browser beacon only fires when a page actually
+loads JavaScript. It measures *visits* and *page-level engagement* — it cannot
+count every request that reaches Cloudflare (assets, API calls, bots, curl,
+health checks, non-JS clients). Per-request figures need edge or origin logs.
+
+| Metric | Definition | Source |
+|---|---|---|
+| **Request** | One HTTP request to a tracked surface (page document or API call), excluding static assets and health checks | **Edge/origin logs only** (Cloudflare logpush or Nginx access log). Beacon cannot supply this. |
+| **Visit** | Session of activity: first beacon starts a visit; requests within **30 min** of last activity join it. Keyed by first-party anonymous cookie `engganyo_vid` (30-day, `SameSite=Lax`, no PII) | **Beacon** (page loads). Beacon undercounts visits for non-JS clients. |
+| **Page view** | One tracked route load | **Beacon** |
+| **Estimated unique visitor** | Distinct `engganyo_vid` in range — estimate only (cookie clearing, private mode, shared devices) | **Beacon** |
+| **API call count** | Requests to `/api/*` | **Edge/origin logs** (beacon doesn't observe them unless we add explicit tracking, which we shouldn't for privacy/perf) |
+| **Bounce proxy** | % of visits with a single page view | **Beacon** (computed from page-view count per visit) |
+
+Proposal for v1: ship the **beacon-sourced dashboard** (visits, uniques,
+page views by route/referrer/device/country) and label request-level figures
+as "not yet collected — requires log pipeline". A later phase can add
+Cloudflare logpush or an Nginx log shipper for true request counts.
 
 ## Human vs bot separation
 
 - **Identifiable bots**: UA pattern list (Googlebot, bingbot, AhrefsBot,
-  SemrushBot, GPTBot, ClaudeBot, etc.) + Cloudflare `cf.bot_management`
-  score where available → tagged `bot`, excluded from human metrics by
-  default with a toggle to include.
-- **Health checks**: `/api/health`, `/api/health/*`, load-balancer probes →
-  excluded entirely (tagged `internal`).
-- Everything else counts as human traffic (acceptable for v1; document the
-  limitation — sophisticated bots won't match UA lists).
+  SemrushBot, GPTBot, ClaudeBot, etc.) classified at the beacon → tagged
+  `bot`, excluded from human metrics by default with a toggle.
+- **Non-JS bots/crawlers** never fire the beacon — they are invisible to
+  visit metrics (correct: they aren't visits). They only appear if/when
+  edge logs are ingested.
+- **Health checks**: `/api/health`, uptime probes → excluded by route
+  filter where applicable.
+- Limitation: beacon-side bot filtering is heuristic; sophisticated bots
+  that execute JS will count as human until edge-log verification exists.
 
 ## Data sources & attribution
 
@@ -75,15 +85,19 @@ near-zero cost; CF headers supply trustworthy geo/IP.
 
 ## Dashboard layout (admin only)
 
-New "Traffic" section under `/admin/analytics`:
+New "Traffic" section under `/admin/analytics` — **beacon-sourced metrics
+only in v1**:
 
 - **Date range picker** (7d / 30d / 90d / custom).
-- **Trend chart**: visits + est. uniques per day (recharts, already in repo).
+- **Trend chart**: visits + est. uniques + page views per day (recharts,
+  already in repo).
 - **Sortable tables**: by country, route, external referrer, device —
-  columns: visits, est. uniques, requests, bounce proxy (% single-page visits).
-- **Recent visitors** (authorized admins): last N `VisitorEvent`s with IP,
-  country, route, UA — IP-level detail gated to `SUPER_ADMIN`/`ADMIN`,
-  visible in an expandable row, never bulk-exportable.
+  columns: visits, est. uniques, page views, bounce proxy.
+- Request-level figures shown as "requires log pipeline" placeholder until
+  edge/origin ingestion exists.
+- **Recent visitors** (authorized admins): last N beacon events with IP,
+  country, route, UA — IP-level detail gated to `SUPER_ADMIN`, visible in
+  an expandable row, never bulk-exportable.
 
 ## Permissions & privacy
 
@@ -97,14 +111,17 @@ New "Traffic" section under `/admin/analytics`:
 
 ## What needs new collection vs what's available now
 
-| Figure | Available today? |
-|---|---|
-| Daily product metrics (users/tasks/credits) | ✅ `AnalyticsSnapshot` |
-| Registered-user countries | ~ `IpRecord` geo (partial, auth users only) |
-| Request/visit/unique-visitor counts | ❌ needs `VisitorEvent` + beacon |
-| Route/referrer/device breakdowns | ❌ needs beacon fields |
-| Human-vs-bot split | ❌ needs UA classification at ingest |
-| IP-level visitor detail | ❌ needs event IP (trusted header) |
+| Figure | Available today? | Source after implementation |
+|---|---|---|
+| Daily product metrics (users/tasks/credits) | ✅ `AnalyticsSnapshot` | existing |
+| Registered-user countries | ~ `IpRecord` geo (partial, auth users only) | existing |
+| Visits / page views / est. uniques | ❌ | **beacon** |
+| Route / referrer / device / country breakdowns (human) | ❌ | **beacon** (+ CF headers for country) |
+| Bounce proxy | ❌ | **beacon** |
+| Total HTTP requests incl. assets/API/bots | ❌ | **edge (CF logpush) or origin (Nginx) logs — phase 2** |
+| API call counts | ❌ | **edge/origin logs — phase 2** |
+| Bot vs human split (JS-executing bots) | partial | beacon UA heuristic; precise split needs edge logs |
+| IP-level visitor detail | ❌ | **beacon** (trusted CF header) |
 
 Estimates only where noted: uniques are cookie-based estimates; bot filtering
 is heuristic; country is CDN-header geo (country-level accuracy).
@@ -125,7 +142,11 @@ is heuristic; country is CDN-header geo (country-level accuracy).
 
 ## Open decisions
 
+- **Phase 2 log ingestion** — whether to add Cloudflare logpush or an Nginx
+  access-log shipper for true request/API/bot-inclusive counts. Proposal:
+  defer until beacon dashboard proves useful; beacon covers the requested
+  breakdowns (country/route/referrer/device) for human visits.
 - IP detail role gate (SUPER_ADMIN vs ADMIN).
-- Whether to also ingest Nginx logs for non-JS clients (crawlers that never
-  run the beacon) — proposal: no for v1; beacon + CF headers suffice.
+- Whether beacon should also record outbound link clicks / CTA events
+  (proposal: no for v1 — page views only).
 - Retention windows (proposed 90d raw / 24mo aggregate).
