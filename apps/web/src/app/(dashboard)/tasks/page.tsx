@@ -148,10 +148,14 @@ const MY_TASK_STATUS: Record<string, { label: string; color: string; icon: Lucid
   CANCELLED:   { label: 'Cancelled',   color: 'text-zinc-500',   icon: X },
 };
 
-// Display-only ordering for My tasks: work that still needs the user first,
-// then submissions awaiting review, then finished/closed items. Stable sort
-// keeps the server's recency order within each group.
-const MY_TASK_ORDER: Record<string, number> = { ASSIGNED: 0, IN_PROGRESS: 0, SUBMITTED: 1 };
+// ASSIGNED/IN_PROGRESS past expiresAt is treated as expired for display,
+// ordering, and submit controls — same eligibility rule as the server
+// summary. Server-side submission validation remains authoritative.
+const isCompletionExpired = (t: { status: string; expiresAt: string | null }) =>
+  (t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS') &&
+  !!t.expiresAt && new Date(t.expiresAt).getTime() < Date.now();
+const myEffectiveStatus = (t: { status: string; expiresAt: string | null }) =>
+  isCompletionExpired(t) ? 'EXPIRED' : t.status;
 
 const proofSchema = z.object({
   proofUrl: z.string().optional().or(z.literal('')),
@@ -770,16 +774,19 @@ function TasksPageInner() {
               <div className="space-y-2">
                 {myData.items
                   .filter((task) => {
-                    if (myFilter === 'pending') return ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(task.status);
-                    if (myFilter === 'done') return ['VERIFIED', 'REJECTED'].includes(task.status);
+                    const eff = myEffectiveStatus(task);
+                    if (myFilter === 'pending') return ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(eff);
+                    if (myFilter === 'done') return ['VERIFIED', 'REJECTED'].includes(eff);
                     return true;
                   })
-                  .sort((a, b) => (MY_TASK_ORDER[a.status] ?? 2) - (MY_TASK_ORDER[b.status] ?? 2))
+                  // Server already orders actionable-first before pagination;
+                  // effective status only affects display, filters, and controls.
                   .map((task) => {
-                  const st = MY_TASK_STATUS[task.status] ?? { label: task.status, color: 'text-zinc-400', icon: CircleDot, spin: false };
+                  const effStatus = myEffectiveStatus(task);
+                  const st = MY_TASK_STATUS[effStatus] ?? { label: effStatus, color: 'text-zinc-400', icon: CircleDot, spin: false };
                   const platform = getPlatform(task.campaign.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
-                  const canSubmit = task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS';
+                  const canSubmit = effStatus === 'ASSIGNED' || effStatus === 'IN_PROGRESS';
                   return (
                     <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-start sm:items-center gap-3 sm:gap-4">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${platformColor}`}>
@@ -843,15 +850,17 @@ function TasksPageInner() {
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        {task.status === 'VERIFIED' ? (
+                        {effStatus === 'VERIFIED' ? (
                           <div className="flex items-center gap-1 text-green-400 text-sm font-semibold">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             +{formatCredits(task.creditsEarned)} {creditLabel(task.creditsEarned)}
                           </div>
-                        ) : task.status === 'SUBMITTED' ? (
+                        ) : effStatus === 'SUBMITTED' ? (
                           <div className="flex items-center gap-1 text-sky-400 text-xs">
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
+                        ) : effStatus === 'EXPIRED' ? (
+                          <span className="text-xs text-zinc-500">Expired</span>
                         ) : canSubmit ? (
                           DISABLED_TASK_TYPES.has(task.campaign.taskType) ? (
                             <div
@@ -919,7 +928,7 @@ function TasksPageInner() {
 
       {/* ── Submit proof modal ── */}
       {submitting && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 pb-20 sm:p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md card-glass rounded-t-2xl sm:rounded-2xl p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-white">

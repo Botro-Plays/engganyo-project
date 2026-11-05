@@ -686,22 +686,48 @@ export class TasksService {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
+    const now = new Date();
 
     const where = {
       userId,
       ...(dto.status && { status: dto.status }),
     };
 
-    const [items, total] = await Promise.all([
+    // Actionable-first ordering must happen before pagination. Rank every
+    // matching completion (actionable = ASSIGNED/IN_PROGRESS and not past
+    // expiresAt; then SUBMITTED; then everything else), newest first within
+    // each group, slice the page, then hydrate the full rows in that order.
+    // Mirrors the eligibility rule in getMyTasksSummary.
+    const [all, total] = await Promise.all([
       this.prisma.taskCompletion.findMany({
         where,
-        select: COMPLETION_SELECT,
-        orderBy: { assignedAt: 'desc' },
-        skip,
-        take: limit,
+        select: { id: true, status: true, expiresAt: true, assignedAt: true },
       }),
       this.prisma.taskCompletion.count({ where }),
     ]);
+
+    const rank = (t: (typeof all)[number]) => {
+      const actionable =
+        (t.status === CompletionStatus.ASSIGNED || t.status === CompletionStatus.IN_PROGRESS) &&
+        (!t.expiresAt || t.expiresAt > now);
+      if (actionable) return 0;
+      return t.status === CompletionStatus.SUBMITTED ? 1 : 2;
+    };
+    all.sort(
+      (a, b) => rank(a) - rank(b) || b.assignedAt.getTime() - a.assignedAt.getTime(),
+    );
+    const pageIds = all.slice(skip, skip + limit).map((t) => t.id);
+
+    const rows = pageIds.length
+      ? await this.prisma.taskCompletion.findMany({
+          where: { id: { in: pageIds } },
+          select: COMPLETION_SELECT,
+        })
+      : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const items = pageIds
+      .map((id) => byId.get(id))
+      .filter((r): r is NonNullable<typeof r> => r != null);
 
     return {
       items,
