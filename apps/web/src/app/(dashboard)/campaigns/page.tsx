@@ -712,6 +712,11 @@ export default function CampaignsPage() {
                           Community
                         </span>
                       )}
+                      {!c.autoVerify && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          Manual review
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm font-semibold text-white truncate">{c.title}</p>
                     <a
