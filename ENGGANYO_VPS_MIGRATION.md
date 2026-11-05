@@ -742,3 +742,11 @@ Gates unchanged: funded BSC/Base transfers user-initiated; PayPal hosted return 
 - Dashboard subscribes to `task:assigned`/`task:completed`/`task:reviewed` → invalidates `['tasks']` prefix (summary + cached lists). Previously the key only refreshed when Tasks/Discover were mounted.
 - Verified vs fake socket.io server: `task:reviewed` REJECTED flipped card "2 submissions" → "1 submission" live, no navigation/focus change; ~10s idle post-event → zero periodic summary calls; welcome still 0 calls.
 - Dev StrictMode double-mount produced 3 summary calls (initial + 2 invalidation dedup misses); prod single-mount = initial + 1.
+
+### PR #38 merged + deployed — `d04078b` (run 41985112186, all green)
+
+- Head `4e127e9` verified pre-merge; API task specs 43 passed/14 skipped, web build clean (59 routes).
+- Deploy run `41985112186`: CI web ✓, CI api ✓, E2E ✓, build+push+deploy ✓.
+- Live smoke: `GET /api/health` → ok (db+redis, 4ms); `/dashboard`, `/tasks`, `/tasks?tab=mine` → 200.
+- Next-action card link targets verified pre-merge in-browser: actionable/review → `/tasks?tab=mine`, confirmed empty → `/tasks`. Auth-gated prod render deferred to first signed-in check.
+- Design slice 3 opened: PR #39 `feat/design-p2p-journey` head `79814d9` — My tasks status strip (shared `tasks/my/summary`), actionable-first ordering, status icons, campaign "Manual review" chip. Verified mocked at 390/1440; +1 request on My tasks only; submit-proof and creator-review modals exercised. Ready for review.
