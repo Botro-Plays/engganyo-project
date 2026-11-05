@@ -10,19 +10,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Brand palette — premium, creator-focused
+        // Brand palette — violet accent drawn from the Engganyo logo.
+        // Mapped to the logo's violet so landing + shell read as one product.
         brand: {
-          50: '#f0f4ff',
-          100: '#e0eaff',
-          200: '#c2d5ff',
-          300: '#93b4fd',
-          400: '#6089fa',
-          500: '#3b62f5',   // primary
-          600: '#2444e8',
-          700: '#1c33ce',
-          800: '#1d2da6',
-          900: '#1e2d82',
-          950: '#141d54',
+          50: '#f4f0ff',
+          100: '#ebe3ff',
+          200: '#d7c7ff',
+          300: '#b999ff',
+          400: '#9663fa',
+          500: '#7c3aed',   // primary — violet from the logo
+          600: '#6d28d9',
+          700: '#5b21b6',
+          800: '#4c1d95',
+          900: '#3b1674',
+          950: '#25104d',
         },
         accent: {
           50: '#fdf4ff',
@@ -30,7 +31,7 @@ const config: Config = {
           200: '#f5d0fe',
           300: '#f0abfc',
           400: '#e879f9',
-          500: '#d946ef',   // secondary accent
+          500: '#d946ef',
           600: '#c026d3',
           700: '#a21caf',
           800: '#86198f',
@@ -38,6 +39,15 @@ const config: Config = {
         },
         surface: {
           DEFAULT: '#0f1117',
+          // Public landing — warm off-white (deep ink stays the signed-in side)
+          warm: '#faf9f7',
+          'warm-50': '#f8f7f5',
+          'warm-100': '#f1f0ed',
+          'warm-200': '#e4e2dd',
+          'warm-border': '#dedcd6',
+          'warm-ink': '#1c1b1a',
+          'warm-muted': '#57554f',
+          // Signed-in surfaces — deep ink (unchanged family)
           50: '#f8f9fc',
           100: '#f1f3f7',
           200: '#e2e6ef',
