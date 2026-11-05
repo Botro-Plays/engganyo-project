@@ -110,10 +110,9 @@ test.describe('landing page', () => {
   // The social-proof stats fetch runs server-side inside the async RSC, so it cannot be
   // intercepted by page.route. The failure branch (stats === null -> section hidden) is
   // covered by code review; here we assert the page loads and the anchor link works.
-  test('"Learn how it works" navigates to the #how-it-works section', async ({ page }) => {
+  test('"How it works" navigates to the #how-it-works section', async ({ page }) => {
     await page.goto('/');
-    // Scroll to the link first — it may be below the fold on the redesigned landing
-    const link = page.getByRole('link', { name: 'Learn how it works' });
+    const link = page.getByRole('link', { name: 'How it works' });
     await link.scrollIntoViewIfNeeded();
     await link.click();
     await expect(page).toHaveURL(/#how-it-works$/);
