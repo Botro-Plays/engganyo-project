@@ -112,7 +112,10 @@ test.describe('landing page', () => {
   // covered by code review; here we assert the page loads and the anchor link works.
   test('"Learn how it works" navigates to the #how-it-works section', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: 'Learn how it works' }).click();
+    // Scroll to the link first — it may be below the fold on the redesigned landing
+    const link = page.getByRole('link', { name: 'Learn how it works' });
+    await link.scrollIntoViewIfNeeded();
+    await link.click();
     await expect(page).toHaveURL(/#how-it-works$/);
     await expect(page.locator('#how-it-works')).toBeInViewport();
   });

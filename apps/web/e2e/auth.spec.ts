@@ -6,8 +6,9 @@ test.describe('Authentication', () => {
   test('landing page loads and shows login/register links', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Engganyo/i);
-    await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /get started free/i })).toBeVisible();
+    // Two "Sign in" links exist (header nav + hero/footer) — target the header one
+    await expect(page.getByRole('navigation').getByRole('link', { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /get started free|start growing for free|create free account/i }).first()).toBeVisible();
   });
 
   test('register → check-email when verification required, dashboard when disabled', async ({ page }) => {
