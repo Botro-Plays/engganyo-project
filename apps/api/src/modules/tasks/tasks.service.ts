@@ -5,7 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel, NotificationType } from '@prisma/client';
+import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel, NotificationType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -686,22 +686,59 @@ export class TasksService {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
+    const now = new Date();
 
     const where = {
       userId,
       ...(dto.status && { status: dto.status }),
     };
 
-    const [items, total] = await Promise.all([
-      this.prisma.taskCompletion.findMany({
-        where,
-        select: COMPLETION_SELECT,
-        orderBy: { assignedAt: 'desc' },
-        skip,
-        take: limit,
-      }),
+    // Actionable-first ordering happens in the database before pagination so
+    // each page is a bounded read: actionable = ASSIGNED/IN_PROGRESS and not
+    // past expiresAt (same rule as getMyTasksSummary); then SUBMITTED; then
+    // everything else. Newest first within each group, id as the final
+    // deterministic tie-breaker so tied timestamps can't reorder across pages.
+    // expires_at is `timestamp without time zone` holding UTC, so it is
+    // converted with AT TIME ZONE 'UTC' before comparing to the timestamptz
+    // parameter — a bare comparison would shift by the session time zone.
+    const statusClause = dto.status
+      ? Prisma.sql`AND status::text = ${dto.status}`
+      : Prisma.empty;
+    const [idRows, total] = await Promise.all([
+      this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM task_completions
+        WHERE user_id = ${userId} ${statusClause}
+        ORDER BY
+          CASE
+            WHEN status::text IN ('ASSIGNED', 'IN_PROGRESS')
+                 AND (expires_at IS NULL
+                      OR expires_at AT TIME ZONE 'UTC' > ${now})
+            THEN 0
+            WHEN status::text = 'SUBMITTED' THEN 1
+            ELSE 2
+          END,
+          assigned_at DESC,
+          id DESC
+        LIMIT ${limit} OFFSET ${skip}
+      `,
       this.prisma.taskCompletion.count({ where }),
     ]);
+
+    if (!idRows.length) {
+      return {
+        items: [],
+        meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      };
+    }
+
+    const rows = await this.prisma.taskCompletion.findMany({
+      where: { id: { in: idRows.map((r) => r.id) } },
+      select: COMPLETION_SELECT,
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const items = idRows
+      .map((r) => byId.get(r.id))
+      .filter((r): r is NonNullable<typeof r> => r != null);
 
     return {
       items,

@@ -8,7 +8,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, ExternalLink, X, CheckCircle2, Clock,
   ChevronLeft, ChevronRight, Send, Flag, Upload, AlertTriangle,
+  CircleDot, Loader, XCircle,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -136,15 +138,24 @@ interface PaginatedResponse<T> {
   meta: { total: number; page: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
 }
 
-const MY_TASK_STATUS: Record<string, { label: string; color: string }> = {
-  ASSIGNED:    { label: 'To do',     color: 'text-yellow-400' },
-  IN_PROGRESS: { label: 'In progress', color: 'text-blue-400' },
-  SUBMITTED:   { label: 'Submitted', color: 'text-sky-400' },
-  VERIFIED:    { label: 'Verified',  color: 'text-green-400' },
-  REJECTED:    { label: 'Rejected',  color: 'text-red-400' },
-  EXPIRED:     { label: 'Expired',   color: 'text-zinc-500' },
-  CANCELLED:   { label: 'Cancelled', color: 'text-zinc-500' },
+const MY_TASK_STATUS: Record<string, { label: string; color: string; icon: LucideIcon; spin?: boolean }> = {
+  ASSIGNED:    { label: 'To do',       color: 'text-yellow-400', icon: CircleDot },
+  IN_PROGRESS: { label: 'In progress', color: 'text-blue-400',   icon: Loader, spin: true },
+  SUBMITTED:   { label: 'Submitted',   color: 'text-sky-400',    icon: Send },
+  VERIFIED:    { label: 'Verified',    color: 'text-green-400',  icon: CheckCircle2 },
+  REJECTED:    { label: 'Rejected',    color: 'text-red-400',    icon: XCircle },
+  EXPIRED:     { label: 'Expired',     color: 'text-zinc-500',   icon: Clock },
+  CANCELLED:   { label: 'Cancelled',   color: 'text-zinc-500',   icon: X },
 };
+
+// ASSIGNED/IN_PROGRESS past expiresAt is treated as expired for display,
+// ordering, and submit controls — same eligibility rule as the server
+// summary. Server-side submission validation remains authoritative.
+const isCompletionExpired = (t: { status: string; expiresAt: string | null }) =>
+  (t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS') &&
+  !!t.expiresAt && new Date(t.expiresAt).getTime() < Date.now();
+const myEffectiveStatus = (t: { status: string; expiresAt: string | null }) =>
+  isCompletionExpired(t) ? 'EXPIRED' : t.status;
 
 const proofSchema = z.object({
   proofUrl: z.string().optional().or(z.literal('')),
@@ -311,6 +322,21 @@ function TasksPageInner() {
     },
     enabled: tab === 'mine' && isAuthenticated,
     refetchInterval: 60_000,
+  });
+
+  // My-tasks status strip: same server summary the dashboard uses, shared
+  // query key so it dedupes and picks up the same socket invalidations.
+  const { data: mySummary } = useQuery({
+    queryKey: ['tasks', 'up-next'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{
+        actionable: number;
+        actionableCredits: number;
+        awaitingReview: number;
+      }>>('tasks/my/summary');
+      return res.data.data;
+    },
+    enabled: tab === 'mine' && isAuthenticated,
   });
 
   // ─── Assign task ───────────────────────────────────────────
@@ -698,6 +724,23 @@ function TasksPageInner() {
       {/* ── My Tasks tab ── */}
       {tab === 'mine' && (
         <>
+          {mySummary && (mySummary.actionable > 0 || mySummary.awaitingReview > 0) && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {mySummary.actionable > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300">
+                  <CircleDot className="w-3 h-3" />
+                  {mySummary.actionable} to finish · +{formatCredits(mySummary.actionableCredits)} {creditLabel(mySummary.actionableCredits)}
+                </span>
+              )}
+              {mySummary.awaitingReview > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-300">
+                  <Clock className="w-3 h-3" />
+                  {mySummary.awaitingReview} awaiting review
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Filter buttons */}
           <div className="flex gap-2 mb-4">
             {(['all', 'pending', 'done'] as const).map((f) => (
@@ -731,15 +774,19 @@ function TasksPageInner() {
               <div className="space-y-2">
                 {myData.items
                   .filter((task) => {
-                    if (myFilter === 'pending') return ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(task.status);
-                    if (myFilter === 'done') return ['VERIFIED', 'REJECTED'].includes(task.status);
+                    const eff = myEffectiveStatus(task);
+                    if (myFilter === 'pending') return ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(eff);
+                    if (myFilter === 'done') return ['VERIFIED', 'REJECTED'].includes(eff);
                     return true;
                   })
+                  // Server already orders actionable-first before pagination;
+                  // effective status only affects display, filters, and controls.
                   .map((task) => {
-                  const st = MY_TASK_STATUS[task.status] ?? { label: task.status, color: 'text-zinc-400' };
+                  const effStatus = myEffectiveStatus(task);
+                  const st = MY_TASK_STATUS[effStatus] ?? { label: effStatus, color: 'text-zinc-400', icon: CircleDot, spin: false };
                   const platform = getPlatform(task.campaign.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
-                  const canSubmit = task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS';
+                  const canSubmit = effStatus === 'ASSIGNED' || effStatus === 'IN_PROGRESS';
                   return (
                     <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-start sm:items-center gap-3 sm:gap-4">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${platformColor}`}>
@@ -751,7 +798,10 @@ function TasksPageInner() {
                           <span className="text-xs font-semibold text-green-400 shrink-0">+{formatCredits(task.campaign.creditPerTask)}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded border border-current/20 text-[10px] font-semibold uppercase tracking-wide ${st.color}`}>{st.label}</span>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-current/20 text-[10px] font-semibold uppercase tracking-wide ${st.color}`}>
+                            <st.icon className={`w-3 h-3 ${st.spin ? 'animate-spin' : ''}`} />
+                            {st.label}
+                          </span>
                           <span className="text-xs text-zinc-500">{formatRelativeTime(task.assignedAt)}</span>
                           <span className="text-[10px] text-zinc-600">by <Link href={`/users/${task.campaign.user.username}`} className="text-zinc-500 hover:text-brand-300 transition-colors">@{task.campaign.user.username}</Link></span>
                           <a
@@ -800,15 +850,17 @@ function TasksPageInner() {
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        {task.status === 'VERIFIED' ? (
+                        {effStatus === 'VERIFIED' ? (
                           <div className="flex items-center gap-1 text-green-400 text-sm font-semibold">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             +{formatCredits(task.creditsEarned)} {creditLabel(task.creditsEarned)}
                           </div>
-                        ) : task.status === 'SUBMITTED' ? (
+                        ) : effStatus === 'SUBMITTED' ? (
                           <div className="flex items-center gap-1 text-sky-400 text-xs">
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
+                        ) : effStatus === 'EXPIRED' ? (
+                          <span className="text-xs text-zinc-500">Expired</span>
                         ) : canSubmit ? (
                           DISABLED_TASK_TYPES.has(task.campaign.taskType) ? (
                             <div
@@ -876,7 +928,7 @@ function TasksPageInner() {
 
       {/* ── Submit proof modal ── */}
       {submitting && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 pb-20 sm:p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md card-glass rounded-t-2xl sm:rounded-2xl p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-white">
