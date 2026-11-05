@@ -808,8 +808,9 @@ Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers;
 
 ### Design revision — PR #41 (Ready for design review)
 
-- **Branch** `feat/design-revision-landing-shell`, **head** `43912f8`, **draft PR** https://github.com/Botro-Plays/engganyo-project/pull/41
+- **Branch** `feat/design-revision-landing-shell`, **head** `facd604407262ab308c4cbd149eaf28b48adb8ff`, **draft PR** https://github.com/Botro-Plays/engganyo-project/pull/41
 - Branched from `main` after PR #40 merged. No merge conflicts; no dependency on PRs #39/#40 beyond base branch.
+- Two commits: `43912f8` (initial redesign), `facd604` (a11y fix + dead query removal + authenticated screenshots).
 
 **Problems addressed (owner feedback):**
 1. Landing page still felt like the old site "in white" — generic hero with equal-weight feature cards, no concrete task example.
@@ -837,11 +838,20 @@ Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers;
 - Daily Reward and Spin the Wheel placed side-by-side in a secondary 2-col bonus row
 - All queries, socket listeners, gamification logic, and interactions preserved unchanged
 
-**Verification:**
-- `tsc --noEmit` clean
-- `next build` clean — 59 routes, 0 errors, warnings pre-existing
-- Landing page screenshots at 390px and 1440px captured (`docs/screenshots/design-slice/after-landing-{390,1440}.png`)
-- Before screenshots also committed (`before-landing-{390,1440}.png`, `before-tasks-unauth-{390,1440}.png`)
-- Dashboard and navigation changes are behind authentication; authenticated screenshots deferred to staging spot-check per review policy
+**More drawer accessibility fix (`facd604`):**
+- Root bug: `aria-hidden="true"` on the wrapper enclosed `role="dialog"`, hiding the drawer from AT.
+- Fix: backdrop is now a sibling `<div aria-hidden>` *before* the dialog, not its parent. `aria-controls` + `aria-expanded` on the More button. Focus entry (80 ms after Suspense flush), focus trap (Tab/Shift+Tab wraps), Escape closes and restores focus to More button (150 ms timeout for re-render), backdrop click closes.
+- Verified (Playwright 390 px headless): drawer visible ✓, focus into drawer ✓, Escape closes ✓, focus restored ✓, backdrop tap closes ✓, touch targets ≥ 44 × 44 px ✓ (all 9 links pass).
 
-**Not in this PR:** Find tasks card/panel behaviour (unchanged from PR #40); task/proof/wallet APIs (unchanged); 1v1 challenges and visitor analytics (proposal stage); PR #36 Gmail logo, funded BSC/Base, PayPal hosted-return (tracked separately).
+**Dead `publicStats` query removed (`facd604`):**
+- `analytics/public-stats` query (5 min refetch) was still firing after Platform Pulse display was removed. Removed query + unused Globe/TrendingUp icons. Dashboard First Load JS: 13.6 kB → 13.5 kB. Net: **−1 API call per 5 min per authenticated session**.
+
+**Before baseline clarification:** The correct before is the deployed PR #40 `c1e4d4d` (engganyo.com). It already had "Find a task. Earn credits." — the visual problem was the light-theme centered layout with equal-weight sections and no concrete task/proof/reward example. Screenshots captured from production.
+
+**Verification (`facd604`):**
+- `tsc --noEmit` clean; `next build` clean — 59 routes, 0 errors
+- Screenshots: `before-prod-landing-{390,1440}.png` (from engganyo.com); `after-landing-{390,1440}.png`, `after-dashboard-{390,1440}.png`, `after-more-drawer-390.png`, `after-tasks-browse-{390,1440}.png`, `after-tasks-accepted-{390,1440}.png`, `after-mytasks-{390,1440}.png` (authenticated dev, mock API)
+- Request count: dashboard −1 (`public-stats` removed); Find tasks identical to PR #40 baseline
+- UI UX Pro Max skill: `.agents/skills/` absent from disk; script unavailable; guidance applied from system context; documented per AGENTS.md
+
+**Not in this PR:** Find tasks card/panel (unchanged from PR #40); task/proof/wallet APIs (unchanged); 1v1 challenges and visitor analytics (proposal stage); PR #36 Gmail logo, funded BSC/Base, PayPal hosted-return (tracked separately).
