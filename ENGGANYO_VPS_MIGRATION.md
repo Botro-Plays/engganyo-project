@@ -869,3 +869,54 @@ Deferred (unchanged): PR #36 Gmail logo render check; funded BSC/Base transfers;
 - UI UX Pro Max skill: `.agents/skills/` absent from disk; script unavailable; guidance applied from system context; documented per AGENTS.md
 
 **Not in this PR:** Find tasks card/panel (unchanged from PR #40); task/proof/wallet APIs (unchanged); 1v1 challenges and visitor analytics (proposal stage); PR #36 Gmail logo, funded BSC/Base, PayPal hosted-return (tracked separately).
+
+---
+
+## PR #41 Deployment — 2026-11-05
+
+**Deployed commit:** `59d2ed2` (main HEAD after E2E test fixes)
+**Workflow run:** `42058096135` — all jobs green
+**Live URL:** https://engganyo.com
+
+### Deployment timeline
+
+| Attempt | Commit | Workflow | Result |
+|---|---|---|---|
+| 1 | `06be37b` (PR #41 merge) | `42045576982` | E2E failed — landing page selectors outdated |
+| 2 | `bebf98b` (auth.spec fix) | `42053228174` | E2E failed — "Learn how it works" text no longer exists |
+| 3 | `bc6f2fb` (anchor text fix) | `42056322972` | E2E failed — strict mode: 2 "How it works" links |
+| 4 | `59d2ed2` (nav-scoped locator) | `42058096135` | **All green — deployed** |
+
+### E2E fixes required
+
+The redesigned landing page changed DOM structure, breaking 2 tests:
+
+1. `auth.spec.ts` — "Sign in" link now appears in both navbar and bottom CTA. Fixed by scoping to `getByRole('navigation')`.
+2. `sprint1-fixes.spec.ts` — "Learn how it works" renamed to "How it works" and appears twice (navbar + hero CTA). Fixed by scoping to navigation element.
+
+### Verification results
+
+**CI pipeline (`42058096135`):**
+- CI — Web lint, build: success
+- CI — API lint, test, build: success
+- E2E — Playwright tests: success (all specs pass)
+- Build & push images: success
+- Deploy to VPS: success
+
+**Production smoke test:**
+- API health: `{"status":"ok"}` — db + redis, 3ms latency
+- Landing H1: "Find a task. Earn credits." ✓
+- Task card mock, "Two ways to participate", `#how-it-works` anchor: all present ✓
+- `/tasks` unauthenticated → redirects to `/login` ✓
+- `engganyo.com` + `www` → HTTP 200 ✓
+
+**Controlled environment verification (pre-merge):**
+- Full journey Dashboard → Find tasks → Accept → Open task → Submit proof → Track review verified at 390px and 1440px against stateful mock API
+- Accepted panel appears, target opens in new tab, proof submission clears panel, My tasks shows SUBMITTED status
+- Request counts: baseline 24 → PR 17 (−7), confirmed `analytics/public-stats` removal
+
+### Known issues / deferred
+
+- Authenticated prod smoke test (signed-in navigation, More drawer on live) requires test credentials — E2E suite covers these flows in CI
+- 1v1 challenges and visitor analytics: proposal stage, not in this release
+- PR #36 Gmail logo, funded BSC/Base transfers, PayPal hosted-return: tracked separately
