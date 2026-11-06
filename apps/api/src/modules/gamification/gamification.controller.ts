@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Headers, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Headers, UseGuards, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
@@ -195,12 +195,17 @@ export class GamificationController {
     const key = idempotencyKey && /^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)
       ? idempotencyKey
       : undefined;
-    // The client confirms the price it displayed (0 = free spin, 20 = paid).
-    // The service compares it against the authoritative cost inside the
-    // settlement transaction and rejects with PRICE_CHANGED on mismatch.
+    // The client must confirm the price it displayed (0 = free spin,
+    // 20 = paid). Required for every new spin: the only supported caller is
+    // the web dashboard, which always sends it — a missing or malformed
+    // value is rejected rather than silently falling through to a paid
+    // charge (e.g. a stale bundle showing "Spin — Free" after the free
+    // entitlement was taken elsewhere).
     const parsed = expectedCostHeader !== undefined ? Number.parseInt(expectedCostHeader, 10) : NaN;
-    const expectedCost = Number.isInteger(parsed) && parsed >= 0 && parsed <= 100000 ? parsed : undefined;
-    return this.gamificationService.spinWheel(user.sub, key, expectedCost);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100000 || String(parsed) !== expectedCostHeader?.trim()) {
+      throw new BadRequestException('X-Expected-Cost header is required and must be a non-negative integer (0 or 20).');
+    }
+    return this.gamificationService.spinWheel(user.sub, key, parsed);
   }
 
   @Get('daily-reward-log')
