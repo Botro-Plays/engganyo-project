@@ -1076,3 +1076,76 @@ Verification scripts (`journey-1v1.cjs`, seed `journey-seed.ts`,
   review. Migration `20261105170000_add_1v1_challenges` applies cleanly
   (`migrate deploy`, additive).
 - Fee rate stays config-driven, default 0%.
+
+---
+
+## PR #42 RELEASED — `6d4ae0b` on production (2026-11-06)
+
+Merged via merge commit `91a60b2` (PR head `8c73134` + lint fix `6d4ae0b`).
+Deploy workflow run **`42151536170`** — all jobs green:
+
+| Job | Result |
+|---|---|
+| CI — API lint, test, build | success — **444 tests / 26 suites passed, 0 skipped**; `challenges.integration.spec.ts` executed against CI Postgres via `TEST_DATABASE_URL` (log line `PASS src/modules/challenges/challenges.integration.spec.ts`) |
+| CI — Web lint, build | success |
+| E2E — Playwright | success |
+| Build & push images | success |
+| Deploy to VPS | success — `Deployment healthy: 6d4ae0b…` at 02:56 UTC |
+
+First attempt (run `42149560315`, `91a60b2`) failed at CI API lint — one
+`no-var-requires` error in `challenges.service.spec.ts` (inline
+`require('@nestjs/common')`); fixed in `6d4ae0b`, rerun green.
+
+### Migration
+
+`20261105170000_add_1v1_challenges` applied by the API container entrypoint
+(`prisma migrate deploy` runs before the app serves; `docker compose up
+--wait` is health-gated, so a failed migration would have failed the deploy).
+Deploy completed healthy → migration applied.
+
+### Production verification (https://engganyo.com)
+
+- `GET /api/health` → `{"status":"ok"}`, db + redis ok
+- `/api/challenges/public`, `/api/challenges/mine`, `/api/challenges/:id`
+  → 401 auth-required (routes live, correctly gated)
+- Browser smoke @1440px + @390px — **8/8 checks**: landing renders,
+  `/tasks?tab=challenges` → `/login`, `/campaigns` → `/login`,
+  `/challenge/[id]` share-link route renders. Screenshots:
+  `docs/screenshots/1v1-prod/`.
+
+**Live 1v1 tab URL:** `https://engganyo.com/tasks?tab=challenges`
+(authenticated). Creator entry: My campaigns → Create → 1v1 challenge.
+Private share links: `https://engganyo.com/challenge/<id>`.
+
+### Credit-moving flows — controlled environment only
+
+No production test credentials exist, so publish/reserve/claim/proof/
+settlement were NOT exercised on prod. They were verified pre-merge in the
+controlled env (26/26 browser checks, exact wallet+ledger assertions,
+concurrent claims, private gate, refunds) and by 444 CI tests incl. 13
+real-Postgres challenge integration tests. First real prod challenge will
+be the first live settlement — recommend watching ledger/revenue rows
+after the first approval.
+
+### Overdue review visibility (verified in controlled env)
+
+A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
+- **Creator**: My campaigns → My 1v1 challenges → "Review proof" modal —
+  submission card gets a red **Escalated** badge (deadline text hides once
+  escalated). Screenshot `11-overdue-review-escalated-1440.png`.
+- **Admin**: admin pending-submissions queue includes every challenge
+  claim awaiting review (escalation path, `admin.service.ts`
+  `listPendingSubmissions` + `reviewChallengeSubmission`).
+
+### Known limitations for users
+
+- Fee rate is 0% at launch (config `challenge_fee_rate`); reward bounds
+  10–500 credits, deadline ≤7 days — configurable via platform_configs.
+- Private challenge passwords: share link + argon2 hash; 5 wrong attempts
+  per IP → 15-min lockout. Password is required again at claim time.
+- Creator cannot cancel after claim; abandonment/expiry auto-refunds
+  reward+fee via 5-min sweep. Submitted proof holds the reserve until
+  creator (or admin after deadline) reviews.
+- One completion per campaign/challenge per user; same-IP self-farm
+  guard applies to challenges.
+- Visitor analytics remains a separate proposal — not in this release.
