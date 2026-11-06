@@ -1489,3 +1489,52 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
   identical stored result, no new spin/debit.
 - Gamification suite still 40/40. API+web typecheck clean. Ready for
   review — NOT merged.
+
+### PR #44 follow-up — required Idempotency-Key at HTTP boundary: head `4a390d7190df218e909e5028daf32425d5a59cb6`
+
+- `POST /gamification/wheel/spin` now REQUIRES a valid
+  `Idempotency-Key` (`/^[A-Za-z0-9_-]{8,128}$/`): missing, empty, too
+  short/long, or containing spaces/dots/symbols → **400 before
+  settlement** (`gamification.controller.ts`). Previously the controller
+  coerced bad keys to `undefined` and still invoked the service, which
+  would have bypassed durable replay protection.
+- Dashboard key generator extracted to `createSpinIdempotencyKey()` in
+  `apps/web/src/lib/api.ts`; both `crypto.randomUUID()` (36 chars,
+  hex+hyphens) and the `Date.now()-base36` fallback verified against the
+  key regex — only supported caller always sends a conforming key.
+- **Tests — 55/55 pass** on disposable migrated PostgreSQL
+  (`engganyo_test`, all 51 migrations incl. wheel attempt + allowance):
+  - New `gamification.controller.spec.ts` (14 tests): omitted/empty/
+    short/long/space/dot/symbol keys and missing/non-numeric/decimal/
+    negative/non-canonical costs → `BadRequestException` with the
+    service mock never invoked; valid key+cost forwards parsed values.
+  - New real-PG boundary test in `gamification-wheel.integration.spec.ts`:
+    real controller → real service → real DB; snapshot of
+    balance/spins/attempts/allowance/ledger identical before and after
+    rejected requests (zero debit, reward, spin, attempt, allowance, or
+    ledger trace); a valid key through the same path settles normally.
+  - Retained: stale free quote → `409 PRICE_CHANGED` (zero settlement),
+    fresh paid confirmation, committed same-key replay without second
+    charge, final-paid-slot race, rollback-after-eligibility, rollout-day
+    seeding, no-key service-level allowance (11 spins then rejected).
+- **Live verification** (local API `node dist/main.js` :3001 + dev
+  PostgreSQL `engganyo_db`, Chromium via Playwright from approved
+  cross-origin `http://localhost:3000`):
+  - curl: missing key → 400, `bad key!` → 400, missing cost → 400.
+  - Browser: preflight passes with all three headers; missing key → 400,
+    malformed key → 400; free quote → concurrent free winner (200) →
+    stale `X-Expected-Cost: 0` click → **409 PRICE_CHANGED**
+    (`expectedCost:0, actualCost:20`, no attempt row committed) →
+    refreshed paid click → 200 (25cr prize) → same-key replay →
+    identical stored result.
+  - DB agrees: 2 spin rows, 2 COMMITTED attempts, allowance
+    `{freeUsed:true, paidUsed:1}`, ledger `[+10, -20, +25]`, balance 515.
+- Note: local dev Postgres (`engganyo_postgres_dev` container) required
+  crash-recovery restart; `engganyo_db`/`engganyo_test` were empty and
+  fully migrated via `prisma migrate deploy` (51 migrations). Untracked
+  `apps/api/prisma/journey-seed.ts`, `.pgdata-test/`,
+  `apps/web/tmp-verify/` are pre-existing artifacts, not part of this
+  change.
+- API+web typecheck clean; eslint 0 errors. PR #44 open, non-draft,
+  mergeable — Ready for review, NOT merged. Production reCAPTCHA
+  untouched.
