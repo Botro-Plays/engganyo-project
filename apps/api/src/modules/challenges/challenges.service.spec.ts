@@ -250,8 +250,7 @@ function makeService(overrides: Partial<Record<string, any>> = {}) {
   const walletService = {
     debit: jest.fn(async (userId: string, amount: number, opts: any, client?: any) => {
       if (state.wallet.balance < amount) {
-        const { BadRequestException: BRE } = require('@nestjs/common');
-        throw new BRE('Insufficient balance');
+        throw new BadRequestException('Insufficient balance');
       }
       state.wallet.balance -= amount;
       state.wallet.transactions.push({ type: opts.type, amount: -amount, userId, referenceId: opts.referenceId });
