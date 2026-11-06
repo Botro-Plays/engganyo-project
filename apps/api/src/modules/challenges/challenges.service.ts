@@ -460,16 +460,23 @@ export class ChallengesService {
     // Atomic claim: conditional UPDATE serializes concurrent claimants on the
     // row lock; exactly one gets count=1. TaskCompletion.challengeId @unique
     // is the database backstop — a second insert would violate it.
+    // NOTE: expires_at is `timestamp` (no tz). Binding a JS Date lets Prisma
+    // type the param as timestamptz, which coerces the column through the
+    // session TimeZone — shifting the deadline by the server offset (a
+    // challenge expiring within the offset window becomes unclaimable).
+    // Send a naive-UTC string cast to ::timestamp instead — the same frame
+    // Prisma uses when it writes DateTime fields.
+    const nowParam = new Date().toISOString().slice(0, -1).replace('T', ' ');
     const completion = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.$executeRaw`
         UPDATE challenges
         SET status = 'CLAIMED'::"ChallengeStatus",
             claimed_by_id = ${userId},
-            claimed_at = NOW(),
-            updated_at = NOW()
+            claimed_at = ${nowParam}::timestamp,
+            updated_at = ${nowParam}::timestamp
         WHERE id = ${challengeId}
           AND status = 'OPEN'::"ChallengeStatus"
-          AND expires_at > NOW()`;
+          AND expires_at > ${nowParam}::timestamp`;
       if (claimed !== 1) {
         throw new ConflictException('This challenge was just claimed by someone else');
       }
@@ -796,9 +803,11 @@ export class ChallengesService {
       take: 100,
     });
     for (const ch of expiredOpen) {
-      await this.closeWithoutAward(ch.id, ChallengeStatus.EXPIRED, 'Challenge offer expired').catch((err) =>
-        this.logger.warn(`Failed to expire challenge ${ch.id}: ${err}`),
-      );
+      // OPEN-only source state: if the offer was claimed between selection
+      // and this write, the guarded update matches zero rows — no close,
+      // no refund. Claimed expiry is handled by the assignment-aware path.
+      await this.closeWithoutAward(ch.id, ChallengeStatus.EXPIRED, 'Challenge offer expired', ChallengeStatus.OPEN)
+        .catch((err) => this.logger.warn(`Failed to expire challenge ${ch.id}: ${err}`));
     }
 
     // 2) Claimed challenges whose claimant abandoned the task
@@ -844,7 +853,18 @@ export class ChallengesService {
     }
   }
 
-  private async closeWithoutAward(challengeId: string, status: ChallengeStatus, reason: string) {
+  // Closes a challenge without an award and refunds the full reserve.
+  // `fromStatus` is the ONLY source state the atomic update may match — a
+  // stale sweep candidate (e.g. an OPEN row that was claimed between
+  // selection and close) writes zero rows and refunds zero credits. For
+  // OPEN offers we also re-check expiresAt so the guard holds even if the
+  // row was touched between selection and write.
+  private async closeWithoutAward(
+    challengeId: string,
+    status: ChallengeStatus,
+    reason: string,
+    fromStatus: ChallengeStatus,
+  ) {
     const ch = await this.prisma.challenge.findUnique({
       where: { id: challengeId },
       select: { creatorId: true, reservedCredits: true, title: true, status: true },
@@ -852,7 +872,13 @@ export class ChallengesService {
     if (!ch) return;
     await this.prisma.$transaction(async (tx) => {
       const closed = await tx.challenge.updateMany({
-        where: { id: challengeId, status: { in: [ChallengeStatus.OPEN, ChallengeStatus.CLAIMED] } },
+        where: {
+          id: challengeId,
+          status: fromStatus,
+          ...(fromStatus === ChallengeStatus.OPEN
+            ? { expiresAt: { lte: new Date() } }
+            : {}),
+        },
         data: { status, closedAt: new Date(), updatedAt: new Date() },
       });
       if (closed.count !== 1) return;

@@ -671,8 +671,11 @@ export class TasksService {
     }
 
     const reviewDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-    await this.prisma.taskCompletion.update({
-      where: { id: completion.id },
+    // Guarded transition: if the expiry sweep closed the challenge and
+    // expired this completion between our read and this write, the update
+    // matches zero rows — proof can never attach to a refunded challenge.
+    const submitted = await this.prisma.taskCompletion.updateMany({
+      where: { id: completion.id, status: { in: submittable } },
       data: {
         status: CompletionStatus.SUBMITTED,
         proofUrl: dto.proofUrl,
@@ -684,6 +687,9 @@ export class TasksService {
         completionSeconds,
       },
     });
+    if (submitted.count !== 1) {
+      throw new ConflictException('This task is no longer active — it may have expired.');
+    }
 
     this.eventsService.emitToUser(userId, 'task:completed', { challengeId, completionId: completion.id, status: 'SUBMITTED' });
     this.eventsService.emitToUser(challenge.creatorId, 'submission:new', { challengeId, completionId: completion.id });

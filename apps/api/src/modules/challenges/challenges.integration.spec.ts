@@ -231,16 +231,17 @@ run('1v1 challenges — real PostgreSQL', () => {
     const list = await service.listPublic(playerA, 1, 50);
     expect(list.items.map((i: any) => i.id)).not.toContain(ch.id);
 
+    // Throttle is per challenge+IP — all five failures from one address
     for (let i = 0; i < 5; i++) {
-      await expect(service.claim(playerB, ch.id, { password: 'wrong' } as never, `10.1.0.${i}`))
+      await expect(service.claim(playerB, ch.id, { password: 'wrong' } as never, '10.1.0.7'))
         .rejects.toThrow(ForbiddenException);
     }
     // Locked out now — even the right password is refused until the window resets
-    await expect(service.claim(playerB, ch.id, { password: 'gate-pass-1' } as never, '10.1.0.9'))
+    await expect(service.claim(playerB, ch.id, { password: 'gate-pass-1' } as never, '10.1.0.7'))
       .rejects.toThrow(BadRequestException);
 
     // Different IP still works
-    const res = await service.claim(playerA, ch.id, { password: 'gate-pass-1' } as never, '10.2.0.1');
+    const res = await service.claim(playerA, ch.id, { password: 'gate-pass-1' } as never, '10.1.0.9');
     expect(res.challengeId).toBe(ch.id);
   });
 
@@ -359,6 +360,71 @@ run('1v1 challenges — real PostgreSQL', () => {
 
     // Two refunds (open + abandoned claim), submitted reserve still held
     expect(await balanceOf(creatorId)).toBe(creatorBefore + 100);
+  });
+
+  it('stale open-offer sweep candidate: claimed challenge is untouched, reserve held, no refund', async () => {
+    // Simulate the race: the sweep selected this row as OPEN+expired, but a
+    // claimant won the slot before the close write landed. (In practice the
+    // claim's expires_at guard makes this nearly impossible — the guarded
+    // close is defense-in-depth and must still write zero rows.)
+    const ch = await service.create(creatorId, 'USER', { ...baseDto, title: 'Stale sweep race' });
+    const claim = await service.claim(playerA, ch.id, {} as never, '10.7.0.1');
+    const creatorBefore = await balanceOf(creatorId);
+
+    // Row now looks like the stale sweep candidate: past expiresAt, but CLAIMED
+    await prisma.challenge.update({
+      where: { id: ch.id },
+      data: { expiresAt: new Date(Date.now() - 60_000) },
+    });
+
+    // Resume the stale close via the private path the sweep uses for OPEN offers
+    await (service as any).closeWithoutAward(ch.id, ChallengeStatus.EXPIRED, 'Challenge offer expired', ChallengeStatus.OPEN);
+
+    const stored = await prisma.challenge.findUniqueOrThrow({ where: { id: ch.id } });
+    expect(stored.status).toBe(ChallengeStatus.CLAIMED); // NOT expired — claim won
+    const completion = await prisma.taskCompletion.findUniqueOrThrow({ where: { id: claim.completionId } });
+    expect(completion.status).toBe(CompletionStatus.ASSIGNED); // live assignment survives
+    expect(await balanceOf(creatorId)).toBe(creatorBefore); // reserve still held
+    const refunds = (await txRowsFor(creatorId)).filter((t) => t.referenceId === ch.id && t.type === TransactionType.REFUND_CHALLENGE_CLOSE);
+    expect(refunds).toHaveLength(0);
+
+    // And the assignment-aware sweep path still works on it once truly abandoned
+    await prisma.taskCompletion.update({ where: { id: claim.completionId }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+    await service.sweepExpired();
+    expect((await prisma.challenge.findUniqueOrThrow({ where: { id: ch.id } })).status).toBe(ChallengeStatus.EXPIRED);
+    expect((await prisma.taskCompletion.findUniqueOrThrow({ where: { id: claim.completionId } })).status).toBe(CompletionStatus.EXPIRED);
+    expect(await balanceOf(creatorId)).toBe(creatorBefore + 50); // refunded exactly once
+  });
+
+  it('expired OPEN offer refunds exactly once across repeated sweeps', async () => {
+    await service.sweepExpired(); // flush expired leftovers from earlier tests
+    const ch = await service.create(creatorId, 'USER', { ...baseDto, title: 'Sweep idempotent', expiresInHours: 1 });
+    await prisma.challenge.update({ where: { id: ch.id }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+    const before = await balanceOf(creatorId);
+    await service.sweepExpired();
+    await service.sweepExpired(); // second sweep must be a no-op
+    await service.sweepExpired();
+    expect(await balanceOf(creatorId)).toBe(before + 50);
+    const refunds = (await txRowsFor(creatorId)).filter((t) => t.referenceId === ch.id && t.type === TransactionType.REFUND_CHALLENGE_CLOSE);
+    expect(refunds).toHaveLength(1);
+  });
+
+  it('concurrent reviews settle exactly once', async () => {
+    const ch = await service.create(creatorId, 'USER', { ...baseDto, title: 'Review race' });
+    const claim = await service.claim(playerA, ch.id, {} as never, '10.8.0.1');
+    await prisma.taskCompletion.update({
+      where: { id: claim.completionId },
+      data: { status: CompletionStatus.SUBMITTED, submittedAt: new Date(), proofUrl: 'https://proof/race.png' },
+    });
+    const results = await Promise.allSettled([
+      service.reviewSubmission(creatorId, ch.id, claim.completionId, { action: 'approve' }),
+      service.reviewSubmission(creatorId, ch.id, claim.completionId, { action: 'approve' }),
+    ]);
+    const ok = results.filter((r) => r.status === 'fulfilled');
+    expect(ok).toHaveLength(1);
+    const earns = (await txRowsFor(playerA)).filter((t) => t.referenceId === ch.id && t.type === TransactionType.EARN_TASK_COMPLETION);
+    expect(earns).toHaveLength(1);
+    expect(await prisma.platformRevenue.count({ where: { challengeId: ch.id } })).toBe(0); // 0% fee
   });
 
   it('DB enforces: one completion per challenge, campaign XOR challenge', async () => {

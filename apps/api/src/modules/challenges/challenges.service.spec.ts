@@ -207,8 +207,11 @@ function makeService(overrides: Partial<Record<string, any>> = {}) {
       // Simulate the atomic claim UPDATE — find the OPEN challenge and flip it.
       // The real SQL is covered by the integration spec; here we emulate the
       // row-lock semantics: first caller wins, second gets 0.
-      const userId = _args[1] as string;   // ${userId} appears first in the SQL
-      const challengeId = _args[2] as string; // ${challengeId} second
+      // ${userId} is always the first interpolation; the challenge id is the
+      // interpolation that matches a known challenge row (param count varies).
+      const vals = _args.slice(1);
+      const userId = vals[0] as string;
+      const challengeId = vals.find((v) => typeof v === 'string' && state.challenges.has(v)) as string;
       const ch = state.challenges.get(challengeId);
       if (!ch || ch.status !== ChallengeStatus.OPEN || ch.expiresAt <= new Date()) return 0;
       ch.status = ChallengeStatus.CLAIMED;

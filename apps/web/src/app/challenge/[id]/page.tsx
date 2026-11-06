@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -28,8 +28,8 @@ interface ChallengeDetail {
   creator: { id: string; username: string; displayName: string | null };
 }
 
-export default function ChallengePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ChallengePage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated, hasHydrated, user } = useAuthStore();
@@ -159,16 +159,18 @@ export default function ChallengePage({ params }: { params: Promise<{ id: string
               </button>
             </form>
           </div>
-        ) : detailLoading || !ch ? (
-          <div className="card-glass rounded-2xl p-16 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
-          </div>
-        ) : detailError ? (
-          <div className="card-glass rounded-2xl p-8 text-center">
-            <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-3" />
-            <p className="text-sm text-zinc-300">This challenge is no longer available.</p>
-            <p className="text-xs text-zinc-500 mt-1">It may have been claimed, expired, or cancelled.</p>
-          </div>
+        ) : !ch ? (
+          detailError && !detailLoading ? (
+            <div className="card-glass rounded-2xl p-8 text-center">
+              <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-3" />
+              <p className="text-sm text-zinc-300">This challenge is no longer available.</p>
+              <p className="text-xs text-zinc-500 mt-1">It may have been claimed, expired, or cancelled.</p>
+            </div>
+          ) : (
+            <div className="card-glass rounded-2xl p-16 flex justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+            </div>
+          )
         ) : (
           <div className="card-glass rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-3">
