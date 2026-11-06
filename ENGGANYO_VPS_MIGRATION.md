@@ -920,3 +920,80 @@ The redesigned landing page changed DOM structure, breaking 2 tests:
 - Authenticated prod smoke test (signed-in navigation, More drawer on live) requires test credentials — E2E suite covers these flows in CI
 - 1v1 challenges and visitor analytics: proposal stage, not in this release
 - PR #36 Gmail logo, funded BSC/Base transfers, PayPal hosted-return: tracked separately
+
+---
+
+## 1v1 P2P Challenges v1 — PR #42 (Ready for review, NOT deployed)
+
+| Item | Value |
+|---|---|
+| PR | https://github.com/Botro-Plays/engganyo-project/pull/42 |
+| Branch | `feat/1v1-p2p-challenges` |
+| Head | `8063dab` (feat: 1v1 P2P challenges v1 — create, claim, prove, settle) |
+| Base | `main` @ `59d2ed2` (post-PR #41 production) |
+| Status | Open, ready for review — **no production deployment** |
+
+### Migration
+
+`apps/api/prisma/migrations/20261105170000_add_1v1_challenges/migration.sql`:
+
+- New enums `ChallengeVisibility` (PUBLIC/PRIVATE), `ChallengeStatus`
+  (OPEN/CLAIMED/COMPLETED/EXPIRED/CANCELLED)
+- `TransactionType` += `SPEND_CHALLENGE_CREATE`, `REFUND_CHALLENGE_CLOSE`,
+  `PLATFORM_FEE_CHALLENGE`
+- New `challenges` table (creator, task fields, reward/proof, visibility +
+  `password_hash`, status, fee snapshot fields, claim fields, expiry)
+- `task_completions.campaign_id` → nullable; new `challenge_id` column with
+  `UNIQUE` index + FK; **`CHECK (num_nonnulls(campaign_id, challenge_id) = 1)`**
+  enforces exactly one offer link per completion
+- `platform_revenue.challenge_id` nullable + unique + FK (source
+  `CHALLENGE_FEE`)
+- Indexes: challenges(creator_id, status, visibility, expires_at, claimed_by_id)
+
+Apply with `prisma migrate deploy` — additive only, no data backfill; existing
+campaign completions keep `campaign_id` and satisfy the CHECK constraint.
+
+### Feature surface
+
+- **Find tasks → 1v1 Challenges tab** (`/tasks?tab=challenges`): public open
+  challenges in the task grid — action, reward, proof requirement, deadline,
+  Claim challenge. Post-claim pinned panel: Open task (new tab), Submit proof,
+  Track in My tasks.
+- **Create**: My campaigns → "1v1 challenge" + tab "Create challenge" → shared
+  `ChallengeFormModal` (title, action, platform/type, target URL, reward,
+  proof, deadline, visibility+password) with live reward/fee/reserve quote.
+- **Private**: `/challenge/[id]` share link → generic prompt → argon2 password
+  gate (5 fails/IP → 15 min lockout) → details + claim.
+- **My campaigns → My 1v1 challenges**: status, claimant, Review proof modal
+  (approve/reject), cancel pre-claim, copy share link.
+- **Lifecycle**: atomic publish+reserve; first-wins claim (conditional UPDATE
+  + unique `challenge_id`); creator-or-admin review; approve pays reward +
+  records fee once; any non-award close refunds reward+fee; 5-min cron sweep
+  expires OPEN and abandoned CLAIMED (SUBMITTED holds reserve for review).
+
+### Test results (local, head `8063dab`)
+
+| Check | Result |
+|---|---|
+| API `tsc --noEmit` | clean |
+| API `nest build` | clean |
+| Web `tsc --noEmit` | clean |
+| Web `next build` | clean — 60 routes incl. `/challenge/[id]` |
+| API jest suite | **388 passed, 0 failed** (53 integration specs skip w/o TEST_DATABASE_URL) |
+| `challenges.service.spec.ts` | 24/24 — bounds, fee snapshot, private hash, self-claim, concurrent claim, cancel/refund, approve/reject idempotency, expiry sweep |
+| `challenges.integration.spec.ts` | written, CI-gated (real Postgres): concurrent claims, lockout, insufficient funds, exactly-once settlement + fee revenue, refunds, expiry, XOR/unique DB constraints |
+
+### Verification gaps (honest status)
+
+- **Two-account browser E2E at 390px/1440px not yet run** — requires seeded
+  staging env with two funded accounts; CI E2E + the DB integration spec cover
+  the same invariants. Screenshots (create form, listing, accepted panel,
+  proof submit, creator review) pending that run.
+- Ordinary campaign regression: covered by existing suite (388 pass incl.
+  campaign-cancellation, review-payouts, my-tasks-ordering specs).
+
+### Remaining decisions
+
+- None blocking. Fee rate is config-driven (`challenge_fee_rate`, default 0%);
+  bounds/TTL/review window configurable via `platform_configs`.
+- Visitor analytics remains a separate proposal — out of scope.
