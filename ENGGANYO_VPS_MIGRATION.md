@@ -1230,3 +1230,24 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
   + wheel @390/1440, claim/spin result shots, `video/*.webm` walkthrough.
 - **Limitations:** web-only — backend reward math unchanged; balance
   display prefers stats API then falls back to auth-store balance.
+
+---
+
+## PR #45 — Mutual 1v1 challenge rooms: design proposal (Ready for design review)
+
+- **Branch/head:** `docs/mutual-1v1-rooms` @ `3c4771045cec844db459439086c1b97cfa32c641`
+- **PR:** https://github.com/Botro-Plays/engganyo-project/pull/45 (open, non-draft, docs-only)
+- **Scope:** v2 section appended to `docs/proposals/1v1-p2p-challenges.md` —
+  mutual rooms where two players each stake X credits, propose tasks for each
+  other, and earn P2P points (no credit reward). **No implementation.**
+- **Key design points:** reserve-at-publish/claim with capture-as-status-only
+  (no double debit); offer versioning with approval-clearing on edit; peer
+  proof review via new `RoomSubmission`; auto-provisioned private `Channel`
+  for chat; `P2pPointEvent` unique-per-room exactly-once points + audited
+  reversal; deadlines cap silent-participant stranding at ~48–120h.
+- **Audit basis:** reuses v1 escrow/claim/password patterns, Channel+Gateway
+  sockets, Report/admin queues, TrustScore/AbuseFlag; verified against
+  `main` @ `6d4ae0b`.
+- **Awaiting approval (doc §11):** launch price X=25cr, post-agreement refund
+  decision table (abandoner-forfeit option), no platform fee at launch,
+  90-day chat retention, v1 coexistence under `/rooms`, pair limit 3/7d.
