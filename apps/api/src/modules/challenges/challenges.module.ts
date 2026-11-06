@@ -1,0 +1,18 @@
+import { Module } from '@nestjs/common';
+
+import { WalletModule } from '../wallet/wallet.module';
+import { AntiAbuseModule } from '../anti-abuse/anti-abuse.module';
+import { SocialAuthModule } from '../social-auth/social-auth.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { EventsModule } from '../events/events.module';
+import { GamificationModule } from '../gamification/gamification.module';
+import { ChallengesController } from './challenges.controller';
+import { ChallengesService } from './challenges.service';
+
+@Module({
+  imports: [WalletModule, GamificationModule, AntiAbuseModule, SocialAuthModule, NotificationsModule, EventsModule],
+  controllers: [ChallengesController],
+  providers: [ChallengesService],
+  exports: [ChallengesService],
+})
+export class ChallengesModule {}

@@ -113,11 +113,20 @@ export function createProofAccessHandler(
       try {
         const completion = await prisma.taskCompletion.findUnique({
           where: { id: completionId },
-          select: { userId: true, campaign: { select: { userId: true } } },
+          select: {
+            userId: true,
+            campaign: { select: { userId: true } },
+            challenge: { select: { creatorId: true, claimedById: true } },
+          },
         });
+        // Proof is visible to the completer, the campaign creator, the
+        // challenge creator, and the challenge claimant (who is the
+        // completer anyway — kept for clarity).
         allowed =
           completion?.userId === ownerId &&
-          completion.campaign.userId === payload.sub;
+          (completion.campaign?.userId === payload.sub ||
+            completion.challenge?.creatorId === payload.sub ||
+            completion.challenge?.claimedById === payload.sub);
       } catch {
         allowed = false;
       }

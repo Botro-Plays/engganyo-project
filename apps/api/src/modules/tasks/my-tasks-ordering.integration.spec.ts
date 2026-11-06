@@ -118,8 +118,8 @@ run('GET /tasks/my ordering — real PostgreSQL', () => {
     expect(new Set(ids).size).toBe(8);
 
     // Recover campaign titles (they carry the spec key) to assert order.
-    const keyOf = (t: { campaign: { title: string } }) =>
-      t.campaign.title.slice(PREFIX.length);
+    const keyOf = (t: { campaign: { title: string } | null }) =>
+      (t.campaign?.title ?? '').slice(PREFIX.length);
     const order = all.map(keyOf);
 
     // Expected: group0 by assignedAt desc → a1(T8), a2(T7);
@@ -145,6 +145,6 @@ run('GET /tasks/my ordering — real PostgreSQL', () => {
       page: 1, limit: 20, status: CompletionStatus.SUBMITTED,
     });
     expect(res.meta.total).toBe(2);
-    expect(res.items.map((t) => t.campaign.title.slice(PREFIX.length))).toEqual(['s1', 's2']);
+    expect(res.items.map((t) => (t.campaign?.title ?? '').slice(PREFIX.length))).toEqual(['s1', 's2']);
   });
 });

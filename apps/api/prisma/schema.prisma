@@ -61,6 +61,10 @@ enum TransactionType {
   // Tipping
   SPEND_TIP
   EARN_TIP
+  // 1v1 challenges
+  SPEND_CHALLENGE_CREATE
+  REFUND_CHALLENGE_CLOSE
+  PLATFORM_FEE_CHALLENGE
 }
 
 enum DepositStatus {
@@ -134,6 +138,19 @@ enum CompletionStatus {
   DISPUTED     // User disputed rejection
   EXPIRED      // Task expired without submission
   CANCELLED    // Campaign cancelled before completion
+}
+
+enum ChallengeVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum ChallengeStatus {
+  OPEN       // published, slot unclaimed
+  CLAIMED    // slot taken, awaiting proof/review
+  COMPLETED  // terminal — awarded or closed without award
+  EXPIRED    // terminal — offer window or abandoned claim elapsed
+  CANCELLED  // terminal — creator cancelled before claim
 }
 
 enum SocialPlatform {
@@ -317,6 +334,8 @@ model User {
   passwordResets       PasswordReset[]
   socialAccounts       SocialAccount[]
   campaigns            Campaign[]
+  challenges           Challenge[]           @relation("ChallengeCreator")
+  challengeClaims      Challenge[]           @relation("ChallengeClaimant")
   completions          TaskCompletion[]
   notifications        Notification[]
   reportsSubmitted     Report[]              @relation("ReportSubmitter")
@@ -638,13 +657,15 @@ model Campaign {
 }
 
 model PlatformRevenue {
-  id         String   @id @default(cuid())
-  date       DateTime @db.Date
-  source     String   // "CAMPAIGN_FEE" | "CREDIT_PURCHASE" | "WITHDRAWAL_FEE"
-  amount     Int
-  campaignId String?  @unique @map("campaign_id")
-  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now()) @map("created_at")
+  id           String     @id @default(cuid())
+  date         DateTime   @db.Date
+  source       String     // "CAMPAIGN_FEE" | "CHALLENGE_FEE" | "CREDIT_PURCHASE" | "WITHDRAWAL_FEE"
+  amount       Int
+  campaignId   String?    @unique @map("campaign_id")
+  campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  challengeId  String?    @unique @map("challenge_id")
+  challenge    Challenge? @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
 
   @@index([date])
   @@index([source])
@@ -652,11 +673,13 @@ model PlatformRevenue {
 }
 
 model TaskCompletion {
-  id         String   @id @default(cuid())
-  campaignId String   @map("campaign_id")
-  campaign   Campaign @relation(fields: [campaignId], references: [id])
-  userId     String   @map("user_id")
-  user       User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(cuid())
+  campaignId   String?  @map("campaign_id")
+  campaign     Campaign? @relation(fields: [campaignId], references: [id])
+  challengeId  String?  @unique @map("challenge_id")
+  challenge    Challenge? @relation(fields: [challengeId], references: [id])
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id])
 
   status       CompletionStatus @default(ASSIGNED)
   creditsEarned Int             @default(0) @map("credits_earned")
@@ -694,6 +717,54 @@ model TaskCompletion {
   @@index([createdAt])
   @@index([proofHash])
   @@map("task_completions")
+}
+
+// =============================================================
+// 1v1 P2P CHALLENGES
+// =============================================================
+
+model Challenge {
+  id     String @id @default(cuid())
+  creatorId String @map("creator_id")
+  creator   User   @relation("ChallengeCreator", fields: [creatorId], references: [id])
+
+  title       String
+  actionText  String   @map("action_text") @db.Text
+  taskType    TaskType @map("task_type")
+  targetUrl   String   @map("target_url")
+
+  rewardCredits      Int     @map("reward_credits")
+  requiresProof      Boolean @default(true) @map("requires_proof")
+  proofInstructions  String? @map("proof_instructions") @db.Text
+
+  visibility    ChallengeVisibility @default(PUBLIC)
+  passwordHash  String?             @map("password_hash") // argon2/bcrypt hash, never plaintext
+
+  status ChallengeStatus @default(OPEN)
+
+  // Economics — snapshotted at publish; fee collected only on settlement
+  feeRateSnapshot  Float @map("fee_rate_snapshot")
+  feeAmount        Int   @map("fee_amount")
+  reservedCredits  Int   @map("reserved_credits") // reward + fee held from creator
+
+  // The single claim — canonical link is TaskCompletion.challengeId (@unique)
+  claim           TaskCompletion?
+  claimedById     String?   @map("claimed_by_id")
+  claimedBy       User?     @relation("ChallengeClaimant", fields: [claimedById], references: [id])
+  claimedAt       DateTime? @map("claimed_at")
+
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  closedAt   DateTime? @map("closed_at")
+
+  platformRevenue PlatformRevenue?
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([visibility])
+  @@index([expiresAt])
+  @@map("challenges")
 }
 
 // =============================================================
