@@ -997,3 +997,82 @@ campaign completions keep `campaign_id` and satisfy the CHECK constraint.
 - None blocking. Fee rate is config-driven (`challenge_fee_rate`, default 0%);
   bounds/TTL/review window configurable via `platform_configs`.
 - Visitor analytics remains a separate proposal — out of scope.
+
+---
+
+## PR #42 pre-merge update — `8c73134` (2026-11-06)
+
+Follow-up commit on `feat/1v1-p2p-challenges` (was `8063dab`). Still **not
+deployed** — Ready for review.
+
+### Race fixes
+
+- `closeWithoutAward()` now takes a required `fromStatus` and, for OPEN
+  offers, re-checks `expiresAt <= now` inside the atomic `updateMany`. A
+  stale open-offer sweep candidate that became CLAIMED writes **0 rows,
+  refunds 0 credits**; claimed expiry stays on the assignment-aware path
+  (completion must still be ASSIGNED/IN_PROGRESS in the same tx).
+- `submitChallengeProof()` uses guarded `updateMany` on live assignment
+  states — proof can no longer flip an expired/refunded completion back to
+  SUBMITTED.
+- **Real bug found by PG evidence**: `expires_at` is `timestamp` (no tz);
+  binding a JS `Date` in raw SQL typed the param `timestamptz` and coerced
+  through the session TimeZone (UTC+8 here), making challenges expiring
+  within ~8h unclaimable. Claim SQL now binds a naive-UTC string cast to
+  `::timestamp`.
+- `/challenge/[id]` page: Next.js 14 `params` is a plain object (was
+  `use(params)` → crash); unlocked private detail now takes precedence over
+  a stale failed detail query.
+
+### PostgreSQL evidence (disposable cluster, port 55432)
+
+`engganyo_test` migrated via `prisma migrate deploy`; `TEST_DATABASE_URL`
+exported. **An earlier suite run against port 5432 failed 56 tests with
+"can't reach database server" — wrong port, not a regression; re-run below
+is authoritative.**
+
+| Suite | Result |
+|---|---|
+| `challenges.integration.spec.ts` | **13/13 pass** — incl. new stale-sweep regression (claimed challenge untouched, reserve held, zero refund rows, then assignment-aware expiry refunds exactly once), expired-OPEN refund-once across repeated sweeps, concurrent-review exactly-once |
+| Full API jest (`--runInBand`) | **444 executed / 444 passed / 0 failed / 0 skipped** — 26/26 suites, all `*.integration.spec.ts` ran against real Postgres |
+
+`.github/workflows/deploy.yml` `ci-api` now exports `TEST_DATABASE_URL`
+alongside `DATABASE_URL` so CI integration suites execute instead of
+skipping.
+
+### Browser evidence — two accounts, funded wallets
+
+Local stack: API :3001, web :3210, Postgres :55432 (`engganyo_journey`),
+Redis :6379. Accounts `player_one` (creator) + `player_two` (claimant),
+`botro` (third claimant/campaign smoke); session IPs rewritten to simulate
+distinct players (same-machine shared-IP guard).
+
+`apps/web/tmp-verify/journey-1v1.cjs` (local only, gitignored):
+**26/26 checks passed** at 1440px + 390px — create via My campaigns UI,
+reserve debit, public discovery, claim, accepted panel (Open task /
+Submit proof), proof upload+submit, creator review+approve, COMPLETED +
+VERIFIED, wallet deltas and ledger rows verified in Postgres (earn +50
+exactly once, spend 1, refund 0, fee revenue 0 at 0% rate), private
+challenge hidden from listing, password gate → wrong-password shot →
+unlock → claim via share link, concurrent claims (201/409, one
+completion row), self-claim 403, ordinary campaign browse/assign/proof
+smoke.
+
+Screenshots committed under `docs/screenshots/1v1-journey/`:
+`01-create-form-1440`, `01b-create-form-filled-1440`, `01c-after-publish-1440`,
+`02-public-listing-1440`, `03-accepted-panel-1440`, `04-proof-submission-1440`,
+`04b-after-submit-1440`, `05-creator-review-1440`, `05b-after-approve-1440`,
+`06-private-gate-390`, `06b-private-wrong-pw-390`, `06c-private-unlocked-390`,
+`06d-private-claimed-390`, `07-challenges-tab-390`, `08-create-form-390`,
+`09-my-tasks-1440`.
+
+Verification scripts (`journey-1v1.cjs`, seed `journey-seed.ts`,
+`redis-cli.exe`) are local-only in `apps/web/tmp-verify/` and
+`apps/api/prisma/` — not committed.
+
+### Still open
+
+- PR #42 remains open at `8c73134` — merge + production deploy pending
+  review. Migration `20261105170000_add_1v1_challenges` applies cleanly
+  (`migrate deploy`, additive).
+- Fee rate stays config-driven, default 0%.
