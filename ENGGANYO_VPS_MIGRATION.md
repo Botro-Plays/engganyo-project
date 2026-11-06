@@ -1460,3 +1460,32 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
   {freeUsed,paidUsed:1}, ledger [+25, -20] only — the rejected request
   left zero trace.
 - API+web typecheck clean, eslint 0 errors. Ready for review — NOT merged.
+
+### PR #44 follow-up — CORS + required expected cost: head `e895da69b221d38bbcc972f093fd0503fe9af634`
+
+- CORS `allowedHeaders` now includes `Idempotency-Key` and
+  `X-Expected-Cost` (`apps/api/src/main.ts`).
+- `X-Expected-Cost` is REQUIRED on `POST /gamification/wheel/spin`:
+  missing, non-integer, negative, or non-canonical values → 400. Caller
+  audit: the only supported caller is `apps/web` dashboard
+  (`page.tsx` spin mutation) — it always sends both headers, so no legacy
+  path is kept. A stale bundle that omits the header gets 400 and cannot
+  silently authorize a paid spin; it must refresh to the new client.
+- **Browser verification** (Chromium via Playwright, origin
+  `http://localhost:3000` — an approved CORS origin — against API on
+  :3001, real PostgreSQL):
+  - Preflight succeeded for all requests carrying Authorization +
+    Idempotency-Key + X-Expected-Cost (no CORS errors).
+  - Status read → quote 0; another request took the free spin (200);
+    stale click with `X-Expected-Cost: 0` → **409 PRICE_CHANGED**
+    (`actualCost: 20`), zero settlement; fresh click at 20 → **200** paid
+    spin; status-after `{freeSpinAvailable:false, paidSpinsToday:1,
+    paidSpinsRemaining:9}`.
+  - DB agrees: 2 spin rows, allowance `{freeUsed:true,paidUsed:1}`,
+    ledger `[+10 free prize, -20 paid, +5 paid prize]` — rejected requests
+    left zero trace.
+- curl checks: missing/malformed (`abc`, `20.5`, `-5`) → 400.
+- Same-key replay verified live: repeat `browser-paid-0002` + cost 20 →
+  identical stored result, no new spin/debit.
+- Gamification suite still 40/40. API+web typecheck clean. Ready for
+  review — NOT merged.
