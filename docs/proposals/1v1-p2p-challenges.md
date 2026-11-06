@@ -269,17 +269,18 @@ Status: **design proposal — awaiting approval before implementation**
 
 v1 (above, deployed in PR #42) is a **one-sided bounty**: one creator posts a
 task + credit reward, one claimer earns credits. v2 introduces **mutual rooms**:
-two players each stake an equal credit contribution, each owes the other one
-real-world task, and the room pays out in **P2P points** — never wallet
-credits. v1 challenges and their reserves remain untouched under their
-original terms; room contributions use separate ledger types and separate
-tables.
+two players each reserve an equal credit contribution, each proposes a task
+for the other to perform, and the room pays out in **P2P points** — never
+wallet credits. When both players accept the same offer version, Engganyo
+collects the combined 2X as the **room charge**. v1 challenges and their
+reserves remain untouched under their original terms; room contributions use
+separate ledger types and separate tables.
 
 ## 1. Audit — what already exists (verified against `main` @ `6d4ae0b`)
 
 | Concern | Existing asset | Reuse decision |
 |---|---|---|
-| Escrow/reserve | `walletService.debit/credit` + typed `Transaction` ledger; v1 pattern (`SPEND_CHALLENGE_CREATE` debit at publish, `REFUND_CHALLENGE_CLOSE` credit on non-award close) | Same pattern, new types `SPEND_ROOM_CREATE` / `SPEND_ROOM_CLAIM` / `REFUND_ROOM_CLOSE`. "Capture" is a **status transition only** — the debit already settled at reserve time, so capture can never debit twice |
+| Reserve/ledger | `walletService.debit/credit` + typed `Transaction` ledger; v1 pattern (`SPEND_CHALLENGE_CREATE` debit at publish, `REFUND_CHALLENGE_CLOSE` credit on non-award close) | Same pattern, new types `SPEND_ROOM_CREATE` / `SPEND_ROOM_CLAIM` / `REFUND_ROOM_CLOSE` / `REFUND_ROOM_RESOLUTION`. At AGREED the combined 2X is recorded as `PlatformRevenue` (`ROOM_CHARGE`) — **no wallet is debited at capture**, so collection can never debit twice |
 | Atomic single-slot claim | Conditional `UPDATE ... WHERE status='OPEN'` inside tx + `RETURNING` (v1 `claim`) | Same for room claim, **plus** the claimant's `debit` inside the same transaction — a losing or underfunded claimant pays nothing |
 | Password-gated private listing | `passwordHash` (argon2), `POST /challenges/:id/preview` + `/access`, 5-fail/IP → 15-min Redis lockout, 404 no-oracle for private detail | Same pattern, per-room |
 | Proof pipeline | Upload → hash → `TaskCompletion` states (ASSIGNED→IN_PROGRESS→SUBMITTED→VERIFIED/REJECTED/DISPUTED), `reviewDeadline` → admin escalation | Reuse upload/hash helpers and the review-deadline escalation pattern, but **new `RoomSubmission` table** — room proof needs *peer* review (each player reviews the other's work), which `TaskCompletion`'s creator-reviews-claimer semantics don't express |
@@ -314,7 +315,7 @@ model ChallengeRoom {
   claimerId           String?  @map("claimer_id")
   claimer             User?    @relation("RoomClaimer", fields: [claimerId], references: [id])
   contributionCredits Int      @map("contribution_credits") // X per player, snapshot
-  combinedPool        Int      @map("combined_pool")        // 2X, snapshot for display
+  roomCharge          Int      @map("room_charge")          // 2X — collected at AGREED
   title               String                               // public card title (no task details for private)
   visibility          ChallengeVisibility @default(PUBLIC)
   passwordHash        String?  @map("password_hash")        // argon2, never plaintext
@@ -331,7 +332,7 @@ model ChallengeRoom {
   // economics
   creatorTxId         String?  @map("creator_tx_id")        // SPEND_ROOM_CREATE txn
   claimerTxId         String?  @map("claimer_tx_id")        // SPEND_ROOM_CLAIM txn
-  escrowCapturedAt    DateTime? @map("escrow_captured_at")  // set at AGREED — capture marker only
+  chargeCollectedAt   DateTime? @map("charge_collected_at") // set at AGREED — 2X → PlatformRevenue
   closedAt            DateTime? @map("closed_at")
   closeReason         String?  @map("close_reason")
   createdAt           DateTime @default(now()) @map("created_at")
@@ -435,8 +436,10 @@ model RoomDispute {
 ```
 
 `TransactionType` additions: `SPEND_ROOM_CREATE`, `SPEND_ROOM_CLAIM`,
-`REFUND_ROOM_CLOSE`, `REFUND_ROOM_FORFEIT` (post-agreement partial refund if the
-approved decision table allows it — see section 5).
+`REFUND_ROOM_CLOSE` (pre-agreement full refund), `REFUND_ROOM_RESOLUTION`
+(post-agreement refund of a player's own contribution — original payer only).
+`PlatformRevenue` gains `roomId String? @unique` + `source: 'ROOM_CHARGE'`
+for the 2X collected at agreement.
 
 `Report` gains `roomId String?` so in-room reports land in the existing admin
 queue with a room context link.
@@ -452,8 +455,9 @@ A publishes (debit X)                B claims (debit X, same tx)
                                                │
               ┌── negotiation timeout ─────────┤ both approve same version
               ▼                                ▼
-        EXPIRED (refund 2X)                 AGREED — offers LOCKED,
-                                           workEndsAt set, escrowCapturedAt=now
+        EXPIRED (refund each own X)         AGREED — offers LOCKED,
+                                           workEndsAt set, 2X collected as
+                                           room charge (PlatformRevenue)
               ┌── dispute / admin ────────────┤
               ▼                                ▼
            DISPUTED                        IN_PROGRESS
@@ -481,20 +485,30 @@ A publishes (debit X)                B claims (debit X, same tx)
 A silent participant can therefore strand a room for at most ~48h in
 negotiation or ~72h+48h in work/review before admin escalation — never forever.
 
-## 4. Equal contributions & escrow semantics
+## 4. Equal contributions, reserve & room-charge semantics
+
+The rules are identical at every stage — reservation, collection, and refund:
 
 - `contributionCredits` X is **snapshotted at publish** and shown identically to
-  both players. `combinedPool = 2X` shown at agreement ("the room costs 2X total").
+  both players. `roomCharge = 2X` is displayed at agreement ("the room charge
+  is 50 credits").
 - **Reserve A**: `walletService.debit(A, X, SPEND_ROOM_CREATE)` inside the publish
   tx — insufficient balance → publish fails, no room row.
 - **Reserve B**: inside the claim tx — `UPDATE rooms SET status='CLAIMED',
   claimerId=B WHERE id=? AND status='OPEN' AND claimExpiresAt>now` **then**
   `debit(B, X, SPEND_ROOM_CLAIM)`; any failure rolls back both. Loser pays nothing.
-- **Capture**: when both players approve the same offer version, the room sets
-  `escrowCapturedAt`. **No ledger entry is written at capture** — both debits
-  already settled at reserve time, so there is no code path that can debit a
-  second time. Pre-agreement close refunds via `REFUND_ROOM_CLOSE` credits to
-  each original payer (never to a different account).
+- **Collect the room charge**: when both players approve the same offer version,
+  one transaction sets `chargeCollectedAt` and writes a single
+  `PlatformRevenue` row (`source: 'ROOM_CHARGE'`, `amount: 2X`, `roomId`) —
+  Engganyo collects the combined 2X as the room charge. **No wallet is debited
+  at this step**: both X debits already settled at reserve time, so capture
+  cannot debit either balance a second time. The approval update is conditional
+  on the matched version, so concurrent approvals collect the charge exactly once.
+- **Refunds return credits only to the original payer.** Pre-agreement close
+  (expiry, cancel, negotiation timeout) credits each player's own X back via
+  `REFUND_ROOM_CLOSE`. Post-agreement refunds (admin resolution only) credit
+  the affected player's own X via `REFUND_ROOM_RESOLUTION` — never another
+  player's contribution, never a different account.
 - **Proposed launch price: X = 25 credits** (matches a mid-tier wheel prize;
   meaningful but not punishing). **Needs approval** — configurable via
   `platform_configs` (`room_contribution_credits`) before launch.
@@ -515,9 +529,12 @@ negotiation or ~72h+48h in work/review before admin escalation — never forever
 - Each player submits proof **for their own work** (`submittedById` must equal
   the offer's performer — server-enforced) and **reviews the peer's** proof.
   Rejection may be disputed once → `DISPUTED` → admin queue.
-- **Points**: on room COMPLETED, insert two `P2pPointEvent` rows (one per player,
-  `role` = CREATOR/CLAIMER) inside the completion tx. `@@unique([userId,roomId])`
-  makes double-award impossible; reversal sets `reversedAt` + reason (audited).
+- **Points**: only when the room reaches COMPLETED — both tasks verified,
+  including verification granted through moderation. Insert two
+  `P2pPointEvent` rows (one per player, `role` = CREATOR/CLAIMER) inside the
+  completion tx. `@@unique([userId,roomId])` makes double-award impossible;
+  reversal sets `reversedAt` + reason (audited). An incomplete room — one-sided
+  abandonment, rejected proof, invalid terms — awards **zero points**.
 - **Leaderboard**: `GET /leaderboard/p2p?type=alltime|weekly` — sums
   non-reversed `P2pPointEvent`, paginated + Redis-cached like `getLeaderboard`.
   Breakdown shows total completions + creator/claimant split per user.
@@ -526,18 +543,19 @@ negotiation or ~72h+48h in work/review before admin escalation — never forever
 
 | Situation | Who can close | Evidence required | Refund | Points |
 |---|---|---|---|---|
-| Pre-agreement: claim/negotiation expiry, either player cancels | System / either player | n/a | **Both X refunded** to original payers | none |
-| Post-agreement, both verified | System | both submissions APPROVED | none — contributions consumed | **+1 each** |
-| Post-agreement, one side abandons (no submission by workEndsAt) | Either player → DISPUTED → admin | room state + deadlines | **Abandoner forfeits X** (`REFUND_ROOM_FORFEIT` to fulfiller) — fulfiller keeps their X too? **Decision needed**: option A = fulfiller refunded (net 0, point only to fulfiller? or none), option B = fulfiller keeps abandoner's X as compensation | fulfiller +1 only if admin confirms their work |
-| Post-agreement, proof rejected, dispute lost | Admin | submission evidence | per admin ruling within the two options above | per ruling |
-| Invalid terms (offer violated platform rules / self-dealing detected) | Admin | offer + proof review | **Both refunded**; abuse flags on both | none; points reversed if already awarded |
-| Confirmed abuse (alt-account pair farming, recycled proof) | Admin | AbuseFlag/IpRecord/DeviceFingerprint correlation | per ruling; typically both refunded + flags | reversed via `reversedAt` |
+| Pre-agreement: claim/negotiation expiry, either player cancels | System / either player | n/a | **Each player's own X refunded** to the original payer | none |
+| Post-agreement, both tasks verified (including via moderation) | System / admin | both submissions APPROVED | none — the 2X room charge stands | **+1 each** |
+| Post-agreement, one side abandons (no submission by workEndsAt) | Either player → DISPUTED → admin | room state + deadlines + peer's completed work | **Affected player's own X refunded** (`REFUND_ROOM_RESOLUTION`); abandoner's X stays as room charge — **no player ever receives the other's contribution** | **zero — incomplete room awards no points** |
+| Post-agreement, proof rejected, dispute lost | Admin | submission evidence | per admin ruling — refunds only ever return a player's own X | per ruling; points only if both directions end verified |
+| Invalid terms (offer violated platform rules / self-dealing detected) | Admin | offer + proof review | **Each player's own X refunded**; abuse flags on both | none; points reversed if already awarded |
+| Confirmed abuse (alt-account pair farming, recycled proof) | Admin | AbuseFlag/IpRecord/DeviceFingerprint correlation | each player's own X refunded per ruling + flags | reversed via `reversedAt` |
 
-**Post-agreement rule callout for approval**: once AGREED, contributions are
-**non-refundable by default** — the only exits are mutual completion, mutual
-cancel *before any submission* (both refunded), or admin dispute resolution.
-This is the financially safe default; the abandoner-forfeit option above is the
-proposed middle ground and needs sign-off.
+**Post-agreement rule callout for approval**: once AGREED, the 2X room charge
+is collected and contributions are **non-refundable by default** — the only
+exits are mutual verified completion (points awarded), mutual cancel *before
+any submission* (each own X refunded), or admin dispute resolution (refunds
+return only the affected player's own contribution; an incomplete room never
+awards points).
 
 ## 6. Route map (proposed)
 
@@ -607,7 +625,7 @@ WS     channel events via existing ChannelsGateway (room-{id} private channel)
 ┌──────────────────────────────┐   ┌──────────────────────────────────────────────────────┐
 │ 🎲 Mutual Room          OPEN │   │ 🎲 Mutual Room                          OPEN · 1 slot  │
 │ "Trade TikTok follows"       │   │ "Trade TikTok follows"        by @player_one        │
-│ Stake 25 cr each · 2X = 50   │   │ Stake 25 cr each · pool 50 cr · claim by in 2d 4h   │
+│ 25 cr each · charge 50 cr    │   │ 25 cr each · room charge 50 cr · claim by in 2d 4h │
 │ Public · TikTok · ⏳ 46h left │   │ Public · TikTok · ⏳ 46h left · 🔒 optional password │
 │ [ View room ]                │   │ [ View room ]                                         │
 └──────────────────────────────┘   └──────────────────────────────────────────────────────┘
@@ -618,7 +636,7 @@ WS     channel events via existing ChannelsGateway (room-{id} private channel)
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Room: Trade TikTok follows              Status: NEGOTIATING   │
-│ You stake 25 · they stake 25 · pool 50 · agree by Nov 9      │
+│ You pay 25 · they pay 25 · charge 50 · agree by Nov 9         │
 ├───────────────────────────────┬──────────────────────────────┤
 │ REQUEST you proposed          │ REQUEST they proposed       │
 │ (they perform)  v3            │ (you perform)   v2          │
@@ -631,7 +649,7 @@ WS     channel events via existing ChannelsGateway (room-{id} private channel)
 │ │ player_one: sounds good, I can do the follow tonight     │ │
 │ │ player_two:  same — approve when ready                   │ │
 │ └──────────────────────────────────────────────────────────┘ │
-│ [ Dispute room ]   [ Leave room — forfeit stake pre-agreement]│
+│ [ Dispute room ] [ Leave room — both contributions refunded ] │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -639,7 +657,7 @@ WS     channel events via existing ChannelsGateway (room-{id} private channel)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ AGREED · work due Nov 10 · chat + proofs                     │
+│ AGREED · charge 50 collected · work due Nov 10               │
 ├───────────────────────────────┬──────────────────────────────┤
 │ YOU OWE (they requested)      │ THEY OWE (you requested)     │
 │ "Like my latest video" YouTube│ "Follow @player2"   TikTok  │
@@ -659,7 +677,8 @@ WS     channel events via existing ChannelsGateway (room-{id} private channel)
 2. Simultaneous claims (N parallel) → exactly one 201, one `SPEND_ROOM_CLAIM`;
    underfunded claimant → 400, zero ledger rows.
 3. Offer edit → version bump + approvals cleared; stale-version approve → 409;
-   both approve same version → AGREED, `escrowCapturedAt` set, **no second debit**
+   both approve same version → AGREED, `chargeCollectedAt` set + one
+   `PlatformRevenue` (ROOM_CHARGE, 2X) row, **no second debit**
    (balance deltas asserted).
 4. Each submits proof for own offer only (`submittedById` enforcement — player
    cannot submit for peer's offer → 403); peer reviews; both APPROVED →
@@ -680,12 +699,15 @@ pair → points withheld pending review.
 
 ## 11. Decisions needed before implementation
 
-1. **Launch price X = 25 credits** — approve or adjust (`room_contribution_credits`).
-2. **Post-agreement refund rule** — approve the decision table in section 5,
-   especially the abandoner-forfeit option (fulfiller compensated vs. neutral refund).
-3. **Platform fee on rooms** — proposal: **none at launch** (contributions are
-   stakes, not purchases; a fee would complicate the "2X pool" mental model).
-   Optional `room_fee_rate` later.
+1. **Launch price X = 25 credits per player** — approve or adjust
+   (`room_contribution_credits`). The room charge is then 50 credits.
+2. **Post-agreement refund rule** — approve the decision table in section 5:
+   the 2X room charge stands once AGREED; one-sided abandonment may refund the
+   affected player's own X (original payer only) with zero points for the
+   incomplete room.
+3. **Additional platform fee on rooms** — proposal: **none beyond the 2X room
+   charge** at launch (the charge itself is the platform's take; a separate
+   `room_fee_rate` on top would double-charge the mental model). Optional later.
 4. **Chat retention 90 days** post-close — approve or adjust.
 5. **v1 coexistence** — rooms live under `/rooms` + a "Rooms" filter/tab;
    v1 `Challenge` flow unchanged. No data migration.
