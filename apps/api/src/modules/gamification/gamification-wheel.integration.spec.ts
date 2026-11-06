@@ -10,7 +10,7 @@
  * recoverable result, and Redis independence of the idempotency path.
  */
 import { PrismaClient, TransactionType } from '@prisma/client';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { GamificationService } from './gamification.service';
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
@@ -355,6 +355,51 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(r).toMatchObject({ isFree: false, cost: 20 });
     // freeUsed from history; paidUsed = max(2 history, 7 redis) + 1 claim.
     expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 8 });
+  });
+
+  it('two concurrent free-expecting spins: one wins free, the other is PRICE_CHANGED with zero settlement', async () => {
+    const u = await mkUser(500);
+
+    const results = await Promise.allSettled([
+      service.spinWheel(u.id, 'fc-a', 0),
+      service.spinWheel(u.id, 'fc-b', 0),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    // The loser confirmed the free price but the authoritative cost became
+    // 20 — definitive rejection, NOT a silent paid charge.
+    const loser = (rejected[0] as PromiseRejectedResult).reason;
+    expect(loser).toBeInstanceOf(ConflictException);
+    expect((loser as ConflictException).getResponse()).toMatchObject({
+      code: 'PRICE_CHANGED',
+      expectedCost: 0,
+      actualCost: 20,
+    });
+    expect((fulfilled[0] as PromiseFulfilledResult<unknown>).value).toMatchObject({
+      isFree: true,
+      cost: 0,
+    });
+
+    // Exactly one settlement: one free spin row, zero debits, loser's
+    // attempt row rolled back, paid slot never consumed.
+    expect(await spinRows(u.id)).toBe(1);
+    expect(await attemptRows(u.id)).toHaveLength(1);
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 0 });
+    const ledger = await ledgerRows(u.id);
+    expect(ledger.filter((t) => t.type === TransactionType.SPEND_STORE_PURCHASE)).toHaveLength(0);
+    expect(ledger.filter((t) => t.type === TransactionType.EARN_WHEEL_SPIN)).toHaveLength(1);
+    expect(await balanceOf(u.id)).toBe(505);
+
+    // After "refresh", an explicit paid attempt at the confirmed price works.
+    const paid = await service.spinWheel(u.id, 'fc-paid', 20);
+    expect(paid).toMatchObject({ isFree: false, cost: 20 });
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 1 });
+    expect(await spinRows(u.id)).toBe(2);
+    expect(await balanceOf(u.id)).toBe(505 - 20 + 5);
   });
 
   it('no-key calls enforce the same daily allowance — 1 free + 10 paid, then rejected', async () => {

@@ -1090,14 +1090,14 @@ export class GamificationService implements OnModuleInit {
   // with conditional updateMany inside the same tx, so different keys cannot
   // over-consume the free spin or the 10-paid-spin cap, and a rollback
   // restores both. Redis is never in this path.
-  async spinWheel(userId: string, idempotencyKey?: string) {
+  async spinWheel(userId: string, idempotencyKey?: string, expectedCost?: number) {
     const execute = async (tx: Prisma.TransactionClient) => {
       if (idempotencyKey) {
         await tx.wheelSpinAttempt.create({
           data: { userId, key: idempotencyKey },
         });
       }
-      const result = await this.executeSpinWheel(userId, tx);
+      const result = await this.executeSpinWheel(userId, tx, expectedCost);
       if (idempotencyKey) {
         await tx.wheelSpinAttempt.update({
           where: { userId_key: { userId, key: idempotencyKey } },
@@ -1163,7 +1163,7 @@ export class GamificationService implements OnModuleInit {
     return { freeUsed, paidUsed };
   }
 
-  private async executeSpinWheel(userId: string, tx: Prisma.TransactionClient) {
+  private async executeSpinWheel(userId: string, tx: Prisma.TransactionClient, expectedCost?: number) {
     const day = new Date().toISOString().slice(0, 10);
 
     // Materialize today's allowance row if missing. createMany +
@@ -1209,6 +1209,24 @@ export class GamificationService implements OnModuleInit {
       if (paidClaim.count === 0) {
         throw new BadRequestException('Maximum 10 paid spins per day');
       }
+    }
+
+    // Bind the attempt to the cost the player confirmed. The authoritative
+    // cost is only known after the allowance claims above; a mismatch (e.g.
+    // the last free spin was taken by a concurrent request) aborts the whole
+    // transaction — no debit, no reward, no spin row, no consumed slot — and
+    // returns a price-change response so the client can refresh and require a
+    // fresh click at the new price.
+    if (expectedCost !== undefined && expectedCost !== cost) {
+      throw new ConflictException({
+        message: `Spin cost changed to ${cost} credits — review the updated price and spin again.`,
+        code: 'PRICE_CHANGED',
+        expectedCost,
+        actualCost: cost,
+      });
+    }
+
+    if (!isFree) {
       await this.walletService.debit(userId, GamificationService.WHEEL_PAID_COST, {
         type: TransactionType.SPEND_STORE_PURCHASE,
         description: 'Spin the wheel',

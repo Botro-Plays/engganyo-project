@@ -189,12 +189,18 @@ export class GamificationController {
   spinWheel(
     @CurrentUser() user: JwtPayload,
     @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers('x-expected-cost') expectedCostHeader?: string,
   ) {
     // Bound the key — it is embedded in a Redis key, so keep it short and safe.
     const key = idempotencyKey && /^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)
       ? idempotencyKey
       : undefined;
-    return this.gamificationService.spinWheel(user.sub, key);
+    // The client confirms the price it displayed (0 = free spin, 20 = paid).
+    // The service compares it against the authoritative cost inside the
+    // settlement transaction and rejects with PRICE_CHANGED on mismatch.
+    const parsed = expectedCostHeader !== undefined ? Number.parseInt(expectedCostHeader, 10) : NaN;
+    const expectedCost = Number.isInteger(parsed) && parsed >= 0 && parsed <= 100000 ? parsed : undefined;
+    return this.gamificationService.spinWheel(user.sub, key, expectedCost);
   }
 
   @Get('daily-reward-log')

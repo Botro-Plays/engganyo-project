@@ -178,3 +178,14 @@ export function getApiErrorMessage(error: unknown): string {
   }
   return 'An unexpected error occurred';
 }
+
+// The wheel spin endpoint rejects with 409 + code PRICE_CHANGED when the
+// authoritative cost differs from the price the UI displayed. This is a
+// definitive rejection — nothing settled — unlike a lost response.
+export function isSpinPriceChanged(error: unknown): boolean {
+  return (
+    axios.isAxiosError(error) &&
+    error.response?.status === 409 &&
+    (error.response?.data as { code?: string } | undefined)?.code === 'PRICE_CHANGED'
+  );
+}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Loader2, RotateCcw, Coins, Zap, Package, Snowflake, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
+import { getApiErrorMessage, isSpinPriceChanged } from '@/lib/api';
 
 interface SpinResult {
   prize: string;
@@ -177,6 +178,16 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
         setAnnouncement(`You won ${spinResult.prize}${spinResult.credits ? `, ${spinResult.credits} credits` : ''}.`);
       }, SPIN_DURATION);
     } catch (err) {
+      if (isSpinPriceChanged(err)) {
+        // Definitive rejection — the cost changed since the button rendered
+        // (e.g. the last free spin was taken). Nothing settled; refresh the
+        // authoritative status so the button shows the new price, and require
+        // a fresh click. Do NOT enter the lost-response recovery state.
+        setError(getApiErrorMessage(err));
+        setIsSpinning(false);
+        onRecover?.();
+        return;
+      }
       // Lost or failed response — the server may still have settled. Do NOT
       // present an invented result; offer a status refresh instead.
       setError(err instanceof Error ? err.message : 'Spin failed');

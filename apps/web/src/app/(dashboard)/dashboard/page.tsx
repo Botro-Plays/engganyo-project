@@ -201,8 +201,12 @@ function DashboardPageInner() {
       const idempotencyKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // Bind the attempt to the price the UI displayed — the server rejects
+      // with PRICE_CHANGED if the authoritative cost differs (e.g. the last
+      // free spin was taken concurrently) instead of silently charging.
+      const expectedCost = wheelStatus?.freeSpinAvailable ? 0 : (wheelStatus?.costPerSpin ?? 20);
       return apiClient.post<ApiResponse<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number }>>('gamification/wheel/spin', undefined, {
-        headers: { 'Idempotency-Key': idempotencyKey },
+        headers: { 'Idempotency-Key': idempotencyKey, 'X-Expected-Cost': String(expectedCost) },
       });
     },
     onSuccess: (res) => {

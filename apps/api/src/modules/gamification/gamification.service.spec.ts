@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import {
   GamificationService,
@@ -546,6 +546,57 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
     expect(wallet.debit).toHaveBeenCalledTimes(2);
     expect(attempts.size).toBe(0);
     expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ paidUsed: 2 });
+  });
+
+  it('expectedCost=0 loses the free-slot race → PRICE_CHANGED with zero settlement; same-key paid retry works', async () => {
+    // Free spin already consumed → authoritative cost is 20, but the client
+    // confirmed the free price it saw (stale status / concurrent claim).
+    redisStore.set(`wheel:free:u1`, today());
+
+    const err = await service.spinWheel('u1', 'key-price-1', 0).catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.getResponse()).toMatchObject({ code: 'PRICE_CHANGED', expectedCost: 0, actualCost: 20 });
+
+    // Nothing settled: no debit, no reward, no spin row, no consumed slot,
+    // and the rolled-back attempt row frees the key for a corrected retry.
+    expect(wallet.debit).not.toHaveBeenCalled();
+    expect(wallet.credit).not.toHaveBeenCalled();
+    expect(prisma.wheelSpin.create).not.toHaveBeenCalled();
+    expect(attempts.size).toBe(0);
+    expect(allowances.size).toBe(0); // allowance row rolled back — no slot consumed
+
+    // Same key + confirmed paid price → executes and commits normally.
+    const result = await service.spinWheel('u1', 'key-price-1', 20);
+    expect(result).toMatchObject({ isFree: false, cost: 20, credits: 5 });
+    expect(wallet.debit).toHaveBeenCalledTimes(1);
+    expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ paidUsed: 1 });
+  });
+
+  it('expectedCost=20 while the free spin is available → PRICE_CHANGED actualCost=0; free entitlement preserved', async () => {
+    // No Redis markers → free spin available, but client confirmed paid price.
+    const err = await service.spinWheel('u1', 'key-price-2', 20).catch((e) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err.getResponse()).toMatchObject({ code: 'PRICE_CHANGED', expectedCost: 20, actualCost: 0 });
+
+    expect(wallet.debit).not.toHaveBeenCalled();
+    expect(spins.length).toBe(0);
+    expect(attempts.size).toBe(0);
+    expect(allowances.size).toBe(0); // free claim rolled back — still available
+
+    const result = await service.spinWheel('u1', 'key-price-2', 0);
+    expect(result).toMatchObject({ isFree: true, cost: 0 });
+    expect(wallet.debit).not.toHaveBeenCalled();
+  });
+
+  it('matching expectedCost settles; absent expectedCost keeps legacy fall-through', async () => {
+    // Free available + expected 0 → free spin.
+    const free = await service.spinWheel('u1', 'key-price-3', 0);
+    expect(free).toMatchObject({ isFree: true, cost: 0 });
+
+    // Legacy caller (no expected cost) falls through to paid — same rules.
+    const paid = await service.spinWheel('u1', 'key-price-4');
+    expect(paid).toMatchObject({ isFree: false, cost: 20 });
+    expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ freeUsed: true, paidUsed: 1 });
   });
 
   it('rolls back attempt, allowance and settlement together when a step fails', async () => {
