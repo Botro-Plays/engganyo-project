@@ -1429,3 +1429,34 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
   `20261106140000_wheel_daily_allowance` ship on merge.
 - Production reCAPTCHA verified still enabled (`recaptcha_enabled=true`
   in platform_configs after PR #43 verification toggle).
+
+### PR #44 follow-up — confirmed-price binding: head `86370dbdcfbc7cc820a0dfc37fd41b4d731470a7`
+
+- `POST /gamification/wheel/spin` accepts `X-Expected-Cost` (0 = free,
+  20 = paid — the price the UI displayed). Inside the settlement tx, after
+  the allowance claims determine the authoritative cost, a mismatch throws
+  `409 {code: PRICE_CHANGED, expectedCost, actualCost}` and rolls back
+  EVERYTHING — no debit, reward, spin row, attempt row, or consumed slot.
+- Web sends the header from current `wheelStatus`; the modal treats
+  PRICE_CHANGED as a definitive rejection (error text + status refresh via
+  `onRecover`, NOT the lost-response recovery card) — the button re-renders
+  at the new price and requires a separate click. `isSpinPriceChanged`
+  helper added to `lib/api.ts`.
+- Legacy callers (no header) keep free-then-paid fall-through — same
+  agreed rules and caps; cannot bypass pricing.
+- Same-key committed retries still replay the stored result; a
+  price-changed attempt leaves no committed row, so a corrected retry
+  under the same key executes cleanly.
+- **Tests: 40/40 pass** (29 unit + 11 real-PostgreSQL). New coverage:
+  unit — expected=0 vs authoritative 20 (zero settlement, same-key paid
+  retry commits), expected=20 vs free available (free entitlement
+  preserved), matching/absent expected cost; integration — two concurrent
+  free-expecting spins → one free win + one PRICE_CHANGED with zero
+  debit/reward/spin-row, then explicit paid attempt succeeds.
+- **Live API verification** (local API on engganyo_test + real PG): two
+  concurrent `X-Expected-Cost: 0` → 200 free spin (25cr prize) + 409
+  PRICE_CHANGED; status flipped to paid-only; `X-Expected-Cost: 20` →
+  paid spin (Streak Freeze); DB shows 2 spin rows, allowance
+  {freeUsed,paidUsed:1}, ledger [+25, -20] only — the rejected request
+  left zero trace.
+- API+web typecheck clean, eslint 0 errors. Ready for review — NOT merged.
