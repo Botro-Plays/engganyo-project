@@ -191,10 +191,14 @@ export class GamificationController {
     @Headers('idempotency-key') idempotencyKey?: string,
     @Headers('x-expected-cost') expectedCostHeader?: string,
   ) {
-    // Bound the key — it is embedded in a Redis key, so keep it short and safe.
-    const key = idempotencyKey && /^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)
-      ? idempotencyKey
-      : undefined;
+    // Idempotency-Key is required for every spin — it is embedded in the
+    // attempt record's unique(userId, key) constraint, so a missing or
+    // malformed key would bypass durable replay protection. Reject at the
+    // HTTP boundary before any settlement work.
+    if (!idempotencyKey || !/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
+      throw new BadRequestException('Idempotency-Key header is required and must be 8-128 characters of [A-Za-z0-9_-].');
+    }
+    const key = idempotencyKey;
     // The client must confirm the price it displayed (0 = free spin,
     // 20 = paid). Required for every new spin: the only supported caller is
     // the web dashboard, which always sends it — a missing or malformed

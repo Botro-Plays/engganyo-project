@@ -11,7 +11,7 @@ import { SpinWheelModal } from '@/components/spin-wheel-modal';
 import { DailyStreakCard } from '@/components/daily-streak-card';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
-import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { apiClient, getApiErrorMessage, createSpinIdempotencyKey } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import type { ApiResponse } from '@/types';
@@ -198,9 +198,7 @@ function DashboardPageInner() {
     // One idempotency key per user-initiated spin; axios retries reuse the same
     // config so a replayed request returns the stored result, not a second spin.
     mutationFn: () => {
-      const idempotencyKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const idempotencyKey = createSpinIdempotencyKey();
       // Bind the attempt to the price the UI displayed — the server rejects
       // with PRICE_CHANGED if the authoritative cost differs (e.g. the last
       // free spin was taken concurrently) instead of silently charging.

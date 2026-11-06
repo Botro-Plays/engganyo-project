@@ -179,6 +179,16 @@ export function getApiErrorMessage(error: unknown): string {
   return 'An unexpected error occurred';
 }
 
+// One idempotency key per user-initiated spin; axios retries reuse the same
+// request config so a replayed request returns the stored result. Format must
+// satisfy the API contract /^[A-Za-z0-9_-]{8,128}$/ — crypto.randomUUID()
+// (36 chars, hex + hyphens) does; the fallback is digits + '-' + base36.
+export function createSpinIdempotencyKey(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 // The wheel spin endpoint rejects with 409 + code PRICE_CHANGED when the
 // authoritative cost differs from the price the UI displayed. This is a
 // definitive rejection — nothing settled — unlike a lost response.

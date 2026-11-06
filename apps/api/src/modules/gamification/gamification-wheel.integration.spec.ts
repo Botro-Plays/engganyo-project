@@ -12,6 +12,7 @@
 import { PrismaClient, TransactionType } from '@prisma/client';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { GamificationService } from './gamification.service';
+import { GamificationController } from './gamification.controller';
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
 const run = TEST_DB ? describe : describe.skip;
@@ -417,5 +418,38 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     await expect(service.spinWheel(u.id)).rejects.toThrow(BadRequestException);
     expect(await spinRows(u.id)).toBe(11);
     expect(await allowanceOf(u.id)).toMatchObject({ paidUsed: 10 });
+  });
+
+  it('HTTP boundary: missing or malformed Idempotency-Key rejects before settlement — zero DB trace', async () => {
+    // Exercise the real controller → real service → real PostgreSQL path.
+    const controller = new GamificationController(service as never);
+    const u = await mkUser(500);
+    const jwt = { sub: u.id } as never;
+
+    const snapshot = async () => ({
+      balance: await balanceOf(u.id),
+      spins: await spinRows(u.id),
+      attempts: (await attemptRows(u.id)).length,
+      allowance: await allowanceOf(u.id),
+      ledger: (await ledgerRows(u.id)).length,
+    });
+    const before = await snapshot();
+
+    // Omitted key with a valid expected cost.
+    expect(() => controller.spinWheel(jwt, undefined, '0')).toThrow(BadRequestException);
+    // Malformed keys with valid expected costs.
+    for (const bad of ['short', 'has space!', 'k'.repeat(129), 'key.with.dots', 'key+plus']) {
+      // eslint-disable-next-line no-await-in-loop
+      expect(() => controller.spinWheel(jwt, bad, '20')).toThrow(BadRequestException);
+    }
+
+    // Nothing reached settlement: no debit, reward, spin, attempt, or allowance change.
+    expect(await snapshot()).toEqual(before);
+
+    // A valid key through the same boundary still settles normally.
+    const ok = await controller.spinWheel(jwt, 'boundary-ok-1', '0');
+    expect(ok).toMatchObject({ isFree: true, cost: 0 });
+    expect(await spinRows(u.id)).toBe(1);
+    expect(await attemptRows(u.id)).toHaveLength(1);
   });
 });
