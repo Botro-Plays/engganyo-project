@@ -1184,3 +1184,19 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
   Cloudflare/Nginx log ingestion deferred per proposal.
 - **Not deployed.** Merge triggers the normal Deploy workflow; the nginx
   change (`infra/nginx/nginx.conf`) ships with the release.
+
+### PR #43 revision — route privacy hardening (Ready for review)
+
+- **Revised head:** `4c00abe` on `feat/admin-visitor-analytics` (supersedes
+  `0ffc438` noted above; same PR #43).
+- **Problem:** beacon sent the raw pathname; `/challenge/[id]` and other
+  dynamic routes could persist private identifiers even with query
+  strings stripped.
+- **Fix:** canonical route labels (`/challenge/[id]`-style) via a strict
+  static-route allowlist — unknown identifier-bearing paths are excluded
+  server-side, not just client-side. Client pre-labels dynamic paths;
+  referrer domains + IP drill-down audited for the same leak class (IPs
+  stay SUPER_ADMIN-only).
+- **Tests:** new privacy specs exercise a private share route and a
+  crafted beacon; PostgreSQL integration (13/13), retention, and role
+  checks retained — suite totals unchanged apart from the additions.
