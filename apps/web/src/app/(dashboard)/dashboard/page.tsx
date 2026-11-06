@@ -6,11 +6,12 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { CheckSquare, Megaphone, Flame, Trophy, Gift, Loader2, Award, RotateCcw, Package, Users, Link2, ChevronRight, Crown } from 'lucide-react';
+import { CheckSquare, Megaphone, Flame, Trophy, Loader2, Award, RotateCcw, Users, Link2, ChevronRight, Crown } from 'lucide-react';
 import { SpinWheelModal } from '@/components/spin-wheel-modal';
+import { DailyStreakCard } from '@/components/daily-streak-card';
 import { useAuthStore } from '@/store/auth.store';
 import { formatCredits, creditLabel, getLevelProgress } from '@/lib/utils';
-import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { apiClient, getApiErrorMessage, createSpinIdempotencyKey } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useRefetchOnVisible } from '@/hooks/use-refetch-on-visible';
 import type { ApiResponse } from '@/types';
@@ -152,7 +153,10 @@ function DashboardPageInner() {
   });
 
   const rewardMutation = useMutation({
-    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward'),
+    // skipRetry: a lost claim response must not be replayed — the server would
+    // answer the retry with "not yet available" and mask a successful claim.
+    // onError refreshes authoritative state so the card shows the truth.
+    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward', undefined, { skipRetry: true }),
     onSuccess: (res) => {
       setRewardResult(res.data.data);
       setRewardError(null);
@@ -164,7 +168,12 @@ function DashboardPageInner() {
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
         .catch(() => {/* silent */});
     },
-    onError: (err) => setRewardError(getApiErrorMessage(err)),
+    onError: (err) => {
+      setRewardError(getApiErrorMessage(err));
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 
   // ── Sprint 3: Wheel Spin ──
@@ -186,7 +195,18 @@ function DashboardPageInner() {
   });
 
   const spinMutation = useMutation({
-    mutationFn: () => apiClient.post<ApiResponse<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number }>>('gamification/wheel/spin'),
+    // One idempotency key per user-initiated spin; axios retries reuse the same
+    // config so a replayed request returns the stored result, not a second spin.
+    mutationFn: () => {
+      const idempotencyKey = createSpinIdempotencyKey();
+      // Bind the attempt to the price the UI displayed — the server rejects
+      // with PRICE_CHANGED if the authoritative cost differs (e.g. the last
+      // free spin was taken concurrently) instead of silently charging.
+      const expectedCost = wheelStatus?.freeSpinAvailable ? 0 : (wheelStatus?.costPerSpin ?? 20);
+      return apiClient.post<ApiResponse<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number }>>('gamification/wheel/spin', undefined, {
+        headers: { 'Idempotency-Key': idempotencyKey, 'X-Expected-Cost': String(expectedCost) },
+      });
+    },
     onSuccess: (res) => {
       setSpinResult(res.data.data);
       setSpinError(null);
@@ -197,7 +217,14 @@ function DashboardPageInner() {
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
         .catch(() => {/* silent */});
     },
-    onError: (err) => setSpinError(getApiErrorMessage(err)),
+    onError: (err) => {
+      setSpinError(getApiErrorMessage(err));
+      // Ambiguous outcome (lost response / retries exhausted): refresh
+      // authoritative status + balance instead of guessing a result.
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 
   // Sync auth store credit balance with fresh API data to prevent flicker
@@ -352,134 +379,16 @@ function DashboardPageInner() {
 
       {/* ── Bonuses row (secondary to the task action) ────── */}
       <div className="grid sm:grid-cols-2 gap-4 mb-6">
-      {/* Daily Reward Card (dedicated module) */}
+      {/* Daily streak card */}
       {gamStats && (
-        <div className="card-glass rounded-xl p-4" data-tour="daily-reward">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                <Gift className="w-5 h-5 text-orange-400" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-white">Daily Reward</h2>
-                <p className="text-xs text-zinc-500">Claim your daily login bonus</p>
-              </div>
-            </div>
-            {rewardResult ? (
-              <div className="text-sm text-green-400 font-medium">
-                +{formatCredits(rewardResult.creditReward)} {creditLabel(rewardResult.creditReward)} · +{rewardResult.xpReward} XP · Day {rewardResult.newStreak}
-                {rewardResult.bonusLootBox && (
-                  <span className="ml-2 inline-flex items-center gap-1 text-violet-400">
-                    <Package className="w-3 h-3" /> Mystery Gift Box!
-                  </span>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => rewardMutation.mutate()}
-                disabled={!gamStats.dailyRewardAvailable || rewardMutation.isPending}
-                className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-orange-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {rewardMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Gift className="w-4 h-4" /> Claim Reward</>}
-              </button>
-            )}
-          </div>
-
-          {/* Streak milestone tracker */}
-          <div className="mt-4 pt-4 border-t border-zinc-800">
-            <div className="flex items-center justify-between text-xs text-zinc-500 mb-2">
-              <span>Streak Progress</span>
-              <span className="flex items-center gap-1">
-                <Flame className="w-3 h-3 text-orange-400" />
-                {gamStats.currentStreak} day{gamStats.currentStreak !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((day) => {
-                const milestone = [5, 7, 14].includes(day);
-                const reached = gamStats.currentStreak >= day;
-                const isCurrent = gamStats.currentStreak === day;
-                const logged = rewardLog?.find((r) => r.streakDay === day);
-                const expectedCredits = Math.min(50 + (day - 1) * 10, 200);
-                return (
-                  <div key={day} className="flex-1 flex flex-col items-center gap-1 group relative py-2 cursor-help">
-                    <div
-                      className={`w-full h-4 rounded-full relative ${reached ? 'bg-orange-500' : 'bg-zinc-800'} ${milestone ? 'ring-2 ring-orange-400/50' : ''} ${isCurrent ? 'ring-2 ring-white/40 shadow-[0_0_8px_rgba(249,115,22,0.4)]' : ''}`}
-                    >
-                      {isCurrent && (
-                        <div className="absolute inset-0 rounded-full animate-pulse bg-orange-400/20" />
-                      )}
-                      {logged && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <CheckSquare className="w-2.5 h-2.5 text-white/70" />
-                        </div>
-                      )}
-                    </div>
-                    {milestone && (
-                      <span className={`text-[9px] font-semibold ${reached ? 'text-orange-400' : 'text-zinc-600'}`}>
-                        D{day}
-                      </span>
-                    )}
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-20">
-                      <div className="bg-zinc-900 border border-zinc-600 rounded-xl px-4 py-3 shadow-2xl whitespace-nowrap min-w-[180px]">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs font-bold text-white">Day {day}</p>
-                          {logged ? (
-                            <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">Claimed</span>
-                          ) : reached ? (
-                            <span className="text-[10px] bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded-full">Reached</span>
-                          ) : (
-                            <span className="text-[10px] bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded-full">Upcoming</span>
-                          )}
-                        </div>
-                        {logged ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-[10px] text-green-400">
-                              <Gift className="w-3 h-3" /> {logged.creditReward} credits
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-blue-400">
-                              <Award className="w-3 h-3" /> {logged.xpReward} XP
-                            </div>
-                            {logged.bonusLootBox && (
-                              <div className="flex items-center gap-1.5 text-[10px] text-violet-400">
-                                <Package className="w-3 h-3" /> Mystery Gift Box!
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-300">
-                              <Gift className="w-3 h-3 text-zinc-500" /> {expectedCredits} credits
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-300">
-                              <Award className="w-3 h-3 text-zinc-500" /> 20 XP
-                            </div>
-                            {milestone && (
-                              <div className="flex items-center gap-1.5 text-[10px] text-orange-400">
-                                <Package className="w-3 h-3" /> Mystery Gift Box!
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="w-2.5 h-2.5 bg-zinc-900 border-r border-b border-zinc-600 rotate-45 -mt-1.5" />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {rewardError && <p className="text-xs text-red-400 mt-3">{rewardError}</p>}
-          {!gamStats.dailyRewardAvailable && !rewardResult && (
-            <p className="text-xs text-zinc-500 mt-3">
-              {gamStats.nextClaimAt
-                ? `Next claim available ${new Date(gamStats.nextClaimAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-                : 'Already claimed. Come back later!'}
-            </p>
-          )}
-        </div>
+        <DailyStreakCard
+          gamStats={gamStats}
+          rewardLog={rewardLog}
+          rewardResult={rewardResult}
+          rewardError={rewardError}
+          isPending={rewardMutation.isPending}
+          onClaim={() => rewardMutation.mutate()}
+        />
       )}
 
       {/* Spin the Wheel (Sprint 3) */}
@@ -494,8 +403,8 @@ function DashboardPageInner() {
                 <h2 className="font-semibold text-white text-sm">Spin the Wheel</h2>
                 <p className="text-xs text-zinc-500">
                   {wheelStatus.freeSpinAvailable
-                    ? 'Free spin available!'
-                    : `${wheelStatus.paidSpinsRemaining} paid left`}
+                    ? 'Free spin today · up to 100 credits'
+                    : `${wheelStatus.paidSpinsRemaining} paid left · ${wheelStatus.costPerSpin}cr each`}
                 </p>
               </div>
             </div>
@@ -516,6 +425,16 @@ function DashboardPageInner() {
         open={wheelOpen}
         onClose={() => setWheelOpen(false)}
         wheelStatus={wheelStatus}
+        balance={stats?.credits?.balance ?? user?.creditBalance}
+        onRecover={() => {
+          void queryClient.invalidateQueries({ queryKey: ['gamification', 'wheel'] });
+          void queryClient.invalidateQueries({ queryKey: ['gamification', 'stats'] });
+          void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+          void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+          apiClient.get<ApiResponse<import('@/store/auth.store').AuthUser>>('auth/me')
+            .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
+            .catch(() => {/* silent */});
+        }}
         onSpin={async () => {
           const res = await spinMutation.mutateAsync();
           if (!res.data.data) {

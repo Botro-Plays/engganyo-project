@@ -364,6 +364,8 @@ model User {
   inventory              UserInventory[]
   activeEffects          UserActiveEffect[]
   wheelSpins             WheelSpin[]
+  wheelSpinAttempts      WheelSpinAttempt[]
+  wheelDailyAllowances   WheelDailyAllowance[]
   dailyRewardLogs        DailyRewardLog[]
 
   @@index([email])
@@ -1562,6 +1564,49 @@ model WheelSpin {
   @@index([userId])
   @@index([createdAt])
   @@map("wheel_spins")
+}
+
+// Idempotent spin attempts: unique(userId, key) enforced at the database
+// level inside the same transaction as the spin settlement. A committed
+// attempt stores the recoverable result so a lost response can be replayed
+// without a second charge.
+enum WheelSpinAttemptStatus {
+  PENDING
+  COMMITTED
+}
+
+model WheelSpinAttempt {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String   @map("key")
+  status    WheelSpinAttemptStatus @default(PENDING)
+  result    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@map("wheel_spin_attempts")
+}
+
+
+// Authoritative per-user, per-UTC-day spin allowance. Rows are created and
+// mutated only inside the spin settlement transaction via conditional
+// updateMany, so the free spin and the 10-paid-spin daily cap cannot be
+// exceeded by concurrent requests or left consumed by a rollback.
+model WheelDailyAllowance {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       String   // UTC calendar day, YYYY-MM-DD
+  freeUsed  Boolean  @default(false) @map("free_used")
+  paidUsed  Int      @default(0) @map("paid_used")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, day])
+  @@index([userId])
+  @@map("wheel_daily_allowances")
 }
 
 model DailyRewardLog {

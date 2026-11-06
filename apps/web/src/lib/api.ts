@@ -1,4 +1,11 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Opt out of the network/5xx retry interceptor for non-idempotent calls. */
+    skipRetry?: boolean;
+  }
+}
 import { useAuthStore } from '@/store/auth.store';
 
 function normalizeApiBaseUrl(input: string): string {
@@ -56,7 +63,11 @@ const RETRY_DELAY_MS = 1000;
 // credentials). A refresh cannot help there and the redirect would discard the error.
 const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
 
-function shouldRetry(error: AxiosError): boolean {
+function shouldRetry(error: AxiosError, config?: InternalAxiosRequestConfig): boolean {
+  // Mutations can opt out — a replayed non-idempotent POST is not safe.
+  if (config?.skipRetry) {
+    return false;
+  }
   // Retry on network errors (no response) or 5xx server errors
   if (!error.response) return true;
   const status = error.response.status;
@@ -73,7 +84,7 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number };
 
     // ── Retry network / 5xx errors ───────────────────────────
-    if (originalRequest && shouldRetry(error)) {
+    if (originalRequest && shouldRetry(error, originalRequest)) {
       const retryCount = originalRequest._retryCount ?? 0;
       if (retryCount < MAX_RETRIES) {
         originalRequest._retryCount = retryCount + 1;
@@ -166,4 +177,25 @@ export function getApiErrorMessage(error: unknown): string {
     return error.message;
   }
   return 'An unexpected error occurred';
+}
+
+// One idempotency key per user-initiated spin; axios retries reuse the same
+// request config so a replayed request returns the stored result. Format must
+// satisfy the API contract /^[A-Za-z0-9_-]{8,128}$/ — crypto.randomUUID()
+// (36 chars, hex + hyphens) does; the fallback is digits + '-' + base36.
+export function createSpinIdempotencyKey(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// The wheel spin endpoint rejects with 409 + code PRICE_CHANGED when the
+// authoritative cost differs from the price the UI displayed. This is a
+// definitive rejection — nothing settled — unlike a lost response.
+export function isSpinPriceChanged(error: unknown): boolean {
+  return (
+    axios.isAxiosError(error) &&
+    error.response?.status === 409 &&
+    (error.response?.data as { code?: string } | undefined)?.code === 'PRICE_CHANGED'
+  );
 }

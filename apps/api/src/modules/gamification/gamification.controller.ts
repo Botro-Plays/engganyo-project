@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Headers, UseGuards, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
@@ -186,8 +186,30 @@ export class GamificationController {
   @Post('wheel/spin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Spin the wheel (free once/day, 20 credits after)' })
-  spinWheel(@CurrentUser() user: JwtPayload) {
-    return this.gamificationService.spinWheel(user.sub);
+  spinWheel(
+    @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers('x-expected-cost') expectedCostHeader?: string,
+  ) {
+    // Idempotency-Key is required for every spin — it is embedded in the
+    // attempt record's unique(userId, key) constraint, so a missing or
+    // malformed key would bypass durable replay protection. Reject at the
+    // HTTP boundary before any settlement work.
+    if (!idempotencyKey || !/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
+      throw new BadRequestException('Idempotency-Key header is required and must be 8-128 characters of [A-Za-z0-9_-].');
+    }
+    const key = idempotencyKey;
+    // The client must confirm the price it displayed (0 = free spin,
+    // 20 = paid). Required for every new spin: the only supported caller is
+    // the web dashboard, which always sends it — a missing or malformed
+    // value is rejected rather than silently falling through to a paid
+    // charge (e.g. a stale bundle showing "Spin — Free" after the free
+    // entitlement was taken elsewhere).
+    const parsed = expectedCostHeader !== undefined ? Number.parseInt(expectedCostHeader, 10) : NaN;
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100000 || String(parsed) !== expectedCostHeader?.trim()) {
+      throw new BadRequestException('X-Expected-Cost header is required and must be a non-negative integer (0 or 20).');
+    }
+    return this.gamificationService.spinWheel(user.sub, key, parsed);
   }
 
   @Get('daily-reward-log')

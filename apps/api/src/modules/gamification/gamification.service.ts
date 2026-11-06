@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
 import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -1078,35 +1078,159 @@ export class GamificationService implements OnModuleInit {
 
   // ─── Spin the Wheel (Sprint 3) ─────────────────────────────
 
-  async spinWheel(userId: string) {
-    const FREE_SPIN_KEY = `wheel:free:${userId}`;
-    const PAID_SPIN_KEY = `wheel:paid:${userId}`;
-    const today = new Date().toISOString().slice(0, 10);
+  private static readonly WHEEL_PAID_COST = 20;
+  private static readonly WHEEL_MAX_PAID_PER_DAY = 10;
 
-    // Check free spin eligibility
-    const lastFree = await this.redisService.get(FREE_SPIN_KEY);
+  // Idempotent wrapper: the attempt key + recoverable result live in
+  // `wheel_spin_attempts` inside the SAME transaction as the spin settlement
+  // and the daily allowance. unique(userId, key) is enforced by Postgres — a
+  // repeated key replays the committed result; a concurrent same-key request
+  // blocks on the uncommitted row, then fails the unique check after the
+  // first commits. The daily allowance (`wheel_daily_allowances`) is claimed
+  // with conditional updateMany inside the same tx, so different keys cannot
+  // over-consume the free spin or the 10-paid-spin cap, and a rollback
+  // restores both. Redis is never in this path.
+  async spinWheel(userId: string, idempotencyKey?: string, expectedCost?: number) {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      if (idempotencyKey) {
+        await tx.wheelSpinAttempt.create({
+          data: { userId, key: idempotencyKey },
+        });
+      }
+      const result = await this.executeSpinWheel(userId, tx, expectedCost);
+      if (idempotencyKey) {
+        await tx.wheelSpinAttempt.update({
+          where: { userId_key: { userId, key: idempotencyKey } },
+          data: { status: 'COMMITTED', result: result as unknown as Prisma.InputJsonValue },
+        });
+      }
+      return result;
+    };
+
+    // The no-key entry point gets the same transactional allowance — only the
+    // attempt bookkeeping is skipped.
+    if (!idempotencyKey) return this.prisma.$transaction(execute);
+
+    try {
+      return await this.prisma.$transaction(execute);
+    } catch (err) {
+      if (this.isAttemptUniqueViolation(err)) {
+        const attempt = await this.prisma.wheelSpinAttempt.findUnique({
+          where: { userId_key: { userId, key: idempotencyKey } },
+        });
+        if (attempt?.result) {
+          return attempt.result as Record<string, unknown>;
+        }
+        throw new ConflictException('This spin request is already being processed.');
+      }
+      throw err;
+    }
+  }
+
+  private isAttemptUniqueViolation(err: unknown): boolean {
+    const e = err as { code?: string; meta?: { target?: unknown } } | null;
+    if (e?.code !== 'P2002') return false;
+    const target = e.meta?.target;
+    const fields = Array.isArray(target) ? target.join(',') : String(target ?? '');
+    return fields.includes('key');
+  }
+
+  // Usage for the current UTC day derived from authoritative spin history,
+  // floored by the legacy Redis counters so the rollout day cannot over-grant.
+  private async dailyAllowanceUsage(
+    userId: string,
+    day: string,
+    db: Prisma.TransactionClient,
+  ): Promise<{ freeUsed: boolean; paidUsed: number }> {
+    const dayStart = new Date(`${day}T00:00:00.000Z`);
+    const [freeSpins, paidSpins] = await Promise.all([
+      db.wheelSpin.count({ where: { userId, isFree: true, createdAt: { gte: dayStart } } }),
+      db.wheelSpin.count({ where: { userId, isFree: false, createdAt: { gte: dayStart } } }),
+    ]);
+    let freeUsed = freeSpins > 0;
+    let paidUsed = paidSpins;
+    try {
+      const [redisFree, redisPaid] = await Promise.all([
+        this.redisService.get(`wheel:free:${userId}`),
+        this.redisService.get(`wheel:paid:${userId}`),
+      ]);
+      if (redisFree === day) freeUsed = true;
+      const rp = redisPaid ? parseInt(redisPaid, 10) : 0;
+      if (Number.isFinite(rp)) paidUsed = Math.max(paidUsed, rp);
+    } catch {
+      // Redis is only a rollout-day hint — wheel_spins is authoritative.
+    }
+    return { freeUsed, paidUsed };
+  }
+
+  private async executeSpinWheel(userId: string, tx: Prisma.TransactionClient, expectedCost?: number) {
+    const day = new Date().toISOString().slice(0, 10);
+
+    // Materialize today's allowance row if missing. createMany +
+    // skipDuplicates is INSERT ... ON CONFLICT DO NOTHING: concurrent
+    // first-touch requests cannot abort each other's transaction the way a
+    // plain create (P2002) would.
+    const seed = await this.dailyAllowanceUsage(userId, day, tx);
+    await tx.wheelDailyAllowance.createMany({
+      data: [{ userId, day, freeUsed: seed.freeUsed, paidUsed: seed.paidUsed }],
+      skipDuplicates: true,
+    });
+    const allowance = await tx.wheelDailyAllowance.findUniqueOrThrow({
+      where: { userId_day: { userId, day } },
+    });
+
     let isFree = false;
-    let cost = 20;
+    let cost = GamificationService.WHEEL_PAID_COST;
 
-    if (!lastFree || lastFree !== today) {
+    // Claim the free spin atomically. The conditional updateMany takes the
+    // allowance row lock and re-evaluates its WHERE clause after any wait, so
+    // two concurrent spins cannot both take the last free spin — the loser
+    // falls through to the paid path.
+    const freeClaim = await tx.wheelDailyAllowance.updateMany({
+      where: { id: allowance.id, freeUsed: false },
+      data: { freeUsed: true },
+    });
+
+    if (freeClaim.count === 1) {
       isFree = true;
       cost = 0;
     } else {
-      // Paid spin: max 10 per day
-      const paidCount = await this.redisService.get(PAID_SPIN_KEY);
-      const spinsToday = paidCount ? parseInt(paidCount, 10) : 0;
-      if (spinsToday >= 10) {
-        throw new BadRequestException('Maximum 10 paid spins per day');
-      }
-      // Debit 20 credits
-      const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
-      if (!wallet || wallet.balance < 20) {
+      const wallet = await tx.wallet.findUnique({ where: { userId } });
+      if (!wallet || wallet.balance < GamificationService.WHEEL_PAID_COST) {
         throw new BadRequestException('Not enough credits for a spin');
       }
-      await this.walletService.debit(userId, 20, {
+      const paidClaim = await tx.wheelDailyAllowance.updateMany({
+        where: {
+          id: allowance.id,
+          paidUsed: { lt: GamificationService.WHEEL_MAX_PAID_PER_DAY },
+        },
+        data: { paidUsed: { increment: 1 } },
+      });
+      if (paidClaim.count === 0) {
+        throw new BadRequestException('Maximum 10 paid spins per day');
+      }
+    }
+
+    // Bind the attempt to the cost the player confirmed. The authoritative
+    // cost is only known after the allowance claims above; a mismatch (e.g.
+    // the last free spin was taken by a concurrent request) aborts the whole
+    // transaction — no debit, no reward, no spin row, no consumed slot — and
+    // returns a price-change response so the client can refresh and require a
+    // fresh click at the new price.
+    if (expectedCost !== undefined && expectedCost !== cost) {
+      throw new ConflictException({
+        message: `Spin cost changed to ${cost} credits — review the updated price and spin again.`,
+        code: 'PRICE_CHANGED',
+        expectedCost,
+        actualCost: cost,
+      });
+    }
+
+    if (!isFree) {
+      await this.walletService.debit(userId, GamificationService.WHEEL_PAID_COST, {
         type: TransactionType.SPEND_STORE_PURCHASE,
         description: 'Spin the wheel',
-      });
+      }, tx);
     }
 
     // Prize weight table
@@ -1136,7 +1260,7 @@ export class GamificationService implements OnModuleInit {
       await this.walletService.credit(userId, prize.credits, {
         type: TransactionType.EARN_WHEEL_SPIN,
         description: `Wheel spin prize: ${prize.name}`,
-      });
+      }, tx);
       result = { ...result, credits: prize.credits };
     } else if (prize.effect === 'xp_boost' && prize.hours) {
       // Rewards stack duration onto existing active effect (game design: bonuses add up)
@@ -1145,11 +1269,12 @@ export class GamificationService implements OnModuleInit {
         'xp_boost',
         { multiplier: 2 },
         prize.hours,
+        tx,
       );
       result = { ...result, multiplier: 2, durationHours: prize.hours, expiresAt, extended };
     } else if (prize.effect === 'streak_freeze') {
       // Update DB (source of truth)
-      const updatedUser = await this.prisma.user.update({
+      const updatedUser = await tx.user.update({
         where: { id: userId },
         data: { streakFreezeCharges: { increment: 1 } },
         select: { streakFreezeCharges: true },
@@ -1158,11 +1283,11 @@ export class GamificationService implements OnModuleInit {
       await this.redisService.set(`boost:streak_freeze:${userId}`, String(updatedUser.streakFreezeCharges)).catch(() => null);
       result = { ...result, charges: updatedUser.streakFreezeCharges };
     } else if (prize.effect === 'loot_box') {
-      const lootBoxItem = await this.prisma.storeItem.findFirst({
+      const lootBoxItem = await tx.storeItem.findFirst({
         where: { name: 'Mystery Gift Box', isActive: true },
       });
       if (lootBoxItem) {
-        await this.prisma.userInventory.create({
+        await tx.userInventory.create({
           data: { userId, itemId: lootBoxItem.id, quantity: 1 },
         });
       }
@@ -1170,18 +1295,9 @@ export class GamificationService implements OnModuleInit {
     }
 
     // Log spin
-    await this.prisma.wheelSpin.create({
+    await tx.wheelSpin.create({
       data: { userId, result: prize.id, isFree, cost },
     });
-
-    // Update spin tracking
-    if (isFree) {
-      await this.redisService.set(FREE_SPIN_KEY, today, 48 * 3600); // 48h TTL
-    } else {
-      const paidCount = await this.redisService.get(PAID_SPIN_KEY);
-      const newCount = (paidCount ? parseInt(paidCount, 10) : 0) + 1;
-      await this.redisService.set(PAID_SPIN_KEY, String(newCount), 24 * 3600);
-    }
 
     return { ...result, isFree, cost };
   }
@@ -1210,19 +1326,22 @@ export class GamificationService implements OnModuleInit {
   }
 
   async getWheelSpinStatus(userId: string) {
-    const FREE_SPIN_KEY = `wheel:free:${userId}`;
-    const PAID_SPIN_KEY = `wheel:paid:${userId}`;
-    const today = new Date().toISOString().slice(0, 10);
-
-    const lastFree = await this.redisService.get(FREE_SPIN_KEY);
-    const paidCount = await this.redisService.get(PAID_SPIN_KEY);
-    const spinsToday = paidCount ? parseInt(paidCount, 10) : 0;
+    const day = new Date().toISOString().slice(0, 10);
+    const allowance = await this.prisma.wheelDailyAllowance.findUnique({
+      where: { userId_day: { userId, day } },
+    });
+    // Row exists → authoritative. Otherwise derive the same seeded view a
+    // first spin would compute (history + legacy Redis floor), without
+    // creating the row — status reads must not mutate.
+    const usage = allowance
+      ? { freeUsed: allowance.freeUsed, paidUsed: allowance.paidUsed }
+      : await this.dailyAllowanceUsage(userId, day, this.prisma);
 
     return {
-      freeSpinAvailable: !lastFree || lastFree !== today,
-      paidSpinsToday: spinsToday,
-      paidSpinsRemaining: Math.max(0, 10 - spinsToday),
-      costPerSpin: 20,
+      freeSpinAvailable: !usage.freeUsed,
+      paidSpinsToday: usage.paidUsed,
+      paidSpinsRemaining: Math.max(0, GamificationService.WHEEL_MAX_PAID_PER_DAY - usage.paidUsed),
+      costPerSpin: GamificationService.WHEEL_PAID_COST,
     };
   }
 }

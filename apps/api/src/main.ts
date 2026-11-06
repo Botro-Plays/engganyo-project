@@ -57,7 +57,7 @@ async function bootstrap(): Promise<void> {
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-admin-pin'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-admin-pin', 'Idempotency-Key', 'X-Expected-Cost'],
   });
 
   // ─── Compression ──────────────────────────────────────────
