@@ -1321,3 +1321,78 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 - Pre-agreement wireframe corrected (leave = both refunded, not forfeit).
 - Owner decisions retained: X=25cr, post-agreement refund policy, 90-day chat
   retention, v1 coexistence, 3 rooms/7d pair limit.
+
+## Review round 3 — 2026-11-06 (PR #43 deployed; PR #44 durable idempotency; PR #45 awaiting owner)
+
+### PR #43 — Visitor analytics: MERGED + DEPLOYED
+
+- Merge candidate `6e78f200fc4bcd20e66fcefba4907262a9623bbf` confirmed;
+  merged via GitHub API → merge commit
+  **`c553275c2d3c6b154871b633099e9c9ea91787f7` = deployed SHA**
+  (`.deployed-sha` on VPS verified).
+- Deploy run [`42171201948`](https://github.com/Botro-Plays/engganyo-project/actions/runs/42171201948):
+  all 5 jobs green (CI API, CI Web, E2E Playwright, Build & push, Deploy).
+- Migration `20261106120000_visitor_analytics` applied
+  (`_prisma_migrations.finished_at` set); `visitor_events` +
+  `visitor_visits` tables present.
+- Nginx force-recreated by `deploy-release.sh`, container healthy;
+  `nginx -t` passed in deploy log and re-verified live inside the
+  container. Country geo-guard confirmed live:
+  `map "$peer_is_cloudflare:$http_cf_ipcountry" $visitor_country` +
+  `proxy_set_header X-Visitor-Country` in running config.
+- **Production access verification (through nginx + AOP client cert):**
+  - SUPER_ADMIN (`admin@engganyo.com`): `traffic/overview`,
+    `traffic/breakdown` (route/country/device), `traffic/recent` → all 200;
+    `/recent` returns `ipAddress` per event.
+  - ADMIN (`jomaralcantara0828@gmail.com`, real-role JWT): overview → 200
+    aggregates; `traffic/recent` → **403 Insufficient permissions** —
+    raw IP drill-down stays SUPER_ADMIN-only.
+  - Login needed a brief `recaptcha_enabled` toggle (platform_configs,
+    30s cache TTL) — **restored to `true`** immediately after token issue.
+- **Privacy verification on prod data:** controlled beacons ingested
+  (2 events). Forged `CF-IPCountry`/`X-Visitor-Country`/`CF-Connecting-IP`/
+  `True-Client-IP` headers → stored `country = NULL` (geo-guard strips
+  non-CF peers). Path `/challenge/someprivateid123` → stored
+  `/challenge/[id]` — private identifiers never persist. Referrer reduced
+  to domain (`google.com`, `evil.example`).
+- Aggregates live: overview returns pageViews/visits/estimatedUniques,
+  UTC-labeled range, `collectionStartedAt`. Organic traffic will accrue
+  from real visitors; test events are the only rows so far.
+
+### PR #44 — Streak/wheel: durable DB idempotency, revised head `7fd184138187878ff1258743f60320fd5559284d`
+
+- Merge held at review per instruction — **not merged**.
+- Redis-only result persistence replaced: new `wheel_spin_attempts` table
+  (`unique(userId, key)`, `status PENDING→COMMITTED`, `result` JSONB).
+  Attempt insert + wallet debit + reward + `wheel_spins` row + result
+  write all commit in ONE `$transaction`; any failure rolls back
+  everything including the attempt row.
+- Replay path is pure Postgres: P2002 → `findUnique` → return committed
+  result (PENDING in-flight → 409). Redis fully removed from the
+  idempotency path (`setNx` deleted); spin counters remain best-effort
+  post-commit cache — a Redis failure or expired lock cannot authorize a
+  second charge.
+- `executeSpinWheel(userId, tx?)` — all settlement writes (wallet
+  debit/credit, xp-boost effect via new `StoreService` tx param, streak
+  freeze, loot-box inventory, wheelSpin row) use the tx client.
+- Migration `20261106130000_wheel_spin_attempts` created + applied locally.
+- **Tests: 31/31 pass** — 26 unit + 5 real-PostgreSQL integration
+  (`engganyo_test`): same-key retry → 1 spin row / 1 debit / 1 credit +
+  recoverable result; concurrent same-key → settles exactly once;
+  post-commit Redis outage → replay from PG; Redis down mid-attempt →
+  fails closed, attempt rolled back; insufficient balance → rollback.
+  API typecheck clean, eslint 0 errors. UI/double-click evidence from
+  `6bdb7b5` retained (web unchanged).
+
+### PR #45 — Mutual rooms: still design review @ `7d984cde3868ea64d0bfc188daa269e5bcadcbd3`
+
+- No code written. Awaiting owner approval on: X=25cr/player, post-agreement
+  refund policy (own-contribution refund on one-sided abandonment, zero
+  points), 90-day chat retention, `/rooms` coexistence with v1, 3 rooms/7d
+  pair limit. Concrete outcomes for abandonment/disputed proof are in the
+  proposal decision table.
+
+### Tracked separately (unchanged)
+
+- Gmail logo render check (SendGrid/Brevo template) — owner-visible.
+- Deferred payment tests (₺1 PAYMONGO package path etc.) — pending.
