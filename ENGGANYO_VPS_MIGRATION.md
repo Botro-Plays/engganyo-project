@@ -1251,3 +1251,73 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 - **Awaiting approval (doc §11):** launch price X=25cr, post-agreement refund
   decision table (abandoner-forfeit option), no platform fee at launch,
   90-day chat retention, v1 coexistence under `/rooms`, pair limit 3/7d.
+
+---
+
+## Review-round updates (2026-11-06)
+
+### PR #43 — Visitor analytics: revised head `6e78f200fc4bcd20e66fcefba4907262a9623bbf`
+
+- **Nginx `nginx -t` catch (critical):** the `$visitor_country` map regex
+  `~^1:(?<vc>[A-Za-z]{2})$` used an unquoted `{2}` quantifier — nginx's config
+  tokenizer ends unquoted tokens at `{`/`}`, so `nginx -t` failed with
+  `unexpected "{"`. Verified with nginx/1.28.0 locally. Fixed by rewriting as
+  `[A-Za-z][A-Za-z]` (identical semantics, brace-free) and **functionally
+  verified** against a live test instance: `1:US`→`US`, `0:US`/`1:USA`/`1:U1`→empty.
+  Without this fix the deploy's post-recreate `nginx -t` gate would have failed.
+- **Deploy reload path confirmed:** `infra/scripts/deploy-release.sh` runs
+  `docker compose up -d --no-build --no-deps --force-recreate nginx` then
+  `docker compose exec -T nginx nginx -t` on every deploy — the container is
+  recreated with the new conf and validated before the deploy reports healthy.
+- **Forged-header analysis:** `$realip_remote_addr` is the pre-realip direct
+  peer (not header-derived) → `geo` cannot be spoofed; `map` only emits a
+  country when peer_is_cloudflare=1 AND `CF-IPCountry` is exactly 2 alpha chars;
+  `proxy_set_header X-Visitor-Country` overwrites any client-supplied value.
+  AOP (`ssl_verify_client on`) blocks non-Cloudflare TLS clients entirely.
+- **Route privacy retained:** 37/37 analytics tests pass on real PostgreSQL
+  (`engganyo_test` @ :55432) — incl. private `/challenge/[id]` label-only
+  storage, crafted-beacon exclusion, query/fragment stripping, retention purge,
+  and SUPER_ADMIN-only IP drill-down (USER → 403).
+- **Readiness:** code + config verified; production collection still requires
+  merge → deploy. Pre-collection dates show zero with on-page caveat.
+
+### PR #44 — Streak/wheel: revised head `6bdb7b5832470341f5b013430d6aba03c3af14d7`
+
+- **Retry bug found + fixed:** `apiClient` retried ALL requests (incl. POST
+  mutations) on network errors/5xx up to 3× — a lost `wheel/spin` response
+  could execute a second charge/reward; `spinWheel` had no idempotency.
+- **Fix (server + client):**
+  - `POST /gamification/wheel/spin` accepts `Idempotency-Key` (validated
+    `[A-Za-z0-9_-]{8,128}`); service stores the result in Redis 15min with a
+    `SET NX` in-flight guard — repeated key replays the stored result,
+    concurrent duplicates wait, distinct keys spin independently, failures
+    clear the key for genuine retry.
+  - Web mutation sends a fresh key per user attempt (axios retries reuse the
+    same config → same key → server dedupes).
+  - Daily-reward claim opts out via new `skipRetry` axios flag — a replayed
+    claim would return "not yet available" and mask success; claim was already
+    server-idempotent (atomic 24h `updateMany` guard → max one reward).
+  - Both mutations invalidate gamification/wallet/my-stats on error —
+    ambiguous outcomes resolve to authoritative state, never invented results.
+- **Tests:** 24/24 gamification spec pass — 4 new idempotency regressions
+  (replay→1 debit/1 credit/1 wheelSpin row; distinct keys; no-key legacy;
+  failure-clears-key). API+web typecheck clean.
+- **E2E proof:** two POSTs same key → identical result, `wheel_spins` 2→3,
+  ledger shows exactly one `SPEND_STORE_PURCHASE -20` + one `EARN_WHEEL_SPIN +25`.
+- Prior evidence retained: 17/18→balance-probe-verified UI run, double-click
+  single-request checks, 390/1440 screenshots + webm in
+  `docs/screenshots/streak-wheel/`.
+
+### PR #45 — Mutual rooms design: revised head `7d984cde3868ea64d0bfc188daa269e5bcadcbd3`
+
+- Economics aligned across lifecycle table, schema, wireframes, decisions:
+  both reserve snapshotted X; at AGREED Engganyo collects combined **2X as the
+  room charge** (`PlatformRevenue ROOM_CHARGE`); capture never debits a wallet.
+- "No platform fee" clarified → no fee beyond the room charge.
+- stake/pot/forfeiture-payout language removed; refunds return credits only to
+  the original payer (`REFUND_ROOM_RESOLUTION`, own X only).
+- Points only when both tasks verify (incl. moderation); one-sided
+  abandonment → affected player's own X may be refunded, zero points.
+- Pre-agreement wireframe corrected (leave = both refunded, not forfeit).
+- Owner decisions retained: X=25cr, post-agreement refund policy, 90-day chat
+  retention, v1 coexistence, 3 rooms/7d pair limit.
