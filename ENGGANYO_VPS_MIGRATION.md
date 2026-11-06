@@ -1396,3 +1396,36 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 
 - Gmail logo render check (SendGrid/Brevo template) — owner-visible.
 - Deferred payment tests (₺1 PAYMONGO package path etc.) — pending.
+
+### PR #44 follow-up — authoritative daily allowance: head `7cf6c303bc25b64700d407efc14983f15a420b70`
+
+- Redis spin counters (`wheel:free:*`, `wheel:paid:*`) removed from the
+  eligibility path. New `wheel_daily_allowances` table
+  (`unique(userId, day)`, `free_used`, `paid_used`) is claimed inside the
+  SAME `$transaction` as the attempt row, wallet debit, reward and
+  `wheel_spins` row via conditional `updateMany` — concurrent different-key
+  requests serialize on the allowance row and cannot over-consume the free
+  spin or the 10-paid cap; any rollback restores both.
+- First touch of a UTC day seeds via `INSERT ... ON CONFLICT DO NOTHING`
+  (`createMany skipDuplicates`) from `wheel_spins` history for that UTC
+  day, floored by the legacy Redis counters — users who already spun on
+  rollout day keep correct free/paid allowances; UTC boundary preserved
+  (`day` = `YYYY-MM-DD` UTC, history counted from `dayT00:00:00.000Z`).
+- `getWheelSpinStatus` reads the allowance row (or computes the same
+  seeded view read-only when no row exists yet) — consistent with what a
+  spin would actually do.
+- No-key legacy entry point now runs the identical transaction; only the
+  attempt bookkeeping is skipped.
+- **Tests: 36/36 pass** (26 unit + 10 real-PostgreSQL). New integration
+  coverage: concurrent different-key last-free-spin race (exactly one
+  free + one paid, ledger/wallet/allowance agree); concurrent final-paid-
+  slot race (one commits, loser 400s and rolls back attempt+slot); paid
+  and free settlement failure after eligibility (allowance/spin/wallet/
+  ledger all roll back, same-key retry succeeds); rollout-day seeding
+  (history + Redis floor → paidUsed=8); no-key path enforces 1 free +
+  10 paid then rejects. Same-key lost-response/replay tests retained.
+- API typecheck clean; eslint 0 errors. Still Ready for review — NOT
+  merged. Migrations `20261106130000_wheel_spin_attempts` +
+  `20261106140000_wheel_daily_allowance` ship on merge.
+- Production reCAPTCHA verified still enabled (`recaptcha_enabled=true`
+  in platform_configs after PR #43 verification toggle).
