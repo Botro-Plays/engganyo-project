@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { CampaignStatus, CompletionStatus, DepositMethod, DepositStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, ChallengeStatus, CompletionStatus, DepositMethod, DepositStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -567,10 +567,14 @@ export class AdminService {
   async listPendingSubmissions(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     const now = new Date();
-    // Admin queue: ALL SUBMITTED completions from manual-review campaigns (not just escalated)
+    // Admin queue: ALL SUBMITTED completions from manual-review campaigns
+    // plus every challenge claim awaiting review (escalation path).
     const where = {
       status: CompletionStatus.SUBMITTED,
-      campaign: { autoVerify: false },
+      OR: [
+        { campaign: { autoVerify: false } },
+        { challengeId: { not: null } },
+      ],
     };
     const [items, total] = await Promise.all([
       this.prisma.taskCompletion.findMany({
@@ -595,6 +599,18 @@ export class AdminService {
               requiresProof: true,
               proofInstructions: true,
               user: { select: { username: true } },
+            },
+          },
+          challenge: {
+            select: {
+              id: true,
+              title: true,
+              taskType: true,
+              targetUrl: true,
+              rewardCredits: true,
+              requiresProof: true,
+              proofInstructions: true,
+              creator: { select: { username: true } },
             },
           },
           user: { select: { id: true, username: true } },
@@ -625,6 +641,7 @@ export class AdminService {
         id: true,
         status: true,
         userId: true,
+        challengeId: true,
         campaign: {
           select: {
             id: true,
@@ -634,14 +651,34 @@ export class AdminService {
             totalSlots: true,
           },
         },
+        challenge: {
+          select: {
+            id: true,
+            creatorId: true,
+            title: true,
+            taskType: true,
+            rewardCredits: true,
+            feeAmount: true,
+            reservedCredits: true,
+            status: true,
+          },
+        },
       },
     });
     if (!completion) throw new NotFoundException('Submission not found');
     if (completion.status !== CompletionStatus.SUBMITTED) {
       throw new BadRequestException(`Submission is already ${completion.status.toLowerCase()}`);
     }
+
+    // 1v1 challenge claims settle through the challenge lifecycle:
+    // approve → reward + fee revenue; reject → permanent close + full refund.
+    if (completion.challenge) {
+      return this.reviewChallengeSubmission(adminId, completion, dto);
+    }
+    if (!completion.campaign) throw new NotFoundException('Submission not found');
+    const campaign = completion.campaign;
     if (dto.action === 'approve') {
-      assertEngagementTaskAllowed(completion.campaign.taskType);
+      assertEngagementTaskAllowed(campaign.taskType);
     }
 
     const now = new Date();
@@ -651,21 +688,21 @@ export class AdminService {
       await this.prisma.withTransaction(async (tx) => {
         await claimCompletionForVerification(tx, {
           completionId,
-          campaignId: completion.campaign.id,
+          campaignId: campaign.id,
           completerUserId: completion.userId,
           fromStatuses: [CompletionStatus.SUBMITTED],
           setData: {
             status: CompletionStatus.VERIFIED,
             verifiedAt: now,
             verifiedBy: adminId,
-            creditsEarned: completion.campaign.creditPerTask,
+            creditsEarned: campaign.creditPerTask,
           },
         });
 
-        await this.walletService.credit(completion.userId, completion.campaign.creditPerTask, {
+        await this.walletService.credit(completion.userId, campaign.creditPerTask, {
           type: TransactionType.EARN_TASK_COMPLETION,
           description: 'Task proof approved',
-          referenceId: completion.campaign.id,
+          referenceId: campaign.id,
           referenceType: 'campaign',
         }, tx);
 
@@ -675,7 +712,7 @@ export class AdminService {
             action: 'submission.approved',
             entityType: 'TaskCompletion',
             entityId: completionId,
-            newValue: { creditsPaid: completion.campaign.creditPerTask },
+            newValue: { creditsPaid: campaign.creditPerTask },
           },
         });
       });
@@ -683,24 +720,24 @@ export class AdminService {
       void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
 
       // Award VP for task completion (admin approval path)
-      await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', completion.campaign.id);
+      await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaign.id);
 
       void this.notificationsService.createNotification(
         completion.userId,
         NotificationType.TASK_COMPLETED,
         'Task Approved',
-        `Your task submission was approved by admin. You earned ${completion.campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
-        { campaignId: completion.campaign.id, completionId, creditsEarned: completion.campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
+        `Your task submission was approved by admin. You earned ${campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
+        { campaignId: campaign.id, completionId, creditsEarned: campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
       ).catch(() => null);
 
-      this.eventsService.emitToAdmins('task:reviewed', { campaignId: completion.campaign.id, completionId, status: 'VERIFIED' });
+      this.eventsService.emitToAdmins('task:reviewed', { campaignId: campaign.id, completionId, status: 'VERIFIED' });
 
-      return { status: 'VERIFIED', creditsPaid: completion.campaign.creditPerTask };
+      return { status: 'VERIFIED', creditsPaid: campaign.creditPerTask };
     } else {
       await this.prisma.withTransaction(async (tx) => {
         await rejectCompletionAndReleaseSlot(tx, {
           completionId,
-          campaignId: completion.campaign.id,
+          campaignId: campaign.id,
           fromStatuses: [CompletionStatus.SUBMITTED],
           setData: {
             status: CompletionStatus.REJECTED,
@@ -721,10 +758,143 @@ export class AdminService {
         });
       });
 
-      this.eventsService.emitToAdmins('task:reviewed', { campaignId: completion.campaign.id, completionId, status: 'REJECTED' });
+      this.eventsService.emitToAdmins('task:reviewed', { campaignId: campaign.id, completionId, status: 'REJECTED' });
 
       return { status: 'REJECTED' };
     }
+  }
+
+  // Admin escalation path for 1v1 challenge claims past reviewDeadline.
+  // Mirrors ChallengesService.reviewSubmission settlement rules.
+  private async reviewChallengeSubmission(
+    adminId: string,
+    completion: {
+      id: string;
+      status: CompletionStatus;
+      userId: string;
+      challenge: {
+        id: string;
+        creatorId: string;
+        title: string;
+        taskType: Parameters<typeof assertEngagementTaskAllowed>[0];
+        rewardCredits: number;
+        feeAmount: number;
+        reservedCredits: number;
+        status: ChallengeStatus;
+      } | null;
+    },
+    dto: { action: 'approve' | 'reject'; reason?: string },
+  ) {
+    const challenge = completion.challenge;
+    if (!challenge) throw new NotFoundException('Challenge not found');
+    if (dto.action === 'approve') assertEngagementTaskAllowed(challenge.taskType);
+    if (completion.userId === challenge.creatorId) {
+      throw new BadRequestException('Challenge creators cannot earn from their own challenge');
+    }
+
+    const now = new Date();
+
+    if (dto.action === 'approve') {
+      await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.taskCompletion.updateMany({
+          where: { id: completion.id, status: CompletionStatus.SUBMITTED },
+          data: {
+            status: CompletionStatus.VERIFIED,
+            verifiedAt: now,
+            verifiedBy: adminId,
+            creditsEarned: challenge.rewardCredits,
+          },
+        });
+        if (claim.count !== 1) {
+          throw new BadRequestException('Submission is not pending review — already processed.');
+        }
+        const closed = await tx.challenge.updateMany({
+          where: { id: challenge.id, status: ChallengeStatus.CLAIMED },
+          data: { status: ChallengeStatus.COMPLETED, closedAt: now, updatedAt: now },
+        });
+        if (closed.count !== 1) {
+          throw new BadRequestException('Challenge is no longer in a reviewable state.');
+        }
+        await this.walletService.credit(completion.userId, challenge.rewardCredits, {
+          type: TransactionType.EARN_TASK_COMPLETION,
+          description: `1v1 challenge approved by admin: ${challenge.title}`,
+          referenceId: challenge.id,
+          referenceType: 'challenge',
+        }, tx);
+        if (challenge.feeAmount > 0) {
+          await tx.platformRevenue.create({
+            data: { date: now, source: 'CHALLENGE_FEE', amount: challenge.feeAmount, challengeId: challenge.id },
+          });
+        }
+        await tx.auditLog.create({
+          data: {
+            userId: adminId,
+            action: 'challenge.approved',
+            entityType: 'TaskCompletion',
+            entityId: completion.id,
+            newValue: { rewardCredits: challenge.rewardCredits, feeAmount: challenge.feeAmount, reviewedBy: 'admin' },
+          },
+        });
+      });
+
+      void this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', challenge.id).catch(() => null);
+      void this.notificationsService.createNotification(
+        completion.userId,
+        NotificationType.TASK_COMPLETED,
+        'Challenge Approved',
+        `Your proof for "${challenge.title}" was approved by admin. You earned ${challenge.rewardCredits} credits.`,
+        { challengeId: challenge.id, completionId: completion.id, creditsEarned: challenge.rewardCredits },
+      ).catch(() => null);
+      this.eventsService.emitToAdmins('task:reviewed', { challengeId: challenge.id, completionId: completion.id, status: 'VERIFIED' });
+      return { status: 'VERIFIED', creditsPaid: challenge.rewardCredits };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.taskCompletion.updateMany({
+        where: { id: completion.id, status: CompletionStatus.SUBMITTED },
+        data: {
+          status: CompletionStatus.REJECTED,
+          verifiedAt: now,
+          verifiedBy: adminId,
+          rejectionReason: dto.reason ?? 'Proof did not meet requirements',
+        },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException('Submission is not pending review — already processed.');
+      }
+      const closed = await tx.challenge.updateMany({
+        where: { id: challenge.id, status: ChallengeStatus.CLAIMED },
+        data: { status: ChallengeStatus.COMPLETED, closedAt: now, updatedAt: now },
+      });
+      if (closed.count !== 1) {
+        throw new BadRequestException('Challenge is no longer in a reviewable state.');
+      }
+      await this.walletService.credit(challenge.creatorId, challenge.reservedCredits, {
+        type: TransactionType.REFUND_CHALLENGE_CLOSE,
+        description: `Challenge rejected by admin: ${challenge.title} (reward + fee refunded)`,
+        referenceId: challenge.id,
+        referenceType: 'challenge',
+      }, tx);
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'challenge.rejected',
+          entityType: 'TaskCompletion',
+          entityId: completion.id,
+          newValue: { reason: dto.reason ?? 'Proof did not meet requirements', reviewedBy: 'admin' },
+        },
+      });
+    });
+
+    void this.notificationsService.createNotification(
+      completion.userId,
+      NotificationType.TASK_REJECTED,
+      'Challenge Rejected',
+      `Your proof for "${challenge.title}" was rejected by admin. Reason: ${dto.reason ?? 'Proof did not meet requirements'}`,
+      { challengeId: challenge.id, completionId: completion.id, reason: dto.reason },
+    ).catch(() => null);
+    this.eventsService.emitToAdmins('task:reviewed', { challengeId: challenge.id, completionId: completion.id, status: 'REJECTED' });
+    return { status: 'REJECTED' };
   }
 
   // ─── Campaigns ────────────────────────────────────────────
@@ -1553,7 +1723,7 @@ export class AdminService {
       }
       case 'completions': {
         const rows = await this.prisma.taskCompletion.findMany({
-          select: { id: true, status: true, creditsEarned: true, assignedAt: true, submittedAt: true, verifiedAt: true, user: { select: { username: true } }, campaign: { select: { id: true, taskType: true } } },
+          select: { id: true, status: true, creditsEarned: true, assignedAt: true, submittedAt: true, verifiedAt: true, user: { select: { username: true } }, campaign: { select: { id: true, taskType: true } }, challenge: { select: { id: true, taskType: true } } },
           orderBy: { assignedAt: 'desc' },
         });
         return {
@@ -1563,8 +1733,8 @@ export class AdminService {
             rows.map((r) => ({
               ...r,
               username: r.user.username,
-              campaignId: r.campaign.id,
-              taskType: r.campaign.taskType,
+              campaignId: r.campaign?.id ?? r.challenge?.id ?? '',
+              taskType: r.campaign?.taskType ?? r.challenge?.taskType ?? '',
               assignedAt: r.assignedAt.toISOString(),
               submittedAt: r.submittedAt?.toISOString() ?? '',
               verifiedAt: r.verifiedAt?.toISOString() ?? '',
@@ -2573,7 +2743,7 @@ export class AdminService {
       distinct: ['campaignId'],
       take: 50,
     });
-    const creatorIds = [...new Set(bidirectional.map((b) => b.campaign.userId))];
+    const creatorIds = [...new Set(bidirectional.map((b) => b.campaign?.userId).filter((id): id is string => !!id))];
     const bidirectionalCreators = creatorIds.length
       ? await this.prisma.user.findMany({
           where: { id: { in: creatorIds } },

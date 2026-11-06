@@ -5,7 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { CompletionStatus, CampaignStatus, TransactionType, TrustLevel, NotificationType, Prisma } from '@prisma/client';
+import { CompletionStatus, CampaignStatus, ChallengeStatus, TaskType, TransactionType, TrustLevel, NotificationType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -33,6 +33,7 @@ const COMPLETION_SELECT = {
   verifiedAt: true,
   expiresAt: true,
   rejectionReason: true,
+  challengeId: true,
   campaign: {
     select: {
       id: true,
@@ -44,6 +45,19 @@ const COMPLETION_SELECT = {
       proofInstructions: true,
       autoVerify: true,
       user: { select: { username: true, displayName: true } },
+    },
+  },
+  challenge: {
+    select: {
+      id: true,
+      title: true,
+      taskType: true,
+      targetUrl: true,
+      rewardCredits: true,
+      requiresProof: true,
+      proofInstructions: true,
+      status: true,
+      creator: { select: { username: true, displayName: true } },
     },
   },
 } as const;
@@ -350,11 +364,42 @@ export class TasksService {
       },
     });
 
-    if (!completion) throw new NotFoundException('Task not assigned to you');
-    assertEngagementTaskAllowed(completion.campaign.taskType);
+    // The :id param is an offer id — campaign completions resolve above;
+    // challenge completions (1v1) resolve here and take the challenge path.
+    if (!completion) {
+      const challengeCompletion = await this.prisma.taskCompletion.findFirst({
+        where: { challengeId: campaignId, userId },
+        select: {
+          id: true,
+          status: true,
+          assignedAt: true,
+          expiresAt: true,
+          challenge: {
+            select: {
+              id: true,
+              creatorId: true,
+              title: true,
+              taskType: true,
+              targetUrl: true,
+              rewardCredits: true,
+              requiresProof: true,
+              proofInstructions: true,
+              status: true,
+            },
+          },
+        },
+      });
+      if (challengeCompletion?.challenge) {
+        return this.submitChallengeProof(userId, campaignId, challengeCompletion, dto, clientIp, userAgent);
+      }
+      throw new NotFoundException('Task not assigned to you');
+    }
+    if (!completion.campaign) throw new NotFoundException('Task not assigned to you');
+    const campaign = completion.campaign;
+    assertEngagementTaskAllowed(campaign.taskType);
 
     // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
-    if (completion.campaign.userId === userId) {
+    if (campaign.userId === userId) {
       throw new BadRequestException('Campaign owners cannot complete their own tasks');
     }
 
@@ -370,7 +415,7 @@ export class TasksService {
       throw new BadRequestException('Task assignment has expired');
     }
 
-    if (completion.campaign.requiresProof && !dto.proofUrl) {
+    if (campaign.requiresProof && !dto.proofUrl) {
       throw new BadRequestException('Proof URL is required for this task');
     }
 
@@ -444,14 +489,14 @@ export class TasksService {
     // This overrides screenshot-only proof for supported platforms.
     const apiVerified = await this.socialAuthService.verifyPlatformAction(
       userId,
-      completion.campaign.taskType as never,
-      completion.campaign.targetUrl,
+      campaign.taskType as never,
+      campaign.targetUrl,
     );
     // apiVerified = true → verified via API (treat as auto-verify)
     // apiVerified = null → platform not supported or account not linked → use campaign setting
     // apiVerified = throws → verification failed (BadRequestException propagates to user)
 
-    const shouldAutoVerify = apiVerified === true ? true : completion.campaign.autoVerify;
+    const shouldAutoVerify = apiVerified === true ? true : campaign.autoVerify;
 
     if (shouldAutoVerify) {
       // ── Auto-verify: claim + counters + credit in ONE transaction ──
@@ -468,14 +513,14 @@ export class TasksService {
             submittedAt: now,
             verifiedAt: now,
             verifiedBy: 'system',
-            creditsEarned: completion.campaign.creditPerTask,
+            creditsEarned: campaign.creditPerTask,
             ...(clientIp && { ipAddress: clientIp }),
             ...(userAgent && { deviceFingerprint: userAgent }),
             completionSeconds,
           },
         });
 
-        await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+        await this.walletService.credit(userId, campaign.creditPerTask, {
           type: TransactionType.EARN_TASK_COMPLETION,
           description: `Task verified`,
           referenceId: campaignId,
@@ -496,8 +541,8 @@ export class TasksService {
         userId,
         NotificationType.TASK_COMPLETED,
         'Task Verified',
-        `Your task was auto-verified. You earned ${completion.campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
-        { campaignId, creditsEarned: completion.campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
+        `Your task was auto-verified. You earned ${campaign.creditPerTask} credits (+${VP_REWARDS.TASK_COMPLETION} VIP Points).`,
+        { campaignId, creditsEarned: campaign.creditPerTask, vpEarned: VP_REWARDS.TASK_COMPLETION },
       ).catch(() => null);
 
       // Clear browse caches for all users since slot counts changed
@@ -506,7 +551,7 @@ export class TasksService {
       this.eventsService.emitToUser(userId, 'task:completed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
       this.eventsService.emitToUser(userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
 
-      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED' };
+      return { creditsEarned: campaign.creditPerTask, status: 'VERIFIED' };
     } else {
       // ── Manual review: hold proof, creator reviews first (48h), then admin ──
       const reviewDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
@@ -525,7 +570,7 @@ export class TasksService {
       });
 
       this.eventsService.emitToUser(userId, 'task:completed', { campaignId, completionId: completion.id, status: 'SUBMITTED' });
-      this.eventsService.emitToUser(completion.campaign.userId, 'submission:new', { campaignId, completionId: completion.id });
+      this.eventsService.emitToUser(campaign.userId, 'submission:new', { campaignId, completionId: completion.id });
       this.eventsService.emitToAdmins('submission:new', { campaignId, completionId: completion.id });
 
       return {
@@ -535,6 +580,127 @@ export class TasksService {
         reviewDeadline,
       };
     }
+  }
+
+  // ─── Submit proof for a 1v1 challenge claim ────────────────
+  // Challenges always go through creator review (no auto-verify): the duel
+  // is settled by the challenger, with admin escalation after reviewDeadline.
+
+  private async submitChallengeProof(
+    userId: string,
+    challengeId: string,
+    completion: {
+      id: string;
+      status: CompletionStatus;
+      assignedAt: Date;
+      expiresAt: Date | null;
+      challenge: {
+        id: string;
+        creatorId: string;
+        title: string;
+        taskType: TaskType;
+        targetUrl: string;
+        rewardCredits: number;
+        requiresProof: boolean;
+        proofInstructions: string | null;
+        status: ChallengeStatus;
+      } | null;
+    },
+    dto: SubmitProofDto,
+    clientIp?: string,
+    userAgent?: string,
+  ) {
+    const challenge = completion.challenge;
+    if (!challenge) throw new NotFoundException('Challenge not found');
+    assertEngagementTaskAllowed(challenge.taskType);
+    if (challenge.creatorId === userId) {
+      throw new BadRequestException('Challenge creators cannot complete their own challenge');
+    }
+    if (challenge.status !== ChallengeStatus.CLAIMED) {
+      throw new BadRequestException('This challenge is no longer active');
+    }
+
+    const submittable: CompletionStatus[] = [
+      CompletionStatus.ASSIGNED,
+      CompletionStatus.IN_PROGRESS,
+    ];
+    if (!submittable.includes(completion.status)) {
+      throw new BadRequestException(`Task is already ${completion.status.toLowerCase()}`);
+    }
+    if (completion.expiresAt && completion.expiresAt < new Date()) {
+      throw new BadRequestException('Task assignment has expired');
+    }
+    if (challenge.requiresProof && !dto.proofUrl) {
+      throw new BadRequestException('Proof URL is required for this challenge');
+    }
+
+    const now = new Date();
+    const completionSeconds = Math.round((now.getTime() - completion.assignedAt.getTime()) / 1000);
+
+    // Suspicious-timing flag (same rule as campaign submissions)
+    if (now.getTime() - completion.assignedAt.getTime() < 5_000) {
+      this.logger.warn(`Suspicious timing: user ${userId} submitted challenge proof in ${now.getTime() - completion.assignedAt.getTime()}ms`);
+      void this.antiAbuseService.flagUser(
+        userId,
+        'suspicious_timing',
+        'medium',
+        `Challenge proof submitted in under 5s (completion ${completion.id})`,
+        { challengeId, completionId: completion.id },
+      ).catch(() => null);
+    }
+
+    // Duplicate proof detection across all completions
+    if (dto.proofHash) {
+      const duplicate = await this.prisma.taskCompletion.findFirst({
+        where: {
+          proofHash: dto.proofHash,
+          userId: { not: userId },
+          status: { in: [CompletionStatus.VERIFIED, CompletionStatus.SUBMITTED] },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        void this.antiAbuseService.flagUser(
+          userId,
+          'duplicate_proof',
+          'high',
+          `Proof hash matches another submission (completion ${duplicate.id})`,
+          { proofHash: dto.proofHash, challengeId },
+        ).catch(() => null);
+      }
+    }
+
+    const reviewDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    // Guarded transition: if the expiry sweep closed the challenge and
+    // expired this completion between our read and this write, the update
+    // matches zero rows — proof can never attach to a refunded challenge.
+    const submitted = await this.prisma.taskCompletion.updateMany({
+      where: { id: completion.id, status: { in: submittable } },
+      data: {
+        status: CompletionStatus.SUBMITTED,
+        proofUrl: dto.proofUrl,
+        proofHash: dto.proofHash,
+        submittedAt: now,
+        reviewDeadline,
+        ...(clientIp && { ipAddress: clientIp }),
+        ...(userAgent && { deviceFingerprint: userAgent }),
+        completionSeconds,
+      },
+    });
+    if (submitted.count !== 1) {
+      throw new ConflictException('This task is no longer active — it may have expired.');
+    }
+
+    this.eventsService.emitToUser(userId, 'task:completed', { challengeId, completionId: completion.id, status: 'SUBMITTED' });
+    this.eventsService.emitToUser(challenge.creatorId, 'submission:new', { challengeId, completionId: completion.id });
+    this.eventsService.emitToAdmins('submission:new', { challengeId, completionId: completion.id });
+
+    return {
+      creditsEarned: 0,
+      status: 'SUBMITTED',
+      message: 'Proof submitted. The challenge creator will review within 48 hours.',
+      reviewDeadline,
+    };
   }
 
   // ─── Recheck task (for YouTube subscribe tasks) ───────────────
@@ -563,10 +729,12 @@ export class TasksService {
     });
 
     if (!completion) throw new NotFoundException('Task not assigned to you');
-    assertEngagementTaskAllowed(completion.campaign.taskType);
+    if (!completion.campaign) throw new NotFoundException('Task not assigned to you');
+    const campaign = completion.campaign;
+    assertEngagementTaskAllowed(campaign.taskType);
 
     // ── Ownership enforcement: campaign owners cannot complete their own tasks unless it's a platform task ──
-    if (completion.campaign.userId === userId && !completion.campaign.isPlatformTask) {
+    if (campaign.userId === userId && !campaign.isPlatformTask) {
       throw new BadRequestException('Campaign owners cannot complete their own tasks');
     }
 
@@ -587,8 +755,8 @@ export class TasksService {
     // ── API verification for supported platforms ──────────────
     const apiVerified = await this.socialAuthService.verifyPlatformAction(
       userId,
-      completion.campaign.taskType as never,
-      completion.campaign.targetUrl,
+      campaign.taskType as never,
+      campaign.targetUrl,
     );
 
     if (apiVerified === true) {
@@ -604,11 +772,11 @@ export class TasksService {
             submittedAt: now,
             verifiedAt: now,
             verifiedBy: 'system',
-            creditsEarned: completion.campaign.creditPerTask,
+            creditsEarned: campaign.creditPerTask,
           },
         });
 
-        await this.walletService.credit(userId, completion.campaign.creditPerTask, {
+        await this.walletService.credit(userId, campaign.creditPerTask, {
           type: TransactionType.EARN_TASK_COMPLETION,
           description: `Task verified`,
           referenceId: campaignId,
@@ -629,22 +797,22 @@ export class TasksService {
         userId,
         'TASK_COMPLETED',
         'Task Verified',
-        `Your task was auto-verified on recheck. You earned ${completion.campaign.creditPerTask} credits.`,
-        { campaignId, creditsEarned: completion.campaign.creditPerTask },
+        `Your task was auto-verified on recheck. You earned ${campaign.creditPerTask} credits.`,
+        { campaignId, creditsEarned: campaign.creditPerTask },
       ).catch(() => null);
 
       this.eventsService.emitToUser(userId, 'task:reviewed', { campaignId, completionId: completion.id, status: 'VERIFIED' });
 
-      return { creditsEarned: completion.campaign.creditPerTask, status: 'VERIFIED', message: 'Verification successful' };
+      return { creditsEarned: campaign.creditPerTask, status: 'VERIFIED', message: 'Verification successful' };
     } else if (apiVerified === null) {
       // ── API verification not available (not linked or API error) ──────────────
-      const taskLabel = completion.campaign.taskType.replace(/_/g, ' ').toLowerCase();
+      const taskLabel = campaign.taskType.replace(/_/g, ' ').toLowerCase();
       throw new BadRequestException(
         `Could not verify ${taskLabel}. Please link your account in Settings > Connected Accounts or upload a screenshot proof instead.`,
       );
     } else {
       // ── Verification failed (false) ──────────────
-      const taskLabel = completion.campaign.taskType.replace(/_/g, ' ').toLowerCase();
+      const taskLabel = campaign.taskType.replace(/_/g, ' ').toLowerCase();
       return {
         creditsEarned: 0,
         status: completion.status,
@@ -672,11 +840,14 @@ export class TasksService {
       }),
       this.prisma.taskCompletion.findMany({
         where: actionableWhere,
-        select: { campaign: { select: { creditPerTask: true } } },
+        select: {
+          campaign: { select: { creditPerTask: true } },
+          challenge: { select: { rewardCredits: true } },
+        },
       }),
     ]);
     const actionableCredits = creditRows.reduce(
-      (sum, row) => sum + (row.campaign?.creditPerTask ?? 0),
+      (sum, row) => sum + (row.campaign?.creditPerTask ?? row.challenge?.rewardCredits ?? 0),
       0,
     );
     return { actionable, actionableCredits, awaitingReview };

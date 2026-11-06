@@ -58,6 +58,8 @@ apps/api/prisma/migrations/**/.gitkeep
 # Docker volumes
 pgdata/
 redisdata/
+.pgdata-test/
+apps/web/tmp-verify/
 
 # Runtime uploads (container-managed volume locally)
 apps/api/uploads/

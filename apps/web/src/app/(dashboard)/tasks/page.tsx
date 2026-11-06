@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, ExternalLink, X, CheckCircle2, Clock,
   ChevronLeft, ChevronRight, Send, Flag, Upload, AlertTriangle,
-  CircleDot, Loader, XCircle,
+  CircleDot, Loader, XCircle, Plus, Swords,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ReportModal } from '@/components/report-modal';
 import { UserLink } from '@/components/user-link';
+import { ChallengeFormModal } from '@/components/challenge-form-modal';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
@@ -111,6 +112,21 @@ interface AvailableTask {
   user: { id: string; username: string; displayName: string | null };
 }
 
+interface ChallengeCard {
+  id: string;
+  title: string;
+  actionText: string;
+  taskType: string;
+  targetUrl: string;
+  rewardCredits: number;
+  requiresProof: boolean;
+  proofInstructions: string | null;
+  visibility: string;
+  status: string;
+  expiresAt: string;
+  creator: { id: string; username: string; displayName: string | null };
+}
+
 interface MyTask {
   id: string;
   status: string;
@@ -121,6 +137,7 @@ interface MyTask {
   verifiedAt: string | null;
   expiresAt: string | null;
   rejectionReason: string | null;
+  challengeId: string | null;
   campaign: {
     id: string;
     title: string;
@@ -130,7 +147,18 @@ interface MyTask {
     requiresProof: boolean;
     proofInstructions: string | null;
     user: { username: string; displayName: string | null };
-  };
+  } | null;
+  challenge: {
+    id: string;
+    title: string;
+    taskType: string;
+    targetUrl: string;
+    rewardCredits: number;
+    requiresProof: boolean;
+    proofInstructions: string | null;
+    status: string;
+    creator: { username: string; displayName: string | null };
+  } | null;
 }
 
 interface PaginatedResponse<T> {
@@ -156,6 +184,53 @@ const isCompletionExpired = (t: { status: string; expiresAt: string | null }) =>
   !!t.expiresAt && new Date(t.expiresAt).getTime() < Date.now();
 const myEffectiveStatus = (t: { status: string; expiresAt: string | null }) =>
   isCompletionExpired(t) ? 'EXPIRED' : t.status;
+
+// Unified offer view — campaign completions carry `campaign`, 1v1 challenge
+// claims carry `challenge`. Both normalize to the same shape so the grid,
+// My tasks, and the proof modal treat them identically. `id` is the offer id
+// used by tasks/:id/submit (campaign id or challenge id).
+interface TaskOffer {
+  id: string;
+  title: string;
+  taskType: string;
+  targetUrl: string;
+  creditPerTask: number;
+  requiresProof: boolean;
+  proofInstructions: string | null;
+  autoVerify?: boolean;
+  user: { username: string; displayName: string | null };
+  kind: 'campaign' | 'challenge';
+}
+
+function offerOf(t: MyTask): TaskOffer | null {
+  if (t.campaign) {
+    return {
+      id: t.campaign.id,
+      title: t.campaign.title,
+      taskType: t.campaign.taskType,
+      targetUrl: t.campaign.targetUrl,
+      creditPerTask: t.campaign.creditPerTask,
+      requiresProof: t.campaign.requiresProof,
+      proofInstructions: t.campaign.proofInstructions,
+      user: t.campaign.user,
+      kind: 'campaign',
+    };
+  }
+  if (t.challenge) {
+    return {
+      id: t.challenge.id,
+      title: t.challenge.title,
+      taskType: t.challenge.taskType,
+      targetUrl: t.challenge.targetUrl,
+      creditPerTask: t.challenge.rewardCredits,
+      requiresProof: t.challenge.requiresProof,
+      proofInstructions: t.challenge.proofInstructions,
+      user: t.challenge.creator,
+      kind: 'challenge',
+    };
+  }
+  return null;
+}
 
 const proofSchema = z.object({
   proofUrl: z.string().optional().or(z.literal('')),
@@ -184,7 +259,8 @@ function TasksPageInner() {
   // Tab is derived from the URL so sidebar nav, aria state, and the visible
   // list can never disagree: /tasks and unknown tab values mean Find tasks.
   const tabParam = searchParams.get('tab');
-  const tab: 'browse' | 'mine' = tabParam === 'mine' ? 'mine' : 'browse';
+  const tab: 'browse' | 'mine' | 'challenges' =
+    tabParam === 'mine' ? 'mine' : tabParam === 'challenges' ? 'challenges' : 'browse';
   const [browsePage, setBrowsePage] = useState(1);
   const [myPage, setMyPage] = useState(1);
   const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'done'>('all');
@@ -196,6 +272,18 @@ function TasksPageInner() {
   // Completion returned by a successful assign — pinned above the browse grid
   // so the user can open the target and submit proof without leaving Find tasks.
   const [justAccepted, setJustAccepted] = useState<MyTask | null>(null);
+  // Pinned panel for a just-claimed 1v1 challenge — persists even after the
+  // challenge leaves the public list (last-slot disappearance).
+  const [justClaimed, setJustClaimed] = useState<{
+    challengeId: string;
+    completionId: string;
+    card: ChallengeCard;
+  } | null>(null);
+  const [showChallengeForm, setShowChallengeForm] = useState(false);
+  const [challengePage, setChallengePage] = useState(1);
+  const [claimingIds, setClaimingIds] = useState<Set<string>>(new Set());
+  const submitOffer = submitting ? offerOf(submitting) : null;
+  const acceptedOffer = justAccepted ? offerOf(justAccepted) : null;
   const [reporting, setReporting] = useState<{ userId: string; label: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -303,6 +391,60 @@ function TasksPageInner() {
     },
     enabled: tab === 'browse' && isAuthenticated,
     refetchInterval: 60_000,
+  });
+
+  // ─── 1v1 challenges (public open list) ─────────────────────
+  const { data: challengeData, isLoading: challengeLoading } = useQuery({
+    queryKey: ['challenges', 'open', challengePage],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<ApiResponse<PaginatedResponse<ChallengeCard>>>(
+          `challenges?page=${challengePage}&limit=12`,
+        );
+        const data = res.data.data;
+        return {
+          ...data,
+          items: Array.isArray(data?.items) ? data.items : [],
+        };
+      } catch (err) {
+        console.error('Failed to fetch challenges:', err);
+        return { items: [], meta: { total: 0, page: 1, totalPages: 1, hasNext: false, hasPrev: false } };
+      }
+    },
+    enabled: tab === 'challenges' && isAuthenticated,
+    refetchInterval: 60_000,
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: ({ id, password }: { id: string; password?: string }) =>
+      apiClient.post(`challenges/${id}/claim`, password ? { password } : {}),
+    onSuccess: (_res, vars) => {
+      const card = challengeData?.items.find((c) => c.id === vars.id);
+      const completionId = (_res as { data?: { data?: { completionId?: string } } })?.data?.data?.completionId;
+      if (card) {
+        setJustClaimed({
+          challengeId: vars.id,
+          completionId: completionId ?? '',
+          card,
+        });
+      }
+      setClaimingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(vars.id);
+        return next;
+      });
+      void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setAssignError(null);
+    },
+    onError: (err, vars) => {
+      setAssignError(getApiErrorMessage(err));
+      setClaimingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(vars.id);
+        return next;
+      });
+    },
   });
 
   // ─── My tasks ──────────────────────────────────────────────
@@ -417,7 +559,7 @@ function TasksPageInner() {
       }),
     onSuccess: (_res, vars) => {
       // The pinned card is only for the task just submitted.
-      setJustAccepted((j) => (j && j.campaign.id === vars.campaignId ? null : j));
+      setJustAccepted((j) => (j && offerOf(j)?.id === vars.campaignId ? null : j));
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       proofForm.reset();
@@ -439,7 +581,8 @@ function TasksPageInner() {
     const map = new Map<string, string>();
     if (myData?.items) {
       for (const t of myData.items) {
-        map.set(t.campaign.id, t.status);
+        const offer = offerOf(t);
+        if (offer) map.set(offer.id, t.status);
       }
     }
     return map;
@@ -523,19 +666,19 @@ function TasksPageInner() {
       {/* ── P2P journeys: Find tasks / My tasks / My campaigns ── */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
         <div role="tablist" aria-label="Task journeys" className="flex gap-1 p-1 bg-surface-hover rounded-lg w-fit overflow-x-auto">
-          {(['browse', 'mine'] as const).map((t) => (
+          {(['browse', 'challenges', 'mine'] as const).map((t) => (
             <button
               key={t}
               role="tab"
               aria-selected={tab === t}
               onClick={() =>
-                router.replace(t === 'mine' ? '/tasks?tab=mine' : '/tasks', { scroll: false })
+                router.replace(t === 'mine' ? '/tasks?tab=mine' : t === 'challenges' ? '/tasks?tab=challenges' : '/tasks', { scroll: false })
               }
               className={`px-4 py-2.5 min-h-11 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                 tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
               }`}
             >
-              {t === 'browse' ? 'Find tasks' : 'My tasks'}
+              {t === 'browse' ? 'Find tasks' : t === 'challenges' ? '1v1 Challenges' : 'My tasks'}
             </button>
           ))}
           <Link
@@ -582,26 +725,26 @@ function TasksPageInner() {
               <span className="font-semibold text-amber-300">Disclaimer:</span> Completing tasks on Engganyo may violate the Terms of Service of third-party platforms (YouTube, Instagram, TikTok, X, Facebook, etc.) and could result in account warnings, restrictions, or permanent bans. Participate at your own risk. Engganyo is not responsible for any account actions taken by third-party platforms.
             </p>
           </div>
-          {justAccepted && (
+          {justAccepted && acceptedOffer && (
             <div className="card-glass rounded-xl p-4 mb-4 border-brand-500/30 bg-brand-500/5">
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white">Task accepted — you can start now</p>
                   <p className="text-xs text-zinc-400 truncate mt-0.5">
-                    {justAccepted.campaign.title} · +{formatCredits(justAccepted.campaign.creditPerTask)} {creditLabel(justAccepted.campaign.creditPerTask)} on approval
+                    {acceptedOffer.title} · +{formatCredits(acceptedOffer.creditPerTask)} {creditLabel(acceptedOffer.creditPerTask)} on approval
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     <a
-                      href={justAccepted.campaign.targetUrl}
+                      href={acceptedOffer.targetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
                     >
-                      Open {PLATFORM_LABEL[getPlatform(justAccepted.campaign.taskType)] ?? 'task'}
+                      Open {PLATFORM_LABEL[getPlatform(acceptedOffer.taskType)] ?? 'task'}
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
-                    {!DISABLED_TASK_TYPES.has(justAccepted.campaign.taskType) && (
+                    {!DISABLED_TASK_TYPES.has(acceptedOffer.taskType) && (
                       <button
                         onClick={() => { setSubmitting(justAccepted); setSubmitError(null); proofForm.reset(); setRecheckResult(null); }}
                         className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
@@ -792,6 +935,211 @@ function TasksPageInner() {
         </>
       )}
 
+      {/* ── 1v1 Challenges tab ── */}
+      {tab === 'challenges' && (
+        <>
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <p className="text-xs text-zinc-500">
+              Player-vs-player duels — one slot, one winner, creator-reviewed proof.
+            </p>
+            <button
+              onClick={() => setShowChallengeForm(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" /> Create challenge
+            </button>
+          </div>
+
+          {justClaimed && (
+            <div className="card-glass rounded-xl p-4 mb-4 border-brand-500/30 bg-brand-500/5">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Challenge claimed — slot is yours</p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">
+                    {justClaimed.card.title} · +{formatCredits(justClaimed.card.rewardCredits)} {creditLabel(justClaimed.card.rewardCredits)} on approval
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <a
+                      href={justClaimed.card.targetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
+                    >
+                      Open task
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      onClick={() => {
+                        // Build a MyTask-shaped object so the existing proof modal works
+                        const synthetic: MyTask = {
+                          id: justClaimed.completionId,
+                          status: 'ASSIGNED',
+                          creditsEarned: 0,
+                          proofUrl: null,
+                          assignedAt: new Date().toISOString(),
+                          submittedAt: null,
+                          verifiedAt: null,
+                          expiresAt: justClaimed.card.expiresAt,
+                          rejectionReason: null,
+                          challengeId: justClaimed.challengeId,
+                          campaign: null,
+                          challenge: {
+                            id: justClaimed.challengeId,
+                            title: justClaimed.card.title,
+                            taskType: justClaimed.card.taskType,
+                            targetUrl: justClaimed.card.targetUrl,
+                            rewardCredits: justClaimed.card.rewardCredits,
+                            requiresProof: justClaimed.card.requiresProof,
+                            proofInstructions: justClaimed.card.proofInstructions,
+                            status: 'CLAIMED',
+                            creator: justClaimed.card.creator,
+                          },
+                        };
+                        setSubmitting(synthetic);
+                        setSubmitError(null);
+                        proofForm.reset();
+                        setRecheckResult(null);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
+                    >
+                      <Send className="w-3.5 h-3.5" /> Submit proof
+                    </button>
+                    <Link
+                      href="/tasks?tab=mine"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-zinc-400 hover:text-white text-xs font-medium transition-colors"
+                    >
+                      Track in My tasks
+                    </Link>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setJustClaimed(null)}
+                  aria-label="Dismiss"
+                  className="text-zinc-500 hover:text-white transition-colors p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {challengeLoading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-44" />
+              ))}
+            </div>
+          ) : !challengeData?.items.length ? (
+            <div className="card-glass rounded-2xl p-16 text-center">
+              <Swords className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-500 text-sm">No open challenges right now.</p>
+              <p className="text-zinc-600 text-xs mt-1">Create one and challenge another player — or check back later.</p>
+              <button
+                onClick={() => setShowChallengeForm(true)}
+                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Create challenge
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {challengeData.items.map((ch) => {
+                  const platform = getPlatform(ch.taskType);
+                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
+                  const hoursLeft = Math.max(0, Math.round((new Date(ch.expiresAt).getTime() - Date.now()) / 3600000));
+                  const isOwn = user?.id === ch.creator.id;
+                  const deadline = hoursLeft < 1 ? '<1h left' : hoursLeft < 24 ? `${hoursLeft}h left` : `${Math.round(hoursLeft / 24)}d left`;
+                  return (
+                    <div key={ch.id} className="card-glass rounded-xl p-5 flex flex-col border-brand-500/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide bg-brand-500/15 border border-brand-500/30 text-brand-300">
+                          1v1 Challenge
+                        </span>
+                        {ch.visibility === 'PRIVATE' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-zinc-500/10 border border-zinc-500/20 text-zinc-400">
+                            Private
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-white mb-1 line-clamp-2">{ch.title}</p>
+                      <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{ch.actionText}</p>
+                      <p className="text-lg font-bold text-green-400 leading-tight mb-2">
+                        +{formatCredits(ch.rewardCredits)}
+                        <span className="text-[11px] font-medium text-green-400/70 ml-1">{creditLabel(ch.rewardCredits)}</span>
+                      </p>
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${platformColor}`}>
+                          {TASK_TYPE_LABELS[ch.taskType] ?? ch.taskType}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-300/90">
+                          <Clock className="w-3 h-3" /> {deadline}
+                        </span>
+                      </div>
+                      {ch.requiresProof && (
+                        <p className="text-[11px] leading-snug text-amber-300/90 flex items-start gap-1.5 mb-3">
+                          <Upload className="w-3.5 h-3.5 shrink-0 mt-px" />
+                          <span>
+                            <span className="font-medium">Proof required</span>
+                            {ch.proofInstructions && (
+                              <span className="text-amber-300/60"> — {ch.proofInstructions}</span>
+                            )}
+                          </span>
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 mt-auto">
+                        <span className="text-brand-300 font-medium">1 slot</span>
+                        <UserLink user={ch.creator} showAvatar={false} />
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (claimingIds.size > 0 || claimMutation.isPending) return;
+                          setClaimingIds((prev) => new Set(prev).add(ch.id));
+                          claimMutation.mutate({ id: ch.id });
+                        }}
+                        disabled={isOwn || claimingIds.size > 0}
+                        className="w-full flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {claimingIds.has(ch.id) ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : isOwn ? (
+                          'Your challenge'
+                        ) : (
+                          'Claim challenge'
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {challengeData.meta.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6">
+                  <button
+                    onClick={() => setChallengePage((p) => p - 1)}
+                    disabled={!challengeData.meta.hasPrev}
+                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </button>
+                  <span className="text-xs text-zinc-500">
+                    Page {challengeData.meta.page} of {challengeData.meta.totalPages}
+                  </span>
+                  <button
+                    onClick={() => setChallengePage((p) => p + 1)}
+                    disabled={!challengeData.meta.hasNext}
+                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
       {/* ── My Tasks tab ── */}
       {tab === 'mine' && (
         <>
@@ -853,20 +1201,22 @@ function TasksPageInner() {
                   // Server already orders actionable-first before pagination;
                   // effective status only affects display, filters, and controls.
                   .map((task) => {
+                  const offer = offerOf(task);
+                  if (!offer) return null;
                   const effStatus = myEffectiveStatus(task);
                   const st = MY_TASK_STATUS[effStatus] ?? { label: effStatus, color: 'text-zinc-400', icon: CircleDot, spin: false };
-                  const platform = getPlatform(task.campaign.taskType);
+                  const platform = getPlatform(offer.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
                   const canSubmit = effStatus === 'ASSIGNED' || effStatus === 'IN_PROGRESS';
                   return (
                     <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-start sm:items-center gap-3 sm:gap-4">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${platformColor}`}>
-                        {TASK_TYPE_LABELS[task.campaign.taskType]?.split(' · ')[0] ?? platform}
+                        {TASK_TYPE_LABELS[offer.taskType]?.split(' · ')[0] ?? platform}
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-white truncate">{task.campaign.title}</p>
-                          <span className="text-xs font-semibold text-green-400 shrink-0">+{formatCredits(task.campaign.creditPerTask)}</span>
+                          <p className="text-sm font-medium text-white truncate">{offer.title}</p>
+                          <span className="text-xs font-semibold text-green-400 shrink-0">+{formatCredits(offer.creditPerTask)}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-current/20 text-[10px] font-semibold uppercase tracking-wide ${st.color}`}>
@@ -874,16 +1224,16 @@ function TasksPageInner() {
                             {st.label}
                           </span>
                           <span className="text-xs text-zinc-500">{formatRelativeTime(task.assignedAt)}</span>
-                          <span className="text-[10px] text-zinc-600">by <Link href={`/users/${task.campaign.user.username}`} className="text-zinc-500 hover:text-brand-300 transition-colors">@{task.campaign.user.username}</Link></span>
+                          <span className="text-[10px] text-zinc-600">by <Link href={`/users/${offer.user.username}`} className="text-zinc-500 hover:text-brand-300 transition-colors">@{offer.user.username}</Link></span>
                           <a
-                            href={task.campaign.targetUrl}
+                            href={offer.targetUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[10px] text-zinc-500 hover:text-brand-400 flex items-center gap-0.5 transition-colors"
                           >
                             <ExternalLink className="w-3 h-3" /> Link
                           </a>
-                          {task.campaign.requiresProof && (
+                          {offer.requiresProof && (
                             <span className="text-[10px] text-amber-400/80 flex items-center gap-0.5">
                               <Upload className="w-3 h-3" /> Proof required
                             </span>
@@ -933,14 +1283,14 @@ function TasksPageInner() {
                         ) : effStatus === 'EXPIRED' ? (
                           <span className="text-xs text-zinc-500">Expired</span>
                         ) : canSubmit ? (
-                          DISABLED_TASK_TYPES.has(task.campaign.taskType) ? (
+                          DISABLED_TASK_TYPES.has(offer.taskType) ? (
                             <div
                               title="This task type is disabled for platform-policy compliance and cannot earn rewards"
                               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-500/10 border border-zinc-500/20 text-zinc-500 cursor-not-allowed"
                             >
                               Disabled
                             </div>
-                          ) : task.campaign.taskType === 'YOUTUBE_SUBSCRIBE' || task.campaign.taskType === 'YOUTUBE_LIKE' ? (
+                          ) : offer.taskType === 'YOUTUBE_SUBSCRIBE' || offer.taskType === 'YOUTUBE_LIKE' ? (
                             <button
                               onClick={() => { setSubmitting(task); setSubmitError(null); setRecheckResult(null); }}
                               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 transition-all"
@@ -998,13 +1348,13 @@ function TasksPageInner() {
       )}
 
       {/* ── Submit proof modal ── */}
-      {submitting && (
+      {submitting && submitOffer && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 pb-20 sm:p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md card-glass rounded-t-2xl sm:rounded-2xl p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-white">
-                {submitting.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? 'Subscribe & Verify' :
-                 submitting.campaign.taskType === 'YOUTUBE_LIKE' ? 'Like & Verify' :
+                {submitOffer.taskType === 'YOUTUBE_SUBSCRIBE' ? 'Subscribe & Verify' :
+                 submitOffer.taskType === 'YOUTUBE_LIKE' ? 'Like & Verify' :
                  'Submit Proof'}
               </h2>
               <button onClick={() => setSubmitting(null)} className="text-zinc-500 hover:text-white transition-colors">
@@ -1013,18 +1363,18 @@ function TasksPageInner() {
             </div>
 
             <div className="mb-4 p-3 rounded-lg bg-surface-hover border border-surface-border">
-              <p className="text-sm text-white font-medium">{submitting.campaign.title}</p>
+              <p className="text-sm text-white font-medium">{submitOffer.title}</p>
               <a
-                href={submitting.campaign.targetUrl}
+                href={submitOffer.targetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-400 transition-colors mt-1"
               >
                 Open link <ExternalLink className="w-3 h-3" />
               </a>
-              {submitting.campaign.proofInstructions && (
+              {submitOffer.proofInstructions && (
                 <p className="text-xs text-zinc-400 mt-2 border-t border-surface-border pt-2">
-                  {submitting.campaign.proofInstructions}
+                  {submitOffer.proofInstructions}
                 </p>
               )}
             </div>
@@ -1043,7 +1393,7 @@ function TasksPageInner() {
               </div>
             )}
 
-            {submitting.campaign.taskType === 'YOUTUBE_SUBSCRIBE' ? (
+            {submitOffer.taskType === 'YOUTUBE_SUBSCRIBE' ? (
               // YouTube Subscribe: Show check button instead of proof upload
               <div className="space-y-4">
                 <p className="text-sm text-zinc-400">
@@ -1055,7 +1405,7 @@ function TasksPageInner() {
                     <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
                       <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
                         <CheckCircle2 className="w-4 h-4" />
-                        Subscription verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                        Subscription verified! You earned +{formatCredits(submitOffer.creditPerTask)} credits.
                       </div>
                     </div>
                     <button
@@ -1073,7 +1423,7 @@ function TasksPageInner() {
                       </div>
                     </div>
                     <button
-                      onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                      onClick={() => recheckMutation.mutate(submitOffer.id)}
                       disabled={recheckMutation.isPending}
                       className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -1082,7 +1432,7 @@ function TasksPageInner() {
                   </>
                 ) : (
                   <button
-                    onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                    onClick={() => recheckMutation.mutate(submitOffer.id)}
                     disabled={recheckMutation.isPending}
                     className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1090,7 +1440,7 @@ function TasksPageInner() {
                   </button>
                 )}
               </div>
-            ) : submitting.campaign.taskType === 'YOUTUBE_LIKE' ? (
+            ) : submitOffer.taskType === 'YOUTUBE_LIKE' ? (
               // YouTube Like: Show check button instead of proof upload
               <div className="space-y-4">
                 <p className="text-sm text-zinc-400">
@@ -1102,7 +1452,7 @@ function TasksPageInner() {
                     <div className="px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30">
                       <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
                         <CheckCircle2 className="w-4 h-4" />
-                        Like verified! You earned +{formatCredits(submitting.campaign.creditPerTask)} credits.
+                        Like verified! You earned +{formatCredits(submitOffer.creditPerTask)} credits.
                       </div>
                     </div>
                     <button
@@ -1120,7 +1470,7 @@ function TasksPageInner() {
                       </div>
                     </div>
                     <button
-                      onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                      onClick={() => recheckMutation.mutate(submitOffer.id)}
                       disabled={recheckMutation.isPending}
                       className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -1129,7 +1479,7 @@ function TasksPageInner() {
                   </>
                 ) : (
                   <button
-                    onClick={() => recheckMutation.mutate(submitting.campaign.id)}
+                    onClick={() => recheckMutation.mutate(submitOffer.id)}
                     disabled={recheckMutation.isPending}
                     className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1141,11 +1491,11 @@ function TasksPageInner() {
               // Other tasks: Show proof upload form
               <form
                 onSubmit={proofForm.handleSubmit((d) =>
-                  submitMutation.mutate({ campaignId: submitting.campaign.id, data: d }),
+                  submitMutation.mutate({ campaignId: submitOffer.id, data: d }),
                 )}
                 className="space-y-3"
               >
-                {submitting.campaign.requiresProof && (
+                {submitOffer.requiresProof && (
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1.5">
                       Proof screenshot <span className="text-red-400">*</span>
@@ -1228,19 +1578,30 @@ function TasksPageInner() {
                 </div>
                 <button
                   type="submit"
-                  disabled={submitMutation.isPending || (submitting.campaign.requiresProof && !uploadedProofUrl)}
+                  disabled={submitMutation.isPending || (submitOffer.requiresProof && !uploadedProofUrl)}
                   className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
                 >
                   {submitMutation.isPending ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <>Submit & earn +{formatCredits(submitting.campaign.creditPerTask)} {creditLabel(submitting.campaign.creditPerTask)}</>
+                    <>Submit & earn +{formatCredits(submitOffer.creditPerTask)} {creditLabel(submitOffer.creditPerTask)}</>
                   )}
                 </button>
               </form>
             )}
           </div>
         </div>
+      )}
+
+      {showChallengeForm && (
+        <ChallengeFormModal
+          onClose={() => setShowChallengeForm(false)}
+          onCreated={({ id }) => {
+            if (id) {
+              void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+            }
+          }}
+        />
       )}
     </div>
   );

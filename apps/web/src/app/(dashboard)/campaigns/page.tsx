@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/auth.store';
 import Link from 'next/link';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
-  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp, BarChart2,
+  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp, BarChart2, Swords,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -19,6 +19,8 @@ import { formatCredits, creditLabel, formatDate } from '@/lib/utils';
 import { UserLink } from '@/components/user-link';
 import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { PlatformSelect } from '@/components/platform-select';
+import { ChallengeFormModal } from '@/components/challenge-form-modal';
+import { MyChallenges } from '@/components/my-challenges';
 import type { ApiResponse } from '@/types';
 
 // ─── Task type → platform map ─────────────────────────────────
@@ -176,6 +178,7 @@ export default function CampaignsPage() {
   });
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showChallengeForm, setShowChallengeForm] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -347,14 +350,27 @@ export default function CampaignsPage() {
           <h1 className="text-2xl font-bold text-white">Campaigns</h1>
           <p className="text-zinc-400 text-sm mt-1">Promote your content by creating engagement campaigns.</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          New campaign
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowChallengeForm(true)}
+            className="flex items-center gap-2 bg-surface-hover hover:bg-surface-border border border-brand-500/30 text-brand-300 text-sm font-medium px-4 py-2 rounded-lg transition-all"
+          >
+            <Swords className="w-4 h-4" />
+            1v1 challenge
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            New campaign
+          </button>
+        </div>
       </div>
+
+      {showChallengeForm && (
+        <ChallengeFormModal onClose={() => setShowChallengeForm(false)} />
+      )}
 
       {/* ── Create modal ── */}
       {showCreate && (
@@ -801,6 +817,10 @@ export default function CampaignsPage() {
           </>
         );
       })()}
+
+      {/* ── My 1v1 challenges (creator tracking + review) ── */}
+      <MyChallenges />
+
       {/* ── Submissions review modal ── */}
       {reviewingCampaign && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

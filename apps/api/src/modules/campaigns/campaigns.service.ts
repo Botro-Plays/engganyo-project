@@ -651,10 +651,10 @@ export class CampaignsService {
 
     // Exclude campaigns the user already has a completion for
     const alreadyAssigned = await this.prisma.taskCompletion.findMany({
-      where: { userId: excludeUserId },
+      where: { userId: excludeUserId, campaignId: { not: null } },
       select: { campaignId: true },
     });
-    const excludeIds = alreadyAssigned.map((c) => c.campaignId);
+    const excludeIds = alreadyAssigned.map((c) => c.campaignId).filter((id): id is string => id !== null);
 
     // Build taskType filter: exact match OR all enum values starting with platform prefix
     let taskTypeWhere: object | undefined;
