@@ -96,13 +96,32 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     }),
   };
 
-  const balanceOf = async () =>
-    (await prisma.wallet.findUniqueOrThrow({ where: { userId } })).balance;
+  let userSeq = 0;
+  const mkUser = async (balance: number) => {
+    userSeq += 1;
+    const tag = `${Date.now().toString(36)}_${userSeq}`;
+    return prisma.user.create({
+      data: {
+        email: `${PREFIX}${tag}@itest.local`,
+        username: `${PREFIX}${tag}`,
+        passwordHash: 'x',
+        referralCode: `${PREFIX}r${tag}`,
+        wallet: { create: { balance, lifetimeEarned: balance } },
+      },
+    });
+  };
 
-  const spinRows = () => prisma.wheelSpin.count({ where: { userId } });
-  const attemptRows = () => prisma.wheelSpinAttempt.findMany({ where: { userId } });
-  const ledgerRows = async () => {
-    const w = await prisma.wallet.findUniqueOrThrow({ where: { userId } });
+  const balanceOf = async (uid: string = userId) =>
+    (await prisma.wallet.findUniqueOrThrow({ where: { userId: uid } })).balance;
+
+  const spinRows = (uid: string = userId) => prisma.wheelSpin.count({ where: { userId: uid } });
+  const attemptRows = (uid: string = userId) => prisma.wheelSpinAttempt.findMany({ where: { userId: uid } });
+  const allowanceOf = (uid: string = userId) =>
+    prisma.wheelDailyAllowance.findUnique({
+      where: { userId_day: { userId: uid, day: today() } },
+    });
+  const ledgerRows = async (uid: string = userId) => {
+    const w = await prisma.wallet.findUniqueOrThrow({ where: { userId: uid } });
     return prisma.transaction.findMany({ where: { walletId: w.id }, orderBy: { createdAt: 'asc' } });
   };
 
@@ -230,5 +249,128 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(
       (await prisma.wallet.findUniqueOrThrow({ where: { userId: poor.id } })).balance,
     ).toBe(10);
+  });
+
+  it('concurrent different-key spins compete for the last free spin — exactly one wins it', async () => {
+    const u = await mkUser(500);
+
+    const [a, b] = await Promise.all([
+      service.spinWheel(u.id, 'free-race-a'),
+      service.spinWheel(u.id, 'free-race-b'),
+    ]);
+
+    const free = [a, b].find((r) => r.isFree);
+    const paid = [a, b].find((r) => !r.isFree);
+    expect(free).toMatchObject({ isFree: true, cost: 0, credits: 5 });
+    expect(paid).toMatchObject({ isFree: false, cost: 20, credits: 5 });
+
+    // Allowance, spin history, wallet and ledger all agree.
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 1 });
+    expect(await spinRows(u.id)).toBe(2);
+    const ledger = await ledgerRows(u.id);
+    expect(ledger.filter((t) => t.type === TransactionType.SPEND_STORE_PURCHASE)).toHaveLength(1);
+    expect(ledger.filter((t) => t.type === TransactionType.EARN_WHEEL_SPIN)).toHaveLength(2);
+    expect(await balanceOf(u.id)).toBe(500 - 20 + 10);
+  });
+
+  it('concurrent different-key spins cannot take the final paid slot twice', async () => {
+    const u = await mkUser(500);
+    // Free spin used, 9 of 10 paid slots consumed.
+    await prisma.wheelDailyAllowance.create({
+      data: { userId: u.id, day: today(), freeUsed: true, paidUsed: 9 },
+    });
+
+    const results = await Promise.allSettled([
+      service.spinWheel(u.id, 'paid-race-a'),
+      service.spinWheel(u.id, 'paid-race-b'),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(BadRequestException);
+
+    // Exactly one settlement committed; the loser's attempt row rolled back.
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 10 });
+    expect(await spinRows(u.id)).toBe(1);
+    expect(await attemptRows(u.id)).toHaveLength(1);
+    const ledger = await ledgerRows(u.id);
+    expect(ledger.filter((t) => t.type === TransactionType.SPEND_STORE_PURCHASE)).toHaveLength(1);
+    expect(await balanceOf(u.id)).toBe(500 - 20 + 5);
+  });
+
+  it('a settlement failure after eligibility rolls back allowance, spin, wallet and ledger', async () => {
+    const u = await mkUser(500);
+
+    // Free-spin path: prize credit fails after the free claim inside the tx.
+    walletStub.credit.mockRejectedValueOnce(new Error('credit failed'));
+    await expect(service.spinWheel(u.id, 'rb-free')).rejects.toThrow('credit failed');
+    expect(await allowanceOf(u.id)).toBeNull();
+    expect(await spinRows(u.id)).toBe(0);
+    expect(await ledgerRows(u.id)).toHaveLength(0);
+    expect(await attemptRows(u.id)).toHaveLength(0);
+    expect(await balanceOf(u.id)).toBe(500);
+
+    // Same-key retry succeeds — eligibility was restored by the rollback.
+    const first = await service.spinWheel(u.id, 'rb-free');
+    expect(first).toMatchObject({ isFree: true, cost: 0 });
+
+    // Paid-spin path: debit commits inside the tx, then credit fails —
+    // the paid slot, debit and ledger row must all roll back.
+    walletStub.credit.mockRejectedValueOnce(new Error('credit failed'));
+    await expect(service.spinWheel(u.id, 'rb-paid')).rejects.toThrow('credit failed');
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 0 });
+    expect(await spinRows(u.id)).toBe(1);
+    expect(await ledgerRows(u.id)).toHaveLength(1); // only the free spin's +5
+    expect(await balanceOf(u.id)).toBe(505);
+
+    const second = await service.spinWheel(u.id, 'rb-paid');
+    expect(second).toMatchObject({ isFree: false, cost: 20 });
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 1 });
+    expect(await spinRows(u.id)).toBe(2);
+    const ledger = await ledgerRows(u.id);
+    expect(ledger.filter((t) => t.type === TransactionType.SPEND_STORE_PURCHASE)).toHaveLength(1);
+    expect(ledger.filter((t) => t.type === TransactionType.EARN_WHEEL_SPIN)).toHaveLength(2);
+    expect(await balanceOf(u.id)).toBe(505 - 20 + 5);
+  });
+
+  it('rollout day: allowance seeds from wheel_spins history with the legacy Redis floor', async () => {
+    const u = await mkUser(500);
+    const dayStart = new Date(`${today()}T00:00:00.000Z`);
+    // Spins recorded before this deploy — rows exist, no allowance row yet.
+    await prisma.wheelSpin.create({
+      data: { userId: u.id, result: 'credits_5', isFree: true, cost: 0, createdAt: dayStart },
+    });
+    await prisma.wheelSpin.create({
+      data: { userId: u.id, result: 'credits_5', isFree: false, cost: 20, createdAt: new Date(dayStart.getTime() + 3600e3) },
+    });
+    await prisma.wheelSpin.create({
+      data: { userId: u.id, result: 'credits_5', isFree: false, cost: 20, createdAt: new Date(dayStart.getTime() + 7200e3) },
+    });
+    // Legacy Redis counter ran ahead of history — the floor must win.
+    redisStore.set(`wheel:paid:${u.id}`, '7');
+
+    const r = await service.spinWheel(u.id, 'rollout-1');
+    expect(r).toMatchObject({ isFree: false, cost: 20 });
+    // freeUsed from history; paidUsed = max(2 history, 7 redis) + 1 claim.
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 8 });
+  });
+
+  it('no-key calls enforce the same daily allowance — 1 free + 10 paid, then rejected', async () => {
+    const u = await mkUser(2000);
+
+    for (let i = 0; i < 11; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await service.spinWheel(u.id);
+    }
+
+    expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 10 });
+    expect(await spinRows(u.id)).toBe(11);
+    expect(await attemptRows(u.id)).toHaveLength(0);
+
+    await expect(service.spinWheel(u.id)).rejects.toThrow(BadRequestException);
+    expect(await spinRows(u.id)).toBe(11);
+    expect(await allowanceOf(u.id)).toMatchObject({ paidUsed: 10 });
   });
 });

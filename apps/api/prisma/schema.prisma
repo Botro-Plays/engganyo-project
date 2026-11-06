@@ -365,6 +365,7 @@ model User {
   activeEffects          UserActiveEffect[]
   wheelSpins             WheelSpin[]
   wheelSpinAttempts      WheelSpinAttempt[]
+  wheelDailyAllowances   WheelDailyAllowance[]
   dailyRewardLogs        DailyRewardLog[]
 
   @@index([email])
@@ -1586,6 +1587,26 @@ model WheelSpinAttempt {
   @@unique([userId, key])
   @@index([userId])
   @@map("wheel_spin_attempts")
+}
+
+
+// Authoritative per-user, per-UTC-day spin allowance. Rows are created and
+// mutated only inside the spin settlement transaction via conditional
+// updateMany, so the free spin and the 10-paid-spin daily cap cannot be
+// exceeded by concurrent requests or left consumed by a rollback.
+model WheelDailyAllowance {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       String   // UTC calendar day, YYYY-MM-DD
+  freeUsed  Boolean  @default(false) @map("free_used")
+  paidUsed  Int      @default(0) @map("paid_used")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, day])
+  @@index([userId])
+  @@map("wheel_daily_allowances")
 }
 
 model DailyRewardLog {

@@ -334,21 +334,30 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
   });
 });
 
-describe('GamificationService — spinWheel idempotency (DB-enforced, lost-response retry)', () => {
+describe('GamificationService — spinWheel idempotency + daily allowance (DB-enforced)', () => {
   let service: GamificationService;
   let wallet: { credit: jest.Mock; debit: jest.Mock };
   let prisma: {
     wallet: { findUnique: jest.Mock };
-    wheelSpin: { create: jest.Mock };
+    wheelSpin: { create: jest.Mock; count: jest.Mock };
     wheelSpinAttempt: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
+    wheelDailyAllowance: {
+      findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+      createMany: jest.Mock;
+      updateMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
   let attempts: Map<string, { status: string; result: unknown }>;
+  let allowances: Map<string, { id: string; userId: string; day: string; freeUsed: boolean; paidUsed: number }>;
+  let spins: Array<{ userId: string; isFree: boolean; cost: number }>;
   let redisStore: Map<string, string>;
   let redis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
 
   const today = () => new Date().toISOString().slice(0, 10);
   const attemptKey = (userId: string, key: string) => `${userId}:${key}`;
+  const allowanceKey = (userId: string, day: string) => `${userId}|${day}`;
   const p2002 = () => ({ code: 'P2002', meta: { target: ['userId', 'key'] } });
 
   beforeEach(async () => {
@@ -359,9 +368,19 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
       del: jest.fn(async (k: string) => { redisStore.delete(k); }),
     };
     attempts = new Map();
+    allowances = new Map();
+    spins = [];
     prisma = {
       wallet: { findUnique: jest.fn().mockResolvedValue({ balance: 100 }) },
-      wheelSpin: { create: jest.fn().mockResolvedValue({}) },
+      wheelSpin: {
+        create: jest.fn(async ({ data }: { data: { userId: string; isFree: boolean; cost: number } }) => {
+          spins.push(data);
+          return {};
+        }),
+        count: jest.fn(async ({ where }: { where: { userId: string; isFree: boolean } }) =>
+          spins.filter((s) => s.userId === where.userId && s.isFree === where.isFree).length,
+        ),
+      },
       wheelSpinAttempt: {
         // Faithful unique(userId,key) semantics: second insert for the same
         // pair raises P2002 like Postgres would after the first commits.
@@ -380,14 +399,51 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
           return attempts.get(attemptKey(where.userId_key.userId, where.userId_key.key)) ?? null;
         }),
       },
-      // Roll back attempt rows when the callback throws, like a real tx.
+      wheelDailyAllowance: {
+        findUnique: jest.fn(async ({ where }: { where: { userId_day: { userId: string; day: string } } }) => {
+          return allowances.get(allowanceKey(where.userId_day.userId, where.userId_day.day)) ?? null;
+        }),
+        findUniqueOrThrow: jest.fn(async ({ where }: { where: { userId_day: { userId: string; day: string } } }) => {
+          const row = allowances.get(allowanceKey(where.userId_day.userId, where.userId_day.day));
+          if (!row) throw new Error('not found');
+          return row;
+        }),
+        // Faithful INSERT ... ON CONFLICT DO NOTHING.
+        createMany: jest.fn(async ({ data }: { data: Array<{ userId: string; day: string; freeUsed: boolean; paidUsed: number }> }) => {
+          for (const d of data) {
+            const k = allowanceKey(d.userId, d.day);
+            if (!allowances.has(k)) {
+              allowances.set(k, { id: `allow-${allowances.size + 1}`, ...d });
+            }
+          }
+          return { count: data.length };
+        }),
+        // Faithful conditional updateMany: WHERE must match current row state.
+        updateMany: jest.fn(async ({ where, data }: {
+          where: { id: string; freeUsed?: boolean; paidUsed?: { lt?: number } };
+          data: { freeUsed?: boolean; paidUsed?: { increment?: number } };
+        }) => {
+          const row = [...allowances.values()].find((r) => r.id === where.id);
+          if (!row) return { count: 0 };
+          if (where.freeUsed !== undefined && row.freeUsed !== where.freeUsed) return { count: 0 };
+          if (where.paidUsed?.lt !== undefined && !(row.paidUsed < where.paidUsed.lt)) return { count: 0 };
+          if (data.freeUsed !== undefined) row.freeUsed = data.freeUsed;
+          if (data.paidUsed?.increment) row.paidUsed += data.paidUsed.increment;
+          return { count: 1 };
+        }),
+      },
+      // Roll back attempt rows, allowance rows and spin rows when the callback
+      // throws, like a real transaction.
       $transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
-        const snapshot = new Map(attempts);
+        const snapAttempts = new Map(attempts);
+        const snapAllowances = new Map(allowances);
+        const snapSpins = [...spins];
         try {
           return await cb(prisma);
         } catch (e) {
-          attempts.clear();
-          snapshot.forEach((v, k) => attempts.set(k, v));
+          attempts.clear(); snapAttempts.forEach((v, k) => attempts.set(k, v));
+          allowances.clear(); snapAllowances.forEach((v, k) => allowances.set(k, v));
+          spins.length = 0; spins.push(...snapSpins);
           throw e;
         }
       }),
@@ -416,7 +472,7 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('replays the stored result on retry — one charge, one reward, one spin row', async () => {
+  it('replays the stored result on retry — one charge, one reward, one spin row, one allowance slot', async () => {
     // Free spin already consumed today → this is a paid spin (20cr charge).
     redisStore.set(`wheel:free:u1`, today());
     redisStore.set(`wheel:paid:u1`, '3');
@@ -430,11 +486,13 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
     expect(wallet.debit).toHaveBeenCalledWith('u1', 20, expect.objectContaining({ type: 'SPEND_STORE_PURCHASE' }), expect.anything());
     expect(wallet.credit).toHaveBeenCalledTimes(1);
     expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
-    expect(redisStore.get('wheel:paid:u1')).toBe('4');
     expect(first).toMatchObject({ isFree: false, cost: 20, credits: 5 });
     // Result persisted on the committed attempt for recovery.
     expect(attempts.get('u1:attempt-key-1')).toMatchObject({ status: 'COMMITTED' });
     expect(attempts.get('u1:attempt-key-1')?.result).toEqual(first);
+    // Allowance row seeded from legacy counters (3 paid) and claimed once.
+    const row = allowances.get(allowanceKey('u1', today()));
+    expect(row).toMatchObject({ freeUsed: true, paidUsed: 4 });
   });
 
   it('committed spin + post-commit cache failure → retry returns stored result, no second charge', async () => {
@@ -443,7 +501,7 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
     const first = await service.spinWheel('u1', 'attempt-key-1');
 
     // Every Redis call now fails — settlement must be unaffected because the
-    // idempotency record lives in Postgres, not the cache.
+    // idempotency record and the allowance live in Postgres, not the cache.
     redis.get.mockRejectedValue(new Error('redis down'));
     redis.set.mockRejectedValue(new Error('redis down'));
     redis.del.mockRejectedValue(new Error('redis down'));
@@ -455,22 +513,20 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
     expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
   });
 
-  it('Redis down during the attempt fails closed — no charge, attempt rolled back', async () => {
+  it('Redis down during the attempt cannot block or double a spin — DB is authoritative', async () => {
     redisStore.set(`wheel:free:u1`, today());
-    redis.get.mockRejectedValueOnce(new Error('redis down'));
+    redis.get.mockRejectedValue(new Error('redis down'));
 
-    await expect(service.spinWheel('u1', 'attempt-key-1')).rejects.toThrow('redis down');
-    expect(wallet.debit).not.toHaveBeenCalled();
-    expect(prisma.wheelSpin.create).not.toHaveBeenCalled();
-    expect(attempts.size).toBe(0); // tx rolled back — no stranded PENDING row
-
-    // Once Redis recovers, the same key executes cleanly.
+    // Seed hint is unavailable, but the spin still settles: the allowance row
+    // is created from wheel_spins history (empty → free spin available).
     const result = await service.spinWheel('u1', 'attempt-key-1');
-    expect(result).toMatchObject({ credits: 5 });
-    expect(wallet.debit).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ credits: 5, isFree: true, cost: 0 });
+    expect(wallet.debit).not.toHaveBeenCalled();
+    expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
+    expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ freeUsed: true, paidUsed: 0 });
   });
 
-  it('a different idempotency key executes a fresh spin', async () => {
+  it('a different idempotency key executes a fresh spin against the same allowance', async () => {
     redisStore.set(`wheel:free:u1`, today());
 
     await service.spinWheel('u1', 'attempt-key-1');
@@ -478,9 +534,10 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
 
     expect(wallet.debit).toHaveBeenCalledTimes(2);
     expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(2);
+    expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ paidUsed: 2 });
   });
 
-  it('no key → legacy behavior (each call spins; client always sends a key)', async () => {
+  it('no key → legacy callers get the same transactional daily allowance', async () => {
     redisStore.set(`wheel:free:u1`, today());
 
     await service.spinWheel('u1');
@@ -488,19 +545,23 @@ describe('GamificationService — spinWheel idempotency (DB-enforced, lost-respo
 
     expect(wallet.debit).toHaveBeenCalledTimes(2);
     expect(attempts.size).toBe(0);
+    expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ paidUsed: 2 });
   });
 
-  it('rolls back the attempt when settlement fails so a real retry can proceed', async () => {
+  it('rolls back attempt, allowance and settlement together when a step fails', async () => {
     redisStore.set(`wheel:free:u1`, today());
     wallet.debit.mockRejectedValueOnce(new Error('db down'));
 
     await expect(service.spinWheel('u1', 'attempt-key-1')).rejects.toThrow('db down');
     expect(attempts.size).toBe(0);
+    expect(allowances.size).toBe(0); // allowance row rolled back too
+    expect(spins.length).toBe(0);
 
     // Retry with the same key executes normally — one successful settlement.
     const result = await service.spinWheel('u1', 'attempt-key-1');
     expect(result).toMatchObject({ credits: 5 });
     expect(wallet.debit).toHaveBeenCalledTimes(2); // 1 failed + 1 success
     expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
+    expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ paidUsed: 1 });
   });
 });
