@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare, Trophy, DollarSign, Banknote,
-  Menu, X, Bell, Loader2, Mail, ListOrdered, Webhook, ShoppingBag,
+  Menu, X, Bell, Loader2, Mail, ListOrdered, Webhook, ShoppingBag, Globe,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -21,6 +21,7 @@ import { useToast } from '@/components/toast-provider';
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
   { href: '/admin/analytics', icon: BarChart2, label: 'Analytics' },
+  { href: '/admin/traffic', icon: Globe, label: 'Visitor analytics' },
   { href: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
   { href: '/admin/finances', icon: Banknote, label: 'Finances' },
   { href: '/admin/users', icon: Users, label: 'Users' },

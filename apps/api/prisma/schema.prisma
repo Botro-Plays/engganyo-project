@@ -1596,3 +1596,80 @@ model WalletChallenge {
 
   @@map("wallet_challenges")
 }
+
+// =============================================================
+// VISITOR ANALYTICS (first-party beacon)
+// =============================================================
+
+// One row per tracked page-view beacon. Raw events are retained for
+// VISITOR_RAW_RETENTION_DAYS (default 90); aggregates live in
+// AnalyticsDailyVisit for VISITOR_AGGREGATE_RETENTION_MONTHS (24).
+model VisitorEvent {
+  id             String   @id @default(cuid())
+  eventId        String   @unique @map("event_id") // client nonce — dedupes retries
+  visitId        String   @map("visit_id")         // engganyo_vid cookie value
+  visitDbId      String?  @map("visit_db_id")
+  visit          VisitorVisit? @relation(fields: [visitDbId], references: [id])
+  path           String                               // normalized route, no query/fragment
+  referrerDomain String?  @map("referrer_domain")    // external host only, or null = direct
+  country        String?                              // CF-IPCountry via trusted proxy header
+  deviceClass    String   @map("device_class")        // mobile | tablet | desktop | other
+  isBot          Boolean  @default(false) @map("is_bot")
+  ipAddress      String?  @map("ip_address")          // SUPER_ADMIN drill-down only
+  userAgent      String?  @map("user_agent")          // truncated
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([visitId, createdAt])
+  @@index([path, createdAt])
+  @@index([country, createdAt])
+  @@index([referrerDomain, createdAt])
+  @@index([deviceClass, createdAt])
+  @@index([isBot, createdAt])
+  @@map("visitor_events")
+}
+
+// Session-grain row: a "visit" is a burst of beacon activity per visitId
+// with no gap longer than the 30-minute session window. Derived at ingest.
+model VisitorVisit {
+  id             String   @id @default(cuid())
+  visitId        String   @map("visit_id")
+  startedAt      DateTime @map("started_at")
+  lastSeenAt     DateTime @map("last_seen_at")
+  pageViews      Int      @default(1) @map("page_views")
+  entryPath      String   @map("entry_path")
+  exitPath       String?  @map("exit_path")
+  referrerDomain String?  @map("referrer_domain")
+  country        String?
+  deviceClass    String   @map("device_class")
+  isBot          Boolean  @default(false) @map("is_bot")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  events         VisitorEvent[]
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([visitId, lastSeenAt])
+  @@index([startedAt])
+  @@index([isBot, startedAt])
+  @@index([country, startedAt])
+  @@index([referrerDomain, startedAt])
+  @@index([deviceClass, startedAt])
+  @@map("visitor_visits")
+}
+
+// Nightly rollup powering long-range trend (> raw retention). One row per
+// (date, dimension, value); 'all' rows feed the headline trend.
+model AnalyticsDailyVisit {
+  id             String   @id @default(cuid())
+  date           DateTime @db.Date
+  dimension      String   // 'all' | 'route' | 'country' | 'referrer' | 'device'
+  value          String   // dimension value; '*' for the 'all' row
+  visits         Int      @default(0)
+  pageViews      Int      @default(0) @map("page_views")
+  bounces        Int      @default(0) // visits with exactly one page view
+  uniqueVisitors Int      @default(0) @map("unique_visitors") // day-level distinct visitIds — sums over ranges are an estimate
+
+  @@unique([date, dimension, value])
+  @@index([date])
+  @@map("analytics_daily_visits")
+}
