@@ -1149,3 +1149,38 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 - One completion per campaign/challenge per user; same-IP self-farm
   guard applies to challenges.
 - Visitor analytics remains a separate proposal — not in this release.
+
+---
+
+## PR #43 — Admin → Visitor analytics v1 (Ready for review, NOT deployed)
+
+- **Branch/head:** `feat/admin-visitor-analytics` @ `0ffc438b6f1f8c38f8f3c32f7d44a9ecf78a6333`
+- **PR:** https://github.com/Botro-Plays/engganyo-project/pull/43 (open, non-draft)
+- **Scope:** first-party beacon page-view collection + server-side aggregation +
+  admin dashboard. Per `docs/proposals/visitor-analytics.md` v1.
+- **Migration:** `20261106120000_visitor_analytics` — adds `visitor_events`,
+  `visitor_visits`, `analytics_daily_visits`. Runs via `prisma migrate deploy`
+  in the API entrypoint on deploy (not yet applied in prod).
+- **Endpoints:** `POST /api/analytics/visit` (public, rate-limited);
+  `GET /api/analytics/traffic/{overview,breakdown,recent}`.
+  `traffic/recent` (IP-level) is SUPER_ADMIN-only — verified 403 for USER.
+- **Privacy:** query strings/fragments stripped, dynamic route segments
+  wildcarded before storage; IPs never in aggregate responses; country only
+  from geo-guarded `CF-IPCountry` (non-CF peers get empty → "Unknown").
+- **Retention:** raw 90 days / aggregates 24 months, nightly cron purge
+  (`visitor-retention`), tested on real Postgres.
+- **Counting:** page views = beacon route loads; visits = 30-min session
+  window; est. uniques = cookie-id estimate; `eventId` dedupes retries;
+  bots + `/api`,`/_next`,`/uploads`,file paths excluded by default.
+- **Tests:** API jest **477/477 pass, 0 skipped** (29 suites) — incl.
+  16 unit + 11 real-Postgres integration + 6 role specs for this feature.
+  Web build/typecheck clean; lint 0 errors both apps.
+- **Browser evidence:** 13/13 checks @1440px + @390px against seeded data
+  (511 visits / 1058 events); screenshots `docs/screenshots/visitor-analytics/`.
+  Admin login used TOTP 2FA (required by admin panel) — test-env secret only.
+- **Limitations:** collection starts on deploy — pre-collection dates show
+  zero with on-page caveat; uniques are cookie-based estimates; beacon
+  covers JS page loads only (not HTTP/API request counts — labeled on-page);
+  Cloudflare/Nginx log ingestion deferred per proposal.
+- **Not deployed.** Merge triggers the normal Deploy workflow; the nginx
+  change (`infra/nginx/nginx.conf`) ships with the release.
