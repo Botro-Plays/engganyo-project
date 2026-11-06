@@ -1538,3 +1538,56 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 - API+web typecheck clean; eslint 0 errors. PR #44 open, non-draft,
   mergeable — Ready for review, NOT merged. Production reCAPTCHA
   untouched.
+
+## PR #44 — MERGED + DEPLOYED to production — 2026-11-06
+
+- **PR:** #44 merged via REST `PUT /pulls/44/merge` (merge commit)
+  `13dc36c817e939c9b5aa168316b53a204feb0ba4`; head verified
+  `4a390d7190df218e909e5028daf32425d5a59cb6`, `mergeable_state: clean`.
+- **Workflow:** Deploy run `42195430845` on `13dc36c` — **all jobs
+  success**: CI web, CI api, E2E Playwright, build+push images,
+  deploy to VPS.
+- **Deployed SHA on VPS:** `/opt/engganyo-project/.deployed-sha` =
+  `13dc36c817e939c9b5aa168316b53a204feb0ba4` (verified via SSH).
+- **Containers:** `engganyo_nginx`, `engganyo_web`, `engganyo_api`
+  recreated ~1 min before check, all `healthy`; redis/postgres up.
+  `nginx -t` inside container: syntax ok, test successful.
+- **Migrations applied** (`_prisma_migrations` on `engganyo_prod`):
+  `20261106130000_wheel_spin_attempts` and
+  `20261106140000_wheel_daily_allowance` both finished; tables
+  `wheel_spin_attempts`, `wheel_daily_allowances`, `wheel_spins` present.
+- **Public health:** `https://engganyo.com/` 200;
+  `/api/health` → `{status:ok, database:ok, redis:ok}`;
+  `/dashboard` 200.
+
+### Production smoke — streak + wheel (Chromium, real browser)
+
+Auth: short-lived access JWT minted inside `engganyo_api` container for
+existing USER `jhing` (read-only + guaranteed-rejected mutations only;
+**no spins or claims executed on prod** — balance-changing actions stay
+in the controlled test environment per policy).
+
+- **Desktop @1440 and mobile @390:** dashboard renders 200 with new
+  Daily Streak card ("Day 1 · longest 1 · On cooldown · D1✓ D5 D7 D14
+  D30") and wheel card; credit balance 250 displayed. Screens:
+  `prod-desktop-dashboard.png`, `prod-mobile-dashboard.png` (temp dir).
+- **Wheel modal:** opens; status API returns
+  `{freeSpinAvailable:true, paidSpinsToday:0, paidSpinsRemaining:10,
+  costPerSpin:20}`; button shows **"Spin — Free"** — current price
+  displayed correctly. Screen: `prod-wheel-modal.png`.
+- **Stale-bundle fails closed:** POST `/gamification/wheel/spin` with NO
+  `Idempotency-Key`/`X-Expected-Cost` (old-bundle shape) → **400**
+  "Idempotency-Key header is required…" — rejected before settlement,
+  zero balance/wallet/ledger effect.
+- **Recovery path:** fresh page load serves the NEW bundle — deployed
+  `dashboard/page-*.js` chunk contains `Idempotency-Key`,
+  `X-Expected-Cost`, `PRICE_CHANGED` literals; a refresh replaces any
+  stale cached client.
+- **CORS preflight** from `https://engganyo.com`: 204 with
+  `Access-Control-Allow-Headers: …,Idempotency-Key,X-Expected-Cost`.
+- **Controlled-env evidence preserved** (local API + real PostgreSQL,
+  recorded above and in PR #44 comment): stale free quote → 409
+  PRICE_CHANGED with zero settlement; same-key retry → identical stored
+  result, one charge/one reward/one spin row.
+
+Production `recaptcha_enabled` untouched throughout.
