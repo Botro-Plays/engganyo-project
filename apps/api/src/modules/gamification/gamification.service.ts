@@ -1078,56 +1078,52 @@ export class GamificationService implements OnModuleInit {
 
   // ─── Spin the Wheel (Sprint 3) ─────────────────────────────
 
-  // Idempotent wrapper: a client retry after a lost response replays the stored
-  // result instead of charging/spinning twice. Keys live 15 min — longer than
-  // any client retry window.
+  // Idempotent wrapper: the attempt key + recoverable result live in
+  // `wheel_spin_attempts` inside the SAME transaction as the spin settlement.
+  // unique(userId, key) is enforced by Postgres — a repeated key replays the
+  // committed result; a concurrent same-key request blocks on the uncommitted
+  // row, then fails the unique check after the first commits. Redis is never
+  // in this path, so a cache failure or expired lock cannot authorize a
+  // second charge.
   async spinWheel(userId: string, idempotencyKey?: string) {
     if (!idempotencyKey) return this.executeSpinWheel(userId);
 
-    const key = `wheel:idem:${userId}:${idempotencyKey}`;
-    const existing = await this.redisService.get(key);
-    if (existing) {
-      if (existing !== 'PROCESSING') {
-        return JSON.parse(existing) as Record<string, unknown>;
-      }
-      // Another request with the same key is mid-spin — wait for its result
-      // rather than executing a second charge.
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, 200));
-        const done = await this.redisService.get(key);
-        if (done && done !== 'PROCESSING') {
-          return JSON.parse(done) as Record<string, unknown>;
-        }
-      }
-      throw new ConflictException('A spin with this request is already in progress.');
-    }
-
-    const acquired = await this.redisService.setNx(key, 'PROCESSING', 60);
-    if (!acquired) {
-      // Lost the race between GET and SET NX — same wait path as above.
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, 200));
-        const done = await this.redisService.get(key);
-        if (done && done !== 'PROCESSING') {
-          return JSON.parse(done) as Record<string, unknown>;
-        }
-      }
-      throw new ConflictException('A spin with this request is already in progress.');
-    }
-
     try {
-      const result = await this.executeSpinWheel(userId);
-      await this.redisService.set(key, JSON.stringify(result), 900);
-      return result;
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.wheelSpinAttempt.create({
+          data: { userId, key: idempotencyKey },
+        });
+        const result = await this.executeSpinWheel(userId, tx);
+        await tx.wheelSpinAttempt.update({
+          where: { userId_key: { userId, key: idempotencyKey } },
+          data: { status: 'COMMITTED', result: result as unknown as Prisma.InputJsonValue },
+        });
+        return result;
+      });
     } catch (err) {
-      // Let a genuine retry re-execute; BadRequest paths (insufficient funds,
-      // daily cap) happen before any debit.
-      await this.redisService.del(key).catch(() => null);
+      if (this.isAttemptUniqueViolation(err)) {
+        const attempt = await this.prisma.wheelSpinAttempt.findUnique({
+          where: { userId_key: { userId, key: idempotencyKey } },
+        });
+        if (attempt?.result) {
+          return attempt.result as Record<string, unknown>;
+        }
+        throw new ConflictException('This spin request is already being processed.');
+      }
       throw err;
     }
   }
 
-  private async executeSpinWheel(userId: string) {
+  private isAttemptUniqueViolation(err: unknown): boolean {
+    const e = err as { code?: string; meta?: { target?: unknown } } | null;
+    if (e?.code !== 'P2002') return false;
+    const target = e.meta?.target;
+    const fields = Array.isArray(target) ? target.join(',') : String(target ?? '');
+    return fields.includes('key');
+  }
+
+  private async executeSpinWheel(userId: string, tx?: Prisma.TransactionClient) {
+    const db = tx ?? this.prisma;
     const FREE_SPIN_KEY = `wheel:free:${userId}`;
     const PAID_SPIN_KEY = `wheel:paid:${userId}`;
     const today = new Date().toISOString().slice(0, 10);
@@ -1148,14 +1144,14 @@ export class GamificationService implements OnModuleInit {
         throw new BadRequestException('Maximum 10 paid spins per day');
       }
       // Debit 20 credits
-      const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+      const wallet = await db.wallet.findUnique({ where: { userId } });
       if (!wallet || wallet.balance < 20) {
         throw new BadRequestException('Not enough credits for a spin');
       }
       await this.walletService.debit(userId, 20, {
         type: TransactionType.SPEND_STORE_PURCHASE,
         description: 'Spin the wheel',
-      });
+      }, tx);
     }
 
     // Prize weight table
@@ -1185,7 +1181,7 @@ export class GamificationService implements OnModuleInit {
       await this.walletService.credit(userId, prize.credits, {
         type: TransactionType.EARN_WHEEL_SPIN,
         description: `Wheel spin prize: ${prize.name}`,
-      });
+      }, tx);
       result = { ...result, credits: prize.credits };
     } else if (prize.effect === 'xp_boost' && prize.hours) {
       // Rewards stack duration onto existing active effect (game design: bonuses add up)
@@ -1194,11 +1190,12 @@ export class GamificationService implements OnModuleInit {
         'xp_boost',
         { multiplier: 2 },
         prize.hours,
+        tx,
       );
       result = { ...result, multiplier: 2, durationHours: prize.hours, expiresAt, extended };
     } else if (prize.effect === 'streak_freeze') {
       // Update DB (source of truth)
-      const updatedUser = await this.prisma.user.update({
+      const updatedUser = await db.user.update({
         where: { id: userId },
         data: { streakFreezeCharges: { increment: 1 } },
         select: { streakFreezeCharges: true },
@@ -1207,11 +1204,11 @@ export class GamificationService implements OnModuleInit {
       await this.redisService.set(`boost:streak_freeze:${userId}`, String(updatedUser.streakFreezeCharges)).catch(() => null);
       result = { ...result, charges: updatedUser.streakFreezeCharges };
     } else if (prize.effect === 'loot_box') {
-      const lootBoxItem = await this.prisma.storeItem.findFirst({
+      const lootBoxItem = await db.storeItem.findFirst({
         where: { name: 'Mystery Gift Box', isActive: true },
       });
       if (lootBoxItem) {
-        await this.prisma.userInventory.create({
+        await db.userInventory.create({
           data: { userId, itemId: lootBoxItem.id, quantity: 1 },
         });
       }
@@ -1219,7 +1216,7 @@ export class GamificationService implements OnModuleInit {
     }
 
     // Log spin
-    await this.prisma.wheelSpin.create({
+    await db.wheelSpin.create({
       data: { userId, result: prize.id, isFree, cost },
     });
 

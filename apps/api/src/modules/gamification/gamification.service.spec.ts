@@ -334,38 +334,63 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
   });
 });
 
-describe('GamificationService — spinWheel idempotency (lost-response retry)', () => {
+describe('GamificationService — spinWheel idempotency (DB-enforced, lost-response retry)', () => {
   let service: GamificationService;
   let wallet: { credit: jest.Mock; debit: jest.Mock };
   let prisma: {
     wallet: { findUnique: jest.Mock };
     wheelSpin: { create: jest.Mock };
+    wheelSpinAttempt: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
+    $transaction: jest.Mock;
   };
+  let attempts: Map<string, { status: string; result: unknown }>;
   let redisStore: Map<string, string>;
-  let redis: {
-    get: jest.Mock;
-    set: jest.Mock;
-    setNx: jest.Mock;
-    del: jest.Mock;
-  };
+  let redis: { get: jest.Mock; set: jest.Mock; del: jest.Mock };
 
   const today = () => new Date().toISOString().slice(0, 10);
+  const attemptKey = (userId: string, key: string) => `${userId}:${key}`;
+  const p2002 = () => ({ code: 'P2002', meta: { target: ['userId', 'key'] } });
 
   beforeEach(async () => {
     redisStore = new Map();
     redis = {
       get: jest.fn(async (k: string) => redisStore.get(k) ?? null),
       set: jest.fn(async (k: string, v: string) => { redisStore.set(k, v); }),
-      setNx: jest.fn(async (k: string, v: string) => {
-        if (redisStore.has(k)) return false;
-        redisStore.set(k, v);
-        return true;
-      }),
       del: jest.fn(async (k: string) => { redisStore.delete(k); }),
     };
+    attempts = new Map();
     prisma = {
       wallet: { findUnique: jest.fn().mockResolvedValue({ balance: 100 }) },
       wheelSpin: { create: jest.fn().mockResolvedValue({}) },
+      wheelSpinAttempt: {
+        // Faithful unique(userId,key) semantics: second insert for the same
+        // pair raises P2002 like Postgres would after the first commits.
+        create: jest.fn(async ({ data }: { data: { userId: string; key: string } }) => {
+          const k = attemptKey(data.userId, data.key);
+          if (attempts.has(k)) throw p2002();
+          attempts.set(k, { status: 'PENDING', result: null });
+          return {};
+        }),
+        update: jest.fn(async ({ where, data }: { where: { userId_key: { userId: string; key: string } }; data: { status: string; result: unknown } }) => {
+          const k = attemptKey(where.userId_key.userId, where.userId_key.key);
+          attempts.set(k, { status: data.status, result: data.result });
+          return {};
+        }),
+        findUnique: jest.fn(async ({ where }: { where: { userId_key: { userId: string; key: string } } }) => {
+          return attempts.get(attemptKey(where.userId_key.userId, where.userId_key.key)) ?? null;
+        }),
+      },
+      // Roll back attempt rows when the callback throws, like a real tx.
+      $transaction: jest.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
+        const snapshot = new Map(attempts);
+        try {
+          return await cb(prisma);
+        } catch (e) {
+          attempts.clear();
+          snapshot.forEach((v, k) => attempts.set(k, v));
+          throw e;
+        }
+      }),
     };
     wallet = {
       credit: jest.fn().mockResolvedValue({ id: 'tx-credit' }),
@@ -402,11 +427,47 @@ describe('GamificationService — spinWheel idempotency (lost-response retry)', 
 
     expect(second).toEqual(first);
     expect(wallet.debit).toHaveBeenCalledTimes(1);
-    expect(wallet.debit).toHaveBeenCalledWith('u1', 20, expect.objectContaining({ type: 'SPEND_STORE_PURCHASE' }));
+    expect(wallet.debit).toHaveBeenCalledWith('u1', 20, expect.objectContaining({ type: 'SPEND_STORE_PURCHASE' }), expect.anything());
     expect(wallet.credit).toHaveBeenCalledTimes(1);
     expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
     expect(redisStore.get('wheel:paid:u1')).toBe('4');
     expect(first).toMatchObject({ isFree: false, cost: 20, credits: 5 });
+    // Result persisted on the committed attempt for recovery.
+    expect(attempts.get('u1:attempt-key-1')).toMatchObject({ status: 'COMMITTED' });
+    expect(attempts.get('u1:attempt-key-1')?.result).toEqual(first);
+  });
+
+  it('committed spin + post-commit cache failure → retry returns stored result, no second charge', async () => {
+    redisStore.set(`wheel:free:u1`, today());
+
+    const first = await service.spinWheel('u1', 'attempt-key-1');
+
+    // Every Redis call now fails — settlement must be unaffected because the
+    // idempotency record lives in Postgres, not the cache.
+    redis.get.mockRejectedValue(new Error('redis down'));
+    redis.set.mockRejectedValue(new Error('redis down'));
+    redis.del.mockRejectedValue(new Error('redis down'));
+
+    const second = await service.spinWheel('u1', 'attempt-key-1');
+    expect(second).toEqual(first);
+    expect(wallet.debit).toHaveBeenCalledTimes(1);
+    expect(wallet.credit).toHaveBeenCalledTimes(1);
+    expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('Redis down during the attempt fails closed — no charge, attempt rolled back', async () => {
+    redisStore.set(`wheel:free:u1`, today());
+    redis.get.mockRejectedValueOnce(new Error('redis down'));
+
+    await expect(service.spinWheel('u1', 'attempt-key-1')).rejects.toThrow('redis down');
+    expect(wallet.debit).not.toHaveBeenCalled();
+    expect(prisma.wheelSpin.create).not.toHaveBeenCalled();
+    expect(attempts.size).toBe(0); // tx rolled back — no stranded PENDING row
+
+    // Once Redis recovers, the same key executes cleanly.
+    const result = await service.spinWheel('u1', 'attempt-key-1');
+    expect(result).toMatchObject({ credits: 5 });
+    expect(wallet.debit).toHaveBeenCalledTimes(1);
   });
 
   it('a different idempotency key executes a fresh spin', async () => {
@@ -426,17 +487,17 @@ describe('GamificationService — spinWheel idempotency (lost-response retry)', 
     await service.spinWheel('u1');
 
     expect(wallet.debit).toHaveBeenCalledTimes(2);
-    expect(redisStore.has('wheel:idem:u1:undefined')).toBe(false);
+    expect(attempts.size).toBe(0);
   });
 
-  it('clears the key when the spin fails before commit so a real retry can proceed', async () => {
+  it('rolls back the attempt when settlement fails so a real retry can proceed', async () => {
     redisStore.set(`wheel:free:u1`, today());
     wallet.debit.mockRejectedValueOnce(new Error('db down'));
 
     await expect(service.spinWheel('u1', 'attempt-key-1')).rejects.toThrow('db down');
-    expect(redisStore.has('wheel:idem:u1:attempt-key-1')).toBe(false);
+    expect(attempts.size).toBe(0);
 
-    // Retry with the same key executes normally.
+    // Retry with the same key executes normally — one successful settlement.
     const result = await service.spinWheel('u1', 'attempt-key-1');
     expect(result).toMatchObject({ credits: 5 });
     expect(wallet.debit).toHaveBeenCalledTimes(2); // 1 failed + 1 success

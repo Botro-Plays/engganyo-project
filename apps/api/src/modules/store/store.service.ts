@@ -721,12 +721,14 @@ export class StoreService implements OnModuleInit {
     type: 'xp_boost' | 'task_limit_boost',
     metadata: Record<string, unknown>,
     durationHours: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<{ expiresAt: string; extended: boolean }> {
+    const db = tx ?? this.prisma;
     const durationMs = durationHours * 3600 * 1000;
     const redisKey = type === 'xp_boost' ? `boost:xp:${userId}` : `boost:task_limit:${userId}`;
 
     // 1. Check for existing active effect of the same type
-    const existing = await this.prisma.userActiveEffect.findFirst({
+    const existing = await db.userActiveEffect.findFirst({
       where: { userId, type, expiresAt: { gt: new Date() } },
       orderBy: { expiresAt: 'desc' },
     });
@@ -736,7 +738,7 @@ export class StoreService implements OnModuleInit {
       const newExpiresAt = new Date(existing.expiresAt.getTime() + durationMs);
       const newMetadata = { ...metadata, expiresAt: newExpiresAt.toISOString() };
 
-      await this.prisma.userActiveEffect.update({
+      await db.userActiveEffect.update({
         where: { id: existing.id },
         data: { expiresAt: newExpiresAt, metadata: newMetadata },
       });
@@ -757,7 +759,7 @@ export class StoreService implements OnModuleInit {
     const expiresAt = expiresAtDate.toISOString();
     const newMetadata = { ...metadata, expiresAt };
 
-    await this.prisma.userActiveEffect.create({
+    await db.userActiveEffect.create({
       data: { userId, type, metadata: newMetadata, expiresAt: expiresAtDate },
     });
 
