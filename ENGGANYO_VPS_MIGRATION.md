@@ -1200,3 +1200,33 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 - **Tests:** new privacy specs exercise a private share route and a
   crafted beacon; PostgreSQL integration (13/13), retention, and role
   checks retained — suite totals unchanged apart from the additions.
+
+---
+
+## PR #44 — Daily streak + Spin the wheel redesign (Ready for review, NOT deployed)
+
+- **Branch/head:** `feat/streak-wheel-redesign` @ `fdd080d2da2386a85953ab9d40b8e17835ff5714`
+- **PR:** https://github.com/Botro-Plays/engganyo-project/pull/44 (open, non-draft, mergeable)
+- **Scope:** web-only redesign of the dashboard Daily Streak card and Spin
+  the Wheel modal. No API, ledger, or eligibility changes — reuses
+  `POST /gamification/daily-reward`, `GET /gamification/wheel/status`,
+  `POST /gamification/wheel/spin` and existing wallet settlement.
+- **Streak card:** current/longest streak, today's claim state, next
+  milestone, milestone ladder (5/7/14/30), real reward schedule
+  (50+10/day cap 200, milestone loot boxes), cooldown copy after claim,
+  missed-day/pending/error states.
+- **Wheel:** legible 8-segment labels, fixed pointer, eligibility+cost
+  before spin, animation to server-returned result, updated balance,
+  `prefers-reduced-motion` instant path, keyboard + Escape, accessible
+  announcement, duplicate-click guard, lost-response `onRecover`
+  (invalidates wheel/stats/wallet/user queries — no invented result).
+- **Verification:** web typecheck + `next build` clean; browser journey
+  @1440px/@390px — claim day-6→7 milestone (loot box shown), free spin →
+  server result "You won 25 Credits", balance rendered "425 credits".
+  Request counts: **1 claim POST + 1 spin POST** despite double clicks.
+  Ledger: **1 daily-reward row + 1 spin row** per successful action.
+  No horizontal overflow @390px; focus-on-open + Escape verified.
+- **Evidence:** `docs/screenshots/streak-wheel/` — before/after dashboard
+  + wheel @390/1440, claim/spin result shots, `video/*.webm` walkthrough.
+- **Limitations:** web-only — backend reward math unchanged; balance
+  display prefers stats API then falls back to auth-store balance.
