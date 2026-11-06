@@ -153,7 +153,10 @@ function DashboardPageInner() {
   });
 
   const rewardMutation = useMutation({
-    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward'),
+    // skipRetry: a lost claim response must not be replayed — the server would
+    // answer the retry with "not yet available" and mask a successful claim.
+    // onError refreshes authoritative state so the card shows the truth.
+    mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward', undefined, { skipRetry: true }),
     onSuccess: (res) => {
       setRewardResult(res.data.data);
       setRewardError(null);
@@ -165,7 +168,12 @@ function DashboardPageInner() {
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
         .catch(() => {/* silent */});
     },
-    onError: (err) => setRewardError(getApiErrorMessage(err)),
+    onError: (err) => {
+      setRewardError(getApiErrorMessage(err));
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 
   // ── Sprint 3: Wheel Spin ──
@@ -187,7 +195,16 @@ function DashboardPageInner() {
   });
 
   const spinMutation = useMutation({
-    mutationFn: () => apiClient.post<ApiResponse<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number }>>('gamification/wheel/spin'),
+    // One idempotency key per user-initiated spin; axios retries reuse the same
+    // config so a replayed request returns the stored result, not a second spin.
+    mutationFn: () => {
+      const idempotencyKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      return apiClient.post<ApiResponse<{ prize: string; type: string; credits?: number; multiplier?: number; durationHours?: number; charges?: number; itemName?: string; isFree: boolean; cost: number }>>('gamification/wheel/spin', undefined, {
+        headers: { 'Idempotency-Key': idempotencyKey },
+      });
+    },
     onSuccess: (res) => {
       setSpinResult(res.data.data);
       setSpinError(null);
@@ -198,7 +215,14 @@ function DashboardPageInner() {
         .then((res) => { if (res.data.data) useAuthStore.getState().setUser(res.data.data); })
         .catch(() => {/* silent */});
     },
-    onError: (err) => setSpinError(getApiErrorMessage(err)),
+    onError: (err) => {
+      setSpinError(getApiErrorMessage(err));
+      // Ambiguous outcome (lost response / retries exhausted): refresh
+      // authoritative status + balance instead of guessing a result.
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 
   // Sync auth store credit balance with fresh API data to prevent flicker

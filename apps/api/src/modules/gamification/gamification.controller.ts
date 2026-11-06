@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Req, Headers, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
@@ -186,8 +186,15 @@ export class GamificationController {
   @Post('wheel/spin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Spin the wheel (free once/day, 20 credits after)' })
-  spinWheel(@CurrentUser() user: JwtPayload) {
-    return this.gamificationService.spinWheel(user.sub);
+  spinWheel(
+    @CurrentUser() user: JwtPayload,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    // Bound the key — it is embedded in a Redis key, so keep it short and safe.
+    const key = idempotencyKey && /^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)
+      ? idempotencyKey
+      : undefined;
+    return this.gamificationService.spinWheel(user.sub, key);
   }
 
   @Get('daily-reward-log')

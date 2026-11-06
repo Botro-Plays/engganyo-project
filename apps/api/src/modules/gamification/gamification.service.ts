@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
 import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -1078,7 +1078,56 @@ export class GamificationService implements OnModuleInit {
 
   // ─── Spin the Wheel (Sprint 3) ─────────────────────────────
 
-  async spinWheel(userId: string) {
+  // Idempotent wrapper: a client retry after a lost response replays the stored
+  // result instead of charging/spinning twice. Keys live 15 min — longer than
+  // any client retry window.
+  async spinWheel(userId: string, idempotencyKey?: string) {
+    if (!idempotencyKey) return this.executeSpinWheel(userId);
+
+    const key = `wheel:idem:${userId}:${idempotencyKey}`;
+    const existing = await this.redisService.get(key);
+    if (existing) {
+      if (existing !== 'PROCESSING') {
+        return JSON.parse(existing) as Record<string, unknown>;
+      }
+      // Another request with the same key is mid-spin — wait for its result
+      // rather than executing a second charge.
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        const done = await this.redisService.get(key);
+        if (done && done !== 'PROCESSING') {
+          return JSON.parse(done) as Record<string, unknown>;
+        }
+      }
+      throw new ConflictException('A spin with this request is already in progress.');
+    }
+
+    const acquired = await this.redisService.setNx(key, 'PROCESSING', 60);
+    if (!acquired) {
+      // Lost the race between GET and SET NX — same wait path as above.
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        const done = await this.redisService.get(key);
+        if (done && done !== 'PROCESSING') {
+          return JSON.parse(done) as Record<string, unknown>;
+        }
+      }
+      throw new ConflictException('A spin with this request is already in progress.');
+    }
+
+    try {
+      const result = await this.executeSpinWheel(userId);
+      await this.redisService.set(key, JSON.stringify(result), 900);
+      return result;
+    } catch (err) {
+      // Let a genuine retry re-execute; BadRequest paths (insufficient funds,
+      // daily cap) happen before any debit.
+      await this.redisService.del(key).catch(() => null);
+      throw err;
+    }
+  }
+
+  private async executeSpinWheel(userId: string) {
     const FREE_SPIN_KEY = `wheel:free:${userId}`;
     const PAID_SPIN_KEY = `wheel:paid:${userId}`;
     const today = new Date().toISOString().slice(0, 10);

@@ -1,4 +1,11 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Opt out of the network/5xx retry interceptor for non-idempotent calls. */
+    skipRetry?: boolean;
+  }
+}
 import { useAuthStore } from '@/store/auth.store';
 
 function normalizeApiBaseUrl(input: string): string {
@@ -56,7 +63,11 @@ const RETRY_DELAY_MS = 1000;
 // credentials). A refresh cannot help there and the redirect would discard the error.
 const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
 
-function shouldRetry(error: AxiosError): boolean {
+function shouldRetry(error: AxiosError, config?: InternalAxiosRequestConfig): boolean {
+  // Mutations can opt out — a replayed non-idempotent POST is not safe.
+  if (config?.skipRetry) {
+    return false;
+  }
   // Retry on network errors (no response) or 5xx server errors
   if (!error.response) return true;
   const status = error.response.status;
@@ -73,7 +84,7 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number };
 
     // ── Retry network / 5xx errors ───────────────────────────
-    if (originalRequest && shouldRetry(error)) {
+    if (originalRequest && shouldRetry(error, originalRequest)) {
       const retryCount = originalRequest._retryCount ?? 0;
       if (retryCount < MAX_RETRIES) {
         originalRequest._retryCount = retryCount + 1;

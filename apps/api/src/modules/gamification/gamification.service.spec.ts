@@ -333,3 +333,113 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     expect(wallet.credit).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('GamificationService — spinWheel idempotency (lost-response retry)', () => {
+  let service: GamificationService;
+  let wallet: { credit: jest.Mock; debit: jest.Mock };
+  let prisma: {
+    wallet: { findUnique: jest.Mock };
+    wheelSpin: { create: jest.Mock };
+  };
+  let redisStore: Map<string, string>;
+  let redis: {
+    get: jest.Mock;
+    set: jest.Mock;
+    setNx: jest.Mock;
+    del: jest.Mock;
+  };
+
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  beforeEach(async () => {
+    redisStore = new Map();
+    redis = {
+      get: jest.fn(async (k: string) => redisStore.get(k) ?? null),
+      set: jest.fn(async (k: string, v: string) => { redisStore.set(k, v); }),
+      setNx: jest.fn(async (k: string, v: string) => {
+        if (redisStore.has(k)) return false;
+        redisStore.set(k, v);
+        return true;
+      }),
+      del: jest.fn(async (k: string) => { redisStore.delete(k); }),
+    };
+    prisma = {
+      wallet: { findUnique: jest.fn().mockResolvedValue({ balance: 100 }) },
+      wheelSpin: { create: jest.fn().mockResolvedValue({}) },
+    };
+    wallet = {
+      credit: jest.fn().mockResolvedValue({ id: 'tx-credit' }),
+      debit: jest.fn().mockResolvedValue({ id: 'tx-debit' }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        GamificationService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: RedisService, useValue: redis },
+        { provide: WalletService, useValue: wallet },
+        { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
+        { provide: EventsService, useValue: { emitToUser: jest.fn() } },
+        { provide: StoreService, useValue: { extendOrCreateActiveEffect: jest.fn(), getActiveXpBoost: jest.fn(), getActiveTaskLimitBoost: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get(GamificationService);
+    // Force the cheapest credits prize (roll 10 < weight 30) for determinism.
+    jest.spyOn(Math, 'random').mockReturnValue(0.1);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('replays the stored result on retry — one charge, one reward, one spin row', async () => {
+    // Free spin already consumed today → this is a paid spin (20cr charge).
+    redisStore.set(`wheel:free:u1`, today());
+    redisStore.set(`wheel:paid:u1`, '3');
+
+    const first = await service.spinWheel('u1', 'attempt-key-1');
+    // Simulate the axios retry after a lost response — same idempotency key.
+    const second = await service.spinWheel('u1', 'attempt-key-1');
+
+    expect(second).toEqual(first);
+    expect(wallet.debit).toHaveBeenCalledTimes(1);
+    expect(wallet.debit).toHaveBeenCalledWith('u1', 20, expect.objectContaining({ type: 'SPEND_STORE_PURCHASE' }));
+    expect(wallet.credit).toHaveBeenCalledTimes(1);
+    expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
+    expect(redisStore.get('wheel:paid:u1')).toBe('4');
+    expect(first).toMatchObject({ isFree: false, cost: 20, credits: 5 });
+  });
+
+  it('a different idempotency key executes a fresh spin', async () => {
+    redisStore.set(`wheel:free:u1`, today());
+
+    await service.spinWheel('u1', 'attempt-key-1');
+    await service.spinWheel('u1', 'attempt-key-2');
+
+    expect(wallet.debit).toHaveBeenCalledTimes(2);
+    expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('no key → legacy behavior (each call spins; client always sends a key)', async () => {
+    redisStore.set(`wheel:free:u1`, today());
+
+    await service.spinWheel('u1');
+    await service.spinWheel('u1');
+
+    expect(wallet.debit).toHaveBeenCalledTimes(2);
+    expect(redisStore.has('wheel:idem:u1:undefined')).toBe(false);
+  });
+
+  it('clears the key when the spin fails before commit so a real retry can proceed', async () => {
+    redisStore.set(`wheel:free:u1`, today());
+    wallet.debit.mockRejectedValueOnce(new Error('db down'));
+
+    await expect(service.spinWheel('u1', 'attempt-key-1')).rejects.toThrow('db down');
+    expect(redisStore.has('wheel:idem:u1:attempt-key-1')).toBe(false);
+
+    // Retry with the same key executes normally.
+    const result = await service.spinWheel('u1', 'attempt-key-1');
+    expect(result).toMatchObject({ credits: 5 });
+    expect(wallet.debit).toHaveBeenCalledTimes(2); // 1 failed + 1 success
+    expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
+  });
+});
