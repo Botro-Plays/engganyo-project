@@ -118,9 +118,35 @@ run('visitor analytics — real PostgreSQL', () => {
     const bd = await service.getBreakdown('route', {
       from: new Date(Date.now() - DAY), to: new Date(), includeBots: false,
     });
-    const row = bd.items.find((i) => i.value === '/users/*');
+    const row = bd.items.find((i) => i.value === '/users/[username]');
     expect(row).toBeDefined();
     expect(bd.items.some((i) => i.value.includes('some_player_name'))).toBe(false);
+  });
+
+  it('private challenge route stores only the label — id never persists', async () => {
+    const PRIVATE_ID = 'cmw4b42t200hpj64jfsfwqvub';
+    await service.ingestBeacon(
+      beacon({ path: `/challenge/${PRIVATE_ID}?share=1`, visitId: `${PREFIX}priv` }),
+      ctx(),
+    );
+    // Raw id must not appear in ANY stored column
+    const events = await prisma.visitorEvent.findMany({ where: { visitId: { startsWith: PREFIX } } });
+    const visits = await prisma.visitorVisit.findMany({ where: { visitId: { startsWith: PREFIX } } });
+    for (const row of [...events, ...visits]) {
+      expect(JSON.stringify(row)).not.toContain(PRIVATE_ID);
+    }
+    expect(events[0].path).toBe('/challenge/[id]');
+    expect(visits[0].entryPath).toBe('/challenge/[id]');
+    expect(visits[0].exitPath).toBe('/challenge/[id]');
+  });
+
+  it('crafted beacons for unknown paths are excluded server-side', async () => {
+    const res = await service.ingestBeacon(
+      beacon({ path: '/admin/users/cmsecretuserid123', visitId: `${PREFIX}crafted` }),
+      ctx(),
+    );
+    expect(res).toEqual({ recorded: false, reason: 'excluded-route' });
+    expect(await prisma.visitorEvent.count({ where: { visitId: { startsWith: PREFIX } } })).toBe(0);
   });
 
   it('excludes identifiable bots from human metrics but keeps them queryable', async () => {
@@ -225,7 +251,7 @@ run('visitor analytics — real PostgreSQL', () => {
   it('aggregate rollup is idempotent and powers long-range trends', async () => {
     const vid = `${PREFIX}rollup`;
     await service.ingestBeacon(
-      beacon({ visitId: vid, eventId: `${PREFIX}r1`, path: '/pricing' }),
+      beacon({ visitId: vid, eventId: `${PREFIX}r1`, path: '/store' }),
       ctx({ country: 'US' }),
     );
     await service.ingestBeacon(

@@ -35,10 +35,37 @@ const BOT_UA_PATTERNS = [
 const MOBILE_UA = /android|iphone|ipod|windows phone|blackberry|mobile/i;
 const TABLET_UA = /ipad|tablet|playbook|silk|kindle/i;
 
-// Path prefixes whose second segment is a dynamic identifier — collapsed to
-// '*' so route cardinality stays bounded and per-user pages don't leak.
-const DYNAMIC_ROUTE_PREFIXES = new Set([
-  'users', 'campaigns', 'challenge', 'forum', 'payment', 'verify-email',
+// Canonical dynamic routes → Next.js-style labels. The beacon stores labels
+// like `/challenge/[id]`, never the raw identifier — a private challenge id,
+// username, or campaign id cannot persist in analytics even via a crafted
+// beacon. Server-side enforcement is authoritative; the web beacon sends
+// pre-labeled paths but this function re-validates everything.
+const DYNAMIC_ROUTE_PATTERNS: { re: RegExp; label: string }[] = [
+  { re: /^\/campaigns\/[^/]+\/analytics$/, label: '/campaigns/[id]/analytics' },
+  { re: /^\/campaigns\/[^/]+$/, label: '/campaigns/[id]' },
+  { re: /^\/challenge\/[^/]+$/, label: '/challenge/[id]' },
+  { re: /^\/forum\/[^/]+$/, label: '/forum/[id]' },
+  { re: /^\/users\/[^/]+$/, label: '/users/[username]' },
+];
+
+// Every literal page route in apps/web/src/app (route groups don't appear in
+// URLs). Anything not in this set or a dynamic pattern above is EXCLUDED —
+// unknown deep paths could carry identifiers and must never be stored.
+const STATIC_ROUTES = new Set([
+  '/',
+  '/about', '/achievements', '/campaigns', '/chat', '/check-email', '/contact',
+  '/dashboard', '/discover', '/faq', '/forgot-password', '/forum', '/forum/new',
+  '/leaderboard', '/login', '/missions', '/notifications', '/payment/return',
+  '/privacy', '/profile', '/referrals', '/register', '/reset-password',
+  '/search', '/settings', '/settings/connected-accounts',
+  '/settings/notifications', '/settings/security', '/store', '/store/inventory',
+  '/tasks', '/terms', '/verify-email', '/wallet',
+  '/admin', '/admin/abuse', '/admin/ai-support', '/admin/analytics',
+  '/admin/audit-log', '/admin/campaigns', '/admin/chat-moderation',
+  '/admin/communications', '/admin/finances', '/admin/forum',
+  '/admin/gamification', '/admin/integrations', '/admin/notifications',
+  '/admin/queues', '/admin/reports', '/admin/revenue', '/admin/server-config',
+  '/admin/store', '/admin/traffic', '/admin/users', '/admin/webhooks',
 ]);
 
 // Routes that must never be recorded even if a beacon is crafted for them.
@@ -47,32 +74,31 @@ const FILE_LIKE_SEGMENT = /\.[a-z0-9]{1,6}$/i;
 
 // ─── Pure helpers (exported for unit tests) ───────────────────────────────────
 
-/** Strip query/fragment, validate shape, wildcard dynamic segments. */
+/**
+ * Reduce a beacon path to a safe route label or null.
+ *
+ * - Query strings and fragments are dropped entirely (tokens/passwords in
+ *   URLs can never reach analytics).
+ * - Dynamic routes collapse to canonical labels (`/challenge/[id]`) so raw
+ *   identifiers — including private challenge ids — are never stored.
+ * - Static routes must match the known page inventory exactly; anything
+ *   else is excluded rather than stored, because an unrecognized path may
+ *   carry an identifier we don't know about.
+ */
 export function normalizeVisitorPath(raw: string): string | null {
   if (typeof raw !== 'string' || raw.length === 0 || raw.length > 300) return null;
-  // Keep only the path portion — drop query string and fragment entirely so
-  // tokens/passwords in URLs can never reach analytics.
   let path = raw.split(/[?#]/, 1)[0];
   if (!path.startsWith('/')) path = `/${path}`;
   if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
-  if (!/^\/[\w\-./~%]*$/.test(path)) return null;
+  if (!/^\/[\w\-./~%[\]]*$/.test(path)) return null;
   if (EXCLUDED_PATH.test(path)) return null;
   const lastSegment = path.split('/').pop() ?? '';
   if (FILE_LIKE_SEGMENT.test(lastSegment)) return null;
 
-  const segs = path.split('/').filter(Boolean);
-  if (segs.length >= 2 && DYNAMIC_ROUTE_PREFIXES.has(segs[0].toLowerCase())) {
-    segs[1] = '*';
-  } else {
-    segs.forEach((seg, i) => {
-      if (i === 0) return;
-      // cuid/nanoid/uuid/numeric ids → wildcard; keep human-readable slugs
-      if (/^[a-z0-9]{20,32}$/i.test(seg) || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(seg) || /^\d+$/.test(seg)) {
-        segs[i] = '*';
-      }
-    });
+  for (const { re, label } of DYNAMIC_ROUTE_PATTERNS) {
+    if (re.test(path)) return label;
   }
-  return '/' + segs.join('/');
+  return STATIC_ROUTES.has(path) ? path : null;
 }
 
 /** Reduce a referrer URL to its external registrable host, or null for direct/internal. */

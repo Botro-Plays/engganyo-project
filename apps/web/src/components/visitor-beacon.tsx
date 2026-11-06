@@ -33,6 +33,24 @@ function shouldTrack(pathname: string | null): boolean {
   return true;
 }
 
+// Dynamic routes carry identifiers (private challenge ids, usernames,
+// campaign ids). The wire payload sends the canonical route LABEL — never
+// the raw identifier — and the server re-validates everything anyway.
+const DYNAMIC_ROUTE_LABELS: [RegExp, string][] = [
+  [/^\/campaigns\/[^/]+\/analytics$/, '/campaigns/[id]/analytics'],
+  [/^\/campaigns\/[^/]+$/, '/campaigns/[id]'],
+  [/^\/challenge\/[^/]+$/, '/challenge/[id]'],
+  [/^\/forum\/[^/]+$/, '/forum/[id]'],
+  [/^\/users\/[^/]+$/, '/users/[username]'],
+];
+
+function safeRouteLabel(pathname: string): string {
+  for (const [re, label] of DYNAMIC_ROUTE_LABELS) {
+    if (re.test(pathname)) return label;
+  }
+  return pathname;
+}
+
 export function VisitorBeacon() {
   const pathname = usePathname();
   const lastSentRef = useRef<{ key: string; at: number } | null>(null);
@@ -50,7 +68,7 @@ export function VisitorBeacon() {
     const payload = {
       eventId: crypto.randomUUID(),
       visitId: getOrCreateVisitId(),
-      path: pathname,
+      path: safeRouteLabel(pathname),
       // document.referrer persists across SPA navigations — the server only
       // uses it when a new visit starts, so the entry referrer is captured.
       referrer: document.referrer || undefined,

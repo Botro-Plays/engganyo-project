@@ -18,20 +18,42 @@ describe('normalizeVisitorPath', () => {
     expect(normalizeVisitorPath('/tasks')).toBe('/tasks');
     expect(normalizeVisitorPath('/')).toBe('/');
     expect(normalizeVisitorPath('/dashboard?tab=challenges')).toBe('/dashboard');
-    expect(normalizeVisitorPath('/challenge/abc#frag')).toBe('/challenge/*');
+    expect(normalizeVisitorPath('/settings/security')).toBe('/settings/security');
+    expect(normalizeVisitorPath('/admin/traffic')).toBe('/admin/traffic');
   });
 
   it('strips query strings and fragments entirely', () => {
     expect(normalizeVisitorPath('/reset-password?token=SECRET123')).toBe('/reset-password');
-    expect(normalizeVisitorPath('/payment/return?session_id=tok_abc')).toBe('/payment/*');
+    expect(normalizeVisitorPath('/payment/return?session_id=tok_abc')).toBe('/payment/return');
   });
 
-  it('wildcards dynamic id segments', () => {
-    expect(normalizeVisitorPath('/users/botro_plays')).toBe('/users/*');
-    expect(normalizeVisitorPath('/campaigns/clxyz1234567890abcdefgh')).toBe('/campaigns/*');
-    expect(normalizeVisitorPath('/challenge/cmw4b42t200hpj64jfsfwqvub')).toBe('/challenge/*');
-    expect(normalizeVisitorPath('/forum/12345')).toBe('/forum/*');
-    expect(normalizeVisitorPath('/tasks/cmabc123def456ghi789jkl0')).toBe('/tasks/*');
+  it('labels dynamic routes — raw identifiers never persist', () => {
+    expect(normalizeVisitorPath('/challenge/cmw4b42t200hpj64jfsfwqvub')).toBe('/challenge/[id]');
+    expect(normalizeVisitorPath('/users/botro_plays')).toBe('/users/[username]');
+    expect(normalizeVisitorPath('/campaigns/clxyz1234567890abcdefgh')).toBe('/campaigns/[id]');
+    expect(normalizeVisitorPath('/campaigns/clxyz1234567890abcdefgh/analytics')).toBe('/campaigns/[id]/analytics');
+    expect(normalizeVisitorPath('/forum/12345')).toBe('/forum/[id]');
+  });
+
+  it('private share route: id never reaches storage in any form', () => {
+    // A private 1v1 challenge link — the raw cuid must not survive.
+    const PRIVATE_ID = 'cmw4b42t200hpj64jfsfwqvub';
+    const label = normalizeVisitorPath(`/challenge/${PRIVATE_ID}`);
+    expect(label).toBe('/challenge/[id]');
+    expect(label).not.toContain(PRIVATE_ID);
+    // Pre-labeled client payloads round-trip identically.
+    expect(normalizeVisitorPath('/challenge/[id]')).toBe('/challenge/[id]');
+    // Even non-cuid identifiers under the route collapse to the label.
+    expect(normalizeVisitorPath('/challenge/my-secret-slug')).toBe('/challenge/[id]');
+  });
+
+  it('excludes unknown/deep paths — crafted beacons cannot smuggle identifiers', () => {
+    expect(normalizeVisitorPath('/tasks/cmabc123def456ghi789jkl0')).toBeNull(); // no such route
+    expect(normalizeVisitorPath('/some/deep/secret/path')).toBeNull();
+    expect(normalizeVisitorPath('/payment/return/extra')).toBeNull();
+    expect(normalizeVisitorPath('/verify-email/sometoken')).toBeNull(); // static page only
+    expect(normalizeVisitorPath('/admin/users/someuserid')).toBeNull();
+    expect(normalizeVisitorPath('/challenge')).toBeNull(); // no index page
   });
 
   it('excludes API, internals, static and file-like paths', () => {
@@ -46,7 +68,7 @@ describe('normalizeVisitorPath', () => {
 
   it('rejects malformed input', () => {
     expect(normalizeVisitorPath('')).toBeNull();
-    expect(normalizeVisitorPath('not-a-path')).toBe('/not-a-path'); // leading slash added
+    expect(normalizeVisitorPath('not-a-path')).toBeNull(); // → '/not-a-path' — not a known route
     expect(normalizeVisitorPath('/bad path with spaces')).toBeNull();
     expect(normalizeVisitorPath(`/${'a'.repeat(400)}`)).toBeNull();
     expect(normalizeVisitorPath('/path\nwith\nnewline')).toBeNull();
