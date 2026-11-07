@@ -277,7 +277,10 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const t = await mkTempUser('late', 300);
     await expect(service.join(t, room.id, {}, '10.0.0.13')).rejects.toThrow(BadRequestException);
     expect(await balanceOf(t)).toBe(300);
-    await service.cancel(creatorId, room.id);
+    // listing is past claimExpiresAt — sweep expires + refunds it (cancel rejects expired rooms)
+    await service.sweepExpired();
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(fresh.status).toBe(RoomStatus.EXPIRED);
   });
 
   // ─── Offers + agreement ───────────────────────────────────
