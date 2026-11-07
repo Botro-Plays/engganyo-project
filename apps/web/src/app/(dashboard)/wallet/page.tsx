@@ -266,6 +266,14 @@ export default function WalletPage() {
   const [txPage, setTxPage] = useState(1);
   const [depPage, setDepPage] = useState(1);
 
+  // Deep-link support: /wallet?tab=deposit opens the deposit flow directly
+  // (used by the sidebar/mobile "Top up" entry points).
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'deposit') {
+      setTab('deposit');
+    }
+  }, []);
+
   // 3-step deposit flow
   const [depositStep, setDepositStep] = useState<DepositStep>(1);
   const [selectedPackage, setSelectedPackage] = useState<DepositPackage | null>(null);
