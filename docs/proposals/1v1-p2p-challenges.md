@@ -712,3 +712,299 @@ pair → points withheld pending review.
 5. **v1 coexistence** — rooms live under `/rooms` + a "Rooms" filter/tab;
    v1 `Challenge` flow unchanged. No data migration.
 6. **Pair-frequency limit N=3 rooms/7d** — approve threshold.
+
+---
+
+# v3 Revision — owner requirements (design for review — NOT implemented)
+
+Status: **revised design proposal — awaiting approval before implementation**
+
+This section revises v2 where the owner's new requirements change lifecycle,
+accounting, API, wireframes, or tests. Where v3 is silent, v2 stands. Items
+marked **[OWNER DECISION]** are unresolved and listed again in §11.
+
+## V3.1 Active-room duration: 30 minutes, server-timed
+
+- **Two distinct clocks.** `claimExpiresAt` (unclaimed listing expiry, default
+  72h, unchanged) governs only OPEN rooms. Once the second player accepts
+  (transition to NEGOTIATING), one transaction atomically persists
+  `startedAt = now()` and `expiresAt = startedAt + 30 minutes` (config:
+  `room_active_minutes`, default 30). `expiresAt` is **never recomputed** —
+  reloads, reconnects, socket drops, and page refreshes cannot restart it.
+- **Countdown UX.** Both players see a persistent countdown + the exact UTC
+  deadline ("Room closes at 14:32 UTC") in the room header on every phase:
+  negotiating, agreed, in-progress, submitted, disputed. Under 5 minutes the
+  countdown turns warning-colored.
+- **Deadline consequence (stated before agreement).** At `expiresAt`, any room
+  not COMPLETED closes as **EXPIRED**. Pending proof/review does **not**
+  survive the deadline in v1: submissions still SUBMITTED at expiry are closed
+  with the room (reviewers see "expired — no payout"). The agreement screen
+  must display this plainly: *"You have 30 minutes from acceptance to finish
+  both tasks and reviews. Anything unfinished at the deadline expires and
+  refunds both contributions."*
+- **Exactly-once unwind.** The expiry transition is a single conditional
+  `UPDATE ... WHERE status IN (active states) AND expiresAt <= now()` that sets
+  status=EXPIRED, `closedAt`, `closeReason='ACTIVE_TIMEOUT'` — repeated sweep
+  runs and concurrent manual expiry calls match 0 rows thereafter. Refunds
+  inside the same tx: each player's own X via `REFUND_ROOM_CLOSE`-family
+  entries **and** reversal of the `PlatformRevenue ROOM_CHARGE` (2X) row
+  collected at AGREED — record `PlatformRevenue.reversedAt`/`reversalReason`
+  (or an offsetting `ROOM_CHARGE_REVERSAL` row if revenue rows are immutable —
+  **[OWNER DECISION: reversal representation]**). Net platform revenue from an
+  expired room is zero.
+- **Completion racing expiry — deterministic rule.** All terminal transitions
+  (peer approval → COMPLETED, expiry sweep → EXPIRED, player cancel → CLOSED,
+  dispute freeze) execute as conditional updates evaluated against **server
+  time inside the same transaction**: a completion commit includes
+  `AND expiresAt > now()` in its WHERE clause. Whichever statement acquires the
+  row lock first wins; the loser matches 0 rows and returns 409
+  `ROOM_CLOSED`. There is no read-then-write window — the database decides.
+  Both players' balances, ledger, room state, and points are asserted in tests
+  for each interleaving.
+- **Enforcement points.** Every room action (offer edit, approve, submit
+  proof, review, dispute, cancel, notify, rate) first checks
+  `status ∈ active AND expiresAt > now()` server-side — expired rooms reject
+  mutations with 409 even before the sweep runs.
+- **Recovery sweep.** Extend the existing `@Cron` sweep: rooms past
+  `expiresAt` in any non-terminal state → EXPIRED + unwind (idempotent).
+  Sweep cadence 1–5 min; worst-case overstay is one interval.
+- **Expired rooms leave discovery.** `GET /rooms` lists only OPEN rooms;
+  EXPIRED/CLOSED/COMPLETED never appear. `GET /rooms/mine` retains them with
+  status + refund outcome.
+
+## V3.2 One active room per user (atomic)
+
+- **Rule.** A user may hold at most **one non-terminal room** across both
+  roles: created (OPEN) or joined (NEGOTIATING/AGREED/IN_PROGRESS/SUBMITTED/
+  DISPUTED-unresolved). Terminal states — COMPLETED, CLOSED, EXPIRED, and
+  DISPUTED-after-admin-resolution — release eligibility.
+- **Atomic enforcement.** New table `RoomParticipation`:
+  `@@unique([userId]) WHERE released_at IS NULL` implemented as a partial
+  unique index on `(user_id) WHERE released_at IS NULL`. Create and claim
+  insert the participation row **inside the same transaction** as the room
+  row / claim update + credit reserve. Postgres serializes on the unique
+  index — simultaneous create/create, create/join, and join/join losers get
+  `23505` → 409 `ACTIVE_ROOM_EXISTS` **before** any debit executes, so losers
+  reserve no credits and gain no room access. Release = set `released_at`
+  in the terminal-transition tx.
+- **UX.** Create/join buttons are disabled with "You already have an active
+  room" + **Resume room** deep link (`/rooms/:id`) when `GET /rooms/mine`
+  shows a non-terminal room. Server remains authoritative — UI is advisory.
+- **Scope question — v1 challenges.** **[OWNER DECISION]** Proposal: the
+  restriction applies to **rooms only** in v1 — existing 1v1 `Challenge`
+  claims are unchanged (a user may hold one room + any number of v1
+  challenges). Extending the guard to v1 would change shipped behavior and
+  needs explicit approval.
+
+## V3.3 Notify other player
+
+- **Action.** "Notify" button in the room header (both phases, while room is
+  active). Sends a private in-app notification to the other participant +
+  a socket event `room:ping` on the room's private channel.
+- **Delivery.** Reuses `notificationsService.createNotification`
+  (type `ROOM_NUDGE`, deep link `/rooms/:id`) — persists for the recipient's
+  notification center. Socket event carries `{ roomId, fromUserId, pingId }`
+  for real-time toast.
+- **Sound.** Client plays a short two-tone chime via WebAudio **only if**:
+  (a) `navigator.mediaDevices`/AudioContext allowed after a user gesture,
+  (b) the recipient's sound preference is on (new user setting
+  `room_nudge_sound`, default on), and (c) no `prefers-reduced-motion`-style
+  accessibility flag suppresses it. If audio is blocked/denied, a visible
+  "🔇 sound blocked — check browser permissions" hint appears once per
+  session; the in-app notification still arrives.
+- **Server enforcement.** Cooldown **60s per sender per room** (Redis
+  `room:nudge:{roomId}:{userId}` TTL, fail-open to DB check if Redis down —
+  cooldown is anti-spam, not financial). Dedup: client supplies `pingId`
+  (uuid); `RoomNudge` row `@@unique([roomId, pingId])` makes retries
+  idempotent. Limits: max **10 nudges/room/day/sender**, max **50
+  nudges/room total** — beyond that 429 `NUDGE_LIMIT`. Requires room
+  membership + active status + `expiresAt > now()`.
+- **Feedback.** Button shows "Sent · next in 0:42" countdown; on 429/409 the
+  remaining cooldown or closed-state reason is displayed.
+
+## V3.4 Participant actions
+
+Row in room header (both players, active room):
+
+| Action | Behavior |
+|---|---|
+| **View profile** | Link to `/users/{username}` — existing public profile page |
+| **Add friend** | **[OWNER DECISION / scope]** No friendship primitive exists in the codebase today (verified: no Friend/UserConnection model). Proposal: v1 ships **View profile + Report user**; a minimal `FriendRequest` (PENDING/ACCEPTED/DECLINED, mutual-consent) is a fast-follow if wanted — it is a new social graph, not a room feature. Alternative: omit entirely. |
+| **Report user** | Opens report dialog pre-scoped to the room: `Report.targetUserId` = participant, `reason`, `description`, `evidence` JSON auto-attached with `{ roomId, roomStatus, offerVersions, submissionIds, lastMessages }` — private, admin-queue only (`reports` admin view + room context). Confirmation dialog warns the report is private and reviewed by moderators. Rate-limited via existing report abuse checks. |
+
+Block/mute: if a user-block primitive is added later it gates room chat +
+notifications; not required for v1.
+
+## V3.5 Post-completion ratings
+
+- **When.** Only after room COMPLETED (both directions verified). Each
+  participant may submit **one rating per room**: `score` 1–5 + optional
+  `review` text (≤280 chars).
+- **Schema.** `RoomRating { roomId, raterId, rateeId, score, review,
+  createdAt, @@unique([roomId, raterId]) }` — one rating per rater per room;
+  `raterId != rateeId` CHECK; both must be room participants (server-verified
+  against `RoomParticipation`/room membership, never client-supplied).
+- **Anti-retaliation window.** Ratings are **hidden until both players have
+  rated or the window closes**: `ratingRevealAt = completedAt + 24h`
+  (config `room_rating_window_hours`). Before reveal, players see "rating
+  pending"; after reveal (or when both submitted early), both see each
+  other's score+review. A player who never rates simply doesn't appear.
+- **Presentation.** Average + count shown on the public profile
+  (`/users/{username}`) as a separate "Room ratings" line — **never mixed**
+  with XP/VP/reputation score or P2P points.
+- **Moderation.** Reviews are reportable (existing `Report` with
+  `targetUserId` + evidence `{roomId, ratingId}`); admin can hide a review
+  (`hiddenAt`) without deleting the rating row (audit preserved). Profanity/
+  scam filters reuse existing text moderation if present.
+- **Anti-farming.** One rating per room per rater (unique), rooms require
+  real dual completion, pair-frequency limit (§V3.2/v2 §8) caps rating
+  volume, new accounts (<7d or <N completions) can receive but their ratings
+  carry a "new player" flag. Rating does not affect credits, points, or
+  wallet — purely reputational.
+
+## V3.6 Revised lifecycle (supersedes v2 §3 timing)
+
+```
+A publishes (debit X, claimExpiresAt = +72h)
+      │
+      ▼
+   OPEN ──B claims (debit X, same tx)──► NEGOTIATING
+                                        negotiationEndsAt = claim + 48h (v2)
+                                        startedAt/expiresAt set at
+                                        AGREED (second-player acceptance)
+      ┌── claim/negotiation expiry ──────┤ both approve same offer version
+      ▼                                 ▼
+   EXPIRED (refund each own X)      AGREED — 2X room charge collected,
+                                    expiresAt = now + 30min
+      ┌── dispute/admin ────────────────┤
+      ▼                                 ▼
+   DISPUTED                        IN_PROGRESS → SUBMITTED → COMPLETED
+   (frozen, admin queue)           any unfinished state at expiresAt
+                                   → EXPIRED: refund each own X +
+                                   reverse ROOM_CHARGE 2X
+```
+
+Terminal states release the §V3.2 active-room slot. `DISPUTED` holds the slot
+until admin resolution (a frozen room still occupies the player — prevents
+dispute-spam slot-hopping).
+
+## V3.7 Revised API plan (deltas to v2 §6)
+
+```
+POST   /rooms/:id/accept-agreement   second-player acceptance → AGREED,
+                                     startedAt/expiresAt persisted atomically,
+                                     2X ROOM_CHARGE collected (v2 approve flow
+                                     split: version-match approval → this)
+GET    /rooms/:id/state              adds: expiresAt, secondsRemaining,
+                                     myActiveRoom flag, nudgeCooldownRemaining
+POST   /rooms/:id/nudge              { pingId } — 60s cooldown, daily caps
+GET    /rooms/mine                   adds activeRoom boolean per room;
+                                     client derives "Resume room" target
+POST   /rooms/:id/ratings            { score, review? } — COMPLETED rooms only,
+                                     one per rater, hidden until reveal
+GET    /users/:username/room-ratings public average + count (post-reveal)
+Admin: unchanged + rating hide action (Report evidence links ratingId)
+```
+
+All room mutations enforce `expiresAt > now()` server-side; expiry enforced on
+reads too (state endpoint reports EXPIRED truthfully before sweep runs).
+
+## V3.8 Revised wireframes (deltas)
+
+### Room header — countdown + participant actions (390px)
+
+```
+┌──────────────────────────────────────────────┐
+│ Mutual Room · NEGOTIATING                    │
+│ ⏱ 14:32 UTC · 23:41 left        [Notify 🔔]  │
+│ @player_one  [Profile] [Report]              │
+│ @player_two  [Profile] [Report]              │
+└──────────────────────────────────────────────┘
+```
+
+### Agreement screen — consequence disclosure (both players, before approve)
+
+```
+┌──────────────────────────────────────────────┐
+│ ⚠ 30-minute room                               │
+│ The clock starts when you both accept. Finish  │
+│ both tasks AND reviews before 14:32 UTC.       │
+│ Unfinished rooms expire — both 25 cr          │
+│ contributions are refunded, no points.         │
+│ [ I understand — approve offers ]             │
+└──────────────────────────────────────────────┘
+```
+
+### Post-completion — rating (after COMPLETED + reveal)
+
+```
+┌──────────────────────────────────────────────┐
+│ Room completed! 🎉 You both earned +1 P2P pt  │
+│ Rate @player_two:  ★★★★☆                    │
+│ [ optional review, 280 chars ]  [ Submit ]    │
+│ Their rating of you: pending (reveals 24h)    │
+└──────────────────────────────────────────────┘
+```
+
+## V3.9 Expanded acceptance tests (supersedes/extends v2 §10)
+
+**Timing & expiry**
+1. AGREED persists `startedAt`/`expiresAt` atomically; reload/reconnect shows
+   identical deadline (no restart).
+2. Expiry before agreement (OPEN/NEGOTIATING) → EXPIRED, each own X refunded,
+   zero revenue rows.
+3. Expiry after agreement with pending proof → EXPIRED, each own X refunded
+   **and** ROOM_CHARGE 2X reversed; net platform revenue = 0.
+4. Expiry after agreement with both verified but completion commit racing
+   deadline → exactly one outcome (COMPLETED+points XOR EXPIRED+refunds);
+   assert balances/ledger/points for both interleavings.
+5. Recovery sweep idempotent: run twice → second run writes 0 rows; expired
+   rooms absent from `GET /rooms`.
+
+**Active-room uniqueness**
+6. Simultaneous create/create, create/join, join/join → exactly one wins;
+   losers: no debit, no participation row, 409 `ACTIVE_ROOM_EXISTS`.
+7. User in DISPUTED (unresolved) cannot create/join; after admin resolution →
+   eligibility released.
+8. `/rooms/mine` + Resume room deep link works at 390px/1440px.
+
+**Notify**
+9. Nudge → recipient gets in-app notification + socket event; sender sees
+   cooldown countdown; retry within 60s → 429 with remaining time.
+10. Spam: >10/day or >50/room → 429; duplicate `pingId` retry → deduped;
+    outsider nudge → 403; expired-room nudge → 409.
+11. Sound: blocked AudioContext → visible fallback hint; mute setting off →
+    no chime but notification still arrives.
+
+**Participant actions**
+12. View profile link resolves; Report user → `Report` row with room
+    evidence JSON visible only in admin queue; report rate-limit enforced.
+
+**Ratings**
+13. Rate before COMPLETED → 409; outsider rates → 403; self-rating → 400;
+    second rating same room → 409 (unique); both rate → both revealed;
+    window close → revealed; hidden review → profile shows average without it.
+
+**Accounting (all outcomes)** — for each terminal path assert both wallets,
+ledger rows, room status, and point events agree: publish-insufficient →
+no row; claim-insufficient → rollback; pre-agreement close → refunds only;
+post-agreement expiry → refunds + revenue reversal; mutual completion →
+charge stands + 2 points; dispute resolutions per v2 table.
+
+## V3.10 Remaining owner decisions (updated list)
+
+1. **Contribution price X** — v2 proposed 25cr/player (charge 50). Approve/adjust.
+2. **Unclaimed listing expiry** — v2 proposed `claimExpiresAt` = 72h; approve/adjust.
+3. **Pending-review timeout policy** — v3 proposes: proof/review does NOT
+   survive the 30-min active deadline (expires with room). Confirm, or allow
+   a post-deadline review grace period (adds a second timer + accounting path).
+4. **Rating window** — proposed 24h (`room_rating_window_hours`); approve/adjust.
+5. **Active-room restriction scope** — rooms only (v1 challenges exempt), or
+   extend to v1 `Challenge` claims (changes shipped behavior).
+6. **Revenue reversal representation** — `reversedAt` on the ROOM_CHARGE row
+   vs offsetting `ROOM_CHARGE_REVERSAL` entry; depends on whether revenue
+   rows are treated as immutable.
+7. **Friendship primitive** — ship View profile + Report only, or build
+   `FriendRequest` now (new social graph).
+8. Carried from v2: post-agreement refund table, no fee beyond room charge,
+   90-day chat retention, `/rooms` navigation alongside v1, pair limit N=3/7d.
