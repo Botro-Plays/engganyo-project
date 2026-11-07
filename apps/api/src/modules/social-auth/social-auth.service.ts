@@ -744,6 +744,21 @@ export class SocialAuthService {
     return TASK_TYPE_PLATFORM[taskType] ?? null;
   }
 
+  // Task types with a real platform-API verifier (the verifyPlatformAction
+  // switch). Only these require a linked account at assign/claim time —
+  // every other task type completes via manual proof review, where the
+  // screenshot itself identifies the account used.
+  private static readonly API_VERIFIED_TASK_TYPES = new Set<TaskType>([
+    TaskType.YOUTUBE_SUBSCRIBE,
+    TaskType.YOUTUBE_LIKE,
+    TaskType.TWITCH_FOLLOW,
+    TaskType.SPOTIFY_FOLLOW,
+  ]);
+
+  static requiresLinkedAccount(taskType: TaskType): boolean {
+    return SocialAuthService.API_VERIFIED_TASK_TYPES.has(taskType);
+  }
+
   /** Return all task types that belong to a given platform */
   static getTaskTypesForPlatform(platform: SocialPlatform): TaskType[] {
     return (Object.entries(TASK_TYPE_PLATFORM) as [TaskType, SocialPlatform][])  

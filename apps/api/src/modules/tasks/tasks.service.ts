@@ -128,12 +128,16 @@ export class TasksService {
           `${platformLabel} tasks are currently disabled.`,
         );
       }
-      const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
-      if (!linked) {
-        const platformLabel = requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase();
-        throw new BadRequestException(
-          `You must link your ${platformLabel} account before accepting this task. Go to Settings → Connected Accounts.`,
-        );
+      // Linked account is required only for API-verified task types;
+      // manual-proof tasks are reviewed from the submitted screenshot.
+      if (SocialAuthService.requiresLinkedAccount(campaign.taskType as never)) {
+        const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
+        if (!linked) {
+          const platformLabel = requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase();
+          throw new BadRequestException(
+            `You must link your ${platformLabel} account before accepting this task. Go to Settings → Connected Accounts.`,
+          );
+        }
       }
     }
     if (campaign.status !== CampaignStatus.ACTIVE) {

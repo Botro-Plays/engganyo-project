@@ -40,8 +40,13 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   GOOGLE_REVIEW: 'GOOGLE',
 };
 
-// Only these platforms require a linked account to accept a task (OAuth-based verification)
-const OAUTH_REQUIRED_PLATFORMS = new Set(['YOUTUBE', 'TWITCH', 'SPOTIFY']);
+// Only task types with real platform-API verification require a linked
+// account to accept (mirrors SocialAuthService.requiresLinkedAccount on the
+// API). Manual-proof tasks — including Facebook, X, Instagram, TikTok,
+// Telegram, Discord — can always be accepted and completed via screenshot.
+const LINK_REQUIRED_TASK_TYPES = new Set([
+  'YOUTUBE_SUBSCRIBE', 'YOUTUBE_LIKE', 'TWITCH_FOLLOW', 'SPOTIFY_FOLLOW',
+]);
 
 // Rewarded YouTube engagement is disabled for platform-policy compliance.
 const DISABLED_TASK_TYPES = new Set([
@@ -957,8 +962,8 @@ function TasksPageInner() {
                           // Only OAuth platforms require a linked account to accept;
                           // manual-proof platforms (FB, Twitter, Instagram, TikTok, Telegram, Discord)
                           // can always be accepted and completed via screenshot.
-                          const needsLink = !!reqPlatform
-                            && OAUTH_REQUIRED_PLATFORMS.has(reqPlatform)
+                          const needsLink = LINK_REQUIRED_TASK_TYPES.has(task.taskType)
+                            && !!reqPlatform
                             && !(safeLinkedAccounts?.has(reqPlatform) ?? false);
                           if (needsLink) {
                             return (
@@ -1479,6 +1484,11 @@ function TasksPageInner() {
               {submitOffer.proofInstructions && (
                 <p className="text-xs text-zinc-400 mt-2 border-t border-surface-border pt-2">
                   {submitOffer.proofInstructions}
+                </p>
+              )}
+              {submitOffer.requiresProof && !LINK_REQUIRED_TASK_TYPES.has(submitOffer.taskType) && (
+                <p className="text-xs text-zinc-500 mt-2 border-t border-surface-border pt-2">
+                  Manual review — your screenshot must show the completed action and your account identity (username or profile) so the creator can verify it.
                 </p>
               )}
             </div>

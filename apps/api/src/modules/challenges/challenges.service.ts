@@ -427,11 +427,15 @@ export class ChallengesService {
           `${requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase()} tasks are currently disabled.`,
         );
       }
-      const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
-      if (!linked) {
-        throw new BadRequestException(
-          `You must link your ${requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase()} account before claiming this challenge.`,
-        );
+      // Linked account is required only for API-verified task types;
+      // manual-proof challenges are reviewed from the submitted screenshot.
+      if (SocialAuthService.requiresLinkedAccount(challenge.taskType)) {
+        const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
+        if (!linked) {
+          throw new BadRequestException(
+            `You must link your ${requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase()} account before claiming this challenge.`,
+          );
+        }
       }
     }
 
