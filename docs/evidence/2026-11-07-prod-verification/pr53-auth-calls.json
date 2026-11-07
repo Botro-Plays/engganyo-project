@@ -1,0 +1,49 @@
+{
+ "startedAt": "2026-11-07T11:54:13.523Z",
+ "authCalls": [
+  {
+   "path": "/api/auth/me",
+   "status": 200,
+   "t": 1794052455683
+  },
+  {
+   "path": "/api/auth/public-config",
+   "status": 200,
+   "t": 1794052455887
+  },
+  {
+   "path": "/api/auth/me",
+   "status": 200,
+   "t": 1794052467924
+  },
+  {
+   "path": "/api/auth/public-config",
+   "status": 200,
+   "t": 1794052468348
+  },
+  {
+   "path": "/api/auth/me",
+   "status": 200,
+   "t": 1794052476398
+  },
+  {
+   "path": "/api/auth/public-config",
+   "status": 200,
+   "t": 1794052476612
+  }
+ ],
+ "checks": {
+  "hasSession": true,
+  "finalUrl": "https://engganyo.com/dashboard",
+  "statusCounts": {
+   "/api/auth/me -> 200": 3,
+   "/api/auth/public-config -> 200": 3
+  },
+  "any429or503": false,
+  "meStatuses": [
+   200,
+   200,
+   200
+  ]
+ }
+}
