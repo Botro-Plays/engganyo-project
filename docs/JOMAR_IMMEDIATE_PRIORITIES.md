@@ -131,7 +131,7 @@ Jomar wants an affordable feed of user-submitted ads, paid directly with money, 
 
 ## 9. Supported-platform logos on the landing page
 
-**Status — DEPLOYED in `1b5181f`.** Landing "Supported platforms" strip added between How it works and Trust signals: ten live platforms via shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy.
+**Status — DEPLOYED in `1b5181f`; order corrected in `6c4f2b5`.** Landing "Supported platforms" strip uses shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Owner requested it before "Two ways to participate" — **PR #49** merged `6c4f2b5` (squash of `e1164df`), deploy run 42353348645; section now renders immediately before the participation section. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy + authenticated pass.
 
 Add a graceful, visually balanced platform section so visitors immediately understand which social platforms Engganyo supports. Include Facebook, TikTok, Telegram, and X, and inspect the configured supported platforms for other eligible entries such as YouTube and Instagram.
 
@@ -146,7 +146,15 @@ Add a graceful, visually balanced platform section so visitors immediately under
 
 ## Live-verification status (7 Nov 2026)
 
-Deployed SHA `1b5181f` carries all three PRs; public surface verified (health, landing logos, anonymous routes). **Authenticated journey verification is blocked**: ssh-agent (Windows service) is Stopped/Disabled and `engganyo_vps` is passphrase-protected — local key-loading failure, not confirmed server rejection; smallest owner action = `ssh-add ~/.ssh/engganyo_vps` in an elevated session or fresh test-account credentials. reCAPTCHA blocks API self-registration; no prod tokens minted.
+Deployed SHA `1b5181f` carries PRs #46–#48; public surface verified (health, landing logos, anonymous routes). **PR #49** (platforms-before-"Two ways") merged `6c4f2b5`, deploy run 42353348645 — confirm order on prod after it lands.
+
+**Authenticated journey verification remains blocked** after a full retry:
+
+- **SSH `engadmin@134.255.232.68`:** agent socket `/tmp/eng-agent.sock` holds 1 ED25519 key, but every identity tried → `Permission denied (publickey,password)`. Unprivileged `engganyo` shell works (read `.deployed-sha` = `1b5181f`, API on 127.0.0.1:3001) but has no docker/sudo. `.env` is `engganyo:600`. No keys rotated, no access settings changed.
+- **Self-registration:** reCAPTCHA **v3 enforced** (confirmed via `/api/auth/public-config`). Automated browsers all rejected — Playwright Chromium headless, real Edge (`channel: msedge`), Edge + `AutomationControlled` disabled + webdriver/plugins/languages init-script spoofing → all `400 "reCAPTCHA validation failed"`. No prod tokens minted (owner instruction).
+- **Smallest owner unblock (either):** (a) elevated `Set-Service ssh-agent -StartupType Manual; Start-Service ssh-agent; ssh-add ~\.ssh\engganyo_vps` → engadmin access for server-side checks + labeled test-user creation; or (b) owner logs into engganyo.com in their own browser and shares the `access_token` from localStorage → injected into Playwright storageState for the full signed-in journey (no credential handling, no reCAPTCHA bypass).
+
+Public health and successful deployment alone do **not** close this checklist — the signed-in journey (chips, Show more, own-work exclusion, Accept & open + popup fallback, proof → review, manual tasks without linking, autoVerify linking rule, Top up nav) is still unverified on prod.
 
 ## Implementation and review requirements
 
