@@ -1110,14 +1110,23 @@ export class RoomsService {
       select: { score: true, roomId: true, room: { select: { closedAt: true } } },
     });
     // Anti-retaliation: a rating counts publicly only once its reveal window
-    // closed or the counterpart rating for the same room also exists.
-    const byRoom = new Map<string, number>();
-    for (const r of ratings) byRoom.set(r.roomId, (byRoom.get(r.roomId) ?? 0) + 1);
+    // closed or BOTH participants rated the room. Ratings are directional —
+    // each targets the counterparty — so "both submitted" must count all
+    // ratings in the room, not just those targeting this ratee.
+    const roomIds = [...new Set(ratings.map((r) => r.roomId))];
+    const roomCounts = roomIds.length
+      ? await this.prisma.roomRating.groupBy({
+          by: ['roomId'],
+          where: { roomId: { in: roomIds }, hiddenAt: null },
+          _count: { _all: true },
+        })
+      : [];
+    const countByRoom = new Map(roomCounts.map((r) => [r.roomId, r._count._all]));
     const now = Date.now();
     const visible = ratings.filter((r) => {
       const closedAt = r.room.closedAt?.getTime() ?? 0;
       const windowClosed = now >= closedAt + windowMs;
-      const bothSubmitted = (byRoom.get(r.roomId) ?? 0) >= 2;
+      const bothSubmitted = (countByRoom.get(r.roomId) ?? 0) >= 2;
       return windowClosed || bothSubmitted;
     });
     const avg = visible.length
