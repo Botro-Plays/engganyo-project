@@ -4,7 +4,9 @@
 **Trigger:** PR #50 made `/auth/me` and `/users/me` read `wallets.balance`
 fresh after discovering that `user.creditBalance` is only a denormalized
 mirror. Auditing every writer showed the referral path never maintains that
-mirror at all, so discrepancies already exist in production.
+mirror at all — a latent defect: the production dry-run (§3a) found **zero**
+referrals and **zero** diverged users, so no discrepancy exists *yet*, but
+the first referral payout would have created permanent mirror drift.
 
 ## 1. Audit — every referral credit path
 
@@ -211,3 +213,64 @@ the user's last wallet-service settlement. To explain a diverged row:
 3. `referral.creditsAwarded` currently increments by **referrer** bonus
    only — confirm that is the intended semantic for leaderboards
    (`getLeaderboard` sums it as "credits earned").
+
+## 6. Implementation status — PR #52 (`fix/referral-balance-consistency`)
+
+The forward fix described in §2 is implemented and under review as
+**PR #52**, head `7db79ab`. What shipped matches this plan:
+
+- `awardMilestone` claims the milestone under `SELECT ... FOR UPDATE` and
+  re-reads the milestones JSON inside the transaction; concurrent
+  awarders serialize on the row lock and pay exactly once.
+- Both awards route through `WalletService.credit(userId, amount, opts, tx)`
+  — ledger rows, `lifetimeEarned`, version bump, and the
+  `user.creditBalance` mirror update commit atomically with the milestone
+  claim. `referenceId`/`referenceType='referral'` + `metadata.milestone`
+  are stamped on each ledger row.
+- New `WalletContentionException` (still a `BadRequestException` on the
+  HTTP surface) lets the referral tx retry its **whole** unit of work —
+  milestone lock, eligibility re-read, both awards, ledger, mirror —
+  bounded at 3 attempts.
+- Lock order everywhere: referral row → wallet row → user row. Ordinary
+  settlements take wallet → user only, so no cycle is introduced.
+  `forwardRef` resolves the new Wallet↔Referrals module dependency;
+  referral hooks remain post-commit fire-and-forget — no recursion.
+- `WalletService.reconcileCreditBalanceMirror(userId)` implements I3:
+  `SELECT ... FOR UPDATE` on the wallet row, then mirror update, in one
+  transaction — identical lock order to settlement, so a racing
+  credit/debit cannot be overwritten by a stale snapshot.
+
+### Production discrepancy report — re-verified 2026-11-07 (read-only)
+
+Run against production Postgres via the `engganyo` deploy account
+(`docker exec engganyo_postgres psql`, SELECT-only). Deployed SHA at time
+of audit: `f9a6d6d` (PR #50). Results:
+
+| Check | Result |
+|---|---|
+| Mirror drift (`users.credit_balance ≠ wallets.balance`) | **0 rows** |
+| `EARN_REFERRAL_BONUS` ledger rows | **0 rows** |
+| `referrals` records (any state) | **0 rows** |
+| Ledger chain breaks (`balance_before ≠ prev balance_after`) | **0 rows** |
+
+**Interpretation:** no current discrepancy exists and none can have
+existed — no referral has ever been recorded in production, so the buggy
+code path never executed. The defect was latent. Historical
+reconciliation is therefore a **no-op**; `reconcileCreditBalanceMirror`
+ships as a tested routine for any future drift, and §3b's interpretation
+rules govern how a diverged row would be explained (mirror drift vs
+duplicate award vs ledger-chain defect) before any repair runs.
+
+### Nginx note (separate workstream)
+
+Production 503s observed during verification traced to the `api_auth`
+zone (10 r/m + burst 5) covering **all** of `/api/auth/*` — including the
+routine authenticated read `GET /api/auth/me` and the unauthenticated
+`GET /api/auth/public-config`. The web client's axios interceptor retries
+5xx responses, so a rate-limited `auth/me` amplifies into a retry storm;
+shared-IP users (carrier-grade NAT) are most exposed. Proposed focused
+fix (pending owner approval, not in this PR): exact-match locations
+`= /api/auth/me`, `= /api/auth/public-config`, `= /api/auth/2fa/status`,
+`= /api/auth/admin-pin/status` routed to `api_general`; the strict
+`api_auth` zone remains on every credential/mutation endpoint
+(login/register/refresh/forgot/reset/verify/2fa writes/admin-pin).
