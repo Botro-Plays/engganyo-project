@@ -198,3 +198,10 @@ Immediate flow and visual changes should be delivered in focused PRs with exact 
 - **Live evidence:** full journey + expiry/refund/cancel + chat + ratings + friends + report verified on engganyo.com with labeled accounts — `docs/evidence/2026-11-07-p2p-rooms/`. Exact ledger/revenue/point records in `evidence.json`.
 - **Owner/friend testing:** sign in → "P2P Rooms" nav or `/rooms`. Room `cmw6gwkem005a4w1s8hf5lani` is OPEN for immediate join testing (or create your own — 25cr/player reserved, auto-refunded if unused in 72h). Full journey needs two accounts.
 - **Open limitations:** admin moderator actions need admin 2FA/PIN session to exercise; dispute-resolution path coded not live-tested; chat 90-day retention documented (purge cron unverified). Pair-frequency is flag-for-review (3/7d), not a hard block.
+
+## Room race fix + moderation verification — DEPLOYED (2026-11-07)
+
+- **PR #56** merged `0bdaa66`, deploy run 42384997521 — room-row-lock serialization for all room mutations; agreement requires approvals on current offer versions; cancel refunds from locked row (fixed unrefunded-joiner bug); admin dispute resolve exactly-once; 90-day room-chat purge with moderation holds.
+- **Live-verified:** full agree→dispute→admin-resolve→expiry-unwind chain on labeled accounts incl. new `devin_mod_test` moderator; chat purge hold/release on prod.
+- **Owner note:** dispute resolution currently records the moderator's decision but does NOT change room outcomes — the room still expires at its deadline with standard refunds. Outcome-based resolution (e.g. award winner) is a future proposal if wanted.
+- **Pair limit:** 3 rooms/pair/7d is a review flag, not a block — see migration record for the enforce-vs-signal decision.
