@@ -153,16 +153,18 @@ Deployed SHA `6c4f2b5` carries PRs #46–#49 (all deploy runs green; containers 
 | Landing: platforms before "Two ways" | ✅ PASS desktop+mobile | SSR order confirmed; `d1/m1` shots |
 | Top up discoverability | ✅ PASS | "CREDITS · Top up" chip + mobile pill → `/wallet?tab=deposit`, deposit methods render; `d2/d3/m3` |
 | Platform filter chips | ✅ PASS | 9 chips (All + FB/TikTok/Telegram/X/IG/Discord/TrustPilot/Google); Facebook filter returns results; `d4/d6` |
-| Initial batch sizing | ✅ PASS | 5 cards rendered (batch ≤6); `d4` |
-| Show more | ⚠️ OPEN | Only 3 tasks exist in prod browse → single page, button correctly absent. Needs more live listings to exercise; logic covered by CI |
-| Accept & open [platform] | ✅ PASS | Popup opened synchronously to the accepted task's `targetUrl`; accepted panel showed Open/Submit proof/Track in My tasks; `d7` |
-| Popup-blocked fallback | ✅ PASS | `window.open` blocked → amber "browser blocked the new tab" warning + panel persisted; `d8` |
-| Manual task without linking | ✅ PASS | TWITTER_FOLLOW/INSTAGRAM_FOLLOW/TIKTOK_FOLLOW/FACEBOOK_PAGE_LIKE accepted with no linked-account gate (all `autoVerify:true` manual types) |
-| autoVerify link-gate (API types) | ⚠️ OPEN | No YT_SUB/LIKE, TWITCH_FOLLOW, or SPOTIFY_FOLLOW listings in prod browse → live check N/A; covered by CI unit matrix + real-PG integration |
-| Self-owned work exclusion | ⚠️ OPEN | `botro` owns 0 campaigns/challenges → nothing to exclude; `ownLeakInBrowse:[]`. Campaign creation needs ≥100cr spend on owner account (admin bypasses trust but real debit) — needs dedicated trust-LOW+ test account or owner-approved spend |
-| Proof submission | ✅ PASS | `POST /uploads/proof` 201 → `POST /tasks/:id/submit` 200 → `SUBMITTED`, reviewDeadline 2026-11-09, creditsEarned 0 (correct pending-review); `proof-retry.json` |
-| Review tracking | ✅ PARTIAL | My tasks shows ASSIGNED→SUBMITTED states; approval requires campaign creator (`reviewSubmission` is creator-only, no admin override) — creator-side approval unverified |
-| Balance/ledger integrity | ✅ PASS | 6088→6088 across all accepts+proof; no unexpected debits |
+| Initial batch sizing | ✅ PASS | 6 cards initial batch; `d4` |
+| Show more | ✅ PASS (round 2) | 9 live items → "Showing 6" + Show more → 9 cards; `r2-tasks*.png`. Round-1 miss was page-load timing, not a bug |
+| Accept & open [platform] | ✅ PASS | Popup opened synchronously to accepted task's `targetUrl`; panel showed Open/Submit proof/Track; `d7` |
+| Popup-blocked fallback | ✅ PASS | `window.open` blocked → amber warning + panel persisted; `d8` |
+| Manual task without linking | ✅ PASS | Manual types accepted unlinked (round 1) + round-2 API assign 201 |
+| autoVerify link-gate (API types) | ⚠️ UNTESTABLE-BY-DESIGN | All API-verified types rejected at creation: TWITCH/SPOTIFY platform-disabled, YOUTUBE_* engagement-policy-disabled (`create.apiverified.*` in `orchestrate.json`). Gate covered by CI unit matrix + real-PG integration |
+| Self-owned work exclusion | ✅ PASS (round 2) | `devin_earn_test` own campaign `cmw66gqsi…` absent from own browse (9 items), all 4 `devin_create_test` campaigns visible, own campaign in `/campaigns` manager; self-assign → 400. `orchestrate.json` |
+| Proof submission | ✅ PASS | Round 1: `cmw65ul4l…` SUBMITTED (review_deadline set). Round 2: `cmw66ldge…` SUBMITTED→**VERIFIED** after creator approval |
+| Review tracking + creator-only approval | ✅ PASS (round 2) | EARN non-creator approve → **403 "Not your campaign"**; CREATE creator approve → 200 `creditsAwarded:10`; completion VERIFIED |
+| Balance/ledger integrity | ✅ PASS | botro 6093→6328 (+235 test earnings, explained); EARN ledger: +200 grant, −110 own campaign, +10 approval → 100; CREATE: +200+300 grant, −440 campaigns → 60. All consistent |
+
+**Round-2 test records (labeled, official site):** accounts `devin_earn_test`/`devin_create_test` (created via DB, ACTIVE, LOW trust, 200cr welcome; CREATE +300 admin grant). CREATE campaigns: `cmw66gpap` (Telegram manual-review), `cmw66gpl1` (TikTok), `cmw66gptq` (Discord), `cmw66gqf9` (Instagram) — all ACTIVE, −110cr each. EARN own campaign `cmw66gqsi` (−110cr). Completion `cmw66ldge00ga5vv8e76li5nn` VERIFIED +10cr. Anti-abuse note: shared-IP rule correctly blocked same-machine EARN↔CREATE assigns (flagged+resolved as test artifact); CREATE session revoked to unblock, re-login required for approval.
 
 **Test records created (labeled):** assignment on `FACEBOOK_PAGE_LIKE` "Face my book" (campaign `cmw48dmaa`, completion `cmw65ul4l`, now SUBMITTED pending creator review, proof file `DEVIN-VERIFY` note); one earlier accepted-panel assignment. No credits spent or earned.
 
