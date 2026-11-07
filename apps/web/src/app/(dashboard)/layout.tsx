@@ -20,6 +20,7 @@ import {
   Bell,
   ShoppingBag,
   MoreHorizontal,
+  Plus,
   X,
 } from 'lucide-react';
 import { Suspense, useState, useRef, useEffect, useCallback } from 'react';
@@ -357,14 +358,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             </div>
 
-            {/* Credit balance chip */}
+            {/* Credit balance chip — links to Wallet deposit flow */}
             {user && (
-              <div className="mx-4 mt-4 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium mb-0.5">Credits</p>
+              <Link
+                href="/wallet?tab=deposit"
+                className="mx-4 mt-4 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 hover:bg-brand-500/15 hover:border-brand-500/40 transition-all group"
+                title="Open wallet to top up"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Credits</p>
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-300 opacity-80 group-hover:opacity-100 transition-opacity">
+                    Top up <Plus className="w-3 h-3" />
+                  </span>
+                </div>
                 <p className="text-xl font-bold text-brand-300 tabular-nums">
                   {formatCredits(wallet?.balance ?? user.creditBalance)}
                 </p>
-              </div>
+              </Link>
             )}
 
             {/* Grouped nav */}
@@ -413,6 +423,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Link>
               </div>
               <div className="flex items-center gap-3 ml-auto">
+                {/* Mobile balance chip — wallet/top-up entry point */}
+                {user && (
+                  <Link
+                    href="/wallet?tab=deposit"
+                    className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 hover:bg-brand-500/15 transition-all"
+                    title="Open wallet to top up"
+                  >
+                    <span className="text-xs font-bold text-brand-300 tabular-nums">
+                      {formatCredits(wallet?.balance ?? user.creditBalance)}
+                    </span>
+                    <Plus className="w-3.5 h-3.5 text-brand-300" />
+                  </Link>
+                )}
                 <SearchBar />
                 <NotificationBell />
                 {user && <TourReplayButton />}
