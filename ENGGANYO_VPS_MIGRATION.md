@@ -1547,7 +1547,7 @@ A SUBMITTED challenge claim past `reviewDeadline` surfaces in two places:
 - **Workflow:** Deploy run `42195430845` on `13dc36c` — **all jobs
   success**: CI web, CI api, E2E Playwright, build+push images,
   deploy to VPS.
-- **Deployed SHA on VPS:** `/opt/engganyo-project/.deployed-sha` =
+- **Deployed SHA: `a2e0508`** carries PRs #46–#53.
   `13dc36c817e939c9b5aa168316b53a204feb0ba4` (verified via SSH).
 - **Containers:** `engganyo_nginx`, `engganyo_web`, `engganyo_api`
   recreated ~1 min before check, all `healthy`; redis/postgres up.
@@ -1674,6 +1674,6 @@ proposals; PR #45 remains at design review.
 
 - **PR #52** merged squash `566fee0` (head `949ecc9`, all checks green) → deploy run **42367801209 success**. Live referral verification on labeled accounts: provisioned `devin_ref_test` + referral row (referrer `devin_create_test`) via SQL, then invoked the deployed `ReferralsService.awardSignUpBonus` through a Nest application context inside the api container — exercises the real shipped path (FOR UPDATE claim → WalletService.credit → mirror → notifications). Result: referrer 60→**70** wallet+mirror, referee 0→**25** wallet+mirror, 2 contiguous `EARN_REFERRAL_BONUS` ledger rows (`reference_type=referral`, role/milestone metadata), `milestones={"sign_up":true}`, `credits_awarded=10`, exactly 2 REFERRAL_QUALIFIED notifications. **Repeat call: zero new credits/ledger/notifications** — idempotent + notification gating confirmed live.
 - **PR #53** merged squash `a2e0508` → deploy run **42368907818 success** (deploy script force-recreates nginx + `nginx -t` gate). Live `nginx -T` confirms `limit_req_status 429` + 4 exact-match read locations.
-- **Rate-limit verification (curl, bounded):** `/api/auth/me` ×20 invalid-token → **all 401, zero 429** (general limiter); `/api/auth/public-config` ×8 → all 200; `/api/auth/login` ×15 fake creds → ~6 pass then **429** (strict zone retained, now 429 not 503). Signed-in dashboard check pending owner re-login (saved session expired; refresh correctly stayed strict and 429'd under the burst).
+- **Rate-limit verification (curl, bounded):** `/api/auth/me` ×20 invalid-token → **all 401, zero 429** (general limiter); `/api/auth/public-config` ×8 → all 200; `/api/auth/login` ×15 fake creds → ~6 pass then **429** (strict zone retained, now 429 not 503). Signed-in dashboard check **PASSED** after owner re-login (`devin_earn_test`): `/dashboard`→`/tasks`→`/wallet` navigation produced `/api/auth/me` 200 ×3 + `public-config` 200 ×3, **zero 429/503**, no retry amplification (1 auth/me per mount). Evidence: `docs/evidence/2026-11-07-prod-verification/pr53-auth-calls.json` + `pr53-dashboard.png`. Earlier expired-session probe also confirmed `/api/auth/refresh` correctly remains on the strict zone (429 under burst — credential endpoint, intended).
 - **Deployed SHA remains `f9a6d6d`** (PRs #46–#50). PR #45 design review @ `fcc7d2b`.
 - **PR #53** `fix/nginx-auth-rate-limits` opened — routine auth reads (`= /api/auth/me`, `public-config`, `2fa/status`, `admin-pin/status`) → `api_general` zone; strict `api_auth` retained on all credential/mutation endpoints; `limit_req_status 429` (axios only retries 5xx → no retry storm); `/api/auth/` headers aligned with `/api/`. `nginx -t` verified inside prod container. Behavioral demo pending deploy.
