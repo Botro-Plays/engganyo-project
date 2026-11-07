@@ -1,0 +1,83 @@
+{
+  "feature": "mutual P2P rooms",
+  "verifiedAt": "2026-11-07",
+  "deployedSha": "9ccdb5fd709e4bb05126956b537bfa347cf762bc",
+  "prs": { "implementation": 54, "followupFixes": 55 },
+  "mergeShas": { "pr54": "1611b43bdf1df3c3ae4cc1249011729557386519", "pr55": "9ccdb5fd709e4bb05126956b537bfa347cf762bc" },
+  "deployRuns": { "pr54": 42377316654, "pr55": 42380992157 },
+  "accounts": {
+    "creator": "devin_create_test (cdevincreate00000000000001)",
+    "joiner": "devin_earn_test (cdevinearn000000000000001)",
+    "outsider": "devin_ref_test (cdevinref000000000000001)"
+  },
+  "room1_completed": {
+    "id": "cmw6gknu7000q4w1s65xtmdmg",
+    "status": "COMPLETED",
+    "ledger": [
+      { "type": "SPEND_ROOM_CREATE", "amount": -25, "before": 70, "after": 45 },
+      { "type": "SPEND_ROOM_CLAIM", "amount": -25, "before": 50, "after": 25 }
+    ],
+    "platformRevenue": { "source": "ROOM_CHARGE", "amount": 50, "reversedAt": null },
+    "p2pPoints": [
+      { "user": "creator", "points": 1, "role": "CREATOR" },
+      { "user": "joiner", "points": 1, "role": "CLAIMER" }
+    ],
+    "ratings": [
+      { "rater": "creator", "ratee": "joiner", "score": 5 },
+      { "rater": "joiner", "ratee": "creator", "score": 4 }
+    ],
+    "publicRatingsAfterFix": { "devin_earn_test": { "average": 5, "count": 1 }, "devin_create_test": { "average": 4, "count": 1 } },
+    "finalBalances": { "creator": 45, "joiner": 25 }
+  },
+  "room2_expired": {
+    "id": "cmw6gn78j002h4w1srctjgbpn",
+    "status": "EXPIRED", "closeReason": "ACTIVE_TIMEOUT",
+    "note": "reached AGREED (revenue collected) then expiresAt forced past; cron sweep refunded",
+    "ledger": [
+      { "type": "SPEND_ROOM_CREATE", "amount": -25, "before": 45, "after": 20 },
+      { "type": "SPEND_ROOM_CLAIM", "amount": -25, "before": 25, "after": 0 },
+      { "type": "REFUND_ROOM_CLOSE", "amount": 25, "before": 20, "after": 45 },
+      { "type": "REFUND_ROOM_CLOSE", "amount": 25, "before": 0, "after": 25 }
+    ],
+    "platformRevenue": { "amount": 50, "reversedAt": "2026-11-07T13:51:00Z", "reversalReason": "ACTIVE_TIMEOUT" },
+    "pointEvents": 0,
+    "finalBalances": { "creator": 45, "joiner": 25 }
+  },
+  "room3_cancelled": {
+    "id": "cmw6gpzsw003z4w1slrk7vuu6",
+    "status": "CLOSED", "closeReason": "PLAYER_CANCEL",
+    "ledger": "SPEND -25/-25 then REFUND +25/+25 — exact reversal"
+  },
+  "room4_open_for_testing": { "id": "cmw6gwkem005a4w1s8hf5lani", "status": "OPEN", "note": "left published for owner/friend join testing; auto-expires in 72h with refund" },
+  "verifiedBehaviors": [
+    "quote endpoint returns 25cr/player, 50 room charge, 30min, 72h claim, 24h rating window, 3 rooms/pair/week",
+    "publish reserves creator contribution atomically (SPEND_ROOM_CREATE ledger)",
+    "marketplace lists open public rooms with creator identity + contribution",
+    "join atomically claims, starts 30-min timer once, reserves joiner funds, provisions PRIVATE channel + 2 members",
+    "dual offer approval -> AGREED + ROOM_CHARGE revenue exactly once; duplicate approve 409",
+    "room-proof upload re-encodes WebP + SHA256; recycled-hash check per user",
+    "peer review both directions -> COMPLETED exactly once + 1 P2P point each, no wallet credit",
+    "ratings 1-5 + review, one per participant, early reveal after both submit (fixed in #55)",
+    "nudge: sent, pingId dedupe, per-sender cooldown",
+    "one active room per user enforced (409 ACTIVE_ROOM_EXISTS)",
+    "cancel NEGOTIATING refunds both (fixed OPEN-cancel bug in CI)",
+    "expiry sweep refunds each payer once + reverses revenue + releases slots, idempotent",
+    "friend request/accept mutual consent flow",
+    "report endpoint creates room-scoped report",
+    "admin /admin/rooms returns 403 for USER role",
+    "socket chat: both participants joined channel, message delivered; outsider join now 403 (fixed in #55)",
+    "ratings public endpoint shows early-reveal averages after #55"
+  ],
+  "bugsFoundAndFixedInFollowup": [
+    "PR#55-1: room PRIVATE channels self-joinable by any user -> participant/staff check in joinChannel (verified 403 live)",
+    "PR#55-2: rating early-reveal unreachable (counted only ratee's ratings) -> groupBy all room ratings (verified live)",
+    "PR#55-3: /rooms/[id] crashed — Next14 params is sync, use(params) threw -> useParams (verified render live)",
+    "pre-merge: cancel() rejected OPEN listings (assertActive vs PRE_AGREEMENT mismatch) -> deadline check per status"
+  ],
+  "limitations": [
+    "admin room monitor verified by build + 403 authz; full moderator flow not exercised (needs admin 2FA/PIN)",
+    "chat retention purge job not separately verified (90-day rule documented; no purge cron confirmed)",
+    "dispute->moderator resolution path coded but not exercised live",
+    "room4 left OPEN for owner testing"
+  ]
+}
