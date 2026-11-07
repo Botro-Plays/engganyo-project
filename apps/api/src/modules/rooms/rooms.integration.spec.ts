@@ -158,6 +158,29 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await prisma.$disconnect();
   });
 
+  // Safety net: expire any room a test failed to clean up so a single
+  // failure can't cascade ACTIVE_ROOM_EXISTS into every later test.
+  afterEach(async () => {
+    const testUserIds = [creatorId, joinerId, outsiderId, poorId].filter(Boolean);
+    const scope = {
+      OR: [{ creatorId: { in: testUserIds } }, { claimerId: { in: testUserIds } }],
+    };
+    await prisma.challengeRoom.updateMany({
+      where: {
+        status: { in: ['NEGOTIATING', 'AGREED', 'IN_PROGRESS', 'SUBMITTED', 'DISPUTED'] },
+        expiresAt: { gt: new Date() },
+        ...scope,
+      },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    // Unclaimed listings hold the creator's slot until claimExpiresAt.
+    await prisma.challengeRoom.updateMany({
+      where: { status: 'OPEN', claimExpiresAt: { gt: new Date() }, ...scope },
+      data: { claimExpiresAt: new Date(Date.now() - 1000) },
+    });
+    await service.sweepExpired();
+  });
+
   // ─── Publish ──────────────────────────────────────────────
 
   it('publish reserves creator contribution atomically with ledger entry', async () => {
@@ -200,8 +223,8 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const other = await service.create(outsiderId, { title: 'Other room' });
     await expect(service.join(joinerId, other.id, {}, '10.0.0.10'))
       .rejects.toThrow(ConflictException);
-    // outsider's room untouched, joiner balance unchanged
-    expect(await balanceOf(joinerId)).toBe(475);
+    // outsider's room untouched, joiner balance unchanged (rejected join reserves nothing)
+    expect(await balanceOf(joinerId)).toBe(500);
     const still = await prisma.challengeRoom.findUnique({ where: { id: other.id } });
     expect(still!.status).toBe(RoomStatus.OPEN);
     expect(still!.claimerId).toBeNull();
