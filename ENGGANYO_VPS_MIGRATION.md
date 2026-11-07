@@ -1636,3 +1636,12 @@ records do not exist on production.
 engganyo.com; then manual-task linking (Phase 3), Top up (Phase 4),
 landing platforms (Phase 5) as focused PRs; credit-trading and Discover-ads
 proposals; PR #45 remains at design review.
+
+## JOMAR immediate priorities rollout (2026-11-07)
+
+- **PR #46** Find tasks discovery/accept-open: merged `a03732c`, deploy run 42348344682 success.
+- **PR #47** manual-task linking gated on verification path (`requiresLinkedAccount(taskType, autoVerify)`; challenges never link-gated): merged `bcb5371`, deploy run 42349412795 success. Head `6ac0d94`.
+- **PR #48** Top up discoverability + landing supported-platforms strip: merged `1b5181f`, deploy run 42349420636 success. **Final deployed SHA `1b5181f`** carries all three.
+- Public verification: `/api/health` ok (db+redis), landing SSR contains "Supported platforms" + brand names, `/tasks` `/wallet` `/login` 200 anonymous.
+- **Blocked:** authenticated live verification — Windows ssh-agent Stopped/Disabled + passphrase-protected `engganyo_vps` = local key-loading failure (server never offered the key). Owner action: load key via `ssh-add` or supply test-account credentials. reCAPTCHA enforced on register/login.
+- **PR #45** mutual rooms revised to v3 @ `c1b197b` on `docs/mutual-1v1-rooms`: 30-min server-timed active window with atomic startedAt/expiresAt + exactly-once unwind incl. ROOM_CHARGE reversal; one-active-room-per-user via partial-unique `RoomParticipation`; Notify-other-player (60s cooldown, pingId dedupe, sound-permission fallback); participant actions (profile/report, friendship deferred); post-completion 1–5 ratings with 24h anti-retaliation reveal; expanded test plan. Awaiting owner decisions (X price, listing expiry, review-timeout policy, rating window, restriction scope, reversal representation, friendship scope).
