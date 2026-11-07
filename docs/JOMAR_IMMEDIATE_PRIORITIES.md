@@ -174,6 +174,13 @@ Deployed SHA `6c4f2b5` carries PRs #46–#49 (all deploy runs green; containers 
 
 **PR #50 live verification (10:28 UTC, `devin_earn_test`):** caches warmed at 100 → `POST /gamification/daily-reward` +50 (`EARN_DAILY_REWARD`, 100→150) → `/auth/me`=`/users/me`=`/wallet/me` all **150** → `POST /store/purchase` Streak Freeze −100 (`SPEND_STORE_PURCHASE`, 150→50) → all three **50**. Ledger before/after chains exact; final wallet 50/260/210. Evidence: `pr50-live-verify*.json`, `pr50-ledger-evidence.json`. Intermittent 503s during testing were nginx `api_auth` rate-limit on burst requests — infra, not app. **Follow-up:** PR #51 referral balance-consistency audit/plan (mirror never updated by referral awards + ledger race + milestone double-award race) — at review.
 
+## Referral balance consistency — implemented, in review (2026-11-07)
+
+- **PR #52** `fix/referral-balance-consistency` head `7db79ab` — forward fix from the PR #51 audit: referral awards now route through `WalletService.credit(tx)` (ledger + `lifetimeEarned` + version + `user.creditBalance` mirror atomic with the milestone claim); milestone claimed under `SELECT ... FOR UPDATE` with in-tx re-read (exactly-once under concurrency); `WalletContentionException` retries the WHOLE referral tx; `reconcileCreditBalanceMirror` locks wallet `FOR UPDATE` before mirroring (safe under live settlements). `forwardRef` Wallet↔Referrals; hooks stay post-commit fire-and-forget (no recursion).
+- **CI:** API lint+test+build ✅ (incl. new real-PostgreSQL `referrals-balance.integration.spec.ts`: concurrent same-milestone awards, award-vs-credit/debit races, whole-tx retry, reconciliation race), Web ✅, E2E pending at time of writing.
+- **Production discrepancy report (read-only, re-verified):** 0 referrals, 0 `EARN_REFERRAL_BONUS` rows, 0 mirror drift, 0 ledger-chain breaks → defect was **latent**, never executed; historical reconciliation is a no-op. Full interpretation rules + results in PR #51 proposal §6 (`0a92a42`).
+- **Nginx finding (separate):** `/api/auth/*` strict zone (10 r/m + burst 5) covers routine reads `GET /auth/me`, `/auth/public-config`, `2fa/status`, `admin-pin/status`; axios retries 5xx → rate-limited `auth/me` becomes a retry storm; shared-IP (CGNAT) users most exposed. Proposed fix: exact-match locations for those GETs → `api_general`; strict zone stays on all credential/mutation endpoints. Awaiting owner approval — not yet implemented.
+
 ## Implementation and review requirements
 
 For web design and implementation, follow `AGENTS.md`, read the repository's UI UX Pro Max skill, and run a targeted design-system search before choosing layouts or interactions. Document Engganyo-specific decisions with the PR.
