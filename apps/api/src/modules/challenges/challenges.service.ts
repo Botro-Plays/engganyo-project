@@ -427,16 +427,9 @@ export class ChallengesService {
           `${requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase()} tasks are currently disabled.`,
         );
       }
-      // Linked account is required only for API-verified task types;
-      // manual-proof challenges are reviewed from the submitted screenshot.
-      if (SocialAuthService.requiresLinkedAccount(challenge.taskType)) {
-        const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
-        if (!linked) {
-          throw new BadRequestException(
-            `You must link your ${requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase()} account before claiming this challenge.`,
-          );
-        }
-      }
+      // No linked-account requirement: challenge proofs are always
+      // creator-reviewed (submitChallengeProof never calls the platform
+      // API), so the screenshot itself is the verification evidence.
     }
 
     // Anti-abuse: shared-IP self-farming guard (same rule as campaigns)

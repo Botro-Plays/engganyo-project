@@ -109,6 +109,7 @@ export class TasksService {
         cooldownHours: true,
         expiresAt: true,
         isPlatformTask: true,
+        autoVerify: true,
       },
     });
 
@@ -128,9 +129,10 @@ export class TasksService {
           `${platformLabel} tasks are currently disabled.`,
         );
       }
-      // Linked account is required only for API-verified task types;
-      // manual-proof tasks are reviewed from the submitted screenshot.
-      if (SocialAuthService.requiresLinkedAccount(campaign.taskType as never)) {
+      // Linked account is required only when the campaign's verification
+      // path actually uses the platform API (autoVerify + API-verified type);
+      // manual-review campaigns are verified from the submitted screenshot.
+      if (SocialAuthService.requiresLinkedAccount(campaign.taskType as never, campaign.autoVerify)) {
         const linked = await this.socialAuthService.hasLinkedAccount(userId, requiredPlatform);
         if (!linked) {
           const platformLabel = requiredPlatform.charAt(0) + requiredPlatform.slice(1).toLowerCase();

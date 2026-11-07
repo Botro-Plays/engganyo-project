@@ -40,13 +40,16 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
   GOOGLE_REVIEW: 'GOOGLE',
 };
 
-// Only task types with real platform-API verification require a linked
-// account to accept (mirrors SocialAuthService.requiresLinkedAccount on the
-// API). Manual-proof tasks — including Facebook, X, Instagram, TikTok,
-// Telegram, Discord — can always be accepted and completed via screenshot.
+// Mirrors SocialAuthService.requiresLinkedAccount on the API: a linked
+// account is required only when the offer's verification path uses the
+// platform API — an API-verified task type configured for autoVerify.
+// Manual-review offers (autoVerify=false, and all 1v1 challenges, which are
+// always creator-reviewed) complete via screenshot with any account.
 const LINK_REQUIRED_TASK_TYPES = new Set([
   'YOUTUBE_SUBSCRIBE', 'YOUTUBE_LIKE', 'TWITCH_FOLLOW', 'SPOTIFY_FOLLOW',
 ]);
+const offerRequiresLinkedAccount = (taskType: string, autoVerify?: boolean) =>
+  autoVerify !== false && LINK_REQUIRED_TASK_TYPES.has(taskType);
 
 // Rewarded YouTube engagement is disabled for platform-policy compliance.
 const DISABLED_TASK_TYPES = new Set([
@@ -133,6 +136,7 @@ interface AvailableTask {
   creditPerTask: number;
   requiresProof: boolean;
   proofInstructions: string | null;
+  autoVerify?: boolean;
   isPlatformTask: boolean;
   user: { id: string; username: string; displayName: string | null };
 }
@@ -171,6 +175,7 @@ interface MyTask {
     creditPerTask: number;
     requiresProof: boolean;
     proofInstructions: string | null;
+    autoVerify?: boolean;
     user: { username: string; displayName: string | null };
   } | null;
   challenge: {
@@ -239,6 +244,7 @@ function offerOf(t: MyTask): TaskOffer | null {
       creditPerTask: t.campaign.creditPerTask,
       requiresProof: t.campaign.requiresProof,
       proofInstructions: t.campaign.proofInstructions,
+      autoVerify: t.campaign.autoVerify,
       user: t.campaign.user,
       kind: 'campaign',
     };
@@ -252,6 +258,7 @@ function offerOf(t: MyTask): TaskOffer | null {
       creditPerTask: t.challenge.rewardCredits,
       requiresProof: t.challenge.requiresProof,
       proofInstructions: t.challenge.proofInstructions,
+      autoVerify: false, // challenges are always creator-reviewed
       user: t.challenge.creator,
       kind: 'challenge',
     };
@@ -959,10 +966,7 @@ function TasksPageInner() {
                           </div>
                         ) : (() => {
                           const reqPlatform = TASK_TYPE_TO_PLATFORM[task.taskType];
-                          // Only OAuth platforms require a linked account to accept;
-                          // manual-proof platforms (FB, Twitter, Instagram, TikTok, Telegram, Discord)
-                          // can always be accepted and completed via screenshot.
-                          const needsLink = LINK_REQUIRED_TASK_TYPES.has(task.taskType)
+                          const needsLink = offerRequiresLinkedAccount(task.taskType, task.autoVerify)
                             && !!reqPlatform
                             && !(safeLinkedAccounts?.has(reqPlatform) ?? false);
                           if (needsLink) {
@@ -1486,7 +1490,7 @@ function TasksPageInner() {
                   {submitOffer.proofInstructions}
                 </p>
               )}
-              {submitOffer.requiresProof && !LINK_REQUIRED_TASK_TYPES.has(submitOffer.taskType) && (
+              {submitOffer.requiresProof && !offerRequiresLinkedAccount(submitOffer.taskType, submitOffer.autoVerify) && (
                 <p className="text-xs text-zinc-500 mt-2 border-t border-surface-border pt-2">
                   Manual review — your screenshot must show the completed action and your account identity (username or profile) so the creator can verify it.
                 </p>
