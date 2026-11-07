@@ -1591,3 +1591,48 @@ in the controlled test environment per policy).
   result, one charge/one reward/one spin row.
 
 Production `recaptcha_enabled` untouched throughout.
+
+---
+
+## 7 Nov 2026 — Testing workflow change + JOMAR priorities kickoff
+
+**Owner directive:** local testing moved off the owner's PC (unresponsive).
+`https://engganyo.com` is now the shared test environment; agents verify
+through GitHub Actions, VPS SSH inspection, and labeled test records on the
+live site. Recorded in `AGENTS.md` → "Testing and deployment workflow" and
+`docs/JOMAR_IMMEDIATE_PRIORITIES.md`.
+
+**Local services stopped** (identified before stopping; data preserved):
+PostgreSQL test cluster `.pgdata-test` :55432 (clean `pg_ctl stop -m fast`),
+temp `redis-server.exe` :6379, API `node dist/main.js` :3001, `next dev`
+:3000 and :3210, stray psql client. Docker daemon was already down (engganyo
+containers not running). Unrelated `aidrama-studio-redis` untouched.
+
+**Phase-1 audit findings** (current main `13dc36c`, recorded in
+`docs/JOMAR_IMMEDIATE_PRIORITIES.md`): platform filter API param exists but
+had no UI; own campaigns appeared in discovery ("Owner View Only");
+server required linked social account for ALL mapped task types including
+manual-proof platforms (verified 400s for unlinked Twitter/Instagram);
+page-based pagination; no Accept-&-open flow; no "Top up" label; no
+landing platform section.
+
+**PR #46 — Find tasks discovery + accept-to-open** — head `12b56ab`,
+branch `feat/find-tasks-discovery`. Changes: API self-campaign exclusion
+(platform tasks preserved), platform picker chips, accumulating Show-more
+feed (batch 6), Accept & open [platform] with synchronous popup +
+blocked-popup fallback, `delByPattern` keyPrefix fix (browse cache was
+never invalidated — assigned tasks could reappear up to 5 min), and
+hasNext/hasPrev derivation fixing dead pagination controls. Local
+typecheck/lint clean; API verified on PostgreSQL; Chromium evidence in PR
+body. **CI + deploy pending.**
+
+**Test records created locally (pre-workflow-change, test env only):**
+`player1@engganyo.test`/`player_two` users, admin `OWN-TEST campaign`
+(TELEGRAM_JOIN_CHANNEL, player_two-owned) and `JOIN-TEST telegram task`
+(admin-owned) in local `engganyo_test` DB. Local infra now stopped; these
+records do not exist on production.
+
+**Pending:** PR #46 CI → merge → deploy → live verification on
+engganyo.com; then manual-task linking (Phase 3), Top up (Phase 4),
+landing platforms (Phase 5) as focused PRs; credit-trading and Discover-ads
+proposals; PR #45 remains at design review.
