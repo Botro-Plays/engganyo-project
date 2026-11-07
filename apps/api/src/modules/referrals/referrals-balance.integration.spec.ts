@@ -40,6 +40,7 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
   let prisma: PrismaClient;
   let wallet: WalletService;
   let referrals: ReferralsService;
+  let notificationsMock: Record<string, jest.Mock>;
   let seq = 0;
 
   const makeUser = async (balance = 0) => {
@@ -67,13 +68,14 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
         mockService() as never, mockService() as never, mockService() as never,
         mockService() as never, mockService() as never, mockService() as never,
       );
+    const notifications = mockService();
     const rs = new ReferralsService(
       prisma as never,
-      mockService() as never, // notifications
+      notifications as never, // notifications
       mockService() as never, // events
       ws as never,
     );
-    return { ws, rs };
+    return { ws, rs, notifications };
   };
 
   const walletState = async (userId: string) => ({
@@ -93,7 +95,11 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
       fn: (tx: never) => unknown,
     ) => prisma.$transaction(fn as never);
     await prisma.$connect();
-    ({ ws: wallet, rs: referrals } = buildServices());
+    ({ ws: wallet, rs: referrals, notifications: notificationsMock } = buildServices());
+  });
+
+  beforeEach(() => {
+    notificationsMock.createNotification?.mockClear?.();
   });
 
   afterAll(async () => {
@@ -149,6 +155,8 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
     expect((await walletState(referrer.id)).wallet.balance).toBe(10);
     expect((await walletState(referee.id)).wallet.balance).toBe(25);
     expect(await referralLedger(ref.id)).toHaveLength(2);
+    // Only the first (committed) call notifies — the repeat is a no-op.
+    expect(notificationsMock.createNotification).toHaveBeenCalledTimes(2);
   });
 
   it('concurrent awarders for the same milestone pay exactly once', async () => {
@@ -167,6 +175,9 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
     expect(await referralLedger(ref.id)).toHaveLength(2);
     expect((await walletState(referrer.id)).user.creditBalance).toBe(10);
     expect((await walletState(referee.id)).user.creditBalance).toBe(25);
+    // Exactly one committed award → exactly one notification pair
+    // (referrer + referee). Concurrent losers emit nothing.
+    expect(notificationsMock.createNotification).toHaveBeenCalledTimes(2);
   });
 
   it('concurrent qualifyReferral calls award first_task exactly once', async () => {
@@ -188,6 +199,8 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
     expect(ledger[0].amount).toBe(25);
     const updated = await prisma.referral.findUniqueOrThrow({ where: { id: ref.id } });
     expect((updated.milestones as Record<string, boolean>).first_task).toBe(true);
+    // One committed first_task award → one notification pair only.
+    expect(notificationsMock.createNotification).toHaveBeenCalledTimes(2);
   });
 
   it('award racing ordinary settlements leaves exact balances and chain', async () => {

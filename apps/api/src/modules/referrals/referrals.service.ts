@@ -51,9 +51,13 @@ export class ReferralsService {
     // ENTIRE unit of work (milestone lock, eligibility re-read, both
     // awards, ledger entries, mirror updates) must restart so the
     // milestones merge is recomputed from fresh state.
+    // `awarded` distinguishes a committed award from an already-awarded
+    // no-op (concurrent loser or repeat call): notifications must fire
+    // only for the invocation that actually committed the milestone.
+    let awarded = false;
     for (let attempt = 1; attempt <= MAX_AWARD_RETRIES; attempt++) {
       try {
-        await this.prisma.withTransaction(async (tx) => {
+        awarded = await this.prisma.withTransaction(async (tx) => {
           // Atomic milestone claim: lock the referral row, then re-read
           // milestones inside the tx. Concurrent awarders serialize on the
           // row lock; the loser sees the flag and skips all credit writes.
@@ -63,7 +67,7 @@ export class ReferralsService {
             select: { milestones: true },
           });
           const lockedMs = (locked.milestones as Record<string, boolean> | null) ?? {};
-          if (lockedMs[milestone]) return;
+          if (lockedMs[milestone]) return false;
 
           await tx.referral.update({
             where: { id: referralId },
@@ -93,6 +97,7 @@ export class ReferralsService {
           };
           await award(referral.referrerId, referrerBonus, 'referrer');
           await award(referral.refereeId, refereeBonus, 'referee');
+          return true;
         });
         break;
       } catch (err) {
@@ -104,6 +109,8 @@ export class ReferralsService {
         throw err;
       }
     }
+
+    if (!awarded) return; // already-awarded no-op: no notifications
 
     this.notifications
       .createNotification(referral.referrerId, NotificationType.REFERRAL_QUALIFIED, 'Referral Milestone!', `${referral.referee.username} hit ${milestone}. You earned ${referrerBonus} credits!`)
