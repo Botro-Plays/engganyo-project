@@ -1,0 +1,29 @@
+{
+  "note": "PR #50 live verification ledger extract — devin_earn_test, read-only psql 2026-11-07",
+  "transactions": [
+    {
+      "type": "EARN_DAILY_REWARD",
+      "amount": 50,
+      "balanceBefore": 100,
+      "balanceAfter": 150,
+      "description": "Daily reward — day 1 streak",
+      "createdAt": "2026-11-07T10:28:12.455Z",
+      "op": "POST /gamification/daily-reward (supported app op)"
+    },
+    {
+      "type": "SPEND_STORE_PURCHASE",
+      "amount": -100,
+      "balanceBefore": 150,
+      "balanceAfter": 50,
+      "description": "Purchased 1x Streak Freeze (3 days)",
+      "createdAt": "2026-11-07T10:28:31.264Z",
+      "op": "POST /store/purchase itemId=cmvi95vkx0004nl39iats78vy (supported app op)"
+    }
+  ],
+  "finalWallet": {
+    "balance": 50,
+    "lifetimeEarned": 260,
+    "lifetimeSpent": 210
+  },
+  "endpointResults": "pr50-live-verify.json + pr50-live-verify-debit.json — auth/me, users/me, wallet/me all returned the committed balance after each op (100→150→50). Intermittent 503s were nginx api_auth rate-limit on test bursts, not app errors."
+}

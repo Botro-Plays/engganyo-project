@@ -1,0 +1,30 @@
+{
+  "steps": [
+    {
+      "step": "daily-reward",
+      "status": 200,
+      "data": {
+        "creditReward": 50,
+        "xpReward": 20,
+        "newStreak": 1,
+        "streakBroken": false,
+        "bonusLootBox": false
+      }
+    },
+    {
+      "step": "store-purchase",
+      "status": 404,
+      "data": {
+        "statusCode": 404,
+        "message": "Item not found",
+        "error": "Not Found",
+        "timestamp": "2026-11-07T10:28:13.186Z",
+        "path": "/api/store/purchase"
+      }
+    }
+  ],
+  "account": {
+    "username": "devin_earn_test",
+    "initialAuthMe": 100
+  }
+}

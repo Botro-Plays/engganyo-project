@@ -1,0 +1,85 @@
+{
+  "steps": [
+    {
+      "label": "pre-debit-retry",
+      "authMe": {
+        "status": 200,
+        "b": 150
+      },
+      "usersMe": {
+        "status": 200,
+        "b": 150
+      },
+      "wallet": {
+        "status": 200,
+        "b": 150
+      }
+    },
+    {
+      "step": "store-purchase",
+      "status": 200,
+      "data": {
+        "purchase": {
+          "id": "cmw69g4ve002y9qzekt0dxv6x",
+          "userId": "cdevinearn000000000000001",
+          "itemId": "cmvi95vkx0004nl39iats78vy",
+          "transactionId": "cmw69g4v4002w9qzejoghokg9",
+          "quantity": 1,
+          "creditCostAtPurchase": 100,
+          "createdAt": "2026-11-07T10:28:31.274Z"
+        },
+        "transaction": {
+          "id": "cmw69g4v4002w9qzejoghokg9",
+          "walletId": "cdevinwallearn000000000001",
+          "type": "SPEND_STORE_PURCHASE",
+          "status": "COMPLETED",
+          "amount": -100,
+          "balanceBefore": 150,
+          "balanceAfter": 50,
+          "description": "Purchased 1x Streak Freeze (3 days)",
+          "referenceId": "cmvi95vkx0004nl39iats78vy",
+          "referenceType": "store_item",
+          "metadata": {
+            "itemName": "Streak Freeze (3 days)",
+            "quantity": 1,
+            "unitCost": 100
+          },
+          "createdAt": "2026-11-07T10:28:31.264Z"
+        },
+        "item": {
+          "id": "cmvi95vkx0004nl39iats78vy",
+          "name": "Streak Freeze (3 days)",
+          "category": "CONVENIENCE",
+          "creditCost": 100
+        }
+      }
+    },
+    {
+      "label": "after-debit",
+      "authMe": {
+        "status": 503
+      },
+      "usersMe": {
+        "status": 200,
+        "b": 50
+      },
+      "wallet": {
+        "status": 200,
+        "b": 50
+      }
+    },
+    {
+      "label": "final",
+      "authMe": {
+        "status": 200,
+        "b": 50
+      },
+      "usersMe": {
+        "status": 503
+      },
+      "wallet": {
+        "status": 503
+      }
+    }
+  ]
+}
