@@ -93,6 +93,43 @@ export class UploadsService {
     return { relativeUrl, destPath };
   }
 
+  /**
+   * Room proof upload: caller must be a participant in a mutual P2P room that
+   * has reached agreement and not yet expired or been frozen by dispute.
+   * Storage is scoped to the room so proof stays attached to the transaction.
+   */
+  async prepareRoomProofStorage(
+    userId: string,
+    roomId: string | undefined,
+  ): Promise<{ relativeUrl: string; destPath: string }> {
+    this.assertSafePathSegment(roomId, 'roomId');
+
+    const room = await this.prisma.challengeRoom.findUnique({
+      where: { id: roomId as string },
+      select: { creatorId: true, claimerId: true, status: true, expiresAt: true },
+    });
+    if (!room) throw new NotFoundException('Room not found');
+    if (room.creatorId !== userId && room.claimerId !== userId) {
+      throw new ForbiddenException('Not a participant in this room');
+    }
+    const AGREED = ['AGREED', 'IN_PROGRESS', 'SUBMITTED'];
+    if (!AGREED.includes(room.status) || (room.expiresAt && room.expiresAt <= new Date())) {
+      throw new BadRequestException('Proof uploads are only allowed while the room is active after agreement');
+    }
+
+    const dir = this.resolveContainedPath(
+      path.join(this.uploadsRoot, 'proofs', 'rooms'),
+      userId,
+      roomId as string,
+    );
+    fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+
+    const filename = `${uuidv4()}${OUTPUT_EXT}`;
+    const destPath = this.resolveContainedPath(dir, filename);
+    const relativeUrl = `/uploads/proofs/rooms/${userId}/${roomId}/${filename}`;
+    return { relativeUrl, destPath };
+  }
+
   prepareAvatarStorage(userId: string): { relativeUrl: string; destPath: string } {
     const dir = this.resolveContainedPath(
       path.join(this.uploadsRoot, 'avatars'),

@@ -3,7 +3,7 @@ import {
   UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { Prisma, UserRole } from '@prisma/client';
+import { Prisma, UserRole, RoomStatus } from '@prisma/client';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
 
@@ -28,6 +28,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { SmtpSettingsService } from '../email/smtp-settings.service';
 import { SmtpSettingsDto } from '../email/smtp-settings.dto';
+import { RoomsService } from '../rooms/rooms.service';
+import { ResolveRoomDisputeDto } from '../rooms/dto/rooms.dto';
 
 @ApiTags('admin')
 @Controller({ path: 'admin' })
@@ -37,6 +39,7 @@ import { SmtpSettingsDto } from '../email/smtp-settings.dto';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
+    private readonly roomsService: RoomsService,
     private readonly smtp: SmtpSettingsService,
     @InjectQueue('email') private readonly emailQueue: Queue,
     @InjectQueue('analytics') private readonly analyticsQueue: Queue,
@@ -286,6 +289,54 @@ export class AdminController {
     @Body() dto: ResolveReportDto,
   ) {
     return this.adminService.resolveReport(admin.sub, id, dto);
+  }
+
+  // ─── P2P Rooms moderation ─────────────────────────────────
+
+  @Get('rooms')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List mutual P2P rooms (optional status filter)' })
+  listRooms(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('status') status?: string,
+  ) {
+    return this.roomsService.adminListRooms(
+      Number(page), Number(limit),
+      status as RoomStatus | undefined,
+    );
+  }
+
+  @Get('rooms/disputes')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Open room disputes queue' })
+  listRoomDisputes(@Query('page') page = 1, @Query('limit') limit = 20) {
+    return this.roomsService.adminListDisputes(Number(page), Number(limit));
+  }
+
+  @Get('rooms/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Full room monitoring detail: participants, offers, proofs, reports, accounting' })
+  getRoom(@Param('id') id: string) {
+    return this.roomsService.adminGetRoom(id);
+  }
+
+  @Post('rooms/disputes/:id/resolve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resolve or dismiss a room dispute (audited)' })
+  resolveRoomDispute(
+    @CurrentUser() admin: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ResolveRoomDisputeDto,
+  ) {
+    return this.roomsService.adminResolveDispute(admin.sub, id, dto.resolution, dto.action);
+  }
+
+  @Post('rooms/ratings/:id/hide')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Hide an abusive room rating (audited)' })
+  hideRoomRating(@CurrentUser() admin: JwtPayload, @Param('id') id: string) {
+    return this.roomsService.adminHideRating(admin.sub, id);
   }
 
   // ─── Notifications ────────────────────────────────────────
