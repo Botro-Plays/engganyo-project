@@ -1,0 +1,16 @@
+{
+ "seesSubmission": {
+  "apiStatus": 200,
+  "found": true
+ },
+ "approve": {
+  "status": 200,
+  "body": "{\"reviewed\":true,\"action\":\"approve\",\"creditsAwarded\":10}"
+ },
+ "earnWalletAfter": {
+  "balance": 100,
+  "lifetimeEarned": 210,
+  "lifetimeSpent": 110
+ },
+ "earnRecentTx": []
+}

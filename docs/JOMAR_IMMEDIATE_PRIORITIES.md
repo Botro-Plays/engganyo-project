@@ -146,7 +146,7 @@ Add a graceful, visually balanced platform section so visitors immediately under
 
 ## Live-verification status (7 Nov 2026) — authenticated pass DONE
 
-Deployed SHA `6c4f2b5` carries PRs #46–#49 (all deploy runs green; containers healthy; migrations current). **Authenticated journey verified on engganyo.com** via a dedicated Edge session the owner signed into manually (account `botro`, SUPER_ADMIN, balance 6088→6088, **zero credit changes**). Evidence: screenshots + `results.json`/`followup.json`/`proof-retry.json` in `Temp/engg-verify/`.
+Deployed SHA `6c4f2b5` carries PRs #46–#49 (all deploy runs green; containers healthy; migrations current). **Authenticated journey verified on engganyo.com** via dedicated Edge sessions signed into manually (round 1: owner account `botro`; round 2: labeled test accounts `devin_earn_test`/`devin_create_test`). Durable evidence: `docs/evidence/2026-11-07-prod-verification/` on `docs/repo-records` (screenshots, sanitized JSON, `ledger-evidence.json`).
 
 | Check | Result | Evidence |
 |---|---|---|
@@ -166,9 +166,11 @@ Deployed SHA `6c4f2b5` carries PRs #46–#49 (all deploy runs green; containers 
 
 **Round-2 test records (labeled, official site):** accounts `devin_earn_test`/`devin_create_test` (created via DB, ACTIVE, LOW trust, 200cr welcome; CREATE +300 admin grant). CREATE campaigns: `cmw66gpap` (Telegram manual-review), `cmw66gpl1` (TikTok), `cmw66gptq` (Discord), `cmw66gqf9` (Instagram) — all ACTIVE, −110cr each. EARN own campaign `cmw66gqsi` (−110cr). Completion `cmw66ldge00ga5vv8e76li5nn` VERIFIED +10cr. Anti-abuse note: shared-IP rule correctly blocked same-machine EARN↔CREATE assigns (flagged+resolved as test artifact); CREATE session revoked to unblock, re-login required for approval.
 
-**Test records created (labeled):** assignment on `FACEBOOK_PAGE_LIKE` "Face my book" (campaign `cmw48dmaa`, completion `cmw65ul4l`, now SUBMITTED pending creator review, proof file `DEVIN-VERIFY` note); one earlier accepted-panel assignment. No credits spent or earned.
+**Test records created (labeled):** assignment on `FACEBOOK_PAGE_LIKE` "Face my book" (campaign `cmw48dmaa`, completion `cmw65ul4l`, now SUBMITTED pending creator review, proof file `DEVIN-VERIFY` note); one earlier accepted-panel assignment (retweet, autoVerify → VERIFIED). **Credit changes: +235 earned** via the retweet cascade — task +15 (`cmw65v2lg…`), mission +20 (`cmw65v2ou…`), achievements +50/+50/+100 (`cmw65v2ro…`/`cmw65v2t4…`/`cmw65v2un…`); wallet 6093→6328. Legitimate test earnings, **not reversed**. Full ids in `ledger-evidence.json`.
 
-**Still open:** Show-more live exercise (needs >6 listings), autoVerify link-gate live check (needs an API-verified listing), own-work exclusion (needs listing-owning account), creator-side review approval. All have CI coverage; live gaps are data-availability, not code.
+**Still open:** autoVerify link-gate live check — **untestable by design**: all API-verified task types (Twitch/Spotify/YouTube-engagement) are disabled platform-side, so no live listing can exercise it; CI unit matrix + real-PG integration cover the gate. Everything else PASS.
+
+**Confirmed bug found during verification → fix in flight:** `GET /auth/me` (and `GET /users/me`) served `creditBalance` stale for up to 1h — the `auth:me`/`user:profile` Redis payloads are never invalidated by wallet settlements, and `user.creditBalance` is only a mirror (referral bonuses never update it). Observed live: `/auth/me`=6088 vs `wallet/me`=6093→6328. **PR #50** (`fix/auth-me-stale-balance`) reads `wallets.balance` fresh on every profile read + best-effort cache I/O; CI regressions cover credit/debit/race/Redis-outage. Ready for review — not yet merged/deployed.
 
 ## Implementation and review requirements
 

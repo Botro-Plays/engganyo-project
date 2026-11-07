@@ -1,0 +1,29 @@
+{
+ "ui": {
+  "chips": 9,
+  "showMore": true,
+  "showing": "6",
+  "cards": 6
+ },
+ "uiAfter": {
+  "cards": 9
+ },
+ "assign": {
+  "status": 201,
+  "cid": "cmw66ldge00ga5vv8e76li5nn"
+ },
+ "submit": {
+  "upload": 201,
+  "submit": 200,
+  "status": "SUBMITTED",
+  "msg": "Proof submitted. The campaign creator will review within 48 hours."
+ },
+ "noncreatorApprove": {
+  "status": 403,
+  "msg": "Not your campaign"
+ },
+ "createSeesSubmission": {
+  "status": 503,
+  "found": false
+ }
+}

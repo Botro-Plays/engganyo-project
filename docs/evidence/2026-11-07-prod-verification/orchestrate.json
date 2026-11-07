@@ -1,0 +1,136 @@
+{
+ "startedAt": "2026-11-07T09:05:10.138Z",
+ "checks": {
+  "create.apiverified.TWITCH_FOLLOW": {
+   "ok": true,
+   "d": {
+    "status": 400,
+    "msg": "Twitch tasks are currently disabled."
+   }
+  },
+  "create.apiverified.YOUTUBE_SUBSCRIBE": {
+   "ok": true,
+   "d": {
+    "status": 400,
+    "msg": "YouTube engagement tasks are disabled for platform-policy compliance and can no longer be created, assigned, or rewarded."
+   }
+  },
+  "create.apiverified.SPOTIFY_FOLLOW": {
+   "ok": true,
+   "d": {
+    "status": 400,
+    "msg": "Spotify tasks are currently disabled."
+   }
+  },
+  "create.campaign.C1": {
+   "ok": true,
+   "d": {
+    "status": 201,
+    "id": "cmw66gpap00eo5vv8go3yg29o"
+   }
+  },
+  "create.campaign.C2": {
+   "ok": true,
+   "d": {
+    "status": 201,
+    "id": "cmw66gpl100ey5vv8lcsikf3x"
+   }
+  },
+  "create.campaign.C3": {
+   "ok": true,
+   "d": {
+    "status": 201,
+    "id": "cmw66gptq00f85vv8ln2iw3z9"
+   }
+  },
+  "create.campaign.C4": {
+   "ok": true,
+   "d": {
+    "status": 201,
+    "id": "cmw66gqf900fi5vv87p2bhy0q"
+   }
+  },
+  "earn.own-campaign-created": {
+   "ok": true,
+   "d": {
+    "status": 201,
+    "id": "cmw66gqsi00fs5vv8dxgrficd"
+   }
+  },
+  "earn.self-assign-blocked": {
+   "ok": true,
+   "d": {
+    "status": 400,
+    "msg": "Cannot assign your own campaign"
+   }
+  },
+  "earn.browse-own-excluded": {
+   "ok": true,
+   "d": {
+    "ownId": "cmw66gqsi00fs5vv8dxgrficd",
+    "found": false,
+    "totalItems": 9
+   }
+  },
+  "earn.browse-create-campaigns-visible": {
+   "ok": true,
+   "d": {
+    "expected": 4,
+    "found": 4
+   }
+  },
+  "earn.own-campaign-in-manager": {
+   "ok": true,
+   "d": {
+    "count": 1
+   }
+  },
+  "earn.ui-chips": {
+   "ok": true,
+   "d": {
+    "chips": 9,
+    "showMore": false
+   }
+  },
+  "earn.ui-show-more": {
+   "ok": false,
+   "d": {
+    "showMore": false,
+    "totalExpected": 9
+   }
+  },
+  "earn.assign-C1": {
+   "ok": false,
+   "d": {
+    "status": 400,
+    "msg": "This assignment is restricted due to potential account abuse. Contact support if you believe this is an error."
+   }
+  }
+ },
+ "records": {
+  "C1": {
+   "id": "cmw66gpap00eo5vv8go3yg29o",
+   "status": 201,
+   "taskType": "TELEGRAM_JOIN_CHANNEL"
+  },
+  "C2": {
+   "id": "cmw66gpl100ey5vv8lcsikf3x",
+   "status": 201,
+   "taskType": "TIKTOK_FOLLOW"
+  },
+  "C3": {
+   "id": "cmw66gptq00f85vv8ln2iw3z9",
+   "status": 201,
+   "taskType": "DISCORD_JOIN_SERVER"
+  },
+  "C4": {
+   "id": "cmw66gqf900fi5vv87p2bhy0q",
+   "status": 201,
+   "taskType": "INSTAGRAM_FOLLOW"
+  },
+  "O1": {
+   "id": "cmw66gqsi00fs5vv8dxgrficd",
+   "status": 201
+  }
+ }
+}

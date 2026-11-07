@@ -1,0 +1,46 @@
+{
+  "note": "Sanitized production ledger extract (transaction ids, types, amounts, timestamps). Queried read-only via engganyo SSH + docker exec psql on 2026-11-07.",
+  "ownerAccount": {
+    "username": "botro",
+    "role": "SUPER_ADMIN",
+    "window": "2026-11-07 08:30-09:30 UTC",
+    "transactions": [
+      { "id": "cmw65asn300175vv8sck0vz5g", "type": "EARN_WHEEL_SPIN", "amount": 5, "balanceAfter": 6093, "description": "Wheel spin prize: 5 Credits", "createdAt": "2026-11-07T08:32:23.679Z", "attribution": "owner activity, before verification session" },
+      { "id": "cmw65v2lg00605vv8a2t2swdz", "type": "EARN_TASK_COMPLETION", "amount": 15, "balanceAfter": 6108, "description": "Task verified", "createdAt": "2026-11-07T08:48:09.700Z", "attribution": "retweet proof auto-verify (completion cmw65uoxo005t5vv8t2800cvk, campaign cmvi99hl6001789wgo171oga8 'Retweet our Platform Launch Post' TWITTER_RETWEET)" },
+      { "id": "cmw65v2ou00675vv8y3qgwbn4", "type": "EARN_MISSION_COMPLETE", "amount": 20, "balanceAfter": 6128, "description": "Mission complete: Daily Grind", "createdAt": "2026-11-07T08:48:09.822Z", "attribution": "mission cascade from task completion" },
+      { "id": "cmw65v2ro006h5vv8fuo4ke8h", "type": "EARN_ACHIEVEMENT", "amount": 50, "balanceAfter": 6178, "description": "Achievement unlocked: First Step", "createdAt": "2026-11-07T08:48:09.925Z", "attribution": "achievement cascade" },
+      { "id": "cmw65v2t4006p5vv8qzybxc3y", "type": "EARN_ACHIEVEMENT", "amount": 50, "balanceAfter": 6228, "description": "Achievement unlocked: First Earnings", "createdAt": "2026-11-07T08:48:09.976Z", "attribution": "achievement cascade" },
+      { "id": "cmw65v2un006x5vv8sphmk7f3", "type": "EARN_ACHIEVEMENT", "amount": 100, "balanceAfter": 6328, "description": "Achievement unlocked: Credit Collector", "createdAt": "2026-11-07T08:48:10.031Z", "attribution": "achievement cascade" }
+    ],
+    "sessionDelta": "+235 credits (15 task + 20 mission + 200 achievements); balance 6093 -> 6328",
+    "finalWallet": { "balance": 6328, "lifetimeEarned": 6328, "lifetimeSpent": 0 }
+  },
+  "testAccounts": {
+    "devin_earn_test": {
+      "note": "Labeled DEVIN-VERIFY account; balances verified via psql",
+      "transactions": [
+        { "type": "EARN_ADMIN_GRANT", "amount": 200, "description": "Welcome bonus credits (DEVIN-VERIFY test account)" },
+        { "type": "SPEND_CAMPAIGN_CREATE", "amount": -110, "description": "Campaign: DEVIN-TEST own campaign — exclusion check (includes 10 platform fee)", "createdAt": "2026-11-07T09:05:00.850Z", "campaignId": "cmw66gqsi00fs5vv8dxgrficd" },
+        { "type": "EARN_TASK_COMPLETION", "amount": 10, "description": "Task approved by campaign creator", "completionId": "cmw66ldge00ga5vv8e76li5nn", "completionStatus": "VERIFIED" }
+      ],
+      "finalWallet": { "balance": 100, "lifetimeEarned": 210, "lifetimeSpent": 110 }
+    },
+    "devin_create_test": {
+      "note": "Labeled DEVIN-VERIFY campaign-funder account",
+      "transactions": [
+        { "type": "EARN_ADMIN_GRANT", "amount": 200, "description": "Welcome bonus credits (DEVIN-VERIFY test account)" },
+        { "type": "EARN_ADMIN_GRANT", "amount": 300, "description": "Admin grant: DEVIN-VERIFY test campaign funding" },
+        { "type": "SPEND_CAMPAIGN_CREATE", "amount": -110, "description": "Campaign: DEVIN-TEST Telegram join - manual review (includes 10 platform fee)", "campaignId": "cmw66gpap00eo5vv8go3yg29o" },
+        { "type": "SPEND_CAMPAIGN_CREATE", "amount": -110, "description": "Campaign: DEVIN-TEST TikTok follow (includes 10 platform fee)", "campaignId": "cmw66gpl100ey5vv8lcsikf3x" },
+        { "type": "SPEND_CAMPAIGN_CREATE", "amount": -110, "description": "Campaign: DEVIN-TEST Discord join (includes 10 platform fee)", "campaignId": "cmw66gptq00f85vv8ln2iw3z9" },
+        { "type": "SPEND_CAMPAIGN_CREATE", "amount": -110, "description": "Campaign: DEVIN-TEST Instagram follow (includes 10 platform fee)", "campaignId": "cmw66gqf900fi5vv87p2bhy0q" }
+      ],
+      "finalWallet": { "balance": 60, "lifetimeEarned": 500, "lifetimeSpent": 440 }
+    }
+  },
+  "completionStates": [
+    { "id": "cmw65uoxo005t5vv8t2800cvk", "campaign": "Retweet our Platform Launch Post", "taskType": "TWITTER_RETWEET", "status": "VERIFIED", "creditsEarned": 15 },
+    { "id": "cmw65ul4l005m5vv8feicp6mc", "campaign": "Face my book", "taskType": "FACEBOOK_PAGE_LIKE", "status": "SUBMITTED", "creditsEarned": 0, "reviewDeadline": "2026-11-09" },
+    { "id": "cmw66ldge00ga5vv8e76li5nn", "campaign": "DEVIN-TEST Telegram join - manual review", "taskType": "TELEGRAM_JOIN_CHANNEL", "status": "VERIFIED", "creditsEarned": 10 }
+  ]
+}
