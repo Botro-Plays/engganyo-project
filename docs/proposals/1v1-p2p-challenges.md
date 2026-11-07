@@ -535,6 +535,13 @@ The rules are identical at every stage — reservation, collection, and refund:
 - Offer fields: `actionText`, `taskType` (platform-restricted types rejected),
   `targetUrl` (same allowlist as campaigns/challenges), `deadline` (≤ room
   `expiresAt`), `requiresProof` + instructions.
+- **Task-type eligibility: every supported platform, including manual-proof
+  types.** Room offers may use any `TaskType` Engganyo supports — Facebook,
+  TikTok, Instagram, X, Telegram, Discord, etc. There is **no API-verification
+  requirement** for room tasks: rooms verify work through *mutual peer review*
+  (each player reviews the other's `RoomSubmission`, with one dispute →
+  admin escalation), not through platform APIs. `DISABLED_TASK_TYPES`
+  (e.g. YouTube engagement) and per-platform enablement apply unchanged.
 - Agreement requires `creatorApprovedVersion = claimerApprovedVersion = V` where
   V is the max version of **both** directions — enforced in one conditional
   update; stale-version approvals are rejected server-side.
@@ -775,6 +782,18 @@ wireframes, and tests below.
   from the moment you join. Finish negotiating, both tasks, and both reviews
   before the deadline — anything unfinished expires and refunds both
   contributions."*
+- **Manual-proof tasks and the 30-minute window.** Because peer review — not
+  an API — verifies room work, manual-proof platforms are fully supported, but
+  the single deadline is tight for them: both players must leave the app,
+  perform the external action (e.g. follow/like/comment on Facebook or TikTok),
+  upload proof, and review each other's submissions — all inside 30 minutes.
+  Manual-proof rooms will therefore expire more often than API-verifiable
+  ones. That is the designed consequence, not a bug: expiry refunds both
+  contributions exactly once, reverses room revenue, releases both slots, and
+  preserves evidence — nobody loses credits for running out of time. If the
+  owner wants manual-proof rooms to be practical at higher completion rates,
+  the lever is `room_active_minutes` (owner decision below); v1 keeps one
+  deadline for every phase rather than adding per-phase timers.
 - **Exactly-once unwind.** The expiry transition is a single conditional
   `UPDATE ... WHERE status IN (active states) AND expiresAt <= now()` that sets
   status=EXPIRED, `closedAt`, `closeReason='ACTIVE_TIMEOUT'` — repeated sweep
@@ -1122,8 +1141,12 @@ charge stands + 2 points; dispute resolutions per v2 table.
 2. **Unclaimed listing expiry** — `claimExpiresAt` governs only OPEN rooms;
    v2 proposed 72h. Approve/adjust.
 3. **Active-window length** — owner specified 30 minutes from B's join;
-   confirm the value (`room_active_minutes`) — it covers negotiation +
-   work + review, which is tight for manual proof review.
+   confirm the value (`room_active_minutes`). It covers negotiation + external
+   work + proof + peer review. Manual-proof platforms (Facebook, TikTok, etc.)
+   are **allowed** — peer review is the verification path, no API requirement —
+   but the window is tight for them and they will expire more often (refunds
+   protect both players). If manual-room completion rate matters, raise
+   `room_active_minutes` or accept the expiry rate; v1 keeps a single deadline.
 4. **Pending-review timeout policy** — resolved by the single deadline:
    proof/review does NOT survive `expiresAt`. Confirm no grace period is
    wanted (a grace period would add a second timer + accounting path).
