@@ -223,8 +223,9 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const other = await service.create(outsiderId, { title: 'Other room' });
     await expect(service.join(joinerId, other.id, {}, '10.0.0.10'))
       .rejects.toThrow(ConflictException);
-    // outsider's room untouched, joiner balance unchanged (rejected join reserves nothing)
-    expect(await balanceOf(joinerId)).toBe(500);
+    // outsider's room untouched, joiner balance unchanged by the rejected join
+    // (joiner already paid 25 for `room` inside makeRoom)
+    expect(await balanceOf(joinerId)).toBe(475);
     const still = await prisma.challengeRoom.findUnique({ where: { id: other.id } });
     expect(still!.status).toBe(RoomStatus.OPEN);
     expect(still!.claimerId).toBeNull();
@@ -465,11 +466,11 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     // slots released
     expect(await prisma.roomParticipation.count({ where: { roomId: room.id, releasedAt: null } })).toBe(0);
 
-    // idempotent: second sweep changes nothing
+    // idempotent: second sweep changes nothing — both payers refunded exactly once
     await service.sweepExpired();
     expect(await prisma.transaction.count({
       where: { referenceId: room.id, type: TransactionType.REFUND_ROOM_CLOSE },
-    })).toBe(1);
+    })).toBe(2);
 
     void cBefore; void jBefore;
   });
@@ -533,8 +534,12 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const offerB = await service.upsertOffer(joinerId, room.id, offerDto('T2'));
     await service.approve(creatorId, room.id, {});
     await service.approve(joinerId, room.id, {});
-    const subA = await service.submitProof(joinerId, room.id, offerA.id, { proofHash: `ra-${seq}` });
-    const subB = await service.submitProof(creatorId, room.id, offerB.id, { proofHash: `rb-${seq}` });
+    const subA = await service.submitProof(joinerId, room.id, offerA.id, {
+      proofUrl: `/uploads/proofs/rooms/j/${room.id}/a.webp`, proofHash: `ra-${seq}`,
+    });
+    const subB = await service.submitProof(creatorId, room.id, offerB.id, {
+      proofUrl: `/uploads/proofs/rooms/c/${room.id}/b.webp`, proofHash: `rb-${seq}`,
+    });
     await service.reviewSubmission(creatorId, subA.id, { action: 'approve' });
     await service.reviewSubmission(joinerId, subB.id, { action: 'approve' });
 

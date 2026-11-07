@@ -975,7 +975,11 @@ export class RoomsService {
     if (!PRE_AGREEMENT_STATUSES.includes(room.status)) {
       throw new ConflictException('Rooms can only be cancelled before agreement — open a dispute instead');
     }
-    this.assertActive(room);
+    // OPEN listings expire on claimExpiresAt; NEGOTIATING rooms on expiresAt.
+    const deadline = room.status === RoomStatus.OPEN ? room.claimExpiresAt : room.expiresAt;
+    if (deadline && deadline <= new Date()) {
+      throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+    }
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
