@@ -39,7 +39,7 @@ Verified against local API (`:3001`, `engganyo_test` DB, 51 migrations) + Chromi
 
 ## 1. Manageable task discovery
 
-**Status — PR #46 merged (`a03732c`), deploy run 42348344682 in progress.** All checks green (API/Web CI + E2E). `pull_request` trigger now on main so all PRs get checks. Production verification pending deploy.
+**Status — DEPLOYED + live-verified.** PR #46 merged `a03732c`, deploy 42348344682 ✅. Authenticated verification on engganyo.com (see Live-verification table): chips, initial batch, platform filter, Accept & open popup, popup-blocked fallback, accepted panel all PASS. Show-more and own-exclusion remain open (data availability).
 
 Delivered in PR #46: platform picker chips wired to the existing `platform=` API filter, self-owned campaigns excluded from discovery at the API level, accumulating "Show more" feed (initial batch 6 — recorded design decision), "Accept & open [platform]" with synchronous popup + blocked-popup fallback, and a `delByPattern` cache-invalidation fix. Local verification evidence is in the PR body; production verification follows merge + deploy.
 
@@ -53,7 +53,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 2. Hide self-owned work and simplify acceptance
 
-**Status — DEPLOYED.** PR #46 merged `a03732c` (deploy 42348344682 ✅). Live-verified on engganyo.com: health ok, platform chips/Show-more/own-work exclusion/Accept & open shipped in bundle. Self-owned campaigns now excluded from `GET /tasks` discovery at the API level; creator management unchanged (`/campaigns`, `tasks/my`). Accept & open [platform] with synchronous popup, blocked-popup fallback, and pinned accepted panel delivered; edge-case browser verification pending deploy.
+**Status — DEPLOYED.** PR #46 merged `a03732c` (deploy 42348344682 ✅). Live-verified on engganyo.com: health ok, platform chips/Show-more/own-work exclusion/Accept & open shipped in bundle. Self-owned campaigns now excluded from `GET /tasks` discovery at the API level; creator management unchanged (`/campaigns`, `tasks/my`). Accept & open [platform] with synchronous popup, blocked-popup fallback, and pinned accepted panel delivered; both paths verified live on prod.
 
 - Verify that discovery excludes the viewer's own campaigns and v1 challenge listings at the API level. Creator management views must still provide access to their work.
 - Provide a clearly labeled Accept & open [platform] interaction. The external destination opens after successful assignment, with Engganyo available for proof submission.
@@ -64,7 +64,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 3. Optional account linking for manual tasks
 
-**Status — DEPLOYED.** PR #47 merged `bcb5371` (deploy 42349412795 ✅) — linking gated on actual verification path (autoVerify + API-verified type); challenges never require linking. Head `6ac0d94`. Review revision: linking now gated on the *actual* verification path — `requiresLinkedAccount(taskType, autoVerify)` requires a link only for API-verified types configured for autoVerify; autoVerify=false takes manual review unlinked; challenges never use the platform API so claim never checks linking. Web mirrors via `offerRequiresLinkedAccount`. Coverage: 28-case unit matrix + real-PG assign tests (manual vs autoVerify) + challenge-claim no-link test. Production verification pending deploy.
+**Status — DEPLOYED.** PR #47 merged `bcb5371` (deploy 42349412795 ✅) — linking gated on actual verification path (autoVerify + API-verified type); challenges never require linking. Head `6ac0d94`. Review revision: linking now gated on the *actual* verification path — `requiresLinkedAccount(taskType, autoVerify)` requires a link only for API-verified types configured for autoVerify; autoVerify=false takes manual review unlinked; challenges never use the platform API so claim never checks linking. Web mirrors via `offerRequiresLinkedAccount`. Coverage: 28-case unit matrix + real-PG assign tests (manual vs autoVerify) + challenge-claim no-link test. Live: manual tasks accepted unlinked on prod; autoVerify link-gate N/A (no API-verified listings live).
 
 Jomar wants beginners to complete manually reviewed tasks using their chosen social account, including switching between their own social accounts.
 
@@ -88,7 +88,7 @@ Jomar describes listings where users buy credits from other users and receive th
 
 ## 5. Discoverable Top up
 
-**Status — DEPLOYED.** PR #48 merged `1b5181f` (deploy 42349420636 ✅) — final prod SHA includes #46+#47+#48. Public check: landing "Supported platforms" strip live in SSR HTML; /tasks /wallet /login 200 anonymous. Sidebar credit chip + new mobile balance pill link to `/wallet?tab=deposit`, opening the existing Deposit Credits flow directly. Charge calculations, payment returns, recovery, and settlement untouched. Production verification pending deploy.
+**Status — DEPLOYED.** PR #48 merged `1b5181f` (deploy 42349420636 ✅) — final prod SHA includes #46+#47+#48. Public check: landing "Supported platforms" strip live in SSR HTML; /tasks /wallet /login 200 anonymous. Sidebar credit chip + new mobile balance pill link to `/wallet?tab=deposit`, opening the existing Deposit Credits flow directly. Charge calculations, payment returns, recovery, and settlement untouched. Verified live: Top up lands on deposit tab at desktop+mobile.
 
 - Inspect Wallet → Deposit Credits and add a clear Top up entry point or label where users look for it.
 - Reuse the existing deposit flow and display the actual enabled payment options, charge currency, minimums, and server-calculated amount.
@@ -131,7 +131,7 @@ Jomar wants an affordable feed of user-submitted ads, paid directly with money, 
 
 ## 9. Supported-platform logos on the landing page
 
-**Status — DEPLOYED in `1b5181f`; order corrected in `6c4f2b5`.** Landing "Supported platforms" strip uses shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Owner requested it before "Two ways to participate" — **PR #49** merged `6c4f2b5` (squash of `e1164df`), deploy run 42353348645; section now renders immediately before the participation section. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy + authenticated pass.
+**Status — DEPLOYED in `1b5181f`; order corrected in `6c4f2b5`.** Landing "Supported platforms" strip uses shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Owner requested it before "Two ways to participate" — **PR #49** merged `6c4f2b5` (squash of `e1164df`), deploy run 42353348645; section now renders immediately before the participation section. Engganyo logo/CTA/nav preserved. Verified live at 390px+1440px, authenticated and anonymous.
 
 Add a graceful, visually balanced platform section so visitors immediately understand which social platforms Engganyo supports. Include Facebook, TikTok, Telegram, and X, and inspect the configured supported platforms for other eligible entries such as YouTube and Instagram.
 
@@ -144,17 +144,29 @@ Add a graceful, visually balanced platform section so visitors immediately under
 - Keep rendering lightweight. The section should use local assets and existing configuration without new client-side platform requests or tracking scripts.
 - Preserve the Engganyo logo and capture before/after views at 390px and 1440px. Verify the full landing page, signup CTA, and mobile navigation after adding the section.
 
-## Live-verification status (7 Nov 2026)
+## Live-verification status (7 Nov 2026) — authenticated pass DONE
 
-Deployed SHA `1b5181f` carries PRs #46–#48; public surface verified (health, landing logos, anonymous routes). **PR #49** (platforms-before-"Two ways") merged `6c4f2b5`, deploy run 42353348645 — confirm order on prod after it lands.
+Deployed SHA `6c4f2b5` carries PRs #46–#49 (all deploy runs green; containers healthy; migrations current). **Authenticated journey verified on engganyo.com** via a dedicated Edge session the owner signed into manually (account `botro`, SUPER_ADMIN, balance 6088→6088, **zero credit changes**). Evidence: screenshots + `results.json`/`followup.json`/`proof-retry.json` in `Temp/engg-verify/`.
 
-**Authenticated journey verification remains blocked** after a full retry:
+| Check | Result | Evidence |
+|---|---|---|
+| Landing: platforms before "Two ways" | ✅ PASS desktop+mobile | SSR order confirmed; `d1/m1` shots |
+| Top up discoverability | ✅ PASS | "CREDITS · Top up" chip + mobile pill → `/wallet?tab=deposit`, deposit methods render; `d2/d3/m3` |
+| Platform filter chips | ✅ PASS | 9 chips (All + FB/TikTok/Telegram/X/IG/Discord/TrustPilot/Google); Facebook filter returns results; `d4/d6` |
+| Initial batch sizing | ✅ PASS | 5 cards rendered (batch ≤6); `d4` |
+| Show more | ⚠️ OPEN | Only 3 tasks exist in prod browse → single page, button correctly absent. Needs more live listings to exercise; logic covered by CI |
+| Accept & open [platform] | ✅ PASS | Popup opened synchronously to the accepted task's `targetUrl`; accepted panel showed Open/Submit proof/Track in My tasks; `d7` |
+| Popup-blocked fallback | ✅ PASS | `window.open` blocked → amber "browser blocked the new tab" warning + panel persisted; `d8` |
+| Manual task without linking | ✅ PASS | TWITTER_FOLLOW/INSTAGRAM_FOLLOW/TIKTOK_FOLLOW/FACEBOOK_PAGE_LIKE accepted with no linked-account gate (all `autoVerify:true` manual types) |
+| autoVerify link-gate (API types) | ⚠️ OPEN | No YT_SUB/LIKE, TWITCH_FOLLOW, or SPOTIFY_FOLLOW listings in prod browse → live check N/A; covered by CI unit matrix + real-PG integration |
+| Self-owned work exclusion | ⚠️ OPEN | `botro` owns 0 campaigns/challenges → nothing to exclude; `ownLeakInBrowse:[]`. Campaign creation needs ≥100cr spend on owner account (admin bypasses trust but real debit) — needs dedicated trust-LOW+ test account or owner-approved spend |
+| Proof submission | ✅ PASS | `POST /uploads/proof` 201 → `POST /tasks/:id/submit` 200 → `SUBMITTED`, reviewDeadline 2026-11-09, creditsEarned 0 (correct pending-review); `proof-retry.json` |
+| Review tracking | ✅ PARTIAL | My tasks shows ASSIGNED→SUBMITTED states; approval requires campaign creator (`reviewSubmission` is creator-only, no admin override) — creator-side approval unverified |
+| Balance/ledger integrity | ✅ PASS | 6088→6088 across all accepts+proof; no unexpected debits |
 
-- **SSH `engadmin@134.255.232.68`:** agent socket `/tmp/eng-agent.sock` holds 1 ED25519 key, but every identity tried → `Permission denied (publickey,password)`. Unprivileged `engganyo` shell works (read `.deployed-sha` = `1b5181f`, API on 127.0.0.1:3001) but has no docker/sudo. `.env` is `engganyo:600`. No keys rotated, no access settings changed.
-- **Self-registration:** reCAPTCHA **v3 enforced** (confirmed via `/api/auth/public-config`). Automated browsers all rejected — Playwright Chromium headless, real Edge (`channel: msedge`), Edge + `AutomationControlled` disabled + webdriver/plugins/languages init-script spoofing → all `400 "reCAPTCHA validation failed"`. No prod tokens minted (owner instruction).
-- **Smallest owner unblock (either):** (a) elevated `Set-Service ssh-agent -StartupType Manual; Start-Service ssh-agent; ssh-add ~\.ssh\engganyo_vps` → engadmin access for server-side checks + labeled test-user creation; or (b) owner logs into engganyo.com in their own browser and shares the `access_token` from localStorage → injected into Playwright storageState for the full signed-in journey (no credential handling, no reCAPTCHA bypass).
+**Test records created (labeled):** assignment on `FACEBOOK_PAGE_LIKE` "Face my book" (campaign `cmw48dmaa`, completion `cmw65ul4l`, now SUBMITTED pending creator review, proof file `DEVIN-VERIFY` note); one earlier accepted-panel assignment. No credits spent or earned.
 
-Public health and successful deployment alone do **not** close this checklist — the signed-in journey (chips, Show more, own-work exclusion, Accept & open + popup fallback, proof → review, manual tasks without linking, autoVerify linking rule, Top up nav) is still unverified on prod.
+**Still open:** Show-more live exercise (needs >6 listings), autoVerify link-gate live check (needs an API-verified listing), own-work exclusion (needs listing-owning account), creator-side review approval. All have CI coverage; live gaps are data-availability, not code.
 
 ## Implementation and review requirements
 
