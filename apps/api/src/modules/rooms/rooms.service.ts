@@ -1110,7 +1110,7 @@ export class RoomsService {
     }
 
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    const cancelled = await this.prisma.$transaction(async (tx) => {
       await this.lockRoom(tx, roomId);
       const fresh = await this.readLockedRoom(tx, roomId);
       if (this.roleOf(fresh, userId) !== myRole) {
@@ -1130,16 +1130,20 @@ export class RoomsService {
         data: { status: RoomStatus.CLOSED, closedAt: now, closeReason: 'PLAYER_CANCEL', updatedAt: now },
       });
       if (closed.count !== 1) throw new ConflictException('Room state changed');
-      await this.refundContribution(tx, room.creatorId, room.contributionCredits, roomId, 'Room cancelled — contribution refunded');
-      if (room.claimerId) {
-        await this.refundContribution(tx, room.claimerId, room.contributionCredits, roomId, 'Room cancelled — contribution refunded');
+      // Refund from the LOCKED row — a join may have committed between the
+      // pre-check read and this transaction, so fresh.claimerId is the
+      // authoritative payer set (never refund from the stale snapshot).
+      await this.refundContribution(tx, fresh.creatorId, fresh.contributionCredits, roomId, 'Room cancelled — contribution refunded');
+      if (fresh.claimerId) {
+        await this.refundContribution(tx, fresh.claimerId, fresh.contributionCredits, roomId, 'Room cancelled — contribution refunded');
       }
       await tx.roomParticipation.updateMany({
         where: { roomId, releasedAt: null },
         data: { releasedAt: now },
       });
+      return fresh;
     });
-    this.notifyRoom(this.counterpartyId(room, userId), roomId, NotificationType.ROOM_UPDATE,
+    this.notifyRoom(this.counterpartyId(cancelled, userId), roomId, NotificationType.ROOM_UPDATE,
       'Room closed', 'The room was cancelled — both contributions were refunded.');
     return { cancelled: true };
   }

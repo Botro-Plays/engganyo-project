@@ -614,10 +614,13 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(claimerApproval?.claimerVersion).toBe(2); // recorded against CURRENT versions
     expect(await prisma.platformRevenue.count({ where: { roomId: room.id } })).toBe(0);
 
-    // Agreement now requires BOTH players to approve the v2 terms.
-    await service.approve(creatorId, room.id, {});
-    const r = await service.approve(joinerId, room.id, {});
+    // Agreement now requires BOTH players to approve the v2 terms — the
+    // joiner's raced approval already recorded {1,2}, so the creator's
+    // re-approval alone completes dual approval and collects the charge.
+    const r = await service.approve(creatorId, room.id, {});
     expect(r.agreed).toBe(true);
+    // A repeated approval on the now-AGREED room is rejected, not re-charged.
+    await expect(service.approve(joinerId, room.id, {})).rejects.toThrow(ConflictException);
     expect(await prisma.platformRevenue.count({ where: { roomId: room.id } })).toBe(1);
     await forceExpireAndSweep(room.id);
   });
