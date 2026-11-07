@@ -12,7 +12,7 @@ import { GamificationModule } from '../gamification/gamification.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 
 @Module({
-  imports: [NotificationsModule, EventsModule, forwardRef(() => PayMongoModule), forwardRef(() => PayPalModule), forwardRef(() => GamificationModule), ReferralsModule],
+  imports: [NotificationsModule, EventsModule, forwardRef(() => PayMongoModule), forwardRef(() => PayPalModule), forwardRef(() => GamificationModule), forwardRef(() => ReferralsModule)],
   controllers: [WalletController],
   providers: [WalletService, CurrencyService, CryptoVerificationService],
   exports: [WalletService, CurrencyService, CryptoVerificationService],
