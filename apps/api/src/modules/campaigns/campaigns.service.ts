@@ -656,6 +656,22 @@ export class CampaignsService {
     });
     const excludeIds = alreadyAssigned.map((c) => c.campaignId).filter((id): id is string => id !== null);
 
+    // Geo filter: if country provided, show campaigns targeting that country OR unrestricted ones
+    const andClauses: object[] = [
+      // Hide the viewer's own campaigns from discovery — creators manage them
+      // via /campaigns. Platform tasks stay visible to everyone, including
+      // the admin who owns them.
+      { OR: [{ userId: { not: excludeUserId } }, { isPlatformTask: true }] },
+    ];
+    if (filters.country) {
+      andClauses.push({
+        OR: [
+          { targetCountries: { isEmpty: true } },
+          { targetCountries: { has: filters.country.toUpperCase() } },
+        ],
+      });
+    }
+
     // Build taskType filter: exact match OR all enum values starting with platform prefix
     let taskTypeWhere: object | undefined;
     if (filters.taskType) {
@@ -669,21 +685,11 @@ export class CampaignsService {
       }
     }
 
-    // Geo filter: if country provided, show campaigns targeting that country OR unrestricted ones
-    const countryWhere = filters.country
-      ? {
-          OR: [
-            { targetCountries: { isEmpty: true } },
-            { targetCountries: { has: filters.country.toUpperCase() } },
-          ],
-        }
-      : {};
-
     const where = {
       status: CampaignStatus.ACTIVE,
       id: { notIn: excludeIds.length > 0 ? excludeIds : ['__none__'] },
+      AND: andClauses,
       ...taskTypeWhere,
-      ...countryWhere,
     };
 
     const [items, total] = await Promise.all([

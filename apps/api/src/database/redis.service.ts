@@ -128,9 +128,16 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   // ─── Pattern-based operations ────────────────────────────
 
   async delByPattern(pattern: string): Promise<void> {
-    const keys = await this.client.keys(pattern);
-    if (keys.length > 0) {
-      await this.client.del(...keys);
+    // ioredis applies keyPrefix to key arguments but not to the KEYS
+    // pattern, and DEL re-applies the prefix — so scan the prefixed names,
+    // then strip the prefix before deleting.
+    const prefix = this.configService.get<string>('redis.keyPrefix', 'engganyo:');
+    const keys = await this.client.keys(`${prefix}${pattern}`);
+    const stripped = keys
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => k.slice(prefix.length));
+    if (stripped.length > 0) {
+      await this.client.del(...stripped);
     }
   }
 

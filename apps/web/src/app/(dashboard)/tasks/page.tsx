@@ -4,7 +4,7 @@ import { Suspense, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import {
   Loader2, ExternalLink, X, CheckCircle2, Clock,
   ChevronLeft, ChevronRight, Send, Flag, Upload, AlertTriangle,
@@ -19,6 +19,7 @@ import { UserLink } from '@/components/user-link';
 import { ChallengeFormModal } from '@/components/challenge-form-modal';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { PlatformIcon } from '@/components/platform-icon';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
@@ -97,6 +98,25 @@ const PLATFORM_COLORS: Record<string, string> = {
   GOOGLE:      'text-orange-400 bg-orange-500/10',
 };
 
+// Short labels for the platform filter chips (badges keep TASK_TYPE_LABELS).
+const FILTER_PLATFORM_LABEL: Record<string, string> = {
+  ...PLATFORM_LABEL,
+  TWITTER: 'X',
+};
+
+// Platforms offered in the Find tasks picker, in display order. Derived from
+// task types that are actually offered (disabled engagement types excluded),
+// then intersected with the enabled-platforms config at render time.
+const FILTER_PLATFORM_ORDER = [
+  'FACEBOOK', 'TIKTOK', 'TELEGRAM', 'TWITTER', 'INSTAGRAM',
+  'DISCORD', 'TWITCH', 'SPOTIFY', 'TRUSTPILOT', 'GOOGLE', 'YOUTUBE',
+];
+
+// Initial discovery batch — two desktop rows of three. "Show more" appends
+// the next batch; batch size is a design-review decision recorded in
+// docs/JOMAR_IMMEDIATE_PRIORITIES.md.
+const BROWSE_PAGE_SIZE = 6;
+
 interface AvailableTask {
   id: string;
   title: string;
@@ -163,7 +183,9 @@ interface MyTask {
 
 interface PaginatedResponse<T> {
   items: T[];
-  meta: { total: number; page: number; totalPages: number; hasNext: boolean; hasPrev: boolean };
+  // The API sends total/page/limit/totalPages only; hasNext/hasPrev are
+  // derived client-side from page vs totalPages.
+  meta: { total: number; page: number; totalPages: number; hasNext?: boolean; hasPrev?: boolean };
 }
 
 const MY_TASK_STATUS: Record<string, { label: string; color: string; icon: LucideIcon; spin?: boolean }> = {
@@ -261,7 +283,7 @@ function TasksPageInner() {
   const tabParam = searchParams.get('tab');
   const tab: 'browse' | 'mine' | 'challenges' =
     tabParam === 'mine' ? 'mine' : tabParam === 'challenges' ? 'challenges' : 'browse';
-  const [browsePage, setBrowsePage] = useState(1);
+  const [platformFilter, setPlatformFilter] = useState<string>('ALL');
   const [myPage, setMyPage] = useState(1);
   const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'done'>('all');
   const [submitting, setSubmitting] = useState<MyTask | null>(null);
@@ -272,6 +294,9 @@ function TasksPageInner() {
   // Completion returned by a successful assign — pinned above the browse grid
   // so the user can open the target and submit proof without leaving Find tasks.
   const [justAccepted, setJustAccepted] = useState<MyTask | null>(null);
+  // Set when the browser blocked the post-accept tab — the pinned panel then
+  // explains that the Open button is the way to reach the task.
+  const [popupBlocked, setPopupBlocked] = useState(false);
   // Pinned panel for a just-claimed 1v1 challenge — persists even after the
   // challenge leaves the public list (last-slot disappearance).
   const [justClaimed, setJustClaimed] = useState<{
@@ -363,35 +388,59 @@ function TasksPageInner() {
   });
 
   // ─── Browse tasks ──────────────────────────────────────────
-  const { data: browseData, isLoading: browseLoading } = useQuery({
-    queryKey: ['tasks', 'browse', browsePage],
-    queryFn: async () => {
-      try {
-        const res = await apiClient.get<ApiResponse<PaginatedResponse<AvailableTask>>>(
-          `tasks?page=${browsePage}&limit=12`,
-        );
-        const data = res.data.data;
-        // Ensure items is always an array and filter out disabled platforms
-        const items = Array.isArray(data?.items) ? data.items : [];
-        const filtered = items.filter((task: AvailableTask) => {
-          if (DISABLED_TASK_TYPES.has(task.taskType)) return false; // disabled for platform-policy compliance
-          const platform = TASK_TYPE_TO_PLATFORM[task.taskType];
-          // If config hasn't loaded yet, show everything; otherwise filter by enabled platforms
-          return !platform || enabledPlatforms === null || enabledPlatforms.includes(platform);
-        });
-        return {
-          ...data,
-          items: filtered,
-          meta: { ...data.meta, total: filtered.length },
-        };
-      } catch (err) {
-        console.error('Failed to fetch browse tasks:', err);
-        return { items: [], meta: { total: 0, page: 1, totalPages: 1, hasNext: false, hasPrev: false } };
-      }
-    },
-    enabled: tab === 'browse' && isAuthenticated,
-    refetchInterval: 60_000,
-  });
+  // Accumulating "Show more" feed: each page is a separate cached request so
+  // revisiting a filter never refetches earlier batches. Server meta keeps
+  // page/totalPages; hasNext is derived because the API does not send it.
+  const { data: browseData, isLoading: browseLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: ['tasks', 'browse', platformFilter],
+      queryFn: async ({ pageParam }) => {
+        try {
+          const platformParam = platformFilter === 'ALL' ? '' : `&platform=${platformFilter}`;
+          const res = await apiClient.get<ApiResponse<PaginatedResponse<AvailableTask>>>(
+            `tasks?page=${pageParam}&limit=${BROWSE_PAGE_SIZE}${platformParam}`,
+          );
+          const data = res.data.data;
+          // Ensure items is always an array and filter out disabled platforms
+          const items = Array.isArray(data?.items) ? data.items : [];
+          const filtered = items.filter((task: AvailableTask) => {
+            if (DISABLED_TASK_TYPES.has(task.taskType)) return false; // disabled for platform-policy compliance
+            const platform = TASK_TYPE_TO_PLATFORM[task.taskType];
+            // If config hasn't loaded yet, show everything; otherwise filter by enabled platforms
+            return !platform || enabledPlatforms === null || enabledPlatforms.includes(platform);
+          });
+          return { ...data, items: filtered };
+        } catch (err) {
+          console.error('Failed to fetch browse tasks:', err);
+          return { items: [], meta: { total: 0, page: 1, totalPages: 1 } };
+        }
+      },
+      initialPageParam: 1,
+      getNextPageParam: (lastPage) =>
+        lastPage.meta && lastPage.meta.page < lastPage.meta.totalPages
+          ? lastPage.meta.page + 1
+          : undefined,
+      enabled: tab === 'browse' && isAuthenticated,
+      refetchInterval: 60_000,
+    });
+
+  const browseItems = useMemo(
+    () => browseData?.pages.flatMap((p) => p.items ?? []) ?? [],
+    [browseData],
+  );
+
+  // Platforms actually offered right now: task types that aren't disabled,
+  // mapped to platforms, intersected with the enabled-platforms config.
+  const browsePlatforms = useMemo(() => {
+    const offered = new Set(
+      Object.keys(TASK_TYPE_TO_PLATFORM)
+        .filter((t) => !DISABLED_TASK_TYPES.has(t))
+        .map((t) => TASK_TYPE_TO_PLATFORM[t]),
+    );
+    return FILTER_PLATFORM_ORDER.filter(
+      (p) => offered.has(p) && (enabledPlatforms === null || enabledPlatforms.includes(p)),
+    );
+  }, [enabledPlatforms]);
 
   // ─── 1v1 challenges (public open list) ─────────────────────
   const { data: challengeData, isLoading: challengeLoading } = useQuery({
@@ -486,21 +535,25 @@ function TasksPageInner() {
   });
 
   // ─── Assign task ───────────────────────────────────────────
+  type BrowsePage = { items: AvailableTask[]; meta: { total: number; page: number; totalPages: number } };
+  type BrowseCache = InfiniteData<BrowsePage, number>;
+
   const assignMutation = useMutation({
     mutationFn: (campaignId: string) => apiClient.post(`tasks/${campaignId}/assign`),
     onMutate: async (campaignId) => {
       assignInFlight.current = true;
       setAssigningIds((prev) => new Set(prev).add(campaignId));
-      // Optimistically remove the assigned task from browse cache
+      // Optimistically remove the assigned task from every loaded browse page
       await queryClient.cancelQueries({ queryKey: ['tasks', 'browse'], type: 'all' });
-      const previousBrowse = queryClient.getQueriesData<{ items: AvailableTask[]; meta: { total: number } }>({ queryKey: ['tasks', 'browse'], type: 'all' });
-      queryClient.setQueriesData<{ items: AvailableTask[]; meta: { total: number } }>({ queryKey: ['tasks', 'browse'], type: 'all' }, (old: { items: AvailableTask[]; meta: { total: number } } | undefined) => {
-        if (!old) return old;
-        const filtered = old.items.filter((t: AvailableTask) => t.id !== campaignId);
+      const previousBrowse = queryClient.getQueriesData<BrowseCache>({ queryKey: ['tasks', 'browse'], type: 'all' });
+      queryClient.setQueriesData<BrowseCache>({ queryKey: ['tasks', 'browse'], type: 'all' }, (old: BrowseCache | undefined) => {
+        if (!old?.pages) return old;
         return {
           ...old,
-          items: filtered,
-          meta: { ...old.meta, total: Math.max(0, old.meta.total - 1) },
+          pages: old.pages.map((p) => ({
+            ...p,
+            items: (p.items ?? []).filter((t: AvailableTask) => t.id !== campaignId),
+          })),
         };
       });
       return { previousBrowse };
@@ -527,6 +580,34 @@ function TasksPageInner() {
       });
     },
   });
+
+  // Accept & open [platform]: the destination tab is opened synchronously on
+  // click so the browser's user activation survives the async assign. The
+  // blank tab is navigated on success and closed on failure; when the popup
+  // itself is blocked, the pinned accepted panel is the visible fallback.
+  const handleAcceptOpen = (task: AvailableTask) => {
+    if (assignInFlight.current || assignMutation.isPending) return;
+    const win = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+    setPopupBlocked(!win);
+    assignMutation.mutate(task.id, {
+      onSuccess: (res) => {
+        const c = res?.data?.data as MyTask | undefined;
+        if (c?.id && c?.campaign) setJustAccepted(c);
+        if (win) {
+          try {
+            win.opener = null;
+            win.location.href = task.targetUrl;
+          } catch {
+            try { win.close(); } catch { /* noop */ }
+            setPopupBlocked(true);
+          }
+        }
+      },
+      onError: () => {
+        try { win?.close(); } catch { /* noop */ }
+      },
+    });
+  };
 
   // ─── Submit proof ──────────────────────────────────────────
   const proofForm = useForm<ProofFormData>({ resolver: zodResolver(proofSchema) });
@@ -759,9 +840,15 @@ function TasksPageInner() {
                       Track in My tasks
                     </Link>
                   </div>
+                  {popupBlocked && (
+                    <p className="text-xs text-amber-300/90 flex items-center gap-1.5 mt-3">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      Your browser blocked the new tab — use the Open button above to reach the task.
+                    </p>
+                  )}
                 </div>
                 <button
-                  onClick={() => setJustAccepted(null)}
+                  onClick={() => { setJustAccepted(null); setPopupBlocked(false); }}
                   aria-label="Dismiss"
                   className="text-zinc-500 hover:text-white transition-colors p-1"
                 >
@@ -770,13 +857,43 @@ function TasksPageInner() {
               </div>
             </div>
           )}
+          {browsePlatforms.length > 0 && (
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1" role="group" aria-label="Filter tasks by platform">
+              <button
+                onClick={() => setPlatformFilter('ALL')}
+                aria-pressed={platformFilter === 'ALL'}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-11 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${
+                  platformFilter === 'ALL'
+                    ? 'bg-brand-500/15 border-brand-500/40 text-brand-300'
+                    : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+                }`}
+              >
+                All platforms
+              </button>
+              {browsePlatforms.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPlatformFilter(p)}
+                  aria-pressed={platformFilter === p}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-11 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${
+                    platformFilter === p
+                      ? 'bg-brand-500/15 border-brand-500/40 text-brand-300'
+                      : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <PlatformIcon platform={p} className="w-3.5 h-3.5" />
+                  {FILTER_PLATFORM_LABEL[p] ?? PLATFORM_LABEL[p] ?? p}
+                </button>
+              ))}
+            </div>
+          )}
           {browseLoading ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-40" />
               ))}
             </div>
-          ) : !browseData?.items.length ? (
+          ) : !browseItems.length ? (
             <div className="card-glass rounded-2xl p-16 text-center">
               <p className="text-zinc-500 text-sm">No tasks available right now.</p>
               <p className="text-zinc-600 text-xs mt-1">Check back later or create a campaign to get engagement.</p>
@@ -784,7 +901,7 @@ function TasksPageInner() {
           ) : (
             <>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-tour="task-browse-grid">
-                {browseData.items.map((task) => {
+                {browseItems.map((task) => {
                   const platform = getPlatform(task.taskType);
                   const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
                   const available = task.totalSlots - task.completedSlots - task.pendingSlots;
@@ -875,22 +992,17 @@ function TasksPageInner() {
                           // and drop its post-accept panel.
                           return (
                             <button
-                              onClick={() => {
-                                if (assignInFlight.current || assignMutation.isPending) return;
-                                assignMutation.mutate(task.id, {
-                                  onSuccess: (res) => {
-                                    const c = res?.data?.data as MyTask | undefined;
-                                    if (c?.id && c?.campaign) setJustAccepted(c);
-                                  },
-                                });
-                              }}
+                              onClick={() => handleAcceptOpen(task)}
                               disabled={assigningIds.size > 0 || available <= 0}
                               className="flex-1 flex items-center justify-center gap-1.5 min-h-11 py-2.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               {assigningIds.has(task.id) ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
-                                'Accept task'
+                                <>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  Accept &amp; open {PLATFORM_LABEL[getPlatform(task.taskType)] ?? 'task'}
+                                </>
                               )}
                             </button>
                           );
@@ -909,25 +1021,17 @@ function TasksPageInner() {
                 })}
               </div>
 
-              {browseData.meta.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6">
+              {hasNextPage && (
+                <div className="mt-6 text-center">
                   <button
-                    onClick={() => setBrowsePage((p) => p - 1)}
-                    disabled={!browseData.meta.hasPrev}
-                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 min-h-11 rounded-lg bg-surface-hover border border-surface-border text-sm font-medium text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ChevronLeft className="w-4 h-4" /> Previous
+                    {isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Show more tasks
                   </button>
-                  <span className="text-xs text-zinc-500">
-                    Page {browseData.meta.page} of {browseData.meta.totalPages}
-                  </span>
-                  <button
-                    onClick={() => setBrowsePage((p) => p + 1)}
-                    disabled={!browseData.meta.hasNext}
-                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <p className="text-xs text-zinc-600 mt-2">Showing {browseItems.length} task{browseItems.length === 1 ? '' : 's'}</p>
                 </div>
               )}
             </>
@@ -1118,7 +1222,7 @@ function TasksPageInner() {
                 <div className="flex items-center justify-between mt-6">
                   <button
                     onClick={() => setChallengePage((p) => p - 1)}
-                    disabled={!challengeData.meta.hasPrev}
+                    disabled={challengeData.meta.page <= 1}
                     className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous
@@ -1128,7 +1232,7 @@ function TasksPageInner() {
                   </span>
                   <button
                     onClick={() => setChallengePage((p) => p + 1)}
-                    disabled={!challengeData.meta.hasNext}
+                    disabled={challengeData.meta.page >= challengeData.meta.totalPages}
                     className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Next <ChevronRight className="w-4 h-4" />
@@ -1316,7 +1420,7 @@ function TasksPageInner() {
                 <div className="flex items-center justify-between mt-6">
                   <button
                     onClick={() => setMyPage((p) => p - 1)}
-                    disabled={!myData.meta.hasPrev}
+                    disabled={myData.meta.page <= 1}
                     className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30"
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous
@@ -1326,7 +1430,7 @@ function TasksPageInner() {
                   </span>
                   <button
                     onClick={() => setMyPage((p) => p + 1)}
-                    disabled={!myData.meta.hasNext}
+                    disabled={myData.meta.page >= myData.meta.totalPages}
                     className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30"
                   >
                     Next <ChevronRight className="w-4 h-4" />
