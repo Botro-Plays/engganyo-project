@@ -302,7 +302,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await service.upsertOffer(joinerId, room.id, offerDto('Task B v1'));
     await service.approve(creatorId, room.id, {});
     await service.approve(joinerId, room.id, {});
-    let fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
     expect(fresh.status).toBe(RoomStatus.AGREED);
 
     // can't edit once AGREED — negotiation closed
