@@ -53,7 +53,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 2. Hide self-owned work and simplify acceptance
 
-**Status — merged with PR #46 (`a03732c`), deploy in progress.** Self-owned campaigns now excluded from `GET /tasks` discovery at the API level; creator management unchanged (`/campaigns`, `tasks/my`). Accept & open [platform] with synchronous popup, blocked-popup fallback, and pinned accepted panel delivered; edge-case browser verification pending deploy.
+**Status — DEPLOYED.** PR #46 merged `a03732c` (deploy 42348344682 ✅). Live-verified on engganyo.com: health ok, platform chips/Show-more/own-work exclusion/Accept & open shipped in bundle. Self-owned campaigns now excluded from `GET /tasks` discovery at the API level; creator management unchanged (`/campaigns`, `tasks/my`). Accept & open [platform] with synchronous popup, blocked-popup fallback, and pinned accepted panel delivered; edge-case browser verification pending deploy.
 
 - Verify that discovery excludes the viewer's own campaigns and v1 challenge listings at the API level. Creator management views must still provide access to their work.
 - Provide a clearly labeled Accept & open [platform] interaction. The external destination opens after successful assignment, with Engganyo available for proof submission.
@@ -64,7 +64,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 3. Optional account linking for manual tasks
 
-**Status — PR #47 open, head `6ac0d94` (rebased on post-#46 main), CI running.** Review revision: linking now gated on the *actual* verification path — `requiresLinkedAccount(taskType, autoVerify)` requires a link only for API-verified types configured for autoVerify; autoVerify=false takes manual review unlinked; challenges never use the platform API so claim never checks linking. Web mirrors via `offerRequiresLinkedAccount`. Coverage: 28-case unit matrix + real-PG assign tests (manual vs autoVerify) + challenge-claim no-link test. Production verification pending deploy.
+**Status — DEPLOYED.** PR #47 merged `bcb5371` (deploy 42349412795 ✅) — linking gated on actual verification path (autoVerify + API-verified type); challenges never require linking. Head `6ac0d94`. Review revision: linking now gated on the *actual* verification path — `requiresLinkedAccount(taskType, autoVerify)` requires a link only for API-verified types configured for autoVerify; autoVerify=false takes manual review unlinked; challenges never use the platform API so claim never checks linking. Web mirrors via `offerRequiresLinkedAccount`. Coverage: 28-case unit matrix + real-PG assign tests (manual vs autoVerify) + challenge-claim no-link test. Production verification pending deploy.
 
 Jomar wants beginners to complete manually reviewed tasks using their chosen social account, including switching between their own social accounts.
 
@@ -88,7 +88,7 @@ Jomar describes listings where users buy credits from other users and receive th
 
 ## 5. Discoverable Top up
 
-**Status — PR #48 open, head `d858b68`, all checks green.** Sidebar credit chip + new mobile balance pill link to `/wallet?tab=deposit`, opening the existing Deposit Credits flow directly. Charge calculations, payment returns, recovery, and settlement untouched. Production verification pending deploy.
+**Status — DEPLOYED.** PR #48 merged `1b5181f` (deploy 42349420636 ✅) — final prod SHA includes #46+#47+#48. Public check: landing "Supported platforms" strip live in SSR HTML; /tasks /wallet /login 200 anonymous. Sidebar credit chip + new mobile balance pill link to `/wallet?tab=deposit`, opening the existing Deposit Credits flow directly. Charge calculations, payment returns, recovery, and settlement untouched. Production verification pending deploy.
 
 - Inspect Wallet → Deposit Credits and add a clear Top up entry point or label where users look for it.
 - Reuse the existing deposit flow and display the actual enabled payment options, charge currency, minimums, and server-calculated amount.
@@ -131,7 +131,7 @@ Jomar wants an affordable feed of user-submitted ads, paid directly with money, 
 
 ## 9. Supported-platform logos on the landing page
 
-**Status — implemented in PR #48 (`d858b68`), checks green, awaiting merge.** Landing "Supported platforms" strip added between How it works and Trust signals: ten live platforms via shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy.
+**Status — DEPLOYED in `1b5181f`.** Landing "Supported platforms" strip added between How it works and Trust signals: ten live platforms via shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy.
 
 Add a graceful, visually balanced platform section so visitors immediately understand which social platforms Engganyo supports. Include Facebook, TikTok, Telegram, and X, and inspect the configured supported platforms for other eligible entries such as YouTube and Instagram.
 
@@ -143,6 +143,10 @@ Add a graceful, visually balanced platform section so visitors immediately under
 - Ensure accessible names, readable contrast, and stable image dimensions. Avoid redundant screen-reader announcements when a logo and visible name convey the same label.
 - Keep rendering lightweight. The section should use local assets and existing configuration without new client-side platform requests or tracking scripts.
 - Preserve the Engganyo logo and capture before/after views at 390px and 1440px. Verify the full landing page, signup CTA, and mobile navigation after adding the section.
+
+## Live-verification status (7 Nov 2026)
+
+Deployed SHA `1b5181f` carries all three PRs; public surface verified (health, landing logos, anonymous routes). **Authenticated journey verification is blocked**: ssh-agent (Windows service) is Stopped/Disabled and `engganyo_vps` is passphrase-protected — local key-loading failure, not confirmed server rejection; smallest owner action = `ssh-add ~/.ssh/engganyo_vps` in an elevated session or fresh test-account credentials. reCAPTCHA blocks API self-registration; no prod tokens minted.
 
 ## Implementation and review requirements
 
