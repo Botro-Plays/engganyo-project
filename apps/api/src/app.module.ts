@@ -21,6 +21,8 @@ import { PayPalModule } from './modules/paypal/paypal.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { ChallengesModule } from './modules/challenges/challenges.module';
+import { RoomsModule } from './modules/rooms/rooms.module';
+import { FriendsModule } from './modules/friends/friends.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AntiAbuseModule } from './modules/anti-abuse/anti-abuse.module';
@@ -99,6 +101,8 @@ import { StoreModule } from './modules/store/store.module';
     CampaignsModule,
     TasksModule,
     ChallengesModule,
+    RoomsModule,
+    FriendsModule,
     GamificationModule,
     NotificationsModule,
     AntiAbuseModule,

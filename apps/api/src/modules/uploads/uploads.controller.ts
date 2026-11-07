@@ -73,6 +73,39 @@ export class UploadsController {
     };
   }
 
+  @Post('room-proof')
+  @UseInterceptors(imageInterceptor())
+  async uploadRoomProof(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { roomId?: string },
+  ) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // roomId must be a mutual P2P room the caller participates in, past
+    // agreement and before the deadline — verified server-side.
+    const { relativeUrl, destPath } = await this.uploadsService.prepareRoomProofStorage(
+      user.sub,
+      body.roomId,
+    );
+
+    await this.uploadsService.reencodeToWebp(file.buffer, destPath);
+
+    const proofHash = this.uploadsService.sha256File(destPath);
+    const size = fs.statSync(destPath).size;
+
+    return {
+      proofUrl: relativeUrl,
+      filename: path.basename(destPath),
+      originalName: file.originalname,
+      mimetype: 'image/webp',
+      size,
+      proofHash,
+    };
+  }
+
   @Post('avatar')
   @UseInterceptors(imageInterceptor())
   async uploadAvatar(

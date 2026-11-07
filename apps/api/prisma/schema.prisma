@@ -65,15 +65,20 @@ enum TransactionType {
   SPEND_CHALLENGE_CREATE
   REFUND_CHALLENGE_CLOSE
   PLATFORM_FEE_CHALLENGE
+  // Mutual P2P rooms (no wallet reward — equal contributions + room charge)
+  SPEND_ROOM_CREATE
+  SPEND_ROOM_CLAIM
+  REFUND_ROOM_CLOSE
+  REFUND_ROOM_RESOLUTION
 }
 
 enum DepositStatus {
-  PENDING      // Created, waiting for payment confirmation
-  PROCESSING   // Payment received, being reviewed
-  COMPLETED    // Credits credited to wallet
-  FAILED       // Payment failed
-  CANCELLED    // Cancelled by user or expired QR
-  REFUNDED     // Deposit refunded by admin
+  PENDING // Created, waiting for payment confirmation
+  PROCESSING // Payment received, being reviewed
+  COMPLETED // Credits credited to wallet
+  FAILED // Payment failed
+  CANCELLED // Cancelled by user or expired QR
+  REFUNDED // Deposit refunded by admin
 }
 
 enum DepositMethod {
@@ -130,14 +135,14 @@ enum TaskType {
 }
 
 enum CompletionStatus {
-  ASSIGNED     // Task assigned to user, not yet started
-  IN_PROGRESS  // User has started the task
-  SUBMITTED    // User submitted proof
-  VERIFIED     // System/admin verified
-  REJECTED     // Proof rejected
-  DISPUTED     // User disputed rejection
-  EXPIRED      // Task expired without submission
-  CANCELLED    // Campaign cancelled before completion
+  ASSIGNED // Task assigned to user, not yet started
+  IN_PROGRESS // User has started the task
+  SUBMITTED // User submitted proof
+  VERIFIED // System/admin verified
+  REJECTED // Proof rejected
+  DISPUTED // User disputed rejection
+  EXPIRED // Task expired without submission
+  CANCELLED // Campaign cancelled before completion
 }
 
 enum ChallengeVisibility {
@@ -146,11 +151,50 @@ enum ChallengeVisibility {
 }
 
 enum ChallengeStatus {
-  OPEN       // published, slot unclaimed
-  CLAIMED    // slot taken, awaiting proof/review
-  COMPLETED  // terminal — awarded or closed without award
-  EXPIRED    // terminal — offer window or abandoned claim elapsed
-  CANCELLED  // terminal — creator cancelled before claim
+  OPEN // published, slot unclaimed
+  CLAIMED // slot taken, awaiting proof/review
+  COMPLETED // terminal — awarded or closed without award
+  EXPIRED // terminal — offer window or abandoned claim elapsed
+  CANCELLED // terminal — creator cancelled before claim
+}
+
+// Mutual P2P rooms — equal contributions, peer-reviewed work, no credit reward
+enum RoomStatus {
+  OPEN // published, awaiting joiner; creator's X reserved
+  NEGOTIATING // joiner claimed + reserved; single expiresAt deadline runs
+  AGREED // both approved the same offer state; 2X room charge collected
+  IN_PROGRESS // at least one submission made
+  SUBMITTED // both directions have submissions (derived state kept for queries)
+  DISPUTED // frozen pending admin — still expires at expiresAt (V3.1a)
+  COMPLETED // terminal — both directions verified, +1 P2P point each
+  CLOSED // terminal — closed pre-agreement, each own X refunded
+  EXPIRED // terminal — deadline elapsed in any active state, unwind applied
+}
+
+enum RoomOfferStatus {
+  PROPOSED
+  APPROVED
+  LOCKED
+  REJECTED
+}
+
+enum RoomSubmissionStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  DISPUTED
+}
+
+enum RoomRole {
+  CREATOR
+  CLAIMER
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
 }
 
 enum SocialPlatform {
@@ -195,6 +239,10 @@ enum NotificationType {
   WELCOME
   VIP_POINTS_EARNED
   TIP_RECEIVED
+  ROOM_NUDGE
+  ROOM_UPDATE
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
 }
 
 enum ReportReason {
@@ -216,12 +264,12 @@ enum ReportStatus {
 }
 
 enum AchievementCategory {
-  ENGAGEMENT    // task completion related
-  CREATOR       // campaign related
-  COMMUNITY     // referral / social related
-  DEDICATION    // streak / login related
-  FINANCIAL     // credits related
-  MILESTONE     // level/rank related
+  ENGAGEMENT // task completion related
+  CREATOR // campaign related
+  COMMUNITY // referral / social related
+  DEDICATION // streak / login related
+  FINANCIAL // credits related
+  MILESTONE // level/rank related
 }
 
 enum MissionType {
@@ -243,11 +291,11 @@ enum StoreCategory {
 }
 
 enum TrustLevel {
-  NEW       // 0-20  — new account, limited access
-  LOW       // 21-40 — some concerns
-  MEDIUM    // 41-60 — average user
-  HIGH      // 61-80 — trusted user
-  VERIFIED  // 81-100 — fully trusted creator
+  NEW // 0-20  — new account, limited access
+  LOW // 21-40 — some concerns
+  MEDIUM // 41-60 — average user
+  HIGH // 61-80 — trusted user
+  VERIFIED // 81-100 — fully trusted creator
 }
 
 enum ForumTopicStatus {
@@ -283,34 +331,34 @@ model User {
   bio         String? @db.Text
 
   // Gamification stats (denormalized for performance)
-  xp            Int   @default(0)
-  level         Int   @default(1)
+  xp              Int   @default(0)
+  level           Int   @default(1)
   reputationScore Float @default(0) @map("reputation_score")
 
   // VIP Points & Tier (denormalized for quick reads)
-  vp        Int     @default(0)
-  vipTierId String? @map("vip_tier_id")
+  vp        Int      @default(0)
+  vipTierId String?  @map("vip_tier_id")
   vipTier   VipTier? @relation(fields: [vipTierId], references: [id])
 
   // Wallet balance (denormalized from wallet for quick reads)
   creditBalance Int @default(0) @map("credit_balance")
 
   // Streaks & activity
-  currentStreak     Int       @default(0) @map("current_streak")
-  longestStreak     Int       @default(0) @map("longest_streak")
-  streakFreezeCharges Int     @default(0) @map("streak_freeze_charges")
-  lastActiveAt      DateTime? @map("last_active_at")
-  lastDailyRewardAt DateTime? @map("last_daily_reward_at")
-  lastClaimIp       String?   @map("last_claim_ip") @db.VarChar(45)
-  registrationIp    String?   @map("registration_ip") @db.VarChar(45)
+  currentStreak       Int       @default(0) @map("current_streak")
+  longestStreak       Int       @default(0) @map("longest_streak")
+  streakFreezeCharges Int       @default(0) @map("streak_freeze_charges")
+  lastActiveAt        DateTime? @map("last_active_at")
+  lastDailyRewardAt   DateTime? @map("last_daily_reward_at")
+  lastClaimIp         String?   @map("last_claim_ip") @db.VarChar(45)
+  registrationIp      String?   @map("registration_ip") @db.VarChar(45)
 
   // Referral
   referralCode String  @unique @map("referral_code")
   referredById String? @map("referred_by_id")
 
   // Two-Factor Authentication
-  twoFactorTotpSecret   String?  @map("two_factor_totp_secret") // AES-encrypted; null = TOTP not configured
-  twoFactorEmailEnabled Boolean  @default(false) @map("two_factor_email_enabled")
+  twoFactorTotpSecret   String? @map("two_factor_totp_secret") // AES-encrypted; null = TOTP not configured
+  twoFactorEmailEnabled Boolean @default(false) @map("two_factor_email_enabled")
 
   // Email preferences
   weeklyDigestEnabled Boolean @default(true) @map("weekly_digest_enabled")
@@ -324,42 +372,42 @@ model User {
   deletedAt DateTime? @map("deleted_at") // soft delete
 
   // ─── Relations ─────────────────────────────────────────────
-  referredBy   User?  @relation("UserReferrals", fields: [referredById], references: [id])
-  referrals    User[] @relation("UserReferrals")
+  referredBy User?  @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals  User[] @relation("UserReferrals")
 
-  profile              UserProfile?
-  wallet               Wallet?
-  sessions             UserSession[]
-  emailVerifications   EmailVerification[]
-  passwordResets       PasswordReset[]
-  socialAccounts       SocialAccount[]
-  campaigns            Campaign[]
-  challenges           Challenge[]           @relation("ChallengeCreator")
-  challengeClaims      Challenge[]           @relation("ChallengeClaimant")
-  completions          TaskCompletion[]
-  notifications        Notification[]
-  reportsSubmitted     Report[]              @relation("ReportSubmitter")
-  reportsReceived      Report[]              @relation("ReportTarget")
-  userAchievements     UserAchievement[]
-  missionProgress      UserMissionProgress[]
-  chats               ChatConversation[]    @relation("UserChats")
-  assignedChats       ChatConversation[]    @relation("AgentChats")
-  trustScore           TrustScore?
-  abuseFlags           AbuseFlag[]
-  ipRecords            IpRecord[]
-  auditLogs            AuditLog[]
-  referralsGiven       Referral[]            @relation("ReferralReferrer")
-  referralReceived     Referral?             @relation("ReferralReferee")
-  forumTopics         ForumTopic[]          @relation("ForumTopics")
-  forumReplies        ForumReply[]         @relation("ForumReplies")
-  forumReactions      ForumReaction[]      @relation("ForumReactions")
-  twoFactorCodes      TwoFactorCode[]
-  twoFactorBackupCodes TwoFactorBackupCode[]
-  deposits             Deposit[]
+  profile                UserProfile?
+  wallet                 Wallet?
+  sessions               UserSession[]
+  emailVerifications     EmailVerification[]
+  passwordResets         PasswordReset[]
+  socialAccounts         SocialAccount[]
+  campaigns              Campaign[]
+  challenges             Challenge[]             @relation("ChallengeCreator")
+  challengeClaims        Challenge[]             @relation("ChallengeClaimant")
+  completions            TaskCompletion[]
+  notifications          Notification[]
+  reportsSubmitted       Report[]                @relation("ReportSubmitter")
+  reportsReceived        Report[]                @relation("ReportTarget")
+  userAchievements       UserAchievement[]
+  missionProgress        UserMissionProgress[]
+  chats                  ChatConversation[]      @relation("UserChats")
+  assignedChats          ChatConversation[]      @relation("AgentChats")
+  trustScore             TrustScore?
+  abuseFlags             AbuseFlag[]
+  ipRecords              IpRecord[]
+  auditLogs              AuditLog[]
+  referralsGiven         Referral[]              @relation("ReferralReferrer")
+  referralReceived       Referral?               @relation("ReferralReferee")
+  forumTopics            ForumTopic[]            @relation("ForumTopics")
+  forumReplies           ForumReply[]            @relation("ForumReplies")
+  forumReactions         ForumReaction[]         @relation("ForumReactions")
+  twoFactorCodes         TwoFactorCode[]
+  twoFactorBackupCodes   TwoFactorBackupCode[]
+  deposits               Deposit[]
   channelMemberships     ChannelMember[]
   channelMessages        ChannelMessage[]
   channelMessageMentions ChannelMessageMention[]
-  createdChannels        Channel[]         @relation("ChannelCreator")
+  createdChannels        Channel[]               @relation("ChannelCreator")
   storePurchases         StorePurchase[]
   inventory              UserInventory[]
   activeEffects          UserActiveEffect[]
@@ -367,6 +415,18 @@ model User {
   wheelSpinAttempts      WheelSpinAttempt[]
   wheelDailyAllowances   WheelDailyAllowance[]
   dailyRewardLogs        DailyRewardLog[]
+  roomsCreated           ChallengeRoom[]         @relation("RoomCreator")
+  roomsJoined            ChallengeRoom[]         @relation("RoomClaimer")
+  roomOffers             RoomOffer[]
+  roomSubmissions        RoomSubmission[]
+  p2pPointEvents         P2pPointEvent[]
+  roomDisputesOpened     RoomDispute[]           @relation("DisputeOpener")
+  roomParticipations     RoomParticipation[]
+  roomNudgesSent         RoomNudge[]             @relation("NudgeSender")
+  roomRatingsGiven       RoomRating[]            @relation("RatingGiver")
+  roomRatingsReceived    RoomRating[]            @relation("RatingReceiver")
+  friendshipsRequested   Friendship[]            @relation("FriendshipRequester")
+  friendshipsReceived    Friendship[]            @relation("FriendshipAddressee")
 
   @@index([email])
   @@index([username])
@@ -386,19 +446,19 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Extended info
-  websiteUrl String? @map("website_url")
+  websiteUrl String?  @map("website_url")
   location   String?
   timezone   String?
   niche      String[] // creator niche tags (e.g. "gaming", "music", "tech")
   languages  String[] // spoken languages
 
   // Social proof metrics (updated periodically)
-  totalFollowers  Int   @default(0) @map("total_followers")
-  totalTasksDone  Int   @default(0) @map("total_tasks_done")
-  totalCampaigns  Int   @default(0) @map("total_campaigns")
-  completionRate  Float @default(0) @map("completion_rate")
+  totalFollowers Int   @default(0) @map("total_followers")
+  totalTasksDone Int   @default(0) @map("total_tasks_done")
+  totalCampaigns Int   @default(0) @map("total_campaigns")
+  completionRate Float @default(0) @map("completion_rate")
 
-  isPublic Boolean @default(true) @map("is_public")
+  isPublic      Boolean @default(true) @map("is_public")
   allowMentions Boolean @default(true) @map("allow_mentions")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -434,8 +494,8 @@ model EmailVerification {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   email     String
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -452,8 +512,8 @@ model PasswordReset {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   email     String
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -467,7 +527,7 @@ model TwoFactorCode {
   id        String    @id @default(cuid())
   userId    String    @map("user_id")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code      String    // argon2-hashed 6-digit code
+  code      String // argon2-hashed 6-digit code
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -480,7 +540,7 @@ model TwoFactorBackupCode {
   id        String    @id @default(cuid())
   userId    String    @map("user_id")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code      String    // argon2-hashed backup code
+  code      String // argon2-hashed backup code
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
@@ -509,18 +569,18 @@ model SocialAccount {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   platform         SocialPlatform
-  platformUserId   String  @map("platform_user_id")
-  platformUsername String? @map("platform_username")
-  profileUrl       String? @map("profile_url")
-  avatarUrl        String? @map("avatar_url")
+  platformUserId   String         @map("platform_user_id")
+  platformUsername String?        @map("platform_username")
+  profileUrl       String?        @map("profile_url")
+  avatarUrl        String?        @map("avatar_url")
 
   // Encrypted OAuth tokens
-  accessToken  String? @map("access_token")
-  refreshToken String? @map("refresh_token")
+  accessToken    String?   @map("access_token")
+  refreshToken   String?   @map("refresh_token")
   tokenExpiresAt DateTime? @map("token_expires_at")
 
-  followerCount Int?     @map("follower_count")
-  isVerified    Boolean  @default(false) @map("is_verified")
+  followerCount Int?      @map("follower_count")
+  isVerified    Boolean   @default(false) @map("is_verified")
   lastSyncedAt  DateTime? @map("last_synced_at")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -541,7 +601,7 @@ model Wallet {
   userId String @unique @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  balance        Int @default(0)         // current balance (integer credits)
+  balance        Int @default(0) // current balance (integer credits)
   lifetimeEarned Int @default(0) @map("lifetime_earned")
   lifetimeSpent  Int @default(0) @map("lifetime_spent")
 
@@ -561,8 +621,8 @@ model Transaction {
   walletId String @map("wallet_id")
   wallet   Wallet @relation(fields: [walletId], references: [id])
 
-  type          TransactionType
-  status        TransactionStatus @default(COMPLETED)
+  type   TransactionType
+  status TransactionStatus @default(COMPLETED)
 
   // All amounts in integer credits; positive = credit, negative = debit
   amount        Int
@@ -580,7 +640,7 @@ model Transaction {
   createdAt DateTime @default(now()) @map("created_at")
 
   // Optional backlink to channel message for tips
-  tipMessage ChannelMessage?
+  tipMessage     ChannelMessage?
   storePurchases StorePurchase[]
 
   @@index([walletId])
@@ -601,21 +661,21 @@ model Campaign {
   user   User   @relation(fields: [userId], references: [id])
 
   title       String
-  description String? @db.Text
+  description String?  @db.Text
   taskType    TaskType @map("task_type")
   targetUrl   String   @map("target_url")
 
   // Slots & economics
-  totalSlots     Int @map("total_slots")     // total completions needed
+  totalSlots     Int @map("total_slots") // total completions needed
   completedSlots Int @default(0) @map("completed_slots")
-  pendingSlots   Int @default(0) @map("pending_slots")   // assigned but not verified
+  pendingSlots   Int @default(0) @map("pending_slots") // assigned but not verified
   creditPerTask  Int @map("credit_per_task") // credits paid to completer per task
-  totalCost      Int @map("total_cost")      // totalSlots * creditPerTask (pre-paid pool)
+  totalCost      Int @map("total_cost") // totalSlots * creditPerTask (pre-paid pool)
 
   // Platform fee (computed at creation, locked)
-  feeAmount       Int      @default(0) @map("fee_amount")
-  feeRateAtCreate Float    @default(0.10) @map("fee_rate_at_create")
-  feeTier         String   @default("STANDARD") @map("fee_tier") // SIMPLE | STANDARD | COMPLEX | CUSTOM
+  feeAmount       Int    @default(0) @map("fee_amount")
+  feeRateAtCreate Float  @default(0.10) @map("fee_rate_at_create")
+  feeTier         String @default("STANDARD") @map("fee_tier") // SIMPLE | STANDARD | COMPLEX | CUSTOM
 
   status          CampaignStatus @default(DRAFT)
   rejectionReason String?        @map("rejection_reason")
@@ -626,28 +686,28 @@ model Campaign {
   minTrustScore   Float    @default(0) @map("min_trust_score")
 
   // Verification settings
-  verificationMethod String?  @map("verification_method") // 'screenshot' | 'oauth' | 'delayed'
-  cooldownHours      Int      @default(24) @map("cooldown_hours") // prevent same user recycle
-  requiresProof      Boolean  @default(true) @map("requires_proof")
-  proofInstructions  String?  @map("proof_instructions") @db.Text
-  autoVerify         Boolean  @default(true) @map("auto_verify") // true = instant payout; false = admin must review proof
+  verificationMethod String? @map("verification_method") // 'screenshot' | 'oauth' | 'delayed'
+  cooldownHours      Int     @default(24) @map("cooldown_hours") // prevent same user recycle
+  requiresProof      Boolean @default(true) @map("requires_proof")
+  proofInstructions  String? @map("proof_instructions") @db.Text
+  autoVerify         Boolean @default(true) @map("auto_verify") // true = instant payout; false = admin must review proof
 
   // Platform task flag - if true, admin creator can assign/complete for testing (no credit reward)
   isPlatformTask Boolean @default(false) @map("is_platform_task")
 
   // Scheduling
-  startsAt   DateTime? @map("starts_at")
-  expiresAt  DateTime? @map("expires_at")
+  startsAt  DateTime? @map("starts_at")
+  expiresAt DateTime? @map("expires_at")
 
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   completedAt DateTime? @map("completed_at")
   cancelledAt DateTime? @map("cancelled_at")
 
-  completions TaskCompletion[]
-  reports     Report[]
-  forumReplies ForumReply[] @relation("ForumCampaignReplies")
-  forumTopics  ForumTopic[]  @relation("ForumCampaignTopics")
+  completions     TaskCompletion[]
+  reports         Report[]
+  forumReplies    ForumReply[]     @relation("ForumCampaignReplies")
+  forumTopics     ForumTopic[]     @relation("ForumCampaignTopics")
   platformRevenue PlatformRevenue?
 
   @@index([userId])
@@ -659,15 +719,19 @@ model Campaign {
 }
 
 model PlatformRevenue {
-  id           String     @id @default(cuid())
-  date         DateTime   @db.Date
-  source       String     // "CAMPAIGN_FEE" | "CHALLENGE_FEE" | "CREDIT_PURCHASE" | "WITHDRAWAL_FEE"
-  amount       Int
-  campaignId   String?    @unique @map("campaign_id")
-  campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  challengeId  String?    @unique @map("challenge_id")
-  challenge    Challenge? @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now()) @map("created_at")
+  id             String         @id @default(cuid())
+  date           DateTime       @db.Date
+  source         String // "CAMPAIGN_FEE" | "CHALLENGE_FEE" | "CREDIT_PURCHASE" | "WITHDRAWAL_FEE"
+  amount         Int
+  campaignId     String?        @unique @map("campaign_id")
+  campaign       Campaign?      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  challengeId    String?        @unique @map("challenge_id")
+  challenge      Challenge?     @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  roomId         String?        @unique @map("room_id")
+  room           ChallengeRoom? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  reversedAt     DateTime?      @map("reversed_at") // ROOM_CHARGE unwind on expiry/dispute
+  reversalReason String?        @map("reversal_reason")
+  createdAt      DateTime       @default(now()) @map("created_at")
 
   @@index([date])
   @@index([source])
@@ -675,16 +739,16 @@ model PlatformRevenue {
 }
 
 model TaskCompletion {
-  id           String   @id @default(cuid())
-  campaignId   String?  @map("campaign_id")
-  campaign     Campaign? @relation(fields: [campaignId], references: [id])
-  challengeId  String?  @unique @map("challenge_id")
-  challenge    Challenge? @relation(fields: [challengeId], references: [id])
-  userId       String   @map("user_id")
-  user         User     @relation(fields: [userId], references: [id])
+  id          String     @id @default(cuid())
+  campaignId  String?    @map("campaign_id")
+  campaign    Campaign?  @relation(fields: [campaignId], references: [id])
+  challengeId String?    @unique @map("challenge_id")
+  challenge   Challenge? @relation(fields: [challengeId], references: [id])
+  userId      String     @map("user_id")
+  user        User       @relation(fields: [userId], references: [id])
 
-  status       CompletionStatus @default(ASSIGNED)
-  creditsEarned Int             @default(0) @map("credits_earned")
+  status        CompletionStatus @default(ASSIGNED)
+  creditsEarned Int              @default(0) @map("credits_earned")
 
   // Proof submission
   proofUrl        String? @map("proof_url")
@@ -726,39 +790,39 @@ model TaskCompletion {
 // =============================================================
 
 model Challenge {
-  id     String @id @default(cuid())
+  id        String @id @default(cuid())
   creatorId String @map("creator_id")
   creator   User   @relation("ChallengeCreator", fields: [creatorId], references: [id])
 
-  title       String
-  actionText  String   @map("action_text") @db.Text
-  taskType    TaskType @map("task_type")
-  targetUrl   String   @map("target_url")
+  title      String
+  actionText String   @map("action_text") @db.Text
+  taskType   TaskType @map("task_type")
+  targetUrl  String   @map("target_url")
 
-  rewardCredits      Int     @map("reward_credits")
-  requiresProof      Boolean @default(true) @map("requires_proof")
-  proofInstructions  String? @map("proof_instructions") @db.Text
+  rewardCredits     Int     @map("reward_credits")
+  requiresProof     Boolean @default(true) @map("requires_proof")
+  proofInstructions String? @map("proof_instructions") @db.Text
 
-  visibility    ChallengeVisibility @default(PUBLIC)
-  passwordHash  String?             @map("password_hash") // argon2/bcrypt hash, never plaintext
+  visibility   ChallengeVisibility @default(PUBLIC)
+  passwordHash String?             @map("password_hash") // argon2/bcrypt hash, never plaintext
 
   status ChallengeStatus @default(OPEN)
 
   // Economics — snapshotted at publish; fee collected only on settlement
-  feeRateSnapshot  Float @map("fee_rate_snapshot")
-  feeAmount        Int   @map("fee_amount")
-  reservedCredits  Int   @map("reserved_credits") // reward + fee held from creator
+  feeRateSnapshot Float @map("fee_rate_snapshot")
+  feeAmount       Int   @map("fee_amount")
+  reservedCredits Int   @map("reserved_credits") // reward + fee held from creator
 
   // The single claim — canonical link is TaskCompletion.challengeId (@unique)
-  claim           TaskCompletion?
-  claimedById     String?   @map("claimed_by_id")
-  claimedBy       User?     @relation("ChallengeClaimant", fields: [claimedById], references: [id])
-  claimedAt       DateTime? @map("claimed_at")
+  claim       TaskCompletion?
+  claimedById String?         @map("claimed_by_id")
+  claimedBy   User?           @relation("ChallengeClaimant", fields: [claimedById], references: [id])
+  claimedAt   DateTime?       @map("claimed_at")
 
-  expiresAt  DateTime  @map("expires_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-  closedAt   DateTime? @map("closed_at")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  closedAt  DateTime? @map("closed_at")
 
   platformRevenue PlatformRevenue?
 
@@ -782,10 +846,10 @@ model Referral {
 
   // A referral "qualifies" when the referee meets conditions
   // (e.g. verified email + completed 1 task)
-  isQualified     Boolean   @default(false) @map("is_qualified")
-  qualifiedAt     DateTime? @map("qualified_at")
-  creditsAwarded  Int       @default(0) @map("credits_awarded")
-  milestones      Json?     @map("milestones") // { sign_up: true, first_task: true, ten_tasks: true, deposit: true, silver_tier: true }
+  isQualified    Boolean   @default(false) @map("is_qualified")
+  qualifiedAt    DateTime? @map("qualified_at")
+  creditsAwarded Int       @default(0) @map("credits_awarded")
+  milestones     Json?     @map("milestones") // { sign_up: true, first_task: true, ten_tasks: true, deposit: true, silver_tier: true }
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -806,11 +870,11 @@ model Achievement {
   icon        String?
   badgeColor  String?             @map("badge_color") // hex color
 
-  requirement Int // numeric threshold to unlock
+  requirement  Int // numeric threshold to unlock
   creditReward Int @default(0) @map("credit_reward")
-  xpReward    Int @default(0) @map("xp_reward")
+  xpReward     Int @default(0) @map("xp_reward")
 
-  isActive Boolean @default(true) @map("is_active")
+  isActive  Boolean @default(true) @map("is_active")
   sortOrder Int     @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -844,7 +908,7 @@ model DailyMission {
 
   requirement  Int // e.g. complete 3 tasks
   creditReward Int @default(0) @map("credit_reward")
-  xpReward    Int @default(0) @map("xp_reward")
+  xpReward     Int @default(0) @map("xp_reward")
 
   isActive  Boolean @default(true) @map("is_active")
   sortOrder Int     @default(0) @map("sort_order")
@@ -876,8 +940,8 @@ model UserMissionProgress {
 }
 
 model XpEvent {
-  id          String @id @default(cuid())
-  userId      String @map("user_id")
+  id          String  @id @default(cuid())
+  userId      String  @map("user_id")
   amount      Int
   source      String // 'task_completion' | 'campaign_create' | 'achievement' | 'daily_login'
   referenceId String? @map("reference_id")
@@ -891,8 +955,8 @@ model XpEvent {
 }
 
 model VpEvent {
-  id          String @id @default(cuid())
-  userId      String @map("user_id")
+  id          String  @id @default(cuid())
+  userId      String  @map("user_id")
   amount      Int
   source      String // 'task_completion' | 'deposit_completed' | 'daily_login' | 'level_up' | 'campaign_create'
   referenceId String? @map("reference_id")
@@ -910,13 +974,13 @@ model VpEvent {
 // =============================================================
 
 model VipTier {
-  id            String @id @default(cuid())
-  name          String @unique
-  level         Int    @unique
-  displayName   String @map("display_name")
+  id            String   @id @default(cuid())
+  name          String   @unique
+  level         Int      @unique
+  displayName   String   @map("display_name")
   description   String?
-  requirementVp Int    @map("requirement_vp")
-  perks         Json   // { taskLimitBonus: number, feeDiscountPercent: number, color: string, icon: string }
+  requirementVp Int      @map("requirement_vp")
+  perks         Json // { taskLimitBonus: number, feeDiscountPercent: number, color: string, icon: string }
   users         User[]
   createdAt     DateTime @default(now()) @map("created_at")
 
@@ -932,13 +996,13 @@ model TrustScore {
   userId String @unique @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  score      Float      @default(50.0) // 0.0 – 100.0
-  level      TrustLevel @default(NEW)
+  score Float      @default(50.0) // 0.0 – 100.0
+  level TrustLevel @default(NEW)
 
   // Contributing factor scores
-  completionRate  Float @default(0) @map("completion_rate")  // % of tasks successfully verified
+  completionRate  Float @default(0) @map("completion_rate") // % of tasks successfully verified
   accountAgeDays  Int   @default(0) @map("account_age_days")
-  reportCount     Int   @default(0) @map("report_count")     // times reported by others
+  reportCount     Int   @default(0) @map("report_count") // times reported by others
   abuseFlagCount  Int   @default(0) @map("abuse_flag_count")
   verifiedSocials Int   @default(0) @map("verified_socials") // # connected platforms
   referralQuality Float @default(0) @map("referral_quality") // avg trust of referred users
@@ -987,9 +1051,9 @@ model IpRecord {
   isp       String?
 
   // Risk signals
-  isVpn   Boolean @default(false) @map("is_vpn")
-  isProxy Boolean @default(false) @map("is_proxy")
-  isTor   Boolean @default(false) @map("is_tor")
+  isVpn     Boolean @default(false) @map("is_vpn")
+  isProxy   Boolean @default(false) @map("is_proxy")
+  isTor     Boolean @default(false) @map("is_tor")
   isHosting Boolean @default(false) @map("is_hosting")
 
   action    String // 'login' | 'register' | 'task_start' | 'task_submit'
@@ -1006,12 +1070,12 @@ model DeviceFingerprint {
   id     String @id @default(cuid())
   userId String @map("user_id")
 
-  fingerprint    String  // hashed device fingerprint
-  userAgent      String? @map("user_agent")
+  fingerprint      String // hashed device fingerprint
+  userAgent        String? @map("user_agent")
   screenResolution String? @map("screen_resolution")
-  timezone       String?
-  language       String?
-  platform       String?
+  timezone         String?
+  language         String?
+  platform         String?
 
   firstSeenAt DateTime @default(now()) @map("first_seen_at")
   lastSeenAt  DateTime @default(now()) @map("last_seen_at")
@@ -1035,10 +1099,10 @@ model Notification {
   type  NotificationType
   title String
   body  String
-  data  Json?   // contextual payload (e.g. { campaignId: '...' })
+  data  Json? // contextual payload (e.g. { campaignId: '...' })
 
-  isRead  Boolean   @default(false) @map("is_read")
-  readAt  DateTime? @map("read_at")
+  isRead Boolean   @default(false) @map("is_read")
+  readAt DateTime? @map("read_at")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1057,20 +1121,23 @@ model Report {
   submittedBy   User   @relation("ReportSubmitter", fields: [submittedById], references: [id])
 
   // Target can be a user, a campaign, a forum topic, a forum reply, or a chat message
-  targetUserId String?   @map("target_user_id")
-  targetUser   User?     @relation("ReportTarget", fields: [targetUserId], references: [id])
-  campaignId   String?   @map("campaign_id")
-  campaign     Campaign? @relation(fields: [campaignId], references: [id])
-  topicId      String?   @unique @map("topic_id")
-  topic        ForumTopic? @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  replyId      String?   @unique @map("reply_id")
-  reply        ForumReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
-  messageId    String?   @unique @map("message_id")
+  targetUserId String?         @map("target_user_id")
+  targetUser   User?           @relation("ReportTarget", fields: [targetUserId], references: [id])
+  campaignId   String?         @map("campaign_id")
+  campaign     Campaign?       @relation(fields: [campaignId], references: [id])
+  topicId      String?         @unique @map("topic_id")
+  topic        ForumTopic?     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  replyId      String?         @unique @map("reply_id")
+  reply        ForumReply?     @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  messageId    String?         @unique @map("message_id")
   message      ChannelMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  roomId       String?         @map("room_id")
+  room         ChallengeRoom?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  ratingId     String?         @map("rating_id")
 
   reason      ReportReason
   description String       @db.Text
-  evidence    Json?        // screenshots, URLs, etc.
+  evidence    Json? // screenshots, URLs, etc.
 
   status     ReportStatus @default(OPEN)
   adminNotes String?      @map("admin_notes") @db.Text
@@ -1093,15 +1160,15 @@ model Report {
 
 model AuditLog {
   id     String  @id @default(cuid())
-  userId String? @map("user_id")     // actor (null = system)
+  userId String? @map("user_id") // actor (null = system)
   user   User?   @relation(fields: [userId], references: [id])
 
-  action     String  // 'user.ban' | 'campaign.approve' | 'credit.adjust' | etc.
+  action     String // 'user.ban' | 'campaign.approve' | 'credit.adjust' | etc.
   entityType String? @map("entity_type") // 'User' | 'Campaign' | 'Wallet'
   entityId   String? @map("entity_id")
 
-  oldValue  Json? @map("old_value")
-  newValue  Json? @map("new_value")
+  oldValue Json? @map("old_value")
+  newValue Json? @map("new_value")
 
   ipAddress String? @map("ip_address")
   userAgent String? @map("user_agent")
@@ -1128,9 +1195,9 @@ model PlatformConfig {
   description String?
   isPublic    Boolean @default(false) @map("is_public") // safe to expose to frontend
 
-  updatedBy String?   @map("updated_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("platform_configs")
 }
@@ -1146,7 +1213,7 @@ model AnalyticsSnapshot {
   // Users
   totalUsers    Int @default(0) @map("total_users")
   newUsers      Int @default(0) @map("new_users")
-  dailyActive   Int @default(0) @map("daily_active")   // sessions started that day
+  dailyActive   Int @default(0) @map("daily_active") // sessions started that day
   monthlyActive Int @default(0) @map("monthly_active") // distinct users with session last 30d
 
   // Tasks
@@ -1160,15 +1227,15 @@ model AnalyticsSnapshot {
   campaignsCompleted Int @default(0) @map("campaigns_completed")
 
   // Credits
-  creditsIssued  Int @default(0) @map("credits_issued")   // earned by workers
-  creditsSpent   Int @default(0) @map("credits_spent")    // paid by campaign owners
+  creditsIssued Int @default(0) @map("credits_issued") // earned by workers
+  creditsSpent  Int @default(0) @map("credits_spent") // paid by campaign owners
 
   // Store
-  storePurchases    Int @default(0) @map("store_purchases")      // total store purchase transactions
-  storeCreditsSpent Int @default(0) @map("store_credits_spent") // credits spent via store
-  storeTopItemId    String? @map("store_top_item_id")            // most-purchased item ID that day
-  storeTopItemName  String? @map("store_top_item_name")          // most-purchased item name
-  storeTopItemCount Int @default(0) @map("store_top_item_count") // purchases of top item
+  storePurchases    Int     @default(0) @map("store_purchases") // total store purchase transactions
+  storeCreditsSpent Int     @default(0) @map("store_credits_spent") // credits spent via store
+  storeTopItemId    String? @map("store_top_item_id") // most-purchased item ID that day
+  storeTopItemName  String? @map("store_top_item_name") // most-purchased item name
+  storeTopItemCount Int     @default(0) @map("store_top_item_count") // purchases of top item
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1181,52 +1248,52 @@ model AnalyticsSnapshot {
 // =============================================================
 
 model DepositPackage {
-  id           String    @id @default(cuid())
-  usdAmount    Float     @map("usd_amount")      // e.g. 10.00
-  methods      String[]  @default([])            // Allowed payment methods; empty = all methods
-  bonusCredits Int       @default(0) @map("bonus_credits")
-  label        String?                            // e.g. "Most Popular"
-  isPopular    Boolean   @default(false) @map("is_popular")
-  isActive     Boolean   @default(true) @map("is_active")
-  sortOrder    Int       @default(0) @map("sort_order")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  usdAmount    Float    @map("usd_amount") // e.g. 10.00
+  methods      String[] @default([]) // Allowed payment methods; empty = all methods
+  bonusCredits Int      @default(0) @map("bonus_credits")
+  label        String? // e.g. "Most Popular"
+  isPopular    Boolean  @default(false) @map("is_popular")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  deposits     Deposit[]
+  deposits Deposit[]
 
   @@map("deposit_packages")
 }
 
 model Deposit {
-  id                String          @id @default(cuid())
-  userId            String          @map("user_id")
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  packageId         String?         @map("package_id")
-  package           DepositPackage? @relation(fields: [packageId], references: [id])
-  method            DepositMethod
-  status            DepositStatus   @default(PENDING)
-  amountFiat        Float           @map("amount_fiat")        // Amount charged in gateway currency
-  currency          String          @default("PHP")             // "PHP", "USD"
-  creditsToAward    Int             @map("credits_to_award")   // Calculated at initiation (base + bonus)
-  creditsAwarded    Int             @default(0) @map("credits_awarded")
-  bonusCredits      Int             @default(0) @map("bonus_credits")  // Bonus portion snapshot
-  exchangeRate      Float?          @map("exchange_rate")       // USD/PHP rate at initiation (null for USD deposits)
-  userWalletAddress String?         @map("user_wallet_address") // EVM wallet address used for crypto payment
-  paymentRef        String?         @unique @map("payment_ref") // Gateway ref / TX hash
-  gatewayData       Json?           @map("gateway_data")        // Raw webhook / gateway payload
+  id                   String          @id @default(cuid())
+  userId               String          @map("user_id")
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageId            String?         @map("package_id")
+  package              DepositPackage? @relation(fields: [packageId], references: [id])
+  method               DepositMethod
+  status               DepositStatus   @default(PENDING)
+  amountFiat           Float           @map("amount_fiat") // Amount charged in gateway currency
+  currency             String          @default("PHP") // "PHP", "USD"
+  creditsToAward       Int             @map("credits_to_award") // Calculated at initiation (base + bonus)
+  creditsAwarded       Int             @default(0) @map("credits_awarded")
+  bonusCredits         Int             @default(0) @map("bonus_credits") // Bonus portion snapshot
+  exchangeRate         Float?          @map("exchange_rate") // USD/PHP rate at initiation (null for USD deposits)
+  userWalletAddress    String?         @map("user_wallet_address") // EVM wallet address used for crypto payment
+  paymentRef           String?         @unique @map("payment_ref") // Gateway ref / TX hash
+  gatewayData          Json?           @map("gateway_data") // Raw webhook / gateway payload
   // Provider-reported settlement figures (null until reported — never estimated)
-  providerFee          Float?        @map("provider_fee")
-  providerFeeCurrency  String?       @map("provider_fee_currency")
-  providerNet          Float?        @map("provider_net")
-  providerNetCurrency  String?       @map("provider_net_currency")
-  providerConverted    Float?        @map("provider_converted")       // e.g. PayPal PHP receivable
-  providerConvertedCur String?       @map("provider_converted_cur")
-  walletVerified      Boolean         @default(false) @map("wallet_verified") // signature-proven payer ownership
-  adminNotes        String?         @map("admin_notes")
-  reviewedBy        String?         @map("reviewed_by")
-  completedAt       DateTime?       @map("completed_at")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+  providerFee          Float?          @map("provider_fee")
+  providerFeeCurrency  String?         @map("provider_fee_currency")
+  providerNet          Float?          @map("provider_net")
+  providerNetCurrency  String?         @map("provider_net_currency")
+  providerConverted    Float?          @map("provider_converted") // e.g. PayPal PHP receivable
+  providerConvertedCur String?         @map("provider_converted_cur")
+  walletVerified       Boolean         @default(false) @map("wallet_verified") // signature-proven payer ownership
+  adminNotes           String?         @map("admin_notes")
+  reviewedBy           String?         @map("reviewed_by")
+  completedAt          DateTime?       @map("completed_at")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([packageId])
@@ -1240,18 +1307,18 @@ model Deposit {
 // =============================================================
 
 model ChatConversation {
-  id        String   @id @default(cuid())
-  userId    String?  @map("user_id") // null for anonymous users
-  ipAddress String?  @map("ip_address") // for anonymous users
+  id        String  @id @default(cuid())
+  userId    String? @map("user_id") // null for anonymous users
+  ipAddress String? @map("ip_address") // for anonymous users
 
-  status   ChatStatus @default(AI_HANDLING)
-  assignedTo String?  @map("assigned_to") // admin userId when transferred to human
+  status     ChatStatus @default(AI_HANDLING)
+  assignedTo String?    @map("assigned_to") // admin userId when transferred to human
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user   User?   @relation("UserChats", fields: [userId], references: [id], onDelete: Cascade)
-  agent  User?   @relation("AgentChats", fields: [assignedTo], references: [id], onDelete: SetNull)
+  user     User?         @relation("UserChats", fields: [userId], references: [id], onDelete: Cascade)
+  agent    User?         @relation("AgentChats", fields: [assignedTo], references: [id], onDelete: SetNull)
   messages ChatMessage[]
 
   @@index([userId])
@@ -1262,11 +1329,11 @@ model ChatConversation {
 }
 
 model ChatMessage {
-  id             String            @id @default(cuid())
-  conversationId String            @map("conversation_id")
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
   role           ChatRole
   content        String
-  isHuman        Boolean           @default(false) @map("is_human") // true if sent by human agent
+  isHuman        Boolean  @default(false) @map("is_human") // true if sent by human agent
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1294,10 +1361,10 @@ enum ChatRole {
 // =============================================================
 
 enum ChannelType {
-  PUBLIC    // Open to all authenticated users
-  VIP       // VIP-only channels
-  PRIVATE   // Invite-only / DM
-  ADMIN     // Admin/mod only
+  PUBLIC // Open to all authenticated users
+  VIP // VIP-only channels
+  PRIVATE // Invite-only / DM
+  ADMIN // Admin/mod only
 }
 
 enum ChannelMemberRole {
@@ -1318,8 +1385,9 @@ model Channel {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  members   ChannelMember[]
-  messages  ChannelMessage[]
+  members       ChannelMember[]
+  messages      ChannelMessage[]
+  ChallengeRoom ChallengeRoom?
 
   @@index([type, isActive])
   @@index([slug])
@@ -1327,14 +1395,14 @@ model Channel {
 }
 
 model ChannelMember {
-  id        String            @id @default(cuid())
-  channelId String            @map("channel_id")
-  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  userId    String            @map("user_id")
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      ChannelMemberRole @default(MEMBER)
-  joinedAt  DateTime          @default(now()) @map("joined_at")
-  lastReadAt DateTime?        @map("last_read_at")
+  id         String            @id @default(cuid())
+  channelId  String            @map("channel_id")
+  channel    Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId     String            @map("user_id")
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       ChannelMemberRole @default(MEMBER)
+  joinedAt   DateTime          @default(now()) @map("joined_at")
+  lastReadAt DateTime?         @map("last_read_at")
 
   @@unique([channelId, userId])
   @@index([userId])
@@ -1356,8 +1424,8 @@ model ChannelMessage {
   tipTransactionId String?      @unique @map("tip_transaction_id")
   tipTransaction   Transaction? @relation(fields: [tipTransactionId], references: [id])
 
-  reports   Report[]
-  mentions  ChannelMessageMention[]
+  reports  Report[]
+  mentions ChannelMessageMention[]
 
   @@index([channelId, createdAt])
   @@index([userId, createdAt])
@@ -1365,12 +1433,12 @@ model ChannelMessage {
 }
 
 model ChannelMessageMention {
-  id        String   @id @default(cuid())
-  messageId String   @map("message_id")
+  id        String         @id @default(cuid())
+  messageId String         @map("message_id")
   message   ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now()) @map("created_at")
+  userId    String         @map("user_id")
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now()) @map("created_at")
 
   @@unique([messageId, userId])
   @@index([userId, createdAt])
@@ -1382,28 +1450,28 @@ model ChannelMessageMention {
 // =============================================================
 
 model ForumTopic {
-  id          String            @id @default(cuid())
-  title       String
-  content     String            @db.Text
-  status      ForumTopicStatus  @default(OPEN)
-  isPinned    Boolean           @default(false) @map("is_pinned")
-  viewCount   Int               @default(0) @map("view_count")
-  replyCount  Int               @default(0) @map("reply_count")
-  lockedAt    DateTime?         @map("locked_at")
-  lockedBy    String?           @map("locked_by")
+  id         String           @id @default(cuid())
+  title      String
+  content    String           @db.Text
+  status     ForumTopicStatus @default(OPEN)
+  isPinned   Boolean          @default(false) @map("is_pinned")
+  viewCount  Int              @default(0) @map("view_count")
+  replyCount Int              @default(0) @map("reply_count")
+  lockedAt   DateTime?        @map("locked_at")
+  lockedBy   String?          @map("locked_by")
 
-  authorId    String            @map("author_id")
-  author      User              @relation("ForumTopics", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String @map("author_id")
+  author   User   @relation("ForumTopics", fields: [authorId], references: [id], onDelete: Cascade)
 
-  campaignId  String?           @map("campaign_id")
-  campaign    Campaign?         @relation("ForumCampaignTopics", fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId String?   @map("campaign_id")
+  campaign   Campaign? @relation("ForumCampaignTopics", fields: [campaignId], references: [id], onDelete: SetNull)
 
-  replies     ForumReply[]
-  reactions   ForumReaction[]
-  reports     Report[]
+  replies   ForumReply[]
+  reactions ForumReaction[]
+  reports   Report[]
 
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([authorId])
   @@index([status])
@@ -1414,29 +1482,29 @@ model ForumTopic {
 }
 
 model ForumReply {
-  id          String            @id @default(cuid())
-  content     String            @db.Text
-  isEdited    Boolean           @default(false) @map("is_edited")
-  editedAt    DateTime?         @map("edited_at")
+  id       String    @id @default(cuid())
+  content  String    @db.Text
+  isEdited Boolean   @default(false) @map("is_edited")
+  editedAt DateTime? @map("edited_at")
 
-  topicId     String            @map("topic_id")
-  topic       ForumTopic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId String     @map("topic_id")
+  topic   ForumTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
-  authorId    String            @map("author_id")
-  author      User              @relation("ForumReplies", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String @map("author_id")
+  author   User   @relation("ForumReplies", fields: [authorId], references: [id], onDelete: Cascade)
 
-  campaignId  String?           @map("campaign_id")
-  campaign    Campaign?         @relation("ForumCampaignReplies", fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignId String?   @map("campaign_id")
+  campaign   Campaign? @relation("ForumCampaignReplies", fields: [campaignId], references: [id], onDelete: SetNull)
 
-  parentReplyId String?         @map("parent_reply_id")
-  parentReply ForumReply?       @relation("ReplyReplies", fields: [parentReplyId], references: [id], onDelete: Cascade)
-  childReplies ForumReply[]     @relation("ReplyReplies")
+  parentReplyId String?      @map("parent_reply_id")
+  parentReply   ForumReply?  @relation("ReplyReplies", fields: [parentReplyId], references: [id], onDelete: Cascade)
+  childReplies  ForumReply[] @relation("ReplyReplies")
 
-  reactions   ForumReaction[]
-  reports     Report[]
+  reactions ForumReaction[]
+  reports   Report[]
 
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([topicId])
   @@index([authorId])
@@ -1447,19 +1515,19 @@ model ForumReply {
 }
 
 model ForumReaction {
-  id          String            @id @default(cuid())
-  type        ForumReactionType
+  id   String            @id @default(cuid())
+  type ForumReactionType
 
-  topicId     String?           @map("topic_id")
-  topic       ForumTopic?       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId String?     @map("topic_id")
+  topic   ForumTopic? @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
-  replyId     String?           @map("reply_id")
-  reply       ForumReply?       @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  replyId String?     @map("reply_id")
+  reply   ForumReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
 
-  userId      String            @map("user_id")
-  user        User              @relation("ForumReactions", fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+  user   User   @relation("ForumReactions", fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime          @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([topicId, userId])
   @@unique([replyId, userId])
@@ -1472,23 +1540,23 @@ model ForumReaction {
 // =============================================================
 
 model StoreItem {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  category    StoreCategory
-  creditCost  Int           @map("credit_cost")
-  isLimited   Boolean       @default(false) @map("is_limited")
-  limitedQty  Int?          @map("limited_qty") // NULL = unlimited
-  startsAt    DateTime?     @map("starts_at")
-  endsAt      DateTime?     @map("ends_at")
-  isActive      Boolean       @default(true) @map("is_active")
-  isConsumable  Boolean       @default(true) @map("is_consumable")
-  maxOwnedPerUser Int?        @map("max_owned_per_user") // NULL = unlimited
-  requiredVipTierLevel Int?   @map("required_vip_tier_level") // NULL = no requirement
-  metadata      Json // item-specific data (boost duration, cosmetic URL, etc.)
+  id                   String        @id @default(cuid())
+  name                 String
+  description          String?
+  category             StoreCategory
+  creditCost           Int           @map("credit_cost")
+  isLimited            Boolean       @default(false) @map("is_limited")
+  limitedQty           Int?          @map("limited_qty") // NULL = unlimited
+  startsAt             DateTime?     @map("starts_at")
+  endsAt               DateTime?     @map("ends_at")
+  isActive             Boolean       @default(true) @map("is_active")
+  isConsumable         Boolean       @default(true) @map("is_consumable")
+  maxOwnedPerUser      Int?          @map("max_owned_per_user") // NULL = unlimited
+  requiredVipTierLevel Int?          @map("required_vip_tier_level") // NULL = no requirement
+  metadata             Json // item-specific data (boost duration, cosmetic URL, etc.)
 
-  purchases   StorePurchase[]
-  inventory   UserInventory[]
+  purchases StorePurchase[]
+  inventory UserInventory[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1537,8 +1605,8 @@ model UserActiveEffect {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // 'xp_boost', 'task_limit_boost'
-  metadata  Json     // { multiplier: 2, expiresAt: "..." } or { bonusSlots: 5, expiresAt: "..." }
+  type      String // 'xp_boost', 'task_limit_boost'
+  metadata  Json // { multiplier: 2, expiresAt: "..." } or { bonusSlots: 5, expiresAt: "..." }
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1556,7 +1624,7 @@ model WheelSpin {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  result    String   // prize identifier
+  result    String // prize identifier
   isFree    Boolean  @map("is_free")
   cost      Int      @default(0) // credits spent (0 if free)
   createdAt DateTime @default(now()) @map("created_at")
@@ -1576,19 +1644,18 @@ enum WheelSpinAttemptStatus {
 }
 
 model WheelSpinAttempt {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  key       String   @map("key")
+  id        String                 @id @default(cuid())
+  userId    String                 @map("user_id")
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String                 @map("key")
   status    WheelSpinAttemptStatus @default(PENDING)
   result    Json?
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime               @default(now()) @map("created_at")
 
   @@unique([userId, key])
   @@index([userId])
   @@map("wheel_spin_attempts")
 }
-
 
 // Authoritative per-user, per-UTC-day spin allowance. Rows are created and
 // mutated only inside the spin settlement transaction via conditional
@@ -1598,7 +1665,7 @@ model WheelDailyAllowance {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  day       String   // UTC calendar day, YYYY-MM-DD
+  day       String // UTC calendar day, YYYY-MM-DD
   freeUsed  Boolean  @default(false) @map("free_used")
   paidUsed  Int      @default(0) @map("paid_used")
   createdAt DateTime @default(now()) @map("created_at")
@@ -1610,14 +1677,14 @@ model WheelDailyAllowance {
 }
 
 model DailyRewardLog {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  streakDay Int      @map("streak_day")
-  creditReward Int   @map("credit_reward")
-  xpReward  Int      @map("xp_reward")
-  bonusLootBox Boolean @default(false) @map("bonus_loot_box")
-  createdAt DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  streakDay    Int      @map("streak_day")
+  creditReward Int      @map("credit_reward")
+  xpReward     Int      @map("xp_reward")
+  bonusLootBox Boolean  @default(false) @map("bonus_loot_box")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -1630,11 +1697,11 @@ model DailyRewardLog {
 model WalletChallenge {
   id         String    @id @default(cuid())
   userId     String    @map("user_id")
-  wallet     String    // declared EVM address (lowercase)
-  chain      String    // "BSC" | "BASE"
+  wallet     String // declared EVM address (lowercase)
+  chain      String // "BSC" | "BASE"
   depositId  String?   @map("deposit_id")
   nonce      String    @unique
-  message    String    // full personal_sign payload shown to the wallet
+  message    String // full personal_sign payload shown to the wallet
   expiresAt  DateTime  @map("expires_at")
   consumedAt DateTime? @map("consumed_at")
   createdAt  DateTime  @default(now()) @map("created_at")
@@ -1650,19 +1717,19 @@ model WalletChallenge {
 // VISITOR_RAW_RETENTION_DAYS (default 90); aggregates live in
 // AnalyticsDailyVisit for VISITOR_AGGREGATE_RETENTION_MONTHS (24).
 model VisitorEvent {
-  id             String   @id @default(cuid())
-  eventId        String   @unique @map("event_id") // client nonce — dedupes retries
-  visitId        String   @map("visit_id")         // engganyo_vid cookie value
-  visitDbId      String?  @map("visit_db_id")
+  id             String        @id @default(cuid())
+  eventId        String        @unique @map("event_id") // client nonce — dedupes retries
+  visitId        String        @map("visit_id") // engganyo_vid cookie value
+  visitDbId      String?       @map("visit_db_id")
   visit          VisitorVisit? @relation(fields: [visitDbId], references: [id])
-  path           String                               // normalized route, no query/fragment
-  referrerDomain String?  @map("referrer_domain")    // external host only, or null = direct
-  country        String?                              // CF-IPCountry via trusted proxy header
-  deviceClass    String   @map("device_class")        // mobile | tablet | desktop | other
-  isBot          Boolean  @default(false) @map("is_bot")
-  ipAddress      String?  @map("ip_address")          // SUPER_ADMIN drill-down only
-  userAgent      String?  @map("user_agent")          // truncated
-  createdAt      DateTime @default(now()) @map("created_at")
+  path           String // normalized route, no query/fragment
+  referrerDomain String?       @map("referrer_domain") // external host only, or null = direct
+  country        String? // CF-IPCountry via trusted proxy header
+  deviceClass    String        @map("device_class") // mobile | tablet | desktop | other
+  isBot          Boolean       @default(false) @map("is_bot")
+  ipAddress      String?       @map("ip_address") // SUPER_ADMIN drill-down only
+  userAgent      String?       @map("user_agent") // truncated
+  createdAt      DateTime      @default(now()) @map("created_at")
 
   @@index([createdAt])
   @@index([visitId, createdAt])
@@ -1677,21 +1744,21 @@ model VisitorEvent {
 // Session-grain row: a "visit" is a burst of beacon activity per visitId
 // with no gap longer than the 30-minute session window. Derived at ingest.
 model VisitorVisit {
-  id             String   @id @default(cuid())
-  visitId        String   @map("visit_id")
-  startedAt      DateTime @map("started_at")
-  lastSeenAt     DateTime @map("last_seen_at")
-  pageViews      Int      @default(1) @map("page_views")
-  entryPath      String   @map("entry_path")
-  exitPath       String?  @map("exit_path")
-  referrerDomain String?  @map("referrer_domain")
+  id             String         @id @default(cuid())
+  visitId        String         @map("visit_id")
+  startedAt      DateTime       @map("started_at")
+  lastSeenAt     DateTime       @map("last_seen_at")
+  pageViews      Int            @default(1) @map("page_views")
+  entryPath      String         @map("entry_path")
+  exitPath       String?        @map("exit_path")
+  referrerDomain String?        @map("referrer_domain")
   country        String?
-  deviceClass    String   @map("device_class")
-  isBot          Boolean  @default(false) @map("is_bot")
-  ipAddress      String?  @map("ip_address")
-  userAgent      String?  @map("user_agent")
+  deviceClass    String         @map("device_class")
+  isBot          Boolean        @default(false) @map("is_bot")
+  ipAddress      String?        @map("ip_address")
+  userAgent      String?        @map("user_agent")
   events         VisitorEvent[]
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
 
   @@index([visitId, lastSeenAt])
   @@index([startedAt])
@@ -1707,8 +1774,8 @@ model VisitorVisit {
 model AnalyticsDailyVisit {
   id             String   @id @default(cuid())
   date           DateTime @db.Date
-  dimension      String   // 'all' | 'route' | 'country' | 'referrer' | 'device'
-  value          String   // dimension value; '*' for the 'all' row
+  dimension      String // 'all' | 'route' | 'country' | 'referrer' | 'device'
+  value          String // dimension value; '*' for the 'all' row
   visits         Int      @default(0)
   pageViews      Int      @default(0) @map("page_views")
   bounces        Int      @default(0) // visits with exactly one page view
@@ -1717,4 +1784,208 @@ model AnalyticsDailyVisit {
   @@unique([date, dimension, value])
   @@index([date])
   @@map("analytics_daily_visits")
+}
+
+// =============================================================
+// =============================================================
+// MUTUAL P2P ROOMS — equal contributions, peer review, no credit reward
+// =============================================================
+
+model ChallengeRoom {
+  id                  String              @id @default(cuid())
+  creatorId           String              @map("creator_id")
+  creator             User                @relation("RoomCreator", fields: [creatorId], references: [id])
+  claimerId           String?             @map("claimer_id")
+  claimer             User?               @relation("RoomClaimer", fields: [claimerId], references: [id])
+  contributionCredits Int                 @map("contribution_credits")
+  roomCharge          Int                 @map("room_charge")
+  title               String
+  visibility          ChallengeVisibility @default(PUBLIC)
+  passwordHash        String?             @map("password_hash")
+  status              RoomStatus          @default(OPEN)
+  channelId           String?             @unique @map("channel_id")
+  channel             Channel?            @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  creatorApproval Json? @map("creator_approval")
+  claimerApproval Json? @map("claimer_approval")
+
+  claimExpiresAt DateTime  @map("claim_expires_at")
+  startedAt      DateTime? @map("started_at")
+  expiresAt      DateTime? @map("expires_at")
+
+  creatorTxId       String?   @map("creator_tx_id")
+  claimerTxId       String?   @map("claimer_tx_id")
+  chargeCollectedAt DateTime? @map("charge_collected_at")
+  closedAt          DateTime? @map("closed_at")
+  closeReason       String?   @map("close_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  offers          RoomOffer[]
+  submissions     RoomSubmission[]
+  pointEvents     P2pPointEvent[]
+  disputes        RoomDispute[]
+  participations  RoomParticipation[]
+  nudges          RoomNudge[]
+  ratings         RoomRating[]
+  reports         Report[]
+  platformRevenue PlatformRevenue[]
+
+  @@index([status, visibility, createdAt])
+  @@index([creatorId])
+  @@index([claimerId])
+  @@index([expiresAt])
+  @@map("challenge_rooms")
+}
+
+model RoomOffer {
+  id                String          @id @default(cuid())
+  roomId            String          @map("room_id")
+  room              ChallengeRoom   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  proposerId        String          @map("proposer_id")
+  proposer          User            @relation(fields: [proposerId], references: [id])
+  proposerRole      RoomRole        @map("proposer_role")
+  version           Int             @default(1)
+  actionText        String          @map("action_text") @db.Text
+  taskType          TaskType        @map("task_type")
+  targetUrl         String          @map("target_url")
+  deadline          DateTime
+  requiresProof     Boolean         @default(true) @map("requires_proof")
+  proofInstructions String?         @map("proof_instructions") @db.Text
+  status            RoomOfferStatus @default(PROPOSED)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  submissions RoomSubmission[]
+
+  @@unique([roomId, proposerRole])
+  @@index([roomId, status])
+  @@map("room_offers")
+}
+
+model RoomSubmission {
+  id            String               @id @default(cuid())
+  roomId        String               @map("room_id")
+  room          ChallengeRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  offerId       String               @map("offer_id")
+  offer         RoomOffer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  submittedById String               @map("submitted_by_id")
+  submittedBy   User                 @relation(fields: [submittedById], references: [id])
+  proofUrl      String?              @map("proof_url")
+  proofHash     String?              @map("proof_hash")
+  note          String?              @db.Text
+  status        RoomSubmissionStatus @default(SUBMITTED)
+  reviewedById  String?              @map("reviewed_by_id")
+  reviewedAt    DateTime?            @map("reviewed_at")
+  reviewNote    String?              @map("review_note") @db.Text
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@index([roomId, status])
+  @@index([offerId, status])
+  @@map("room_submissions")
+}
+
+// Active-room slot — one non-terminal room per user across both roles.
+// Partial unique index (user_id WHERE released_at IS NULL) is created by
+// the migration SQL; Prisma cannot express partial indexes in schema.
+model RoomParticipation {
+  id         String        @id @default(cuid())
+  roomId     String        @map("room_id")
+  room       ChallengeRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String        @map("user_id")
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       RoomRole
+  joinedAt   DateTime      @default(now()) @map("joined_at")
+  releasedAt DateTime?     @map("released_at")
+
+  @@index([userId, releasedAt])
+  @@index([roomId])
+  @@map("room_participations")
+}
+
+model RoomNudge {
+  id        String        @id @default(cuid())
+  roomId    String        @map("room_id")
+  room      ChallengeRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderId  String        @map("sender_id")
+  sender    User          @relation("NudgeSender", fields: [senderId], references: [id], onDelete: Cascade)
+  pingId    String        @map("ping_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@unique([roomId, pingId])
+  @@index([roomId, createdAt])
+  @@map("room_nudges")
+}
+
+model RoomRating {
+  id         String        @id @default(cuid())
+  roomId     String        @map("room_id")
+  room       ChallengeRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  raterId    String        @map("rater_id")
+  rater      User          @relation("RatingGiver", fields: [raterId], references: [id], onDelete: Cascade)
+  rateeId    String        @map("ratee_id")
+  ratee      User          @relation("RatingReceiver", fields: [rateeId], references: [id], onDelete: Cascade)
+  score      Int
+  review     String?       @db.Text
+  hiddenAt   DateTime?     @map("hidden_at")
+  hiddenById String?       @map("hidden_by_id")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@unique([roomId, raterId])
+  @@index([rateeId, hiddenAt])
+  @@map("room_ratings")
+}
+
+model RoomDispute {
+  id           String        @id @default(cuid())
+  roomId       String        @map("room_id")
+  room         ChallengeRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  openedById   String        @map("opened_by_id")
+  openedBy     User          @relation("DisputeOpener", fields: [openedById], references: [id])
+  reason       String        @db.Text
+  evidence     Json?
+  status       ReportStatus  @default(OPEN)
+  resolution   String?       @db.Text
+  resolvedById String?       @map("resolved_by_id")
+  resolvedAt   DateTime?     @map("resolved_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([roomId])
+  @@map("room_disputes")
+}
+
+model P2pPointEvent {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId         String        @map("room_id")
+  room           ChallengeRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  role           RoomRole
+  points         Int           @default(1)
+  reversedAt     DateTime?     @map("reversed_at")
+  reversalReason String?       @map("reversal_reason")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@unique([userId, roomId])
+  @@index([userId, reversedAt])
+  @@map("p2p_point_events")
+}
+
+model Friendship {
+  id          String           @id @default(cuid())
+  requesterId String           @map("requester_id")
+  requester   User             @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String           @map("addressee_id")
+  addressee   User             @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  respondedAt DateTime?        @map("responded_at")
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
+  @@map("friendships")
 }

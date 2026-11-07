@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Megaphone, Flag,
   ScrollText, Zap, LogOut, ShieldAlert, BarChart2, Settings2, MessageSquare, Trophy, DollarSign, Banknote,
-  Menu, X, Bell, Loader2, Mail, ListOrdered, Webhook, ShoppingBag, Globe,
+  Menu, X, Bell, Loader2, Mail, ListOrdered, Webhook, ShoppingBag, Globe, Swords,
 } from 'lucide-react';
 import { useAuthStore, type AuthUser } from '@/store/auth.store';
 import { AuthGuard } from '@/components/auth-guard';
@@ -28,6 +28,7 @@ const navItems = [
   { href: '/admin/campaigns', icon: Megaphone, label: 'Campaigns' },
   { href: '/admin/ai-support', icon: MessageSquare, label: 'AI Support' },
   { href: '/admin/chat-moderation', icon: MessageSquare, label: 'Chat Moderation' },
+  { href: '/admin/rooms', icon: Swords, label: 'P2P Rooms' },
   { href: '/admin/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/admin/gamification', icon: Trophy, label: 'Gamification' },
   { href: '/admin/abuse', icon: ShieldAlert, label: 'Abuse' },
