@@ -437,14 +437,28 @@ export class AuthService {
 
   async getMe(userId: string): Promise<SafeUser> {
     const cacheKey = `auth:me:${userId}`;
-    const cached = await this.redisService.getJson<SafeUser>(cacheKey);
-    if (cached) return cached;
+    // Cache failures degrade to a fresh DB read — a Redis outage must not
+    // turn a successful read (or a preceding settlement) into an error.
+    const cached = await this.redisService.getJson<SafeUser>(cacheKey).catch((err: unknown) => {
+      this.logger.warn(`auth:me cache read failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
+    if (cached) {
+      // creditBalance is volatile: wallet mutations never invalidate this
+      // cache, so always resolve it from the ledger-backed wallet row.
+      const wallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { balance: true },
+      });
+      return { ...cached, creditBalance: wallet?.balance ?? cached.creditBalance };
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId, deletedAt: null },
       include: {
         vipTier: { select: { name: true, level: true, displayName: true, perks: true, requirementVp: true } },
         referredBy: { select: { username: true, displayName: true } },
+        wallet: { select: { balance: true } },
       },
     });
     if (!user) throw new NotFoundException('User not found');
@@ -467,8 +481,17 @@ export class AuthService {
       nextTierProgress = 100;
     }
 
-    const result: SafeUser = { ...base, nextTierProgress };
-    await this.redisService.setJson(cacheKey, result, 3600);
+    // wallet.balance is authoritative (ledger-backed); user.creditBalance is
+    // only a denormalized mirror and can lag (e.g. referral bonuses).
+    const result: SafeUser = {
+      ...base,
+      nextTierProgress,
+      creditBalance: user.wallet?.balance ?? base.creditBalance,
+    };
+    // Best-effort cache write — a Redis failure must not fail the request.
+    await this.redisService.setJson(cacheKey, result, 3600).catch((err: unknown) => {
+      this.logger.warn(`auth:me cache write failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
+    });
     return result;
   }
 

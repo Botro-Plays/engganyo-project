@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   ConflictException,
@@ -61,6 +62,8 @@ const SOCIAL_SELECT = {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
@@ -70,14 +73,27 @@ export class UsersService {
 
   async getMe(userId: string) {
     const cacheKey = `user:profile:${userId}`;
+    // Cache failures degrade to a fresh DB read — a Redis outage must not
+    // turn a successful read into an error.
     const cached = await this.redisService.getJson<{
       socialAccounts: unknown[];
       equippedCosmetics: unknown[];
+      creditBalance?: number;
       nextTierProgress?: number;
-    } & Record<string, unknown>>(cacheKey);
+    } & Record<string, unknown>>(cacheKey).catch((err: unknown) => {
+      this.logger.warn(`user:profile cache read failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    });
     if (cached) {
+      // creditBalance is volatile: wallet mutations never invalidate this
+      // cache, so always resolve it from the ledger-backed wallet row.
+      const wallet = await this.prisma.wallet.findUnique({
+        where: { userId },
+        select: { balance: true },
+      });
       return {
         ...cached,
+        creditBalance: wallet?.balance ?? cached.creditBalance,
         socialAccounts: Array.isArray(cached.socialAccounts) ? cached.socialAccounts : [],
         equippedCosmetics: cached.equippedCosmetics ?? [],
       };
@@ -98,10 +114,11 @@ export class UsersService {
           },
         },
         vipTier: { select: { name: true, displayName: true, level: true, perks: true, requirementVp: true } },
+        wallet: { select: { balance: true } },
       },
     });
     if (!user) throw new NotFoundException('User not found');
-    const { inventory, ...rest } = user;
+    const { inventory, wallet, ...rest } = user;
 
     // Compute VIP progress % to next tier
     let nextTierProgress = 0;
@@ -124,8 +141,14 @@ export class UsersService {
       socialAccounts: Array.isArray(rest.socialAccounts) ? rest.socialAccounts : [],
       equippedCosmetics: inventory,
       nextTierProgress,
+      // wallet.balance is authoritative (ledger-backed); user.creditBalance
+      // is only a denormalized mirror and can lag.
+      creditBalance: wallet?.balance ?? rest.creditBalance,
     };
-    await this.redisService.setJson(cacheKey, result, 3600);
+    // Best-effort cache write — a Redis failure must not fail the request.
+    await this.redisService.setJson(cacheKey, result, 3600).catch((err: unknown) => {
+      this.logger.warn(`user:profile cache write failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
+    });
     return result;
   }
 
