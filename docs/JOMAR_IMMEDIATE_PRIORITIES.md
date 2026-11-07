@@ -39,7 +39,7 @@ Verified against local API (`:3001`, `engganyo_test` DB, 51 migrations) + Chromi
 
 ## 1. Manageable task discovery
 
-**Status — PR #46 open, head `7a3437f`, CI running.** API + Web CI green; E2E in progress. Adds `pull_request` trigger so PRs get checks (build/deploy jobs stay gated to `main`). Local evidence in PR body; production verification follows merge + deploy.
+**Status — PR #46 merged (`a03732c`), deploy run 42348344682 in progress.** All checks green (API/Web CI + E2E). `pull_request` trigger now on main so all PRs get checks. Production verification pending deploy.
 
 Delivered in PR #46: platform picker chips wired to the existing `platform=` API filter, self-owned campaigns excluded from discovery at the API level, accumulating "Show more" feed (initial batch 6 — recorded design decision), "Accept & open [platform]" with synchronous popup + blocked-popup fallback, and a `delByPattern` cache-invalidation fix. Local verification evidence is in the PR body; production verification follows merge + deploy.
 
@@ -53,7 +53,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 2. Hide self-owned work and simplify acceptance
 
-**Status — implemented in PR #46 (`7a3437f`), awaiting CI + review.** Self-owned campaigns now excluded from `GET /tasks` discovery at the API level; creator management unchanged (`/campaigns`, `tasks/my`). Accept & open [platform] with synchronous popup, blocked-popup fallback, and pinned accepted panel delivered; edge-case browser verification pending deploy.
+**Status — merged with PR #46 (`a03732c`), deploy in progress.** Self-owned campaigns now excluded from `GET /tasks` discovery at the API level; creator management unchanged (`/campaigns`, `tasks/my`). Accept & open [platform] with synchronous popup, blocked-popup fallback, and pinned accepted panel delivered; edge-case browser verification pending deploy.
 
 - Verify that discovery excludes the viewer's own campaigns and v1 challenge listings at the API level. Creator management views must still provide access to their work.
 - Provide a clearly labeled Accept & open [platform] interaction. The external destination opens after successful assignment, with Engganyo available for proof submission.
@@ -64,7 +64,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 3. Optional account linking for manual tasks
 
-**Status — PR #47 open, head `878e7e8`, CI triggered.** `SocialAuthService.requiresLinkedAccount(taskType)` gates linking to the four API-verified types only (YouTube subscribe/like, Twitch follow, Spotify follow); assign + challenge claim + web card gate aligned; proof modal defines manual-review evidence (action + account identity). 14/14 unit tests pass. Fresh-account journey verification pending deploy.
+**Status — PR #47 open, head `6ac0d94` (rebased on post-#46 main), CI running.** Review revision: linking now gated on the *actual* verification path — `requiresLinkedAccount(taskType, autoVerify)` requires a link only for API-verified types configured for autoVerify; autoVerify=false takes manual review unlinked; challenges never use the platform API so claim never checks linking. Web mirrors via `offerRequiresLinkedAccount`. Coverage: 28-case unit matrix + real-PG assign tests (manual vs autoVerify) + challenge-claim no-link test. Production verification pending deploy.
 
 Jomar wants beginners to complete manually reviewed tasks using their chosen social account, including switching between their own social accounts.
 
@@ -88,7 +88,7 @@ Jomar describes listings where users buy credits from other users and receive th
 
 ## 5. Discoverable Top up
 
-**Status — PR #48 open, head `d858b68`, CI triggered.** Sidebar credit chip + new mobile balance pill link to `/wallet?tab=deposit`, opening the existing Deposit Credits flow directly. Charge calculations, payment returns, recovery, and settlement untouched. Production verification pending deploy.
+**Status — PR #48 open, head `d858b68`, all checks green.** Sidebar credit chip + new mobile balance pill link to `/wallet?tab=deposit`, opening the existing Deposit Credits flow directly. Charge calculations, payment returns, recovery, and settlement untouched. Production verification pending deploy.
 
 - Inspect Wallet → Deposit Credits and add a clear Top up entry point or label where users look for it.
 - Reuse the existing deposit flow and display the actual enabled payment options, charge currency, minimums, and server-calculated amount.
@@ -131,7 +131,7 @@ Jomar wants an affordable feed of user-submitted ads, paid directly with money, 
 
 ## 9. Supported-platform logos on the landing page
 
-**Status — implemented in PR #48 (`d858b68`), awaiting CI + review.** Landing "Supported platforms" strip added between How it works and Trust signals: ten live platforms via shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy.
+**Status — implemented in PR #48 (`d858b68`), checks green, awaiting merge.** Landing "Supported platforms" strip added between How it works and Trust signals: ten live platforms via shared `PlatformIcon` inline SVGs, responsive wrap, no tracking. Engganyo logo/CTA/nav preserved. 390px/1440px verification pending deploy.
 
 Add a graceful, visually balanced platform section so visitors immediately understand which social platforms Engganyo supports. Include Facebook, TikTok, Telegram, and X, and inspect the configured supported platforms for other eligible entries such as YouTube and Instagram.
 
