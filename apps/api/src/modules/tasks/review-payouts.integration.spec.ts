@@ -11,7 +11,7 @@
  * outside the tx and are NOT asserted here.
  */
 import {
-  PrismaClient, CampaignStatus, CompletionStatus, TransactionType,
+  PrismaClient, CampaignStatus, CompletionStatus, TransactionType, TaskType,
 } from '@prisma/client';
 import { TasksService } from './tasks.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
@@ -79,7 +79,7 @@ run('Review payouts — real PostgreSQL integration', () => {
       social as never, notifications as never, events as never,
       mockService() as never, store as never,
     );
-    return { walletSvc, campaignsSvc, adminSvc, tasksSvc };
+    return { walletSvc, campaignsSvc, adminSvc, tasksSvc, social };
   };
 
   const makeUser = async (role: 'USER' | 'SUPER_ADMIN' = 'USER') => {
@@ -96,12 +96,17 @@ run('Review payouts — real PostgreSQL integration', () => {
     });
   };
 
-  const makeCampaign = async (ownerId: string, autoVerify = false, totalSlots = 2) =>
+  const makeCampaign = async (
+    ownerId: string,
+    autoVerify = false,
+    totalSlots = 2,
+    taskType: TaskType = 'TIKTOK_FOLLOW',
+  ) =>
     prisma.campaign.create({
       data: {
         userId: ownerId,
         title: `${PREFIX}campaign`,
-        taskType: 'TIKTOK_FOLLOW',
+        taskType,
         targetUrl: 'https://tiktok.com/@x',
         totalSlots,
         creditPerTask: 50,
@@ -410,6 +415,39 @@ run('Review payouts — real PostgreSQL integration', () => {
     expect(
       s.audits.filter((a) => a.entityId === completion.id && a.action === 'submission.approved').length,
     ).toBeLessThanOrEqual(1);
+  });
+
+  it('API-capable task with manual review assigns without a linked account', async () => {
+    const owner = await makeUser();
+    const worker = await makeUser();
+    const svc = buildServices(prisma);
+    svc.social.hasLinkedAccount.mockResolvedValue(false);
+    const campaign = await makeCampaign(owner.id, false, 2, 'TWITCH_FOLLOW');
+
+    const res = await svc.tasksSvc.assignTask(worker.id, campaign.id, 'USER');
+    expect(res.id).toBeTruthy();
+    const completion = await prisma.taskCompletion.findFirst({
+      where: { campaignId: campaign.id, userId: worker.id },
+    });
+    expect(completion?.status).toBe(CompletionStatus.ASSIGNED);
+  });
+
+  it('API-capable task with autoVerify requires a linked account', async () => {
+    const owner = await makeUser();
+    const worker = await makeUser();
+    const svc = buildServices(prisma);
+    svc.social.hasLinkedAccount.mockResolvedValue(false);
+    const campaign = await makeCampaign(owner.id, true, 2, 'TWITCH_FOLLOW');
+
+    await expect(svc.tasksSvc.assignTask(worker.id, campaign.id, 'USER'))
+      .rejects.toThrow(/link your twitch account/i);
+    expect(await prisma.taskCompletion.count({
+      where: { campaignId: campaign.id, userId: worker.id },
+    })).toBe(0);
+
+    svc.social.hasLinkedAccount.mockResolvedValue(true);
+    const res = await svc.tasksSvc.assignTask(worker.id, campaign.id, 'USER');
+    expect(res.id).toBeTruthy();
   });
 
   it('automatic submit racing recheck on the same completion: exactly one pays', async () => {

@@ -462,6 +462,20 @@ describe('ChallengesService', () => {
       expect(state.completions.size).toBe(1);
     });
 
+    it('claims an API-capable task type without a linked account (always manual review)', async () => {
+      const { service, state } = makeService();
+      const social = (service as any).socialAuthService;
+      social.getPlatformForTaskType.mockImplementation((t: string) =>
+        t === 'TWITCH_FOLLOW' ? 'TWITCH' : null);
+      social.hasLinkedAccount.mockResolvedValue(false);
+      const ch = await setupOpenChallenge(service, state, { ...baseDto, taskType: 'TWITCH_FOLLOW' });
+      const res = await service.claim('player2', ch.id, {} as any, '9.9.9.9');
+      expect(res.challengeId).toBe(ch.id);
+      expect(res.status).toBe(CompletionStatus.ASSIGNED);
+      // Challenge proofs are always creator-reviewed — linking is never consulted.
+      expect(social.hasLinkedAccount).not.toHaveBeenCalled();
+    });
+
     it('blocks self-claims', async () => {
       const { service, state } = makeService();
       const ch = await setupOpenChallenge(service, state);
