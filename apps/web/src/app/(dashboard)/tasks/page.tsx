@@ -1051,6 +1051,19 @@ function TasksPageInner() {
       {/* ── 1v1 Challenges tab ── */}
       {tab === 'challenges' && (
         <>
+          <Link
+            href="/rooms"
+            className="mb-4 flex items-center justify-between rounded-xl border border-brand-500/30 bg-brand-500/5 px-4 py-3 transition-colors hover:border-brand-500/60"
+          >
+            <div>
+              <p className="text-sm font-semibold text-brand-200">Looking for mutual P2P rooms?</p>
+              <p className="mt-0.5 text-xs text-zinc-400">
+                Rooms are different from challenges — both players stake equal credits, do each other&apos;s tasks,
+                and peer-review proof. No credit rewards; finish in time to earn a P2P point.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Open rooms →</span>
+          </Link>
           <div className="flex items-center justify-between mb-4 gap-3">
             <p className="text-xs text-zinc-500">
               Player-vs-player duels — one slot, one winner, creator-reviewed proof.

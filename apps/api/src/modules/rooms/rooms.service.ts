@@ -126,7 +126,7 @@ export class RoomsService {
   private async findRoom(id: string) {
     const room = await this.prisma.challengeRoom.findUnique({
       where: { id },
-      select: { ...ROOM_SELECT, passwordHash: true, contributionCredits: true, creatorApproval: true, claimerApproval: true },
+      select: { ...ROOM_SELECT, passwordHash: true, channelId: true, contributionCredits: true, creatorApproval: true, claimerApproval: true },
     });
     if (!room) throw new NotFoundException('Room not found');
     return room;
@@ -1008,6 +1008,15 @@ export class RoomsService {
     this.assertActive(room);
 
     const cfg = await this.getConfig();
+
+    // Dedupe FIRST: a retry with the same pingId is idempotent success,
+    // never a cooldown/limit error.
+    const existingPing = await this.prisma.roomNudge.findUnique({
+      where: { roomId_pingId: { roomId, pingId: dto.pingId } },
+      select: { id: true },
+    });
+    if (existingPing) return { sent: true, deduplicated: true };
+
     const cdKey = `room:nudge:cd:${roomId}:${userId}`;
     try {
       const existing = await this.redis.get(cdKey);

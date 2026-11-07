@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Plus,
   X,
+  Swords,
 } from 'lucide-react';
 import { Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -62,6 +63,7 @@ const navGroups = [
     items: [
       { href: '/forum', icon: MessageSquare, label: 'Forum' },
       { href: '/chat', icon: MessageCircle, label: 'Chat' },
+      { href: '/rooms', icon: Swords, label: 'P2P Rooms' },
       { href: '/discover', icon: Compass, label: 'Discover' },
     ],
   },
@@ -93,6 +95,7 @@ const mobileNavPrimary = [
 const mobileNavSecondary = [
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/chat', icon: MessageCircle, label: 'Chat' },
+  { href: '/rooms', icon: Swords, label: 'P2P Rooms' },
   { href: '/discover', icon: Compass, label: 'Discover' },
   { href: '/achievements', icon: Medal, label: 'Achievements' },
   { href: '/missions', icon: Target, label: 'Missions' },
