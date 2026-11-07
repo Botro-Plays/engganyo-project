@@ -43,6 +43,20 @@ export interface DebitOptions {
 // ─── Constants ─────────────────────────────────────────────────
 const MAX_RETRY = 5;
 
+/**
+ * Thrown when the optimistic-lock retry budget is exhausted inside a
+ * caller-provided transaction. Still a BadRequestException for HTTP
+ * callers, but distinguishable via `instanceof` so transaction-owning
+ * callers (e.g. referral milestone awards) can retry their WHOLE unit of
+ * work instead of only the wallet apply step.
+ */
+export class WalletContentionException extends BadRequestException {
+  constructor() {
+    super('Transaction failed after retries. Please try again.');
+    this.name = 'WalletContentionException';
+  }
+}
+
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
@@ -59,6 +73,7 @@ export class WalletService {
     private readonly cryptoVerification: CryptoVerificationService,
     @Inject(forwardRef(() => GamificationService))
     private readonly gamificationService: GamificationService,
+    @Inject(forwardRef(() => ReferralsService))
     private readonly referralsService: ReferralsService,
   ) {}
 
@@ -237,7 +252,7 @@ export class WalletService {
         if (err instanceof Error && err.message === 'OPTIMISTIC_LOCK_CONFLICT') {
           this.logger.warn(`Optimistic lock conflict for userId=${userId}, attempt=${attempt}`);
           if (attempt === MAX_RETRY) {
-            throw new BadRequestException('Transaction failed after retries. Please try again.');
+            throw new WalletContentionException();
           }
           await new Promise((r) => setTimeout(r, 50 * attempt));
           continue;
@@ -246,6 +261,40 @@ export class WalletService {
       }
     }
     throw new BadRequestException('Transaction failed.');
+  }
+
+  // ─── Mirror reconciliation ─────────────────────────────────
+
+  /**
+   * Reconcile the denormalized `user.creditBalance` mirror to the
+   * ledger-backed `wallets.balance`. Locks the wallet row FOR UPDATE
+   * first — the same lock order as executeWithOptimisticLock (wallet row,
+   * then user row) — so a concurrent settlement either commits before our
+   * read (we copy the newest balance) or waits for this tx and rewrites
+   * the mirror itself. Idempotent; safe to call per user under live
+   * traffic. Returns { changed, from?, to }.
+   */
+  async reconcileCreditBalanceMirror(userId: string) {
+    return this.prisma.withTransaction(async (tx) => {
+      const rows = await tx.$queryRaw<{ balance: number }[]>`
+        SELECT balance FROM wallets WHERE user_id = ${userId} FOR UPDATE`;
+      const wallet = rows[0];
+      if (!wallet) throw new NotFoundException('Wallet not found');
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { creditBalance: true },
+      });
+      if (!user) throw new NotFoundException('User not found');
+      if (user.creditBalance === wallet.balance) {
+        return { changed: false as const, to: wallet.balance };
+      }
+      await tx.user.update({
+        where: { id: userId },
+        data: { creditBalance: wallet.balance },
+      });
+      return { changed: true as const, from: user.creditBalance, to: wallet.balance };
+    });
   }
 
   // ─── Deposit system ────────────────────────────────────────
