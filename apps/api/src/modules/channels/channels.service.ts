@@ -149,6 +149,22 @@ export class ChannelsService implements OnModuleInit {
       }
     }
 
+    // Mutual P2P room channels are participant-only: membership is granted
+    // atomically at claim time, so self-join must verify room participation
+    // (staff may join for moderation).
+    if (channel.type === ChannelType.PRIVATE) {
+      const room = await this.prisma.challengeRoom.findFirst({
+        where: { channelId },
+        select: { creatorId: true, claimerId: true },
+      });
+      if (room && !this.isStaffRole(role)) {
+        const isParticipant = room.creatorId === userId || room.claimerId === userId;
+        if (!isParticipant) {
+          throw new ForbiddenException('This chat is limited to the room participants');
+        }
+      }
+    }
+
     // Idempotent join
     const existing = await this.prisma.channelMember.findUnique({
       where: { channelId_userId: { channelId, userId } },

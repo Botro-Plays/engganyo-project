@@ -1,8 +1,8 @@
 'use client';
 
-import { use, useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Clock, Wallet, MessageCircle, Bell, UserPlus, Flag,
@@ -487,8 +487,8 @@ function RoomChat({ channelId, roomId }: { channelId: string; roomId: string }) 
 
 // ─── Main page ────────────────────────────────────────────────
 
-export default function RoomWorkspacePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function RoomWorkspacePage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
