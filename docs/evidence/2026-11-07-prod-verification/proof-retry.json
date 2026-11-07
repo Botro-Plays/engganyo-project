@@ -1,0 +1,16 @@
+{
+ "uploadStatus": 201,
+ "proofUrl": "/uploads/proofs/cmvi99hg4000689wg13eblesj/cmw65ul4l005m5vv8feicp6mc/7626af06-87fa-4f3f-94d9-b45d2e539540.webp",
+ "submitStatus": 200,
+ "submitBody": {
+  "success": true,
+  "data": {
+   "creditsEarned": 0,
+   "status": "SUBMITTED",
+   "message": "Proof submitted. The campaign creator will review within 48 hours.",
+   "reviewDeadline": "2026-11-09T08:52:57.414Z"
+  },
+  "timestamp": "2026-11-07T08:52:57.443Z"
+ },
+ "balance": 6088
+}

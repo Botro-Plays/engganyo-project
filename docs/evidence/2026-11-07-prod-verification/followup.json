@@ -1,0 +1,87 @@
+{
+ "hasToken": true,
+ "myTasksStatus": 200,
+ "myTasksKeys": [
+  "items",
+  "meta"
+ ],
+ "myTasks": [
+  {
+   "id": "cmw65ul4l005m5vv8feicp6mc",
+   "taskType": "FACEBOOK_PAGE_LIKE",
+   "title": "Face my book",
+   "status": "ASSIGNED",
+   "campaignId": "cmw48dmaa002rsxflg8xruhjq"
+  },
+  {
+   "id": "cmw65uoxo005t5vv8t2800cvk",
+   "taskType": "TWITTER_RETWEET",
+   "title": "Retweet our Platform Launch Post",
+   "status": "VERIFIED",
+   "campaignId": "cmvi99hl6001789wgo171oga8"
+  }
+ ],
+ "campaignsStatus": 200,
+ "campaignsTopKeys": [
+  "success",
+  "data",
+  "timestamp"
+ ],
+ "campaignsDataKeys": [
+  "items",
+  "meta"
+ ],
+ "myCampaignCount": 0,
+ "myCampaigns": [],
+ "/challenges/mine?page=1&limit=20": {
+  "status": 200,
+  "keys": [
+   "items",
+   "meta"
+  ]
+ },
+ "/challenges?page=1&limit=20&scope=mine": {
+  "status": 200,
+  "keys": [
+   "items",
+   "meta"
+  ]
+ },
+ "browseCount": 3,
+ "browseSample": [
+  {
+   "id": "cmvi99hks001389wg1wmhhtqo",
+   "tt": "TWITTER_FOLLOW",
+   "title": "Follow Engganyo on Twitter/X",
+   "target": "https://twitter.com/engganyo",
+   "autoVerify": true
+  },
+  {
+   "id": "cmvi99hkk001189wg13nisb16",
+   "tt": "INSTAGRAM_FOLLOW",
+   "title": "Follow Engganyo on Instagram",
+   "target": "https://instagram.com/engganyo",
+   "autoVerify": true
+  },
+  {
+   "id": "cmvi99hkd000z89wgx3q4bvgs",
+   "tt": "TIKTOK_FOLLOW",
+   "title": "Follow Engganyo on TikTok",
+   "target": "https://tiktok.com/@engganyo",
+   "autoVerify": true
+  }
+ ],
+ "ownLeakInBrowse": [],
+ "taskAStatus": "ASSIGNED",
+ "proofRetry": {
+  "step": "upload",
+  "status": 404,
+  "body": {
+   "statusCode": 404,
+   "message": "Task assignment not found",
+   "error": "Not Found",
+   "timestamp": "2026-11-07T08:52:19.721Z",
+   "path": "/api/uploads/proof"
+  }
+ }
+}

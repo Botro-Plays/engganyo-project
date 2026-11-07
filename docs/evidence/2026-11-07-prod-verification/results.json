@@ -1,0 +1,174 @@
+{
+ "startedAt": "2026-11-07T08:46:40.205Z",
+ "checks": {
+  "identity": {
+   "ok": true,
+   "detail": {
+    "user": "botro",
+    "email": "<owner-email>",
+    "balance": 6088,
+    "role": "SUPER_ADMIN"
+   }
+  },
+  "landing.platforms-before-how": {
+   "ok": true,
+   "detail": {
+    "platforms": 639,
+    "how": 799,
+    "cta": 2807
+   }
+  },
+  "dashboard.topup-visible": {
+   "ok": true,
+   "detail": [
+    {
+     "text": "CREDITS\n\nTop up\n\n6,093",
+     "href": "/wallet?tab=deposit"
+    },
+    {
+     "text": "Wallet",
+     "href": "/wallet"
+    },
+    {
+     "text": "6,093",
+     "href": "/wallet?tab=deposit"
+    },
+    {
+     "text": "Wallet",
+     "href": "/wallet"
+    }
+   ]
+  },
+  "wallet.topup-lands-deposit": {
+   "ok": true,
+   "detail": {
+    "url": "https://engganyo.com/wallet?tab=deposit",
+    "deposit": true
+   }
+  },
+  "tasks.chips-present": {
+   "ok": true,
+   "detail": [
+    "All platforms",
+    "Facebook",
+    "TikTok",
+    "Telegram",
+    "X",
+    "Instagram",
+    "Discord",
+    "TrustPilot",
+    "Google"
+   ]
+  },
+  "tasks.initial-batch": {
+   "ok": true,
+   "detail": {
+    "cards": 5,
+    "showing": null
+   }
+  },
+  "tasks.show-more": {
+   "ok": "n/a",
+   "detail": "no Show more (single page of results)"
+  },
+  "tasks.platform-filter": {
+   "ok": true,
+   "detail": {
+    "chip": "Facebook",
+    "empty": false
+   }
+  },
+  "tasks.autoverify-linking-scan": {
+   "ok": true,
+   "detail": {
+    "note": "no autoVerify API-verified listings in browse — link-gate check N/A on prod data",
+    "types": [
+     "FACEBOOK_PAGE_LIKE",
+     "TWITTER_RETWEET",
+     "TWITTER_FOLLOW",
+     "INSTAGRAM_FOLLOW",
+     "TIKTOK_FOLLOW"
+    ]
+   }
+  },
+  "ownlistings": {
+   "myCampaigns": 0,
+   "myChallengesStatus": 200
+  },
+  "tasks.own-work-excluded": {
+   "ok": "open",
+   "detail": {
+    "ownListings": 0,
+    "leaked": 0,
+    "note": "account owns no campaigns/challenges — cannot verify exclusion; campaign creation is trust-gated (NEW trust rejected). Needs an account that owns listings."
+   }
+  },
+  "tasks.accept-open-popup": {
+   "ok": true,
+   "detail": {
+    "popupUrl": "https://www.facebook.com/",
+    "panel": {
+     "accepted": true,
+     "openBtn": true,
+     "popupWarn": false
+    }
+   }
+  },
+  "taskA": {
+   "id": "cmvi99hks001389wg1wmhhtqo",
+   "taskType": "TWITTER_FOLLOW",
+   "title": "Follow Engganyo on Twitter/X"
+  },
+  "tasks.popup-blocked-fallback": {
+   "ok": true,
+   "detail": {
+    "popupWarn": true,
+    "panelVisible": true
+   }
+  },
+  "taskB": {
+   "id": "cmvi99hkk001189wg13nisb16",
+   "taskType": "INSTAGRAM_FOLLOW",
+   "title": "Follow Engganyo on Instagram"
+  },
+  "tasks.proof-submitted": {
+   "ok": false,
+   "detail": {
+    "submitWasDisabled": false
+   }
+  },
+  "tasks.review-tracking": {
+   "ok": true,
+   "detail": [
+    "VERIFIED"
+   ]
+  },
+  "wallet.balance-delta": {
+   "ok": true,
+   "detail": {
+    "before": 6088,
+    "after": 6088,
+    "delta": 0
+   }
+  },
+  "mobile.landing-order": {
+   "ok": true,
+   "detail": {
+    "platforms": 594,
+    "how": 754,
+    "overflow": false
+   }
+  },
+  "mobile.tasks-layout": {
+   "ok": true,
+   "detail": {
+    "chips": 9,
+    "singleCol": true
+   }
+  },
+  "mobile.wallet-deposit": {
+   "ok": true,
+   "detail": {}
+  }
+ }
+}
