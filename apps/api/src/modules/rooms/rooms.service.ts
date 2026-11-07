@@ -68,6 +68,7 @@ export class RoomsService {
       'room_active_minutes', 'room_rating_window_hours',
       'room_pair_limit_per_week', 'room_nudge_cooldown_seconds',
       'room_nudge_daily_cap', 'room_nudge_room_cap',
+      'room_chat_retention_days',
     ];
     const rows = await this.prisma.platformConfig.findMany({
       where: { key: { in: keys } },
@@ -86,6 +87,7 @@ export class RoomsService {
       nudgeCooldownSec: cfg('room_nudge_cooldown_seconds', 60),
       nudgeDailyCap: cfg('room_nudge_daily_cap', 10),
       nudgeRoomCap: cfg('room_nudge_room_cap', 50),
+      chatRetentionDays: cfg('room_chat_retention_days', 90),
     };
   }
 
@@ -130,6 +132,48 @@ export class RoomsService {
     });
     if (!room) throw new NotFoundException('Room not found');
     return room;
+  }
+
+  // Every room-state mutation takes this row lock FIRST inside its
+  // transaction, then re-reads status/deadline before writing. This
+  // serializes offer edits vs agreement, proof/review/cancel/dispute vs
+  // the expiry sweep, and chat purge vs late reports — the conditional
+  // UPDATE guards remain as backstops for paths that don't lock.
+  private async lockRoom(tx: Tx, roomId: string) {
+    await tx.$executeRaw`SELECT id FROM challenge_rooms WHERE id = ${roomId} FOR UPDATE`;
+  }
+
+  private async readLockedRoom(tx: Tx, roomId: string) {
+    return tx.challengeRoom.findUniqueOrThrow({
+      where: { id: roomId },
+      select: {
+        id: true, status: true, expiresAt: true, claimExpiresAt: true,
+        creatorId: true, claimerId: true, contributionCredits: true,
+        roomCharge: true, title: true, channelId: true, closedAt: true,
+        creatorApproval: true, claimerApproval: true, chargeCollectedAt: true,
+      },
+    });
+  }
+
+  // Re-read helpers used after lockRoom() — callers verify the status
+  // set and deadline appropriate to their action against this fresh row.
+  private roomDeadlinePassed(room: { status: RoomStatus; expiresAt: Date | null; claimExpiresAt: Date }, now = new Date()) {
+    const deadline = room.status === RoomStatus.OPEN ? room.claimExpiresAt : room.expiresAt;
+    return !!deadline && deadline <= now;
+  }
+
+  // Post-agreement states where peer review / proof actions are allowed.
+  private assertReviewableRoom(room: { status: RoomStatus; expiresAt: Date | null }, now = new Date()) {
+    if (room.status === RoomStatus.DISPUTED) {
+      throw new ConflictException('Room is frozen pending moderator review');
+    }
+    const reviewable: RoomStatus[] = [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED];
+    if (!reviewable.includes(room.status)) {
+      throw new ConflictException(`Room is ${room.status.toLowerCase()} — reviews only apply while the room is active`);
+    }
+    if (room.expiresAt && room.expiresAt <= now) {
+      throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+    }
   }
 
   private async participation(userId: string) {
@@ -563,6 +607,9 @@ export class RoomsService {
     const room = await this.findRoom(roomId);
     const myRole = this.roleOf(room, userId);
     if (!myRole) throw new ForbiddenException('Not a room participant');
+    // Fast-fail pre-checks only — authoritative state is re-read under the
+    // room-row lock inside the transaction (same lock approve() takes, so
+    // an edit can never interleave with the second approval).
     if (room.status !== RoomStatus.NEGOTIATING) {
       throw new ConflictException('Offers can only be edited while negotiating');
     }
@@ -584,6 +631,20 @@ export class RoomsService {
     }
 
     const offer = await this.prisma.$transaction(async (tx) => {
+      await this.lockRoom(tx, roomId);
+      const fresh = await this.readLockedRoom(tx, roomId);
+      if (this.roleOf(fresh, userId) !== myRole) {
+        throw new ForbiddenException('Not a room participant');
+      }
+      if (fresh.status !== RoomStatus.NEGOTIATING) {
+        throw new ConflictException('Offers can only be edited while negotiating');
+      }
+      if (this.roomDeadlinePassed(fresh)) {
+        throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+      }
+      if (fresh.expiresAt && offerDeadline > fresh.expiresAt) {
+        throw new BadRequestException('Offer deadline cannot exceed the room deadline');
+      }
       const existing = await tx.roomOffer.findUnique({
         where: { roomId_proposerRole: { roomId, proposerRole: myRole } },
       });
@@ -624,46 +685,51 @@ export class RoomsService {
     const room = await this.findRoom(roomId);
     const myRole = this.roleOf(room, userId);
     if (!myRole) throw new ForbiddenException('Not a room participant');
+    // Fast-fail pre-checks only — status, deadline, and BOTH offer versions
+    // are re-read under the room-row lock inside the transaction so an
+    // approval can never be recorded against offer versions that a
+    // concurrently-committed edit already replaced.
     if (room.status !== RoomStatus.NEGOTIATING) {
       throw new ConflictException(`Room is ${room.status.toLowerCase()} — approvals only apply while negotiating`);
     }
     this.assertActive(room);
 
-    const [creatorOffer, claimerOffer] = await Promise.all([
-      this.prisma.roomOffer.findUnique({ where: { roomId_proposerRole: { roomId, proposerRole: RoomRole.CREATOR } } }),
-      this.prisma.roomOffer.findUnique({ where: { roomId_proposerRole: { roomId, proposerRole: RoomRole.CLAIMER } } }),
-    ]);
-    if (!creatorOffer || !claimerOffer) {
-      throw new BadRequestException('Both players must propose an offer before approving');
-    }
-
-    // Optional stale-version guard
-    if (dto.creatorVersion && dto.creatorVersion !== creatorOffer.version) {
-      throw new ConflictException('STALE_VERSION: the creator offer changed — refresh and re-approve');
-    }
-    if (dto.claimerVersion && dto.claimerVersion !== claimerOffer.version) {
-      throw new ConflictException('STALE_VERSION: the joiner offer changed — refresh and re-approve');
-    }
-
-    const approval = {
-      creatorVersion: creatorOffer.version,
-      claimerVersion: claimerOffer.version,
-      at: new Date().toISOString(),
-    };
-
     const result = await this.prisma.$transaction(async (tx) => {
-      // Lock the room row and re-read approvals inside the tx.
-      await tx.$executeRaw`SELECT id FROM challenge_rooms WHERE id = ${roomId} FOR UPDATE`;
-      const fresh = await tx.challengeRoom.findUniqueOrThrow({
-        where: { id: roomId },
-        select: { status: true, creatorApproval: true, claimerApproval: true, expiresAt: true, chargeCollectedAt: true },
-      });
+      // Lock the room row FIRST — same lock upsertOffer() takes — then
+      // re-read room state AND the persisted offer versions.
+      await this.lockRoom(tx, roomId);
+      const fresh = await this.readLockedRoom(tx, roomId);
+      if (this.roleOf(fresh, userId) !== myRole) {
+        throw new ForbiddenException('Not a room participant');
+      }
       if (fresh.status !== RoomStatus.NEGOTIATING) {
         throw new ConflictException(`Room is ${fresh.status.toLowerCase()}`);
       }
       if (fresh.expiresAt && fresh.expiresAt <= new Date()) {
         throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
       }
+
+      const [creatorOffer, claimerOffer] = await Promise.all([
+        tx.roomOffer.findUnique({ where: { roomId_proposerRole: { roomId, proposerRole: RoomRole.CREATOR } } }),
+        tx.roomOffer.findUnique({ where: { roomId_proposerRole: { roomId, proposerRole: RoomRole.CLAIMER } } }),
+      ]);
+      if (!creatorOffer || !claimerOffer) {
+        throw new BadRequestException('Both players must propose an offer before approving');
+      }
+
+      // Optional stale-version guard — against the LOCKED versions.
+      if (dto.creatorVersion && dto.creatorVersion !== creatorOffer.version) {
+        throw new ConflictException('STALE_VERSION: the creator offer changed — refresh and re-approve');
+      }
+      if (dto.claimerVersion && dto.claimerVersion !== claimerOffer.version) {
+        throw new ConflictException('STALE_VERSION: the joiner offer changed — refresh and re-approve');
+      }
+
+      const approval = {
+        creatorVersion: creatorOffer.version,
+        claimerVersion: claimerOffer.version,
+        at: new Date().toISOString(),
+      };
 
       await tx.challengeRoom.update({
         where: { id: roomId },
@@ -677,11 +743,14 @@ export class RoomsService {
       const jApproval = (myRole === RoomRole.CLAIMER ? approval : fresh.claimerApproval) as
         { creatorVersion: number; claimerVersion: number } | null;
 
+      // Both players must have approved the CURRENT persisted offer
+      // versions — a stored approval for superseded versions never counts.
       const agreed =
-        cApproval?.creatorVersion === creatorOffer.version &&
-        cApproval?.claimerVersion === claimerOffer.version &&
-        jApproval?.creatorVersion === creatorOffer.version &&
-        jApproval?.claimerVersion === claimerOffer.version;
+        !!cApproval && !!jApproval &&
+        cApproval.creatorVersion === creatorOffer.version &&
+        cApproval.claimerVersion === claimerOffer.version &&
+        jApproval.creatorVersion === creatorOffer.version &&
+        jApproval.claimerVersion === claimerOffer.version;
 
       if (!agreed) return { agreed: false };
 
@@ -751,19 +820,40 @@ export class RoomsService {
       throw new BadRequestException('Proof image is required for this offer');
     }
 
-    // Recycled-proof check across this user's prior submissions
-    if (dto.proofHash) {
-      const recycled = await this.prisma.roomSubmission.findFirst({
-        where: { submittedById: userId, proofHash: dto.proofHash },
-        select: { id: true },
-      });
-      if (recycled) {
-        this.logger.warn(`Recycled room proof blocked: user ${userId} hash ${dto.proofHash.slice(0, 12)}`);
-        throw new BadRequestException('This proof image was already used in a previous submission.');
-      }
-    }
-
     const submission = await this.prisma.$transaction(async (tx) => {
+      // Serialize vs the expiry sweep and other room mutations: lock the
+      // room row, then re-verify the room is still actionable before the
+      // submission row is written.
+      await this.lockRoom(tx, roomId);
+      const fresh = await this.readLockedRoom(tx, roomId);
+      if (this.roleOf(fresh, userId) !== myRole) {
+        throw new ForbiddenException('Not a room participant');
+      }
+      if (fresh.status === RoomStatus.DISPUTED) {
+        throw new ConflictException('Room is frozen pending moderator review');
+      }
+      if (!POST_AGREEMENT_STATUSES.includes(fresh.status)) {
+        throw new ConflictException('Proof can only be submitted after the room is agreed');
+      }
+      if (this.roomDeadlinePassed(fresh)) {
+        throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+      }
+
+      // Recycled-proof check inside the lock: same-room resubmissions
+      // serialize, so a committed duplicate hash is always visible here.
+      // (Cross-room same-hash races remain best-effort — no unique index,
+      // since identical-image resubmission after rejection is legitimate.)
+      if (dto.proofHash) {
+        const recycled = await tx.roomSubmission.findFirst({
+          where: { submittedById: userId, proofHash: dto.proofHash },
+          select: { id: true },
+        });
+        if (recycled) {
+          this.logger.warn(`Recycled room proof blocked: user ${userId} hash ${dto.proofHash.slice(0, 12)}`);
+          throw new BadRequestException('This proof image was already used in a previous submission.');
+        }
+      }
+
       const s = await tx.roomSubmission.create({
         data: {
           roomId, offerId, submittedById: userId,
@@ -789,7 +879,11 @@ export class RoomsService {
       }
       const newStatus = allSubmitted ? RoomStatus.SUBMITTED : RoomStatus.IN_PROGRESS;
       await tx.challengeRoom.updateMany({
-        where: { id: roomId, status: { in: [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED] } },
+        where: {
+          id: roomId,
+          status: { in: [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED] },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
         data: { status: newStatus },
       });
       return s;
@@ -836,6 +930,11 @@ export class RoomsService {
 
     if (dto.action === 'approve') {
       const completed = await this.prisma.$transaction(async (tx) => {
+        // Lock the room row and re-verify it is still reviewable — a proof
+        // review can never commit against a room the sweep just expired.
+        await this.lockRoom(tx, room.id);
+        const freshRoom = await this.readLockedRoom(tx, room.id);
+        this.assertReviewableRoom(freshRoom);
         const claim = await tx.roomSubmission.updateMany({
           where: { id: submissionId, status: { in: [RoomSubmissionStatus.SUBMITTED, RoomSubmissionStatus.DISPUTED] } },
           data: {
@@ -863,13 +962,14 @@ export class RoomsService {
 
         // Terminal transition — expiresAt > now() is enforced IN the WHERE
         // clause so a completion racing expiry loses deterministically.
+        const txNow = new Date();
         const done = await tx.challengeRoom.updateMany({
           where: {
             id: room.id,
             status: { in: [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED] },
-            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            OR: [{ expiresAt: null }, { expiresAt: { gt: txNow } }],
           },
-          data: { status: RoomStatus.COMPLETED, closedAt: now, updatedAt: now },
+          data: { status: RoomStatus.COMPLETED, closedAt: txNow, updatedAt: txNow },
         });
         if (done.count !== 1) {
           throw new ConflictException('ROOM_CLOSED: the deadline passed before completion committed');
@@ -906,6 +1006,9 @@ export class RoomsService {
 
     if (dto.action === 'reject') {
       await this.prisma.$transaction(async (tx) => {
+        await this.lockRoom(tx, room.id);
+        const freshRoom = await this.readLockedRoom(tx, room.id);
+        this.assertReviewableRoom(freshRoom);
         const claim = await tx.roomSubmission.updateMany({
           where: { id: submissionId, status: { in: [RoomSubmissionStatus.SUBMITTED, RoomSubmissionStatus.DISPUTED] } },
           data: { status: RoomSubmissionStatus.REJECTED, reviewedById: userId, reviewedAt: now, reviewNote: dto.note ?? null },
@@ -920,13 +1023,20 @@ export class RoomsService {
 
     // dispute → freeze room pending admin; still expires at expiresAt
     await this.prisma.$transaction(async (tx) => {
+      await this.lockRoom(tx, room.id);
+      const freshRoom = await this.readLockedRoom(tx, room.id);
+      this.assertReviewableRoom(freshRoom);
       const claim = await tx.roomSubmission.updateMany({
         where: { id: submissionId, status: { in: [RoomSubmissionStatus.SUBMITTED, RoomSubmissionStatus.DISPUTED] } },
         data: { status: RoomSubmissionStatus.DISPUTED, reviewedById: userId, reviewedAt: now, reviewNote: dto.note ?? null },
       });
       if (claim.count !== 1) throw new ConflictException('Submission already reviewed');
       await tx.challengeRoom.updateMany({
-        where: { id: room.id, status: { in: [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED] } },
+        where: {
+          id: room.id,
+          status: { in: [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED] },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
         data: { status: RoomStatus.DISPUTED },
       });
       await tx.roomDispute.create({
@@ -954,11 +1064,29 @@ export class RoomsService {
     this.assertActive(room);
 
     await this.prisma.$transaction(async (tx) => {
+      await this.lockRoom(tx, roomId);
+      const fresh = await this.readLockedRoom(tx, roomId);
+      if (this.roleOf(fresh, userId) !== myRole) {
+        throw new ForbiddenException('Not a room participant');
+      }
+      if (!ACTIVE_STATUSES.includes(fresh.status)) {
+        throw new ConflictException(`Room is ${fresh.status.toLowerCase()}`);
+      }
+      if (fresh.status === RoomStatus.DISPUTED) {
+        throw new ConflictException('Room already has an open dispute');
+      }
+      if (this.roomDeadlinePassed(fresh)) {
+        throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+      }
       await tx.roomDispute.create({
         data: { roomId, openedById: userId, reason: dto.reason },
       });
       await tx.challengeRoom.updateMany({
-        where: { id: roomId, status: { in: ACTIVE_STATUSES } },
+        where: {
+          id: roomId,
+          status: { in: ACTIVE_STATUSES },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
         data: { status: RoomStatus.DISPUTED },
       });
     });
@@ -982,22 +1110,40 @@ export class RoomsService {
     }
 
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      await this.lockRoom(tx, roomId);
+      const fresh = await this.readLockedRoom(tx, roomId);
+      if (this.roleOf(fresh, userId) !== myRole) {
+        throw new ForbiddenException('Not a room participant');
+      }
+      if (!PRE_AGREEMENT_STATUSES.includes(fresh.status)) {
+        throw new ConflictException('Rooms can only be cancelled before agreement — open a dispute instead');
+      }
+      // OPEN listings expire on claimExpiresAt; NEGOTIATING rooms on expiresAt.
+      // The deadline is re-checked under the lock so a cancel can never
+      // commit after the sweep has already expired (or is expiring) it.
+      if (this.roomDeadlinePassed(fresh)) {
+        throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+      }
       const closed = await tx.challengeRoom.updateMany({
         where: { id: roomId, status: { in: PRE_AGREEMENT_STATUSES } },
         data: { status: RoomStatus.CLOSED, closedAt: now, closeReason: 'PLAYER_CANCEL', updatedAt: now },
       });
       if (closed.count !== 1) throw new ConflictException('Room state changed');
-      await this.refundContribution(tx, room.creatorId, room.contributionCredits, roomId, 'Room cancelled — contribution refunded');
-      if (room.claimerId) {
-        await this.refundContribution(tx, room.claimerId, room.contributionCredits, roomId, 'Room cancelled — contribution refunded');
+      // Refund from the LOCKED row — a join may have committed between the
+      // pre-check read and this transaction, so fresh.claimerId is the
+      // authoritative payer set (never refund from the stale snapshot).
+      await this.refundContribution(tx, fresh.creatorId, fresh.contributionCredits, roomId, 'Room cancelled — contribution refunded');
+      if (fresh.claimerId) {
+        await this.refundContribution(tx, fresh.claimerId, fresh.contributionCredits, roomId, 'Room cancelled — contribution refunded');
       }
       await tx.roomParticipation.updateMany({
         where: { roomId, releasedAt: null },
         data: { releasedAt: now },
       });
+      return fresh;
     });
-    this.notifyRoom(this.counterpartyId(room, userId), roomId, NotificationType.ROOM_UPDATE,
+    this.notifyRoom(this.counterpartyId(cancelled, userId), roomId, NotificationType.ROOM_UPDATE,
       'Room closed', 'The room was cancelled — both contributions were refunded.');
     return { cancelled: true };
   }
@@ -1043,8 +1189,21 @@ export class RoomsService {
     }
 
     try {
-      await this.prisma.roomNudge.create({
-        data: { roomId, senderId: userId, pingId: dto.pingId },
+      await this.prisma.$transaction(async (tx) => {
+        await this.lockRoom(tx, roomId);
+        const fresh = await this.readLockedRoom(tx, roomId);
+        if (this.roleOf(fresh, userId) !== myRole) {
+          throw new ForbiddenException('Not a room participant');
+        }
+        if (!ACTIVE_STATUSES.includes(fresh.status)) {
+          throw new ConflictException(`Room is ${fresh.status.toLowerCase()}`);
+        }
+        if (this.roomDeadlinePassed(fresh)) {
+          throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
+        }
+        await tx.roomNudge.create({
+          data: { roomId, senderId: userId, pingId: dto.pingId },
+        });
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -1196,6 +1355,9 @@ export class RoomsService {
     });
     for (const room of expiredOpen) {
       await this.prisma.$transaction(async (tx) => {
+        // Same room-row lock as every other room mutation — expiry
+        // serializes against join/cancel/report instead of racing them.
+        await this.lockRoom(tx, room.id);
         const closed = await tx.challengeRoom.updateMany({
           where: { id: room.id, status: RoomStatus.OPEN, claimExpiresAt: { lte: now } },
           data: { status: RoomStatus.EXPIRED, closedAt: now, closeReason: 'CLAIM_WINDOW_EXPIRED', updatedAt: now },
@@ -1232,6 +1394,10 @@ export class RoomsService {
     now: Date,
   ) {
     await this.prisma.$transaction(async (tx) => {
+      // Lock the room row first — the same lock held by approve/edit/
+      // submit/review/cancel/dispute — so expiry and room actions
+      // serialize deterministically instead of interleaving writes.
+      await this.lockRoom(tx, room.id);
       const expired = await tx.challengeRoom.updateMany({
         where: {
           id: room.id,
@@ -1269,24 +1435,92 @@ export class RoomsService {
     }
   }
 
+  // ─── Room chat retention ───────────────────────────────────
+  // Room chat is retained for room_chat_retention_days (default 90) after
+  // the room closes, then purged — UNLESS an unresolved moderation hold
+  // exists (open room dispute, or open report scoped to the room or to a
+  // message in its channel). Held rooms keep their full history until the
+  // hold clears; the next daily run purges them. Resolved/dismissed
+  // message reports are detached (messageId → null) before deletion so the
+  // moderation record itself survives the purge.
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async purgeClosedRoomChat() {
+    const { chatRetentionDays } = await this.getConfig();
+    const cutoff = new Date(Date.now() - chatRetentionDays * 24 * 3600_000);
+    const rooms = await this.prisma.challengeRoom.findMany({
+      where: { channelId: { not: null }, closedAt: { not: null, lte: cutoff } },
+      select: { id: true, channelId: true },
+      take: 200,
+    });
+    let purged = 0;
+    let held = 0;
+    for (const room of rooms) {
+      try {
+        const result = await this.prisma.$transaction(async (tx) => {
+          // Same room-row lock as reports/disputes — a moderation action
+          // can never slip between the hold check and message deletion.
+          await this.lockRoom(tx, room.id);
+          const openStatuses = [ReportStatus.OPEN, ReportStatus.UNDER_REVIEW];
+          const [openDisputes, openRoomReports, openMessageReports] = await Promise.all([
+            tx.roomDispute.count({ where: { roomId: room.id, status: { in: openStatuses } } }),
+            tx.report.count({ where: { roomId: room.id, status: { in: openStatuses } } }),
+            tx.report.count({
+              where: { message: { is: { channelId: room.channelId! } }, status: { in: openStatuses } },
+            }),
+          ]);
+          if (openDisputes + openRoomReports + openMessageReports > 0) {
+            return { held: true as const, deleted: 0 };
+          }
+          // Detach resolved message-reports so cascade doesn't erase them.
+          await tx.report.updateMany({
+            where: {
+              message: { is: { channelId: room.channelId! } },
+              status: { in: [ReportStatus.RESOLVED, ReportStatus.DISMISSED] },
+            },
+            data: { messageId: null },
+          });
+          const deleted = await tx.channelMessage.deleteMany({ where: { channelId: room.channelId! } });
+          return { held: false as const, deleted: deleted.count };
+        });
+        if (result.held) held += 1; else purged += 1;
+      } catch (err) {
+        this.logger.warn(`Room chat purge failed for ${room.id}: ${err}`);
+      }
+    }
+    if (purged || held) {
+      this.logger.log(`Room chat purge: ${purged} channel(s) purged, ${held} held for moderation`);
+    }
+    return { purged, held };
+  }
+
   // ─── Room-scoped user report ───────────────────────────────
 
   async reportUser(userId: string, roomId: string, dto: { targetUserId: string; reason: ReportReason; description: string }) {
     const room = await this.findRoom(roomId);
     const myRole = this.roleOf(room, userId);
     if (!myRole) throw new ForbiddenException('Not a room participant');
-    if (dto.targetUserId !== room.creatorId && dto.targetUserId !== room.claimerId) {
-      throw new BadRequestException('Reports are limited to room participants');
-    }
-    const report = await this.prisma.report.create({
-      data: {
-        submittedById: userId,
-        targetUserId: dto.targetUserId,
-        roomId,
-        reason: dto.reason,
-        description: dto.description,
-        evidence: { roomStatus: room.status, myRole },
-      },
+    // Lock the room row: the chat-retention purge takes the same lock, so a
+    // report can never be created concurrently with evidence deletion.
+    const report = await this.prisma.$transaction(async (tx) => {
+      await this.lockRoom(tx, roomId);
+      const fresh = await this.readLockedRoom(tx, roomId);
+      if (this.roleOf(fresh, userId) !== myRole) {
+        throw new ForbiddenException('Not a room participant');
+      }
+      if (dto.targetUserId !== fresh.creatorId && dto.targetUserId !== fresh.claimerId) {
+        throw new BadRequestException('Reports are limited to room participants');
+      }
+      return tx.report.create({
+        data: {
+          submittedById: userId,
+          targetUserId: dto.targetUserId,
+          roomId,
+          reason: dto.reason,
+          description: dto.description,
+          evidence: { roomStatus: fresh.status, myRole },
+        },
+      });
     });
     this.events.emitToAdmins('report:new', { reportId: report.id, roomId });
     return { reported: true, reportId: report.id };
@@ -1372,16 +1606,19 @@ export class RoomsService {
   async adminResolveDispute(adminId: string, disputeId: string, resolution: string, action: 'resolve' | 'dismiss') {
     const dispute = await this.prisma.roomDispute.findUnique({
       where: { id: disputeId },
-      include: { room: { select: { id: true, status: true } } },
+      include: { room: { select: { id: true, status: true, closedAt: true } } },
     });
     if (!dispute) throw new NotFoundException('Dispute not found');
-    if (dispute.status !== ReportStatus.OPEN && dispute.status !== ReportStatus.UNDER_REVIEW) {
-      throw new ConflictException('Dispute already resolved');
-    }
 
+    // Resolution is an adjudication record ONLY — it never mutates room
+    // state. A DISPUTED room stays frozen until expiresAt, then the
+    // standard expiry sweep refunds both contributions and reverses the
+    // room charge exactly once (closeReason ACTIVE_TIMEOUT). Resolving
+    // after expiry is allowed: moderators can still record the outcome.
+    // The conditional update makes concurrent resolve calls exactly-once.
     await this.prisma.$transaction(async (tx) => {
-      await tx.roomDispute.update({
-        where: { id: disputeId },
+      const updated = await tx.roomDispute.updateMany({
+        where: { id: disputeId, status: { in: [ReportStatus.OPEN, ReportStatus.UNDER_REVIEW] } },
         data: {
           status: action === 'resolve' ? ReportStatus.RESOLVED : ReportStatus.DISMISSED,
           resolution,
@@ -1389,13 +1626,16 @@ export class RoomsService {
           resolvedAt: new Date(),
         },
       });
+      if (updated.count !== 1) {
+        throw new ConflictException('Dispute already resolved');
+      }
       await tx.auditLog.create({
         data: {
           userId: adminId,
           action: `room.dispute.${action}`,
           entityType: 'RoomDispute',
           entityId: disputeId,
-          newValue: { roomId: dispute.roomId, resolution },
+          newValue: { roomId: dispute.roomId, resolution, roomStatusAtResolution: dispute.room.status },
         },
       });
     });
@@ -1406,10 +1646,11 @@ export class RoomsService {
     const rating = await this.prisma.roomRating.findUnique({ where: { id: ratingId } });
     if (!rating) throw new NotFoundException('Rating not found');
     await this.prisma.$transaction(async (tx) => {
-      await tx.roomRating.update({
-        where: { id: ratingId },
+      const hidden = await tx.roomRating.updateMany({
+        where: { id: ratingId, hiddenAt: null },
         data: { hiddenAt: new Date(), hiddenById: adminId },
       });
+      if (hidden.count !== 1) throw new ConflictException('Rating already hidden');
       await tx.auditLog.create({
         data: {
           userId: adminId,

@@ -554,6 +554,292 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await service.rate(joinerId, room.id, { score: 4 });
   });
 
+  // ─── Concurrency: offer edit vs second approval ───────────
+  // Both ops take the same challenge_rooms FOR UPDATE lock inside their
+  // transactions. Holding that lock externally lets the test queue the
+  // two operations in a deterministic order: whoever asks first commits
+  // first, and the loser re-reads the winner's committed state.
+
+  async function raceOnRoomLock(
+    roomId: string,
+    ops: Array<() => Promise<unknown>>,
+    staggerMs = 250,
+  ): Promise<Array<unknown>> {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const holder = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM challenge_rooms WHERE id = ${roomId} FOR UPDATE`;
+      await gate;
+    });
+    const pending = ops.map((op, i) => new Promise<unknown>((resolve) => {
+      setTimeout(() => {
+        op().then(resolve).catch((e) => resolve({ error: e }));
+      }, i * staggerMs);
+    }));
+    // Give every op time to pass its pre-checks and queue on the row lock.
+    await new Promise((r) => setTimeout(r, staggerMs * ops.length + 500));
+    release();
+    await holder;
+    return Promise.all(pending);
+  }
+
+  const offerByRole = (roomId: string, role: 'CREATOR' | 'CLAIMER') =>
+    prisma.roomOffer.findUniqueOrThrow({
+      where: { roomId_proposerRole: { roomId, proposerRole: role } },
+    });
+
+  it('edit racing second approval — edit wins: approvals invalidated, agreement needs both re-approvals', async () => {
+    const { room } = await makeRoom();
+    await service.upsertOffer(creatorId, room.id, offerDto('Task A v1'));
+    await service.upsertOffer(joinerId, room.id, offerDto('Task B v1'));
+    await service.approve(creatorId, room.id, {}); // creator approval on v1
+
+    // Queue the edit BEFORE the second approval on the room lock.
+    const [editRes, approveRes] = await raceOnRoomLock(room.id, [
+      () => service.upsertOffer(joinerId, room.id, offerDto('Task B v2 edited')),
+      () => service.approve(joinerId, room.id, {}),
+    ]);
+    expect((editRes as any).error).toBeUndefined();
+    expect((approveRes as any).agreed).toBe(false); // only joiner's fresh approval stored
+
+    // Stored state proves the edit committed and approvals were reset.
+    const offerB = await offerByRole(room.id, 'CLAIMER');
+    expect(offerB.version).toBe(2);
+    expect(offerB.actionText).toBe('Task B v2 edited');
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(fresh.status).toBe(RoomStatus.NEGOTIATING);
+    expect(fresh.creatorApproval).toBeNull(); // v1 approval invalidated by the edit
+    const claimerApproval = fresh.claimerApproval as { creatorVersion: number; claimerVersion: number } | null;
+    expect(claimerApproval?.creatorVersion).toBe(1);
+    expect(claimerApproval?.claimerVersion).toBe(2); // recorded against CURRENT versions
+    expect(await prisma.platformRevenue.count({ where: { roomId: room.id } })).toBe(0);
+
+    // Agreement now requires BOTH players to approve the v2 terms — the
+    // joiner's raced approval already recorded {1,2}, so the creator's
+    // re-approval alone completes dual approval and collects the charge.
+    const r = await service.approve(creatorId, room.id, {});
+    expect(r.agreed).toBe(true);
+    // A repeated approval on the now-AGREED room is rejected, not re-charged.
+    await expect(service.approve(joinerId, room.id, {})).rejects.toThrow(ConflictException);
+    expect(await prisma.platformRevenue.count({ where: { roomId: room.id } })).toBe(1);
+    await forceExpireAndSweep(room.id);
+  });
+
+  it('edit racing second approval — approve wins: edit rejected, exactly one charge on v1', async () => {
+    const { room } = await makeRoom();
+    await service.upsertOffer(creatorId, room.id, offerDto('Task A v1'));
+    await service.upsertOffer(joinerId, room.id, offerDto('Task B v1'));
+    await service.approve(creatorId, room.id, {});
+
+    // Queue the second approval BEFORE the edit on the room lock.
+    const [approveRes, editRes] = await raceOnRoomLock(room.id, [
+      () => service.approve(joinerId, room.id, {}),
+      () => service.upsertOffer(joinerId, room.id, offerDto('Task B v2 edited')),
+    ]);
+    expect((approveRes as any).agreed).toBe(true);
+    expect((editRes as any).error).toBeInstanceOf(ConflictException); // room already AGREED
+
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(fresh.status).toBe(RoomStatus.AGREED);
+    expect(fresh.chargeCollectedAt).not.toBeNull();
+    const offerB = await offerByRole(room.id, 'CLAIMER');
+    expect(offerB.version).toBe(1); // edit never committed
+    expect(offerB.actionText).toBe('Task B v1');
+    expect(offerB.status).toBe('LOCKED');
+    const revenue = await prisma.platformRevenue.findMany({ where: { roomId: room.id } });
+    expect(revenue).toHaveLength(1);
+    expect(revenue[0].amount).toBe(50);
+    await forceExpireAndSweep(room.id);
+  });
+
+  it('cancel racing join — cancel first: join loses cleanly, creator refunded once', async () => {
+    const room = await service.create(creatorId, { title: 'Cancel vs join' });
+    const t = await mkTempUser('joinrace', 300);
+    const tBefore = await balanceOf(t);
+
+    const [cancelRes, joinRes] = await raceOnRoomLock(room.id, [
+      () => service.cancel(creatorId, room.id),
+      () => service.join(t, room.id, {}, '10.0.0.20'),
+    ]);
+    expect((cancelRes as any).cancelled).toBe(true);
+    expect((joinRes as any).error).toBeInstanceOf(ConflictException);
+
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(fresh.status).toBe(RoomStatus.CLOSED);
+    expect(fresh.closeReason).toBe('PLAYER_CANCEL');
+    expect(fresh.claimerId).toBeNull();
+    expect(await balanceOf(t)).toBe(tBefore); // rejected join reserved nothing
+    expect(await prisma.roomParticipation.count({ where: { userId: t } })).toBe(0);
+    const refunds = (await txRowsFor(creatorId)).filter(
+      (x) => x.referenceId === room.id && x.type === TransactionType.REFUND_ROOM_CLOSE,
+    );
+    expect(refunds).toHaveLength(1);
+  });
+
+  it('cancel racing join — join first: room negotiates then cancel refunds both', async () => {
+    const room = await service.create(creatorId, { title: 'Join vs cancel' });
+    const t = await mkTempUser('joinrace2', 300);
+
+    const [joinRes, cancelRes] = await raceOnRoomLock(room.id, [
+      () => service.join(t, room.id, {}, '10.0.0.21'),
+      () => service.cancel(creatorId, room.id),
+    ]);
+    expect((joinRes as any).error).toBeUndefined();
+    expect((joinRes as any).status).toBe('NEGOTIATING');
+    expect((cancelRes as any).cancelled).toBe(true);
+
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(fresh.status).toBe(RoomStatus.CLOSED);
+    expect(fresh.claimerId).toBe(t);
+    // Both payers refunded exactly once (creator reserve + joiner reserve).
+    expect(await prisma.transaction.count({
+      where: { referenceId: room.id, type: TransactionType.REFUND_ROOM_CLOSE },
+    })).toBe(2);
+    expect(await balanceOf(t)).toBe(300);
+    expect(await prisma.roomParticipation.count({ where: { roomId: room.id, releasedAt: null } })).toBe(0);
+  });
+
+  it('peer approve racing peer dispute — room freezes DISPUTED, never completes', async () => {
+    const { room } = await makeRoom();
+    const offerA = await service.upsertOffer(creatorId, room.id, offerDto('Follow me'));
+    const offerB = await service.upsertOffer(joinerId, room.id, offerDto('Like my post'));
+    await service.approve(creatorId, room.id, {});
+    await service.approve(joinerId, room.id, {});
+    const subA = await service.submitProof(joinerId, room.id, offerA.id, {
+      proofUrl: '/u/a', proofHash: `race-a-${seq}`,
+    });
+    const subB = await service.submitProof(creatorId, room.id, offerB.id, {
+      proofUrl: '/u/b', proofHash: `race-b-${seq}`,
+    });
+
+    // Creator approves subA while joiner disputes subB — simultaneous.
+    await raceOnRoomLock(room.id, [
+      () => service.reviewSubmission(creatorId, subA.id, { action: 'approve' }),
+      () => service.reviewSubmission(joinerId, subB.id, { action: 'dispute', note: 'proof looks fake' }),
+    ]);
+
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(fresh.status).toBe(RoomStatus.DISPUTED);
+    expect(await prisma.p2pPointEvent.count({ where: { roomId: room.id } })).toBe(0);
+    expect(await prisma.roomDispute.count({ where: { roomId: room.id } })).toBe(1);
+    await forceExpireAndSweep(room.id);
+  });
+
+  // ─── Admin dispute resolution ─────────────────────────────
+
+  it('admin dispute resolution is exactly-once, audited, and never mutates room state', async () => {
+    const { room } = await makeRoom();
+    await service.dispute(creatorId, room.id, { reason: 'partner went silent' });
+    const dispute = await prisma.roomDispute.findFirstOrThrow({ where: { roomId: room.id } });
+    expect(dispute.status).toBe('OPEN');
+
+    // Two concurrent resolutions → exactly one commits.
+    const [r1, r2] = await Promise.allSettled([
+      service.adminResolveDispute(creatorId, dispute.id, 'creator wins', 'resolve'),
+      service.adminResolveDispute(joinerId, dispute.id, 'joiner wins', 'resolve'),
+    ]);
+    const ok = [r1, r2].filter((r) => r.status === 'fulfilled');
+    const failed = [r1, r2].filter((r) => r.status === 'rejected');
+    expect(ok).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+    expect((failed[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+
+    const freshDispute = await prisma.roomDispute.findUniqueOrThrow({ where: { id: dispute.id } });
+    expect(['RESOLVED', 'DISMISSED']).toContain(freshDispute.status);
+    expect(freshDispute.resolution).toBeTruthy();
+    expect(await prisma.auditLog.count({
+      where: { entityType: 'RoomDispute', entityId: dispute.id },
+    })).toBe(1);
+
+    // Room state untouched: still DISPUTED until the deadline sweep.
+    const freshRoom = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(freshRoom.status).toBe(RoomStatus.DISPUTED);
+
+    // Repeat resolution → conflict.
+    await expect(service.adminResolveDispute(creatorId, dispute.id, 'again', 'resolve'))
+      .rejects.toThrow(ConflictException);
+
+    // Expiry still unwinds normally after resolution.
+    await forceExpireAndSweep(room.id);
+    const expired = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(expired.status).toBe(RoomStatus.EXPIRED);
+    expect(await prisma.transaction.count({
+      where: { referenceId: room.id, type: TransactionType.REFUND_ROOM_CLOSE },
+    })).toBe(2);
+  });
+
+  // ─── Chat retention purge ─────────────────────────────────
+
+  it('purges room chat after retention window; holds on unresolved moderation', async () => {
+    const mkClosedRoomWithChat = async (suffix: string, closedDaysAgo: number) => {
+      const c = await mkTempUser(`pc_${suffix}`, 300);
+      const j = await mkTempUser(`pj_${suffix}`, 300);
+      const room = await service.create(c, { title: `Purge ${suffix}` });
+      await service.join(j, room.id, {}, '10.0.0.30');
+      // Force terminal state + aged closedAt directly (service paths covered elsewhere).
+      const closedAt = new Date(Date.now() - closedDaysAgo * 24 * 3600_000);
+      await prisma.challengeRoom.update({
+        where: { id: room.id },
+        data: { status: RoomStatus.COMPLETED, closedAt, expiresAt: closedAt },
+      });
+      const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+      await prisma.channelMessage.create({
+        data: { channelId: fresh.channelId!, userId: c, content: `hello from ${suffix}` },
+      });
+      return { room: fresh, creator: c, joiner: j };
+    };
+
+    // A: old + clean → purged. B: old + open dispute → held. C: recent → untouched.
+    const a = await mkClosedRoomWithChat('a', 100);
+    const b = await mkClosedRoomWithChat('b', 100);
+    const c = await mkClosedRoomWithChat('c', 10);
+    await prisma.roomDispute.create({
+      data: { roomId: b.room.id, openedById: b.creator, reason: 'unresolved', status: 'OPEN' },
+    });
+
+    const result = await service.purgeClosedRoomChat();
+    expect(result.purged).toBeGreaterThanOrEqual(1);
+    expect(result.held).toBeGreaterThanOrEqual(1);
+
+    expect(await prisma.channelMessage.count({ where: { channelId: a.room.channelId! } })).toBe(0);
+    expect(await prisma.channelMessage.count({ where: { channelId: b.room.channelId! } })).toBe(1); // held
+    expect(await prisma.channelMessage.count({ where: { channelId: c.room.channelId! } })).toBe(1); // too recent
+
+    // Resolve the hold → next purge collects room B.
+    const disputeB = await prisma.roomDispute.findFirstOrThrow({ where: { roomId: b.room.id } });
+    await service.adminResolveDispute(b.creator, disputeB.id, 'resolved', 'resolve');
+    await service.purgeClosedRoomChat();
+    expect(await prisma.channelMessage.count({ where: { channelId: b.room.channelId! } })).toBe(0);
+  });
+
+  it('purge preserves resolved message-report records', async () => {
+    const c = await mkTempUser('pc_r', 300);
+    const j = await mkTempUser('pj_r', 300);
+    const room = await service.create(c, { title: 'Purge report' });
+    await service.join(j, room.id, {}, '10.0.0.31');
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    const closedAt = new Date(Date.now() - 100 * 24 * 3600_000);
+    await prisma.challengeRoom.update({
+      where: { id: room.id },
+      data: { status: RoomStatus.COMPLETED, closedAt, expiresAt: closedAt },
+    });
+    const msg = await prisma.channelMessage.create({
+      data: { channelId: fresh.channelId!, userId: c, content: 'reported message' },
+    });
+    // Resolved report pointing at the message — must survive the purge.
+    const report = await prisma.report.create({
+      data: {
+        submittedById: j, targetUserId: c, roomId: room.id, messageId: msg.id,
+        reason: 'SPAM_CAMPAIGN', description: 'test', status: 'RESOLVED',
+      },
+    });
+    await service.purgeClosedRoomChat();
+    expect(await prisma.channelMessage.count({ where: { channelId: fresh.channelId! } })).toBe(0);
+    const survived = await prisma.report.findUnique({ where: { id: report.id } });
+    expect(survived).not.toBeNull();
+    expect(survived!.messageId).toBeNull(); // detached, not cascade-deleted
+  });
+
   // ─── helpers ──────────────────────────────────────────────
 
   async function mkTempUser(suffix: string, balance: number) {
