@@ -205,3 +205,10 @@ Immediate flow and visual changes should be delivered in focused PRs with exact 
 - **Live-verified:** full agree→dispute→admin-resolve→expiry-unwind chain on labeled accounts incl. new `devin_mod_test` moderator; chat purge hold/release on prod.
 - **Owner note:** dispute resolution currently records the moderator's decision but does NOT change room outcomes — the room still expires at its deadline with standard refunds. Outcome-based resolution (e.g. award winner) is a future proposal if wanted.
 - **Pair limit:** 3 rooms/pair/7d is a review flag, not a block — see migration record for the enforce-vs-signal decision.
+
+## Retention purge pagination + dispute clarity — DEPLOYED (2026-11-08)
+
+- **PR #57** merged `c4464a2`, deploy run 42431103653 — chat-retention purge now uses a durable keyset cursor (persisted in `platform_configs`) so each run progresses through all eligible rooms in bounded batches; emptied channels drop out of eligibility; held rooms stay eligible and are re-checked each pass; returns separate examined/purged/held/deleted-message counts.
+- **CI:** real-Postgres regression with 205 eligible rooms + empty channels covering multi-run progression, first-batch hold, hold release.
+- **Live-verified on prod:** labeled `zzlvp_*` fixtures — cursor persisted across bounded runs, held room evidence preserved then purged after release, empty channels never examined. Fixtures + temp config removed.
+- **Dispute UI:** admin resolve panel + room detail and the participant DISPUTED banner now state explicitly that resolution records adjudication only — the room stays frozen until its deadline, then refunds both players; it never resumes work or completes the room.
