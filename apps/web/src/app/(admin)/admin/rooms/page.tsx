@@ -182,6 +182,9 @@ export default function AdminRoomsPage() {
                 ))}
               </div>
               <div className="mt-4 space-y-2">
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">
+                  Recording a decision does not change the room. It stays frozen until its original deadline, then expires with both contributions refunded and the room charge reversed. Resolution records adjudication only — it never resumes work or completes the room.
+                </div>
                 <select value={action} onChange={(e) => setAction(e.target.value as 'resolve' | 'dismiss')} className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
                   <option value="resolve">Resolve</option>
                   <option value="dismiss">Dismiss</option>
@@ -226,6 +229,11 @@ export default function AdminRoomsPage() {
                   <div>Closed: {detail.closedAt ? formatRelativeTime(detail.closedAt) : '—'}</div>
                   <div>Reason: {detail.closeReason ?? '—'}</div>
                 </div>
+                {detail.status === 'DISPUTED' && (
+                  <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-200/80">
+                    Frozen until the original deadline, then expires with both contributions refunded and the room charge reversed. Moderator decisions record adjudication only — they never resume work or complete the room.
+                  </p>
+                )}
               </div>
 
               {/* Offers */}

@@ -808,7 +808,7 @@ export default function RoomWorkspacePage() {
                 <ShieldAlert className="h-4 w-4" /> Under moderator review
               </h2>
               <p className="mt-1 text-xs text-amber-200/70">
-                Actions are frozen. The deadline still applies — if it passes, contributions are refunded.
+                Actions are frozen while a moderator reviews. A moderator&apos;s decision is recorded for the record — it does not resume the room or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
               </p>
             </div>
           )}
