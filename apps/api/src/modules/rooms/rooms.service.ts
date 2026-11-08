@@ -68,7 +68,8 @@ export class RoomsService {
       'room_active_minutes', 'room_rating_window_hours',
       'room_pair_limit_per_week', 'room_nudge_cooldown_seconds',
       'room_nudge_daily_cap', 'room_nudge_room_cap',
-      'room_chat_retention_days',
+      'room_chat_retention_days', 'room_chat_purge_batch_size',
+      'room_chat_purge_max_per_run',
     ];
     const rows = await this.prisma.platformConfig.findMany({
       where: { key: { in: keys } },
@@ -88,6 +89,8 @@ export class RoomsService {
       nudgeDailyCap: cfg('room_nudge_daily_cap', 10),
       nudgeRoomCap: cfg('room_nudge_room_cap', 50),
       chatRetentionDays: cfg('room_chat_retention_days', 90),
+      chatPurgeBatchSize: cfg('room_chat_purge_batch_size', 200),
+      chatPurgeMaxPerRun: cfg('room_chat_purge_max_per_run', 1000),
     };
   }
 
@@ -1439,59 +1442,143 @@ export class RoomsService {
   // Room chat is retained for room_chat_retention_days (default 90) after
   // the room closes, then purged — UNLESS an unresolved moderation hold
   // exists (open room dispute, or open report scoped to the room or to a
-  // message in its channel). Held rooms keep their full history until the
-  // hold clears; the next daily run purges them. Resolved/dismissed
-  // message reports are detached (messageId → null) before deletion so the
-  // moderation record itself survives the purge.
+  // message in its channel). Held rooms keep their full history and stay
+  // eligible — they are re-checked on every pass. Resolved/dismissed
+  // message reports are detached (messageId → null) before deletion so
+  // the moderation record itself survives the purge.
+  //
+  // Progression: eligible rooms are walked with a deterministic keyset
+  // cursor (id ASC, persisted in platform_configs) so every scheduled
+  // run advances through the whole backlog instead of re-scanning the
+  // same first batch. Rooms whose channels are already empty are
+  // excluded up front, and each run is bounded by
+  // room_chat_purge_max_per_run rooms in room_chat_purge_batch_size
+  // transactions. When the tail is reached the cursor wraps to the head
+  // so held rooms are re-evaluated on the next pass.
+
+  private static readonly PURGE_CURSOR_KEY = 'room_chat_purge_cursor';
+
+  private async getPurgeCursor(): Promise<string> {
+    const row = await this.prisma.platformConfig.findUnique({
+      where: { key: RoomsService.PURGE_CURSOR_KEY },
+      select: { value: true },
+    });
+    return typeof row?.value === 'string' ? row.value : '';
+  }
+
+  private async setPurgeCursor(cursor: string) {
+    await this.prisma.platformConfig.upsert({
+      where: { key: RoomsService.PURGE_CURSOR_KEY },
+      create: {
+        key: RoomsService.PURGE_CURSOR_KEY,
+        value: cursor,
+        description: 'Keyset cursor (last processed room id) for the room-chat retention purge',
+      },
+      update: { value: cursor },
+    });
+  }
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
-  async purgeClosedRoomChat() {
-    const { chatRetentionDays } = await this.getConfig();
+  async purgeClosedRoomChat(opts?: { maxRooms?: number }) {
+    const { chatRetentionDays, chatPurgeBatchSize, chatPurgeMaxPerRun } = await this.getConfig();
     const cutoff = new Date(Date.now() - chatRetentionDays * 24 * 3600_000);
-    const rooms = await this.prisma.challengeRoom.findMany({
-      where: { channelId: { not: null }, closedAt: { not: null, lte: cutoff } },
-      select: { id: true, channelId: true },
-      take: 200,
-    });
+    const batchSize = Math.max(1, chatPurgeBatchSize);
+    const maxRooms = Math.max(1, opts?.maxRooms ?? chatPurgeMaxPerRun);
+
+    let cursor = await this.getPurgeCursor();
+    let examined = 0;
     let purged = 0;
     let held = 0;
-    for (const room of rooms) {
-      try {
-        const result = await this.prisma.$transaction(async (tx) => {
-          // Same room-row lock as reports/disputes — a moderation action
-          // can never slip between the hold check and message deletion.
-          await this.lockRoom(tx, room.id);
-          const openStatuses = [ReportStatus.OPEN, ReportStatus.UNDER_REVIEW];
-          const [openDisputes, openRoomReports, openMessageReports] = await Promise.all([
-            tx.roomDispute.count({ where: { roomId: room.id, status: { in: openStatuses } } }),
-            tx.report.count({ where: { roomId: room.id, status: { in: openStatuses } } }),
-            tx.report.count({
-              where: { message: { is: { channelId: room.channelId! } }, status: { in: openStatuses } },
-            }),
-          ]);
-          if (openDisputes + openRoomReports + openMessageReports > 0) {
-            return { held: true as const, deleted: 0 };
-          }
-          // Detach resolved message-reports so cascade doesn't erase them.
-          await tx.report.updateMany({
-            where: {
-              message: { is: { channelId: room.channelId! } },
-              status: { in: [ReportStatus.RESOLVED, ReportStatus.DISMISSED] },
-            },
-            data: { messageId: null },
+    let deletedMessages = 0;
+    let hasMore = false;
+
+    while (examined < maxRooms) {
+      const take = Math.min(batchSize, maxRooms - examined);
+      const rooms = await this.prisma.challengeRoom.findMany({
+        where: {
+          channelId: { not: null },
+          closedAt: { not: null, lte: cutoff },
+          // Skip channels already emptied by a previous pass — they would
+          // otherwise stay eligible forever and starve later rooms.
+          channel: { is: { messages: { some: {} } } },
+          id: cursor ? { gt: cursor } : undefined,
+        },
+        select: { id: true, channelId: true },
+        orderBy: { id: 'asc' },
+        take,
+      });
+
+      if (rooms.length === 0) {
+        if (cursor === '') break; // nothing eligible
+        // Tail reached — wrap so the next run re-checks from the head
+        // (held rooms keep their messages and remain eligible).
+        cursor = '';
+        await this.setPurgeCursor(cursor);
+        break;
+      }
+
+      for (const room of rooms) {
+        examined += 1;
+        cursor = room.id;
+        try {
+          const result = await this.prisma.$transaction(async (tx) => {
+            // Same room-row lock as reports/disputes — a moderation action
+            // can never slip between the hold check and message deletion.
+            await this.lockRoom(tx, room.id);
+            const openStatuses = [ReportStatus.OPEN, ReportStatus.UNDER_REVIEW];
+            const [openDisputes, openRoomReports, openMessageReports] = await Promise.all([
+              tx.roomDispute.count({ where: { roomId: room.id, status: { in: openStatuses } } }),
+              tx.report.count({ where: { roomId: room.id, status: { in: openStatuses } } }),
+              tx.report.count({
+                where: { message: { is: { channelId: room.channelId! } }, status: { in: openStatuses } },
+              }),
+            ]);
+            if (openDisputes + openRoomReports + openMessageReports > 0) {
+              return { held: true as const, deleted: 0 };
+            }
+            // Detach resolved message-reports so cascade doesn't erase them.
+            await tx.report.updateMany({
+              where: {
+                message: { is: { channelId: room.channelId! } },
+                status: { in: [ReportStatus.RESOLVED, ReportStatus.DISMISSED] },
+              },
+              data: { messageId: null },
+            });
+            const deleted = await tx.channelMessage.deleteMany({ where: { channelId: room.channelId! } });
+            return { held: false as const, deleted: deleted.count };
           });
-          const deleted = await tx.channelMessage.deleteMany({ where: { channelId: room.channelId! } });
-          return { held: false as const, deleted: deleted.count };
-        });
-        if (result.held) held += 1; else purged += 1;
-      } catch (err) {
-        this.logger.warn(`Room chat purge failed for ${room.id}: ${err}`);
+          if (result.held) {
+            held += 1;
+          } else {
+            purged += 1;
+            deletedMessages += result.deleted;
+          }
+        } catch (err) {
+          this.logger.warn(`Room chat purge failed for ${room.id}: ${err}`);
+        }
+      }
+
+      // Persist progress after each batch — durable across restarts and
+      // bounded per run; the next scheduled run resumes here.
+      await this.setPurgeCursor(cursor);
+      hasMore = rooms.length === take;
+      if (rooms.length < take) {
+        // Consumed the tail — wrap for the next run.
+        cursor = '';
+        await this.setPurgeCursor(cursor);
+        hasMore = false;
+        break;
       }
     }
-    if (purged || held) {
-      this.logger.log(`Room chat purge: ${purged} channel(s) purged, ${held} held for moderation`);
+
+    if (examined || held) {
+      this.logger.log(
+        `Room chat purge: ${examined} room(s) examined, ${purged} purged ` +
+        `(${deletedMessages} messages deleted), ${held} held for moderation` +
+        (hasMore ? ', more pending' : ''),
+      );
     }
-    return { purged, held };
+    return { examined, purged, held, deletedMessages, hasMore, cursor };
   }
 
   // ─── Room-scoped user report ───────────────────────────────

@@ -840,6 +840,101 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(survived!.messageId).toBeNull(); // detached, not cascade-deleted
   });
 
+  it('purge paginates >200 eligible rooms via durable cursor; holds stay eligible', async () => {
+    // Deterministic start regardless of earlier tests' cursor state.
+    await prisma.platformConfig.deleteMany({ where: { key: 'room_chat_purge_cursor' } });
+
+    const creator = await mkTempUser('pgc', 0);
+    const tag = Math.random().toString(36).slice(2, 8);
+    const closedAt = new Date(Date.now() - 100 * 24 * 3600_000);
+    const TOTAL = 205;          // > one 200-room batch
+    const EMPTY = 8;            // already-empty channels — must never be examined
+    const HOLD_N = 10;          // moderation hold inside the first batch
+
+    const channels: { id: string; name: string; slug: string; type: 'PRIVATE'; createdById: string }[] = [];
+    const rooms: {
+      id: string; creatorId: string; contributionCredits: number; roomCharge: number;
+      title: string; claimExpiresAt: Date; status: RoomStatus; channelId: string;
+      closedAt: Date; expiresAt: Date;
+    }[] = [];
+    const messages: { id: string; channelId: string; userId: string; content: string }[] = [];
+
+    for (let i = 1; i <= TOTAL + EMPTY; i++) {
+      const n = String(i).padStart(3, '0');
+      const channelId = `zzpg${tag}c${n}`;
+      const roomId = `zzpg${tag}r${n}`;
+      channels.push({ id: channelId, name: `zz ${n}`, slug: `zz-pg-${tag}-${n}`, type: 'PRIVATE', createdById: creator });
+      rooms.push({
+        id: roomId, creatorId: creator, contributionCredits: 25, roomCharge: 50,
+        title: `P${n}`, claimExpiresAt: closedAt, status: RoomStatus.COMPLETED,
+        channelId, closedAt, expiresAt: closedAt,
+      });
+      if (i <= TOTAL) {
+        messages.push({ id: `zzpg${tag}m${n}`, channelId, userId: creator, content: `m${n}` });
+      }
+    }
+    await prisma.channel.createMany({ data: channels });
+    await prisma.challengeRoom.createMany({ data: rooms });
+    await prisma.channelMessage.createMany({ data: messages });
+
+    // Moderation hold on a room inside the first 200 — evidence must survive.
+    await prisma.roomDispute.create({
+      data: { roomId: `zzpg${tag}r${String(HOLD_N).padStart(3, '0')}`, openedById: creator, reason: 'hold', status: 'OPEN' },
+    });
+
+    const heldChannelId = `zzpg${tag}c${String(HOLD_N).padStart(3, '0')}`;
+    const lastChannelId = `zzpg${tag}c${String(TOTAL).padStart(3, '0')}`;
+    const msgCount = (channelId: string) =>
+      prisma.channelMessage.count({ where: { channelId } });
+
+    // Run 1: bounded to 120 rooms — covers part of the first batch only.
+    const r1 = await service.purgeClosedRoomChat({ maxRooms: 120 });
+    expect(r1.examined).toBe(120);
+    expect(r1.purged).toBe(119);   // 120 examined − 1 held
+    expect(r1.held).toBe(1);
+    expect(r1.deletedMessages).toBe(119);
+    expect(r1.hasMore).toBe(true);
+    // Cursor persisted — durable progress across invocations.
+    const cursorRow = await prisma.platformConfig.findUnique({ where: { key: 'room_chat_purge_cursor' } });
+    expect(typeof cursorRow?.value).toBe('string');
+    expect(cursorRow!.value).not.toBe('');
+
+    // Run 2: resumes after the cursor, walks past room 200 to the tail.
+    const r2 = await service.purgeClosedRoomChat({ maxRooms: 120 });
+    expect(r2.examined).toBe(TOTAL - 120); // 85 remaining message-bearing rooms
+    expect(r2.purged).toBe(85);
+    expect(r2.held).toBe(0);
+    expect(r2.deletedMessages).toBe(85);
+    expect(r2.hasMore).toBe(false);
+    // Cursor wrapped for the next pass.
+    const wrapped = await prisma.platformConfig.findUnique({ where: { key: 'room_chat_purge_cursor' } });
+    expect(wrapped!.value).toBe('');
+
+    // Messages beyond the first 200-batch are gone; held evidence intact.
+    expect(await msgCount(lastChannelId)).toBe(0);
+    expect(await msgCount(heldChannelId)).toBe(1);
+    // Empty channels were never examined: 120 + 85 = 205 = message-bearing rooms only.
+    expect(r1.examined + r2.examined).toBe(TOTAL);
+
+    // Run 3: only the held room is still eligible — re-checked, still held.
+    const r3 = await service.purgeClosedRoomChat();
+    expect(r3.examined).toBe(1);
+    expect(r3.held).toBe(1);
+    expect(r3.deletedMessages).toBe(0);
+    expect(await msgCount(heldChannelId)).toBe(1);
+
+    // Release the hold → next pass purges the previously protected room.
+    const dispute = await prisma.roomDispute.findFirstOrThrow({ where: { roomId: `zzpg${tag}r${String(HOLD_N).padStart(3, '0')}` } });
+    await service.adminResolveDispute(creator, dispute.id, 'released', 'resolve');
+    const r4 = await service.purgeClosedRoomChat();
+    expect(r4.examined).toBe(1);
+    expect(r4.purged).toBe(1);
+    expect(r4.deletedMessages).toBe(1);
+    expect(await msgCount(heldChannelId)).toBe(0);
+
+    await prisma.platformConfig.deleteMany({ where: { key: 'room_chat_purge_cursor' } });
+  });
+
   // ─── helpers ──────────────────────────────────────────────
 
   async function mkTempUser(suffix: string, balance: number) {
