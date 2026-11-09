@@ -35,12 +35,13 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function Countdown({ seconds }: { seconds: number | null | undefined }) {
+function Countdown({ seconds, bare }: { seconds: number | null | undefined; bare?: boolean }) {
   if (seconds == null) return null;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   const text = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+  if (bare) return <span className="tabular-nums">{text}</span>;
   return (
     <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
       <Timer className="h-3 w-3" /> {text}
@@ -48,35 +49,56 @@ function Countdown({ seconds }: { seconds: number | null | undefined }) {
   );
 }
 
-function RoomCard({ room, onJoin }: { room: RoomSummary; onJoin: (r: RoomSummary) => void }) {
-  const joinable = room.status === 'OPEN' && (room.claimSecondsRemaining ?? 0) > 0;
+function RoomCard({ room, onJoin, activeRoomId }: { room: RoomSummary; onJoin: (r: RoomSummary) => void; activeRoomId?: string | null }) {
+  const claimLeft = room.claimSecondsRemaining ?? 0;
+  const joinable = room.status === 'OPEN' && claimLeft > 0;
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 transition-colors hover:border-zinc-700">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 transition-colors hover:border-brand-500/40">
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-zinc-100 line-clamp-1">{room.title}</h3>
         <StatusBadge status={room.status} />
       </div>
+
+      {/* Contribution = the "price" of this mutual ad */}
+      <div className="mt-3 flex items-end justify-between gap-2">
+        <div>
+          <div className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Each player pays</div>
+          <div className="text-2xl font-bold leading-tight text-zinc-100">{formatCredits(room.contributionCredits)}</div>
+        </div>
+        <div className="text-right text-[10px] leading-tight text-zinc-500">
+          <div>room charge {formatCredits(room.roomCharge)} once agreed</div>
+          {joinable && (
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-medium text-amber-300">
+              <Timer className="h-3 w-3" /> <Countdown seconds={claimLeft} bare />
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
         <UserLink user={{ username: room.creator.username }} className="text-zinc-300 hover:text-brand-300" />
         {room.creator.reputationScore != null && (
           <span className="text-zinc-500">· rep {room.creator.reputationScore}</span>
         )}
         {room.visibility === 'PRIVATE' && (
-          <span className="inline-flex items-center gap-1 text-zinc-500"><Lock className="h-3 w-3" /> Private</span>
+          <span className="inline-flex items-center gap-1 text-zinc-500"><Lock className="h-3 w-3" /> Password</span>
         )}
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-3 text-xs">
-          <span className="inline-flex items-center gap-1 text-zinc-300">
-            <Wallet className="h-3.5 w-3.5 text-brand-400" />
-            {formatCredits(room.contributionCredits)} each
-          </span>
-          {joinable && <Countdown seconds={room.claimSecondsRemaining} />}
-        </div>
-        {joinable ? (
+
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-800/70 pt-3">
+        <span className="text-[11px] text-zinc-500">30 min to complete once joined</span>
+        {joinable && activeRoomId ? (
+          <Link
+            href={`/rooms/${activeRoomId}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:border-amber-400"
+            title="You already have an active room — finish or cancel it first"
+          >
+            Active room — resume
+          </Link>
+        ) : joinable ? (
           <button
             onClick={() => onJoin(room)}
-            className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-500"
+            className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-500"
           >
             Join <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -89,6 +111,21 @@ function RoomCard({ room, onJoin }: { room: RoomSummary; onJoin: (r: RoomSummary
           </Link>
         )}
       </div>
+    </div>
+  );
+}
+
+function QueryError({ label, onRetry }: { label: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-12 text-center">
+      <p className="text-sm text-red-300">Couldn&apos;t load {label}.</p>
+      <p className="mt-1 text-xs text-zinc-500">Check your connection and try again.</p>
+      <button
+        onClick={onRetry}
+        className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-500"
+      >
+        Retry
+      </button>
     </div>
   );
 }
@@ -237,7 +274,10 @@ export default function RoomsPage() {
     onSuccess: (res) => {
       setJoinTarget(null);
       setJoinPassword('');
+      // Refresh membership, marketplace availability, wallet, and the
+      // active-room pointer before navigating to the workspace.
       void queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       router.push(`/rooms/${res.roomId}`);
     },
     onError: (err) => setJoinError(getApiErrorMessage(err)),
@@ -254,8 +294,8 @@ export default function RoomsPage() {
             <Swords className="h-6 w-6 text-brand-400" /> P2P Rooms
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-            Mutual rooms — you and a partner each stake credits, do each other&apos;s tasks, and review the proof.
-            No credit rewards, no platform fees on the work itself: finish in time and you both earn a P2P point.
+            Mutual rooms — you and a partner each contribute credits, do each other&apos;s tasks, and review the proof.
+            Contributions are reserved up front and only collected if you both agree on the tasks; anything unfinished by the deadline is refunded. Each completed room earns a P2P point — never wallet credits.
             Looking for reward-paying challenges?{' '}
             <Link href="/tasks" className="text-brand-400 hover:underline">Find tasks</Link>.
           </p>
@@ -301,6 +341,8 @@ export default function RoomsPage() {
         <div className="mt-4">
           {browseQuery.isLoading ? (
             <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-zinc-600" /></div>
+          ) : browseQuery.isError ? (
+            <QueryError label="open rooms" onRetry={() => void browseQuery.refetch()} />
           ) : (browseQuery.data?.rooms.length ?? 0) === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-800 py-16 text-center">
               <Users className="mx-auto h-8 w-8 text-zinc-700" />
@@ -311,7 +353,7 @@ export default function RoomsPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 {browseQuery.data!.rooms.map((room) => (
-                  <RoomCard key={room.id} room={room} onJoin={setJoinTarget} />
+                  <RoomCard key={room.id} room={room} onJoin={setJoinTarget} activeRoomId={activeRoomId} />
                 ))}
               </div>
               {(browseQuery.data?.hasMore || page > 1) && (
@@ -343,6 +385,8 @@ export default function RoomsPage() {
         <div className="mt-4 space-y-2">
           {mineQuery.isLoading ? (
             <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-zinc-600" /></div>
+          ) : mineQuery.isError ? (
+            <QueryError label="your rooms" onRetry={() => void mineQuery.refetch()} />
           ) : (mineQuery.data?.rooms.length ?? 0) === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-800 py-16 text-center">
               <Swords className="mx-auto h-8 w-8 text-zinc-700" />
@@ -388,6 +432,8 @@ export default function RoomsPage() {
           </div>
           {boardQuery.isLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-zinc-600" /></div>
+          ) : boardQuery.isError ? (
+            <QueryError label="the leaderboard" onRetry={() => void boardQuery.refetch()} />
           ) : (boardQuery.data?.entries.length ?? 0) === 0 ? (
             <p className="px-4 py-12 text-center text-sm text-zinc-500">No completed rooms yet.</p>
           ) : (
@@ -428,7 +474,9 @@ export default function RoomsPage() {
               <span className="font-semibold text-brand-300">{formatCredits(joinTarget.contributionCredits)}</span>
             </p>
             <p className="mt-1 text-xs text-zinc-500">
-              Reserved on join and refunded if the room doesn&apos;t complete. The {quoteQuery.data?.activeMinutes ?? 30}-minute clock starts immediately.
+              Your {formatCredits(joinTarget.contributionCredits)} is reserved now and refunded in full if the room doesn&apos;t complete.
+              If you both agree on tasks, the room collects {formatCredits(joinTarget.roomCharge)} once — no extra debit.
+              The {quoteQuery.data?.activeMinutes ?? 30}-minute clock starts the moment you join.
             </p>
             {joinTarget.visibility === 'PRIVATE' && (
               <input

@@ -32,10 +32,29 @@ export interface RoomSummary {
   claimerId: string | null;
   creator: RoomUser;
   claimer: RoomUser | null;
-  secondsRemaining?: number;
-  claimSecondsRemaining?: number;
+  /** Seconds left on the ACTIVE-room deadline (expiresAt). Null until joined. */
+  secondsRemaining?: number | null;
+  /** Seconds left to claim an OPEN listing (claimExpiresAt). Null once joined. */
+  claimSecondsRemaining?: number | null;
   myRole?: 'CREATOR' | 'CLAIMER' | null;
+  isParticipant?: boolean;
   isActiveRoom?: boolean;
+  requiresPassword?: boolean;
+}
+
+/** Minimal probe returned by POST /rooms/:id/preview for share-link gates. */
+export interface RoomPreviewInfo {
+  id: string;
+  title: string;
+  status: RoomStatus;
+  visibility: 'PUBLIC' | 'PRIVATE';
+  contributionCredits: number;
+  roomCharge: number;
+  claimExpiresAt: string;
+  createdAt: string;
+  requiresPassword: boolean;
+  claimSecondsRemaining?: number | null;
+  creator: { username: string; displayName: string | null; avatarUrl: string | null; reputationScore?: number };
 }
 
 export interface RoomOffer {
@@ -123,7 +142,7 @@ export const roomsApi = {
   mine: (page = 1) => get<RoomListResponse>(`rooms/mine?page=${page}&limit=20`),
   get: (id: string) => get<RoomSummary>(`rooms/${id}`),
   state: (id: string) => get<RoomState>(`rooms/${id}/state`),
-  preview: (id: string) => post<RoomSummary>(`rooms/${id}/preview`),
+  preview: (id: string) => post<RoomPreviewInfo>(`rooms/${id}/preview`),
   access: (id: string, password: string) => post<RoomSummary>(`rooms/${id}/access`, { password }),
   create: (dto: { title: string; contributionCredits?: number; visibility?: 'PUBLIC' | 'PRIVATE'; password?: string }) =>
     post<RoomSummary>('rooms', dto),
