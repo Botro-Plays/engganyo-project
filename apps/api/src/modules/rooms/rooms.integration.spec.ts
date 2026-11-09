@@ -967,6 +967,169 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await prisma.platformConfig.deleteMany({ where: { key: 'room_chat_purge_cursor' } });
   });
 
+  // ─── Same-IP evidence rule ───────────────────────────────
+  //
+  // Two legitimate users on one household/office/CGNAT IP must be able to
+  // play mutual rooms; only high-confidence farming signals hard-block.
+  // Every same-IP join still produces a review flag for admins.
+
+  const mkSession = (userId: string, ip: string) =>
+    prisma.userSession.create({
+      data: {
+        userId,
+        refreshToken: `rt_${PREFIX}${Math.random().toString(36).slice(2)}`,
+        ipAddress: ip,
+        expiresAt: new Date(Date.now() + 24 * 3600_000),
+      },
+    });
+
+  const flagCallsFor = (userId: string) =>
+    noopAbuse.flagUser.mock.calls.filter((c) => c[0] === userId);
+
+  const THIRTY_DAYS = 30 * 24 * 3600_000;
+
+  it('same-IP join allowed + flagged low when both accounts are established', async () => {
+    noopAbuse.flagUser.mockClear();
+    const ip = '10.9.0.1';
+    const c = await mkTempUser('sipok_c', 500);
+    const j = await mkTempUser('sipok_j', 500);
+    const old = new Date(Date.now() - THIRTY_DAYS);
+    await prisma.user.update({ where: { id: c }, data: { createdAt: old, registrationIp: '198.51.100.7' } });
+    await prisma.user.update({ where: { id: j }, data: { createdAt: old, registrationIp: '198.51.100.8' } });
+    await mkSession(c, ip);
+
+    const room = await service.create(c, { title: 'Household pair', contributionCredits: 25 });
+    await service.join(j, room.id, {}, ip);
+
+    const after = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(after.status).toBe(RoomStatus.NEGOTIATING);
+    const flags = flagCallsFor(j);
+    expect(flags).toHaveLength(1);
+    expect(flags[0][1]).toBe('room_same_ip_review');
+    expect(flags[0][2]).toBe('low');
+
+    await service.cancel(c, room.id); // cleanup — refunds both sides
+  });
+
+  it('same-IP join flagged medium when one account is new', async () => {
+    noopAbuse.flagUser.mockClear();
+    const ip = '10.9.0.2';
+    const c = await mkTempUser('sipm_c', 500);
+    const j = await mkTempUser('sipm_j', 500);
+    const old = new Date(Date.now() - THIRTY_DAYS);
+    await prisma.user.update({ where: { id: c }, data: { createdAt: old, registrationIp: '198.51.100.9' } });
+    await prisma.user.update({ where: { id: j }, data: { registrationIp: '198.51.100.10' } }); // fresh account
+    await mkSession(c, ip);
+
+    const room = await service.create(c, { title: 'New joiner', contributionCredits: 25 });
+    await service.join(j, room.id, {}, ip);
+
+    const flags = flagCallsFor(j);
+    expect(flags).toHaveLength(1);
+    expect(flags[0][1]).toBe('room_same_ip_review');
+    expect(flags[0][2]).toBe('medium');
+
+    await service.cancel(c, room.id);
+  });
+
+  it('same-IP join blocked when both accounts are new and share registration IP', async () => {
+    noopAbuse.flagUser.mockClear();
+    const ip = '10.9.0.3';
+    const c = await mkTempUser('sipb_c', 500);
+    const j = await mkTempUser('sipb_j', 500);
+    // Both fresh (createdAt = now) and registered from the same IP.
+    await prisma.user.updateMany({ where: { id: { in: [c, j] } }, data: { registrationIp: ip } });
+    await mkSession(c, ip);
+
+    const room = await service.create(c, { title: 'Burner pair', contributionCredits: 25 });
+    await expect(service.join(j, room.id, {}, ip)).rejects.toThrow(BadRequestException);
+
+    const roomAfter = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(roomAfter.claimerId).toBeNull();
+    const flags = flagCallsFor(j);
+    expect(flags.some((f) => f[1] === 'alt_account_self_farm' && f[2] === 'critical')).toBe(true);
+
+    await service.cancel(c, room.id); // cleanup
+  });
+
+  it('same-IP join blocked when either account has an unresolved high/critical flag', async () => {
+    noopAbuse.flagUser.mockClear();
+    const ip = '10.9.0.4';
+    const c = await mkTempUser('siph_c', 500);
+    const j = await mkTempUser('siph_j', 500);
+    const old = new Date(Date.now() - THIRTY_DAYS);
+    await prisma.user.updateMany({
+      where: { id: { in: [c, j] } },
+      data: { createdAt: old, registrationIp: '198.51.100.20' }, // would otherwise be 'low'
+    });
+    // Distinct registration IPs so sameRegIp doesn't fire.
+    await prisma.user.update({ where: { id: j }, data: { registrationIp: '198.51.100.21' } });
+    await mkSession(c, ip);
+    await prisma.abuseFlag.create({
+      data: { userId: j, flagType: 'suspicious_timing', severity: 'high', description: 'prior flag' },
+    });
+
+    const room = await service.create(c, { title: 'Flagged joiner', contributionCredits: 25 });
+    await expect(service.join(j, room.id, {}, ip)).rejects.toThrow(BadRequestException);
+    const flags = flagCallsFor(j);
+    expect(flags.some((f) => f[1] === 'alt_account_self_farm' && f[2] === 'critical')).toBe(true);
+
+    await prisma.abuseFlag.deleteMany({ where: { userId: j, flagType: 'suspicious_timing' } });
+    await service.cancel(c, room.id);
+  });
+
+  it('same-IP join blocked when the pair already completed 5 rooms this week', async () => {
+    noopAbuse.flagUser.mockClear();
+    const ip = '10.9.0.5';
+    const c = await mkTempUser('sipl_c', 500);
+    const j = await mkTempUser('sipl_j', 500);
+    const old = new Date(Date.now() - THIRTY_DAYS);
+    await prisma.user.updateMany({
+      where: { id: { in: [c, j] } },
+      data: { createdAt: old, registrationIp: '198.51.100.30' },
+    });
+    await prisma.user.update({ where: { id: j }, data: { registrationIp: '198.51.100.31' } });
+    await mkSession(c, ip);
+
+    // Farming loop: 5 completed rooms between this exact pair in 7d.
+    for (let i = 0; i < 5; i++) {
+      await prisma.challengeRoom.create({
+        data: {
+          creatorId: c,
+          claimerId: j,
+          contributionCredits: 25,
+          roomCharge: 0,
+          title: `hist${i}`,
+          status: RoomStatus.COMPLETED,
+          claimExpiresAt: new Date(Date.now() - 25 * 3600_000),
+          closedAt: new Date(Date.now() - 24 * 3600_000),
+          createdAt: new Date(Date.now() - (i + 1) * 3600_000),
+        },
+      });
+    }
+
+    const room = await service.create(c, { title: 'Loop pair', contributionCredits: 25 });
+    await expect(service.join(j, room.id, {}, ip)).rejects.toThrow(BadRequestException);
+
+    await service.cancel(c, room.id); // cleanup
+  });
+
+  it('different-IP join produces no same-IP flag', async () => {
+    noopAbuse.flagUser.mockClear();
+    const c = await mkTempUser('sipd_c', 500);
+    const j = await mkTempUser('sipd_j', 500);
+    await mkSession(c, '10.9.0.90'); // creator active on a different IP
+
+    const room = await service.create(c, { title: 'Distinct IPs', contributionCredits: 25 });
+    await service.join(j, room.id, {}, '10.9.0.91');
+
+    expect(flagCallsFor(j)).toHaveLength(0);
+    const after = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(after.status).toBe(RoomStatus.NEGOTIATING);
+
+    await service.cancel(c, room.id); // cleanup
+  });
+
   // ─── helpers ──────────────────────────────────────────────
 
   async function mkTempUser(suffix: string, balance: number) {
