@@ -49,7 +49,7 @@ function Countdown({ seconds, bare }: { seconds: number | null | undefined; bare
   );
 }
 
-function RoomCard({ room, onJoin }: { room: RoomSummary; onJoin: (r: RoomSummary) => void }) {
+function RoomCard({ room, onJoin, activeRoomId }: { room: RoomSummary; onJoin: (r: RoomSummary) => void; activeRoomId?: string | null }) {
   const claimLeft = room.claimSecondsRemaining ?? 0;
   const joinable = room.status === 'OPEN' && claimLeft > 0;
   return (
@@ -87,7 +87,15 @@ function RoomCard({ room, onJoin }: { room: RoomSummary; onJoin: (r: RoomSummary
 
       <div className="mt-3 flex items-center justify-between border-t border-zinc-800/70 pt-3">
         <span className="text-[11px] text-zinc-500">30 min to complete once joined</span>
-        {joinable ? (
+        {joinable && activeRoomId ? (
+          <Link
+            href={`/rooms/${activeRoomId}`}
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:border-amber-400"
+            title="You already have an active room — finish or cancel it first"
+          >
+            Active room — resume
+          </Link>
+        ) : joinable ? (
           <button
             onClick={() => onJoin(room)}
             className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-500"
@@ -345,7 +353,7 @@ export default function RoomsPage() {
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 {browseQuery.data!.rooms.map((room) => (
-                  <RoomCard key={room.id} room={room} onJoin={setJoinTarget} />
+                  <RoomCard key={room.id} room={room} onJoin={setJoinTarget} activeRoomId={activeRoomId} />
                 ))}
               </div>
               {(browseQuery.data?.hasMore || page > 1) && (
