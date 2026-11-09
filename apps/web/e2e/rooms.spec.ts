@@ -33,6 +33,27 @@ async function login(page: Page, email: string, password: string) {
   if (await accept.count()) await accept.click().catch(() => null);
 }
 
+const API = process.env['E2E_API_URL'] ?? 'http://localhost:3001/api';
+
+async function apiToken(page: Page) {
+  return page.evaluate(() => localStorage.getItem('access_token'));
+}
+
+/** Cancel any leftover pre-agreement rooms so retries start clean —
+ * an unclaimed OPEN room still holds the one-active-room slot. */
+async function cancelActiveRooms(page: Page) {
+  const token = await apiToken(page);
+  if (!token) return;
+  const headers = { Authorization: `Bearer ${token}` };
+  const res = await page.request.get(`${API}/rooms/mine?limit=50`, { headers });
+  const body = await res.json().catch(() => null);
+  for (const r of body?.data?.rooms ?? []) {
+    if (['OPEN', 'NEGOTIATING'].includes(r.status)) {
+      await page.request.delete(`${API}/rooms/${r.id}`, { headers }).catch(() => null);
+    }
+  }
+}
+
 async function newUserPage(browser: Browser) {
   const context = await browser.newContext({ baseURL: BASE });
   const page = await context.newPage();
@@ -65,6 +86,7 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
     try {
       // ── Creator publishes from the marketplace ──────────────
       await login(a.page, USER_A.email, USER_A.password);
+      await cancelActiveRooms(a.page);
       await a.page.goto(`${BASE}/rooms`);
       await a.page.getByRole('button', { name: /create room/i }).click();
       const createModal = a.page.locator('div.fixed.inset-0').last();
@@ -76,6 +98,7 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
       // ── Joiner opens the shared link → public preview gate ──
       await login(b.page, USER_B.email, USER_B.password);
+      await cancelActiveRooms(b.page);
       await b.page.goto(`${BASE}/rooms/${roomId}`);
       // Preview, not the participant workspace: contribution terms + confirm.
       await expect(b.page.getByText(/review & join/i).first()).toBeVisible({ timeout: 15_000 });
@@ -86,13 +109,16 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await expect(b.page.getByRole('link', { name: /e2e_room_a/i }).first()).toBeVisible({ timeout: 20_000 });
       await expect(b.page.getByText(/negotiat/i).first()).toBeVisible({ timeout: 20_000 });
 
-      // ── Marketplace: Join renders on eligible listings ──────
-      await b.page.goto(`${BASE}/rooms`);
-      // The joined room is no longer listed; create a throwaway check on the
-      // browse contract via a fresh listing below in test 2. Here assert the
-      // "My rooms" tab shows this room as joiner.
-      await b.page.getByRole('button', { name: /my rooms/i }).click();
-      await expect(b.page.getByText('E2E mutual follow exchange')).toBeVisible({ timeout: 15_000 });
+      // ── Membership proof: rooms/mine lists the room for the joiner ──
+      const tokenB = await apiToken(b.page);
+      const mineRes = await b.page.request.get(`${API}/rooms/mine?limit=20`, {
+        headers: { Authorization: `Bearer ${tokenB}` },
+      });
+      const mineBody = await mineRes.json();
+      const mineRoom = (mineBody?.data?.rooms ?? []).find((r: { id: string }) => r.id === roomId);
+      expect(mineRoom, 'joiner rooms/mine contains the joined room').toBeTruthy();
+      expect(mineRoom.myRole).toBe('CLAIMER');
+      expect(mineBody?.data?.activeRoomId).toBe(roomId);
 
       // ── Creator sees the partner arrive ────────────────────
       await a.page.reload();
@@ -171,9 +197,11 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
       // Closed-room history stays reachable for participants.
-      await a.page.goto(`${BASE}/rooms`);
-      await a.page.getByRole('button', { name: /my rooms/i }).click();
-      await expect(a.page.getByText('E2E mutual follow exchange')).toBeVisible({ timeout: 15_000 });
+      for (const p of [a.page, b.page]) {
+        await p.goto(`${BASE}/rooms`);
+        await p.getByRole('button', { name: /my rooms/i }).click();
+        await expect(p.getByText('E2E mutual follow exchange')).toBeVisible({ timeout: 20_000 });
+      }
     } finally {
       await a.context.close();
       await b.context.close();
@@ -187,6 +215,7 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
     try {
       await login(a.page, USER_A.email, USER_A.password);
+      await cancelActiveRooms(a.page);
       await a.page.goto(`${BASE}/rooms`);
       await a.page.getByRole('button', { name: /create room/i }).click();
       const createModal = a.page.locator('div.fixed.inset-0').last();
@@ -199,6 +228,7 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
       // Nonparticipant hits the share link → password gate, not a dead page.
       await login(b.page, USER_B.email, USER_B.password);
+      await cancelActiveRooms(b.page);
       await b.page.goto(`${BASE}/rooms/${roomId}`);
       await expect(b.page.getByText(/room password/i)).toBeVisible({ timeout: 15_000 });
       await b.page.getByPlaceholder(/password shared with you/i).fill('wrong-pw');
