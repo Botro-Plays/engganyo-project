@@ -13,7 +13,7 @@ import {
 
 import axios from 'axios';
 import { roomsApi, friendsApi, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
-import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
 import { connectChannelSocket } from '@/lib/channel-socket';
 import { useAuthStore } from '@/store/auth.store';
 import { UserLink } from '@/components/user-link';
@@ -570,6 +570,10 @@ function RoomWorkspace() {
   const stateQuery = useQuery({
     queryKey: ['room', id],
     queryFn: () => roomsApi.state(id),
+    // Socket events + the interval below already keep this fresh; a window
+    // focus refetch would just duplicate them (two participants alt-tabbing
+    // during a session was a measurable burst source).
+    refetchOnWindowFocus: false,
     refetchInterval: (q) => {
       const s = q.state.data?.room.status;
       return s && ['OPEN', 'NEGOTIATING', 'AGREED', 'IN_PROGRESS', 'SUBMITTED'].includes(s) ? 10000 : false;
@@ -1385,7 +1389,9 @@ export default function RoomPage() {
     queryFn: () => roomsApi.get(id),
     retry: (count, err) => {
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      return status !== 404 && count < 2;
+      // 404 means "probe the preview endpoint" — every other 4xx (incl. 429)
+      // is definitive; only network/5xx get the single shared retry.
+      return status !== 404 && shouldRetryQuery(count, err);
     },
   });
 
