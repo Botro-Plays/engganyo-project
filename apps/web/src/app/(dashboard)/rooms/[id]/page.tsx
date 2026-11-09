@@ -73,7 +73,10 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
   const room = state.room;
   const postAgreement = ['AGREED', 'IN_PROGRESS', 'SUBMITTED'].includes(room.status);
   const mySubmission = offer.latestSubmission;
-  const isPendingReview = mySubmission && ['SUBMITTED', 'DISPUTED'].includes(mySubmission.status) && !offer.isMine;
+  // The offer proposer reviews the performer's proof — the API rejects
+  // self-review, so the button must live on MY offer once a submission is
+  // pending, not on the partner's offer carrying my own submission.
+  const isPendingReview = mySubmission && ['SUBMITTED', 'DISPUTED'].includes(mySubmission.status) && offer.isMine;
   const canSubmitProof = offer.performerIsMe && postAgreement &&
     (!mySubmission || mySubmission.status === 'REJECTED') &&
     new Date(offer.deadline) > new Date();
@@ -524,9 +527,9 @@ function nextActionHint(room: NonNullable<RoomState['room']>, state: RoomState):
   if (status === 'EXPIRED' || status === 'CLOSED') return 'This room is finished — contributions were refunded.';
   if (status === 'COMPLETED') return state.myRating ? 'Room complete — thanks for playing.' : 'Rate your partner to finish up.';
   // AGREED / IN_PROGRESS / SUBMITTED
-  const pendingMine = state.offers.filter((o) => !o.isMine);
-  const myPendingReview = pendingMine.find((o) => o.latestSubmission && ['SUBMITTED', 'DISPUTED'].includes(o.latestSubmission.status));
-  if (myPendingReview) return 'Your partner submitted proof — review it to keep things moving.';
+  // I review proofs on offers I proposed; the partner performs them.
+  const awaitingMyReview = state.offers.find((o) => o.isMine && o.latestSubmission && ['SUBMITTED', 'DISPUTED'].includes(o.latestSubmission.status));
+  if (awaitingMyReview) return 'Your partner submitted proof — review it to keep things moving.';
   const myTask = state.offers.find((o) => !o.isMine); // partner's offer = my task
   if (myTask) {
     const sub = myTask.latestSubmission;
@@ -944,6 +947,13 @@ function RoomWorkspace() {
                   </div>
                 </div>
               )}
+              <button
+                onClick={() => cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
+                className="mt-3 w-full rounded-lg border border-zinc-800 px-3 py-2 text-xs text-zinc-500 hover:border-red-500/40 hover:text-red-300"
+              >
+                Cancel room — refunds both contributions
+              </button>
             </div>
           )}
 
