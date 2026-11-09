@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
-import { apiClient } from '@/lib/api';
+import { apiClient, shouldRetryQuery } from '@/lib/api';
 import type { ApiResponse } from '@/types';
 import { ChatWidget } from '@/components/chat/ChatWidget';
 import { SocketProvider } from '@/components/socket-provider';
@@ -45,7 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 10 * 1000, // 10 seconds
-            retry: 1,
+            retry: shouldRetryQuery,
             refetchOnWindowFocus: true,
             refetchOnReconnect: true,
           },

@@ -63,6 +63,42 @@ const RETRY_DELAY_MS = 1000;
 // credentials). A refresh cannot help there and the redirect would discard the error.
 const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
 
+// Concurrent 401s share ONE in-flight refresh — without this, an expired
+// access token makes every pending query fire its own /auth/refresh and
+// the refresh endpoint's own throttle turns the burst into logouts.
+let refreshPromise: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post<{ data: { accessToken: string } }>(
+        `${API_BASE_URL}/auth/refresh`,
+        {},
+        { withCredentials: true },
+      )
+      .then((res) => {
+        const token = res.data.data.accessToken;
+        localStorage.setItem('access_token', token);
+        return token;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+/** Query-level retry policy: never amplify client errors (incl. 429) —
+ *  the next poll interval is the natural retry. Server/network errors get
+ *  one retry, matching the previous global default. */
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    if (status !== undefined && status >= 400 && status < 500) return false;
+  }
+  return failureCount < 1;
+}
+
 function shouldRetry(error: AxiosError, config?: InternalAxiosRequestConfig): boolean {
   // Mutations can opt out — a replayed non-idempotent POST is not safe.
   if (config?.skipRetry) {
@@ -132,14 +168,7 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const response = await axios.post<{ data: { accessToken: string } }>(
-          `${API_BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true },
-        );
-
-        const { accessToken } = response.data.data;
-        localStorage.setItem('access_token', accessToken);
+        const accessToken = await refreshAccessToken();
 
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
