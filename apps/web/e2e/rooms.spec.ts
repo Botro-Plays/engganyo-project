@@ -72,13 +72,13 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await createModal.getByRole('button', { name: /publish room/i }).click();
       await a.page.waitForURL(/\/rooms\/[a-z0-9]+/, { timeout: 30_000 });
       roomId = a.page.url().split('/rooms/')[1];
-      await expect(a.page.getByText(/waiting for a partner/i)).toBeVisible({ timeout: 15_000 });
+      await expect(a.page.getByText(/waiting for a partner/i).first()).toBeVisible({ timeout: 15_000 });
 
       // ── Joiner opens the shared link → public preview gate ──
       await login(b.page, USER_B.email, USER_B.password);
       await b.page.goto(`${BASE}/rooms/${roomId}`);
       // Preview, not the participant workspace: contribution terms + confirm.
-      await expect(b.page.getByText(/review & join/i)).toBeVisible({ timeout: 15_000 });
+      await expect(b.page.getByText(/review & join/i).first()).toBeVisible({ timeout: 15_000 });
       await expect(b.page.getByText(/reserved on join/i)).toBeVisible();
       await b.page.getByRole('button', { name: /review & join/i }).click();
       await b.page.getByRole('button', { name: /confirm & join/i }).click();
@@ -156,9 +156,9 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await modal.getByRole('button', { name: /^approve$/i }).click();
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
-      await expect(a.page.getByText(/room completed/i)).toBeVisible({ timeout: 20_000 });
-      await expect(b.page.getByText(/room completed/i)).toBeVisible({ timeout: 20_000 });
-      await expect(a.page.getByText(/\+1 p2p point/i)).toBeVisible();
+      await expect(a.page.getByText(/room completed/i).first()).toBeVisible({ timeout: 20_000 });
+      await expect(b.page.getByText(/room completed/i).first()).toBeVisible({ timeout: 20_000 });
+      await expect(a.page.getByText(/\+1 p2p point/i).first()).toBeVisible();
 
       // ── Ratings from both sides ─────────────────────────────
       await a.page.getByRole('button', { name: /rate your partner/i }).click();
@@ -206,10 +206,10 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await expect(b.page.getByText(/incorrect password/i)).toBeVisible({ timeout: 15_000 });
       await b.page.getByPlaceholder(/password shared with you/i).fill('pw1234');
       await b.page.getByRole('button', { name: /unlock room/i }).click();
-      await expect(b.page.getByText(/review & join/i)).toBeVisible({ timeout: 15_000 });
+      await expect(b.page.getByText(/review & join/i).first()).toBeVisible({ timeout: 15_000 });
       await b.page.getByRole('button', { name: /review & join/i }).click();
       await b.page.getByRole('button', { name: /confirm & join/i }).click();
-      await expect(b.page.getByText(/negotiat/i)).toBeVisible({ timeout: 20_000 });
+      await expect(b.page.getByText(/negotiat/i).first()).toBeVisible({ timeout: 20_000 });
 
       // Either participant can cancel while NEGOTIATING — success routes
       // back to the marketplace and "My rooms" keeps the CLOSED history.
