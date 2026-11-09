@@ -1060,7 +1060,9 @@ function RoomWorkspace() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowDispute(false)}>
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-zinc-100">Open a dispute</h2>
-            <p className="mt-1 text-xs text-zinc-500">Freezes room actions for moderator review. The deadline still applies.</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Freezes room actions while a moderator reviews. A moderator&apos;s decision is recorded for the record — it does not resume the room, complete it, or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
+            </p>
             <textarea
               value={disputeReason}
               onChange={(e) => setDisputeReason(e.target.value)}
