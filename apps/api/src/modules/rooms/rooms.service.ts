@@ -137,6 +137,84 @@ export class RoomsService {
     return room;
   }
 
+  /**
+   * Evidence-scored same-IP check for room joins.
+   *
+   * Returns 'block' | 'low' | 'medium' | null (no shared IP → nothing to do).
+   * The old rule hard-blocked ANY join whose IP matched a creator session —
+   * which also blocked legitimate pairs on one household/office/CGNAT
+   * connection. Rooms pay no wallet credits (only +1 P2P point), so the
+   * yield being protected is small; the rule therefore blocks only on
+   * high-confidence farming signals and flags everything else for review:
+   *
+   *  - 'block': either account already carries an unresolved high/critical
+   *    abuse flag; BOTH accounts are <7d old AND registered from the same
+   *    IP (burner-pair pattern); or the pair already completed ≥5 rooms in
+   *    7d while sharing an IP (industrial farming loop).
+   *  - 'medium': one side is new (<7d) or the pair shares a registration
+   *    IP, or ≥3 completed same-IP rooms in 7d — allowed, flagged for
+   *    admin review.
+   *  - 'low': both accounts established — allowed, flagged for review.
+   */
+  private async assessRoomSameIp(
+    joinerId: string,
+    creatorId: string,
+    ip: string,
+  ): Promise<'block' | 'low' | 'medium' | null> {
+    if (!ip) return null;
+    const sharedSession = await this.prisma.userSession.findFirst({
+      where: {
+        userId: creatorId,
+        ipAddress: ip,
+        lastUsedAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) },
+        isRevoked: false,
+      },
+      select: { id: true },
+    });
+    if (!sharedSession) return null;
+
+    const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000);
+    const [joiner, creator, flags, pairCompleted] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: joinerId },
+        select: { createdAt: true, registrationIp: true, referredById: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: creatorId },
+        select: { createdAt: true, registrationIp: true },
+      }),
+      this.prisma.abuseFlag.count({
+        where: {
+          userId: { in: [joinerId, creatorId] },
+          isResolved: false,
+          severity: { in: ['high', 'critical'] },
+        },
+      }),
+      this.prisma.challengeRoom.count({
+        where: {
+          createdAt: { gte: weekAgo },
+          status: RoomStatus.COMPLETED,
+          OR: [
+            { creatorId: joinerId, claimerId: creatorId },
+            { creatorId: creatorId, claimerId: joinerId },
+          ],
+        },
+      }),
+    ]);
+    if (!joiner || !creator) return 'medium';
+
+    const SEVEN_DAYS = 7 * 24 * 3600_000;
+    const joinerNew = Date.now() - joiner.createdAt.getTime() < SEVEN_DAYS;
+    const creatorNew = Date.now() - creator.createdAt.getTime() < SEVEN_DAYS;
+    const bothNew = joinerNew && creatorNew;
+    const sameRegIp = !!(joiner.registrationIp && creator.registrationIp
+      && joiner.registrationIp === creator.registrationIp);
+
+    if (flags > 0 || (bothNew && sameRegIp) || pairCompleted >= 5) return 'block';
+    if (joinerNew || creatorNew || sameRegIp || pairCompleted >= 3) return 'medium';
+    return 'low';
+  }
+
   // Every room-state mutation takes this row lock FIRST inside its
   // transaction, then re-reads status/deadline before writing. This
   // serializes offer edits vs agreement, proof/review/cancel/dispute vs
@@ -411,21 +489,23 @@ export class RoomsService {
       await this.redis.del(`room:pwfail:${roomId}:${ip}`);
     }
 
-    // Same-IP self-farm guard (same rule as v1 challenges)
-    const sharedIp = await this.prisma.userSession.findFirst({
-      where: {
-        userId: room.creatorId,
-        ipAddress: ip,
-        lastUsedAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) },
-        isRevoked: false,
-      },
-      select: { id: true },
-    });
-    if (sharedIp && ip) {
+    // Same-IP evidence check — distinguishes legitimate pairs (household,
+    // office, CGNAT, friends on one connection) from reward farming.
+    // Rooms pay no wallet credits (only +1 P2P point), so same-IP joins are
+    // allowed when the accounts show independent establishment; only
+    // high-confidence farming signals hard-block, and every other same-IP
+    // join is flagged for admin review instead of silently passing.
+    const ipVerdict = await this.assessRoomSameIp(userId, room.creatorId, ip);
+    if (ipVerdict === 'block') {
       this.logger.warn(`Room self-farm blocked: ${userId} shares IP with creator ${room.creatorId}`);
       void this.antiAbuse.flagUser(userId, 'alt_account_self_farm', 'critical',
         `Shared IP ${ip} with room creator ${room.creatorId}`, { clientIp: ip, creatorId: room.creatorId, roomId }).catch(() => null);
       throw new BadRequestException('This join is restricted due to potential account abuse.');
+    }
+    if (ipVerdict) {
+      void this.antiAbuse.flagUser(userId, 'room_same_ip_review', ipVerdict,
+        `Same-IP room join reviewed: ${userId} ↔ ${room.creatorId} via ${ip}`,
+        { clientIp: ip, creatorId: room.creatorId, roomId, verdict: ipVerdict }).catch(() => null);
     }
 
     // Pair-frequency signal: flag for review beyond the weekly cap (allow — admins review)
