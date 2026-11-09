@@ -1745,3 +1745,41 @@ proposals; PR #45 remains at design review.
 - Pair-frequency `room_pair_limit_per_week` remains a review signal, not an enforced cap.
 - Dispute resolution records adjudication only; outcome-based resolution is future work.
 - Purge cron verified by direct invocation, not a 03:00 wait at scale.
+
+---
+
+## 2026-11-09 (PM) — Production-readiness hardening: reCAPTCHA audit, same-IP rule, request bursts, deploy storage
+
+### reCAPTCHA incident audit — CLOSED
+
+- **Current state:** `platform_configs.recaptcha_enabled = true` (verified live). Never disabled again for testing.
+- **Exact disable window (reconstructed from logs):** reCAPTCHA was confirmed ENFORCING at `2026-11-09T12:24:58Z` (last `reCAPTCHA score rejected (login)` warning in api logs). It was disabled via direct SQL between ~12:25 and ~12:26 UTC for the headless-browser verification, and restored after the last test session at `12:55:55Z` — effective window **≈12:25–13:00 UTC (~35 min)**. The restore was a raw `UPDATE` (no `updated_at` bump, no audit_log row — `platform_configs.updated_at` still shows the prior Prisma write at Oct 21), so the exact re-enable second is unrecoverable; bounded by zero captcha warnings and zero sessions after 13:00 UTC.
+- **Activity review during the window:** `user_sessions` created 12:20–13:30 UTC = ONLY `devin_p2p_a`/`devin_p2p_b` from operator IP `156.59.233.176` (the labeled test accounts). Zero new user registrations 12:00–14:00 UTC. Zero `audit_logs` and zero `abuse_flags` rows for the whole day. Non-test sessions that day (`jomstaid` IPv6 09:25–09:40, `botro` 09:28–11:36) all predate the window. **No unexpected authentication or registration activity found.**
+- Going forward: verification uses owner-assisted login (real Edge via CDP) — reCAPTCHA stays enabled and sessions are normal.
+
+### PR #61 — deploy storage management — DEPLOYED `4a9bef8`
+
+- `infra/scripts/deploy-release.sh` now gates storage: preflight requires ≥4GiB free on the docker fs (`DEPLOY_DISK_MIN_FREE_KB`) BEFORE `compose pull`, runs one safe prune pass if below, and exits 1 with a clear error before any pull/metadata if still low.
+- Retention: only this repo's `ghcr api|web:<40-hex>` tags eligible. Protected = images referenced by any container + `DEPLOY_SHA` + last `DEPLOY_KEEP_RELEASES`(2) SHAs in `.release-history` (seeded from `.deployed-sha` on first run). Base images, containers, volumes, DB data, uploads, backups never touched; `docker image prune -f` = dangling layers only.
+- Every prune appends per-image results + free space to `.deploy-storage.log` + Actions log. Post-deploy prune runs BEFORE `.release.env`/`.deployed-sha`; a still-below-minimum disk exits 1 with metadata untouched.
+- **First live run verified:** deploy `4a9bef8` logged `free_before=13.4GB, pruned 0, retained 2 rollback releases`; second deploy `9c4ef6e` pruned the superseded `0e3de39` pair (~1.87GB freed), kept `9c4ef6e`+`4a9bef8`.
+
+### PR #59 — same-IP evidence rule — DEPLOYED `6a2f30b` (in `9c4ef6e`)
+
+- Replaced the hard block (any join whose IP matched a recent creator session) with `assessRoomSameIp()` in `rooms.service.ts`: account age, registration-IP overlap, unresolved high/critical abuse flags, and the pair's completed-room count in 7d.
+- **block**: unresolved high/critical flag on either account; BOTH accounts <7d AND same registration IP (burner pair); or ≥5 completed same-IP rooms in 7d (farming loop).
+- **medium/low**: allowed + `room_same_ip_review` abuse flag for admin review (medium when one side is new / shared reg IP / ≥3 completed same-IP rooms; low otherwise).
+- Legitimate household/office/CGNAT pairs now have a workable path; duplicate-reward and abusive-pair protections preserved (active-room uniqueness, atomic accounting, exactly-once P2P points unchanged). v1 challenges keep the strict block — they pay wallet credits.
+- Real-PostgreSQL regressions (6 new specs in `rooms.integration.spec.ts`): established pair allowed+flagged low; new joiner medium; burner pair blocked; flagged account blocked; ≥5-room loop blocked; distinct-IP unaffected. All green in CI on `83c9c9b`.
+
+### PR #60 — request-burst fixes — DEPLOYED `9c4ef6e`
+
+- **Refresh storm removed:** concurrent 401s now share one in-flight `POST /auth/refresh` (`refreshAccessToken()` in `lib/api.ts`) — previously N pending queries = N refresh calls.
+- **4xx retry amplification removed:** global `shouldRetryQuery()` skips all 4xx (incl. 429 — next poll is the natural retry), keeps 1 retry for network/5xx; room detail probe keeps its 404 carve-out.
+- **Focus-refetch duplication removed:** room state query no longer refetches on window focus (socket events + 10s poll already cover it).
+- Steady-state polling unchanged: room state 10s, notifications 30s, wallet 60s, marketplace `mine` 15s (tab-scoped). Per-IP `api_general` limit reassessment pending measured two-participant traffic from the live verification.
+
+### Status
+
+- Tested heads: `83c9c9b` (#59), `07e7552` (#60), `34949b2` (#61) — all CI API/Web/E2E green. Merges: `6a2f30b`, `9c4ef6e`, `4a9bef8`. Deploys: run 42640022374 (`4a9bef8` success), run 42640150250 (`9c4ef6e` success — final, contains all three).
+- **In progress:** same-IP browser journey with reCAPTCHA enabled + normal sessions (owner-assisted Edge logins, request instrumentation per participant). Distinct-IP case remains covered by CI E2E (`X-Forwarded-For` per context).
