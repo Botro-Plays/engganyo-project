@@ -34,6 +34,15 @@ async function login(page: Page, email: string, password: string) {
 }
 
 const API = process.env['E2E_API_URL'] ?? 'http://localhost:3001/api';
+const API_ORIGIN = new URL(API).origin;
+
+// The API's same-IP self-farm guard rejects a join when the joiner's IP
+// matches any of the creator's session IPs. Both browsers share the CI
+// runner's loopback address, so each context gets a distinct documentation-
+// range client IP — the same situation as two real users on different
+// networks. X-Forwarded-For is injected at the network layer because the
+// browser cannot send it (not in the API's CORS allowedHeaders).
+const USER_IPS = { a: '203.0.113.10', b: '203.0.113.11' } as const;
 
 async function apiToken(page: Page) {
   return page.evaluate(() => localStorage.getItem('access_token'));
@@ -41,10 +50,10 @@ async function apiToken(page: Page) {
 
 /** Cancel any leftover pre-agreement rooms so retries start clean —
  * an unclaimed OPEN room still holds the one-active-room slot. */
-async function cancelActiveRooms(page: Page) {
+async function cancelActiveRooms(page: Page, ip: string) {
   const token = await apiToken(page);
   if (!token) return;
-  const headers = { Authorization: `Bearer ${token}` };
+  const headers = { Authorization: `Bearer ${token}`, 'x-forwarded-for': ip };
   const res = await page.request.get(`${API}/rooms/mine?limit=50`, { headers });
   const body = await res.json().catch(() => null);
   for (const r of body?.data?.rooms ?? []) {
@@ -54,10 +63,14 @@ async function cancelActiveRooms(page: Page) {
   }
 }
 
-async function newUserPage(browser: Browser) {
+async function newUserPage(browser: Browser, ip: string) {
   const context = await browser.newContext({ baseURL: BASE });
+  await context.route(`${API_ORIGIN}/**`, async (route) => {
+    const headers = { ...route.request().headers(), 'x-forwarded-for': ip };
+    await route.continue({ headers });
+  });
   const page = await context.newPage();
-  return { context, page };
+  return { context, page, ip };
 }
 
 function futureDeadline(minutes: number) {
@@ -79,14 +92,14 @@ async function proposeOffer(page: Page, actionText: string, targetUrl: string) {
 test.describe.serial('P2P rooms — browser acceptance', () => {
   test('public browse → preview → join → offers → proof → completion → ratings', async ({ browser }) => {
     test.setTimeout(240_000);
-    const a = await newUserPage(browser);
-    const b = await newUserPage(browser);
+    const a = await newUserPage(browser, USER_IPS.a);
+    const b = await newUserPage(browser, USER_IPS.b);
     let roomId = '';
 
     try {
       // ── Creator publishes from the marketplace ──────────────
       await login(a.page, USER_A.email, USER_A.password);
-      await cancelActiveRooms(a.page);
+      await cancelActiveRooms(a.page, a.ip);
       await a.page.goto(`${BASE}/rooms`);
       await a.page.getByRole('button', { name: /create room/i }).click();
       const createModal = a.page.locator('div.fixed.inset-0').last();
@@ -98,21 +111,23 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
       // ── Joiner opens the shared link → public preview gate ──
       await login(b.page, USER_B.email, USER_B.password);
-      await cancelActiveRooms(b.page);
+      await cancelActiveRooms(b.page, b.ip);
       await b.page.goto(`${BASE}/rooms/${roomId}`);
       // Preview, not the participant workspace: contribution terms + confirm.
       await expect(b.page.getByText(/review & join/i).first()).toBeVisible({ timeout: 15_000 });
       await expect(b.page.getByText(/reserved on join/i)).toBeVisible();
       await b.page.getByRole('button', { name: /review & join/i }).click();
       await b.page.getByRole('button', { name: /confirm & join/i }).click();
-      // Same URL — the gate swaps preview → participant workspace in place.
-      await expect(b.page.getByRole('link', { name: /e2e_room_a/i }).first()).toBeVisible({ timeout: 20_000 });
-      await expect(b.page.getByText(/negotiat/i).first()).toBeVisible({ timeout: 20_000 });
+      // The preview also shows the creator link and "negotiation" copy, so
+      // prove the swap with the participant-only chat input.
+      await expect(b.page.getByPlaceholder(/message your partner/i)).toBeVisible({ timeout: 20_000 });
+      await expect(b.page.getByRole('link', { name: /e2e_room_a/i }).first()).toBeVisible();
+      await expect(b.page.getByText(/negotiat/i).first()).toBeVisible();
 
       // ── Membership proof: rooms/mine lists the room for the joiner ──
       const tokenB = await apiToken(b.page);
       const mineRes = await b.page.request.get(`${API}/rooms/mine?limit=20`, {
-        headers: { Authorization: `Bearer ${tokenB}` },
+        headers: { Authorization: `Bearer ${tokenB}`, 'x-forwarded-for': b.ip },
       });
       const mineBody = await mineRes.json();
       const mineRoom = (mineBody?.data?.rooms ?? []).find((r: { id: string }) => r.id === roomId);
@@ -210,12 +225,12 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
   test('private room: password gate → join → creator cancel refunds', async ({ browser }) => {
     test.setTimeout(180_000);
-    const a = await newUserPage(browser);
-    const b = await newUserPage(browser);
+    const a = await newUserPage(browser, USER_IPS.a);
+    const b = await newUserPage(browser, USER_IPS.b);
 
     try {
       await login(a.page, USER_A.email, USER_A.password);
-      await cancelActiveRooms(a.page);
+      await cancelActiveRooms(a.page, a.ip);
       await a.page.goto(`${BASE}/rooms`);
       await a.page.getByRole('button', { name: /create room/i }).click();
       const createModal = a.page.locator('div.fixed.inset-0').last();
@@ -228,7 +243,7 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
       // Nonparticipant hits the share link → password gate, not a dead page.
       await login(b.page, USER_B.email, USER_B.password);
-      await cancelActiveRooms(b.page);
+      await cancelActiveRooms(b.page, b.ip);
       await b.page.goto(`${BASE}/rooms/${roomId}`);
       await expect(b.page.getByText(/room password/i)).toBeVisible({ timeout: 15_000 });
       await b.page.getByPlaceholder(/password shared with you/i).fill('wrong-pw');
@@ -239,7 +254,8 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await expect(b.page.getByText(/review & join/i).first()).toBeVisible({ timeout: 15_000 });
       await b.page.getByRole('button', { name: /review & join/i }).click();
       await b.page.getByRole('button', { name: /confirm & join/i }).click();
-      await expect(b.page.getByText(/negotiat/i).first()).toBeVisible({ timeout: 20_000 });
+      await expect(b.page.getByPlaceholder(/message your partner/i)).toBeVisible({ timeout: 20_000 });
+      await expect(b.page.getByText(/negotiat/i).first()).toBeVisible();
 
       // Either participant can cancel while NEGOTIATING — success routes
       // back to the marketplace and "My rooms" keeps the CLOSED history.

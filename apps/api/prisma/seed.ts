@@ -264,31 +264,35 @@ async function main(): Promise<void> {
   }
   console.log(`✅ Seeded ${sampleCampaigns.length} sample platform campaigns`);
 
-  // ─── E2E P2P room players (CI only — db:seed runs solely in the e2e job) ──
+  // ─── E2E P2P room players (test envs only) ────────────────────────────
   // Two funded, ordinary accounts used by apps/web/e2e/rooms.spec.ts to drive
   // the real browser creation→join→agreement→proof→completion journey.
-  const e2ePassword = await argon2.hash('E2eRoom@123');
-  for (const p of [
-    { email: 'e2e-room-a@engganyo.test', username: 'e2e_room_a', displayName: 'E2E Room A' },
-    { email: 'e2e-room-b@engganyo.test', username: 'e2e_room_b', displayName: 'E2E Room B' },
-  ]) {
-    const existing = await prisma.user.findUnique({ where: { email: p.email } });
-    if (!existing) {
-      await prisma.user.create({
-        data: {
-          email: p.email,
-          username: p.username,
-          passwordHash: e2ePassword,
-          displayName: p.displayName,
-          role: UserRole.USER,
-          status: UserStatus.ACTIVE,
-          referralCode: `E2E${p.username.slice(-1).toUpperCase()}0001`,
-          creditBalance: 500,
-          profile: { create: { isPublic: true } },
-          wallet: { create: { balance: 500, lifetimeEarned: 500 } },
-        },
-      });
-      console.log(`✅ E2E room player: ${p.username}`);
+  // NODE_ENV=test is set only by the CI e2e job — production seeds must
+  // never create known-password funded accounts.
+  if (process.env.NODE_ENV === 'test') {
+    const e2ePassword = await argon2.hash('E2eRoom@123');
+    for (const p of [
+      { email: 'e2e-room-a@engganyo.test', username: 'e2e_room_a', displayName: 'E2E Room A' },
+      { email: 'e2e-room-b@engganyo.test', username: 'e2e_room_b', displayName: 'E2E Room B' },
+    ]) {
+      const existing = await prisma.user.findUnique({ where: { email: p.email } });
+      if (!existing) {
+        await prisma.user.create({
+          data: {
+            email: p.email,
+            username: p.username,
+            passwordHash: e2ePassword,
+            displayName: p.displayName,
+            role: UserRole.USER,
+            status: UserStatus.ACTIVE,
+            referralCode: `E2E${p.username.slice(-1).toUpperCase()}0001`,
+            creditBalance: 500,
+            profile: { create: { isPublic: true } },
+            wallet: { create: { balance: 500, lifetimeEarned: 500 } },
+          },
+        });
+        console.log(`✅ E2E room player: ${p.username}`);
+      }
     }
   }
 
