@@ -234,6 +234,38 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await service.cancel(creatorId, room.id);
   });
 
+  it('exposes a single typed claim-deadline field across list/detail/mine responses', async () => {
+    // Regression: listPublic previously returned `secondsRemaining` for the
+    // claim window while the marketplace card read `claimSecondsRemaining`,
+    // so Join never rendered. Assert the real response shapes now.
+    const room = await service.create(creatorId, { title: 'Contract shape' });
+
+    const list = await service.listPublic(joinerId);
+    const card = list.rooms.find((r) => r.id === room.id);
+    expect(card).toBeTruthy();
+    expect(typeof (card as Record<string, unknown>)['claimSecondsRemaining']).toBe('number');
+    expect((card as Record<string, unknown>)['claimSecondsRemaining']).toBeGreaterThan(0);
+    // secondsRemaining is reserved for the active-room deadline — OPEN
+    // listings have no expiresAt yet, so it must not carry the claim window.
+    expect((card as Record<string, unknown>)['secondsRemaining']).toBeUndefined();
+
+    const detail = await service.getOne(joinerId, room.id);
+    expect(typeof detail.claimSecondsRemaining).toBe('number');
+    expect(detail.isParticipant).toBe(false);
+
+    const mine = await service.listMine(creatorId);
+    const mineRow = mine.rooms.find((r) => r.id === room.id);
+    expect(mineRow).toBeTruthy();
+    expect(typeof mineRow!.claimSecondsRemaining).toBe('number');
+    expect(mineRow!.secondsRemaining).toBeNull(); // OPEN room: no active deadline yet
+
+    // The password/access path returns the same claim field for public rooms.
+    const viaAccess = await service.verifyAccess(joinerId, room.id, { password: '' }, '10.0.0.12');
+    expect(typeof (viaAccess as Record<string, unknown>)['claimSecondsRemaining']).toBe('number');
+
+    await service.cancel(creatorId, room.id);
+  });
+
   // ─── Join ─────────────────────────────────────────────────
 
   it('join atomically claims, starts timer once, reserves joiner funds, provisions chat', async () => {

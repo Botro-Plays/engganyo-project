@@ -268,7 +268,10 @@ export class RoomsService {
       }),
     ]);
     return {
-      rooms: rooms.map((r) => ({ ...r, secondsRemaining: Math.max(0, Math.floor((r.claimExpiresAt.getTime() - now.getTime()) / 1000)) })),
+      // claimSecondsRemaining is the single claim-window field — the UI
+      // keys Join eligibility off it. secondsRemaining stays reserved for
+      // the active-room deadline (expiresAt) everywhere else.
+      rooms: rooms.map((r) => ({ ...r, claimSecondsRemaining: Math.max(0, Math.floor((r.claimExpiresAt.getTime() - now.getTime()) / 1000)) })),
       total,
       page,
       hasMore: page * limit < total,
@@ -295,6 +298,9 @@ export class RoomsService {
         myRole: this.roleOf(r, userId),
         isActiveRoom: active?.roomId === r.id,
         secondsRemaining: r.expiresAt ? Math.max(0, Math.floor((r.expiresAt.getTime() - Date.now()) / 1000)) : null,
+        claimSecondsRemaining: r.status === RoomStatus.OPEN
+          ? Math.max(0, Math.floor((r.claimExpiresAt.getTime() - Date.now()) / 1000))
+          : null,
       })),
       activeRoomId: active?.roomId ?? null,
       total,
@@ -313,7 +319,13 @@ export class RoomsService {
       },
     });
     if (!room) throw new NotFoundException('Room not found');
-    return { ...room, requiresPassword: room.visibility === 'PRIVATE' };
+    return {
+      ...room,
+      requiresPassword: room.visibility === 'PRIVATE',
+      claimSecondsRemaining: room.status === RoomStatus.OPEN
+        ? Math.max(0, Math.floor((room.claimExpiresAt.getTime() - Date.now()) / 1000))
+        : null,
+    };
   }
 
   private async checkPasswordThrottle(roomId: string, ip: string) {
@@ -345,7 +357,15 @@ export class RoomsService {
     const room = await this.findRoom(roomId);
     const { passwordHash: _omit, creatorApproval: _ca, claimerApproval: _la, ...rest } = room;
     const myRole = this.roleOf(room, userId);
-    return { ...rest, myRole, isParticipant: myRole !== null, secondsRemaining: room.expiresAt ? Math.max(0, Math.floor((room.expiresAt.getTime() - Date.now()) / 1000)) : null };
+    return {
+      ...rest,
+      myRole,
+      isParticipant: myRole !== null,
+      secondsRemaining: room.expiresAt ? Math.max(0, Math.floor((room.expiresAt.getTime() - Date.now()) / 1000)) : null,
+      claimSecondsRemaining: room.status === RoomStatus.OPEN
+        ? Math.max(0, Math.floor((room.claimExpiresAt.getTime() - Date.now()) / 1000))
+        : null,
+    };
   }
 
   async getOne(userId: string, roomId: string) {

@@ -8,9 +8,11 @@ import {
   ArrowLeft, Clock, Wallet, MessageCircle, Bell, UserPlus, Flag,
   CheckCircle2, XCircle, AlertTriangle, Send, Loader2, Upload,
   ExternalLink, Handshake, FileCheck, ShieldAlert, Star, DoorOpen,
+  Lock, Timer,
 } from 'lucide-react';
 
-import { roomsApi, friendsApi, type RoomState, type RoomOffer, type RoomSubmission } from '@/lib/rooms';
+import axios from 'axios';
+import { roomsApi, friendsApi, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { connectChannelSocket } from '@/lib/channel-socket';
 import { useAuthStore } from '@/store/auth.store';
@@ -392,12 +394,18 @@ function ReviewModal({ roomId, submission, onClose }: { roomId: string; submissi
 
 interface ChatMessage { id: string; userId: string; content: string; createdAt: string; user?: { username: string; displayName: string | null } }
 
-function RoomChat({ channelId, roomId }: { channelId: string; roomId: string }) {
+function RoomChat({ channelId, roomId, onIncomingMessage }: {
+  channelId: string;
+  roomId: string;
+  onIncomingMessage?: () => void;
+}) {
   const { accessToken, user } = useAuthStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const onIncomingRef = useRef(onIncomingMessage);
+  onIncomingRef.current = onIncomingMessage;
 
   useEffect(() => {
     let socket: ReturnType<typeof connectChannelSocket> | null = null;
@@ -411,6 +419,7 @@ function RoomChat({ channelId, roomId }: { channelId: string; roomId: string }) 
       const onMsg = (m: ChatMessage) => {
         if ((m as { channelId?: string }).channelId === channelId || !('channelId' in (m as object))) {
           setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
+          if (m.userId !== user?.id) onIncomingRef.current?.();
         }
       };
       const onConnect = () => { setConnected(true); socket?.emit('channel:join', { channelId }); };
@@ -426,7 +435,7 @@ function RoomChat({ channelId, roomId }: { channelId: string; roomId: string }) 
       };
     }
     return undefined;
-  }, [channelId, accessToken, roomId]);
+  }, [channelId, accessToken, roomId, user?.id]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -485,13 +494,63 @@ function RoomChat({ channelId, roomId }: { channelId: string; roomId: string }) 
   );
 }
 
+// ─── Stage stepper + next action ──────────────────────────────
+
+const ROOM_STAGES = ['Partner', 'Agree tasks', 'Work + proof', 'Review', 'Done'];
+
+function stageIndex(status: string): number {
+  switch (status) {
+    case 'OPEN': return 0;
+    case 'NEGOTIATING': return 1;
+    case 'AGREED':
+    case 'IN_PROGRESS': return 2;
+    case 'SUBMITTED': return 3;
+    case 'COMPLETED': return 4;
+    default: return -1; // DISPUTED / CLOSED / EXPIRED — no linear progress
+  }
+}
+
+function nextActionHint(room: NonNullable<RoomState['room']>, state: RoomState): string {
+  const status = room.status;
+  if (status === 'OPEN') return 'Share this room — waiting for a partner to join. Your contribution stays reserved until then.';
+  if (status === 'NEGOTIATING') {
+    const myOffer = state.offers.find((o) => o.isMine);
+    if (!myOffer) return 'Propose the task you want your partner to do.';
+    if (state.offers.length < 2) return 'Waiting for your partner to propose their task.';
+    const myApproved = room.myRole === 'CREATOR' ? !!state.approvals.creator : !!state.approvals.claimer;
+    return myApproved ? 'Waiting for your partner to approve both offers.' : 'Review both offers, then approve to lock the agreement.';
+  }
+  if (status === 'DISPUTED') return 'Frozen pending moderator review — the original deadline still applies.';
+  if (status === 'EXPIRED' || status === 'CLOSED') return 'This room is finished — contributions were refunded.';
+  if (status === 'COMPLETED') return state.myRating ? 'Room complete — thanks for playing.' : 'Rate your partner to finish up.';
+  // AGREED / IN_PROGRESS / SUBMITTED
+  const pendingMine = state.offers.filter((o) => !o.isMine);
+  const myPendingReview = pendingMine.find((o) => o.latestSubmission && ['SUBMITTED', 'DISPUTED'].includes(o.latestSubmission.status));
+  if (myPendingReview) return 'Your partner submitted proof — review it to keep things moving.';
+  const myTask = state.offers.find((o) => !o.isMine); // partner's offer = my task
+  if (myTask) {
+    const sub = myTask.latestSubmission;
+    if (!sub || sub.status === 'REJECTED') {
+      return `Do your partner's task and submit proof${myTask.requiresProof ? ' (image required)' : ''} before the deadline.`;
+    }
+    if (sub.status === 'SUBMITTED' || sub.status === 'DISPUTED') return 'Proof submitted — waiting for your partner to review.';
+    if (sub.status === 'APPROVED') return 'Your proof was approved — waiting on your partner\'s task.';
+  }
+  return 'Coordinate with your partner in chat while you work.';
+}
+
 // ─── Main page ────────────────────────────────────────────────
 
-export default function RoomWorkspacePage() {
+function RoomWorkspace() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+
+  const [mobileView, setMobileView] = useState<'task' | 'chat'>('task');
+  const [chatUnread, setChatUnread] = useState(0);
+  const mobileViewRef = useRef(mobileView);
+  mobileViewRef.current = mobileView;
 
   const [editingOffer, setEditingOffer] = useState<RoomOffer | null | 'new'>(null);
   const [proofOffer, setProofOffer] = useState<RoomOffer | null>(null);
@@ -610,8 +669,20 @@ export default function RoomWorkspacePage() {
   if (!state || !room) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
-        <p className="text-sm text-zinc-500">{stateQuery.isError ? 'Room not found or you don\'t have access.' : 'Loading…'}</p>
-        <Link href="/rooms" className="mt-3 inline-block text-sm text-brand-400 hover:underline">← Back to rooms</Link>
+        <p className="text-sm text-zinc-500">
+          {stateQuery.isError ? 'Couldn\'t load this room — check your connection and try again.' : 'Loading…'}
+        </p>
+        {stateQuery.isError && (
+          <button
+            onClick={() => void stateQuery.refetch()}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-500"
+          >
+            Retry
+          </button>
+        )}
+        <div className="mt-3">
+          <Link href="/rooms" className="text-sm text-brand-400 hover:underline">← Back to rooms</Link>
+        </div>
       </div>
     );
   }
@@ -634,16 +705,19 @@ export default function RoomWorkspacePage() {
     return room.status === 'OPEN' ? '—' : 'refunded';
   };
 
+  const stage = stageIndex(room.status);
+  const hint = nextActionHint(room, state);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      {/* Header */}
+      {/* Header — partner, room id, stage, deadline */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link href="/rooms" className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300" aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-zinc-100">{room.title}</h1>
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
                 room.status === 'COMPLETED' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
@@ -652,14 +726,60 @@ export default function RoomWorkspacePage() {
                 : 'border-brand-500/40 bg-brand-500/10 text-brand-300'}`}>
                 {STATUS_LABEL[room.status] ?? room.status}
               </span>
+              <span className="rounded-md border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500" title="Room ID">
+                #{id.slice(-8)}
+              </span>
             </div>
             <p className="mt-0.5 text-xs text-zinc-500">
-              vs <UserLink user={{ username: room.counterparty?.username ?? '' }} className="text-zinc-300 hover:text-brand-300" />
-              {' · '}your role: {myRole === 'CREATOR' ? 'room creator' : 'joiner'}
+              {room.counterparty
+                ? <>with <UserLink user={{ username: room.counterparty.username }} className="text-zinc-300 hover:text-brand-300" /> · you are {myRole === 'CREATOR' ? 'the creator' : 'the joiner'}</>
+                : <>your role: {myRole === 'CREATOR' ? 'room creator' : 'joiner'} · waiting for a partner</>}
             </p>
           </div>
         </div>
-        <DeadlineClock seconds={room.secondsRemaining} deadlineUtc={room.deadlineUtc} />
+        <DeadlineClock seconds={room.secondsRemaining ?? room.claimSecondsRemaining ?? null} deadlineUtc={room.deadlineUtc ?? room.claimExpiresAt ?? null} />
+      </div>
+
+      {/* Stage stepper */}
+      {stage >= 0 && (
+        <ol className="mt-4 flex items-center gap-1 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2.5">
+          {ROOM_STAGES.map((label, i) => (
+            <li key={label} className="flex items-center gap-1.5">
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                i < stage ? 'bg-emerald-500/20 text-emerald-300'
+                : i === stage ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/50'
+                : 'bg-zinc-800 text-zinc-600'}`}>
+                {i < stage ? '✓' : i + 1}
+              </span>
+              <span className={`whitespace-nowrap text-[11px] ${i <= stage ? 'text-zinc-300' : 'text-zinc-600'}`}>{label}</span>
+              {i < ROOM_STAGES.length - 1 && <span className="mx-1 h-px w-4 bg-zinc-800" />}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* Next required action */}
+      <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-500/30 bg-brand-500/5 px-4 py-3">
+        <Handshake className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
+        <p className="text-sm text-zinc-200">{hint}</p>
+      </div>
+
+      {/* Mobile view switcher */}
+      <div className="mt-4 flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1 lg:hidden">
+        {([['task', 'Tasks'], ['chat', 'Chat']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => { setMobileView(key); if (key === 'chat') setChatUnread(0); }}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              mobileView === key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {label}
+            {key === 'chat' && chatUnread > 0 && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{chatUnread > 9 ? '9+' : chatUnread}</span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Contribution strip */}
@@ -688,8 +808,78 @@ export default function RoomWorkspacePage() {
       {actionError && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{actionError}</p>}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-5">
-        {/* Left: actions */}
-        <div className="space-y-3 lg:col-span-3">
+        {/* Left: partner + task/proof workflow */}
+        <div className={`space-y-3 lg:col-span-3 ${mobileView === 'chat' ? 'hidden lg:block' : ''}`}>
+          {/* Partner card */}
+          {room.counterparty && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Your partner</h3>
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {room.counterparty.avatarUrl && <img src={room.counterparty.avatarUrl} alt="" className="h-10 w-10 rounded-full" />}
+                <div className="min-w-0 flex-1">
+                  <UserLink user={{ username: room.counterparty.username }} className="block truncate text-sm font-medium text-zinc-200 hover:text-brand-300" />
+                  <div className="text-[10px] text-zinc-500">rep {room.counterparty.reputationScore ?? '—'}</div>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => nudgeMutation.mutate()}
+                  disabled={nudgeMutation.isPending || (state.nudge.cooldownRemaining > 0) || terminal || room.status === 'DISPUTED'}
+                  className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
+                  title={state.nudge.cooldownRemaining > 0 ? `Next nudge in ${state.nudge.cooldownRemaining}s` : 'Ping your partner'}
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  {state.nudge.cooldownRemaining > 0 ? `${state.nudge.cooldownRemaining}s` : 'Nudge'}
+                </button>
+                {['NONE', 'DECLINED', 'CANCELLED'].includes(friendInfo.status) ? (
+                  <button
+                    onClick={() => friendMutation.mutate('request')}
+                    disabled={friendMutation.isPending}
+                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 disabled:opacity-50"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" /> Add friend
+                  </button>
+                ) : friendInfo.status === 'PENDING' && friendInfo.direction === 'incoming' ? (
+                  <span className="flex gap-1">
+                    <button
+                      onClick={() => friendMutation.mutate('accept')}
+                      disabled={friendMutation.isPending}
+                      className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => friendMutation.mutate('decline')}
+                      disabled={friendMutation.isPending}
+                      className="flex-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-400"
+                    >
+                      Decline
+                    </button>
+                  </span>
+                ) : friendInfo.status === 'PENDING' ? (
+                  <span className="rounded-lg border border-zinc-700 px-2 py-1.5 text-center text-xs text-zinc-500">Request sent</span>
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Friends
+                  </span>
+                )}
+                <Link
+                  href={`/users/${room.counterparty.username}`}
+                  className="rounded-lg border border-zinc-700 px-2 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-500"
+                >
+                  View profile
+                </Link>
+                <button
+                  onClick={() => setShowReport(true)}
+                  className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-400 hover:border-red-500/50 hover:text-red-300"
+                >
+                  <Flag className="h-3.5 w-3.5" /> Report
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* OPEN creator view */}
           {isOpenCreatorView && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
@@ -812,82 +1002,6 @@ export default function RoomWorkspacePage() {
               </p>
             </div>
           )}
-        </div>
-
-        {/* Right: partner actions + chat */}
-        <div className="space-y-3 lg:col-span-2">
-          {/* Partner card */}
-          {room.counterparty && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Your partner</h3>
-              <div className="mt-2 flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {room.counterparty.avatarUrl && <img src={room.counterparty.avatarUrl} alt="" className="h-10 w-10 rounded-full" />}
-                <div className="min-w-0 flex-1">
-                  <UserLink user={{ username: room.counterparty.username }} className="block truncate text-sm font-medium text-zinc-200 hover:text-brand-300" />
-                  <div className="text-[10px] text-zinc-500">rep {room.counterparty.reputationScore ?? '—'}</div>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => nudgeMutation.mutate()}
-                  disabled={nudgeMutation.isPending || (state.nudge.cooldownRemaining > 0) || terminal || room.status === 'DISPUTED'}
-                  className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 disabled:opacity-40"
-                  title={state.nudge.cooldownRemaining > 0 ? `Next nudge in ${state.nudge.cooldownRemaining}s` : 'Ping your partner'}
-                >
-                  <Bell className="h-3.5 w-3.5" />
-                  {state.nudge.cooldownRemaining > 0 ? `${state.nudge.cooldownRemaining}s` : 'Nudge'}
-                </button>
-                {['NONE', 'DECLINED', 'CANCELLED'].includes(friendInfo.status) ? (
-                  <button
-                    onClick={() => friendMutation.mutate('request')}
-                    disabled={friendMutation.isPending}
-                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-300 hover:border-zinc-500 disabled:opacity-50"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" /> Add friend
-                  </button>
-                ) : friendInfo.status === 'PENDING' && friendInfo.direction === 'incoming' ? (
-                  <span className="flex gap-1">
-                    <button
-                      onClick={() => friendMutation.mutate('accept')}
-                      disabled={friendMutation.isPending}
-                      className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => friendMutation.mutate('decline')}
-                      disabled={friendMutation.isPending}
-                      className="flex-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-400"
-                    >
-                      Decline
-                    </button>
-                  </span>
-                ) : friendInfo.status === 'PENDING' ? (
-                  <span className="rounded-lg border border-zinc-700 px-2 py-1.5 text-center text-xs text-zinc-500">Request sent</span>
-                ) : (
-                  <span className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-300">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Friends
-                  </span>
-                )}
-                <Link
-                  href={`/users/${room.counterparty.username}`}
-                  className="rounded-lg border border-zinc-700 px-2 py-1.5 text-center text-xs text-zinc-300 hover:border-zinc-500"
-                >
-                  View profile
-                </Link>
-                <button
-                  onClick={() => setShowReport(true)}
-                  className="inline-flex items-center justify-center gap-1 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-400 hover:border-red-500/50 hover:text-red-300"
-                >
-                  <Flag className="h-3.5 w-3.5" /> Report
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Chat */}
-          {room.channelId && <RoomChat channelId={room.channelId} roomId={id} />}
 
           {/* Dispute */}
           {!terminal && room.status !== 'DISPUTED' && room.claimerId && (
@@ -897,6 +1011,21 @@ export default function RoomWorkspacePage() {
             >
               Open a dispute
             </button>
+          )}
+        </div>
+
+        {/* Right: persistent chat */}
+        <div className={`space-y-3 lg:col-span-2 ${mobileView === 'task' ? 'hidden lg:block' : ''}`}>
+          {room.channelId ? (
+            <RoomChat
+              channelId={room.channelId}
+              roomId={id}
+              onIncomingMessage={() => { if (mobileViewRef.current !== 'chat') setChatUnread((n) => n + 1); }}
+            />
+          ) : (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6 text-center text-xs text-zinc-600">
+              Chat opens once your partner joins.
+            </div>
           )}
         </div>
       </div>
@@ -1027,5 +1156,272 @@ function ReportModal({ onClose, onSubmit, pending }: { onClose: () => void; onSu
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Public preview + join gate ───────────────────────────────
+// /rooms/[id] serves three audiences: participants get the workspace,
+// eligible non-participants get a Binance-P2P-style order preview with a
+// contribution confirmation before the authorized join, and private rooms
+// go through the password gate first. /state stays participant-only.
+
+function GateShell({ children }: { children: React.ReactNode }) {
+  return <div className="mx-auto max-w-2xl px-4 py-8">{children}</div>;
+}
+
+function GateError({ title, children, onRetry }: { title: string; children?: React.ReactNode; onRetry?: () => void }) {
+  return (
+    <GateShell>
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-8 text-center">
+        <AlertTriangle className="mx-auto h-8 w-8 text-zinc-600" />
+        <h1 className="mt-3 text-lg font-semibold text-zinc-200">{title}</h1>
+        {children && <div className="mt-2 text-sm text-zinc-500">{children}</div>}
+        <div className="mt-5 flex items-center justify-center gap-3">
+          {onRetry && (
+            <button onClick={onRetry} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500">
+              Retry
+            </button>
+          )}
+          <Link href="/rooms" className="text-sm text-brand-400 hover:underline">← Back to rooms</Link>
+        </div>
+      </div>
+    </GateShell>
+  );
+}
+
+function RoomPreview({ detail, password }: {
+  detail: RoomSummary;
+  password?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState('');
+  const claimLeft = detail.claimSecondsRemaining ?? 0;
+  const joinable = detail.status === 'OPEN' && claimLeft > 0;
+
+  const joinMutation = useMutation({
+    mutationFn: () => roomsApi.join(detail.id, password || undefined),
+    onSuccess: () => {
+      // Refresh membership, marketplace availability, wallet, and the
+      // active-room pointer — then the gate refetches and swaps to the
+      // participant workspace automatically.
+      void queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      void queryClient.invalidateQueries({ queryKey: ['room-detail', detail.id] });
+      void queryClient.invalidateQueries({ queryKey: ['room', detail.id] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
+    onError: (e) => { setError(getApiErrorMessage(e)); setConfirming(false); },
+  });
+
+  if (!joinable) {
+    return (
+      <GateError title={detail.status === 'OPEN' ? 'This listing has expired' : 'This room is no longer available'}>
+        {detail.status === 'OPEN'
+          ? 'The claim window closed before anyone joined. The creator\'s contribution was refunded.'
+          : 'This room was already joined or closed — only participants can view it.'}
+      </GateError>
+    );
+  }
+
+  return (
+    <GateShell>
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60">
+        {/* Order header */}
+        <div className="border-b border-zinc-800 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-bold text-zinc-100">{detail.title}</h1>
+              <p className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+                by <UserLink user={{ username: detail.creator.username }} className="text-zinc-300 hover:text-brand-300" />
+                {detail.creator.reputationScore != null && <span>· rep {detail.creator.reputationScore}</span>}
+                {detail.visibility === 'PRIVATE' && <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3" /> unlocked</span>}
+              </p>
+            </div>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+              <Timer className="mr-1 inline h-3 w-3" />
+              {Math.floor(claimLeft / 3600) > 0
+                ? `${Math.floor(claimLeft / 3600)}h ${Math.floor((claimLeft % 3600) / 60)}m left to join`
+                : `${Math.floor(claimLeft / 60)}m ${claimLeft % 60}s left to join`}
+            </span>
+          </div>
+        </div>
+
+        {/* Terms — what joining actually commits */}
+        <div className="space-y-3 p-5 text-sm">
+          <div className="grid grid-cols-2 gap-3 rounded-lg bg-zinc-950/60 p-3 text-center">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-zinc-500">You contribute</div>
+              <div className="text-xl font-bold text-zinc-100">{formatCredits(detail.contributionCredits)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-zinc-500">Partner contributes</div>
+              <div className="text-xl font-bold text-zinc-100">{formatCredits(detail.contributionCredits)}</div>
+            </div>
+          </div>
+          <ul className="space-y-1.5 text-xs leading-relaxed text-zinc-400">
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> Reserved on join — <span className="text-zinc-300">refunded in full</span> if the room doesn&apos;t complete.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> If you both agree on tasks, the room collects <span className="text-zinc-300">{formatCredits(detail.roomCharge)}</span> once — no extra debit.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> A <span className="text-zinc-300">30-minute clock</span> starts the moment you join — shared by negotiation, work, and proof.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> Finish both directions and you each earn <span className="text-zinc-300">+1 P2P point</span> — never wallet credits.</li>
+          </ul>
+
+          {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
+
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500"
+            >
+              Review &amp; join — reserve {formatCredits(detail.contributionCredits)}
+            </button>
+          ) : (
+            <div className="rounded-lg border border-brand-500/40 bg-brand-500/5 p-4">
+              <p className="text-sm font-semibold text-zinc-100">Confirm your contribution</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                {formatCredits(detail.contributionCredits)} will be reserved from your wallet now.
+                The 30-minute clock starts immediately and cannot be paused.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setConfirming(false)}
+                  disabled={joinMutation.isPending}
+                  className="flex-1 rounded-lg border border-zinc-800 px-4 py-2 text-sm text-zinc-400 hover:border-zinc-700"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => joinMutation.mutate()}
+                  disabled={joinMutation.isPending}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                >
+                  {joinMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Confirm &amp; join
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mt-3 text-center text-[11px] text-zinc-600">
+        Room #{detail.id.slice(-8)} · only join rooms you trust — chat and proof stay private to both players.
+      </p>
+    </GateShell>
+  );
+}
+
+function PrivateRoomGate({ id, preview }: { id: string; preview: RoomPreviewInfo }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [unlocked, setUnlocked] = useState<RoomSummary | null>(null);
+
+  const accessMutation = useMutation({
+    mutationFn: () => roomsApi.access(id, password),
+    onSuccess: (d) => setUnlocked(d),
+    onError: (e) => setError(getApiErrorMessage(e)),
+  });
+
+  if (unlocked) {
+    return <RoomPreview detail={unlocked} password={password} />;
+  }
+
+  return (
+    <GateShell>
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-8">
+        <div className="text-center">
+          <Lock className="mx-auto h-8 w-8 text-brand-400" />
+          <h1 className="mt-3 text-lg font-bold text-zinc-100">{preview.title}</h1>
+          <p className="mt-1 text-xs text-zinc-500">
+            Private room by @{preview.creator.username}
+            {preview.creator.reputationScore != null && ` · rep ${preview.creator.reputationScore}`}
+            {' · '}{formatCredits(preview.contributionCredits)} each
+          </p>
+        </div>
+        <div className="mt-5">
+          <label className="mb-1 block text-xs font-medium text-zinc-400">Room password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && password.length >= 4) accessMutation.mutate(); }}
+            placeholder="Enter the password shared with you"
+            autoFocus
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-brand-500 focus:outline-none"
+          />
+          {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+          <button
+            onClick={() => accessMutation.mutate()}
+            disabled={password.length < 4 || accessMutation.isPending}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500 disabled:opacity-50"
+          >
+            {accessMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Unlock room
+          </button>
+        </div>
+      </div>
+    </GateShell>
+  );
+}
+
+// ─── Page gate ────────────────────────────────────────────────
+
+export default function RoomPage() {
+  const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+
+  const detailQuery = useQuery({
+    queryKey: ['room-detail', id],
+    queryFn: () => roomsApi.get(id),
+    retry: (count, err) => {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      return status !== 404 && count < 2;
+    },
+  });
+
+  const detail = detailQuery.data;
+  const notFound = axios.isAxiosError(detailQuery.error) && detailQuery.error.response?.status === 404;
+
+  // 404 from getOne → probe the minimal preview endpoint: private rooms
+  // disclose only through the password gate; public non-open rooms report
+  // as unavailable.
+  const previewQuery = useQuery({
+    queryKey: ['room-preview', id],
+    queryFn: () => roomsApi.preview(id),
+    enabled: notFound && !detailQuery.isLoading,
+    retry: false,
+  });
+
+  if (detailQuery.isLoading || (notFound && previewQuery.isLoading)) {
+    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-zinc-600" /></div>;
+  }
+
+  if (detail) {
+    if (detail.isParticipant) return <RoomWorkspace />;
+    return <RoomPreview detail={detail} />;
+  }
+
+  if (notFound) {
+    if (previewQuery.isError) {
+      return <GateError title="Room not found">This room doesn&apos;t exist or the link is wrong.</GateError>;
+    }
+    const preview = previewQuery.data;
+    if (!preview) return null;
+    if (preview.visibility === 'PRIVATE') return <PrivateRoomGate id={id} preview={preview} />;
+    return (
+      <GateError title={preview.status === 'OPEN' ? 'This listing has expired' : 'This room is no longer available'}>
+        {preview.status === 'OPEN'
+          ? 'The claim window closed before anyone joined.'
+          : 'This room was already joined or closed — only participants can view it.'}
+      </GateError>
+    );
+  }
+
+  // Network / server / unexpected failure — never pretend the room is empty.
+  return (
+    <GateError
+      title="Couldn't load this room"
+      onRetry={() => { void detailQuery.refetch(); void previewQuery.refetch(); void queryClient.invalidateQueries({ queryKey: ['room-detail', id] }); }}
+    >
+      The request failed — check your connection and try again.
+    </GateError>
   );
 }
