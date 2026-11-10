@@ -190,6 +190,38 @@ describe('ChannelsService', () => {
 
       await expect(service.joinChannel('user-1', 'ch-1')).rejects.toThrow(ForbiddenException);
     });
+
+    it('should not consume join rate limit for an existing member re-join', async () => {
+      prisma.channel.findUnique.mockResolvedValueOnce({
+        id: 'ch-1',
+        isActive: true,
+        type: ChannelType.PUBLIC,
+      });
+      prisma.channelMember.findUnique.mockResolvedValueOnce({ id: 'mem-1', joinedAt: new Date('2026-01-01') });
+
+      const result = await service.joinChannel('user-1', 'ch-1');
+
+      expect(result.success).toBe(true);
+      // Socket reconnects/page loads re-emit channel:join — an existing
+      // member must not burn the 3/hour new-join quota.
+      expect(redis.incrWithExpiry).not.toHaveBeenCalledWith(expect.stringContaining('chat_join'), expect.anything());
+      expect(prisma.channelMember.create).not.toHaveBeenCalled();
+    });
+
+    it('should rate-limit NEW joins', async () => {
+      prisma.channel.findUnique.mockResolvedValueOnce({
+        id: 'ch-1',
+        isActive: true,
+        type: ChannelType.PUBLIC,
+      });
+      prisma.channelMember.findUnique.mockResolvedValueOnce(null);
+      prisma.channelMember.create.mockResolvedValueOnce({ id: 'mem-2', joinedAt: new Date() });
+      redis.incrWithExpiry.mockResolvedValueOnce(4); // over the 3/hour limit
+      redis.ttl.mockResolvedValueOnce(2751);
+
+      await expect(service.joinChannel('user-1', 'ch-1')).rejects.toThrow(BadRequestException);
+      expect(redis.incrWithExpiry).toHaveBeenCalledWith(expect.stringContaining('chat_join'), expect.anything());
+    });
   });
 
   describe('sendMessage', () => {
