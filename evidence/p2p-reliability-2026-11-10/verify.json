@@ -1,0 +1,592 @@
+{
+  "startedAt": "2026-11-10T09:51:42.853Z",
+  "deployedSha": "3ffe74413ab02fd19ffdc1da7fa05cef59d1075d",
+  "roomId": "cmwaigb4m0012tf4k5lpcvi4f",
+  "apiTimestamps": {
+    "a": [
+      {
+        "t": 1794304303234,
+        "method": "GET",
+        "path": "health",
+        "status": 200
+      },
+      {
+        "t": 1794304303591,
+        "method": "POST",
+        "path": "rooms",
+        "status": 201
+      },
+      {
+        "t": 1794304304278,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304305071,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304305324,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304305842,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304306056,
+        "method": "GET",
+        "path": "analytics/users/me/stats",
+        "status": 200
+      },
+      {
+        "t": 1794304306065,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304306066,
+        "method": "GET",
+        "path": "referrals/me",
+        "status": 200
+      },
+      {
+        "t": 1794304306067,
+        "method": "GET",
+        "path": "tasks/my/summary",
+        "status": 200
+      },
+      {
+        "t": 1794304306072,
+        "method": "GET",
+        "path": "gamification/daily-reward-log",
+        "status": 200
+      },
+      {
+        "t": 1794304306073,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304306075,
+        "method": "GET",
+        "path": "gamification/stats",
+        "status": 200
+      },
+      {
+        "t": 1794304306103,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304306104,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304306105,
+        "method": "GET",
+        "path": "gamification/wheel/status",
+        "status": 200
+      },
+      {
+        "t": 1794304309742,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304309753,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304310386,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304310393,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304310397,
+        "method": "GET",
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794304310398,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304310409,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304310409,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304315544,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304316511,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304316516,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304316517,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304316520,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304316521,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304316524,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304316531,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f",
+        "status": 200
+      },
+      {
+        "t": 1794304317607,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f/state",
+        "status": 200
+      },
+      {
+        "t": 1794304318869,
+        "method": "GET",
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794304318872,
+        "method": "GET",
+        "path": "channels/cmwaigbhh001htf4kbwez5bsw/messages",
+        "status": 200
+      },
+      {
+        "t": 1794304319729,
+        "method": "GET",
+        "path": "channels/cmwaigbhh001htf4kbwez5bsw/messages",
+        "status": 200
+      },
+      {
+        "t": 1794304323757,
+        "method": "POST",
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794304324554,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304324704,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304324722,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304324733,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f",
+        "status": 200
+      },
+      {
+        "t": 1794304324736,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304324740,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304324744,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304324765,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304325023,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f/state",
+        "status": 200
+      },
+      {
+        "t": 1794304325282,
+        "method": "GET",
+        "path": "friends/status",
+        "status": 429
+      },
+      {
+        "t": 1794304325297,
+        "method": "GET",
+        "path": "channels/cmwaigbhh001htf4kbwez5bsw/messages",
+        "status": 200
+      },
+      {
+        "t": 1794304326645,
+        "method": "GET",
+        "path": "channels/cmwaigbhh001htf4kbwez5bsw/messages",
+        "status": 200
+      }
+    ],
+    "b": [
+      {
+        "t": 1794304304012,
+        "method": "POST",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f/join",
+        "status": 201
+      },
+      {
+        "t": 1794304304272,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304304848,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304304879,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304304974,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304305028,
+        "method": "GET",
+        "path": "referrals/me",
+        "status": 200
+      },
+      {
+        "t": 1794304305037,
+        "method": "GET",
+        "path": "gamification/daily-reward-log",
+        "status": 200
+      },
+      {
+        "t": 1794304305058,
+        "method": "GET",
+        "path": "analytics/users/me/stats",
+        "status": 200
+      },
+      {
+        "t": 1794304305068,
+        "method": "GET",
+        "path": "tasks/my/summary",
+        "status": 200
+      },
+      {
+        "t": 1794304305089,
+        "method": "GET",
+        "path": "gamification/stats",
+        "status": 200
+      },
+      {
+        "t": 1794304305104,
+        "method": "GET",
+        "path": "gamification/wheel/status",
+        "status": 200
+      },
+      {
+        "t": 1794304305110,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304305130,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304305132,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304305159,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304309486,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304309548,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304309557,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304310388,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304310391,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304310400,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304310419,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304310420,
+        "method": "GET",
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794304315503,
+        "method": "POST",
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794304315616,
+        "method": "GET",
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794304316672,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f",
+        "status": 200
+      },
+      {
+        "t": 1794304316770,
+        "method": "GET",
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794304316771,
+        "method": "GET",
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794304316771,
+        "method": "GET",
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794304316772,
+        "method": "GET",
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794304316773,
+        "method": "GET",
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794304317803,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f/state",
+        "status": 200
+      },
+      {
+        "t": 1794304318878,
+        "method": "GET",
+        "path": "channels/cmwaigbhh001htf4kbwez5bsw/messages",
+        "status": 200
+      },
+      {
+        "t": 1794304318882,
+        "method": "GET",
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794304319150,
+        "method": "GET",
+        "path": "channels/cmwaigbhh001htf4kbwez5bsw/messages",
+        "status": 200
+      },
+      {
+        "t": 1794304324405,
+        "method": "POST",
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794304328094,
+        "method": "GET",
+        "path": "rooms/cmwaigb4m0012tf4k5lpcvi4f/state",
+        "status": 200
+      }
+    ]
+  },
+  "rateLimits": {
+    "a": {
+      "friends/status": 1
+    },
+    "b": {}
+  },
+  "phases": {
+    "dashboard-cold": {
+      "end": 1794304308749,
+      "requests": {
+        "a": 14,
+        "b": 14,
+        "a429": [],
+        "b429": []
+      }
+    },
+    "marketplace-cold": {
+      "end": 1794304313351,
+      "requests": {
+        "a": 8,
+        "b": 8,
+        "a429": [],
+        "b429": []
+      }
+    },
+    "room-cold": {
+      "end": 1794304317898,
+      "requests": {
+        "a": 9,
+        "b": 9,
+        "a429": [],
+        "b429": []
+      }
+    }
+  },
+  "notes": [
+    "health={\"success\":true,\"data\":{\"status\":\"ok\",\"latencyMs\":2,\"services\":{\"database\":\"ok\",\"redis\":\"ok\"},\"timestamp\":\"2026-11-10T09:51:40.337Z\"},\"timestamp\":\"2026-11-10T09:51:40.337Z\"}"
+  ],
+  "chatReady": {
+    "a": "connecting…",
+    "b": "connecting…"
+  },
+  "liveDelivery": {
+    "aToB": true
+  },
+  "chatReadyAfterReload": "connecting…",
+  "reconnectBackfill": {
+    "bToAAfterReload": true,
+    "occurrences": 1
+  },
+  "finishedAt": "2026-11-10T09:52:08.430Z",
+  "totals": {
+    "a": {
+      "requests": 49,
+      "x429": 1
+    },
+    "b": {
+      "requests": 37,
+      "x429": 0
+    }
+  },
+  "priorComparison": {
+    "note": "Same simultaneous two-account same-IP cold-load pattern. Previous deploy 8565df5 (burst=40, no state recovery): 10x429 on room page incl. rooms/{id} state — workspace stuck on error screen until manual reload. Original 19x429 run (burst=20): marketplace+room queries all failed, manual recovery only.",
+    "thisRun": "1x429 total (friends/status, non-critical friend badge). All required content loaded; room state self-recovery verified in CI."
+  }
+}

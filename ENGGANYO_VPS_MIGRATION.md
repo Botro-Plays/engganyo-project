@@ -1837,3 +1837,58 @@ On completed room `cmwa73su9001c5jsb68emjdzi` (chat persists as history), both l
 - Offer deadlines are inherited from the room; the API still accepts an explicit client deadline within bounds (validated) for API consumers.
 - 429 edge: simultaneous cold loads by 2+ same-IP users can transiently rate-limit the shared bucket; recovery is manual-ish (error state → retry/focus refetch). Consider a modest `api_general` bump or cold-load request consolidation only if real-user reports justify it.
 - `EventsGateway` logs `Redis adapter failed: server.adapter is not a function` at boot — pre-existing adapter wiring issue on the notifications namespace; single-instance deployment unaffected (rooms still deliver — verified live), but multi-instance scaling would need it fixed.
+
+---
+
+## 2026-11-10 — Cold-load 429 correction + chat readiness states — DEPLOYED `3ffe744`
+
+### Corrected record
+
+The 19 same-IP cold-load 429s (deploy `9d9de0b`) were previously reported as
+"resolved/retained limit" — that was inaccurate. They remained open until
+PRs #66/#67 measured the full chain end-to-end. Endpoint-level analysis,
+duplicate-call identification, timing, visible consequences, and the actual
+recovery mechanism are documented in
+`evidence/p2p-reliability-2026-11-10/results.md`.
+
+Key finding: polling queries (notifications 30s, wallet 60s, store 30s)
+self-recovered, but **non-polling required queries did not** — `rooms` browse
+and `rooms/{id}/state` have no data on first-load failure, so
+`refetchInterval` never engaged and the page waited for manual Retry/reload.
+
+### PR #66 `8565df5` — request reduction + chat readiness
+
+- public-config staleTime 0→60s (was refetch-on-every-mount); active-effects
+  staleTime = poll interval; rooms quote lazy (create modal only); browse 30s poll.
+- RoomChat tracks `channel:join` ack separately from transport: states
+  connecting/ready/reconnecting/failed, 10s join-ack timeout, manual Retry,
+  draft preservation on failed sends, reconnect re-join + missed-history
+  backfill merged by id (no duplicates), persisted-vs-live status copy.
+- `channel:error` payload now includes channelId.
+- E2E `chat-readiness.spec.ts`: proxied WS through reconnect, swallowed
+  `channel:joined` → failed → retry → ready + backfill, dedupe, draft.
+
+### PR #67 `3ffe744` — recovery gap + burst justification
+
+- `rooms/{id}/state` error-poll every 10s on transient failures (was: stuck
+  on error screen after a cold-load 429 — reproduced live).
+- `api_general` burst 20→60: measured legitimate two-user
+  dashboard→marketplace→room chain ≈70 req/15s exceeded burst=40 (10×429
+  observed). Sustained 60r/m unchanged; `api_auth`/`api_task` untouched.
+
+### Live verification (`3ffe744`, room `cmwaigb4m0012tf4k5lpcvi4f`)
+
+Same-IP labeled accounts, reCAPTCHA enabled, normal sessions:
+
+- Cold loads: dashboard 14+14, marketplace 8+8, room 9+9 requests —
+  **1×429 total** (`friends/status`, non-critical) vs 19 originally / 10 on
+  `8565df5`. Zero required-content or action failures.
+- Chat: both participants `ready`; UI-sent A→B message live without refresh;
+  B→A message during A's reload backfilled with exactly 1 occurrence.
+- Deploy run 42791889004 all jobs green; `.deployed-sha` = `3ffe744`.
+
+### Remaining limitations
+
+- `friends/status` transient 429 possible (silent, non-critical).
+- Socket auto-reconnect verified in CI; live reconnect check used reload path.
+- EventsGateway Redis-adapter boot warning unchanged (single-instance OK).
