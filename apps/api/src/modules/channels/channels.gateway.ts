@@ -103,7 +103,7 @@ export class ChannelsGateway
       await client.join(`channel:${payload.channelId}`);
       client.emit('channel:joined', { channelId: payload.channelId });
     } catch (err) {
-      client.emit('channel:error', { message: (err as Error).message });
+      client.emit('channel:error', { channelId: payload.channelId, message: (err as Error).message });
     }
   }
 

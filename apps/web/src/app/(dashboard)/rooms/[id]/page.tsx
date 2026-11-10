@@ -406,6 +406,19 @@ function ReviewModal({ roomId, submission, onClose }: { roomId: string; submissi
 
 interface ChatMessage { id: string; userId: string; content: string; createdAt: string; user?: { username: string; displayName: string | null } }
 
+type ChatStatus = 'connecting' | 'ready' | 'reconnecting' | 'failed';
+
+// If the transport is up but the server never acknowledges channel
+// membership, surface a retryable failure instead of hanging forever.
+const JOIN_ACK_TIMEOUT_MS = 10_000;
+
+const CHAT_STATUS_META: Record<ChatStatus, { label: string; className: string }> = {
+  connecting: { label: 'connecting…', className: 'text-zinc-500' },
+  ready: { label: 'ready', className: 'text-emerald-400' },
+  reconnecting: { label: 'reconnecting…', className: 'text-amber-400' },
+  failed: { label: 'connection failed', className: 'text-red-400' },
+};
+
 function RoomChat({ channelId, roomId, onIncomingMessage }: {
   channelId: string;
   roomId: string;
@@ -414,42 +427,115 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
   const { accessToken, user } = useAuthStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState<ChatStatus>('connecting');
   const endRef = useRef<HTMLDivElement>(null);
   const onIncomingRef = useRef(onIncomingMessage);
   onIncomingRef.current = onIncomingMessage;
+  const socketRef = useRef<ReturnType<typeof connectChannelSocket> | null>(null);
+  const joinRef = useRef<(() => void) | null>(null);
+
+  // Merge by id so history reloads, REST responses, and live socket
+  // events can overlap without ever duplicating a message.
+  const mergeMessages = useCallback((incoming: ChatMessage[]) => {
+    setMessages((prev) => {
+      const map = new Map(prev.map((m) => [m.id, m]));
+      for (const m of incoming) map.set(m.id, m);
+      return [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    });
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    const res = await apiClient.get<ApiResponse<ChatMessage[]>>(`channels/${channelId}/messages?limit=50`);
+    mergeMessages(res.data.data ?? []);
+  }, [channelId, mergeMessages]);
 
   useEffect(() => {
-    let socket: ReturnType<typeof connectChannelSocket> | null = null;
-    const load = async () => {
-      const res = await apiClient.get<ApiResponse<ChatMessage[]>>(`channels/${channelId}/messages?limit=50`);
-      setMessages(res.data.data ?? []);
+    void loadHistory().catch(() => null);
+    if (!accessToken) return undefined;
+
+    const socket = connectChannelSocket(accessToken);
+    socketRef.current = socket;
+    let joinTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearJoinTimer = () => {
+      if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; }
     };
-    void load().catch(() => null);
-    if (accessToken) {
-      socket = connectChannelSocket(accessToken);
-      const onMsg = (m: ChatMessage) => {
-        if ((m as { channelId?: string }).channelId === channelId || !('channelId' in (m as object))) {
-          setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
-          if (m.userId !== user?.id) onIncomingRef.current?.();
-        }
-      };
-      const onConnect = () => { setConnected(true); socket?.emit('channel:join', { channelId }); };
-      const onDisconnect = () => setConnected(false);
-      socket.on('connect', onConnect);
-      socket.on('disconnect', onDisconnect);
-      socket.on('chat:message', onMsg);
-      if (socket.connected) onConnect();
-      return () => {
-        socket?.off('connect', onConnect);
-        socket?.off('disconnect', onDisconnect);
-        socket?.off('chat:message', onMsg);
-      };
-    }
-    return undefined;
-  }, [channelId, accessToken, roomId, user?.id]);
+    const armJoinTimer = () => {
+      clearJoinTimer();
+      joinTimer = setTimeout(() => setStatus('failed'), JOIN_ACK_TIMEOUT_MS);
+    };
+    // Transport connect ≠ room membership: every (re)connect must re-join
+    // the channel and wait for the server's channel:joined ack before the
+    // UI reports "ready".
+    const join = () => {
+      setStatus('connecting');
+      socket.emit('channel:join', { channelId });
+      armJoinTimer();
+    };
+    joinRef.current = join;
+
+    const onConnect = () => join();
+    const onDisconnect = () => { clearJoinTimer(); setStatus('reconnecting'); };
+    const onConnectError = () => setStatus('reconnecting');
+    const onReconnectFailed = () => { clearJoinTimer(); setStatus('failed'); };
+    const onJoined = (p: { channelId?: string }) => {
+      if (p?.channelId !== channelId) return;
+      clearJoinTimer();
+      setStatus('ready');
+      // Membership (re)established — pull anything missed while
+      // unsubscribed; mergeMessages dedupes the overlap with live events.
+      void loadHistory().catch(() => null);
+    };
+    const onChannelError = (p: { channelId?: string }) => {
+      if (p?.channelId && p.channelId !== channelId) return;
+      clearJoinTimer();
+      setStatus('failed');
+    };
+    const onMsg = (m: ChatMessage) => {
+      const mc = m as ChatMessage & { channelId?: string };
+      if (mc.channelId === channelId || !('channelId' in mc)) {
+        mergeMessages([m]);
+        if (m.userId !== user?.id) onIncomingRef.current?.();
+      }
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    socket.on('reconnect_failed', onReconnectFailed);
+    socket.on('channel:joined', onJoined);
+    socket.on('channel:error', onChannelError);
+    socket.on('chat:message', onMsg);
+    if (socket.connected) onConnect();
+
+    return () => {
+      clearJoinTimer();
+      joinRef.current = null;
+      if (socketRef.current === socket) socketRef.current = null;
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.off('reconnect_failed', onReconnectFailed);
+      socket.off('channel:joined', onJoined);
+      socket.off('channel:error', onChannelError);
+      socket.off('chat:message', onMsg);
+    };
+  }, [channelId, accessToken, roomId, user?.id, loadHistory, mergeMessages]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  const retry = () => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    if (socket.connected) {
+      // Transport is fine — the join itself failed or timed out.
+      joinRef.current?.();
+    } else {
+      // Resume (or restart after reconnect_failed) the transport; the
+      // 'connect' handler re-emits channel:join automatically.
+      socket.connect();
+    }
+  };
 
   const send = async () => {
     const content = input.trim();
@@ -457,10 +543,14 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
     setInput('');
     try {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content });
-      const msg = res.data.data;
-      setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
-    } catch { /* toast handled globally */ }
+      mergeMessages([res.data.data]);
+    } catch {
+      // Preserve the unsent draft so a failed send never loses text.
+      setInput(content);
+    }
   };
+
+  const meta = CHAT_STATUS_META[status];
 
   return (
     <div className="flex h-full min-h-[320px] flex-col rounded-xl border border-zinc-800 bg-zinc-900/40">
@@ -468,8 +558,16 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
         <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
           <MessageCircle className="h-3.5 w-3.5" /> Room chat
         </span>
-        <span className={`text-[10px] ${connected ? 'text-emerald-400' : 'text-zinc-600'}`}>
-          {connected ? 'connected' : 'reconnecting…'}
+        <span className="flex items-center gap-2">
+          {status !== 'ready' && (
+            <span className="text-[10px] text-zinc-600">live updates paused — sends still save</span>
+          )}
+          <span className={`text-[10px] ${meta.className}`} data-testid="chat-status">{meta.label}</span>
+          {(status === 'failed' || status === 'reconnecting') && (
+            <button onClick={retry} data-testid="chat-retry" className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800">
+              Retry
+            </button>
+          )}
         </span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: 380 }}>
