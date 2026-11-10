@@ -1130,6 +1130,107 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await service.cancel(c, room.id); // cleanup
   });
 
+  // ─── Offer deadline validation ────────────────────────────
+  // Single rule across API + UI: offer terms inherit/bounded by the ROOM
+  // deadline; proof eligibility is room-level (status + room deadline).
+
+  it('rejects past, invalid, naive-timezone, and beyond-room offer deadlines; omitted defaults to room deadline', async () => {
+    const { room } = await makeRoom();
+    const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    const base = {
+      actionText: 'Follow my account please',
+      taskType: TaskType.TIKTOK_FOLLOW,
+      targetUrl: 'https://tiktok.com/@target',
+      requiresProof: true,
+    };
+
+    // past deadline → 400
+    await expect(service.upsertOffer(creatorId, room.id, {
+      ...base, deadline: new Date(Date.now() - 60_000).toISOString(),
+    })).rejects.toThrow(BadRequestException);
+
+    // unparseable deadline → 400
+    await expect(service.upsertOffer(creatorId, room.id, {
+      ...base, deadline: 'not-a-date',
+    })).rejects.toThrow(BadRequestException);
+
+    // naive datetime (no offset/Z) → 400 — server-TZ ambiguity is rejected
+    await expect(service.upsertOffer(creatorId, room.id, {
+      ...base, deadline: '2030-01-01T10:00',
+    })).rejects.toThrow(BadRequestException);
+
+    // beyond room expiry → 400
+    await expect(service.upsertOffer(creatorId, room.id, {
+      ...base, deadline: new Date(fresh.expiresAt!.getTime() + 60_000).toISOString(),
+    })).rejects.toThrow(BadRequestException);
+
+    // omitted → inherits the room deadline exactly
+    const offer = await service.upsertOffer(creatorId, room.id, base);
+    expect(offer.deadline.getTime()).toBe(fresh.expiresAt!.getTime());
+  });
+
+  it('stores an explicit-offset deadline at the intended instant (timezone conversion)', async () => {
+    const { room } = await makeRoom();
+    // Same instant written with a +08:00 offset must store the identical time.
+    const target = new Date(Date.now() + 10 * 60_000);
+    const shifted = new Date(target.getTime() + 8 * 3600_000);
+    const p = (n: number) => String(n).padStart(2, '0');
+    const offsetStr =
+      `${shifted.getUTCFullYear()}-${p(shifted.getUTCMonth() + 1)}-${p(shifted.getUTCDate())}` +
+      `T${p(shifted.getUTCHours())}:${p(shifted.getUTCMinutes())}:${p(shifted.getUTCSeconds())}+08:00`;
+    const offer = await service.upsertOffer(creatorId, room.id, {
+      ...offerDto('TZ check'), deadline: offsetStr,
+    });
+    // offset string carries second precision — compare at second granularity
+    expect(Math.floor(offer.deadline.getTime() / 1000)).toBe(Math.floor(target.getTime() / 1000));
+  });
+
+  it('an offer deadline lapsing during negotiation blocks agreement until offers are updated', async () => {
+    const { room } = await makeRoom();
+    await service.upsertOffer(creatorId, room.id, offerDto('Task A'));
+    await service.upsertOffer(joinerId, room.id, offerDto('Task B'));
+
+    // Simulate terms lapsing mid-negotiation (e.g. a short custom deadline).
+    await prisma.roomOffer.updateMany({
+      where: { roomId: room.id },
+      data: { deadline: new Date(Date.now() - 1000) },
+    });
+
+    // Approval is refused — expired terms cannot become binding.
+    await expect(service.approve(creatorId, room.id, {}))
+      .rejects.toThrow(ConflictException);
+    const still = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
+    expect(still.status).toBe(RoomStatus.NEGOTIATING);
+
+    // Refreshing offers restores live terms; dual approval then agrees.
+    await service.upsertOffer(creatorId, room.id, offerDto('Task A v2'));
+    await service.upsertOffer(joinerId, room.id, offerDto('Task B v2'));
+    await service.approve(creatorId, room.id, {});
+    const r = await service.approve(joinerId, room.id, {});
+    expect(r.agreed).toBe(true);
+  });
+
+  it('proof eligibility follows the room deadline, not the offer deadline (API/UI single rule)', async () => {
+    const { room } = await makeRoom();
+    const offerA = await service.upsertOffer(creatorId, room.id, offerDto('Follow me'));
+    const offerB = await service.upsertOffer(joinerId, room.id, offerDto('Like my post'));
+    await service.approve(creatorId, room.id, {});
+    await service.approve(joinerId, room.id, {});
+
+    // Offer deadline lapses while the room is still active — proof remains
+    // submittable because eligibility is room-level, matching proofWindowOpen
+    // in the web client.
+    await prisma.roomOffer.update({
+      where: { id: offerA.id },
+      data: { deadline: new Date(Date.now() - 1000) },
+    });
+    const sub = await service.submitProof(joinerId, room.id, offerA.id, {
+      proofUrl: '/uploads/proofs/rooms/j/r/x.webp', proofHash: `hash-rule-${seq}`,
+    });
+    expect(sub.status).toBe(RoomSubmissionStatus.SUBMITTED);
+    expect(offerB.deadline.getTime()).toBeGreaterThan(Date.now());
+  });
+
   // ─── helpers ──────────────────────────────────────────────
 
   async function mkTempUser(suffix: string, balance: number) {

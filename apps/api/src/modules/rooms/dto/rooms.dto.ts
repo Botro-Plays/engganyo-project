@@ -72,9 +72,10 @@ export class UpsertOfferDto {
   @MaxLength(500)
   targetUrl!: string;
 
-  @ApiProperty({ description: 'Offer deadline — must be ≤ room expiresAt' })
+  @ApiPropertyOptional({ description: 'Offer deadline — must be a future date ≤ room expiresAt. Optional: defaults to the room deadline.' })
+  @IsOptional()
   @IsDateString()
-  deadline!: string;
+  deadline?: string;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()

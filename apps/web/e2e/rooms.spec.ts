@@ -73,18 +73,13 @@ async function newUserPage(browser: Browser, ip: string) {
   return { context, page, ip };
 }
 
-function futureDeadline(minutes: number) {
-  const d = new Date(Date.now() + minutes * 60_000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 async function proposeOffer(page: Page, actionText: string, targetUrl: string) {
   await page.getByRole('button', { name: /propose my task|edit my offer/i }).first().click();
   const modal = page.locator('div.fixed.inset-0').last();
   await modal.getByPlaceholder(/follow my tiktok/i).fill(actionText);
   await modal.getByPlaceholder(/https/).fill(targetUrl);
-  await modal.locator('input[type="datetime-local"]').fill(futureDeadline(15));
+  // No per-offer deadline picker — terms inherit the shared room deadline.
+  await expect(modal.getByText(/share the room deadline/i)).toBeVisible();
   await modal.getByRole('button', { name: /publish offer|save offer/i }).click();
   await expect(modal).toBeHidden({ timeout: 15_000 });
 }

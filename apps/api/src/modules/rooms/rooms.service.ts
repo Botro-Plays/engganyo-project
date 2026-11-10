@@ -243,6 +243,44 @@ export class RoomsService {
     return !!deadline && deadline <= now;
   }
 
+  /**
+   * Resolve the offer deadline against fresh server time and the locked
+   * room row. A client-supplied deadline must parse, be in the future, and
+   * not exceed the room expiry; when omitted the offer inherits the room
+   * deadline so offer terms can never outlive the room clock.
+   */
+  private resolveOfferDeadline(
+    clientDeadline: string | undefined,
+    room: { expiresAt: Date | null },
+    now = new Date(),
+  ): Date {
+    if (clientDeadline === undefined || clientDeadline === null || clientDeadline === '') {
+      if (!room.expiresAt) {
+        throw new ConflictException('Room deadline unavailable — cannot set offer terms');
+      }
+      return room.expiresAt;
+    }
+    const parsed = new Date(clientDeadline);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('Offer deadline must be a valid date');
+    }
+    // Naive datetimes ("2026-11-10T10:49") parse in the SERVER's timezone —
+    // silently shifting the instant for clients in other zones. Require an
+    // explicit offset/Z so the stored deadline means the same thing to
+    // everyone. (UI clients omit the field entirely and inherit the room
+    // deadline.)
+    if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(clientDeadline.trim())) {
+      throw new BadRequestException('Offer deadline must include a timezone offset');
+    }
+    if (parsed <= now) {
+      throw new BadRequestException('Offer deadline must be in the future');
+    }
+    if (room.expiresAt && parsed > room.expiresAt) {
+      throw new BadRequestException('Offer deadline cannot exceed the room deadline');
+    }
+    return parsed;
+  }
+
   // Post-agreement states where peer review / proof actions are allowed.
   private assertReviewableRoom(room: { status: RoomStatus; expiresAt: Date | null }, now = new Date()) {
     if (room.status === RoomStatus.DISPUTED) {
@@ -720,10 +758,6 @@ export class RoomsService {
     if (!dto.targetUrl.startsWith('http')) {
       throw new BadRequestException('targetUrl must be a valid URL');
     }
-    const offerDeadline = new Date(dto.deadline);
-    if (room.expiresAt && offerDeadline > room.expiresAt) {
-      throw new BadRequestException('Offer deadline cannot exceed the room deadline');
-    }
     assertEngagementTaskAllowed(dto.taskType);
     const platform = SocialAuthService.getPlatformForTaskType(dto.taskType);
     if (platform) {
@@ -745,9 +779,11 @@ export class RoomsService {
       if (this.roomDeadlinePassed(fresh)) {
         throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
       }
-      if (fresh.expiresAt && offerDeadline > fresh.expiresAt) {
-        throw new BadRequestException('Offer deadline cannot exceed the room deadline');
-      }
+      // Deadline is validated against FRESH server time and the locked
+      // room row — a client-supplied deadline may not be invalid, past,
+      // or beyond the room expiry. When omitted it defaults to the room
+      // deadline, so offer terms can never outlive the room clock.
+      const offerDeadline = this.resolveOfferDeadline(dto.deadline, fresh);
       const existing = await tx.roomOffer.findUnique({
         where: { roomId_proposerRole: { roomId, proposerRole: myRole } },
       });
@@ -826,6 +862,13 @@ export class RoomsService {
       }
       if (dto.claimerVersion && dto.claimerVersion !== claimerOffer.version) {
         throw new ConflictException('STALE_VERSION: the joiner offer changed — refresh and re-approve');
+      }
+
+      // An offer whose deadline lapsed during negotiation must not become
+      // binding — agreement is refused until both offers carry live terms.
+      const approveNow = new Date();
+      if (creatorOffer.deadline <= approveNow || claimerOffer.deadline <= approveNow) {
+        throw new ConflictException('OFFER_EXPIRED: an offer deadline has passed — update the offers and re-approve');
       }
 
       const approval = {
