@@ -1887,8 +1887,18 @@ Same-IP labeled accounts, reCAPTCHA enabled, normal sessions:
   B→A message during A's reload backfilled with exactly 1 occurrence.
 - Deploy run 42791889004 all jobs green; `.deployed-sha` = `3ffe744`.
 
+### PR #68 `a1153e8` — friend-status silent failure (deploy run 42809813164)
+
+The residual `friends/status` 429 exposed a real defect: `catch(()=>null)`
+left the UI on the default `NONE` state — "Add friend" rendered and
+friendship actions were enabled on an assumed state. Now React Query
+(`retry:false`, 30s staleTime — no polling) with explicit loading /
+"Status unavailable" + Retry / known-status-only actions. E2E covers
+500 → unavailable+retry → recovery and asserts no action buttons while
+status is unknown. `.deployed-sha` verified `a1153e8`.
+
 ### Remaining limitations
 
-- `friends/status` transient 429 possible (silent, non-critical).
 - Socket auto-reconnect verified in CI; live reconnect check used reload path.
 - EventsGateway Redis-adapter boot warning unchanged (single-instance OK).
+- Friend testing checklist for owners/friends: `docs/P2P_FRIEND_TEST_CHECKLIST.md`.
