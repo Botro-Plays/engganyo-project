@@ -185,4 +185,58 @@ test.describe.serial('Room chat readiness', () => {
       await b.context.close();
     }
   });
+
+  test('room state self-recovers from a transient load failure', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const a = await newUserPage(browser, USER_IPS.a);
+    const b = await newUserPage(browser, USER_IPS.b);
+    let roomId = '';
+
+    try {
+      await login(a.page, USER_A.email, USER_A.password);
+      await cancelActiveRooms(a.page, a.ip);
+      await login(b.page, USER_B.email, USER_B.password);
+      await cancelActiveRooms(b.page, b.ip);
+      const tokenA = await apiToken(a.page);
+      const tokenB = await apiToken(b.page);
+
+      const createRes = await apiPost(a.page, a.ip, tokenA!, '/rooms', {
+        title: 'E2E state recovery room',
+        visibility: 'PUBLIC',
+      });
+      roomId = (await createRes.json())?.data?.id;
+      expect(roomId).toBeTruthy();
+      // Join so the room reaches NEGOTIATING — the workspace with chat.
+      const joinRes = await apiPost(b.page, b.ip, tokenB!, `/rooms/${roomId}/join`, {});
+      expect(joinRes.ok()).toBeTruthy();
+
+      // Fail the room-state endpoint briefly — like a 429 during a
+      // cold-load burst. Fulfill (not abort) so the client sees a real
+      // 429 response: 4xx is not retried, so the error poll is the only
+      // recovery path — exactly the production failure mode.
+      let blockState = true;
+      await a.page.route('**/rooms/*/state', async (route) => {
+        if (blockState) return route.fulfill({ status: 429, contentType: 'application/json', body: '{}' });
+        return route.continue();
+      });
+      setTimeout(() => { blockState = false; }, 12_000);
+
+      await a.page.goto(`${BASE}/rooms/${roomId}`);
+      const sawError = await a.page
+        .getByText(/couldn't load this room/i)
+        .waitFor({ timeout: 20_000 })
+        .then(() => true)
+        .catch(() => false);
+      console.log(`[state-recovery] error state visible: ${sawError}`);
+
+      // However the failure surfaced, the workspace must appear on its
+      // own once the endpoint recovers — no reload, no manual retry.
+      await expect(a.page.getByPlaceholder(/message your partner/i)).toBeVisible({ timeout: 60_000 });
+      await expect(a.page.getByTestId('chat-status')).toHaveText('ready', { timeout: 30_000 });
+    } finally {
+      await a.page.unroute('**/rooms/*/state').catch(() => null);
+      await a.context.close();
+      await b.context.close();
+    }
+  });
 });
