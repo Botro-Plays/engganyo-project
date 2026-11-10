@@ -1800,3 +1800,40 @@ Two labeled accounts `devin_p2p_a` / `devin_p2p_b` on one public IP (`156.59.233
 - Chat delivery verified at the data layer (6/6 rows); the harness's on-screen text check returned 0 due to render timing — visual chat confirmation from the earlier run still stands.
 - Proof/review/rating steps for room `cmwa3ssez` were driven via in-page `fetch` (real user sessions) after the corrupt-fixture 400 — the UI path itself is covered by CI E2E (`rooms.spec.ts` uploads via `setInputFiles`) and by the earlier completed room `cmw98jrp6001htllju0pea6pd`.
 - Distinct-IP case remains covered by CI E2E (`X-Forwarded-For` per browser context); no separate live distinct-IP run was needed.
+
+---
+
+## 2026-11-10 — Deadline-rule fix + full UI journey + live-chat repair chain
+
+### PR #62 — single room-deadline rule — DEPLOYED `b333b95`
+
+- Offer `deadline` is now optional; when omitted the offer inherits `room.expiresAt` inside the locked transaction. Client-supplied deadlines must parse, include a timezone offset (naive datetimes rejected — they silently parse in server TZ), be in the future, and not exceed the room expiry. `approve()` re-reads both persisted offer deadlines under the room lock and refuses agreement (`OFFER_EXPIRED`) if either lapsed during negotiation.
+- Proof eligibility uses one rule (room status + room deadline); the UI shows the reason + recovery when proof is unavailable. Offer form no longer asks for a deadline — it states both tasks share the room deadline.
+- Tested head `e02bee1` — CI API (incl. real-PG deadline/TZ/late-op specs)/Web/E2E green (initial `d5dfe09` failed one assertion on ms-vs-second timestamp precision; fixed). Merged `b333b95`, deploy run 42752229328 — `.deployed-sha` verified, all containers healthy.
+
+### Live journey v3 — room `cmwa73su9001c5jsb68emjdzi` — COMPLETED via UI only
+
+Same-IP labeled accounts (`devin_p2p_a`/`devin_p2p_b`, shared IP `156.59.233.176`), owner-assisted Edge sessions, reCAPTCHA enabled, deployed `b333b95`. Evidence: `evidence/p2p-deadline-rule-2026-11-10/` (results.json + 19 screenshots).
+
+- Marketplace → create `LIVE DL mwa73ud4` → B join & reserve → immediate workspace → partner arrival visible on creator **without refresh** → 6 chat messages persisted → offers via simplified form (**both offer deadlines == `room.expiresAt` = `2026-11-10T05:04:12.785Z`, verified via API**) → dual approval → AGREED → proofs uploaded **through the visible UI** (valid 8×8 PNG fixture) → peer reviews via UI → COMPLETED visible without refresh → ratings 5/5 via UI → closed history both sides → 390px mobile screenshot.
+- **Ledger/DB verified:** `SPEND_ROOM_CREATE −25` (a), `SPEND_ROOM_CLAIM −25` (b), `ROOM_CHARGE 50` ×1, `p2p_point_events` +1 each, `room_submissions` both APPROVED cross-reviewed with proof, `room_ratings` 5/5 ×2, wallets 450→425 each, status COMPLETED.
+- **Burst measurement (cosmetics-429 investigation):** two simultaneous cold marketplace loads produced **19×429 total, ALL inside the first ~12s** — the shared per-IP `api_general` bucket was drained by back-to-back full page loads (each page fires ~9 endpoints: auth/me, notifications, cosmetics, wallet, rooms, rooms/quote, store/active-effects, public-config, analytics/visit). Zero 429s in every later phase: workspace initial load 11 reqs/12s clean, join transition 1 req/10s, steady-state ~9–11 reqs/45s per participant (~12–14/min), post-agree ≤3 reqs/8s. Assessment: steady-state has comfortable headroom at 60r/m; the residual edge is two same-IP users cold-loading within the same minute. 429'd queries do not auto-retry (by design — no amplification); recovery is via error states + focus refetch + navigation, verified when the journey proceeded normally afterward. **Limit retained at 60r/m** — no increase warranted by measured traffic; auth/sensitive limiters untouched.
+
+### Live-chat defect chain — three real bugs found and fixed
+
+The v3 run exposed that room chat never delivered messages live (senders saw their own via REST response; recipients saw nothing until reload; indicator showed "reconnecting…"). Root causes, each fixed in its own PR:
+
+1. **PR #63 — `e0af749` (deploy run 42762713522):** (a) REST `POST /channels/messages` never emitted `chat:message` — only the socket `chat:send` handler did, and every web client sends via REST. `ChannelsService` now emits `channel.message.created` via EventEmitter2 for REST and socket sends; `ChannelsGateway` broadcasts it via `@OnEvent`. (b) Token refresh wrote `localStorage.access_token` but never the zustand store — socket auth used the expired login-time JWT forever ("reconnecting…"). Refresh now syncs `store.accessToken`; SocketProvider reconnects on token change; socket connectors drop stale sockets. (c) The room workspace listened for `room:*` events on the **channels** namespace, but the server emits them on **notifications** (per-user rooms) — moved to the shared notifications socket. Unit spec asserts the emit; E2E now requires live socket delivery both directions (reload fallback removed).
+2. **PR #64 — `bda2914` (deploy run 42765716937):** sessions created before #63 have a stale token persisted in the `engganyo-auth` store while localStorage holds a fresher one (pre-fix refreshes never synced). `AuthInitializer` now adopts `localStorage.access_token` into the store on hydration when they diverge.
+3. **PR #65 — `9d9de0b` (deploy run 42768595465):** `joinChannel()` charged the 3/hour join quota BEFORE the idempotent membership check — every socket connect/reconnect/page load re-emits `channel:join`, so members were locked out of their own channel's live messages after ~3 reloads (observed live: `Rate limit exceeded — try again in 2751s`). Existing members now return before `enforceRateLimit`; all authz checks (active channel, VIP, private-room participation) still precede it. New joins remain limited. Unit specs cover both paths.
+
+### Live chat verification — PASSED on `9d9de0b`
+
+On completed room `cmwa73su9001c5jsb68emjdzi` (chat persists as history), both labeled accounts: sockets report `connected`, messages sent via the visible UI input were seen by the partner **without any refresh** in both directions (`LIVE-A-*`/`LIVE-B-*` at 07:13:28–29 UTC, persisted in `channel_messages`, screenshots `verify-livechat-*.png`, `livechat-verify.json`).
+
+### Remaining limitations (updated)
+
+- The RoomChat "connected" indicator reflects socket transport only, not `channel:join` success — cosmetic; delivery itself verified.
+- Offer deadlines are inherited from the room; the API still accepts an explicit client deadline within bounds (validated) for API consumers.
+- 429 edge: simultaneous cold loads by 2+ same-IP users can transiently rate-limit the shared bucket; recovery is manual-ish (error state → retry/focus refetch). Consider a modest `api_general` bump or cold-load request consolidation only if real-user reports justify it.
+- `EventsGateway` logs `Redis adapter failed: server.adapter is not a function` at boot — pre-existing adapter wiring issue on the notifications namespace; single-instance deployment unaffected (rooms still deliver — verified live), but multi-instance scaling would need it fixed.

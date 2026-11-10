@@ -1,0 +1,1776 @@
+{
+  "startedAt": "2026-11-10T04:32:21.245Z",
+  "roomId": "cmwa73su9001c5jsb68emjdzi",
+  "apiCounts": {
+    "a": {
+      "tasks/my/summary": 1,
+      "notifications": 19,
+      "gamification/wheel/status": 1,
+      "auth/public-config": 6,
+      "wallet/me": 13,
+      "auth/me": 5,
+      "store/active-effects": 18,
+      "rooms/quote": 3,
+      "rooms": 4,
+      "users/cosmetics": 5,
+      "analytics/visit": 6,
+      "rooms/cmwa73su9001c5jsb68emjdzi": 4,
+      "rooms/cmwa73su9001c5jsb68emjdzi/state": 39,
+      "friends/status": 4,
+      "channels/cmwa741rz001r5jsbou9521ps/messages": 4,
+      "channels/messages": 3,
+      "rooms/cmwa73su9001c5jsb68emjdzi/offers": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/approve": 1,
+      "uploads/room-proof": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/offers/cmwa76u1d002i5jsb4hjcjaiy/submit-proof": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/submissions/cmwa7868m00305jsb55ajegpl/review": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/rate": 1,
+      "rooms/mine": 3
+    },
+    "b": {
+      "tasks/my/summary": 1,
+      "wallet/me": 15,
+      "referrals/me": 1,
+      "analytics/users/me/stats": 1,
+      "auth/public-config": 7,
+      "store/active-effects": 20,
+      "gamification/daily-reward-log": 1,
+      "notifications": 21,
+      "gamification/stats": 1,
+      "gamification/wheel/status": 1,
+      "rooms/quote": 4,
+      "rooms": 4,
+      "users/cosmetics": 6,
+      "auth/me": 6,
+      "analytics/visit": 7,
+      "rooms/cmwa73su9001c5jsb68emjdzi/join": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi": 4,
+      "rooms/cmwa73su9001c5jsb68emjdzi/state": 34,
+      "friends/status": 4,
+      "channels/cmwa741rz001r5jsbou9521ps/messages": 4,
+      "channels/messages": 3,
+      "rooms/cmwa73su9001c5jsb68emjdzi/offers": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/approve": 1,
+      "uploads/room-proof": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/offers/cmwa76qnf002d5jsb6if7ozsr/submit-proof": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/submissions/cmwa77yed002v5jsb6etp1ink/review": 1,
+      "rooms/cmwa73su9001c5jsb68emjdzi/rate": 1,
+      "rooms/mine": 2
+    }
+  },
+  "rateLimits": {
+    "a": {
+      "auth/me": 1,
+      "notifications": 1,
+      "store/active-effects": 1,
+      "rooms/quote": 1,
+      "rooms": 1,
+      "auth/public-config": 1,
+      "users/cosmetics": 1,
+      "wallet/me": 1,
+      "analytics/visit": 1
+    },
+    "b": {
+      "wallet/me": 2,
+      "notifications": 1,
+      "store/active-effects": 1,
+      "rooms/quote": 1,
+      "rooms": 1,
+      "auth/public-config": 1,
+      "users/cosmetics": 1,
+      "analytics/visit": 1
+    }
+  },
+  "apiTimestamps": {
+    "a": [
+      {
+        "t": 1794285142065,
+        "path": "tasks/my/summary",
+        "status": 200
+      },
+      {
+        "t": 1794285142067,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285142075,
+        "path": "gamification/wheel/status",
+        "status": 200
+      },
+      {
+        "t": 1794285142155,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285142372,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285143248,
+        "path": "auth/me",
+        "status": 429
+      },
+      {
+        "t": 1794285143250,
+        "path": "notifications",
+        "status": 429
+      },
+      {
+        "t": 1794285143253,
+        "path": "store/active-effects",
+        "status": 429
+      },
+      {
+        "t": 1794285143254,
+        "path": "rooms/quote",
+        "status": 429
+      },
+      {
+        "t": 1794285143255,
+        "path": "rooms",
+        "status": 429
+      },
+      {
+        "t": 1794285143257,
+        "path": "auth/public-config",
+        "status": 429
+      },
+      {
+        "t": 1794285143380,
+        "path": "users/cosmetics",
+        "status": 429
+      },
+      {
+        "t": 1794285143381,
+        "path": "wallet/me",
+        "status": 429
+      },
+      {
+        "t": 1794285143384,
+        "path": "analytics/visit",
+        "status": 429
+      },
+      {
+        "t": 1794285173520,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285173521,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285203623,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285203774,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285203777,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285234015,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285234037,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285244023,
+        "path": "rooms",
+        "status": 201
+      },
+      {
+        "t": 1794285244276,
+        "path": "rooms/quote",
+        "status": 200
+      },
+      {
+        "t": 1794285244289,
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794285245824,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285246183,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285246468,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285256752,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285257207,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285257210,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285263871,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285264254,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285264294,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285267038,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285277317,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285287596,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285294494,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285294527,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285297852,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285308132,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285318394,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285324102,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285324732,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285324767,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285326257,
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794285327844,
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794285328662,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285329497,
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794285338918,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285349180,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285354990,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285355013,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285359494,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285369780,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285380067,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285380737,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/offers",
+        "status": 200
+      },
+      {
+        "t": 1794285381006,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285384345,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285385241,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285385255,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285389457,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285391297,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285397059,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/approve",
+        "status": 200
+      },
+      {
+        "t": 1794285397327,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285402287,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285407594,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285415493,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285415502,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285417854,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285428067,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285428106,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285428500,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285428891,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285428893,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285429086,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285429223,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285429223,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285430324,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285431465,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285431532,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285437146,
+        "path": "uploads/room-proof",
+        "status": 201
+      },
+      {
+        "t": 1794285437458,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/offers/cmwa76u1d002i5jsb4hjcjaiy/submit-proof",
+        "status": 201
+      },
+      {
+        "t": 1794285437725,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285448232,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285458503,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285459557,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285459557,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285468774,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285479047,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285489310,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285489322,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285489798,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285489799,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285499577,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285509944,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285520044,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285520047,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285520208,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285525271,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285529326,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/submissions/cmwa7868m00305jsb55ajegpl/review",
+        "status": 200
+      },
+      {
+        "t": 1794285529586,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285539852,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285544475,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285549573,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285549980,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285550037,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285550038,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285550163,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285550195,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285550197,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285550204,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285550211,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285550483,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285550743,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285550757,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285559059,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/rate",
+        "status": 201
+      },
+      {
+        "t": 1794285559337,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285576579,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285576614,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285576636,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285576636,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285576640,
+        "path": "rooms/quote",
+        "status": 200
+      },
+      {
+        "t": 1794285576750,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285576763,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285576765,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285576787,
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794285580669,
+        "path": "rooms/mine",
+        "status": 200
+      },
+      {
+        "t": 1794285595927,
+        "path": "rooms/mine",
+        "status": 200
+      },
+      {
+        "t": 1794285607022,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285607031,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285611182,
+        "path": "rooms/mine",
+        "status": 200
+      },
+      {
+        "t": 1794285626062,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285626105,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285626119,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285626126,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285626128,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285626131,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285626135,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285626142,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285626395,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285626646,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285626697,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285638089,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285638583,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      }
+    ],
+    "b": [
+      {
+        "t": 1794285142263,
+        "path": "tasks/my/summary",
+        "status": 200
+      },
+      {
+        "t": 1794285142264,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285142285,
+        "path": "referrals/me",
+        "status": 200
+      },
+      {
+        "t": 1794285142295,
+        "path": "analytics/users/me/stats",
+        "status": 200
+      },
+      {
+        "t": 1794285142300,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285142301,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285142304,
+        "path": "gamification/daily-reward-log",
+        "status": 200
+      },
+      {
+        "t": 1794285142307,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285142311,
+        "path": "gamification/stats",
+        "status": 200
+      },
+      {
+        "t": 1794285142315,
+        "path": "gamification/wheel/status",
+        "status": 200
+      },
+      {
+        "t": 1794285142593,
+        "path": "wallet/me",
+        "status": 429
+      },
+      {
+        "t": 1794285143200,
+        "path": "notifications",
+        "status": 429
+      },
+      {
+        "t": 1794285143207,
+        "path": "store/active-effects",
+        "status": 429
+      },
+      {
+        "t": 1794285143215,
+        "path": "rooms/quote",
+        "status": 429
+      },
+      {
+        "t": 1794285143224,
+        "path": "rooms",
+        "status": 429
+      },
+      {
+        "t": 1794285143225,
+        "path": "auth/public-config",
+        "status": 429
+      },
+      {
+        "t": 1794285143226,
+        "path": "wallet/me",
+        "status": 429
+      },
+      {
+        "t": 1794285143237,
+        "path": "users/cosmetics",
+        "status": 429
+      },
+      {
+        "t": 1794285143240,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285143252,
+        "path": "analytics/visit",
+        "status": 429
+      },
+      {
+        "t": 1794285173447,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285173450,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285203461,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285203699,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285203703,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285233948,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285234510,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285248937,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285248998,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285249001,
+        "path": "rooms/quote",
+        "status": 200
+      },
+      {
+        "t": 1794285249111,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285249114,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285249117,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285249120,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285249127,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285249158,
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794285255193,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/join",
+        "status": 201
+      },
+      {
+        "t": 1794285255465,
+        "path": "rooms/quote",
+        "status": 200
+      },
+      {
+        "t": 1794285255474,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285255482,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285255637,
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794285255732,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285255732,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285255994,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285256263,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285256272,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285266312,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285276581,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285279376,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285285742,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285286846,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285297104,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285307421,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285309613,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285315713,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285315985,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285317698,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285327054,
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794285327958,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285328680,
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794285330319,
+        "path": "channels/messages",
+        "status": 201
+      },
+      {
+        "t": 1794285338216,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285339847,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285346225,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285348482,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285358978,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285369265,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285370090,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285375943,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285376468,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285379540,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285385117,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/offers",
+        "status": 200
+      },
+      {
+        "t": 1794285385379,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285395651,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285398304,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/approve",
+        "status": 200
+      },
+      {
+        "t": 1794285398573,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285400324,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285406706,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285408842,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285419108,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285429523,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285430697,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285436180,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285436954,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285439786,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285440250,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285440292,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285440426,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285440432,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285440437,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285440438,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285440475,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285440477,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285440697,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285441309,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285441310,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285447318,
+        "path": "uploads/room-proof",
+        "status": 201
+      },
+      {
+        "t": 1794285447604,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/offers/cmwa76qnf002d5jsb6if7ozsr/submit-proof",
+        "status": 201
+      },
+      {
+        "t": 1794285447863,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285458132,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285468411,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285470685,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285470730,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285478687,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285488956,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285499221,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285500667,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285500915,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285500973,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285509485,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285519752,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285530016,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285531156,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285531209,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285535664,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/submissions/cmwa77yed002v5jsb6etp1ink/review",
+        "status": 200
+      },
+      {
+        "t": 1794285535933,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285561138,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285561159,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285561341,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285561347,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285561350,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285561358,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285561488,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285561495,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285561610,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285561861,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285561875,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285570209,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/rate",
+        "status": 201
+      },
+      {
+        "t": 1794285570469,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285591746,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285591747,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285597478,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285597515,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285597533,
+        "path": "rooms/quote",
+        "status": 200
+      },
+      {
+        "t": 1794285597653,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285597656,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285597663,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285597664,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285597665,
+        "path": "rooms",
+        "status": 200
+      },
+      {
+        "t": 1794285597686,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285601548,
+        "path": "rooms/mine",
+        "status": 200
+      },
+      {
+        "t": 1794285616827,
+        "path": "rooms/mine",
+        "status": 200
+      },
+      {
+        "t": 1794285618524,
+        "path": "analytics/visit",
+        "status": 201
+      },
+      {
+        "t": 1794285618552,
+        "path": "store/active-effects",
+        "status": 200
+      },
+      {
+        "t": 1794285618565,
+        "path": "auth/me",
+        "status": 200
+      },
+      {
+        "t": 1794285618617,
+        "path": "notifications",
+        "status": 200
+      },
+      {
+        "t": 1794285618699,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi",
+        "status": 200
+      },
+      {
+        "t": 1794285618709,
+        "path": "auth/public-config",
+        "status": 200
+      },
+      {
+        "t": 1794285618741,
+        "path": "wallet/me",
+        "status": 200
+      },
+      {
+        "t": 1794285618743,
+        "path": "users/cosmetics",
+        "status": 200
+      },
+      {
+        "t": 1794285619032,
+        "path": "rooms/cmwa73su9001c5jsb68emjdzi/state",
+        "status": 200
+      },
+      {
+        "t": 1794285619289,
+        "path": "friends/status",
+        "status": 200
+      },
+      {
+        "t": 1794285619323,
+        "path": "channels/cmwa741rz001r5jsbou9521ps/messages",
+        "status": 200
+      },
+      {
+        "t": 1794285638319,
+        "path": "wallet/me",
+        "status": 200
+      }
+    ]
+  },
+  "phases": {
+    "marketplace_idle_15s": {
+      "a": {
+        "ms": 15000,
+        "total": 2,
+        "perEndpoint": {
+          "notifications": 1,
+          "store/active-effects": 1
+        },
+        "elapsed": 15004
+      },
+      "b": {
+        "ms": 15000,
+        "total": 0,
+        "perEndpoint": {},
+        "elapsed": 15007
+      }
+    },
+    "join_transition_10s": {
+      "b": {
+        "ms": 10000,
+        "total": 1,
+        "perEndpoint": {
+          "rooms/cmwa73su9001c5jsb68emjdzi/state": 1
+        },
+        "elapsed": 10008
+      }
+    },
+    "creator_sees_join_10s": {
+      "a": {
+        "ms": 10000,
+        "total": 1,
+        "perEndpoint": {
+          "rooms/cmwa73su9001c5jsb68emjdzi/state": 1
+        },
+        "elapsed": 10006
+      }
+    },
+    "steady_45s": {
+      "a": {
+        "ms": 45000,
+        "total": 9,
+        "perEndpoint": {
+          "notifications": 2,
+          "wallet/me": 1,
+          "store/active-effects": 2,
+          "rooms/cmwa73su9001c5jsb68emjdzi/state": 4
+        },
+        "elapsed": 45012
+      },
+      "b": {
+        "ms": 45000,
+        "total": 8,
+        "perEndpoint": {
+          "wallet/me": 1,
+          "store/active-effects": 1,
+          "notifications": 2,
+          "rooms/cmwa73su9001c5jsb68emjdzi/state": 4
+        },
+        "elapsed": 45012
+      }
+    },
+    "post_agree_8s": {
+      "a": {
+        "ms": 8000,
+        "total": 3,
+        "perEndpoint": {
+          "notifications": 1,
+          "store/active-effects": 1,
+          "rooms/cmwa73su9001c5jsb68emjdzi/state": 1
+        },
+        "elapsed": 8008
+      },
+      "b": {
+        "ms": 8000,
+        "total": 1,
+        "perEndpoint": {
+          "rooms/cmwa73su9001c5jsb68emjdzi/state": 1
+        },
+        "elapsed": 8010
+      }
+    }
+  },
+  "notes": [
+    "partner arrival visible on creator without refresh: true",
+    "chat visible without refresh: A sees B=false, B sees A=false",
+    "offer deadlines: 2026-11-10T05:04:12.785Z | 2026-11-10T05:04:12.785Z vs room.expiresAt=2026-11-10T05:04:12.785Z",
+    "agreement: AGREED",
+    "proof states visible without refresh: A=true B=true",
+    "post-upload status=SUBMITTED",
+    "post-review status=COMPLETED",
+    "completion visible without refresh: A=true B=true",
+    "a history shows room: true",
+    "b history shows room: true",
+    "final status=COMPLETED"
+  ],
+  "wallets": {
+    "aBefore": {
+      "id": "cdevinp2wa00000000000001",
+      "balance": 450,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 125,
+      "updatedAt": "2026-11-10T03:01:28.707Z"
+    },
+    "bBefore": {
+      "http": 429
+    },
+    "aAfter": {
+      "id": "cdevinp2wa00000000000001",
+      "balance": 425,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 150,
+      "updatedAt": "2026-11-10T04:34:01.307Z"
+    },
+    "bAfter": {
+      "id": "cdevinp2wb00000000000001",
+      "balance": 425,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 150,
+      "updatedAt": "2026-11-10T04:34:12.813Z"
+    }
+  },
+  "bursts": {
+    "marketplace_initial_12s": {
+      "a": {
+        "total": 9,
+        "perEndpoint": {
+          "auth/me": 1,
+          "notifications": 1,
+          "store/active-effects": 1,
+          "rooms/quote": 1,
+          "rooms": 1,
+          "auth/public-config": 1,
+          "users/cosmetics": 1,
+          "wallet/me": 1,
+          "analytics/visit": 1
+        },
+        "statuses": [
+          "auth/me",
+          "notifications",
+          "store/active-effects",
+          "rooms/quote",
+          "rooms",
+          "auth/public-config",
+          "users/cosmetics",
+          "wallet/me",
+          "analytics/visit"
+        ]
+      },
+      "b": {
+        "total": 10,
+        "perEndpoint": {
+          "wallet/me": 2,
+          "notifications": 1,
+          "store/active-effects": 1,
+          "rooms/quote": 1,
+          "rooms": 1,
+          "auth/public-config": 1,
+          "users/cosmetics": 1,
+          "auth/me": 1,
+          "analytics/visit": 1
+        },
+        "statuses": [
+          "wallet/me",
+          "notifications",
+          "store/active-effects",
+          "rooms/quote",
+          "rooms",
+          "auth/public-config",
+          "wallet/me",
+          "users/cosmetics",
+          "analytics/visit"
+        ]
+      }
+    },
+    "workspace_initial_12s_a": {
+      "total": 11,
+      "perEndpoint": {
+        "analytics/visit": 1,
+        "auth/me": 1,
+        "notifications": 1,
+        "store/active-effects": 1,
+        "rooms/cmwa73su9001c5jsb68emjdzi": 1,
+        "wallet/me": 1,
+        "auth/public-config": 1,
+        "users/cosmetics": 1,
+        "rooms/cmwa73su9001c5jsb68emjdzi/state": 1,
+        "friends/status": 1,
+        "channels/cmwa741rz001r5jsbou9521ps/messages": 1
+      },
+      "statuses": []
+    }
+  },
+  "roomTitle": "LIVE DL mwa73ud4",
+  "finalStatus": "COMPLETED",
+  "finishedAt": "2026-11-10T04:40:38.585Z"
+}

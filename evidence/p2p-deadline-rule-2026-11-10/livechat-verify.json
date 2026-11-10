@@ -1,0 +1,13 @@
+{
+  "startedAt": "2026-11-10T07:13:28.784Z",
+  "checks": {
+    "inputsVisible": {
+      "a": true,
+      "b": true
+    },
+    "socketsConnected": true,
+    "bSeesA_withoutRefresh": true,
+    "aSeesB_withoutRefresh": true
+  },
+  "finishedAt": "2026-11-10T07:13:38.527Z"
+}
