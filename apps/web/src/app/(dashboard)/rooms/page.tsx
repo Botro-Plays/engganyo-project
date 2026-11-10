@@ -251,11 +251,17 @@ export default function RoomsPage() {
   const [joinPassword, setJoinPassword] = useState('');
   const [joinError, setJoinError] = useState('');
 
-  const quoteQuery = useQuery({ queryKey: ['rooms', 'quote'], queryFn: () => roomsApi.quote(), enabled: isAuthenticated });
+  // Quote is only displayed inside the create modal — fetch lazily so
+  // routine marketplace loads don't spend a request on it.
+  const quoteQuery = useQuery({ queryKey: ['rooms', 'quote'], queryFn: () => roomsApi.quote(), enabled: isAuthenticated && showCreate });
+  // The marketplace list is required content — keep a slow poll so a
+  // transient failure (e.g. a 429 during a cold-load burst) recovers
+  // without requiring the user to hit Retry or reload.
   const browseQuery = useQuery({
     queryKey: ['rooms', 'browse', page],
     queryFn: () => roomsApi.list(page),
     enabled: isAuthenticated && tab === 'browse',
+    refetchInterval: 30_000,
   });
   const mineQuery = useQuery({
     queryKey: ['rooms', 'mine'],

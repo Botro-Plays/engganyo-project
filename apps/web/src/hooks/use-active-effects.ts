@@ -19,6 +19,6 @@ export function useActiveEffects(enabled = true) {
     },
     enabled,
     refetchInterval: 30_000,
-    staleTime: 10_000,
+    staleTime: 30_000,
   });
 }
