@@ -91,6 +91,16 @@ function AuthInitializer() {
 
   useEffect(() => {
     if (!hasHydrated) return;
+
+    // Reconcile store vs. localStorage: apiClient sends localStorage's
+    // access_token (refresh writes there first), while the persisted store
+    // token can be staler — e.g. sessions from before the refresh-sync
+    // fix. Socket auth reads the store, so adopt the fresher token.
+    const lsToken = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    if (lsToken && lsToken !== accessToken) {
+      useAuthStore.setState({ accessToken: lsToken });
+      return; // effect re-runs once the store holds the reconciled token
+    }
     if (!accessToken) return;
 
     // Refresh user data from backend to ensure fields like twoFactorEnabled are present
