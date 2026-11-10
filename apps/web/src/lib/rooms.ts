@@ -111,6 +111,17 @@ export interface RoomState {
   config: { contributionCredits: number; roomCharge: number; activeMinutes: number };
 }
 
+/**
+ * Single proof-eligibility rule — mirrors the API (`submitProof` accepts
+ * proof only in post-agreement statuses before the ROOM deadline; offer
+ * deadlines are informational and never gate submission). Keep in sync with
+ * `POST_AGREEMENT_STATUSES` + `roomDeadlinePassed` in rooms.service.ts.
+ */
+export function proofWindowOpen(room: { status: RoomStatus; expiresAt: string | null }): boolean {
+  if (!['AGREED', 'IN_PROGRESS', 'SUBMITTED'].includes(room.status)) return false;
+  return !room.expiresAt || new Date(room.expiresAt) > new Date();
+}
+
 export interface RoomQuote {
   contributionCredits: number;
   roomCharge: number;
@@ -150,7 +161,7 @@ export const roomsApi = {
   cancel: (id: string) => del<{ cancelled: boolean }>(`rooms/${id}`),
   upsertOffer: (id: string, dto: {
     actionText: string; taskType: string; targetUrl: string;
-    deadline: string; requiresProof?: boolean; proofInstructions?: string;
+    deadline?: string; requiresProof?: boolean; proofInstructions?: string;
   }) => put<RoomOffer>(`rooms/${id}/offers`, dto),
   approve: (id: string, versions?: { creatorVersion?: number; claimerVersion?: number }) =>
     post<{ agreed: boolean; status: string }>(`rooms/${id}/approve`, versions ?? {}),

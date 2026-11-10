@@ -25,7 +25,9 @@ export function useCosmeticsMap(userIds: (string | null | undefined)[]) {
       return res.data.data;
     },
     enabled: idsKey.length > 0,
-    staleTime: 60_000,
+    // Equipped cosmetics change rarely — a longer staleTime keeps page
+    // navigations from re-firing the lookup and adds to per-IP burst headroom.
+    staleTime: 300_000,
   });
 
   return data ?? {};

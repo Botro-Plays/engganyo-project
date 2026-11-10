@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 import axios from 'axios';
-import { roomsApi, friendsApi, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
+import { roomsApi, friendsApi, proofWindowOpen, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
 import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
 import { connectChannelSocket } from '@/lib/channel-socket';
 import { useAuthStore } from '@/store/auth.store';
@@ -77,9 +77,15 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
   // self-review, so the button must live on MY offer once a submission is
   // pending, not on the partner's offer carrying my own submission.
   const isPendingReview = mySubmission && ['SUBMITTED', 'DISPUTED'].includes(mySubmission.status) && offer.isMine;
-  const canSubmitProof = offer.performerIsMe && postAgreement &&
-    (!mySubmission || mySubmission.status === 'REJECTED') &&
-    new Date(offer.deadline) > new Date();
+  // Proof eligibility is a ROOM-level rule (shared with the API): post-
+  // agreement status + before the room deadline. Offer deadlines are
+  // informational and never gate submission.
+  const proofOpen = proofWindowOpen(room);
+  const roomDeadlinePassed = !!room.expiresAt && new Date(room.expiresAt) <= new Date();
+  const canSubmitProof = offer.performerIsMe && proofOpen &&
+    (!mySubmission || mySubmission.status === 'REJECTED');
+  const proofBlockedByDeadline = offer.performerIsMe && postAgreement && roomDeadlinePassed &&
+    (!mySubmission || mySubmission.status === 'REJECTED');
 
   return (
     <div className={`rounded-xl border p-4 ${offer.isMine ? 'border-brand-500/40 bg-brand-500/5' : 'border-zinc-800 bg-zinc-900/60'}`}>
@@ -98,7 +104,7 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
         <a href={offer.targetUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-400 hover:underline">
           Open task <ExternalLink className="h-3 w-3" />
         </a>
-        <span>due {new Date(offer.deadline).toLocaleString()}</span>
+        <span>due {new Date(offer.deadline).toLocaleString()} (room deadline)</span>
         {offer.requiresProof && <span className="inline-flex items-center gap-1"><FileCheck className="h-3 w-3" /> proof required</span>}
       </div>
       {offer.proofInstructions && <p className="mt-1 text-xs italic text-zinc-500">Proof: {offer.proofInstructions}</p>}
@@ -143,6 +149,12 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
             <FileCheck className="h-3.5 w-3.5" /> Review proof
           </button>
         )}
+        {proofBlockedByDeadline && (
+          <p className="w-full text-xs text-amber-400">
+            The room deadline has passed — proof can no longer be submitted. The room will expire
+            shortly and both contributions will be refunded automatically.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -150,12 +162,13 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
 
 // ─── Offer editor modal ───────────────────────────────────────
 
-function OfferEditor({ roomId, existing, onClose }: { roomId: string; existing?: RoomOffer; onClose: () => void }) {
+function OfferEditor({ roomId, roomDeadline, existing, onClose }: {
+  roomId: string; roomDeadline: string | null; existing?: RoomOffer; onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const [actionText, setActionText] = useState(existing?.actionText ?? '');
   const [taskType, setTaskType] = useState(existing?.taskType ?? 'TIKTOK_FOLLOW');
   const [targetUrl, setTargetUrl] = useState(existing?.targetUrl ?? '');
-  const [deadline, setDeadline] = useState(existing?.deadline ? existing.deadline.slice(0, 16) : '');
   const [requiresProof, setRequiresProof] = useState(existing?.requiresProof ?? true);
   const [proofInstructions, setProofInstructions] = useState(existing?.proofInstructions ?? '');
   const [error, setError] = useState('');
@@ -163,7 +176,9 @@ function OfferEditor({ roomId, existing, onClose }: { roomId: string; existing?:
   const save = useMutation({
     mutationFn: () => roomsApi.upsertOffer(roomId, {
       actionText: actionText.trim(), taskType, targetUrl: targetUrl.trim(),
-      deadline: new Date(deadline).toISOString(), requiresProof,
+      // No per-offer deadline: terms inherit the shared room deadline
+      // server-side, so offers can never outlive the room clock.
+      requiresProof,
       proofInstructions: proofInstructions || undefined,
     }),
     onSuccess: () => {
@@ -173,7 +188,7 @@ function OfferEditor({ roomId, existing, onClose }: { roomId: string; existing?:
     onError: (err) => setError(getApiErrorMessage(err)),
   });
 
-  const valid = actionText.trim().length >= 5 && targetUrl.startsWith('http') && deadline && !save.isPending;
+  const valid = actionText.trim().length >= 5 && targetUrl.startsWith('http') && !save.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
@@ -192,27 +207,20 @@ function OfferEditor({ roomId, existing, onClose }: { roomId: string; existing?:
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-brand-500 focus:outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-400">Task type</label>
-              <select
-                value={taskType}
-                onChange={(e) => setTaskType(e.target.value)}
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-500 focus:outline-none"
-              >
-                {CHALLENGE_TASK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-400">Deadline</label>
-              <input
-                type="datetime-local"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-500 focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-400">Task type</label>
+            <select
+              value={taskType}
+              onChange={(e) => setTaskType(e.target.value)}
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-500 focus:outline-none"
+            >
+              {CHALLENGE_TASK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
           </div>
+          <p className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
+            Both tasks share the room deadline{roomDeadline ? ` — ${new Date(roomDeadline).toLocaleString()}` : ''}.
+            Proof stays open until then; if it passes, both contributions are refunded.
+          </p>
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-400">Target URL</label>
             <input
@@ -1048,6 +1056,7 @@ function RoomWorkspace() {
       {editingOffer && (
         <OfferEditor
           roomId={id}
+          roomDeadline={room.expiresAt}
           existing={editingOffer === 'new' ? undefined : editingOffer}
           onClose={() => setEditingOffer(null)}
         />
