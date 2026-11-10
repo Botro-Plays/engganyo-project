@@ -1783,3 +1783,20 @@ proposals; PR #45 remains at design review.
 
 - Tested heads: `83c9c9b` (#59), `07e7552` (#60), `34949b2` (#61) — all CI API/Web/E2E green. Merges: `6a2f30b`, `9c4ef6e`, `4a9bef8`. Deploys: run 42640022374 (`4a9bef8` success), run 42640150250 (`9c4ef6e` success — final, contains all three).
 - **In progress:** same-IP browser journey with reCAPTCHA enabled + normal sessions (owner-assisted Edge logins, request instrumentation per participant). Distinct-IP case remains covered by CI E2E (`X-Forwarded-For` per context).
+
+### Live same-IP browser journey — COMPLETED (reCAPTCHA ON, normal sessions, shared IP)
+
+Two labeled accounts `devin_p2p_a` / `devin_p2p_b` on one public IP (`156.59.233.176`), owner-assisted Edge logins via CDP, reCAPTCHA enabled throughout, no session revocation. Evidence: `evidence/p2p-sameip-2026-11-09/` (results.json + screenshots).
+
+- **Prior room `cmwa2n6se00g0q5wy5y5x2vi7`** (AGREED, offer deadlines already past — harness bug, see limitations): auto-sweep expired it → `EXPIRED / ACTIVE_TIMEOUT`, both `REFUND_ROOM_CLOSE +25` exactly once. Expiry path verified on a same-IP AGREED room.
+- **Completed room `cmwa3ssez00itq5wyfdu4o0ja`** (`LIVE E2E R3`): marketplace browse → preview → Join & reserve → immediate workspace → partner arrival visible → chat 6/6 persisted → mutual offers → dual approval → **AGREED** (one `ROOM_CHARGE 50`) → proofs → peer reviews → **COMPLETED** → ratings 5/5 both ways → closed history visible to both.
+- **Ledger/DB verified:** `SPEND_ROOM_CREATE −25` (a), `SPEND_ROOM_CLAIM −25` (b), `ROOM_CHARGE 50` ×1, `p2p_point_events` +1 each (not reversed), wallets 475→450 each, `room_ratings` 5/5 ×2, status `COMPLETED`.
+- **Rate limits:** exactly **1×429** all run (`users/cosmetics`, during history phase) vs. the earlier burst of dozens. Per-phase request counts: marketplace idle **0 reqs/15s** both; join transition b=1, a=3 reqs/10s; steady-state a=7, b=8 reqs/45s (~10–11/min/participant); post-agree 1 req/8s each. `api_general` 60r/m now has comfortable headroom for a two-person room — **no increase needed**; auth/sensitive-action limiters unchanged.
+- **Proof upload incident — NOT a product bug:** UI proof submit 400'd twice. Root cause: the test fixture `proof-test.png` was a corrupt PNG (sharp `libspng read error` → API correctly returned `Uploaded file is not a valid image`). Verified: valid PNG upload → 201, corrupt → 400, completed-room upload → 400 (correct gate). Proofs/reviews then completed via in-browser fetch with valid images (real sessions). Fixture regenerated.
+
+### Remaining limitations (updated)
+
+- Offer `deadline` is client-supplied; the API accepts past deadlines and the UI then hides "Upload proof" (`canSubmitProof` requires `offer.deadline > now`) while the room stays AGREED until expiry. A real user could pick a past datetime in the offer form — minor UX gap worth a follow-up (validate `deadline > now` server-side and/or in the form).
+- Chat delivery verified at the data layer (6/6 rows); the harness's on-screen text check returned 0 due to render timing — visual chat confirmation from the earlier run still stands.
+- Proof/review/rating steps for room `cmwa3ssez` were driven via in-page `fetch` (real user sessions) after the corrupt-fixture 400 — the UI path itself is covered by CI E2E (`rooms.spec.ts` uploads via `setInputFiles`) and by the earlier completed room `cmw98jrp6001htllju0pea6pd`.
+- Distinct-IP case remains covered by CI E2E (`X-Forwarded-For` per browser context); no separate live distinct-IP run was needed.

@@ -1,0 +1,72 @@
+{
+  "startedAt": "2026-11-10T02:00:57.721Z",
+  "roomId": "cmwa1gcfq00d1q5wyz0fkc2qy",
+  "apiCounts": {
+    "a": {
+      "analytics/visit": 4,
+      "auth/me": 3,
+      "store/active-effects": 8,
+      "auth/public-config": 3,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy": 3,
+      "wallet/me": 5,
+      "notifications": 8,
+      "users/cosmetics": 3,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy/state": 10,
+      "friends/status": 2,
+      "channels/cmwa1i30x00deq5wyu4ihq837/messages": 1,
+      "channels/messages": 3,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy/offers": 1,
+      "rooms/quote": 2,
+      "rooms": 3,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7": 1,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/state": 8,
+      "channels/cmwa2nexk00gfq5wyjous2st9/messages": 1,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/offers": 1
+    },
+    "b": {
+      "wallet/me": 8,
+      "auth/public-config": 5,
+      "users/cosmetics": 4,
+      "notifications": 11,
+      "store/active-effects": 10,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy": 5,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy/state": 9,
+      "friends/status": 3,
+      "analytics/visit": 4,
+      "auth/me": 3,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy/preview": 1,
+      "channels/cmwa1i30x00deq5wyu4ihq837/messages": 1,
+      "channels/messages": 3,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy/offers": 1,
+      "rooms/quote": 2,
+      "rooms": 2,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/join": 1,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7": 1,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/state": 5,
+      "channels/cmwa2nexk00gfq5wyjous2st9/messages": 1,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/offers": 1,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/approve": 1
+    }
+  },
+  "rateLimits": {
+    "a": {
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy/state": 1
+    },
+    "b": {
+      "friends/status": 1,
+      "analytics/visit": 1,
+      "auth/me": 1,
+      "notifications": 1,
+      "store/active-effects": 1,
+      "rooms/cmwa1gcfq00d1q5wyz0fkc2qy": 2,
+      "auth/public-config": 2,
+      "wallet/me": 2,
+      "users/cosmetics": 2
+    }
+  },
+  "phases": {},
+  "notes": [
+    "chat delivery: A sees B-msg-3=0, B sees A-msg-3=0"
+  ],
+  "roomId2": "cmwa2n6se00g0q5wy5y5x2vi7"
+}

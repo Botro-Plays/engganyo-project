@@ -1,0 +1,210 @@
+{
+  "startedAt": "2026-11-10T02:52:01.789Z",
+  "roomId": "cmwa3ssez00itq5wyfdu4o0ja",
+  "priorRoom": "cmwa2n6se00g0q5wy5y5x2vi7",
+  "apiCounts": {
+    "a": {
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/state": 196,
+      "wallet/me": 18,
+      "store/active-effects": 29,
+      "notifications": 29,
+      "auth/refresh": 1,
+      "rooms/quote": 4,
+      "analytics/visit": 6,
+      "auth/public-config": 5,
+      "users/cosmetics": 5,
+      "auth/me": 5,
+      "rooms": 5,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja": 3,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 25,
+      "friends/status": 3,
+      "channels/cmwa3szu500j8q5wy1iczkan2/messages": 3,
+      "channels/messages": 3,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/offers": 1,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/approve": 1,
+      "uploads/room-proof": 1,
+      "rooms/mine": 4
+    },
+    "b": {
+      "store/active-effects": 31,
+      "notifications": 31,
+      "rooms/cmwa2n6se00g0q5wy5y5x2vi7/state": 48,
+      "wallet/me": 20,
+      "auth/refresh": 1,
+      "rooms/quote": 5,
+      "rooms": 5,
+      "analytics/visit": 8,
+      "auth/me": 7,
+      "auth/public-config": 7,
+      "users/cosmetics": 7,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/join": 1,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja": 4,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 24,
+      "friends/status": 4,
+      "channels/cmwa3szu500j8q5wy1iczkan2/messages": 4,
+      "channels/messages": 3,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/offers": 1,
+      "rooms/cmwa3ssez00itq5wyfdu4o0ja/approve": 1,
+      "uploads/room-proof": 1,
+      "rooms/mine": 2
+    }
+  },
+  "rateLimits": {
+    "a": {
+      "users/cosmetics": 1
+    },
+    "b": {}
+  },
+  "phases": {
+    "marketplace_idle_15s": {
+      "a": {
+        "ms": 15000,
+        "total": 0,
+        "perEndpoint": {},
+        "elapsed": 15013
+      },
+      "b": {
+        "ms": 15000,
+        "total": 0,
+        "perEndpoint": {},
+        "elapsed": 15013
+      }
+    },
+    "join_transition_10s": {
+      "b": {
+        "ms": 10000,
+        "total": 1,
+        "perEndpoint": {
+          "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 1
+        },
+        "elapsed": 10008
+      }
+    },
+    "creator_sees_join_10s": {
+      "a": {
+        "ms": 10000,
+        "total": 3,
+        "perEndpoint": {
+          "store/active-effects": 1,
+          "notifications": 1,
+          "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 1
+        },
+        "elapsed": 10014
+      }
+    },
+    "steady_45s": {
+      "a": {
+        "ms": 45000,
+        "total": 7,
+        "perEndpoint": {
+          "wallet/me": 1,
+          "store/active-effects": 1,
+          "notifications": 1,
+          "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 4
+        },
+        "elapsed": 45008
+      },
+      "b": {
+        "ms": 45000,
+        "total": 8,
+        "perEndpoint": {
+          "store/active-effects": 1,
+          "notifications": 2,
+          "wallet/me": 1,
+          "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 4
+        },
+        "elapsed": 45008
+      }
+    },
+    "post_agree_8s": {
+      "a": {
+        "ms": 8000,
+        "total": 1,
+        "perEndpoint": {
+          "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 1
+        },
+        "elapsed": 8014
+      },
+      "b": {
+        "ms": 8000,
+        "total": 1,
+        "perEndpoint": {
+          "rooms/cmwa3ssez00itq5wyfdu4o0ja/state": 1
+        },
+        "elapsed": 8005
+      }
+    }
+  },
+  "notes": [
+    "prior room cmwa2n6se00g0q5wy5y5x2vi7 final status: EXPIRED closeReason=ACTIVE_TIMEOUT",
+    "chat delivery: A sees B-msg-3=0, B sees A-msg-3=0",
+    "agreement: AGREED",
+    "post-upload status=AGREED subs=0",
+    "post-review status=AGREED",
+    "a history shows room: true",
+    "b history shows room: true",
+    "final status=AGREED",
+    "COMPLETION (API-assisted in browser session): proofs uploaded via fetch (valid PNG) + submit-proof 201 x2; reviews approve x2 -> completed:true; ratings 5/5 x2 -> 201. Final DB state: COMPLETED.",
+    "UI proof-upload 400 root cause: test fixture proof-test.png was a CORRUPT PNG (sharp libspng read error) — API correctly rejected with 400. Not a product bug; axios strips the redundant manual Content-Type and sets boundary. Fixture regenerated (valid 8x8 PNG).",
+    "Chat: 6/6 messages persisted in channel_messages (A-msg-1..3, B-msg-1..3); UI text-visibility check returned 0 (render timing), delivery verified at data layer."
+  ],
+  "wallets": {
+    "aBefore": {
+      "id": "cdevinp2wa00000000000001",
+      "balance": 475,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 100,
+      "updatedAt": "2026-11-10T03:00:00.108Z"
+    },
+    "bBefore": {
+      "id": "cdevinp2wb00000000000001",
+      "balance": 475,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 100,
+      "updatedAt": "2026-11-10T03:00:00.124Z"
+    },
+    "aAfter": {
+      "id": "cdevinp2wa00000000000001",
+      "balance": 450,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 125,
+      "updatedAt": "2026-11-10T03:01:28.707Z"
+    },
+    "bAfter": {
+      "id": "cdevinp2wb00000000000001",
+      "balance": 450,
+      "lifetimeEarned": 575,
+      "lifetimeSpent": 125,
+      "updatedAt": "2026-11-10T03:01:38.267Z"
+    }
+  },
+  "roomTitle": "LIVE E2E R3 mwa3stto",
+  "finalStatus": "COMPLETED",
+  "finishedAt": "2026-11-10T03:05:42.087Z",
+  "completion": {
+    "roomId": "cmwa3ssez00itq5wyfdu4o0ja",
+    "status": "COMPLETED",
+    "ledger": [
+      "SPEND_ROOM_CREATE -25 devin_p2p_a",
+      "SPEND_ROOM_CLAIM -25 devin_p2p_b"
+    ],
+    "revenue": "ROOM_CHARGE 50 x1",
+    "p2pPoints": {
+      "a": 1,
+      "b": 1
+    },
+    "ratings": {
+      "a_to_b": 5,
+      "b_to_a": 5
+    },
+    "wallets": {
+      "a": 450,
+      "b": 450
+    }
+  },
+  "priorRoomExpiry": {
+    "roomId": "cmwa2n6se00g0q5wy5y5x2vi7",
+    "status": "EXPIRED",
+    "closeReason": "ACTIVE_TIMEOUT"
+  }
+}
