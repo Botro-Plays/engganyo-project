@@ -156,7 +156,7 @@ test.describe.serial('Room chat readiness', () => {
       //    never confirms → join timeout → "failed" + Retry. ──
       wsProxy.dropJoined = true;
       await a.page.reload();
-      await expect(statusA).toHaveText('failed', { timeout: 45_000 });
+      await expect(statusA).toHaveText('connection failed', { timeout: 45_000 });
       await expect(a.page.getByTestId('chat-retry')).toBeVisible();
 
       // A message sent while the join is unacknowledged must still be
