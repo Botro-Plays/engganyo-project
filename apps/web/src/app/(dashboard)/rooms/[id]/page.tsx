@@ -672,7 +672,6 @@ function RoomWorkspace() {
   const [ratingScore, setRatingScore] = useState(5);
   const [ratingReview, setRatingReview] = useState('');
   const [actionError, setActionError] = useState('');
-  const [friendInfo, setFriendInfo] = useState<{ status: string; friendshipId?: string; direction?: string }>({ status: 'NONE' });
 
   const stateQuery = useQuery({
     queryKey: ['room', id],
@@ -703,12 +702,18 @@ function RoomWorkspace() {
   const negotiating = room?.status === 'NEGOTIATING';
   const terminal = room && ['COMPLETED', 'CLOSED', 'EXPIRED'].includes(room.status);
 
-  // Friend status with counterparty
-  useEffect(() => {
-    if (room?.counterpartyId) {
-      void friendsApi.status(room.counterpartyId).then(setFriendInfo).catch(() => null);
-    }
-  }, [room?.counterpartyId]);
+  // Friend status with counterparty — React Query gives explicit
+  // loading/error states; no polling, manual refetch only. Actions must
+  // never run on an assumed status (the old catch(()=>null) silently
+  // stayed 'NONE' and offered "Add friend" on any failure).
+  const friendQuery = useQuery({
+    queryKey: ['friend-status', room?.counterpartyId],
+    queryFn: () => friendsApi.status(room!.counterpartyId),
+    enabled: !!room?.counterpartyId,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const friendInfo = friendQuery.data ?? { status: 'NONE' };
 
   // Socket events for live updates — room:* events are emitted on the
   // notifications namespace (per-user rooms), NOT the channels namespace
@@ -767,9 +772,7 @@ function RoomWorkspace() {
       return action === 'accept' ? friendsApi.accept(fid) : friendsApi.decline(fid);
     },
     onSuccess: () => {
-      if (room?.counterpartyId) {
-        void friendsApi.status(room.counterpartyId).then(setFriendInfo).catch(() => null);
-      }
+      void friendQuery.refetch();
     },
     onError: (e) => setActionError(getApiErrorMessage(e)),
   });
@@ -954,7 +957,22 @@ function RoomWorkspace() {
                   <Bell className="h-3.5 w-3.5" />
                   {state.nudge.cooldownRemaining > 0 ? `${state.nudge.cooldownRemaining}s` : 'Nudge'}
                 </button>
-                {['NONE', 'DECLINED', 'CANCELLED'].includes(friendInfo.status) ? (
+                {friendQuery.isLoading ? (
+                  <span className="inline-flex items-center justify-center rounded-lg border border-zinc-800 px-2 py-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-600" />
+                  </span>
+                ) : friendQuery.isError ? (
+                  <span className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2 py-1.5 text-xs text-zinc-500">
+                    Status unavailable
+                    <button
+                      onClick={() => void friendQuery.refetch()}
+                      data-testid="friend-status-retry"
+                      className="font-medium text-brand-400 hover:underline"
+                    >
+                      Retry
+                    </button>
+                  </span>
+                ) : ['NONE', 'DECLINED', 'CANCELLED'].includes(friendInfo.status) ? (
                   <button
                     onClick={() => friendMutation.mutate('request')}
                     disabled={friendMutation.isPending}

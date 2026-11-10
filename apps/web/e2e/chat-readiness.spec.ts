@@ -239,4 +239,50 @@ test.describe.serial('Room chat readiness', () => {
       await b.context.close();
     }
   });
+
+  test('friend status shows unavailable + retry instead of assuming NONE', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const a = await newUserPage(browser, USER_IPS.a);
+    const b = await newUserPage(browser, USER_IPS.b);
+    let roomId = '';
+
+    try {
+      await login(a.page, USER_A.email, USER_A.password);
+      await cancelActiveRooms(a.page, a.ip);
+      await login(b.page, USER_B.email, USER_B.password);
+      await cancelActiveRooms(b.page, b.ip);
+      const tokenA = await apiToken(a.page);
+      const tokenB = await apiToken(b.page);
+
+      const createRes = await apiPost(a.page, a.ip, tokenA!, '/rooms', {
+        title: 'E2E friend-status room',
+        visibility: 'PUBLIC',
+      });
+      roomId = (await createRes.json())?.data?.id;
+      expect(roomId).toBeTruthy();
+      const joinRes = await apiPost(b.page, b.ip, tokenB!, `/rooms/${roomId}/join`, {});
+      expect(joinRes.ok()).toBeTruthy();
+
+      // Fail the friend-status endpoint — previously this silently stayed
+      // 'NONE' and rendered "Add friend" on an assumed state.
+      await a.page.route('**/friends/status*', (route) =>
+        route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
+      );
+
+      await a.page.goto(`${BASE}/rooms/${roomId}`);
+      await expect(a.page.getByText(/status unavailable/i)).toBeVisible({ timeout: 30_000 });
+      // No friendship action may render while the status is unknown.
+      await expect(a.page.getByRole('button', { name: /add friend/i })).toHaveCount(0);
+      await expect(a.page.getByRole('button', { name: /^accept$/i })).toHaveCount(0);
+
+      // Manual retry recovers — no polling required.
+      await a.page.unroute('**/friends/status*');
+      await a.page.getByTestId('friend-status-retry').click();
+      await expect(a.page.getByRole('button', { name: /add friend/i })).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await a.page.unroute('**/friends/status*').catch(() => null);
+      await a.context.close();
+      await b.context.close();
+    }
+  });
 });
