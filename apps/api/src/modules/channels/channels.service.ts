@@ -136,8 +136,6 @@ export class ChannelsService implements OnModuleInit {
   }
 
   async joinChannel(userId: string, channelId: string, role?: UserRole) {
-    await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.join, role);
-
     const channel = await this.prisma.channel.findUnique({
       where: { id: channelId },
     });
@@ -168,11 +166,16 @@ export class ChannelsService implements OnModuleInit {
       }
     }
 
-    // Idempotent join
+    // Idempotent join — existing members return BEFORE the rate limit.
+    // Socket clients re-emit channel:join on every connect/reconnect and
+    // page load; charging those against the new-join quota locked members
+    // out of their own channel's live messages after a few reloads.
     const existing = await this.prisma.channelMember.findUnique({
       where: { channelId_userId: { channelId, userId } },
     });
     if (existing) return { success: true, joinedAt: existing.joinedAt };
+
+    await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.join, role);
 
     const member = await this.prisma.channelMember.create({
       data: { channelId, userId },
