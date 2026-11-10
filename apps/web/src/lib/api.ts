@@ -79,6 +79,10 @@ function refreshAccessToken(): Promise<string> {
       .then((res) => {
         const token = res.data.data.accessToken;
         localStorage.setItem('access_token', token);
+        // Keep the zustand store in sync — socket clients authenticate with
+        // store.accessToken, and without this they keep retrying the expired
+        // login-time token forever ("reconnecting…" with dead chat).
+        useAuthStore.setState({ accessToken: token });
         return token;
       })
       .finally(() => {

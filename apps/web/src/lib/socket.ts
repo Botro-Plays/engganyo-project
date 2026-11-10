@@ -10,6 +10,8 @@ export function connectSocket(token: string): Socket {
   if (socket?.connected) {
     return socket;
   }
+  // Stop a dead socket's reconnection loop before replacing it.
+  socket?.disconnect();
 
   const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/api';
   const baseUrl = apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');

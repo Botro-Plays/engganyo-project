@@ -15,6 +15,7 @@ import axios from 'axios';
 import { roomsApi, friendsApi, proofWindowOpen, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
 import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
 import { connectChannelSocket } from '@/lib/channel-socket';
+import { useSocketContext } from '@/components/socket-provider';
 import { useAuthStore } from '@/store/auth.store';
 import { UserLink } from '@/components/user-link';
 import { CHALLENGE_TASK_TYPES } from '@/components/challenge-form-modal';
@@ -603,33 +604,33 @@ function RoomWorkspace() {
     }
   }, [room?.counterpartyId]);
 
-  // Socket events for live updates
+  // Socket events for live updates — room:* events are emitted on the
+  // notifications namespace (per-user rooms), NOT the channels namespace
+  // the chat socket uses. Listen on the shared notifications socket.
+  const { socket: eventsSocket } = useSocketContext();
   useEffect(() => {
-    const { accessToken } = useAuthStore.getState();
-    if (!accessToken || !room) return;
-    const socket = connectChannelSocket(accessToken);
+    if (!eventsSocket) return;
     const refresh = () => void queryClient.invalidateQueries({ queryKey: ['room', id] });
     const onPing = (p: { roomId?: string }) => { if (p.roomId === id) refresh(); };
-    socket.on('room:ping', onPing);
-    socket.on('room:offer-updated', onPing);
-    socket.on('room:proof-submitted', onPing);
-    socket.on('room:proof-approved', onPing);
-    socket.on('room:proof-rejected', onPing);
-    socket.on('room:agreed', onPing);
-    socket.on('room:completed', onPing);
-    socket.on('room:joined', onPing);
+    eventsSocket.on('room:ping', onPing);
+    eventsSocket.on('room:offer-updated', onPing);
+    eventsSocket.on('room:proof-submitted', onPing);
+    eventsSocket.on('room:proof-approved', onPing);
+    eventsSocket.on('room:proof-rejected', onPing);
+    eventsSocket.on('room:agreed', onPing);
+    eventsSocket.on('room:completed', onPing);
+    eventsSocket.on('room:joined', onPing);
     return () => {
-      socket.off('room:ping', onPing);
-      socket.off('room:offer-updated', onPing);
-      socket.off('room:proof-submitted', onPing);
-      socket.off('room:proof-approved', onPing);
-      socket.off('room:proof-rejected', onPing);
-      socket.off('room:agreed', onPing);
-      socket.off('room:completed', onPing);
-      socket.off('room:joined', onPing);
+      eventsSocket.off('room:ping', onPing);
+      eventsSocket.off('room:offer-updated', onPing);
+      eventsSocket.off('room:proof-submitted', onPing);
+      eventsSocket.off('room:proof-approved', onPing);
+      eventsSocket.off('room:proof-rejected', onPing);
+      eventsSocket.off('room:agreed', onPing);
+      eventsSocket.off('room:completed', onPing);
+      eventsSocket.off('room:joined', onPing);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.id, id, queryClient]);
+  }, [id, queryClient, eventsSocket]);
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['room', id] });
 

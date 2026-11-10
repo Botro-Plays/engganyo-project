@@ -142,12 +142,10 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await chatInputA.press('Enter');
       await chatInputB.fill('ready! sending proof soon');
       await chatInputB.press('Enter');
-      // Socket delivery to A; fall back to reload-driven REST load.
-      await expect(a.page.getByText('ready! sending proof soon')).toBeVisible({ timeout: 15_000 })
-        .catch(async () => {
-          await a.page.reload();
-          await expect(a.page.getByText('ready! sending proof soon')).toBeVisible({ timeout: 15_000 });
-        });
+      // Socket delivery to A — REST sends must broadcast chat:message to
+      // channel members; a reload fallback would mask a broken push path.
+      await expect(a.page.getByText('ready! sending proof soon')).toBeVisible({ timeout: 15_000 });
+      await expect(b.page.getByText('hey — ready when you are')).toBeVisible({ timeout: 15_000 });
 
       // ── Dual offers → versioned agreement ──────────────────
       await proposeOffer(a.page, 'Follow @e2e_room_b on TikTok and screenshot it', 'https://www.tiktok.com/@e2e_room_b');

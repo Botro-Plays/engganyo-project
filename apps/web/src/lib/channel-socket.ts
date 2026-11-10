@@ -10,6 +10,9 @@ export function connectChannelSocket(token: string): Socket {
   if (channelSocket?.connected) {
     return channelSocket;
   }
+  // A dead socket keeps its reconnection loop alive — stop it before
+  // replacing, or stale sockets accumulate on every token refresh.
+  channelSocket?.disconnect();
 
   const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/api';
   const baseUrl = apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
