@@ -682,6 +682,14 @@ function RoomWorkspace() {
     // during a session was a measurable burst source).
     refetchOnWindowFocus: false,
     refetchInterval: (q) => {
+      // Keep polling through transient failures (429/5xx/network) — a
+      // cold-load burst must self-recover; there is no data yet, so the
+      // active-status check below can't apply. Permanent denials
+      // (403/404) stay manual via the Retry button.
+      if (q.state.status === 'error') {
+        const st = (q.state.error as { response?: { status?: number } })?.response?.status;
+        return st === 403 || st === 404 ? false : 10_000;
+      }
       const s = q.state.data?.room.status;
       return s && ['OPEN', 'NEGOTIATING', 'AGREED', 'IN_PROGRESS', 'SUBMITTED'].includes(s) ? 10000 : false;
     },
