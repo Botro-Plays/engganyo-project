@@ -158,7 +158,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     channels = new ChannelsService(
       prisma as never, mockRedis() as never, wallet as never,
       gamification as never, antiAbuse as never,
-      notifications as never, events as never,
+      notifications as never, events as never, mockService() as never,
     );
     store = new StoreService(
       prisma as never, mockRedis() as never, wallet as never,

@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import type { Socket } from 'socket.io-client';
 import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { useAuthStore } from '@/store/auth.store';
 
 interface SocketContextValue {
   socket: Socket | null;
@@ -23,11 +24,14 @@ export function useSocketContext() {
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  // Subscribe to the store token — token refresh updates it, and the socket
+  // must reconnect with the fresh JWT or the server rejects it forever.
+  const accessToken = useAuthStore((s) => s.accessToken);
 
   const connect = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    const token = localStorage.getItem('access_token');
+    const token = useAuthStore.getState().accessToken ?? localStorage.getItem('access_token');
     if (!token) {
       setSocket(null);
       setConnected(false);
@@ -58,11 +62,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    disconnectSocket();
+    setSocket(null);
+    setConnected(false);
     const cleanup = connect();
     return () => {
       cleanup?.();
     };
-  }, [connect]);
+    // Reconnect whenever the access token changes (login, refresh).
+  }, [connect, accessToken]);
 
   const reconnect = useCallback(() => {
     disconnectSocket();

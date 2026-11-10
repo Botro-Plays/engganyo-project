@@ -9,6 +9,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Logger, UseGuards } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -126,11 +127,21 @@ export class ChannelsGateway
     if (!userId || !payload.channelId || !payload.content) return;
 
     try {
-      const message = await this.channelsService.sendMessage(userId, payload.channelId, payload.content, role as UserRole);
-      this.server.to(`channel:${payload.channelId}`).emit('chat:message', message);
+      // sendMessage() emits channel.message.created, which this gateway
+      // broadcasts below — covers REST and socket sends uniformly.
+      await this.channelsService.sendMessage(userId, payload.channelId, payload.content, role as UserRole);
     } catch (err) {
       client.emit('chat:error', { message: (err as Error).message });
     }
+  }
+
+  // ChannelsService emits this for every persisted message (REST POST and
+  // socket chat:send alike) — broadcast it to the channel room so members
+  // receive messages live instead of only on refetch.
+  @OnEvent('channel.message.created')
+  handleMessageCreated(payload: { channelId: string; message: unknown }) {
+    if (!payload?.channelId) return;
+    this.server.to(`channel:${payload.channelId}`).emit('chat:message', payload.message);
   }
 
   @SubscribeMessage('chat:typing')

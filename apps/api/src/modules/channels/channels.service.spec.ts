@@ -10,6 +10,8 @@ jest.mock('bad-words', () => ({
   },
 }));
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
 import { ChannelsService } from './channels.service';
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
@@ -100,6 +102,10 @@ const mockEventsService = {
   emitToUser: jest.fn(),
 };
 
+const mockEventEmitter = {
+  emit: jest.fn(),
+};
+
 describe('ChannelsService', () => {
   let service: ChannelsService;
   let prisma: typeof mockPrisma;
@@ -116,6 +122,7 @@ describe('ChannelsService', () => {
         { provide: AntiAbuseService, useValue: mockAntiAbuseService },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: EventsService, useValue: mockEventsService },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 
@@ -213,6 +220,12 @@ describe('ChannelsService', () => {
 
       expect(result.content).toBe('Hello world');
       expect(prisma.channelMessage.create).toHaveBeenCalled();
+      // REST sends must broadcast — recipients rely on chat:message pushes
+      // (the gateway translates this event into the socket emit).
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith('channel.message.created', {
+        channelId: 'ch-1',
+        message: expect.objectContaining({ id: 'msg-1', channelId: 'ch-1', content: 'Hello world' }),
+      });
     });
 
     it('should block duplicate messages within 30s', async () => {

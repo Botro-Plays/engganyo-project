@@ -15,6 +15,8 @@ import {
   UserRole,
 } from '@prisma/client';
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -44,6 +46,7 @@ export class ChannelsService implements OnModuleInit {
     private readonly antiAbuseService: AntiAbuseService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ═══════════════════════════════════════════════════════════
@@ -386,7 +389,7 @@ export class ChannelsService implements OnModuleInit {
         }
       : null;
 
-    return {
+    const dto = {
       id: message.id,
       channelId: message.channelId,
       userId: message.userId,
@@ -402,6 +405,11 @@ export class ChannelsService implements OnModuleInit {
       },
       tip: null,
     };
+    // Broadcast to channel room members — REST sends bypass the gateway's
+    // chat:send handler, so without this emit recipients only see the
+    // message on their next refetch.
+    this.eventEmitter.emit('channel.message.created', { channelId, message: dto });
+    return dto;
   }
 
   async deleteMessage(userId: string, messageId: string, isAdmin: boolean) {
@@ -852,7 +860,7 @@ export class ChannelsService implements OnModuleInit {
         }
       : null;
 
-    return {
+    const dto = {
       id: announcement.id,
       channelId: announcement.channelId,
       userId: announcement.userId,
@@ -868,6 +876,8 @@ export class ChannelsService implements OnModuleInit {
       },
       tip: null,
     };
+    this.eventEmitter.emit('channel.message.created', { channelId, message: dto });
+    return dto;
   }
 
   private hashContent(content: string): string {
