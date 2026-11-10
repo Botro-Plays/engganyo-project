@@ -1181,7 +1181,8 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const offer = await service.upsertOffer(creatorId, room.id, {
       ...offerDto('TZ check'), deadline: offsetStr,
     });
-    expect(offer.deadline.getTime()).toBe(target.getTime());
+    // offset string carries second precision — compare at second granularity
+    expect(Math.floor(offer.deadline.getTime() / 1000)).toBe(Math.floor(target.getTime() / 1000));
   });
 
   it('an offer deadline lapsing during negotiation blocks agreement until offers are updated', async () => {
