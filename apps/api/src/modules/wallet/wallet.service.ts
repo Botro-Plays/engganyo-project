@@ -685,8 +685,11 @@ export class WalletService {
             // replaced claim. Covers paymentRef and gatewayData.submittedHash.
             guard?: { claimHash: string; userWalletAddress: string; walletVerified: boolean } } = {},
   ) {
-    const { deposit, wallet, notification } = await this.prisma.withTransaction(async (tx) => {
-      const existing = await tx.deposit.findUnique({ where: { id: depositId } });
+    const { deposit, wallet, notification, vpUsd } = await this.prisma.withTransaction(async (tx) => {
+      const existing = await tx.deposit.findUnique({
+        where: { id: depositId },
+        include: { package: { select: { usdAmount: true } } },
+      });
       if (!existing) throw new NotFoundException('Deposit not found');
       if (existing.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
       if (existing.status === DepositStatus.CANCELLED) throw new BadRequestException('Deposit was cancelled');
@@ -752,7 +755,11 @@ export class WalletService {
         where: { id: walletRecord.id },
       });
 
-      const vpAmount = Math.round((existing.amountFiat ?? 0) * VP_REWARDS.DEPOSIT_PER_DOLLAR);
+      // VP is denominated in USD — amountFiat is gateway currency (PHP for
+      // PayMongo), so it must never be multiplied by the per-dollar rate
+      // directly. See depositUsdValue.
+      const vpUsd = this.depositUsdValue(existing);
+      const vpAmount = Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR);
       const vpText = vpAmount > 0 ? ` (+${vpAmount} VIP Points)` : '';
       const newNotification = await tx.notification.create({
         data: {
@@ -764,7 +771,7 @@ export class WalletService {
         },
       });
 
-      return { deposit: updatedDeposit, wallet: updatedWallet, notification: newNotification };
+      return { deposit: updatedDeposit, wallet: updatedWallet, notification: newNotification, vpUsd };
     });
 
     this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId, status: DepositStatus.COMPLETED });
@@ -782,7 +789,7 @@ export class WalletService {
 
     // Award VP for deposit completion (outside transaction for resilience)
     try {
-      const vpAmount = Math.round((deposit.amountFiat ?? 0) * VP_REWARDS.DEPOSIT_PER_DOLLAR);
+      const vpAmount = Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR);
       if (vpAmount > 0) {
         await this.gamificationService.awardVp(deposit.userId, vpAmount, 'deposit_completed', deposit.id, `Deposit ${deposit.method}`);
       }
@@ -794,6 +801,29 @@ export class WalletService {
     void this.referralsService.checkMilestones(deposit.userId).catch(() => null);
 
     return deposit;
+  }
+
+  /**
+   * Authoritative USD value of a deposit for VP purposes.
+   *
+   * `amountFiat` is charged in GATEWAY currency — PHP pesos for PayMongo —
+   * so multiplying it by DEPOSIT_PER_DOLLAR inflates VP by the FX rate
+   * (~58× at ₱58/$1). Prefer the package's USD amount (the value credits
+   * were actually priced from); for package-less deposits fall back to the
+   * initiation-time exchangeRate snapshot, then to amountFiat for
+   * USD-denominated rails.
+   */
+  private depositUsdValue(d: {
+    amountFiat: number | null;
+    currency: string;
+    exchangeRate: number | null;
+    package?: { usdAmount: number } | null;
+  }): number {
+    if (d.package?.usdAmount != null) return d.package.usdAmount;
+    if (d.currency === 'PHP' && d.exchangeRate != null && d.exchangeRate > 0) {
+      return (d.amountFiat ?? 0) / d.exchangeRate;
+    }
+    return d.amountFiat ?? 0;
   }
 
   // ─── Submit txHash for an existing PENDING crypto deposit ──

@@ -141,6 +141,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     await prisma.notification.deleteMany({ where: u });
     await prisma.transaction.deleteMany({ where: { wallet: u } });
     await prisma.deposit.deleteMany({ where: u });
+    await prisma.depositPackage.deleteMany({ where: { label: { startsWith: PREFIX } } });
     await prisma.wallet.deleteMany({ where: u });
     await prisma.user.deleteMany({ where: { username: { startsWith: PREFIX } } });
     await prisma.$disconnect();
@@ -269,5 +270,38 @@ run('Deposit completion — real PostgreSQL integration', () => {
     expect(s.user.creditBalance).toBe(50);
     expect(s.ledger).toHaveLength(0);
     await expect(makeWallet(prisma).completeDeposit(d.id)).resolves.toBeTruthy();
+  });
+
+  it('PayMongo (PHP) deposit awards VP on the USD package value, not PHP amountFiat', async () => {
+    const user = await makeUser();
+    const pkg = await prisma.depositPackage.create({
+      data: { usdAmount: 10, methods: ['PAYMONGO'], label: `${PREFIX}pkg` },
+    });
+    // ₱580 at 58 PHP/USD ≈ $10 — the bug multiplied 580 × 10 = 5800 VP.
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        packageId: pkg.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 580,
+        currency: 'PHP',
+        exchangeRate: 58,
+        creditsToAward: 50000,
+      },
+    });
+
+    const gamification = mockService();
+    const wallet = new WalletService(
+      prisma as never, mockService() as never, mockService() as never,
+      mockService() as never, mockService() as never, mockService() as never,
+      mockService() as never, gamification as never, mockService() as never,
+    );
+
+    await wallet.completeDeposit(d.id);
+
+    // VP = round($10 × DEPOSIT_PER_DOLLAR(10)) = 100, not 5800.
+    expect(gamification.awardVp).toHaveBeenCalledWith(
+      user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO',
+    );
   });
 });
