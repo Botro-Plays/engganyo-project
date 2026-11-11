@@ -2007,7 +2007,61 @@ plan: `docs/GAMIFICATION_WORKSTREAM_STAGE1.md`.
   unavailable from agent shell — query to be run when access restored.
 - **Still open**: mixed-provenance inventory implementation (design
   proposed, owner decisions P1–P4 pending — required before
-  marketplace); manual-approval gamification parity; campaign
-  slot-expiry sweep; tip/rain idempotency; deposit-VP historical
-  impact query (SSH unavailable from agent shell); stage-2 design
-  docs (weekly journal, catch-up XP, P2P reputation, observability).
+  marketplace); campaign slot-expiry sweep; tip/rain idempotency;
+  deposit-VP historical impact query (SSH unavailable from agent
+  shell); stage-2 design docs (weekly journal, catch-up XP, P2P
+  reputation, observability).
+
+### Reward-delivery hardening — merged & deployed (11 Nov 2026)
+
+Closes the remaining reward-delivery gaps on deployed `9797c43`
+before any new gamification.
+
+- **PR #73** `fix/reward-outbox-parity` → CI run `42995270135`
+  (success on head `fa6854c`), merged `5ca7cc8`, deploy run
+  `42997959315` (success). Durable `reward_outbox_events` table
+  (migration `20261112000000_reward_outbox_xp_accounting`) +
+  `xp_events.baseAmount`/`boostMultiplier` columns. Reward
+  notifications/socket events are now enqueued as outbox rows inside
+  the reward transaction and delivered post-commit
+  (`flushRewardOutbox`) plus a 15s sweeper with bounded retries and
+  FAILED status — no external effects can escape a rolled-back or
+  retried transaction. `XpEvent.amount` now records the actual applied
+  (post-boost) XP delta; historical rows untouched pending discrepancy
+  review. Stable replay identities: task outcomes keyed by
+  `completionId` (not campaignId), daily rewards by UTC date, mission
+  rewards by mission+date, achievements by achievement+user,
+  `(userId, source, referenceId)` dedupe. Manual-approval parity: one
+  durable outcome path `awardTaskCompletionOutcome` used by automatic
+  verification, creator review, admin approval, and challenge
+  approval — XP/VP/mission/achievement/referral effects exactly once.
+- **PR #74** `fix/deposit-vp-entitlement` → CI run `42996143701`
+  (success on head `7073d83`), merged `1c9b622`, deploy run
+  `42998020733` (success — all CI+E2E jobs green). Deposit completion
+  now claims/completes the deposit AND creates/settles a durable
+  `reward_entitlements` row (migration
+  `20261112010000_reward_entitlements`) in one transaction — the
+  crash window between settlement and `awardVp` is eliminated.
+  Unresolved-valuation PHP deposits keep a PENDING entitlement that
+  retains valuation inputs for later reconciliation; recovery sweep
+  re-resolves and settles idempotently (awardVp dedupes on
+  `(userId, source, referenceId)`). Zero-VP entitlements (₱1
+  minimum-charge) settle without an awardVp call. Fixed CI failure:
+  `RangeError` on zero-VP path → `vpAmount > 0` guard in both
+  settlement paths.
+- **Deployed SHA: `1c9b622`**. `/api/health` verified ok
+  (database ok, redis ok) at 10:18 UTC. Site serving.
+- **Verified in CI (real PostgreSQL)**: rollback leaves no outbox
+  rows/effects; transaction retry doesn't duplicate; duplicate source
+  delivery yields one reward; concurrent distinct rewards both settle;
+  deposit entitlement survives settlement→processing crash, retry,
+  and duplicate processing; package price change after initiation
+  can't alter VP; invalid/missing PHP rates → PENDING entitlement
+  retained.
+- **Remaining gaps**: historical XP/VP discrepancy reports still owed
+  before any data correction; outbox/entitlement sweeps verified in
+  CI but live labeled-account verification pending (no real-money
+  payments); deposit-VP historical impact query still needs DB
+  access; marketplace economics + provenance decisions P1–P4 still
+  pending owner approval; campaign slot-expiry sweep and tip/rain
+  idempotency still open.
