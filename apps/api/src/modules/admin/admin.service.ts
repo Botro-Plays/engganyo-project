@@ -3128,29 +3128,26 @@ export class AdminService {
     if (!item) throw new NotFoundException('Store item not found');
     if (dto.quantity < 1 || dto.quantity > 999) throw new BadRequestException('Quantity must be 1–999');
 
-    const existing = await this.prisma.userInventory.findFirst({
-      where: { userId: dto.userId, itemId: dto.itemId, consumedAt: null },
-    });
-
-    if (existing) {
-      await this.prisma.userInventory.update({
-        where: { id: existing.id },
-        data: { quantity: { increment: dto.quantity } },
+    // Single transaction: the (userId,itemId) unique index makes the upsert
+    // race-safe — concurrent grants/purchases can never fragment a stack.
+    // Audit log + notification stay outside so a notification failure cannot
+    // roll back a committed grant.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userInventory.upsert({
+        where: { userId_itemId: { userId: dto.userId, itemId: dto.itemId } },
+        create: { userId: dto.userId, itemId: dto.itemId, quantity: dto.quantity },
+        update: { quantity: { increment: dto.quantity }, consumedAt: null },
       });
-    } else {
-      await this.prisma.userInventory.create({
-        data: { userId: dto.userId, itemId: dto.itemId, quantity: dto.quantity },
-      });
-    }
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId: adminId,
-        action: 'store_item.grant',
-        entityType: 'User',
-        entityId: dto.userId,
-        metadata: { itemId: dto.itemId, itemName: item.name, quantity: dto.quantity, reason: dto.reason } as Prisma.InputJsonValue,
-      },
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'store_item.grant',
+          entityType: 'User',
+          entityId: dto.userId,
+          metadata: { itemId: dto.itemId, itemName: item.name, quantity: dto.quantity, reason: dto.reason } as Prisma.InputJsonValue,
+        },
+      });
     });
 
     await this.notificationsService.createNotification(

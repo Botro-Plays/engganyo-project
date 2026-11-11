@@ -32,15 +32,33 @@ describe('StoreService — equipCosmetic (cache invalidation + ownership)', () =
   let prisma: {
     userInventory: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock };
     storeItem: { findUnique: jest.Mock };
+    $executeRaw: jest.Mock;
+    $transaction: jest.Mock;
   };
-  let redis: { invalidateUserCaches: jest.Mock };
+  let redis: { invalidateUserCaches: jest.Mock; del: jest.Mock; getJson: jest.Mock; setJson: jest.Mock; set: jest.Mock };
 
   beforeEach(() => {
     prisma = {
       userInventory: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
       storeItem: { findUnique: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      // equipCosmetic runs inside $transaction under a row lock — hand the
+      // callback a tx client exposing the same mocks plus $executeRaw.
+      $transaction: jest.fn(),
     };
-    redis = { invalidateUserCaches: jest.fn().mockResolvedValue(undefined) };
+    prisma.$transaction.mockImplementation(async (cb: (t: unknown) => unknown) =>
+      cb({
+        $executeRaw: prisma.$executeRaw,
+        userInventory: prisma.userInventory,
+      }),
+    );
+    redis = {
+      invalidateUserCaches: jest.fn().mockResolvedValue(undefined),
+      del: jest.fn().mockResolvedValue(undefined),
+      getJson: jest.fn().mockResolvedValue(null),
+      setJson: jest.fn().mockResolvedValue(undefined),
+      set: jest.fn().mockResolvedValue(undefined),
+    };
     service = new StoreService(
       prisma as never,
       redis as never,

@@ -281,18 +281,14 @@ export class StoreService implements OnModuleInit {
         }
         await tx.userInventory.create({ data: { userId, itemId, quantity: 1, equipped: true } });
       } else {
-        // Consumables: stack into an existing unconsumed row or create a new one
-        const existing = await tx.userInventory.findFirst({
-          where: { userId, itemId, consumedAt: null },
+        // Consumables: stack onto the single (userId,itemId) row or create it.
+        // The compound unique index makes this upsert race-safe against
+        // concurrent grants/purchases/loot-box rewards.
+        await tx.userInventory.upsert({
+          where: { userId_itemId: { userId, itemId } },
+          create: { userId, itemId, quantity },
+          update: { quantity: { increment: quantity }, consumedAt: null },
         });
-        if (existing) {
-          await tx.userInventory.update({
-            where: { id: existing.id },
-            data: { quantity: { increment: quantity } },
-          });
-        } else {
-          await tx.userInventory.create({ data: { userId, itemId, quantity } });
-        }
       }
 
       return { purchase: p, walletTx, item };
@@ -367,22 +363,95 @@ export class StoreService implements OnModuleInit {
   // ─── Use an inventory item ─────────────────────────────────
 
   async useItem(userId: string, inventoryId: string) {
-    const inventory = await this.prisma.userInventory.findFirst({
-      where: { id: inventoryId, userId },
-      include: { item: true },
+    // Everything — validation, effect application, and consumption — runs in
+    // ONE transaction under a row lock on the inventory row. The effect's DB
+    // writes (user_active_effects / streakFreezeCharges / loot-box rewards)
+    // commit or roll back together with the quantity decrement, so an item
+    // can never be consumed without its benefit (or vice versa). Redis cache
+    // writes are deferred to post-commit; readers fall back to the DB, so a
+    // cache failure cannot lose the effect.
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM user_inventory WHERE id = ${inventoryId} FOR UPDATE`;
+
+      const inventory = await tx.userInventory.findFirst({
+        where: { id: inventoryId, userId },
+        include: { item: true },
+      });
+      if (!inventory) throw new NotFoundException('Item not found in your inventory');
+      if (inventory.consumedAt) throw new BadRequestException('Item has already been used');
+      if (inventory.quantity <= 0) throw new BadRequestException('Item is depleted');
+
+      const item = inventory.item;
+
+      // Non-consumable items (cosmetics) are equipped/unequipped, not "used"
+      if (!item.isConsumable) {
+        throw new BadRequestException(`${item.name} is a permanent cosmetic. Use the equip endpoint instead.`);
+      }
+
+      const meta = item.metadata as Record<string, unknown>;
+      const effectType = this.resolveEffectType(item);
+
+      // Guard: reject if an effect of the same type is already active.
+      // Read via the tx client so the check sees committed state under the lock.
+      if (effectType === 'xp_boost' || effectType === 'task_limit_boost') {
+        // Serialize same-type effect creation per user across ALL transactions
+        // (useItem, wheel, loot box). Advisory xact locks live outside the row-
+        // lock domain, so this cannot deadlock against wallet/user row locks.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${effectType}`}, 0))`;
+        const active = await tx.userActiveEffect.findFirst({
+          where: { userId, type: effectType, expiresAt: { gt: new Date() } },
+          select: { id: true },
+        });
+        if (active) {
+          throw new BadRequestException(
+            effectType === 'xp_boost'
+              ? 'An XP Boost is already active. Wait for it to expire before using another.'
+              : 'A Task Limit Boost is already active. Wait for it to expire before using another.',
+          );
+        }
+      }
+
+      // Apply effect FIRST — if it fails, the item is NOT consumed and the
+      // whole transaction (including any partial effect writes) rolls back.
+      const effectResult = await this.applyEffect(userId, effectType, meta, tx);
+      if (!effectResult.applied) {
+        throw new BadRequestException((effectResult.reason as string) ?? 'Effect could not be applied');
+      }
+
+      // Consume under the row lock — quantity cannot change beneath us.
+      const newQty = inventory.quantity - 1;
+      if (newQty <= 0) {
+        await tx.userInventory.delete({ where: { id: inventoryId } });
+      } else {
+        await tx.userInventory.update({
+          where: { id: inventoryId },
+          data: { quantity: newQty },
+        });
+      }
+
+      return {
+        inventoryId,
+        itemName: item.name,
+        effectType,
+        effectResult,
+        remainingQuantity: newQty,
+        effectTypeForCache: effectType,
+      };
     });
-    if (!inventory) throw new NotFoundException('Item not found in your inventory');
-    if (inventory.consumedAt) throw new BadRequestException('Item has already been used');
-    if (inventory.quantity <= 0) throw new BadRequestException('Item is depleted');
 
-    const item = inventory.item;
+    // Post-commit: refresh Redis effect caches from the DB source of truth.
+    // Best-effort — readers already fall back to DB on a cache miss.
+    await this.syncEffectCaches(userId).catch((err: unknown) => {
+      this.logger.error(`Post-commit effect cache sync failed for user ${userId}`, err);
+    });
 
-    // Non-consumable items (cosmetics) are equipped/unequipped, not "used"
-    if (!item.isConsumable) {
-      throw new BadRequestException(`${item.name} is a permanent cosmetic. Use the equip endpoint instead.`);
-    }
+    const { effectTypeForCache: _e, ...publicResult } = result;
+    return publicResult;
+  }
 
-    const meta = item.metadata as Record<string, unknown>;
+  /** Resolve the effect type from item metadata with legacy name fallbacks. */
+  private resolveEffectType(item: { name: string; metadata: unknown }): string | undefined {
+    const meta = item.metadata as Record<string, unknown> | null;
     let effectType = meta?.['effectType'] as string | undefined;
 
     // Fallbacks for legacy items created before effectType was added to metadata.
@@ -395,50 +464,59 @@ export class StoreService implements OnModuleInit {
       else if (nameLower.includes('task refresh')) effectType = 'task_refresh';
       else if (nameLower.includes('mystery') || meta?.['isLootBox'] === true) effectType = 'loot_box';
     }
-
-    // Guard: reject if an effect of the same type is already active
-    if (effectType === 'xp_boost') {
-      const active = await this.getActiveXpBoost(userId);
-      if (active) throw new BadRequestException('An XP Boost is already active. Wait for it to expire before using another.');
-    }
-    if (effectType === 'task_limit_boost') {
-      const active = await this.getActiveTaskLimitBoost(userId);
-      if (active) throw new BadRequestException('A Task Limit Boost is already active. Wait for it to expire before using another.');
-    }
-
-    // Apply effect FIRST — if it fails, the item is NOT consumed.
-    // This prevents the item from vanishing with no reward on Redis / wallet errors.
-    const effectResult = await this.applyEffect(userId, effectType, meta);
-    if (!effectResult.applied) {
-      throw new BadRequestException((effectResult.reason as string) ?? 'Effect could not be applied');
-    }
-
-    // Only consume the item after the effect is successfully applied
-    const newQty = inventory.quantity - 1;
-    if (newQty <= 0) {
-      await this.prisma.userInventory.delete({ where: { id: inventoryId } });
-    } else {
-      await this.prisma.userInventory.update({
-        where: { id: inventoryId },
-        data: { quantity: newQty },
-      });
-    }
-
-    return {
-      inventoryId,
-      itemName: item.name,
-      effectType,
-      effectResult,
-      remainingQuantity: newQty,
-    };
+    return effectType;
   }
 
-  // ─── Apply effect to Redis ─────────────────────────────────
+  /**
+   * Rebuild Redis effect caches from committed DB state after an item use.
+   * Covers xp_boost, task_limit_boost, and streak_freeze keys. Safe to call
+   * any time — it only mirrors authoritative DB rows.
+   */
+  async syncEffectCaches(userId: string): Promise<void> {
+    const [xpEffect, taskEffect, user] = await Promise.all([
+      this.prisma.userActiveEffect.findFirst({
+        where: { userId, type: 'xp_boost', expiresAt: { gt: new Date() } },
+        orderBy: { expiresAt: 'desc' },
+      }),
+      this.prisma.userActiveEffect.findFirst({
+        where: { userId, type: 'task_limit_boost', expiresAt: { gt: new Date() } },
+        orderBy: { expiresAt: 'desc' },
+      }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { streakFreezeCharges: true } }),
+    ]);
+
+    const writes: Promise<unknown>[] = [];
+    if (xpEffect) {
+      const meta = xpEffect.metadata as Record<string, unknown>;
+      const ttl = Math.max(1, Math.floor((xpEffect.expiresAt.getTime() - Date.now()) / 1000));
+      writes.push(this.redisService.setJson(`boost:xp:${userId}`, meta, ttl).catch(() => null));
+    } else {
+      writes.push(this.redisService.del(`boost:xp:${userId}`).catch(() => null));
+    }
+    if (taskEffect) {
+      const meta = taskEffect.metadata as Record<string, unknown>;
+      const ttl = Math.max(1, Math.floor((taskEffect.expiresAt.getTime() - Date.now()) / 1000));
+      writes.push(this.redisService.setJson(`boost:task_limit:${userId}`, meta, ttl).catch(() => null));
+    } else {
+      writes.push(this.redisService.del(`boost:task_limit:${userId}`).catch(() => null));
+    }
+    if (user) {
+      writes.push(this.redisService.set(`boost:streak_freeze:${userId}`, String(user.streakFreezeCharges)).catch(() => null));
+    }
+    await Promise.all(writes);
+  }
+
+  // ─── Apply effect to the database (inside caller's transaction) ──
+  //
+  // All writes go through `tx` so they commit atomically with the item
+  // consumption. Redis cache writes are intentionally NOT done here — the
+  // caller refreshes caches post-commit via syncEffectCaches.
 
   private async applyEffect(
     userId: string,
     effectType: string | undefined,
     meta: Record<string, unknown>,
+    tx: Prisma.TransactionClient,
   ): Promise<Record<string, unknown>> {
     if (!effectType) return { applied: false, reason: 'No effect type' };
 
@@ -451,17 +529,10 @@ export class StoreService implements OnModuleInit {
         const expiresAt = expiresAtDate.toISOString();
         const metadata = { multiplier, expiresAt };
 
-        // Persist to DB (source of truth)
-        await this.prisma.userActiveEffect.create({
+        // Persist to DB (source of truth) inside the transaction
+        await tx.userActiveEffect.create({
           data: { userId, type: 'xp_boost', metadata, expiresAt: expiresAtDate },
         });
-
-        // Update Redis cache (best-effort)
-        try {
-          await this.redisService.setJson(`boost:xp:${userId}`, metadata, ttlSeconds);
-        } catch (redisErr: unknown) {
-          this.logger.error(`Redis cache write failed for boost:xp:${userId}`, redisErr);
-        }
         return { applied: true, type: 'xp_boost', multiplier, expiresAt };
       }
 
@@ -473,37 +544,23 @@ export class StoreService implements OnModuleInit {
         const expiresAt = expiresAtDate.toISOString();
         const metadata = { bonusSlots, expiresAt };
 
-        // Persist to DB (source of truth)
-        await this.prisma.userActiveEffect.create({
+        // Persist to DB (source of truth) inside the transaction
+        await tx.userActiveEffect.create({
           data: { userId, type: 'task_limit_boost', metadata, expiresAt: expiresAtDate },
         });
-
-        // Update Redis cache (best-effort)
-        try {
-          await this.redisService.setJson(`boost:task_limit:${userId}`, metadata, ttlSeconds);
-        } catch (redisErr: unknown) {
-          this.logger.error(`Redis cache write failed for boost:task_limit:${userId}`, redisErr);
-        }
         return { applied: true, type: 'task_limit_boost', bonusSlots, expiresAt };
       }
 
       case 'streak_freeze': {
         const protectedDays = (meta['protectedDays'] as number) ?? 3;
-        const key = `boost:streak_freeze:${userId}`;
 
-        // Update DB (source of truth)
-        const updatedUser = await this.prisma.user.update({
+        // DB write inside the transaction (source of truth); Redis cache is
+        // refreshed post-commit by syncEffectCaches.
+        const updatedUser = await tx.user.update({
           where: { id: userId },
           data: { streakFreezeCharges: { increment: protectedDays } },
           select: { streakFreezeCharges: true },
         });
-
-        // Update Redis cache (best-effort)
-        try {
-          await this.redisService.set(key, String(updatedUser.streakFreezeCharges));
-        } catch (redisErr: unknown) {
-          this.logger.error(`Redis cache write failed for ${key}`, redisErr);
-        }
 
         return { applied: true, type: 'streak_freeze', protectedDays, totalCharges: updatedUser.streakFreezeCharges };
       }
@@ -518,7 +575,7 @@ export class StoreService implements OnModuleInit {
       }
 
       case 'loot_box': {
-        return this.openLootBox(userId, meta);
+        return this.openLootBox(userId, meta, tx);
       }
 
       default:
@@ -529,42 +586,52 @@ export class StoreService implements OnModuleInit {
   // ─── Equip / unequip a cosmetic ────────────────────────────
 
   async equipCosmetic(userId: string, inventoryId: string) {
-    const inventory = await this.prisma.userInventory.findFirst({
-      where: { id: inventoryId, userId },
-      include: { item: true },
-    });
-    if (!inventory) throw new NotFoundException('Item not found in your inventory');
-    if (inventory.item.isConsumable || inventory.item.category !== StoreCategory.COSMETIC) {
-      throw new BadRequestException('Only cosmetics can be equipped or unequipped');
-    }
+    // Single transaction under a row lock: the equip state change and any
+    // same-type unequip commit atomically, so a concurrent use/listing/
+    // purchase receipt on this row serializes instead of interleaving.
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM user_inventory WHERE id = ${inventoryId} FOR UPDATE`;
 
-    const meta = inventory.item.metadata as Record<string, unknown>;
-    const cosmeticType = meta?.['cosmeticType'] as string | undefined;
-
-    if (inventory.equipped) {
-      // Unequip
-      await this.prisma.userInventory.update({ where: { id: inventoryId }, data: { equipped: false } });
-      await this.invalidateProfileCache(userId);
-      return { inventoryId, equipped: false, itemName: inventory.item.name };
-    }
-
-    // Equip: first unequip any other cosmetic of the same cosmeticType for this user
-    if (cosmeticType) {
-      const otherEquipped = await this.prisma.userInventory.findMany({
-        where: { userId, equipped: true },
-        include: { item: { select: { metadata: true } } },
+      const inventory = await tx.userInventory.findFirst({
+        where: { id: inventoryId, userId },
+        include: { item: true },
       });
-      for (const other of otherEquipped) {
-        const otherMeta = other.item.metadata as Record<string, unknown>;
-        if (otherMeta?.['cosmeticType'] === cosmeticType && other.id !== inventoryId) {
-          await this.prisma.userInventory.update({ where: { id: other.id }, data: { equipped: false } });
+      if (!inventory) throw new NotFoundException('Item not found in your inventory');
+      if (inventory.item.isConsumable || inventory.item.category !== StoreCategory.COSMETIC) {
+        throw new BadRequestException('Only cosmetics can be equipped or unequipped');
+      }
+
+      const meta = inventory.item.metadata as Record<string, unknown>;
+      const cosmeticType = meta?.['cosmeticType'] as string | undefined;
+
+      if (inventory.equipped) {
+        // Unequip
+        await tx.userInventory.update({ where: { id: inventoryId }, data: { equipped: false } });
+        return { inventoryId, equipped: false, itemName: inventory.item.name };
+      }
+
+      // Equip: first unequip any other cosmetic of the same cosmeticType for this user
+      if (cosmeticType) {
+        const otherEquipped = await tx.userInventory.findMany({
+          where: { userId, equipped: true },
+          include: { item: { select: { metadata: true } } },
+        });
+        for (const other of otherEquipped) {
+          const otherMeta = other.item.metadata as Record<string, unknown>;
+          if (otherMeta?.['cosmeticType'] === cosmeticType && other.id !== inventoryId) {
+            await tx.userInventory.update({ where: { id: other.id }, data: { equipped: false } });
+          }
         }
       }
-    }
 
-    await this.prisma.userInventory.update({ where: { id: inventoryId }, data: { equipped: true } });
+      await tx.userInventory.update({ where: { id: inventoryId }, data: { equipped: true } });
+      return { inventoryId, equipped: true, itemName: inventory.item.name };
+    });
+
+    // Post-commit: cached profile embeds equippedCosmetics — invalidate
+    // best-effort; a failure must not turn a committed equip into an error.
     await this.invalidateProfileCache(userId);
-    return { inventoryId, equipped: true, itemName: inventory.item.name };
+    return result;
   }
 
   /**
@@ -583,7 +650,11 @@ export class StoreService implements OnModuleInit {
   private async openLootBox(
     userId: string,
     meta: Record<string, unknown>,
+    tx: Prisma.TransactionClient,
   ): Promise<Record<string, unknown>> {
+    // Runs inside the caller's transaction: the rolled reward (wallet credit,
+    // active effect, or cosmetic grant) commits atomically with the loot-box
+    // consumption. Any failure propagates so useItem rolls back the consume.
     try {
       let possibleRewards = (meta['possibleRewards'] as Array<Record<string, unknown>>) ?? [];
       // Fallback: use default rewards for legacy items without full metadata
@@ -618,7 +689,7 @@ export class StoreService implements OnModuleInit {
         await this.walletService.credit(userId, credits, {
           type: TransactionType.EARN_LOOT_BOX,
           description: `Loot box reward: ${credits} credits`,
-        });
+        }, tx);
         return { applied: true, type: 'loot_box', reward: 'credits', amount: credits };
       }
 
@@ -629,6 +700,8 @@ export class StoreService implements OnModuleInit {
           'xp_boost',
           { multiplier: 2 },
           hours,
+          tx,
+          true, // deferRedis — caches sync post-commit
         );
         return {
           applied: true,
@@ -646,7 +719,7 @@ export class StoreService implements OnModuleInit {
         const cosmeticIdentifier = pool[Math.floor(Math.random() * pool.length)];
 
         // Try to find a matching cosmetic store item (by name or metadata)
-        const allCosmetics = await this.prisma.storeItem.findMany({
+        const allCosmetics = await tx.storeItem.findMany({
           where: { category: StoreCategory.COSMETIC, isActive: true },
         });
 
@@ -661,39 +734,45 @@ export class StoreService implements OnModuleInit {
 
         if (cosmeticItem) {
           // Check if user already owns it
-          const existing = await this.prisma.userInventory.findFirst({
+          const existing = await tx.userInventory.findFirst({
             where: { userId, itemId: cosmeticItem.id },
           });
 
           if (!existing) {
-            // Add to inventory and auto-equip (mirrors purchase behaviour)
-            const otherEquipped = await this.prisma.userInventory.findMany({
-              where: { userId, equipped: true },
-              include: { item: { select: { metadata: true } } },
-            });
+            // Add to inventory and auto-equip (mirrors purchase behaviour).
+            // The (userId,itemId) unique index means a racing grant/purchase
+            // makes this create fail with P2002 — the whole use transaction
+            // rolls back (item NOT consumed); a retry then finds `existing`
+            // and takes the credits fallback below.
             const cMeta = cosmeticItem.metadata as Record<string, unknown>;
             const cosmeticType = cMeta?.['cosmeticType'] as string | undefined;
-            for (const other of otherEquipped) {
-              const otherMeta = other.item.metadata as Record<string, unknown>;
-              if (otherMeta?.['cosmeticType'] === cosmeticType && other.id) {
-                await this.prisma.userInventory.update({
-                  where: { id: other.id },
-                  data: { equipped: false },
-                });
+            if (cosmeticType) {
+              const otherEquipped = await tx.userInventory.findMany({
+                where: { userId, equipped: true },
+                include: { item: { select: { metadata: true } } },
+              });
+              for (const other of otherEquipped) {
+                const otherMeta = other.item.metadata as Record<string, unknown>;
+                if (otherMeta?.['cosmeticType'] === cosmeticType) {
+                  await tx.userInventory.update({
+                    where: { id: other.id },
+                    data: { equipped: false },
+                  });
+                }
               }
             }
-            await this.prisma.userInventory.create({
+            await tx.userInventory.create({
               data: { userId, itemId: cosmeticItem.id, quantity: 1, equipped: true },
             });
             return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic: cosmeticItem.name };
           }
 
-          // Already owned — fall back to credits
+          // Already owned (or lost the create race) — fall back to credits
           const fallbackCredits = Math.floor(Math.random() * 200) + 100;
           await this.walletService.credit(userId, fallbackCredits, {
             type: TransactionType.EARN_LOOT_BOX,
             description: `Loot box reward: duplicate cosmetic converted to ${fallbackCredits} credits`,
-          });
+          }, tx);
           return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: `You already own ${cosmeticItem.name}, converted to ${fallbackCredits} credits` };
         }
 
@@ -702,7 +781,7 @@ export class StoreService implements OnModuleInit {
         await this.walletService.credit(userId, fallbackCredits, {
           type: TransactionType.EARN_LOOT_BOX,
           description: `Loot box reward: ${fallbackCredits} credits (cosmetic not available)`,
-        });
+        }, tx);
         return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: 'Cosmetic not available, converted to credits' };
       }
 
@@ -722,10 +801,18 @@ export class StoreService implements OnModuleInit {
     metadata: Record<string, unknown>,
     durationHours: number,
     tx?: Prisma.TransactionClient,
+    deferRedis = false,
   ): Promise<{ expiresAt: string; extended: boolean }> {
     const db = tx ?? this.prisma;
     const durationMs = durationHours * 3600 * 1000;
     const redisKey = type === 'xp_boost' ? `boost:xp:${userId}` : `boost:task_limit:${userId}`;
+
+    // Inside a transaction, serialize find-then-write on this (user,type)
+    // effect slot — prevents duplicate active-effect rows when a wheel/loot-box
+    // reward races a store-item use of the same boost type.
+    if (tx) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${type}`}, 0))`;
+    }
 
     // 1. Check for existing active effect of the same type
     const existing = await db.userActiveEffect.findFirst({
@@ -743,12 +830,15 @@ export class StoreService implements OnModuleInit {
         data: { expiresAt: newExpiresAt, metadata: newMetadata },
       });
 
-      // Update Redis cache with new TTL
-      const ttlSeconds = Math.ceil((newExpiresAt.getTime() - Date.now()) / 1000);
-      try {
-        await this.redisService.setJson(redisKey, newMetadata, ttlSeconds);
-      } catch (redisErr: unknown) {
-        this.logger.error(`Redis cache update failed for ${redisKey}`, redisErr);
+      // Update Redis cache with new TTL (skipped when the caller will sync
+      // caches post-commit — a rolled-back tx must not leave a phantom boost)
+      if (!deferRedis) {
+        const ttlSeconds = Math.ceil((newExpiresAt.getTime() - Date.now()) / 1000);
+        try {
+          await this.redisService.setJson(redisKey, newMetadata, ttlSeconds);
+        } catch (redisErr: unknown) {
+          this.logger.error(`Redis cache update failed for ${redisKey}`, redisErr);
+        }
       }
 
       return { expiresAt: newExpiresAt.toISOString(), extended: true };
@@ -763,12 +853,14 @@ export class StoreService implements OnModuleInit {
       data: { userId, type, metadata: newMetadata, expiresAt: expiresAtDate },
     });
 
-    // Update Redis cache
-    const ttlSeconds = Math.ceil(durationMs / 1000);
-    try {
-      await this.redisService.setJson(redisKey, newMetadata, ttlSeconds);
-    } catch (redisErr: unknown) {
-      this.logger.error(`Redis cache write failed for ${redisKey}`, redisErr);
+    // Update Redis cache (skipped when caller syncs post-commit)
+    if (!deferRedis) {
+      const ttlSeconds = Math.ceil(durationMs / 1000);
+      try {
+        await this.redisService.setJson(redisKey, newMetadata, ttlSeconds);
+      } catch (redisErr: unknown) {
+        this.logger.error(`Redis cache write failed for ${redisKey}`, redisErr);
+      }
     }
 
     return { expiresAt, extended: false };

@@ -134,7 +134,10 @@ run('wheel spin idempotency — real PostgreSQL', () => {
       walletStub as never,
       { createNotification: jest.fn() } as never,
       { emitToUser: jest.fn() } as never,
-      { extendOrCreateActiveEffect: jest.fn() } as never,
+      {
+        extendOrCreateActiveEffect: jest.fn(async () => ({ expiresAt: new Date().toISOString(), extended: false })),
+        syncEffectCaches: jest.fn(async () => {}),
+      } as never,
     );
     await prisma.$connect();
 
