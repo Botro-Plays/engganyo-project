@@ -577,6 +577,9 @@ export class AuthService {
         data: { usedAt: new Date() },
       });
     });
+
+    // Drop any stale JWT/profile cache entry from before verification.
+    await this.redisService.invalidateUserCaches(verification.userId);
   }
 
   // ─── Resend Verification ───────────────────────────────────

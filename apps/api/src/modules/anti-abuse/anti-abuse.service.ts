@@ -321,6 +321,10 @@ export class AntiAbuseService {
           data: { status: UserStatus.SUSPENDED },
         });
 
+        // Drop the JWT/profile caches so the suspended identity stops
+        // authenticating immediately rather than at cache expiry.
+        await this.redisService.invalidateUserCaches(userId);
+
         await this.prisma.auditLog.create({
           data: {
             action: 'user.auto_suspend',

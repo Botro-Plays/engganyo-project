@@ -1039,11 +1039,13 @@ export class AdminService {
           where: { id: targetUserId },
           data: { status: 'SUSPENDED' },
         });
+        await this.redisService.invalidateUserCaches(targetUserId);
       } else if (action === 'BAN') {
         await this.prisma.user.update({
           where: { id: targetUserId },
           data: { status: 'BANNED' },
         });
+        await this.redisService.invalidateUserCaches(targetUserId);
       }
 
       // Send notification to reported user
