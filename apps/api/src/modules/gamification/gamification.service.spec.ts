@@ -40,8 +40,11 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     vipTier: { findMany: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock };
     xpEvent: { create: jest.Mock };
     vpEvent: { create: jest.Mock };
-    withTransaction: jest.Mock;
+    dailyMission: { findMany: jest.Mock };
+    userMissionProgress: { findUnique: jest.Mock; upsert: jest.Mock };
+    $executeRaw: jest.Mock;
     $transaction: jest.Mock;
+    withTransaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -58,6 +61,9 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
       vipTier: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
       xpEvent: { create: jest.fn() },
       vpEvent: { create: jest.fn() },
+      dailyMission: { findMany: jest.fn().mockResolvedValue([]) },
+      userMissionProgress: { findUnique: jest.fn(), upsert: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(0),
       // The tx client delegates to the same mocks so every assertion can
       // verify that ALL writes went through the transaction boundary.
       withTransaction: jest.fn(),
