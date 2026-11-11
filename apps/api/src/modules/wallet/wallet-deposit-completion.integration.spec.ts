@@ -272,12 +272,21 @@ run('Deposit completion — real PostgreSQL integration', () => {
     await expect(makeWallet(prisma).completeDeposit(d.id)).resolves.toBeTruthy();
   });
 
-  it('PayMongo (PHP) deposit awards VP on the USD package value, not PHP amountFiat', async () => {
+  const gamificationWallet = () => {
+    const gamification = mockService();
+    const wallet = new WalletService(
+      prisma as never, mockService() as never, mockService() as never,
+      mockService() as never, mockService() as never, mockService() as never,
+      mockService() as never, gamification as never, mockService() as never,
+    );
+    return { wallet, gamification };
+  };
+
+  it('PayMongo deposit awards VP on the usdValue snapshot, immune to later package price changes', async () => {
     const user = await makeUser();
     const pkg = await prisma.depositPackage.create({
       data: { usdAmount: 10, methods: ['PAYMONGO'], label: `${PREFIX}pkg` },
     });
-    // ₱580 at 58 PHP/USD ≈ $10 — the bug multiplied 580 × 10 = 5800 VP.
     const d = await prisma.deposit.create({
       data: {
         userId: user.id,
@@ -286,22 +295,116 @@ run('Deposit completion — real PostgreSQL integration', () => {
         amountFiat: 580,
         currency: 'PHP',
         exchangeRate: 58,
+        usdValue: 10, // initiation snapshot
         creditsToAward: 50000,
       },
     });
+    // Admin edits the package price AFTER initiation — must not affect VP.
+    await prisma.depositPackage.update({ where: { id: pkg.id }, data: { usdAmount: 999 } });
 
-    const gamification = mockService();
-    const wallet = new WalletService(
-      prisma as never, mockService() as never, mockService() as never,
-      mockService() as never, mockService() as never, mockService() as never,
-      mockService() as never, gamification as never, mockService() as never,
-    );
-
+    const { wallet, gamification } = gamificationWallet();
     await wallet.completeDeposit(d.id);
 
-    // VP = round($10 × DEPOSIT_PER_DOLLAR(10)) = 100, not 5800.
     expect(gamification.awardVp).toHaveBeenCalledWith(
       user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO',
     );
+  });
+
+  it('pre-snapshot PHP deposit derives USD from the initiation exchangeRate', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 580,
+        currency: 'PHP',
+        exchangeRate: 58,
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+    expect(gamification.awardVp).toHaveBeenCalledWith(
+      user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO',
+    );
+  });
+
+  it('PHP deposit with no snapshot and no valid rate records an unresolved case, never guesses', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 580,
+        currency: 'PHP',
+        exchangeRate: null, // legacy/broken row — no trustworthy USD figure
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+
+    // No VP awarded — entitlement preserved as a reconciliation record.
+    expect(gamification.awardVp).not.toHaveBeenCalled();
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'deposit.vp_unresolved', entityId: d.id },
+    });
+    expect(audit).not.toBeNull();
+    expect((audit!.metadata as Record<string, unknown>)?.['reason']).toBe('no_usd_valuation');
+  });
+
+  it('USD deposit awards VP on amountFiat directly', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYPAL,
+        amountFiat: 25,
+        currency: 'USD',
+        creditsToAward: 125000,
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+    expect(gamification.awardVp).toHaveBeenCalledWith(
+      user.id, 250, 'deposit_completed', d.id, 'Deposit PAYPAL',
+    );
+  });
+
+  it('₱1 minimum-charge package earns ~0 VP on its nominal USD value', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 1, // ₱1 minimum charge
+        currency: 'PHP',
+        exchangeRate: 58,
+        usdValue: 0.02, // nominal package USD value
+        creditsToAward: 100,
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+    // round(0.02 × 10) = 0 → no awardVp call at all.
+    expect(gamification.awardVp).not.toHaveBeenCalled();
+  });
+
+  it('completion retry does not double-award VP', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYPAL,
+        amountFiat: 10,
+        currency: 'USD',
+        usdValue: 10,
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+    await expect(wallet.completeDeposit(d.id)).rejects.toThrow(); // already completed
+    expect(gamification.awardVp).toHaveBeenCalledTimes(1);
   });
 });

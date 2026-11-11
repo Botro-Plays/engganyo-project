@@ -501,6 +501,9 @@ export class WalletService {
           bonusCredits: pkg.bonusCredits,
           creditsAwarded: 0,
           exchangeRate: isPhp ? usdToPhp : null,
+          // Immutable USD valuation snapshot — package prices are editable,
+          // so completion must not re-read the live package row.
+          usdValue: pkg.usdAmount,
           userWalletAddress,
         },
       });
@@ -685,11 +688,8 @@ export class WalletService {
             // replaced claim. Covers paymentRef and gatewayData.submittedHash.
             guard?: { claimHash: string; userWalletAddress: string; walletVerified: boolean } } = {},
   ) {
-    const { deposit, wallet, notification, vpUsd } = await this.prisma.withTransaction(async (tx) => {
-      const existing = await tx.deposit.findUnique({
-        where: { id: depositId },
-        include: { package: { select: { usdAmount: true } } },
-      });
+    const { deposit, wallet, notification, vpAmount, vpUnresolved } = await this.prisma.withTransaction(async (tx) => {
+      const existing = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!existing) throw new NotFoundException('Deposit not found');
       if (existing.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
       if (existing.status === DepositStatus.CANCELLED) throw new BadRequestException('Deposit was cancelled');
@@ -757,9 +757,27 @@ export class WalletService {
 
       // VP is denominated in USD — amountFiat is gateway currency (PHP for
       // PayMongo), so it must never be multiplied by the per-dollar rate
-      // directly. See depositUsdValue.
+      // directly. See depositUsdValue. Unresolved valuations are recorded
+      // for reconciliation instead of silently over/under-awarding.
       const vpUsd = this.depositUsdValue(existing);
-      const vpAmount = Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR);
+      const vpAmount = vpUsd != null ? Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR) : 0;
+      const vpUnresolved = vpUsd == null;
+      if (vpUnresolved) {
+        await tx.auditLog.create({
+          data: {
+            action: 'deposit.vp_unresolved',
+            entityType: 'Deposit',
+            entityId: depositId,
+            metadata: {
+              reason: 'no_usd_valuation',
+              amountFiat: existing.amountFiat,
+              currency: existing.currency,
+              exchangeRate: existing.exchangeRate,
+              usdValue: existing.usdValue,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
       const vpText = vpAmount > 0 ? ` (+${vpAmount} VIP Points)` : '';
       const newNotification = await tx.notification.create({
         data: {
@@ -771,7 +789,7 @@ export class WalletService {
         },
       });
 
-      return { deposit: updatedDeposit, wallet: updatedWallet, notification: newNotification, vpUsd };
+      return { deposit: updatedDeposit, wallet: updatedWallet, notification: newNotification, vpAmount, vpUnresolved };
     });
 
     this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId, status: DepositStatus.COMPLETED });
@@ -788,8 +806,12 @@ export class WalletService {
     }
 
     // Award VP for deposit completion (outside transaction for resilience)
+    if (vpUnresolved) {
+      this.logger.warn(
+        `Deposit ${depositId} completed with no resolvable USD valuation — VP entitlement recorded for reconciliation (audit_log deposit.vp_unresolved)`,
+      );
+    }
     try {
-      const vpAmount = Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR);
       if (vpAmount > 0) {
         await this.gamificationService.awardVp(deposit.userId, vpAmount, 'deposit_completed', deposit.id, `Deposit ${deposit.method}`);
       }
@@ -807,21 +829,32 @@ export class WalletService {
    * Authoritative USD value of a deposit for VP purposes.
    *
    * `amountFiat` is charged in GATEWAY currency — PHP pesos for PayMongo —
-   * so multiplying it by DEPOSIT_PER_DOLLAR inflates VP by the FX rate
-   * (~58× at ₱58/$1). Prefer the package's USD amount (the value credits
-   * were actually priced from); for package-less deposits fall back to the
-   * initiation-time exchangeRate snapshot, then to amountFiat for
-   * USD-denominated rails.
+   * so it must never be treated as dollars or multiplied by the per-dollar
+   * rate directly. Resolution order:
+   *   1. `usdValue` — immutable snapshot written at initiation (package
+   *      prices are admin-editable, so the live package row is NOT
+   *      authoritative for an existing deposit).
+   *   2. PHP deposits: `amountFiat / exchangeRate` using the
+   *      initiation-time rate snapshot (covers deposits created before
+   *      usdValue existed). The ₱1 minimum-charge package resolves here
+   *      too — its peso charge divided by the rate yields its nominal USD
+   *      value (~$0.02 → 0 VP).
+   *   3. USD-denominated rails (PayPal/USDT): `amountFiat` IS USD.
+   *   4. PHP deposit with no snapshot AND no valid rate → null: recorded
+   *      as an unresolved reconciliation case, never guessed.
    */
   private depositUsdValue(d: {
     amountFiat: number | null;
     currency: string;
     exchangeRate: number | null;
-    package?: { usdAmount: number } | null;
-  }): number {
-    if (d.package?.usdAmount != null) return d.package.usdAmount;
-    if (d.currency === 'PHP' && d.exchangeRate != null && d.exchangeRate > 0) {
-      return (d.amountFiat ?? 0) / d.exchangeRate;
+    usdValue: number | null;
+  }): number | null {
+    if (d.usdValue != null && d.usdValue > 0) return d.usdValue;
+    if (d.currency === 'PHP') {
+      if (d.exchangeRate != null && d.exchangeRate > 0) {
+        return (d.amountFiat ?? 0) / d.exchangeRate;
+      }
+      return null;
     }
     return d.amountFiat ?? 0;
   }

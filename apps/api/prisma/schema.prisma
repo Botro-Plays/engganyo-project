@@ -1278,6 +1278,7 @@ model Deposit {
   creditsAwarded       Int             @default(0) @map("credits_awarded")
   bonusCredits         Int             @default(0) @map("bonus_credits") // Bonus portion snapshot
   exchangeRate         Float?          @map("exchange_rate") // USD/PHP rate at initiation (null for USD deposits)
+  usdValue             Float?          @map("usd_value") // Immutable USD valuation snapshot at initiation (VP/reconciliation)
   userWalletAddress    String?         @map("user_wallet_address") // EVM wallet address used for crypto payment
   paymentRef           String?         @unique @map("payment_ref") // Gateway ref / TX hash
   gatewayData          Json?           @map("gateway_data") // Raw webhook / gateway payload
