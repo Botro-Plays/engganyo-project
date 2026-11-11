@@ -1949,3 +1949,22 @@ implementation; marketplace fee rounding specified per-order with
 examples; decision table reduced to four start-blocking marketplace
 choices; banner pricing parked pending traffic measurement + owner
 selection.
+
+### Deploy record — inventory atomicity (11 Nov 2026)
+
+PR #69 (`fix/inventory-atomicity`) merged as `0fa7a07` and deployed via
+Deploy run `42979865842` — all jobs green (API lint/test/build, Web,
+Playwright E2E, image build, VPS deploy); all containers healthy;
+`https://engganyo.com` 200 and `/api/health` reports db+redis ok.
+
+Ships: `useItem`/`equipCosmetic` single-transaction row-lock mutations
+(effect DB writes + consumption commit/roll back together),
+`@@unique(userId,itemId)` on `user_inventory` (migration
+`20261111000000_user_inventory_unique` — pre-flight verified zero
+duplicate pairs), upsert-based grants/purchases/loot-box rewards,
+deferred Redis effect-cache sync post-commit, and advisory-lock
+serialization of same-type active effects. New real-Postgres
+`store-inventory.integration.spec.ts` covers concurrent last-unit use,
+stacked consumption, purchase stacking, equip serialization, and
+cross-user rejection. Stage-1 audit + invariants + marketplace launch
+plan: `docs/GAMIFICATION_WORKSTREAM_STAGE1.md`.

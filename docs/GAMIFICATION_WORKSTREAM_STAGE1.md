@@ -1,6 +1,6 @@
 # Gamification Workstream — Stage 1: Source Audit, Inventory Invariants, Marketplace Launch Plan
 
-Status: Stage 1 delivered. Code fix in **PR #69** (`fix/inventory-atomicity`, SHA `57ff35b`) — CI pending at time of writing. Marketplace/progression economics remain unimplemented pending owner approval.
+Status: Stage 1 inventory-safety fix **merged and deployed** — PR #69 → main `0fa7a07`, Deploy run `42979865842` all jobs green, containers healthy, `engganyo.com` + `/api/health` OK (db+redis ok) as of 2026-11-11T07:45Z. Migration `20261111000000_user_inventory_unique` applied by deploy. Marketplace/progression economics remain unimplemented pending owner approval.
 
 ---
 
@@ -111,8 +111,8 @@ Deferred (non-blocking): max active listings/seller (5), binding assignment for 
 
 ## 6. Stage status
 
-- **SHA**: `57ff35b` on `fix/inventory-atomicity` (PR #69), based on `a1153e8`.
-- **Local verification**: `tsc --noEmit` clean; `store.service.spec.ts` 10/10; integration spec compiles (DB-gated).
-- **CI**: pending — see PR #69 checks.
-- **Remaining gaps**: defects #2–#10 above; `UserActiveEffect` uniqueness; provenance column; marketplace implementation.
-- **Next concrete decision**: owner approval of D1–D4 (or amendments) unblocks marketplace PR; defects #2–#4 are the recommended next fix PR regardless.
+- **Deployed SHA**: `0fa7a07` on main (squash of PR #69, head `440260b`), deployed 2026-11-11 ~07:42Z via Deploy run `42979865842` — CI API/Web/E2E green, all containers healthy.
+- **Branch CI**: run `42978454459` green after one fix round (test-double repairs + advisory-lock serialization of same-type active effects).
+- **Local verification**: `tsc --noEmit` clean; `store.service.spec.ts` + `gamification.service.spec.ts` 39/39; integration spec compiles and ran green in CI against real Postgres.
+- **Remaining gaps**: defects #5–#10 above (deposit-VP currency bug, manual-review gamification gaps, mission/XP/achievement atomicity, campaign slot sweep, tip idempotency); provenance column; marketplace implementation.
+- **Next concrete decision**: owner approval of D1–D4 (or amendments) unblocks marketplace PR; defects #2–#4 (`updateMissionProgress`, `awardXp`/`awardVp`, `unlockAchievement`) are the recommended next fix PR regardless.
