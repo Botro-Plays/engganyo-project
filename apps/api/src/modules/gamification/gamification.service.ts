@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType, CompletionStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -451,12 +452,36 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    *  operator visibility. Each pass retries only unsettled effects. */
   private static readonly MAX_OUTCOME_ATTEMPTS = 25;
 
+  /** Processing lease TTL: a claim older than this is presumed crashed
+   *  and may be re-claimed by another worker. */
+  private static readonly OUTCOME_CLAIM_STALE_MS = 2 * 60 * 1000;
+
   /**
    * Settle every unsettled effect of a durable task outcome.
+   *
+   * Serialization: the outcome is claimed with a conditional
+   * updateMany (status PENDING + claim absent-or-stale) carrying a
+   * unique claimToken and an attempts increment. Every subsequent
+   * outcome write — per-effect flags and the final status — is
+   * conditional on that token, so:
+   * - two workers can never process the same outcome concurrently
+   *   (only one claim matches);
+   * - a stale worker whose lease was taken over cannot overwrite
+   *   DONE/CANCELLED, re-claim, or acknowledge the new owner's work
+   *   (its writes match zero rows and it stops);
+   * - a crashed worker's claim expires after OUTCOME_CLAIM_STALE_MS
+   *   and the sweeper re-claims it — recovery is preserved.
    *
    * Guards: the completion must exist, belong to the outcome's user,
    * and still be VERIFIED — anything else cancels the outcome rather
    * than paying out.
+   *
+   * Mission progress is attributed to the completion's VERIFIED UTC
+   * date (verifiedAt, falling back to createdAt), NOT the processing
+   * day — a delayed recovery can never advance a later day's mission.
+   * Missions are evaluated against the config active at processing
+   * time; a mission created after the verified date can still receive
+   * the event (progress row is dated to the verified day).
    *
    * Each effect is tracked by its own flag, committed independently:
    * a crash after an effect commits but before its flag update simply
@@ -472,25 +497,50 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     });
     if (!outcome || outcome.status !== 'PENDING') return outcome;
 
+    const claimToken = randomUUID();
+    const staleBefore = new Date(Date.now() - GamificationService.OUTCOME_CLAIM_STALE_MS);
+    const claimed = await this.prisma.taskCompletionOutcome.updateMany({
+      where: {
+        id: outcomeId,
+        status: 'PENDING',
+        OR: [{ claimedAt: null }, { claimedAt: { lt: staleBefore } }],
+      },
+      data: { claimedAt: new Date(), claimToken, attempts: { increment: 1 } },
+    });
+    if (claimed.count !== 1) return outcome; // another worker owns it
+
+    // Re-read under our claim: a previous crashed pass may have settled
+    // effects; only unsettled flags are (re-)run. attempts already
+    // includes this claim's increment.
+    const fresh = await this.prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { id: outcomeId },
+    });
+
     const completion = await this.prisma.taskCompletion.findUnique({
-      where: { id: outcome.completionId },
-      select: { userId: true, status: true },
+      where: { id: fresh.completionId },
+      select: { userId: true, status: true, verifiedAt: true, createdAt: true },
     });
     if (
       !completion ||
       completion.status !== CompletionStatus.VERIFIED ||
-      completion.userId !== outcome.userId
+      completion.userId !== fresh.userId
     ) {
-      await this.prisma.taskCompletionOutcome.update({
-        where: { id: outcome.id },
+      await this.prisma.taskCompletionOutcome.updateMany({
+        where: { id: outcomeId, claimToken },
         data: {
           status: 'CANCELLED',
           lastError: 'completion missing, not VERIFIED, or owner mismatch',
           processedAt: new Date(),
+          claimedAt: null,
+          claimToken: null,
         },
       });
       return outcome;
     }
+
+    // Mission eligibility binds to the authoritative VERIFIED instant,
+    // not the processing day.
+    const missionDate = completion.verifiedAt ?? completion.createdAt;
 
     const effects: Array<{
       key: 'xpSettled' | 'vpSettled' | 'missionSettled' | 'achievementsSettled' | 'referralSettled';
@@ -500,69 +550,88 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       {
         key: 'xpSettled',
         name: 'xp',
-        run: () => this.awardXp(outcome.userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', outcome.completionId),
+        run: () => this.awardXp(fresh.userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', fresh.completionId),
       },
       {
         key: 'vpSettled',
         name: 'vp',
-        run: () => this.awardVp(outcome.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', outcome.completionId),
+        run: () => this.awardVp(fresh.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', fresh.completionId),
       },
       {
         key: 'missionSettled',
         name: 'mission',
         // completionId is the mission-event dedupe identity — outcome
         // recovery can never count the same task twice.
-        run: () => this.updateMissionProgress(outcome.userId, MissionType.COMPLETE_N_TASKS, 1, { sourceId: outcome.completionId }),
+        run: () => this.updateMissionProgress(fresh.userId, MissionType.COMPLETE_N_TASKS, 1, { sourceId: fresh.completionId, date: missionDate }),
       },
       {
         key: 'achievementsSettled',
         name: 'achievements',
-        run: () => this.checkAchievements(outcome.userId),
+        run: () => this.checkAchievements(fresh.userId),
       },
       {
         key: 'referralSettled',
         name: 'referral',
         run: async () => {
-          await this.referralsService.qualifyReferral(outcome.userId);
-          await this.referralsService.checkMilestones(outcome.userId);
+          await this.referralsService.qualifyReferral(fresh.userId);
+          await this.referralsService.checkMilestones(fresh.userId);
         },
       },
     ];
 
-    const settled = { ...outcome } as Record<string, unknown>;
+    const settled = { ...fresh } as Record<string, unknown>;
     let lastError: string | null = null;
+    let claimLost = false;
     for (const eff of effects) {
       if (settled[eff.key]) continue;
       try {
         await eff.run();
-        await this.prisma.taskCompletionOutcome.update({
-          where: { id: outcome.id },
+        // Flag write is claim-conditional: if our lease was taken over
+        // mid-pass the new owner re-runs this effect (idempotent) and
+        // we must stop — never acknowledge work we no longer own.
+        const flagged = await this.prisma.taskCompletionOutcome.updateMany({
+          where: { id: outcomeId, claimToken },
           data: { [eff.key]: true },
         });
+        if (flagged.count === 0) {
+          claimLost = true;
+          break;
+        }
         settled[eff.key] = true;
       } catch (err) {
         lastError = `${eff.name}: ${(err as Error)?.message ?? err}`.slice(0, 500);
         this.logger.error(
-          `Task outcome ${outcome.id} effect '${eff.name}' failed for completion ${outcome.completionId}: ${lastError}`,
+          `Task outcome ${outcomeId} effect '${eff.name}' failed for completion ${fresh.completionId}: ${lastError}`,
         );
       }
     }
+    if (claimLost) {
+      this.logger.warn(`Task outcome ${outcomeId} claim superseded mid-pass — stopping`);
+      return outcome;
+    }
 
     const allSettled = effects.every((e) => settled[e.key]);
-    const attempts = allSettled ? outcome.attempts : outcome.attempts + 1;
-    await this.prisma.taskCompletionOutcome.update({
-      where: { id: outcome.id },
+    const final = await this.prisma.taskCompletionOutcome.updateMany({
+      where: { id: outcomeId, claimToken },
       data: {
         status: allSettled
           ? 'DONE'
-          : attempts >= GamificationService.MAX_OUTCOME_ATTEMPTS
+          : fresh.attempts >= GamificationService.MAX_OUTCOME_ATTEMPTS
             ? 'FAILED'
             : 'PENDING',
-        attempts,
         lastError,
         processedAt: allSettled ? new Date() : null,
+        claimedAt: null,
+        claimToken: null,
       },
     });
+    if (final.count === 0) {
+      // Our lease expired and another worker claimed the outcome while
+      // we were processing. Its conditional writes own the row now;
+      // our effect writes were idempotent, so nothing is lost or duped.
+      this.logger.warn(`Task outcome ${outcomeId} final write lost claim — superseded worker result discarded`);
+      return outcome;
+    }
 
     await this.flushRewardOutbox();
     return outcome;
@@ -1170,10 +1239,14 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     type: MissionType,
     increment = 1,
-    opts?: { sourceId?: string },
+    opts?: { sourceId?: string; date?: Date },
   ) {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    // Mission period = the UTC day of the qualifying event. Callers
+    // processing delayed/recovered events (e.g. task outcomes) pass the
+    // authoritative event timestamp so a late recovery attributes
+    // progress to the correct day instead of the processing day.
+    const day = new Date(opts?.date ?? Date.now());
+    day.setUTCHours(0, 0, 0, 0);
 
     const missions = await this.prisma.dailyMission.findMany({
       where: { type, isActive: true },
@@ -1190,7 +1263,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`mission:${userId}:${mission.id}`}, 0))`;
 
         const existing = await tx.userMissionProgress.findUnique({
-          where: { userId_missionId_date: { userId, missionId: mission.id, date: today } },
+          where: { userId_missionId_date: { userId, missionId: mission.id, date: day } },
         });
 
         if (existing?.isCompleted) return { completed: false, alreadyDone: true };
@@ -1198,35 +1271,28 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         // Event-level dedupe: when the caller supplies a stable source
         // identity (e.g. a task completionId), the same event can never
         // count twice for this mission — outcome recovery replays are
-        // safe. The event row commits atomically with the progress.
+        // safe. INSERT ... ON CONFLICT DO NOTHING keeps the transaction
+        // valid on a duplicate (a caught P2002 would abort the Postgres
+        // transaction); the event row commits atomically with progress.
         if (opts?.sourceId) {
-          try {
-            await tx.missionProgressEvent.create({
-              data: {
-                userId,
-                missionId: mission.id,
-                sourceType: type,
-                sourceId: opts.sourceId,
-                date: today,
-              },
-            });
-          } catch (err) {
-            if ((err as { code?: string })?.code === 'P2002') {
-              return { completed: false, alreadyCounted: true };
-            }
-            throw err;
-          }
+          const inserted = await tx.$executeRaw`
+            INSERT INTO mission_progress_events
+              (id, user_id, mission_id, source_type, source_id, "date", created_at)
+            VALUES
+              (${randomUUID()}, ${userId}, ${mission.id}, ${String(type)}, ${opts.sourceId}, ${day.toISOString().slice(0, 10)}, NOW())
+            ON CONFLICT (mission_id, source_type, source_id) DO NOTHING`;
+          if (inserted === 0) return { completed: false, alreadyCounted: true };
         }
 
         const newProgress = (existing?.progress ?? 0) + increment;
         const isCompleted = newProgress >= mission.requirement;
 
         await tx.userMissionProgress.upsert({
-          where: { userId_missionId_date: { userId, missionId: mission.id, date: today } },
+          where: { userId_missionId_date: { userId, missionId: mission.id, date: day } },
           create: {
             userId,
             missionId: mission.id,
-            date: today,
+            date: day,
             progress: newProgress,
             isCompleted,
             completedAt: isCompleted ? new Date() : null,
@@ -1248,7 +1314,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         }, tx);
         // Stable per-day identity: same mission legitimately completes once
         // per day, so the ref must include the date, not just the mission.
-        const missionRef = `${mission.id}:${today.toISOString().slice(0, 10)}`;
+        const missionRef = `${mission.id}:${day.toISOString().slice(0, 10)}`;
         await this.awardXp(userId, mission.xpReward, 'mission_complete', missionRef, mission.name, tx);
 
         // Durable outbox rows INSIDE the payout tx — they commit or roll
