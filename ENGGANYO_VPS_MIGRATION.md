@@ -1918,3 +1918,20 @@ reinterpreted per owner as a **player item marketplace** —
 economics implemented). `docs/proposals/paid-discover-ads.md` refined
 with payment/moderation/impression audit (Ready for review). Beginner
 onboarding traced end-to-end in priorities §7.
+
+### Records update — banner-ads re-scope (11 Nov 2026, rev 3)
+
+Owner clarified the ads feature targets **external customers** buying
+**banner placements** (artwork + external URL + real money), not a
+user-submitted Discover feed. `docs/proposals/paid-discover-ads.md`
+removed; replaced by `docs/proposals/external-banner-ads.md` (Ready for
+review): 10 named zones across public/dashboard/community screens with
+previews + density limits, creative/URL validation + Sponsored labeling,
+fair-rotation delivery + frequency caps, self-serve + admin-assisted
+booking, shared-vs-exclusive time packages with proposed pricing,
+full lifecycle (delivery start, edits, pauses, rejection, outages,
+cancellation, refunds, reconciliation), and per-campaign
+impressions/reach/clicks/CTR measurement. Jomar checklist item 8 renamed
+to "External banner advertising — real-money bookings and intelligent
+placement". Marketplace proposal unchanged and separate. No economics
+implemented — pricing awaits owner approval.

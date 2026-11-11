@@ -21,7 +21,7 @@ the table wins. Verified against current main + production evidence cited.
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
 | 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
-| 8 | Paid Discover ads | **Proposal ready - owner decision pending** | Proposal (rev 2): `docs/proposals/paid-discover-ads.md`. Real-money payment via existing PayMongo/PayPal/USDT deposit-provider integrations (parallel purchase flow, not credits); scrollable `/discover` ads rail; per-ad impression analytics (new tables - visitor analytics does NOT count ad views); moderation before publication | Source audit on `a1153e8`; Discover page + visitor-analytics + payment modules located | Owner decisions: providers, price tiers, refund method, placement scope, moderation SLA, advertiser eligibility. |
+| 8 | External banner advertising - real-money bookings and intelligent placement | **Proposal ready - owner decision pending** | **Re-scoped (owner, 11 Nov rev 3):** external customers buy banner placements across named public/dashboard/Discover/community zones with artwork + external URL, paid in real money. Proposal (rev 3): `docs/proposals/external-banner-ads.md` (replaces Discover-feed `paid-discover-ads.md`, removed). 10 named zones with previews + density limits, banner specs/URL validation/Sponsored labeling, fair-rotation delivery + frequency caps, self-serve + admin-assisted booking, shared vs exclusive time packages, full lifecycle incl. refunds/reconciliation, per-campaign impressions/reach/clicks/CTR | Source audit on `a1153e8` route map + payment/analytics modules | Owner decisions: zone list, package prices, advertiser account model, refund/cancellation policy, providers, eligibility. |
 | 9 | Supported-platform logos (owner item) | **Shipped + live-verified** | Landing "Supported platforms" strip, local SVGs, before "Two ways to participate" | PR #49 `6c4f2b5`; live 390px+1440px | None. |
 
 ## Delivery order
@@ -29,7 +29,7 @@ the table wins. Verified against current main + production evidence cited.
 1. Improve Find tasks and the accept-to-proof journey.
 2. Simplify manual-task onboarding and make Top up visible.
 3. Refine the visual design and add supported-platform logos to the landing page.
-4. Prepare proposals for the player item marketplace and paid Discover ads. (Credit-resale interpretation superseded by owner clarification, 11 Nov.)
+4. Prepare proposals for the player item marketplace and external banner advertising. (Credit-resale interpretation superseded by owner clarification, 11 Nov.)
 
 Track each item through verification, implementation, review, and deployment. Record the PR, tested SHA, evidence, and outstanding decisions here as work progresses. Existing wheel/streak releases do not close these items.
 
@@ -162,11 +162,24 @@ restrictive for Jomar's "spoon-fed beginner" goal — raising it is an
 anti-abuse tradeoff decision, not a code change. Fresh-account retest still
 pending.
 
-## 8. Paid Discover ads
+## 8. External banner advertising — real-money bookings and intelligent placement
 
-**Status — proposal ready for owner review (11 Nov, rev 2).** `docs/proposals/paid-discover-ads.md` — refined with source audit (payment providers, Discover surface, visitor-analytics limits, moderation lifecycle, per-ad impression design).
+**Status — proposal ready for owner review (11 Nov, rev 3).** `docs/proposals/external-banner-ads.md` (supersedes the Discover-feed draft `paid-discover-ads.md`, removed).
 
-Jomar wants an affordable feed of user-submitted ads, paid directly with money, with visible per-ad views and content moderation. The proposal defines checkout correlation (`ad_purchases` ↔ provider `paymentRef`, parallel to but separate from credit deposits), the DRAFT→PAYMENT→MODERATION→LIVE lifecycle with idempotent rejection refunds, reporting/takedown, per-ad impression counting (IntersectionObserver ≥50%/1s, 24h dedupe, bot filtering — new tables required; visitor analytics does not count ad views), pricing/duration tiers, and mobile/desktop wireframes. No ad economics implemented — awaiting owner approval.
+> **Owner clarification (11 Nov 2026):** external customers buy **banner
+> placements** across suitable Engganyo areas — artwork + external
+> destination URL + real-money payment. Not a user-submitted Discover feed.
+
+The proposal defines 10 named zones across public/dashboard/community
+screens (with live previews, per-zone desktop+mobile specs, and ad-density
+limits), artwork/URL validation and Sponsored labeling, intelligent
+delivery (schedule, fair rotation, frequency caps, shared-vs-exclusive
+allocation), self-serve `/advertise` + admin-assisted booking, time-based
+shared/exclusive packages with proposed prices, a consistent
+payment→moderation→delivery lifecycle covering edits/pauses/rejection/
+outages/cancellation/refunds/reconciliation, and per-campaign
+impressions/unique-reach/clicks/CTR reporting with abuse controls. No ad
+economics implemented — awaiting owner approval.
 
 ## 9. Supported-platform logos on the landing page
 
