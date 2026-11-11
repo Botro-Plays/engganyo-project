@@ -10,6 +10,11 @@ import { Prisma, PrismaClient } from '@prisma/client';
  * wraps the PG code in the error. Retrying the WHOLE transaction is safe
  * because every write re-validates under its locks and a failed attempt
  * rolls back completely — nothing partial can be retried into a duplicate.
+ *
+ * OPT-IN ONLY: callers must audit the callback for outer-variable
+ * mutations (reset per attempt) and non-transactional effects (must run
+ * after commit). PrismaService.withTransaction deliberately does NOT
+ * retry globally — only paths audited for attempt-local state use this.
  */
 
 export function isRetryableTxError(err: unknown): boolean {

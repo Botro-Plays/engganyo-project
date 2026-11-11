@@ -719,7 +719,11 @@ export class GamificationService implements OnModuleInit {
     const milestoneDays = [5, 7, 14, 30];
     let bonusLootBox = false;
 
-    await this.prisma.withTransaction(async (tx) => {
+    // Opt-in bounded retry (deadlock/serialization only). The callback
+    // mutates `bonusLootBox`, so it is reset at the start of EVERY attempt —
+    // an aborted attempt must not leak state into the retry or post-commit.
+    await withTransactionRetry(this.prisma, async (tx) => {
+      bonusLootBox = false;
       // Atomic eligibility claim — only one concurrent request gets count=1
       const eligibleSince = new Date(now.getTime() - DAILY_REWARD_COOLDOWN_MS);
       const claimed = await tx.user.updateMany({

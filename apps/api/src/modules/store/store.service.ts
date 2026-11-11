@@ -166,11 +166,17 @@ export class StoreService implements OnModuleInit {
    * before reading or changing equipped rows, so two different items in
    * the same slot can never both end up equipped.
    *
-   * Lock ordering contract: catalog row (store_items) → advisory slot
-   * locks → user_inventory rows → users row → wallet row → effect rows.
-   * Advisory locks DO participate in Postgres deadlock detection; safety
-   * comes from the consistent acquisition order plus withTxRetry's
-   * bounded whole-transaction retry, not from the lock type.
+   * Actual lock sequences (no universal order exists — wallet engine
+   * locks wallet→user mirror; daily reward claims the user row first):
+   *   purchaseItem:  store_items → equip advisory → wallet → user → inventory
+   *   useItem:       user_inventory → effect advisory → effects/user/wallet
+   *   equipCosmetic: equip advisory → user_inventory
+   *   spinWheel:     wheel_attempt → wallet → user → effect advisory/inventory
+   *   dailyReward:   users(claim) → wallet → users(xp/vp) → inventory
+   * Residual cross-path cycles (e.g. useItem holds inventory→wants wallet
+   * while wheel holds wallet→wants inventory) are possible; Postgres
+   * deadlock detection aborts one side and withTransactionRetry replays
+   * the whole tx — that, not lock ordering alone, is the safety net.
    */
   private async lockEquipSlot(
     tx: Prisma.TransactionClient,
@@ -432,9 +438,9 @@ export class StoreService implements OnModuleInit {
       if (effectType === 'xp_boost' || effectType === 'task_limit_boost') {
         // Serialize same-type effect creation per user across ALL transactions
         // (useItem, wheel, loot box). Advisory xact locks participate in
-        // Postgres deadlock detection — safety comes from the consistent
-        // lock order (advisory slots before inventory/user/wallet rows) and
-        // withTxRetry's bounded whole-transaction retry on 40P01/40001/P2034.
+        // Postgres deadlock detection — see lockEquipSlot for the actual
+        // per-path lock sequences; withTransactionRetry covers residual
+        // cross-path cycles.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${effectType}`}, 0))`;
         const active = await tx.userActiveEffect.findFirst({
           where: { userId, type: effectType, expiresAt: { gt: new Date() } },
