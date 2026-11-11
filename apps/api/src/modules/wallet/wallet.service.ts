@@ -909,12 +909,15 @@ export class WalletService {
     });
 
     if (entitlement.status === 'PENDING') {
-      // Resolved valuation (0 VP is valid — e.g. the ₱1 minimum-charge
-      // package) — award and settle atomically in this tx.
-      await this.gamificationService.awardVp(
-        d.userId, vpAmount, 'deposit_completed', d.id,
-        `Deposit ${d.method}`, tx,
-      );
+      // Resolved valuation — award and settle atomically in this tx.
+      // vpAmount may be 0 (₱1 minimum-charge package): no VP event is
+      // written, but the entitlement still settles as fulfilled.
+      if (vpAmount > 0) {
+        await this.gamificationService.awardVp(
+          d.userId, vpAmount, 'deposit_completed', d.id,
+          `Deposit ${d.method}`, tx,
+        );
+      }
       await tx.rewardEntitlement.update({
         where: { id: entitlement.id },
         data: { status: 'SETTLED', settledAt: new Date(), unresolvedReason: null },
@@ -948,10 +951,12 @@ export class WalletService {
       // Re-resolved valuation → award + settle atomically. awardVp dedupes
       // on (userId, source, referenceId) so a prior partial settle can't
       // double-pay.
-      await this.gamificationService.awardVp(
-        ent.userId, vpAmount, 'deposit_completed', depositId,
-        `Deposit ${deposit.method}`, tx,
-      );
+      if (vpAmount > 0) {
+        await this.gamificationService.awardVp(
+          ent.userId, vpAmount, 'deposit_completed', depositId,
+          `Deposit ${deposit.method}`, tx,
+        );
+      }
       await tx.rewardEntitlement.update({
         where: { id: ent.id },
         data: { status: 'SETTLED', settledAt: new Date(), amount: vpAmount, unresolvedReason: null },
