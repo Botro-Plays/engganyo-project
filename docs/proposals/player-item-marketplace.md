@@ -1,52 +1,181 @@
 # Proposal: player item marketplace (user-to-user item trading)
 
-**Status: Ready for review — no implementation authorized.**
+**Status: Ready for review (rev 2) — no implementation authorized.**
 
 > **Interpretation correction (owner, 11 Nov 2026):** Jomar's request is a
 > **player item marketplace**, not a credit-resale market. Users sell
 > eligible inventory earned or obtained through Engganyo (e.g. boosts);
-> buyers pay with **wallet credits** and sellers receive credits. The
-> earlier "credit trading" draft (`credit-trading.md`, peer transfer of
-> credits) is **superseded** — credits themselves remain non-transferable.
-> This also removes the stored-value/e-money legal gate that applied to
-> credit resale; item trading moves existing platform inventory, not money.
+> buyers pay with **wallet credits** and sellers receive credits. Direct
+> peer resale of credits themselves is **outside this marketplace's scope**.
+> (Note: credits are not literally non-transferable — chat tipping already
+> moves credits between users via `SPEND_TIP`/`EARN_TIP`; what this proposal
+> excludes is a general credit-trading market.) Item trading does **not**
+> automatically eliminate legal/regulatory review — credits are purchasable
+> with money, so stored-value/e-money and tax questions still need review
+> before launch.
 
 ## Audit — what already exists (main `a1153e8`)
 
 | Layer | Path | State |
 |---|---|---|
-| Items | `apps/api/prisma/schema.prisma` — `StoreItem` (category, `creditCost`, `isConsumable`, `metadata` JSON, limited qty, VIP gate, sale window) | Implemented |
-| Inventory | `UserInventory` (`quantity`, `consumedAt`, `equipped`, `acquiredAt`) — **no per-unit attributes or expiry column** | Implemented |
+| Items | `apps/api/prisma/schema.prisma` — `StoreItem` (category, `creditCost`, `isConsumable`, `metadata` JSON, `maxOwnedPerUser`, `requiredVipTierLevel`, limited qty, sale window, `isActive`) | Implemented, **mutable catalog** |
+| Inventory | `UserInventory` (`quantity`, `consumedAt`, `equipped`, `acquiredAt`) — **no per-unit attributes, expiry, or reservation column** | Implemented |
 | Purchases | `StorePurchase` → `Transaction` ledger (`SPEND_STORE_PURCHASE`) | Implemented |
-| Store purchase | `apps/api/src/modules/store/store.service.ts` `purchaseItem` — single `$transaction`, `SELECT ... FOR UPDATE` on item row, all eligibility guards under the lock, `walletService.debit`, idempotent-ish via transaction link | Implemented, strong pattern to reuse |
-| Item use | `useItem` — applies effect FIRST, consumes only on success; `xp_boost`, `task_limit_boost`, `streak_freeze`, `task_refresh`, `loot_box` (`EARN_LOOT_BOX`) | Implemented |
-| Equip | `equipCosmetic` for non-consumables; `equipped` flag on inventory row | Implemented |
-| Activated effects | `UserActiveEffect` (xp/task-limit boosts with `expiresAt`) — separate from inventory | Implemented |
-| Admin | `admin.controller.ts` store item CRUD + `grantStoreItem` | Implemented |
-| Wallet | `wallet.service.ts` `credit`/`debit(userId, amount, opts, tx?)` + `Transaction` ledger + `TransactionType` enum | Implemented |
-| Live catalog | Prod `store_items`: 2 BOOST (XP 24h 150cr, Task Limit +5 200cr), 2 COSMETIC (Neon 350cr, Gold Frame 500cr), 2 CONVENIENCE (Streak Freeze 100cr, Mystery Box 120cr). `CREDIT_PACK`/`GUILD_PERK` enums unused. Prod `user_inventory`: **1 row total** | Verified via VPS DB |
-| Open branches/PRs | No store/marketplace/trading branches or PRs. Checked all 72 remote heads: only store-adjacent branch `fix/transfers-purchases-atomicity` (`372e2a8`) is **merged** (A07 atomic store/tips/rain purchases — the locked pattern this proposal reuses). `feat/web-discoverability` (`d858b68`) is the only unmerged feature branch and is unrelated (SEO). | Clean |
+| Store purchase | `store.service.ts` `purchaseItem` — single `$transaction`, `SELECT ... FOR UPDATE` on item row, guards under lock, `walletService.debit`, inventory upsert in same tx | Implemented, strong pattern |
+| Item use | `store.service.ts:369` `useItem` — **NOT transactional**: `findFirst` → checks → `applyEffect` (writes `user_active_effects`, `user.streakFreezeCharges`, Redis; loot box RNG + reward grants) → then `userInventory.update/delete`. No row lock, no `$transaction` | Implemented with **known race surface** |
+| Equip | `store.service.ts:531` `equipCosmetic` — **NOT transactional**: read → per-type unequip loop → `equipped` flag writes | Implemented with same race surface |
+| Admin grant | `admin.service.ts:3122` `grantStoreItem` — read-then update/create on `user_inventory` | Implemented, same race surface |
+| Activated effects | `UserActiveEffect` (`expiresAt`) — separate from inventory | Implemented |
+| Admin | store item CRUD + grant | Implemented |
+| Wallet | `wallet.service.ts` `credit`/`debit` + `Transaction` ledger | Implemented |
+| Live catalog | 2 BOOST, 2 COSMETIC, 2 CONVENIENCE items; `CREDIT_PACK`/`GUILD_PERK` unused; prod ~1 tradable inventory row | Verified via VPS DB |
+| Branches | All 72 remote heads checked; only `fix/transfers-purchases-atomicity` (`372e2a8`) touches this area — **merged** (it added the purchase lock) | Clean |
 
-**Foundation vs feature:** the store engine (items, inventory, locked
-purchase, use/equip, effects, ledger) is a complete foundation. A
-user-to-user marketplace is a **new feature** — nothing today lets a user
-resell inventory; `UserInventory` has no reservation/transfer concept.
+**Foundation vs feature:** the store engine is a complete foundation, but
+`useItem`, `equipCosmetic`, and `grantStoreItem` are **non-transactional
+read-modify-write sequences**. Any marketplace reservation scheme must
+coordinated-lock **all** inventory writers, not just listing/purchase.
+
+## The concurrency problem (rev-1 correction)
+
+Rev 1 claimed "escrow by decrement" makes use/equip races impossible. That
+was wrong. `useItem` reads the inventory row, applies the effect with its
+own writes, then writes `quantity - 1` or deletes the row — all outside a
+transaction and without a lock. Concrete interleaving:
+
+1. Inventory `qty=2`. `useItem` reads `qty=2`.
+2. `createListing(qty=1)` decrements inventory to `qty=1` (escrow).
+3. `useItem` finishes `applyEffect`, then writes `quantity = 2-1 = 1`
+   (stale) or deletes the row.
+4. Result: **phantom unit** — listing holds 1, effect applied once, yet
+   inventory still shows 1 usable unit that no longer exists (or a
+   delete-vs-update conflict error mid-flow).
+
+Worse, `applyEffect` commits `user_active_effects`/streak credits **before**
+the inventory decrement — a failure between them leaves the effect granted
+with the item retained (free effect) or vice versa.
+
+### Required coordinated design
+
+Every writer of a given `user_inventory` row must serialize on the same
+row lock inside one transaction:
+
+- **`createListing` / `cancelListing` / expiry sweep**: tx → `SELECT ... FOR
+  UPDATE` on inventory row → move qty inventory→listing (or back) → commit.
+- **`useItem` (refactor)**: wrap in `$transaction`; lock the inventory row
+  `FOR UPDATE`; re-validate `quantity`, `consumedAt`, consumable; perform
+  the **consumption decrement inside the same tx**; apply the
+  `UserActiveEffect`/streak/loot-box DB writes **inside the same tx** so
+  effect+consume commit or roll back together. Redis cache writes stay
+  best-effort **post-commit** (they already tolerate failure). Loot-box RNG
+  reward grants must join the tx.
+- **`equipCosmetic` (refactor)**: same — lock row, re-validate, flag writes
+  in tx; listing creation must reject `equipped=true` rows (or auto-unequip
+  inside its tx).
+- **`grantStoreItem` / purchase fulfillment / marketplace receipt**: all
+  inventory upserts take the same row lock (or insert path is naturally
+  race-free via unique `(userId,itemId)`).
+- **Conditional decrement**: consumption uses
+  `UPDATE ... SET quantity = quantity - 1 WHERE id = ? AND quantity >= 1`
+  (or row-lock + recheck) so a stale read can never resurrect units.
+
+With all writers locking the same row, listing-vs-use and
+cancel-vs-purchase serialize deterministically: whichever tx commits first
+wins; the loser re-reads post-lock state and gets a clean
+`ITEM_BUSY`/`LISTING_UNAVAILABLE`/`INSUFFICIENT_STOCK` error — never a
+phantom unit or double settlement.
+
+## History preservation (rev-1 correction)
+
+Rev 1 said "delete row at 0" — wrong: orders reference listings, so
+listings are **never deleted**. Terminal states:
+
+```
+ACTIVE → SOLD_OUT (remainingQuantity = 0, keeps listing for history)
+       → CANCELLED (seller; qty returned to inventory)
+       → EXPIRED (auto-cancel after listing TTL)
+       → REMOVED (admin takedown; qty returned, reason logged)
+```
+
+`marketplace_listings` retains `originalQuantity`, `remainingQuantity`,
+`unitPrice`, `sellerId`, `itemId`, `itemSnapshot`, `status`, timestamps.
+`marketplace_orders` links listing + buyer + seller + qty + price +
+transaction ids — the permanent audit record for both sides' history views.
+
+## Purchase idempotency & wallet locking (rev-1 correction)
+
+- **Buyer-scoped idempotency:** `purchaseKey` is unique per
+  `(buyerId, purchaseKey)` — enforced by a unique constraint checked and
+  inserted **inside the settlement transaction**, not as a pre-check.
+  Retried/double-clicked buys return the existing order.
+- **Key reuse with different params:** same `purchaseKey` + different
+  `listingId`/`quantity`/`unitPrice` → `409 IDEMPOTENCY_KEY_REUSED` (the
+  stored order's params are compared inside the tx; mismatch rejects, no
+  second debit).
+- **Reciprocal purchases / deadlocks:** two buyers purchasing each other's
+  listings (or any cycle) must not deadlock. Wallet rows are locked in
+  **deterministic order** — sort participant `userId`s and acquire wallet
+  locks in that order inside the tx (or lock the listing row first, then
+  wallets sorted by id). Whole-transaction retry (bounded, e.g. 3×) on
+  Postgres serialization/deadlock errors (`P2034`/40P01) as a backstop —
+  same pattern class as the referral-balance fix (PR #52).
+
+## Item restrictions on resale and receipt (rev-1 correction)
+
+Referencing mutable `StoreItem` alone does **not** preserve advertised
+attributes — admin edits to `metadata`, price, or `isActive` would silently
+change what a listing delivers. Required rules:
+
+- **Binding snapshot:** at listing creation, copy the advertised attributes
+  into `marketplace_listings.itemSnapshot` — `itemId`, `name`, `category`,
+  `isConsumable`, full `metadata` (effectType, multiplier, durationHours,
+  bonusSlots, protectedDays, possibleRewards), and a `catalogVersion`/
+  `storeItem.updatedAt` marker. The listing advertises the snapshot, not
+  the live row.
+- **Fulfillment rule:** purchase delivers the **snapshot** attributes.
+  Implementation choice at build time: (a) listings only allowed for items
+  whose snapshot still matches catalog at purchase time (strict — listing
+  auto-pauses `CATALOG_CHANGED` if admin edits the item), or (b) snapshot
+  is authoritative and fulfillment materializes attributes independent of
+  later catalog edits. Recommend (a) for launch — simpler, prevents
+  advertising-then-nerfing.
+- **Deactivated items (`isActive=false`):** existing listings auto-pause;
+  new listings rejected. Already-listed units remain fulfillable only if
+  snapshot matches at sale time under rule (a); otherwise listing pauses
+  until seller cancels.
+- **Buyer-side restrictions at receipt:** re-check `maxOwnedPerUser`,
+  `requiredVipTierLevel`, and item eligibility **inside the purchase tx**
+  against the *buyer* — if the buyer can't validly own the item (VIP gate,
+  ownership cap already reached via other inventory), purchase rejects
+  `BUYER_INELIGIBLE` and nothing moves. Note `maxOwnedPerUser` semantics
+  must be defined for stacked quantities.
+- **Seller-side at listing:** item must be unused (`consumedAt IS NULL`),
+  unequipped (cosmetics), and seller must pass account-status checks.
+- **Cancellation returns:** qty returns to the seller's `user_inventory`
+  under the same row lock; if the row was deleted meanwhile (fully
+  consumed), it's re-created. Returned units remain usable even if the
+  catalog item is later deactivated — inventory ownership is independent
+  of storefront availability (same as today).
+- **Equipped cosmetics:** `equipped=true` rows are not listable; the Sell
+  action prompts "Unequip to sell" (or unequips inside the listing tx —
+  decide; recommend requiring manual unequip for clarity).
 
 ## Product shape
 
-New top-level section **`/marketplace`** (distinct from the platform Store —
-the Store sells platform items for credits; the marketplace trades
-player-owned inventory between users).
+New top-level section **`/marketplace`** — distinct from the platform Store
+(the Store sells platform items; the marketplace trades player-owned
+inventory). Credit resale is out of scope; credits remain the settlement
+currency only.
 
-### Browse / detail
+### Browse / detail / history
 
-- Grid of active listings: item art/name, quantity, price per unit (credits),
-  seller username (+ optional reputation/XP badge), listed time, time left.
+- Grid of ACTIVE listings: item art/name, quantity, price/unit (credits),
+  seller username (+ reputation badge), listed time, time remaining.
 - Filters: category (Boost / Convenience / Cosmetic), price sort, seller.
-- Item detail: full description, item metadata (e.g. "+5 slots / 48h"),
-  seller card, quantity selector, total price, Buy button.
-- **My listings** tab: active/pending/sold history, cancel, relist.
-- **Purchase/sale history**: per-user ledger view (linked transaction ids).
+- Detail: snapshot attributes (e.g. "+5 slots / 48h"), seller card,
+  quantity selector, total, Buy.
+- **My listings**: active/pending/sold/cancelled/expired history.
+- **Purchase/sale history**: both sides, linked transaction ids.
 
 ```
 Desktop                                        Mobile (390px)
@@ -62,129 +191,84 @@ Desktop                                        Mobile (390px)
 └──────────────────────────────────────┘
 ```
 
-### Listing creation (from `/store/inventory`)
+## Tradability matrix (launch proposal)
 
-"Sell" action on eligible inventory rows → quantity + price per unit →
-confirm reservation → listing live.
-
-## Tradability matrix (proposed launch rules)
-
-| Item class | Examples (live catalog) | Listable? | Rule |
+| Item class | Examples | Listable? | Rule |
 |---|---|---|---|
-| Unused consumable boost | XP Boost, Task Limit Boost, Streak Freeze | ✅ Yes | Only while sitting in `user_inventory` (`consumedAt IS NULL`). Once `useItem` runs, the effect moves to `UserActiveEffect` and is **not tradable** — the buyer would get nothing. |
-| Unopened loot box | Mystery Gift Box | ✅ Yes | Tradable only while unopened (`consumedAt IS NULL`). Opening resolves contents to the opener — contents are RNG at open time, so the box itself is the asset. |
-| Non-consumable cosmetic | Neon theme, Gold Frame | ⚠️ Proposed: yes, unequipped only | Must be `equipped=false` to list (equipped items show "Unequip to sell"). On transfer buyer receives it unequipped. Owner decision below. |
-| Activated effect | Active XP/task-limit boost | ❌ No | Lives in `user_active_effects`, not inventory — cannot be listed, gifted, or transferred. |
-| Expired/bound items | n/a today | ❌ No | No per-unit expiry exists on inventory rows; if expiry is added later it must gate listing. |
-| Credits / points | wallet balance, P2P points | ❌ No | Explicitly out of scope — credits are not items; points are reputation. |
+| Unused consumable boost | XP Boost, Task Limit Boost, Streak Freeze | ✅ Yes (launch) | `consumedAt IS NULL`, sitting in `user_inventory` |
+| Unopened loot box | Mystery Gift Box | ✅ Yes (launch) | Tradable only unopened; contents resolve at open time to the opener |
+| Non-consumable cosmetic | Neon, Gold Frame | ⚠️ Owner decision | Proposed: yes, unequipped only; buyer receives unequipped |
+| Activated effect | Active boost in `user_active_effects` | ❌ No | Not inventory; cannot be listed or transferred |
+| Expired/bound items | n/a today | ❌ No | Gate added if per-unit expiry ever introduced |
+| Credits / points | wallet balance, P2P points | ❌ No | Credit resale out of scope; points are reputation |
 
-**Attribute preservation:** item attributes live on `StoreItem.metadata`
-(effect type, multiplier, duration) and are referenced by `itemId` — a
-transfer moves the inventory row reference, so attributes travel intact.
-No per-unit attribute snapshot is needed for launch categories; if
-per-unit variance is ever introduced (e.g. different durations), listings
-must snapshot attributes into the listing row — flagged as a schema
-dependency, not needed now.
-
-## Lifecycle & atomicity
+## Lifecycle
 
 ```
 SELLER                          PLATFORM                        BUYER
   │ create listing (qty, price)   │                                │
-  ├──────────────────────────────►│ reserve qty OUT of usable      │
-  │                               │ inventory (escrow)             │
-  │ cancel ──────────────────────►│ release qty back to inventory  │
+  ├──────────────────────────────►│ tx: lock inventory row,        │
+  │                               │  move qty inventory→listing    │
+  │ cancel ──────────────────────►│ tx: lock listing, return qty   │
   │                               │                                │
-  │                    buy ──────►│ ONE tx: lock listing,          │
-  │                               │  debit buyer, credit seller    │
-  │                               │  (−fee→platform), move qty     │
-  │                               │  listing→buyer inventory,      │
-  │                               │  write both ledger rows        │
+  │                    buy ──────►│ ONE tx: lock listing (sorted   │
+  │                               │  wallet locks), idempotency    │
+  │                               │  check, debit buyer, credit    │
+  │                               │  seller (−fee→platform), move  │
+  │                               │  qty listing→buyer inventory,  │
+  │                               │  write order + ledger rows     │
   │◄──────────────────────────────┤                                │
   │ EARN_MARKETPLACE_SALE (+fee)  │ SPEND_MARKETPLACE_PURCHASE      │
 ```
 
-**Reservation model (recommended):** listing creation moves quantity out of
-`user_inventory` into the listing (`marketplace_listings.quantity`) inside
-the same transaction — "escrow by decrement". Usable inventory can never
-include listed units, so `useItem`/`equipCosmetic`/re-listing need **zero
-changes** and can never race a listing. Cancel/sale-expiry credits the
-quantity back. Alternative (`reservedQuantity` column on inventory) was
-rejected: it requires auditing every consume/equip path for the reserved
-remainder — more surface, same guarantee.
-
-**Purchase transaction** (mirrors `purchaseItem`'s proven pattern):
-
-1. `SELECT ... FOR UPDATE` on the listing row → re-validate `ACTIVE`, qty, price.
-2. Lock buyer wallet via `walletService.debit` (`SPEND_MARKETPLACE_PURCHASE`).
-3. `walletService.credit` seller (`EARN_MARKETPLACE_SALE`, net of fee) +
-   `PLATFORM_FEE_MARKETPLACE` revenue row if fee approved.
-4. Decrement listing qty (delete row at 0); upsert buyer `user_inventory`.
-5. Write `marketplace_orders` history row (listing, buyer, seller, qty,
-   unit price, fee, transaction ids) — the audit record for both sides.
-6. Idempotency: client-generated `requestKey` unique per purchase attempt —
-   a retried/double-clicked buy returns the existing order, never a second
-   debit. Concurrent buyers serialize on the listing row lock; second buyer
-   sees reduced qty or `LISTING_SOLD_OUT`.
-
-**New ledger types needed:** `SPEND_MARKETPLACE_PURCHASE`,
-`EARN_MARKETPLACE_SALE`, `PLATFORM_FEE_MARKETPLACE` (naming TBD at review).
-
-**Accounting example (5% fee, illustrative):** buyer purchases 2 × XP Boost
-@ 60cr each = 120cr. One tx writes:
-
-| Entry | Amount | Balance effect |
-|---|---|---|
-| `SPEND_MARKETPLACE_PURCHASE` (buyer) | −120 | buyer wallet −120 |
-| `EARN_MARKETPLACE_SALE` (seller) | +114 | seller wallet +114 |
-| `PLATFORM_FEE_MARKETPLACE` (platform) | +6 | platform revenue +6 |
-
-Sum of credit legs = 0 within the tx (120 = 114 + 6); the `marketplace_orders`
-row links all three transaction ids plus listing/buyer/seller/qty/price for
-audit. If fee is 0% at launch, only the two user legs are written.
-
-## Edge cases (all must be specified before build)
+## Edge cases
 
 | Case | Proposed behavior |
 |---|---|
-| Insufficient funds | Debit fails inside tx → whole purchase rolls back; listing untouched; clear "not enough credits" error. |
-| Self-purchase | Reject `sellerId === buyerId` before tx (also blocks wash-trading for fee evasion / points farming). |
-| Duplicate listings | Allow multiple listings per item **or** one active listing per (seller,item) — decision; recommend one active per item+price-tier for simplicity. |
-| Purchase vs cancel/use race | Impossible by construction: listed qty is out of inventory; cancel and purchase both lock the listing row — first wins, second gets `LISTING_UNAVAILABLE`. |
-| Forged attributes | Attributes come from `StoreItem` server-side; listing stores only `itemId`+qty+price — client cannot inject metadata. Price is the only user input → bound it (below). |
-| Suspended/banned accounts | Check `user.status`/suspension inside the tx for both parties; suspended seller's listings auto-unpublish + qty returns; suspended buyer cannot purchase. |
-| Admin takedown | `listing.status = REMOVED` → qty returns to seller inventory, order history preserved, reason logged. Reuses admin tooling patterns. |
-| Listing expiry | Auto-cancel after N days (proposed 7) → qty returns; sweep job like the room-expiry pattern. |
-| Partial purchase | Buyer may buy 1..listed qty; listing stays ACTIVE with remainder. |
+| Insufficient funds | Debit fails inside tx → full rollback; `INSUFFICIENT_FUNDS`; listing untouched |
+| Self-purchase | Reject `sellerId === buyerId` pre-tx (also blocks fee-evasion wash trades) |
+| Duplicate listings | Decision: one ACTIVE listing per (seller,item) recommended |
+| Listing vs use/equip race | Serialized by shared row lock (see coordinated design); loser gets clean error |
+| Cancel vs purchase race | Both lock listing row; first commits, second gets `LISTING_UNAVAILABLE` |
+| Forged attributes | Client sends only `itemId`+qty+price; attributes come from server-side snapshot |
+| Suspended accounts | `user.status` checked inside tx both sides; suspended seller's listings auto-unpublish + qty returns |
+| Admin takedown | `status=REMOVED`, qty returns, order history preserved, reason logged |
+| Buyer ineligible | `BUYER_INELIGIBLE` if VIP/cap checks fail at receipt; nothing moves |
+| Catalog changed mid-listing | Listing pauses `CATALOG_CHANGED` under fulfillment rule (a) |
+| Idempotent retry | Same key+params → existing order; same key+diff params → 409 |
+| Reciprocal purchase deadlock | Sorted wallet locking + bounded whole-tx retry |
 
-## Economics decisions for approval
+## Owner decision table — proposed defaults
 
-1. **Launch categories:** unused consumables only (BOOST + CONVENIENCE),
-   cosmetics deferred? — recommend consumables-only v1 (simplest matrix,
-   no equip edge cases).
-2. **Fee:** proposed 5% platform fee on sale proceeds — or 0% for launch?
-3. **Price bounds:** proposed min 10cr, max 100,000cr per unit.
-4. **Listing expiry:** proposed 7 days.
-5. **Purchase currency:** wallet credits only (no points, no money).
-6. **Cold start:** prod has ~1 tradable inventory row today — supply comes
-   from store purchases/loot boxes over time; consider seeding a few
-   labeled listings for launch testing only.
+| Decision | Proposed default | Alternatives |
+|---|---|---|
+| Launch categories | Unused consumables only (BOOST + CONVENIENCE); cosmetics deferred | Include unequipped cosmetics v1 |
+| Fee | 5% of sale price, rounded **down** to whole credits; `PLATFORM_FEE_MARKETPLACE` ledger row | 0% launch fee; or fee rounded to nearest |
+| Price bounds | Min 10cr, max 100,000cr per unit | Different floor/ceiling |
+| Listing expiry | 7 days → auto-CANCELLED, qty returns | 3d / 14d / never |
+| Relisting | Seller may manually relist cancelled/expired items; no auto-relist | Auto-relist once; unlimited |
+| Duplicate listings | One ACTIVE listing per (seller,item) | Multiple concurrent listings |
+| Equipped cosmetics | Must unequip manually before listing | Auto-unequip inside listing tx |
 
-## Scope estimate (for planning, not commitment)
+## Scope estimate (planning only)
 
-- API: `marketplace` module — listings CRUD, buy/cancel, history; ~4 new
-  tables (`marketplace_listings`, `marketplace_orders`, idempotency keys);
-  3 ledger types; admin takedown endpoint; expiry sweep.
-- Web: `/marketplace` browse+detail+my-listings+history, sell flow on
-  `/store/inventory`, nav entry, mobile/desktop per wireframes above.
-- Tests: real-PG specs for reservation decrement, concurrent buy/cancel,
-  insufficient funds, self-purchase, fee math, exactly-once settlement;
-  E2E browse→list→buy→use-bought-item.
+- API: `marketplace` module — listings CRUD + terminal-state sweep,
+  purchase/cancel with idempotency, history; ~3 new tables
+  (`marketplace_listings`, `marketplace_orders`, purchase idempotency);
+  3 ledger types; admin takedown; **plus the useItem/equipCosmetic/grant
+  transactional refactor** (required, not optional).
+- Web: `/marketplace` pages, sell flow on `/store/inventory`, nav entry.
+- Tests: real-PG specs — **listing-vs-use race, cancel-vs-purchase race,
+  concurrent buyers, insufficient funds, self-purchase, idempotency-key
+  reuse/mismatch, reciprocal-purchase deadlock retry, fee math,
+  exactly-once settlement, snapshot-vs-catalog-change**; E2E browse→list→
+  buy→use.
 
 ## Open questions for the owner
 
-1. Consumables-only v1, or include unequipped cosmetics?
-2. Fee % and who absorbs it (buyer price vs seller net)?
+1. Approve consumables-only v1 (cosmetics deferred)?
+2. Fee % and rounding rule?
 3. Price floor/ceiling?
-4. Listing duration before auto-expiry?
-5. May sellers relist unsold items automatically?
+4. Listing TTL?
+5. Manual relist only, or auto-relist?
+6. Legal/tax review owner for credit-denominated item trading?

@@ -17,11 +17,11 @@ the table wins. Verified against current main + production evidence cited.
 | 1 | Manageable task discovery (2-3 choices, platform select) | **Partially shipped - acceptance open** | Platform filter chips + paginated "Show more" feed (initial batch **6**, not 2-3); `browseActive` filters platformPrefix/taskType/geo, excludes completed + own campaigns. `apps/api/src/modules/campaigns/campaigns.service.ts:633`, `apps/web/src/app/(dashboard)/tasks/page.tsx` | PR #46 `a03732c` live-verified: chips filter, 6-card batch, Show more, own-work exclusion | **OPEN:** Jomar asked for two/three choices - shipped six initial cards (two desktop rows); needs his sign-off or a batch-size change. Visual-design satisfaction also open (item 6). |
 | 2 | Hide self-owned work + Accept & open target | **Shipped + live-verified** | Own campaigns excluded from `GET /tasks` at API level; creators keep `/campaigns` + `tasks/my`. "Accept & open [platform]" opens target synchronously post-assign with popup-blocked fallback + pinned accepted panel | PR #46; live PASS on engganyo.com (popup + fallback + panel) | None known. |
 | 3 | Optional account linking for manual tasks | **Shipped + live-verified** | `SocialAuthService.requiresLinkedAccount(taskType, autoVerify)` - link required only for API-verified autoVerify types; manual-proof tasks accept unlinked; challenges never require linking. `social-auth.service.ts:760`, `tasks.service.ts:135` | PR #47 `bcb5371`; live manual-task accept unlinked; CI 28-case matrix + real-PG specs | Jomar's "no OAuth at all" is not fully met - OAuth linking remains for the 4 API-verified task types (needed for automated verification). Multi-account support exists via Settings > Connected Accounts. Deferred funded-crypto qualification retained. |
-| 4 | User-to-user marketplace | **Proposal ready - owner decision pending** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** - users sell eligible inventory (boosts etc.) for wallet credits; credits themselves are NOT tradable. Proposal: `docs/proposals/player-item-marketplace.md`. Supersedes credit-resale draft `credit-trading.md` (removed). Audit: `StoreItem`/`UserInventory`/`StorePurchase`/`useItem`/`equipCosmetic`/`UserActiveEffect` + locked `purchaseItem` tx (`store.service.ts:163`) are a complete foundation; no listing/reservation/transfer exists | Source audit on `a1153e8`; prod catalog: 2 BOOST + 2 COSMETIC + 2 CONVENIENCE items, ~1 tradable inventory row | Owner decisions: launch categories (consumables-only?), fee %, price bounds, listing expiry, cosmetic tradability. |
+| 4 | User-to-user marketplace | **Proposal ready - owner decision pending** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** - users sell eligible inventory (boosts etc.) for wallet credits; direct credit resale is out of scope (tipping already moves credits peer-to-peer). Proposal (rev 2): `docs/proposals/player-item-marketplace.md`. Supersedes credit-resale draft `credit-trading.md` (removed). Audit: `StoreItem`/`UserInventory`/`StorePurchase`/`useItem`/`equipCosmetic`/`UserActiveEffect` + locked `purchaseItem` tx (`store.service.ts:163`) are a complete foundation; no listing/reservation/transfer exists | Source audit on `a1153e8`; prod catalog: 2 BOOST + 2 COSMETIC + 2 CONVENIENCE items, ~1 tradable inventory row | Owner decisions: launch categories (consumables-only?), fee %, price bounds, listing expiry, cosmetic tradability. |
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
 | 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
-| 8 | Paid Discover ads | **Proposal ready - owner decision pending** | Proposal refined with audit: `docs/proposals/paid-discover-ads.md`. Real-money payment via existing PayMongo/PayPal/USDT deposit-provider integrations (parallel purchase flow, not credits); scrollable `/discover` ads rail; per-ad impression analytics (new tables - visitor analytics does NOT count ad views); moderation before publication | Source audit on `a1153e8`; Discover page + visitor-analytics + payment modules located | Owner decisions: providers, price tiers, refund method, placement scope, moderation SLA, advertiser eligibility. |
+| 8 | Paid Discover ads | **Proposal ready - owner decision pending** | Proposal (rev 2): `docs/proposals/paid-discover-ads.md`. Real-money payment via existing PayMongo/PayPal/USDT deposit-provider integrations (parallel purchase flow, not credits); scrollable `/discover` ads rail; per-ad impression analytics (new tables - visitor analytics does NOT count ad views); moderation before publication | Source audit on `a1153e8`; Discover page + visitor-analytics + payment modules located | Owner decisions: providers, price tiers, refund method, placement scope, moderation SLA, advertiser eligibility. |
 | 9 | Supported-platform logos (owner item) | **Shipped + live-verified** | Landing "Supported platforms" strip, local SVGs, before "Two ways to participate" | PR #49 `6c4f2b5`; live 390px+1440px | None. |
 
 ## Delivery order
@@ -95,14 +95,15 @@ Jomar wants beginners to complete manually reviewed tasks using their chosen soc
 
 ## 4. Player item marketplace (was: user-to-user credit marketplace)
 
-**Status — proposal ready for owner review (11 Nov).** `docs/proposals/player-item-marketplace.md`.
+**Status — proposal ready for owner review (11 Nov, rev 2).** `docs/proposals/player-item-marketplace.md`.
 
 > **Interpretation corrected by owner (11 Nov 2026):** Jomar means a
 > **player item marketplace** — users sell eligible Engganyo inventory
 > (boosts and similar items) and buyers pay with wallet credits; sellers
 > receive credits. The earlier credit-resale reading (peer transfer of
-> credits, `credit-trading.md`) is **superseded and removed**. Credits and
-> P2P points remain non-transferable.
+> credits, `credit-trading.md`) is **superseded and removed**. Direct credit
+> resale stays out of scope (chat tipping legitimately transfers credits);
+> P2P points remain reputation-only.
 
 The proposal covers the tradability matrix (unused consumables tradable;
 activated effects, equipped cosmetics, credits, and points not), atomic
@@ -163,7 +164,7 @@ pending.
 
 ## 8. Paid Discover ads
 
-**Status — proposal ready for owner review (11 Nov).** `docs/proposals/paid-discover-ads.md` — refined with source audit (payment providers, Discover surface, visitor-analytics limits, moderation lifecycle, per-ad impression design).
+**Status — proposal ready for owner review (11 Nov, rev 2).** `docs/proposals/paid-discover-ads.md` — refined with source audit (payment providers, Discover surface, visitor-analytics limits, moderation lifecycle, per-ad impression design).
 
 Jomar wants an affordable feed of user-submitted ads, paid directly with money, with visible per-ad views and content moderation. The proposal defines checkout correlation (`ad_purchases` ↔ provider `paymentRef`, parallel to but separate from credit deposits), the DRAFT→PAYMENT→MODERATION→LIVE lifecycle with idempotent rejection refunds, reporting/takedown, per-ad impression counting (IntersectionObserver ≥50%/1s, 24h dedupe, bot filtering — new tables required; visitor analytics does not count ad views), pricing/duration tiers, and mobile/desktop wireframes. No ad economics implemented — awaiting owner approval.
 
