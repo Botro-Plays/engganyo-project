@@ -243,7 +243,7 @@ SELLER                          PLATFORM                        BUYER
 | Decision | Proposed default | Alternatives |
 |---|---|---|
 | Launch categories | Unused consumables only (BOOST + CONVENIENCE); cosmetics deferred | Include unequipped cosmetics v1 |
-| Fee | 5% of sale price, rounded **down** to whole credits; `PLATFORM_FEE_MARKETPLACE` ledger row | 0% launch fee; or fee rounded to nearest |
+| Fee | **5% of the order total** (sum of qty × unit price), rounded **down** to whole credits, once per purchase — not per unit; `PLATFORM_FEE_MARKETPLACE` ledger row. Examples: 1×33cr → fee ⌊1.65⌋=1cr, seller +32; 3×33cr=99cr order → fee ⌊4.95⌋=4cr (per-unit rounding would give 3cr — rejected for simplicity) | 0% launch fee; per-unit rounding; round to nearest |
 | Price bounds | Min 10cr, max 100,000cr per unit | Different floor/ceiling |
 | Listing expiry | 7 days → auto-CANCELLED, qty returns | 3d / 14d / never |
 | Relisting | Seller may manually relist cancelled/expired items; no auto-relist | Auto-relist once; unlimited |

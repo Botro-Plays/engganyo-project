@@ -1935,3 +1935,17 @@ impressions/reach/clicks/CTR measurement. Jomar checklist item 8 renamed
 to "External banner advertising — real-money bookings and intelligent
 placement". Marketplace proposal unchanged and separate. No economics
 implemented — pricing awaits owner approval.
+
+### Records update — decision package corrections (11 Nov 2026)
+
+`docs/IMPLEMENTATION_DECISION_PACKAGE.md` corrected: recommendations no
+longer phrased as approvals; analytics window corrected to actual
+collection period 2026-11-06→11 (~5 days, 267 human views full window /
+78 steady-state Nov 8–11; /discover and /forum zero steady-state views);
+page views labeled observed data, impressions labeled unvalidated
+estimates; yield conclusions removed; placement diagrams relabeled as
+conceptual wireframes with rendered-preview verification deferred to
+implementation; marketplace fee rounding specified per-order with
+examples; decision table reduced to four start-blocking marketplace
+choices; banner pricing parked pending traffic measurement + owner
+selection.
