@@ -12,6 +12,9 @@ import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { EventsService } from './events.service';
+import { PrismaService } from '../../database/prisma.service';
+import { RedisService } from '../../database/redis.service';
+import { authenticateSocket } from './socket-auth.util';
 
 @WebSocketGateway({
   namespace: 'notifications',
@@ -36,6 +39,8 @@ export class EventsGateway
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
     private readonly eventsService: EventsService,
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
   ) {}
 
   afterInit(server: Server) {
@@ -62,67 +67,27 @@ export class EventsGateway
   }
 
   async handleConnection(client: Socket) {
-    try {
-      const token = this.extractToken(client);
-      if (!token) {
-        this.logger.warn('Socket connection rejected: no token');
-        client.disconnect(true);
-        return;
-      }
+    const auth = await authenticateSocket(client, {
+      jwtService: this.jwtService,
+      configService: this.configService,
+      prisma: this.prisma,
+      redisService: this.redisService,
+      logRejection: (msg) => this.logger.warn(`Socket connection rejected: ${msg}`),
+    });
+    if (!auth) return;
 
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('jwt.accessSecret'),
-      });
-
-      if ((payload as { purpose?: string }).purpose !== 'access') {
-        this.logger.warn('Socket connection rejected: wrong token purpose');
-        client.disconnect(true);
-        return;
-      }
-
-      const userId = payload.sub as string;
-      if (!userId) {
-        this.logger.warn('Socket connection rejected: no userId in token');
-        client.disconnect(true);
-        return;
-      }
-
-      client.data.userId = userId;
-      await client.join(`user:${userId}`);
-
-      // Join admin room for real-time admin alerts
-      const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR'];
-      if (adminRoles.includes(payload.role)) {
-        await client.join('admin');
-        this.logger.debug(`Socket connected: ${client.id} for user ${userId} (admin room joined)`);
-      } else {
-        this.logger.debug(`Socket connected: ${client.id} for user ${userId}`);
-      }
-    } catch (err) {
-      this.logger.warn(`Socket connection rejected: ${(err as Error).message}`);
-      client.disconnect(true);
+    // Join admin room for real-time admin alerts — uses the CURRENT database
+    // role, not the handshake token's claim.
+    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'MODERATOR'];
+    if (adminRoles.includes(auth.role)) {
+      await client.join('admin');
+      this.logger.debug(`Socket connected: ${client.id} for user ${auth.userId} (admin room joined)`);
+    } else {
+      this.logger.debug(`Socket connected: ${client.id} for user ${auth.userId}`);
     }
   }
 
   handleDisconnect(client: Socket) {
     this.logger.debug(`Socket disconnected: ${client.id}`);
-  }
-
-  private extractToken(client: Socket): string | null {
-    // Try auth object first (recommended)
-    const authToken = client.handshake.auth?.token as string | undefined;
-    if (authToken) return authToken;
-
-    // Fallback to query param
-    const queryToken = client.handshake.query?.token as string | undefined;
-    if (queryToken) return queryToken;
-
-    // Fallback to Authorization header
-    const header = client.handshake.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      return header.substring(7);
-    }
-
-    return null;
   }
 }
