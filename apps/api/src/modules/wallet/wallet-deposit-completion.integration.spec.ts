@@ -306,7 +306,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     await wallet.completeDeposit(d.id);
 
     expect(gamification.awardVp).toHaveBeenCalledWith(
-      user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO',
+      user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO', expect.anything(),
     );
   });
 
@@ -325,7 +325,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     const { wallet, gamification } = gamificationWallet();
     await wallet.completeDeposit(d.id);
     expect(gamification.awardVp).toHaveBeenCalledWith(
-      user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO',
+      user.id, 100, 'deposit_completed', d.id, 'Deposit PAYMONGO', expect.anything(),
     );
   });
 
@@ -367,7 +367,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     const { wallet, gamification } = gamificationWallet();
     await wallet.completeDeposit(d.id);
     expect(gamification.awardVp).toHaveBeenCalledWith(
-      user.id, 250, 'deposit_completed', d.id, 'Deposit PAYPAL',
+      user.id, 250, 'deposit_completed', d.id, 'Deposit PAYPAL', expect.anything(),
     );
   });
 
@@ -406,5 +406,119 @@ run('Deposit completion — real PostgreSQL integration', () => {
     await wallet.completeDeposit(d.id);
     await expect(wallet.completeDeposit(d.id)).rejects.toThrow(); // already completed
     expect(gamification.awardVp).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolved deposit settles VP entitlement atomically with completion', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYPAL,
+        amountFiat: 10,
+        currency: 'USD',
+        usdValue: 10,
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+
+    const ent = await prisma.rewardEntitlement.findUniqueOrThrow({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+    });
+    expect(ent.status).toBe('SETTLED');
+    expect(ent.amount).toBe(100);
+    expect(ent.settledAt).not.toBeNull();
+  });
+
+  it('unresolved valuation retains a durable UNRESOLVED entitlement', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 580,
+        currency: 'PHP',
+        exchangeRate: null,
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+
+    const ent = await prisma.rewardEntitlement.findUniqueOrThrow({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+    });
+    expect(ent.status).toBe('UNRESOLVED');
+    expect(ent.unresolvedReason).toBe('no_usd_valuation');
+  });
+
+  it('processRewardEntitlements backfills a completed deposit missing its entitlement', async () => {
+    const user = await makeUser();
+    // Simulates a legacy crash-window loss: deposit COMPLETED, no
+    // entitlement row, no VP event.
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYPAL,
+        amountFiat: 20,
+        currency: 'USD',
+        usdValue: 20,
+        creditsToAward: 100000,
+        status: DepositStatus.COMPLETED,
+        creditsAwarded: 100000,
+        completedAt: new Date(),
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.processRewardEntitlements();
+
+    const ent = await prisma.rewardEntitlement.findUniqueOrThrow({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+    });
+    expect(ent.status).toBe('SETTLED');
+    const calls = gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id);
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toBe(200); // $20 × 10 VP/USD
+  });
+
+  it('unresolved entitlement settles after valuation backfill; repeated sweeps stay idempotent', async () => {
+    const user = await makeUser();
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 580,
+        currency: 'PHP',
+        exchangeRate: null, // unresolved at completion
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.completeDeposit(d.id);
+
+    let ent = await prisma.rewardEntitlement.findUniqueOrThrow({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+    });
+    expect(ent.status).toBe('UNRESOLVED');
+
+    // Sweep while still unresolvable — entitlement retained, no award.
+    await wallet.processRewardEntitlements();
+    ent = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: ent.id } });
+    expect(ent.status).toBe('UNRESOLVED');
+    expect(gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id)).toHaveLength(0);
+
+    // Admin backfills the initiation-time rate → next sweep settles once.
+    await prisma.deposit.update({ where: { id: d.id }, data: { exchangeRate: 58 } });
+    await wallet.processRewardEntitlements();
+    ent = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: ent.id } });
+    expect(ent.status).toBe('SETTLED');
+    expect(ent.amount).toBe(100);
+
+    // Duplicate sweep / replay — no second award.
+    await wallet.processRewardEntitlements();
+    await expect(wallet.completeDeposit(d.id)).rejects.toThrow();
+    const calls = gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id);
+    expect(calls).toHaveLength(1);
   });
 });

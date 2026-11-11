@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma, DepositMethod, DepositStatus, TransactionType, TransactionStatus, NotificationType, UserRole } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { withTransactionRetry } from '../../database/tx-retry';
 import { CurrencyService } from './currency.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
@@ -691,7 +692,16 @@ export class WalletService {
     const { deposit, wallet, notification, vpAmount, vpUnresolved } = await this.prisma.withTransaction(async (tx) => {
       const existing = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!existing) throw new NotFoundException('Deposit not found');
-      if (existing.status === DepositStatus.COMPLETED) throw new BadRequestException('Deposit already completed');
+      if (existing.status === DepositStatus.COMPLETED) {
+        // Replay path: a previous completion may have left an
+        // UNRESOLVED/PENDING VP entitlement (missing valuation at the
+        // time, or a pre-entitlement crash-window loss). Re-attempt
+        // settlement idempotently before keeping the API contract.
+        await this.trySettleDepositVpEntitlement(depositId).catch((err) =>
+          this.logger.warn(`VP entitlement settle on replay failed for deposit ${depositId}: ${(err as Error)?.message}`),
+        );
+        throw new BadRequestException('Deposit already completed');
+      }
       if (existing.status === DepositStatus.CANCELLED) throw new BadRequestException('Deposit was cancelled');
       if (existing.status === DepositStatus.FAILED) throw new BadRequestException('Deposit was failed');
 
@@ -755,13 +765,14 @@ export class WalletService {
         where: { id: walletRecord.id },
       });
 
-      // VP is denominated in USD — amountFiat is gateway currency (PHP for
-      // PayMongo), so it must never be multiplied by the per-dollar rate
-      // directly. See depositUsdValue. Unresolved valuations are recorded
-      // for reconciliation instead of silently over/under-awarding.
-      const vpUsd = this.depositUsdValue(existing);
-      const vpAmount = vpUsd != null ? Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR) : 0;
-      const vpUnresolved = vpUsd == null;
+      // ── VP entitlement: durable record + atomic settlement ──
+      // Written INSIDE this tx (unique source+referenceId → replay-safe);
+      // awardVp runs in the SAME tx when the valuation resolves, so
+      // deposit + wallet + VP + entitlement commit or roll back together.
+      // Unresolvable valuations commit as UNRESOLVED — retained for later
+      // re-settlement, never a peso-as-dollar guess.
+      const { status: vpEntitlementStatus, vpAmount } = await this.ensureDepositVpEntitlement(tx, existing);
+      const vpUnresolved = vpEntitlementStatus === 'UNRESOLVED';
       if (vpUnresolved) {
         await tx.auditLog.create({
           data: {
@@ -805,19 +816,15 @@ export class WalletService {
       this.eventsService.emitToUser(deposit.userId, 'notification:new', notification);
     }
 
-    // Award VP for deposit completion (outside transaction for resilience)
+    // VP was settled INSIDE the deposit transaction (or retained as an
+    // UNRESOLVED entitlement) — nothing left to do post-commit except
+    // flush reward-outbox deliveries (level/tier notifications) promptly.
     if (vpUnresolved) {
       this.logger.warn(
-        `Deposit ${depositId} completed with no resolvable USD valuation — VP entitlement recorded for reconciliation (audit_log deposit.vp_unresolved)`,
+        `Deposit ${depositId} completed with no resolvable USD valuation — VP entitlement retained as UNRESOLVED for reconciliation`,
       );
     }
-    try {
-      if (vpAmount > 0) {
-        await this.gamificationService.awardVp(deposit.userId, vpAmount, 'deposit_completed', deposit.id, `Deposit ${deposit.method}`);
-      }
-    } catch (vpErr) {
-      this.logger.warn(`Failed to award VP for deposit ${depositId}: ${(vpErr as Error).message}`);
-    }
+    void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
 
     // Sprint 7: Check referral milestones after deposit
     void this.referralsService.checkMilestones(deposit.userId).catch(() => null);
@@ -857,6 +864,147 @@ export class WalletService {
       return null;
     }
     return d.amountFiat ?? 0;
+  }
+
+  /**
+   * Idempotently record + settle the deposit VP entitlement inside `tx`.
+   * Unique (source, referenceId) makes creation replay-safe; awardVp's
+   * own (userId, source, referenceId) dedupe is the second guard.
+   * Returns the FINAL entitlement status.
+   */
+  private async ensureDepositVpEntitlement(
+    tx: Prisma.TransactionClient,
+    d: {
+      id: string;
+      userId: string;
+      method: DepositMethod;
+      amountFiat: number | null;
+      currency: string;
+      exchangeRate: number | null;
+      usdValue: number | null;
+    },
+  ): Promise<{ status: string; vpAmount: number }> {
+    const vpUsd = this.depositUsdValue(d);
+    const vpAmount = vpUsd != null ? Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR) : 0;
+    const entitlement = await tx.rewardEntitlement.upsert({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+      create: {
+        userId: d.userId,
+        kind: 'vp',
+        amount: vpAmount,
+        source: 'deposit_completed',
+        referenceId: d.id,
+        referenceType: 'Deposit',
+        description: `Deposit ${d.method}`,
+        status: vpUsd != null ? 'PENDING' : 'UNRESOLVED',
+        unresolvedReason: vpUsd != null ? null : 'no_usd_valuation',
+        metadata: {
+          amountFiat: d.amountFiat,
+          currency: d.currency,
+          exchangeRate: d.exchangeRate,
+          usdValue: d.usdValue,
+        } as Prisma.InputJsonValue,
+      },
+      update: {},
+    });
+
+    if (entitlement.status === 'PENDING') {
+      // Resolved valuation — award and settle atomically in this tx.
+      // vpAmount may be 0 (₱1 minimum-charge package): no VP event is
+      // written, but the entitlement still settles as fulfilled.
+      if (vpAmount > 0) {
+        await this.gamificationService.awardVp(
+          d.userId, vpAmount, 'deposit_completed', d.id,
+          `Deposit ${d.method}`, tx,
+        );
+      }
+      await tx.rewardEntitlement.update({
+        where: { id: entitlement.id },
+        data: { status: 'SETTLED', settledAt: new Date(), unresolvedReason: null },
+      });
+      return { status: 'SETTLED', vpAmount };
+    }
+    return { status: entitlement.status, vpAmount };
+  }
+
+  /**
+   * Re-attempt settlement of a retained deposit VP entitlement. Runs on
+   * the already-completed replay path and from processRewardEntitlements
+   * — covers backfilled valuations and legacy crash-window losses.
+   * Idempotent: status is re-checked inside the tx and awardVp dedupes
+   * on (userId, source, referenceId).
+   */
+  private async trySettleDepositVpEntitlement(depositId: string) {
+    const ent = await this.prisma.rewardEntitlement.findUnique({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: depositId } },
+    });
+    if (!ent || (ent.status !== 'UNRESOLVED' && ent.status !== 'PENDING')) return;
+    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+    if (!deposit) return;
+    const vpUsd = this.depositUsdValue(deposit);
+    if (vpUsd == null) return; // still unresolvable — retained
+    const vpAmount = Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR);
+
+    await withTransactionRetry(this.prisma, async (tx) => {
+      const fresh = await tx.rewardEntitlement.findUnique({ where: { id: ent.id } });
+      if (!fresh || (fresh.status !== 'UNRESOLVED' && fresh.status !== 'PENDING')) return;
+      // Re-resolved valuation → award + settle atomically. awardVp dedupes
+      // on (userId, source, referenceId) so a prior partial settle can't
+      // double-pay.
+      if (vpAmount > 0) {
+        await this.gamificationService.awardVp(
+          ent.userId, vpAmount, 'deposit_completed', depositId,
+          `Deposit ${deposit.method}`, tx,
+        );
+      }
+      await tx.rewardEntitlement.update({
+        where: { id: ent.id },
+        data: { status: 'SETTLED', settledAt: new Date(), amount: vpAmount, unresolvedReason: null },
+      });
+    });
+    void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
+  }
+
+  /**
+   * Bounded reconciliation sweep: settle retained entitlements and
+   * backfill COMPLETED deposits that have no entitlement row (legacy
+   * crash-window VP losses and pre-entitlement unresolved cases).
+   * Every step is idempotent — safe to run repeatedly.
+   */
+  async processRewardEntitlements(limit = 100) {
+    const entitlements = await this.prisma.rewardEntitlement.findMany({
+      where: { status: { in: ['PENDING', 'UNRESOLVED'] }, kind: 'vp', source: 'deposit_completed' },
+      take: limit,
+    });
+    for (const ent of entitlements) {
+      try {
+        await this.trySettleDepositVpEntitlement(ent.referenceId);
+      } catch (err) {
+        this.logger.warn(`Entitlement ${ent.id} settle failed: ${(err as Error)?.message}`);
+      }
+    }
+
+    const deposits = await this.prisma.deposit.findMany({
+      where: { status: DepositStatus.COMPLETED },
+      orderBy: { completedAt: 'desc' },
+      take: limit,
+      select: { id: true },
+    });
+    for (const d of deposits) {
+      try {
+        await withTransactionRetry(this.prisma, async (tx) => {
+          const existing = await tx.rewardEntitlement.findUnique({
+            where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+          });
+          if (existing) return;
+          const full = await tx.deposit.findUniqueOrThrow({ where: { id: d.id } });
+          await this.ensureDepositVpEntitlement(tx, full);
+        });
+      } catch (err) {
+        this.logger.warn(`Deposit ${d.id} entitlement backfill failed: ${(err as Error)?.message}`);
+      }
+    }
+    void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
   }
 
   // ─── Submit txHash for an existing PENDING crypto deposit ──

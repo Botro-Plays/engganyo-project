@@ -984,6 +984,32 @@ model RewardOutboxEvent {
   @@map("reward_outbox_events")
 }
 
+// Durable reward entitlement — written inside the settlement
+// transaction so a reward obligation survives crashes. PENDING rows are
+// processed idempotently; UNRESOLVED rows retain the entitlement until
+// the missing input (e.g. a USD valuation) is backfilled and the row is
+// re-settled. Unique (source, referenceId) makes creation replay-safe.
+model RewardEntitlement {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  kind             String    // 'vp'
+  amount           Int?
+  source           String    // 'deposit_completed' | ...
+  referenceId      String    @map("reference_id")
+  referenceType    String?   @map("reference_type")
+  description      String?
+  status           String    @default("PENDING") // PENDING | SETTLED | UNRESOLVED | CANCELLED
+  unresolvedReason String?   @map("unresolved_reason")
+  metadata         Json?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  settledAt        DateTime? @map("settled_at")
+
+  @@unique([source, referenceId])
+  @@index([status])
+  @@map("reward_entitlements")
+}
+
 model VpEvent {
   id          String  @id @default(cuid())
   userId      String  @map("user_id")
