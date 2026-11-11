@@ -82,7 +82,7 @@ run('reward atomicity — real PostgreSQL', () => {
       prisma as never,
       { get: jest.fn(async () => null), set: jest.fn(async () => {}), del: jest.fn(async () => {}) } as never,
       walletStub as never,
-      { createNotification: jest.fn() } as never,
+      { createNotification: jest.fn(async () => ({})) } as never,
       { emitToUser: jest.fn() } as never,
       {
         getActiveXpBoost: jest.fn(async () => null),

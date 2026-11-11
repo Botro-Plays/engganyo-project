@@ -206,7 +206,7 @@ export class GamificationService implements OnModuleInit {
   };
 
   if (tx) return apply(tx);
-  return this.prisma.withTransaction(apply);
+  return withTransactionRetry(this.prisma, apply);
 }
 
   // ─── Get my stats ──────────────────────────────────────────
@@ -314,7 +314,7 @@ export class GamificationService implements OnModuleInit {
   };
 
   if (tx) return apply(tx);
-  return this.prisma.withTransaction(apply);
+  return withTransactionRetry(this.prisma, apply);
 }
 
   async getUserVipTier(userId: string, currentVp?: number, tx?: Prisma.TransactionClient) {
