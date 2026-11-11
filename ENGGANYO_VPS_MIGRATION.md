@@ -2065,3 +2065,107 @@ before any new gamification.
   access; marketplace economics + provenance decisions P1–P4 still
   pending owner approval; campaign slot-expiry sweep and tip/rain
   idempotency still open.
+
+## Durable task outcomes + entitlement sweep hardening (2026-11-11, PM)
+
+Follow-up batch closing the remaining reward-delivery gaps in `1c9b622`.
+
+- **PR #76** `fix/entitlement-sweep` → head `729409b`, CI `43012424917`
+  success, merged `679b8bc`, deploy run `43014179589` success.
+  - Entitlement sweep no longer re-scans the newest 100 completed
+    deposits: backfill now scans `completed_at ASC, id ASC` over
+    post-rollout deposits missing an entitlement — settled rows drop out
+    so bounded batches progress deterministically.
+  - `nextAttemptAt` backoff (`ENTITLEMENT_RETRY_BACKOFF_MS`) on
+    UNRESOLVED/PENDING entitlements — persistent unresolved cases retry
+    at most once per window and cannot starve eligible work.
+  - Explicit rollout boundary `ENTITLEMENT_ROLLOUT_AT =
+    2026-11-11T10:18Z` (after the `1c9b622` deploy completed 10:14Z):
+    pre-rollout deposits are historical reconciliation only — the sweep
+    must never auto-entitle them.
+  - Missing deposit row → entitlement `CANCELLED` (`deposit_missing`)
+    instead of infinite retry. Cron `@Cron(EVERY_10_MINUTES)` added —
+    the sweep now has a production caller.
+- **PR #75** `fix/durable-task-outcomes` → head `77e287a`, CI
+  `43012899275` success (after fixture fix `2bd197d`→`77e287a` for the
+  `task_completions_single_offer` check constraint + Prisma regen),
+  merged `d9c9228`, deploy run `43014870852` success.
+  - `task_completion_outcomes` + per-effect settled flags (migration
+    `20261113000000_durable_task_outcomes`): the pending outcome row is
+    upserted INSIDE every VERIFIED transition tx (auto-verify, recheck,
+    creator campaign/challenge review, admin campaign/challenge
+    approval — 6 call sites). XP/VP/mission/achievements/referral
+    effects settle independently with persistent progress; the 60s
+    sweeper resumes PENDING outcomes (max 25 attempts → FAILED for
+    operators). Ownership + VERIFIED eligibility re-verified before
+    processing; mismatch → CANCELLED.
+  - `mission_progress_events` dedupe on `(missionId, sourceType,
+    sourceId)` where sourceId = completionId — outcome recovery can
+    never count one task twice.
+  - Mission notification/socket outbox rows now insert INSIDE the
+    mission progress+payout transaction — no post-commit crash window.
+  - `notifications.dedupe_key` unique; outbox notification delivery
+    binds `dedupeKey = outbox event id`; socket payloads carry stable
+    `_eventId`. Documented guarantee: durable at-least-once dispatch,
+    idempotent notification persistence — not exactly-once to clients.
+- **PR #77** `fix/notification-referral-idempotency` → head `5970433`,
+  CI `43015295928` success, merged `4d01040`, deploy run `43016773147`.
+  - `createNotification` returns the persisted row on dedupeKey P2002
+    (true idempotent replay, no duplicate/spurious failure).
+  - `qualifyReferral` recovers a missing `first_task` milestone when
+    `isQualified` is already true — the flag flip and milestone award
+    are separate writes; a crash between them previously stranded the
+    milestone permanently.
+- **Deployed SHA progression**: `679b8bc` → `d9c9228` → `4d01040`.
+  `/api/health` ok throughout (database ok, redis ok).
+
+### Live labeled-account verification (production, `d9c9228`)
+
+Test accounts `devin_earn_test` (worker) / `devin_create_test` (creator),
+DEVIN-TEST campaign `cmw66gpl100ey5vv8lcsikf3x` (manual review, 10cr).
+
+- Assign `cmwc2wvnc000q4z471h5s96q4` → submit proof → creator approve
+  → VERIFIED 2026-11-11T12:12:20.747Z, 10 credits awarded.
+- Outcome `cmwc2x2a500124z47qgmwub1u`: **DONE**, all five effect flags
+  settled, attempts=0.
+- `xp_events`: 50 XP, base=50, `reference_id = completionId`.
+- `vp_events`: 1 VP, `reference_id = completionId`.
+- `mission_progress_events`: 2 rows (two COMPLETE_N_TASKS missions),
+  `source_id = completionId`.
+- `reward_outbox_events`: mission CREDIT_EARNED notification +
+  `mission:completed` socket, 3× achievement pairs, level-up VP bonus —
+  all **DELIVERED**; `notifications.dedupe_key` = outbox event id on
+  every outbox-delivered row.
+- Side effect noted: anti-abuse flagged the 1.2s assign→submit timing
+  (expected for scripted test; informational only).
+
+### Historical reconciliation (read-only, no adjustments)
+
+Full report: `docs/HISTORICAL_REWARD_RECONCILIATION_2026-11-11.md`
+(records @ `330122c`). Headlines:
+
+- `reward_entitlements` = **0 rows** — the deployed sweep never touched
+  any deposit; all 3 historical COMPLETED deposits (Nov 3–4, user
+  `botro`) predate the feature and are excluded by the rollout boundary.
+- ~**20 VP over-award** on two PAYMONGO ₱1-package deposits (awarded 10
+  VP each vs correct ~0 under current valuation). Read-only; reversal
+  needs owner approval.
+- VP ledger fully reconciles for all 10 users. XP ledger: `jhing` has
+  **+180 XP** unexplained surplus — reported, not corrected.
+- Historical lost effect found: completion
+  `cmw66ldge00ga5vv8e76li5nn` (devin_earn_test) got VP but never its
+  50 XP — pre-durable-path loss; the new sweeper prevents recurrence.
+
+### Remaining gaps / owner decisions
+
+- Owner decisions pending: ~20 VP deposit over-award reversal;
+  jhing +180 XP investigation; whether to backfill devin_earn_test's
+  missing 50 XP (test account).
+- Entitlement sweep verified in CI + code review; first live sweep with
+  real entitlements awaits a post-rollout deposit (no real-money
+  payments triggered).
+- Referral milestone notifications still fire-and-forget (credits are
+  durable via milestone map; cosmetic notification can be lost).
+- Task ASSIGNED/TASK_COMPLETED direct notifications remain
+  fire-and-forget UX events, not outbox-durable.
+- Marketplace economics + provenance P1–P4 still pending owner approval.
