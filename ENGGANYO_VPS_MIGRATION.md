@@ -2169,3 +2169,7 @@ Full report: `docs/HISTORICAL_REWARD_RECONCILIATION_2026-11-11.md`
 - Task ASSIGNED/TASK_COMPLETED direct notifications remain
   fire-and-forget UX events, not outbox-durable.
 - Marketplace economics + provenance P1–P4 still pending owner approval.
+
+**Final deployed SHA: `4d01040`** — deploy run `43016773147` success;
+`.deployed-sha` confirmed on VPS; `/api/health` ok (db+redis) at
+12:26 UTC. All three PRs (#75, #76, #77) live.
