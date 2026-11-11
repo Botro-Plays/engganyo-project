@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Logger, BadRequestException, ConflictExceptio
 import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { withTransactionRetry } from '../../database/tx-retry';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -718,7 +719,11 @@ export class GamificationService implements OnModuleInit {
     const milestoneDays = [5, 7, 14, 30];
     let bonusLootBox = false;
 
-    await this.prisma.withTransaction(async (tx) => {
+    // Opt-in bounded retry (deadlock/serialization only). The callback
+    // mutates `bonusLootBox`, so it is reset at the start of EVERY attempt —
+    // an aborted attempt must not leak state into the retry or post-commit.
+    await withTransactionRetry(this.prisma, async (tx) => {
+      bonusLootBox = false;
       // Atomic eligibility claim — only one concurrent request gets count=1
       const eligibleSince = new Date(now.getTime() - DAILY_REWARD_COOLDOWN_MS);
       const claimed = await tx.user.updateMany({
@@ -1114,9 +1119,12 @@ export class GamificationService implements OnModuleInit {
     // The no-key entry point gets the same transactional allowance — only the
     // attempt bookkeeping is skipped.
     const settle = async (): Promise<Record<string, unknown>> => {
-      if (!idempotencyKey) return this.prisma.$transaction(execute) as Promise<Record<string, unknown>>;
+      // withTransactionRetry: bounded whole-tx retry on deadlock/serialization
+      // — wheel settlement touches wallet + inventory + effect rows.
+      const run = () => withTransactionRetry(this.prisma, execute) as Promise<Record<string, unknown>>;
+      if (!idempotencyKey) return run();
       try {
-        return await this.prisma.$transaction(execute) as Record<string, unknown>;
+        return await run();
       } catch (err) {
         if (this.isAttemptUniqueViolation(err)) {
           const attempt = await this.prisma.wheelSpinAttempt.findUnique({

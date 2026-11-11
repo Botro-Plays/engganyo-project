@@ -253,6 +253,66 @@ run('inventory atomicity — real PostgreSQL', () => {
     expect(after.equipped).toBe(true);
   });
 
+  it('concurrent equips of two different items in the same slot leave exactly one equipped', async () => {
+    // Second cosmetic sharing cosmeticType 'avatar_frame' with cosmeticItemId.
+    const cos2 = await mkItem({
+      name: `${PREFIX}Cosmetic 2`,
+      category: StoreCategory.COSMETIC,
+      isConsumable: false,
+      metadata: { cosmeticType: 'avatar_frame', effectType: 'cosmetic' },
+    });
+    const buyer = await mkUser(0);
+    const inv1 = await mkInventory(buyer.id, cosmeticItemId, 1);
+    const inv2 = await mkInventory(buyer.id, cos2.id, 1);
+
+    const [e1, e2] = await Promise.allSettled([
+      service.equipCosmetic(buyer.id, inv1.id),
+      service.equipCosmetic(buyer.id, inv2.id),
+    ]);
+    expect(e1.status).toBe('fulfilled');
+    expect(e2.status).toBe('fulfilled');
+
+    const equipped = await prisma.userInventory.count({
+      where: { userId: buyer.id, equipped: true },
+    });
+    expect(equipped).toBe(1); // slot serialization — never two equipped
+  });
+
+  it('purchase auto-equip racing a manual equip of the same slot stays consistent', async () => {
+    const cos2 = await mkItem({
+      name: `${PREFIX}Cosmetic 3`,
+      category: StoreCategory.COSMETIC,
+      isConsumable: false,
+      creditCost: 10,
+      metadata: { cosmeticType: 'avatar_frame', effectType: 'cosmetic' },
+    });
+    const buyer = await mkUser(1000);
+    // Buyer already owns+equips cosmeticItemId, then races a purchase of cos2
+    // against re-equipping the first item.
+    await service.purchaseItem(buyer.id, cosmeticItemId, 1);
+    const inv1 = await prisma.userInventory.findFirstOrThrow({
+      where: { userId: buyer.id, itemId: cosmeticItemId },
+    });
+    expect(inv1.equipped).toBe(true);
+
+    const [p, e] = await Promise.allSettled([
+      service.purchaseItem(buyer.id, cos2.id, 1),
+      service.equipCosmetic(buyer.id, inv1.id),
+    ]);
+    expect(p.status).toBe('fulfilled');
+    // equipCosmetic on an equipped row toggles it OFF — both orders are valid
+    // serialized outcomes; the invariant is at most one equipped per slot.
+    const equipped = await prisma.userInventory.findMany({
+      where: { userId: buyer.id, equipped: true },
+      include: { item: { select: { metadata: true } } },
+    });
+    const frameEquipped = equipped.filter((r) => {
+      const m = r.item.metadata as Record<string, unknown>;
+      return m?.['cosmeticType'] === 'avatar_frame';
+    });
+    expect(frameEquipped.length).toBeLessThanOrEqual(1);
+  });
+
   it('useItem on someone else\'s inventory is rejected', async () => {
     const other = await mkUser();
     const inv = await mkInventory(other.id, freezeItemId, 1);

@@ -33,7 +33,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
   let prisma: {
     user: { findUnique: jest.Mock; findFirst: jest.Mock; updateMany: jest.Mock; update: jest.Mock };
     storeItem: { findFirst: jest.Mock };
-    userInventory: { create: jest.Mock };
+    userInventory: { create: jest.Mock; upsert: jest.Mock };
     dailyRewardLog: { create: jest.Mock };
     achievement: { findUnique: jest.Mock };
     userAchievement: { findUnique: jest.Mock; create: jest.Mock };
@@ -41,6 +41,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     xpEvent: { create: jest.Mock };
     vpEvent: { create: jest.Mock };
     withTransaction: jest.Mock;
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -50,7 +51,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     prisma = {
       user: { findUnique: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
       storeItem: { findFirst: jest.fn() },
-      userInventory: { create: jest.fn() },
+      userInventory: { create: jest.fn(), upsert: jest.fn() },
       dailyRewardLog: { create: jest.fn() },
       achievement: { findUnique: jest.fn() },
       userAchievement: { findUnique: jest.fn(), create: jest.fn() },
@@ -60,8 +61,11 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
       // The tx client delegates to the same mocks so every assertion can
       // verify that ALL writes went through the transaction boundary.
       withTransaction: jest.fn(),
+      $transaction: jest.fn(),
     };
     prisma.withTransaction.mockImplementation((cb: (tx: typeof prisma) => Promise<unknown>) => cb(prisma));
+    // withTransactionRetry drives client.$transaction directly.
+    prisma.$transaction.mockImplementation((cb: (tx: typeof prisma) => Promise<unknown>) => cb(prisma));
     wallet = { credit: jest.fn().mockResolvedValue({ id: 'tx-1' }), debit: jest.fn() };
     notifications = { createNotification: jest.fn().mockResolvedValue({}) };
     events = { emitToUser: jest.fn() };
@@ -208,7 +212,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
 
     await service.claimDailyReward('u1', '5.6.7.8');
 
-    expect(prisma.withTransaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     // wallet.credit(userId, amount, opts, tx) — tx is the prisma tx client
     expect(wallet.credit).toHaveBeenCalledWith(
       'u1', 80, expect.objectContaining({ type: 'EARN_DAILY_REWARD' }), prisma,
@@ -245,7 +249,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     const retry = await service.claimDailyReward('u1', '5.6.7.8');
     expect(retry.newStreak).toBe(4);
     expect(wallet.credit).toHaveBeenCalledTimes(1);
-    expect(prisma.withTransaction).toHaveBeenCalledTimes(2);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
   });
 
   it('uses only the server clock — client time hints cannot affect eligibility or streak', async () => {
@@ -311,7 +315,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     prisma.user.findFirst.mockResolvedValue({ id: 'other-user' });
 
     await expect(service.claimDailyReward('u1', '9.9.9.9')).rejects.toThrow('this network today');
-    expect(prisma.withTransaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(wallet.credit).not.toHaveBeenCalled();
 
     // The IP window bound is UTC midnight — the original policy, unchanged
