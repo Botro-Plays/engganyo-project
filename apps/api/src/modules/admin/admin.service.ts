@@ -715,10 +715,10 @@ export class AdminService {
             newValue: { creditsPaid: campaign.creditPerTask },
           },
         });
-      });
 
-      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
-      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
+        // Durable reward outcome — commits atomically with VERIFIED.
+        await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completionId);
+      });
 
       // Full gamification outcome — same path as auto-verify (parity)
       await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
@@ -836,10 +836,11 @@ export class AdminService {
             newValue: { rewardCredits: challenge.rewardCredits, feeAmount: challenge.feeAmount, reviewedBy: 'admin' },
           },
         });
+
+        // Durable reward outcome — commits atomically with VERIFIED.
+        await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completion.id);
       });
 
-      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
-      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
       await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completion.id);
       void this.notificationsService.createNotification(
         completion.userId,

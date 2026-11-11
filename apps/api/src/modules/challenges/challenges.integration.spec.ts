@@ -102,6 +102,7 @@ run('1v1 challenges — real PostgreSQL', () => {
     updateMissionProgress: jest.fn().mockResolvedValue(undefined),
     checkAchievements: jest.fn().mockResolvedValue(undefined),
     awardTaskCompletionOutcome: jest.fn().mockResolvedValue(undefined),
+    recordTaskCompletionOutcome: jest.fn().mockResolvedValue(undefined),
   };
   const noopAbuse = {
     flagUser: jest.fn().mockResolvedValue(undefined),

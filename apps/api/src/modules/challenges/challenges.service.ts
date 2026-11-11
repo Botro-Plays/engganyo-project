@@ -699,10 +699,11 @@ export class ChallengesService {
             newValue: { rewardCredits: challenge.rewardCredits, feeAmount: challenge.feeAmount, reviewedBy: 'challenge_creator' },
           },
         });
+
+        // Durable reward outcome — commits atomically with VERIFIED.
+        await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completionId);
       });
 
-      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
-      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
       await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
       void this.antiAbuseService.queueRecalculate(completion.userId).catch(() => null);
 

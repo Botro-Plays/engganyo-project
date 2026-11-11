@@ -417,6 +417,9 @@ export class CampaignsService {
           },
         });
 
+        // Durable reward outcome — commits atomically with VERIFIED.
+        await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completionId);
+
         return res;
       });
 
@@ -424,9 +427,6 @@ export class CampaignsService {
       // notification — an in-flight completion on a CANCELLED campaign
       // fills the last slot without flipping the status.
       const willBeFull = txResult.becameCompleted;
-
-      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
-      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
 
       await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
 

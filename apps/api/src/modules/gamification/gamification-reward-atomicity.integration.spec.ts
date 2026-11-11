@@ -25,6 +25,7 @@ run('reward atomicity — real PostgreSQL', () => {
 
   let prisma: PrismaClient;
   let service: GamificationService;
+  let referralsStub: { qualifyReferral: jest.Mock; checkMilestones: jest.Mock };
   let seq = 0;
 
   const walletStub = {
@@ -78,6 +79,10 @@ run('reward atomicity — real PostgreSQL', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
+    referralsStub = {
+      qualifyReferral: jest.fn(async () => {}),
+      checkMilestones: jest.fn(async () => {}),
+    };
     service = new GamificationService(
       prisma as never,
       { get: jest.fn(async () => null), set: jest.fn(async () => {}), del: jest.fn(async () => {}) } as never,
@@ -90,6 +95,7 @@ run('reward atomicity — real PostgreSQL', () => {
         extendOrCreateActiveEffect: jest.fn(async () => ({})),
         syncEffectCaches: jest.fn(async () => {}),
       } as never,
+      referralsStub as never,
     );
     await prisma.$connect();
   });
@@ -325,5 +331,230 @@ run('reward atomicity — real PostgreSQL', () => {
     ]);
     expect((await xpOf(u.id)).xp).toBe(30);
     expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'dup_test' } })).toBe(3);
+  });
+
+  // ─── Durable task-completion outcomes ─────────────────────
+
+  const mkVerifiedCompletion = async (uid: string, status: 'VERIFIED' | 'SUBMITTED' = 'VERIFIED') =>
+    prisma.taskCompletion.create({
+      data: {
+        userId: uid,
+        status,
+        verifiedAt: status === 'VERIFIED' ? new Date() : null,
+        verifiedBy: status === 'VERIFIED' ? 'system' : null,
+      },
+    });
+
+  it('durable outcome settles every effect exactly once; replay is a no-op', async () => {
+    const u = await mkUser();
+    const completion = await mkVerifiedCompletion(u.id);
+
+    // Simulate the VERIFIED transition tx: outcome row + completion
+    // commit together.
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+    // Replay — recovery/sweeper/duplicate call must not double-settle.
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+    await service.processPendingTaskOutcomes();
+
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+    expect(outcome.status).toBe('DONE');
+    expect(outcome.xpSettled).toBe(true);
+    expect(outcome.vpSettled).toBe(true);
+    expect(outcome.missionSettled).toBe(true);
+    expect(outcome.achievementsSettled).toBe(true);
+    expect(outcome.referralSettled).toBe(true);
+
+    // XP 50 + VP 1 for the task completion — exactly one event each.
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
+    expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
+    expect(referralsStub.qualifyReferral).toHaveBeenCalledWith(u.id);
+    expect(referralsStub.checkMilestones).toHaveBeenCalledWith(u.id);
+  });
+
+  it('a failing effect stays unsettled and recovers without double-paying settled effects', async () => {
+    const u = await mkUser();
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+
+    // First pass: VP award throws — other effects still settle.
+    const vpSpy = jest.spyOn(service, 'awardVp').mockRejectedValueOnce(new Error('vp transient'));
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+    vpSpy.mockRestore();
+
+    let outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+    expect(outcome.status).toBe('PENDING');
+    expect(outcome.vpSettled).toBe(false);
+    expect(outcome.xpSettled).toBe(true);
+    expect(outcome.lastError).toContain('vp');
+
+    // XP settled exactly once even though the outcome re-ran.
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion' } })).toBe(1);
+
+    // Recovery pass settles the remaining effect.
+    await service.processPendingTaskOutcomes();
+    outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+    expect(outcome.status).toBe('DONE');
+    expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion' } })).toBe(1);
+    expect(await vpOf(u.id)).toBe(1);
+  });
+
+  it('refuses to process an outcome whose completion is not VERIFIED or not owned', async () => {
+    const u = await mkUser();
+    const other = await mkUser();
+    const pendingCompletion = await mkVerifiedCompletion(u.id, 'SUBMITTED');
+    await prisma.taskCompletionOutcome.create({
+      data: { completionId: pendingCompletion.id, userId: u.id },
+    });
+    // Wrong owner recorded on the outcome row.
+    const wrongOwner = await mkVerifiedCompletion(other.id);
+    await prisma.taskCompletionOutcome.create({
+      data: { completionId: wrongOwner.id, userId: u.id },
+    });
+
+    await service.processPendingTaskOutcomes();
+
+    for (const c of [pendingCompletion, wrongOwner]) {
+      const o = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { completionId: c.id } });
+      expect(o.status).toBe('CANCELLED');
+    }
+    expect(await prisma.xpEvent.count({ where: { userId: { in: [u.id, other.id] }, source: 'task_completion' } })).toBe(0);
+    expect(await prisma.vpEvent.count({ where: { userId: { in: [u.id, other.id] }, source: 'task_completion' } })).toBe(0);
+  });
+
+  it('mission progress dedupes on sourceId — outcome replay cannot count a task twice', async () => {
+    const u = await mkUser();
+    const mission = await prisma.dailyMission.create({
+      data: {
+        name: `${PREFIX}dedupe-mission`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 5,
+        creditReward: 10,
+        xpReward: 5,
+        isActive: true,
+      },
+    });
+
+    // Same sourceId delivered repeatedly (outcome recovery) counts once.
+    await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-X' });
+    await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-X' });
+    await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-X' });
+
+    const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+    const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+      where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+    });
+    expect(progress.progress).toBe(1);
+    expect(await prisma.missionProgressEvent.count({ where: { missionId: mission.id, sourceId: 'completion-X' } })).toBe(1);
+
+    // A distinct completion is a distinct event — counts again.
+    await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-Y' });
+    const after = await prisma.userMissionProgress.findUniqueOrThrow({
+      where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+    });
+    expect(after.progress).toBe(2);
+  });
+
+  it('mission payout + outbox rows commit together; replay creates no duplicates', async () => {
+    const u = await mkUser();
+    const mission = await prisma.dailyMission.create({
+      data: {
+        name: `${PREFIX}outbox-mission`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 1,
+        creditReward: 40,
+        xpReward: 20,
+        isActive: true,
+      },
+    });
+
+    const notes: any[] = [];
+    const origCreate = (service as any).notificationsService.createNotification;
+    (service as any).notificationsService.createNotification = jest.fn(async (...a: any[]) => {
+      notes.push(a);
+      return {};
+    });
+
+    try {
+      await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-Z' });
+      // Replay the same event — early return, no new outbox rows.
+      await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-Z' });
+    } finally {
+      (service as any).notificationsService.createNotification = origCreate;
+    }
+
+    const rows = await prisma.rewardOutboxEvent.findMany({
+      where: { userId: u.id, kind: 'notification' },
+    });
+    const missionRows = rows.filter((r) => (r.data as any)?.missionId === mission.id);
+    expect(missionRows).toHaveLength(1);
+    expect(missionRows[0].status).toBe('DELIVERED');
+    // Exactly one persisted notification for THIS mission — other active
+    // missions may also complete for the user, so match on the payload.
+    const missionNotes = notes.filter((n) => (n[4] as any)?.missionId === mission.id);
+    expect(missionNotes).toHaveLength(1);
+    // Socket row carries a stable event identity for client dedupe.
+    const socketRow = await prisma.rewardOutboxEvent.findFirst({
+      where: {
+        userId: u.id,
+        kind: 'socket',
+        socketEvent: 'mission:completed',
+        socketPayload: { path: ['missionId'], equals: mission.id },
+      },
+    });
+    expect(socketRow?.status).toBe('DELIVERED');
+  });
+
+  it('notification delivery is exactly-once across a crash before ack', async () => {
+    const u = await mkUser();
+    const notes: any[] = [];
+    (service as any).notificationsService.createNotification = jest.fn(async (...a: any[]) => {
+      notes.push(a);
+      // Simulate the REAL persistence path: the notification row is
+      // written with the outbox event id as its dedupe identity.
+      const dedupeKey = (a[5] as any)?.dedupeKey;
+      await prisma.notification.create({
+        data: {
+          userId: a[0],
+          type: a[1],
+          title: a[2],
+          body: a[3],
+          data: a[4] as any,
+          ...(dedupeKey ? { dedupeKey } : {}),
+        },
+      });
+      return {};
+    });
+
+    const ev = await prisma.rewardOutboxEvent.create({
+      data: { userId: u.id, kind: 'notification', notificationType: 'LEVEL_UP', title: 'T', body: 'B' },
+    });
+
+    // First flush: creates notification + marks DELIVERED.
+    await service.flushRewardOutbox();
+    // Simulate crash-after-notification-commit: reset the outbox row to
+    // PENDING (as if the ack write never landed) and flush again.
+    await prisma.rewardOutboxEvent.update({
+      where: { id: ev.id },
+      data: { status: 'PENDING', deliveredAt: null, processingAt: null },
+    });
+    await service.flushRewardOutbox();
+
+    // The retry found the existing dedupeKey row — no second notification.
+    expect(notes).toHaveLength(1);
+    expect(await prisma.notification.count({ where: { userId: u.id, dedupeKey: ev.id } })).toBe(1);
+    expect((await prisma.rewardOutboxEvent.findUniqueOrThrow({ where: { id: ev.id } })).status).toBe('DELIVERED');
   });
 });

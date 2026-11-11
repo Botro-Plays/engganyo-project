@@ -12,6 +12,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { StoreService } from '../store/store.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 const NOW = new Date('2026-10-15T08:00:00.000Z');
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 60 * 60 * 1000);
@@ -85,6 +86,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
         { provide: NotificationsService, useValue: notifications },
         { provide: EventsService, useValue: events },
         { provide: StoreService, useValue: { getActiveXpBoost: jest.fn().mockResolvedValue(null), getActiveTaskLimitBoost: jest.fn().mockResolvedValue(null) } },
+        { provide: ReferralsService, useValue: { qualifyReferral: jest.fn().mockResolvedValue(undefined), checkMilestones: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -472,6 +474,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
         { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
         { provide: EventsService, useValue: { emitToUser: jest.fn() } },
         { provide: StoreService, useValue: { extendOrCreateActiveEffect: jest.fn(), getActiveXpBoost: jest.fn(), getActiveTaskLimitBoost: jest.fn(), syncEffectCaches: jest.fn(async () => {}) } },
+        { provide: ReferralsService, useValue: { qualifyReferral: jest.fn().mockResolvedValue(undefined), checkMilestones: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

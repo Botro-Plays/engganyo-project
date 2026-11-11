@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
-import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
+import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType, CompletionStatus } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { withTransactionRetry } from '../../database/tx-retry';
@@ -8,6 +8,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { StoreService } from '../store/store.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 // ─── Level formula (matches frontend utils.ts) ────────────────
 export const getLevelFromXp = (xp: number) => Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -85,6 +86,7 @@ const DEFAULT_VIP_TIERS = [
 export class GamificationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GamificationService.name);
   private outboxTimer?: NodeJS.Timeout;
+  private outcomeTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -94,6 +96,8 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
     private readonly storeService: StoreService,
+    @Inject(forwardRef(() => ReferralsService))
+    private readonly referralsService: ReferralsService,
   ) {}
 
   async onModuleInit() {
@@ -108,10 +112,18 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       void this.flushRewardOutbox();
     }, 15_000);
     this.outboxTimer.unref?.();
+
+    // Task-outcome sweeper — resumes PENDING durable outcomes whose
+    // processing was interrupted, so reward effects are never lost.
+    this.outcomeTimer = setInterval(() => {
+      void this.processPendingTaskOutcomes();
+    }, 60_000);
+    this.outcomeTimer.unref?.();
   }
 
   onModuleDestroy() {
     if (this.outboxTimer) clearInterval(this.outboxTimer);
+    if (this.outcomeTimer) clearInterval(this.outcomeTimer);
   }
 
   // ─── Seeds ────────────────────────────────────────────────
@@ -391,33 +403,187 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 }
 
   /**
-   * Single outcome path for a verified task/challenge completion.
-   *
-   * EVERY completion surface — auto-verify, creator review, admin review,
-   * challenge settlement — must route through here so XP, VP, mission
-   * progress, and achievement checks are identical. Exactly-once is
-   * enforced upstream by the completion claim CAS (a completion can only
-   * transition to VERIFIED once); `referenceId` is the unique completion
-   * id — never the campaign/challenge id, which can have many completions.
-   *
-   * Each effect is isolated: a failure in one is logged and does not
-   * suppress the others (the upstream claim cannot re-fire, so skipping
-   * would permanently lose the effect).
+   * Record the durable outcome obligation INSIDE the caller's VERIFIED
+   * transition transaction. Every completion surface — auto-verify,
+   * creator review, admin review, challenge settlement — must call this
+   * in the same tx that flips the completion to VERIFIED, so the reward
+   * obligation commits or rolls back with the verification itself.
+   * Upsert on the unique completionId makes repeat calls safe.
+   */
+  async recordTaskCompletionOutcome(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    completionId: string,
+  ) {
+    await tx.taskCompletionOutcome.upsert({
+      where: { completionId },
+      create: { completionId, userId },
+      update: {},
+    });
+  }
+
+  /**
+   * Post-commit entry point for a verified completion's reward outcome.
+   * Ensures the durable row exists (defensive — the VERIFIED tx should
+   * already have created it) and processes it. Effects are idempotent,
+   * so calling this again after a crash simply resumes.
    */
   async awardTaskCompletionOutcome(userId: string, completionId: string) {
-    const effects: Array<[string, () => Promise<unknown>]> = [
-      ['xp', () => this.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', completionId)],
-      ['vp', () => this.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', completionId)],
-      ['mission', () => this.updateMissionProgress(userId, MissionType.COMPLETE_N_TASKS)],
-      ['achievements', () => this.checkAchievements(userId)],
+    // The VERIFIED transaction already committed the outcome row; this
+    // call is the fast-path processor. Any failure here is recovered by
+    // processPendingTaskOutcomes — it must not fail the caller's request
+    // for an already-verified, already-paid completion.
+    try {
+      const outcome = await this.prisma.taskCompletionOutcome.upsert({
+        where: { completionId },
+        create: { completionId, userId },
+        update: {},
+      });
+      await this.processTaskCompletionOutcome(outcome.id);
+    } catch (err) {
+      this.logger.warn(
+        `Task outcome fast-path failed for completion ${completionId} (user ${userId}) — sweeper will retry: ${(err as Error)?.message}`,
+      );
+    }
+  }
+
+  /** Maximum processing passes before an outcome is marked FAILED for
+   *  operator visibility. Each pass retries only unsettled effects. */
+  private static readonly MAX_OUTCOME_ATTEMPTS = 25;
+
+  /**
+   * Settle every unsettled effect of a durable task outcome.
+   *
+   * Guards: the completion must exist, belong to the outcome's user,
+   * and still be VERIFIED — anything else cancels the outcome rather
+   * than paying out.
+   *
+   * Each effect is tracked by its own flag, committed independently:
+   * a crash after an effect commits but before its flag update simply
+   * re-runs that effect, which is safe because every effect dedupes on
+   * stable identities (xp/vp events, mission progress events,
+   * achievement unique row, referral milestone map). Unsettled effects
+   * are retried by processPendingTaskOutcomes; after
+   * MAX_OUTCOME_ATTEMPTS passes the outcome is FAILED for operators.
+   */
+  async processTaskCompletionOutcome(outcomeId: string) {
+    const outcome = await this.prisma.taskCompletionOutcome.findUnique({
+      where: { id: outcomeId },
+    });
+    if (!outcome || outcome.status !== 'PENDING') return outcome;
+
+    const completion = await this.prisma.taskCompletion.findUnique({
+      where: { id: outcome.completionId },
+      select: { userId: true, status: true },
+    });
+    if (
+      !completion ||
+      completion.status !== CompletionStatus.VERIFIED ||
+      completion.userId !== outcome.userId
+    ) {
+      await this.prisma.taskCompletionOutcome.update({
+        where: { id: outcome.id },
+        data: {
+          status: 'CANCELLED',
+          lastError: 'completion missing, not VERIFIED, or owner mismatch',
+          processedAt: new Date(),
+        },
+      });
+      return outcome;
+    }
+
+    const effects: Array<{
+      key: 'xpSettled' | 'vpSettled' | 'missionSettled' | 'achievementsSettled' | 'referralSettled';
+      name: string;
+      run: () => Promise<unknown>;
+    }> = [
+      {
+        key: 'xpSettled',
+        name: 'xp',
+        run: () => this.awardXp(outcome.userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', outcome.completionId),
+      },
+      {
+        key: 'vpSettled',
+        name: 'vp',
+        run: () => this.awardVp(outcome.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', outcome.completionId),
+      },
+      {
+        key: 'missionSettled',
+        name: 'mission',
+        // completionId is the mission-event dedupe identity — outcome
+        // recovery can never count the same task twice.
+        run: () => this.updateMissionProgress(outcome.userId, MissionType.COMPLETE_N_TASKS, 1, { sourceId: outcome.completionId }),
+      },
+      {
+        key: 'achievementsSettled',
+        name: 'achievements',
+        run: () => this.checkAchievements(outcome.userId),
+      },
+      {
+        key: 'referralSettled',
+        name: 'referral',
+        run: async () => {
+          await this.referralsService.qualifyReferral(outcome.userId);
+          await this.referralsService.checkMilestones(outcome.userId);
+        },
+      },
     ];
-    for (const [name, run] of effects) {
+
+    const settled = { ...outcome } as Record<string, unknown>;
+    let lastError: string | null = null;
+    for (const eff of effects) {
+      if (settled[eff.key]) continue;
       try {
-        await run();
+        await eff.run();
+        await this.prisma.taskCompletionOutcome.update({
+          where: { id: outcome.id },
+          data: { [eff.key]: true },
+        });
+        settled[eff.key] = true;
       } catch (err) {
+        lastError = `${eff.name}: ${(err as Error)?.message ?? err}`.slice(0, 500);
         this.logger.error(
-          `Task-completion ${name} reward failed for completion ${completionId} (user ${userId}): ${(err as Error)?.message}`,
+          `Task outcome ${outcome.id} effect '${eff.name}' failed for completion ${outcome.completionId}: ${lastError}`,
         );
+      }
+    }
+
+    const allSettled = effects.every((e) => settled[e.key]);
+    const attempts = allSettled ? outcome.attempts : outcome.attempts + 1;
+    await this.prisma.taskCompletionOutcome.update({
+      where: { id: outcome.id },
+      data: {
+        status: allSettled
+          ? 'DONE'
+          : attempts >= GamificationService.MAX_OUTCOME_ATTEMPTS
+            ? 'FAILED'
+            : 'PENDING',
+        attempts,
+        lastError,
+        processedAt: allSettled ? new Date() : null,
+      },
+    });
+
+    await this.flushRewardOutbox();
+    return outcome;
+  }
+
+  /**
+   * Recovery sweep: process PENDING outcomes oldest-first. Each outcome
+   * is isolated — one failing outcome never blocks the rest of the
+   * batch, and settled effects are never re-run.
+   */
+  async processPendingTaskOutcomes(limit = 50) {
+    const pending = await this.prisma.taskCompletionOutcome.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+    for (const o of pending) {
+      try {
+        await this.processTaskCompletionOutcome(o.id);
+      } catch (err) {
+        this.logger.warn(`Task outcome ${o.id} processing failed: ${(err as Error)?.message}`);
       }
     }
   }
@@ -1000,7 +1166,12 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   // ─── Update mission progress ───────────────────────────────
 
-  async updateMissionProgress(userId: string, type: MissionType, increment = 1) {
+  async updateMissionProgress(
+    userId: string,
+    type: MissionType,
+    increment = 1,
+    opts?: { sourceId?: string },
+  ) {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -1008,11 +1179,13 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       where: { type, isActive: true },
     });
 
+    let anyCompleted = false;
     for (const mission of missions) {
       // One transaction per mission: advisory lock serializes concurrent
       // progress updates for the same (user, mission), and the payout +
-      // progress row commit or roll back together — no double-pay, no
-      // lost payout.
+      // progress row + outbox rows commit or roll back together — no
+      // double-pay, no lost payout, no crash window before delivery rows
+      // exist.
       const outcome = await withTransactionRetry(this.prisma, async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`mission:${userId}:${mission.id}`}, 0))`;
 
@@ -1021,6 +1194,29 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         });
 
         if (existing?.isCompleted) return { completed: false, alreadyDone: true };
+
+        // Event-level dedupe: when the caller supplies a stable source
+        // identity (e.g. a task completionId), the same event can never
+        // count twice for this mission — outcome recovery replays are
+        // safe. The event row commits atomically with the progress.
+        if (opts?.sourceId) {
+          try {
+            await tx.missionProgressEvent.create({
+              data: {
+                userId,
+                missionId: mission.id,
+                sourceType: type,
+                sourceId: opts.sourceId,
+                date: today,
+              },
+            });
+          } catch (err) {
+            if ((err as { code?: string })?.code === 'P2002') {
+              return { completed: false, alreadyCounted: true };
+            }
+            throw err;
+          }
+        }
 
         const newProgress = (existing?.progress ?? 0) + increment;
         const isCompleted = newProgress >= mission.requirement;
@@ -1055,13 +1251,10 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         const missionRef = `${mission.id}:${today.toISOString().slice(0, 10)}`;
         await this.awardXp(userId, mission.xpReward, 'mission_complete', missionRef, mission.name, tx);
 
-        return { completed: true, alreadyDone: false };
-      });
-
-      if (outcome.completed) {
-        // Durable outbox rows (autocommitted) + immediate flush — survives
-        // a crash between mission commit and delivery.
-        await this.prisma.rewardOutboxEvent.create({
+        // Durable outbox rows INSIDE the payout tx — they commit or roll
+        // back with the reward itself, so there is no window where the
+        // mission paid out but its notifications were never recorded.
+        await tx.rewardOutboxEvent.create({
           data: {
             userId,
             kind: 'notification',
@@ -1071,12 +1264,19 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
             data: { missionId: mission.id, missionName: mission.name, creditReward: mission.creditReward, xpReward: mission.xpReward },
           },
         });
-        await this.prisma.rewardOutboxEvent.create({
+        await tx.rewardOutboxEvent.create({
           data: { userId, kind: 'socket', socketEvent: 'mission:completed', socketPayload: { missionId: mission.id, missionName: mission.name } },
         });
-        await this.flushRewardOutbox();
-      }
+
+        return { completed: true, alreadyDone: false };
+      });
+
+      if (outcome.completed) anyCompleted = true;
     }
+
+    // Delivery is post-commit only; committed rows are also recovered by
+    // the periodic outbox sweeper if this flush is interrupted.
+    if (anyCompleted) await this.flushRewardOutbox();
   }
 
   // ─── Private helpers ───────────────────────────────────────
@@ -1195,11 +1395,19 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   /**
    * Deliver committed reward-outbox rows (notifications + socket events).
    *
-   * At-least-once delivery: each row is claimed atomically via
-   * `processingAt` before sending so concurrent flushes cannot
-   * double-deliver; a crash mid-delivery leaves the row claimable again
-   * after the 2-minute stale window. NEVER throws — reward settlement
-   * must not fail because notification delivery did.
+   * Delivery guarantees:
+   * - PERSISTED notifications are exactly-once: each is bound to its
+   *   outbox event id via Notification.dedupeKey, so a crash after the
+   *   notification row commits but before the outbox row is acknowledged
+   *   cannot create a second notification — the retry finds the existing
+   *   row. The outbox claim (processingAt) ensures only one flusher
+   *   handles a given event at a time.
+   * - SOCKET events are at-least-once: a crash between emit and
+   *   acknowledgement may redeliver. Every emitted payload carries a
+   *   stable `_eventId` (the outbox row id) so clients can dedupe.
+   *
+   * NEVER throws — reward settlement must not fail because notification
+   * delivery did.
    */
   async flushRewardOutbox() {
     try {
@@ -1226,15 +1434,28 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
         try {
           if (ev.kind === 'notification') {
-            await this.notificationsService.createNotification(
-              ev.userId,
-              (ev.notificationType as NotificationType) ?? 'SYSTEM_ANNOUNCEMENT',
-              ev.title ?? '',
-              ev.body ?? '',
-              (ev.data as Prisma.InputJsonValue | undefined) ?? undefined,
-            );
+            // Exactly-once: skip creation when a previous attempt already
+            // committed the notification but crashed before ack.
+            const existing = await this.prisma.notification.findFirst({
+              where: { dedupeKey: ev.id },
+              select: { id: true },
+            });
+            if (!existing) {
+              await this.notificationsService.createNotification(
+                ev.userId,
+                (ev.notificationType as NotificationType) ?? 'SYSTEM_ANNOUNCEMENT',
+                ev.title ?? '',
+                ev.body ?? '',
+                (ev.data as Prisma.InputJsonValue | undefined) ?? undefined,
+                { dedupeKey: ev.id },
+              );
+            }
           } else if (ev.kind === 'socket' && ev.socketEvent) {
-            this.eventsService.emitToUser(ev.userId, ev.socketEvent, ev.socketPayload);
+            const base =
+              ev.socketPayload && typeof ev.socketPayload === 'object'
+                ? (ev.socketPayload as Record<string, unknown>)
+                : {};
+            this.eventsService.emitToUser(ev.userId, ev.socketEvent, { ...base, _eventId: ev.id });
           }
           await this.prisma.rewardOutboxEvent.update({
             where: { id: ev.id },
