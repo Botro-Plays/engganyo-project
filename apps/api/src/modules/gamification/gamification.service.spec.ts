@@ -461,7 +461,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
         { provide: WalletService, useValue: wallet },
         { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
         { provide: EventsService, useValue: { emitToUser: jest.fn() } },
-        { provide: StoreService, useValue: { extendOrCreateActiveEffect: jest.fn(), getActiveXpBoost: jest.fn(), getActiveTaskLimitBoost: jest.fn() } },
+        { provide: StoreService, useValue: { extendOrCreateActiveEffect: jest.fn(), getActiveXpBoost: jest.fn(), getActiveTaskLimitBoost: jest.fn(), syncEffectCaches: jest.fn() } },
       ],
     }).compile();
 

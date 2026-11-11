@@ -1577,9 +1577,9 @@ model UserInventory {
   equipped   Boolean   @default(false) @map("equipped") // for cosmetics: whether this item is currently active
   acquiredAt DateTime  @default(now()) @map("acquired_at")
 
+  @@unique([userId, itemId])
   @@index([userId])
   @@index([itemId])
-  @@index([userId, itemId])
   @@map("user_inventory")
 }
 

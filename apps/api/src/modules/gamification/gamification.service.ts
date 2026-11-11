@@ -754,8 +754,12 @@ export class GamificationService implements OnModuleInit {
           where: { name: 'Mystery Gift Box', isActive: true },
         });
         if (lootBoxItem) {
-          await tx.userInventory.create({
-            data: { userId, itemId: lootBoxItem.id, quantity: 1 },
+          // Upsert on the (userId,itemId) unique key — stacks onto an existing
+          // box row instead of creating a duplicate.
+          await tx.userInventory.upsert({
+            where: { userId_itemId: { userId, itemId: lootBoxItem.id } },
+            create: { userId, itemId: lootBoxItem.id, quantity: 1 },
+            update: { quantity: { increment: 1 }, consumedAt: null },
           });
           bonusLootBox = true;
         }
@@ -1109,22 +1113,31 @@ export class GamificationService implements OnModuleInit {
 
     // The no-key entry point gets the same transactional allowance — only the
     // attempt bookkeeping is skipped.
-    if (!idempotencyKey) return this.prisma.$transaction(execute);
-
-    try {
-      return await this.prisma.$transaction(execute);
-    } catch (err) {
-      if (this.isAttemptUniqueViolation(err)) {
-        const attempt = await this.prisma.wheelSpinAttempt.findUnique({
-          where: { userId_key: { userId, key: idempotencyKey } },
-        });
-        if (attempt?.result) {
-          return attempt.result as Record<string, unknown>;
+    const settle = async (): Promise<Record<string, unknown>> => {
+      if (!idempotencyKey) return this.prisma.$transaction(execute) as Promise<Record<string, unknown>>;
+      try {
+        return await this.prisma.$transaction(execute) as Record<string, unknown>;
+      } catch (err) {
+        if (this.isAttemptUniqueViolation(err)) {
+          const attempt = await this.prisma.wheelSpinAttempt.findUnique({
+            where: { userId_key: { userId, key: idempotencyKey } },
+          });
+          if (attempt?.result) {
+            return attempt.result as Record<string, unknown>;
+          }
+          throw new ConflictException('This spin request is already being processed.');
         }
-        throw new ConflictException('This spin request is already being processed.');
+        throw err;
       }
-      throw err;
-    }
+    };
+
+    const result = await settle();
+    // Post-commit: rebuild effect caches from DB (deferred Redis writes).
+    // Idempotent — also safe on replayed idempotent results.
+    await this.storeService.syncEffectCaches(userId).catch((err: unknown) => {
+      this.logger.error(`Post-spin effect cache sync failed for user ${userId}`, err);
+    });
+    return result;
   }
 
   private isAttemptUniqueViolation(err: unknown): boolean {
@@ -1270,25 +1283,26 @@ export class GamificationService implements OnModuleInit {
         { multiplier: 2 },
         prize.hours,
         tx,
+        true, // deferRedis — synced post-commit so a rollback leaves no phantom boost
       );
       result = { ...result, multiplier: 2, durationHours: prize.hours, expiresAt, extended };
     } else if (prize.effect === 'streak_freeze') {
-      // Update DB (source of truth)
+      // Update DB (source of truth); Redis cache synced post-commit
       const updatedUser = await tx.user.update({
         where: { id: userId },
         data: { streakFreezeCharges: { increment: 1 } },
         select: { streakFreezeCharges: true },
       });
-      // Update Redis cache (best-effort)
-      await this.redisService.set(`boost:streak_freeze:${userId}`, String(updatedUser.streakFreezeCharges)).catch(() => null);
       result = { ...result, charges: updatedUser.streakFreezeCharges };
     } else if (prize.effect === 'loot_box') {
       const lootBoxItem = await tx.storeItem.findFirst({
         where: { name: 'Mystery Gift Box', isActive: true },
       });
       if (lootBoxItem) {
-        await tx.userInventory.create({
-          data: { userId, itemId: lootBoxItem.id, quantity: 1 },
+        await tx.userInventory.upsert({
+          where: { userId_itemId: { userId, itemId: lootBoxItem.id } },
+          create: { userId, itemId: lootBoxItem.id, quantity: 1 },
+          update: { quantity: { increment: 1 }, consumedAt: null },
         });
       }
       result = { ...result, itemName: 'Mystery Gift Box' };
