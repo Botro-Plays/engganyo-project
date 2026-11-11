@@ -394,6 +394,10 @@ export class StoreService implements OnModuleInit {
       // Guard: reject if an effect of the same type is already active.
       // Read via the tx client so the check sees committed state under the lock.
       if (effectType === 'xp_boost' || effectType === 'task_limit_boost') {
+        // Serialize same-type effect creation per user across ALL transactions
+        // (useItem, wheel, loot box). Advisory xact locks live outside the row-
+        // lock domain, so this cannot deadlock against wallet/user row locks.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${effectType}`}, 0))`;
         const active = await tx.userActiveEffect.findFirst({
           where: { userId, type: effectType, expiresAt: { gt: new Date() } },
           select: { id: true },
@@ -802,6 +806,13 @@ export class StoreService implements OnModuleInit {
     const db = tx ?? this.prisma;
     const durationMs = durationHours * 3600 * 1000;
     const redisKey = type === 'xp_boost' ? `boost:xp:${userId}` : `boost:task_limit:${userId}`;
+
+    // Inside a transaction, serialize find-then-write on this (user,type)
+    // effect slot — prevents duplicate active-effect rows when a wheel/loot-box
+    // reward races a store-item use of the same boost type.
+    if (tx) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${type}`}, 0))`;
+    }
 
     // 1. Check for existing active effect of the same type
     const existing = await db.userActiveEffect.findFirst({

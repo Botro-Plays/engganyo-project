@@ -37,6 +37,7 @@ run('inventory atomicity — real PostgreSQL', () => {
     set: jest.fn(async (k: string, v: string) => void redisStore.set(k, v)),
     setJson: jest.fn(async (k: string, v: unknown) => void redisStore.set(k, JSON.stringify(v))),
     del: jest.fn(async (k: string) => void redisStore.delete(k)),
+    invalidateUserCaches: jest.fn(async () => {}),
   };
 
   const walletStub = {
@@ -104,7 +105,7 @@ run('inventory atomicity — real PostgreSQL', () => {
       prisma as never,
       redisStub as never,
       walletStub as never,
-      { createNotification: jest.fn() } as never,
+      { createNotification: jest.fn(async () => ({})) } as never,
       { emitToUser: jest.fn() } as never,
     );
     await prisma.$connect();
@@ -193,7 +194,6 @@ run('inventory atomicity — real PostgreSQL', () => {
       service.useItem(userId, inv1.id),
       service.useItem(userId, inv2.id),
     ]);
-    const ok = results.filter((r) => r.status === 'fulfilled');
     const failed = results.filter((r) => r.status === 'rejected');
 
     // Sequential-after-commit semantics: at least one must fail the
