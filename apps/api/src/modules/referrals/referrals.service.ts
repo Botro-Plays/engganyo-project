@@ -139,8 +139,8 @@ export class ReferralsService {
    * Qualifies any pending referral and awards first_task milestone.
    */
   async qualifyReferral(refereeId: string) {
-    const referral = await this.prisma.referral.findFirst({
-      where: { refereeId, isQualified: false },
+    const referral = await this.prisma.referral.findUnique({
+      where: { refereeId },
       include: {
         referrer: { select: { id: true, username: true } },
         referee: { select: { id: true, username: true } },
@@ -148,10 +148,22 @@ export class ReferralsService {
     });
     if (!referral) return;
 
-    await this.prisma.referral.update({
-      where: { id: referral.id },
-      data: { isQualified: true, qualifiedAt: new Date() },
-    });
+    // Recovery-safe: the isQualified flip and the first_task milestone
+    // award are separate writes, so a crash between them must not strand
+    // the milestone. qualifyReferral only runs from the verified-task
+    // outcome path, so a qualified referral missing the milestone is
+    // either a crashed award (retry completes it) or legacy data whose
+    // milestone is legitimately earned by this verified task.
+    // awardMilestone dedupes on the locked milestones map — exactly once.
+    const ms = (referral.milestones as Record<string, boolean> | null) ?? {};
+    if (referral.isQualified && ms['first_task']) return;
+
+    if (!referral.isQualified) {
+      await this.prisma.referral.update({
+        where: { id: referral.id },
+        data: { isQualified: true, qualifiedAt: new Date() },
+      });
+    }
 
     await this.awardMilestone(referral.id, 'first_task', 25, 0, 'First task completed');
   }

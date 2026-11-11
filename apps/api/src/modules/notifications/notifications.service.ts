@@ -18,13 +18,30 @@ export class NotificationsService {
     data?: Prisma.InputJsonValue,
     opts?: { dedupeKey?: string },
   ) {
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId, type, title, body,
-        ...(data !== undefined && { data }),
-        ...(opts?.dedupeKey && { dedupeKey: opts.dedupeKey }),
-      },
-    });
+    let notification;
+    try {
+      notification = await this.prisma.notification.create({
+        data: {
+          userId, type, title, body,
+          ...(data !== undefined && { data }),
+          ...(opts?.dedupeKey && { dedupeKey: opts.dedupeKey }),
+        },
+      });
+    } catch (err) {
+      // Idempotent replay: a dedupeKey uniquely binds the notification to
+      // its outbox event. A retry after a crash between the notification
+      // commit and the outbox acknowledgement hits the unique constraint —
+      // return the already-persisted row instead of creating a duplicate
+      // (and without re-emitting the live socket event, which would
+      // double-toast the client).
+      if (opts?.dedupeKey && (err as { code?: string })?.code === 'P2002') {
+        const existing = await this.prisma.notification.findUnique({
+          where: { dedupeKey: opts.dedupeKey },
+        });
+        if (existing) return existing;
+      }
+      throw err;
+    }
     this.eventsService.emitToUser(userId, 'notification:new', notification);
     return notification;
   }
