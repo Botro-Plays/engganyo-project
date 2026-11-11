@@ -1968,3 +1968,31 @@ serialization of same-type active effects. New real-Postgres
 stacked consumption, purchase stacking, equip serialization, and
 cross-user rejection. Stage-1 audit + invariants + marketplace launch
 plan: `docs/GAMIFICATION_WORKSTREAM_STAGE1.md`.
+
+### Stage-1 hardening — in flight (11 Nov 2026)
+
+- **PR #70** `fix/inventory-hardening`: cosmetic equip-slot serialization
+  (`pg_advisory_xact_lock` on `equip:{userId}:{cosmeticType}` across
+  equipCosmetic / purchaseItem auto-equip / loot-box grants), corrected
+  deadlock claim (advisory locks DO participate in PG deadlock
+  detection), consistent lock order documented, and
+  `src/database/tx-retry.ts` bounded whole-tx retry (40P01/40001/P2034)
+  wired into `PrismaService.withTransaction`, store writers, wheel settle.
+  CI pending at record time.
+- **PR #71** `fix/deposit-vp-currency`: deposit VP now uses authoritative
+  USD value (`package.usdAmount` → `amountFiat/exchangeRate` → USD
+  amountFiat) instead of gateway-currency `amountFiat` — fixes ~58× VP
+  inflation on PayMongo PHP deposits. PayMongo regression added. CI
+  pending at record time.
+- **Deposit-VP historical impact (read-only, pending DB access)**: bug
+  live since VP-on-deposit shipped (~mid-2026); only PAYMONGO (PHP)
+  deposits affected — PayPal/USDT are USD-denominated. Impact query for
+  `vp_events` (source='deposit_completed') joined to `deposits` +
+  `deposit_packages` to compare awarded vs correct VP; no retroactive
+  correction proposed pending owner review. SSH to VPS currently
+  unavailable from agent shell — query to be run when access restored.
+- **Still open**: reward atomicity PR (mission progress/payout,
+  awardXp/awardVp lost-updates, unlockAchievement lost payout);
+  mixed-provenance inventory design (bound vs tradable lots — required
+  before marketplace); manual-approval gamification parity; campaign
+  slot-expiry sweep; tip idempotency; stage-2 design docs.
