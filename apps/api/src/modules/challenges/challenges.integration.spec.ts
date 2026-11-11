@@ -142,6 +142,7 @@ run('1v1 challenges — real PostgreSQL', () => {
       socialStub as never,
       noopNotify as never,
       noopEvents as never,
+      { qualifyReferral: jest.fn(async () => {}), checkMilestones: jest.fn(async () => {}) } as never,
     );
     await prisma.$connect();
 

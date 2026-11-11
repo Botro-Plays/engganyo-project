@@ -426,8 +426,9 @@ export class CampaignsService {
       const willBeFull = txResult.becameCompleted;
 
       void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
+      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
 
-      await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
+      await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
 
       void this.notificationsService.createNotification(
         completion.userId,

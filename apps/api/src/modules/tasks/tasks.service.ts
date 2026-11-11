@@ -537,10 +537,7 @@ export class TasksService {
       void this.referralsService.qualifyReferral(userId).catch(() => null);
       void this.referralsService.checkMilestones(userId).catch(() => null);
 
-      await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
-      await this.gamificationService.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
-      await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
-      await this.gamificationService.checkAchievements(userId);
+      await this.gamificationService.awardTaskCompletionOutcome(userId, completion.id);
       void this.antiAbuseService.queueRecalculate(userId);
 
       void this.notificationsService.createNotification(
@@ -793,10 +790,7 @@ export class TasksService {
       void this.referralsService.qualifyReferral(userId).catch(() => null);
       void this.referralsService.checkMilestones(userId).catch(() => null);
 
-      await this.gamificationService.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
-      await this.gamificationService.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaignId);
-      await this.gamificationService.updateMissionProgress(userId, 'COMPLETE_N_TASKS' as never);
-      await this.gamificationService.checkAchievements(userId);
+      await this.gamificationService.awardTaskCompletionOutcome(userId, completion.id);
       void this.antiAbuseService.queueRecalculate(userId);
 
       void this.notificationsService.createNotification(

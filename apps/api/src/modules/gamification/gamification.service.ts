@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
 import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -82,8 +82,9 @@ const DEFAULT_VIP_TIERS = [
 ];
 
 @Injectable()
-export class GamificationService implements OnModuleInit {
+export class GamificationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GamificationService.name);
+  private outboxTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -100,6 +101,17 @@ export class GamificationService implements OnModuleInit {
     await this.seedAchievements();
     await this.seedMissions();
     await this.seedVipTiers();
+
+    // Reward outbox sweeper — delivers committed PENDING rows so a crash
+    // between commit and inline flush cannot lose notifications/events.
+    this.outboxTimer = setInterval(() => {
+      void this.flushRewardOutbox();
+    }, 15_000);
+    this.outboxTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.outboxTimer) clearInterval(this.outboxTimer);
   }
 
   // ─── Seeds ────────────────────────────────────────────────
@@ -166,6 +178,18 @@ export class GamificationService implements OnModuleInit {
       });
       if (!user) return null;
 
+      // Replay protection: a stable (user, source, referenceId) pair pays
+      // once. The user-row lock held above serializes the check+insert, so
+      // concurrent duplicate deliveries cannot both pass. Sources without
+      // a referenceId (e.g. level_up) rely on their upstream guards.
+      if (referenceId != null) {
+        const dup = await t.xpEvent.findFirst({
+          where: { userId, source, referenceId },
+          select: { id: true },
+        });
+        if (dup) return { newXp: user.xp, newLevel: user.level, leveledUp: false, deduplicated: true };
+      }
+
       const newXp = user.xp + boostedAmount;
       const newLevel = getLevelFromXp(newXp);
       const leveledUp = newLevel > user.level;
@@ -175,38 +199,60 @@ export class GamificationService implements OnModuleInit {
         data: { xp: newXp, level: newLevel },
       });
 
+      // Record the APPLIED delta (post-boost) so user.xp reconciles with
+      // event amounts; base + multiplier kept for audit.
       await t.xpEvent.create({
-        data: { userId, amount, source, referenceId, description },
+        data: {
+          userId,
+          amount: boostedAmount,
+          baseAmount: amount,
+          boostMultiplier: xpBoost && xpBoost.multiplier > 1 ? xpBoost.multiplier : null,
+          source,
+          referenceId,
+          description,
+        },
       });
 
       if (leveledUp) {
-      void this.notificationsService.createNotification(
-        userId,
-        NotificationType.LEVEL_UP,
-        `Level ${newLevel} reached!`,
-        `You advanced to level ${newLevel}. Keep it up!`,
-        { previousLevel: user.level, newLevel },
-      ).catch(() => null);
-      this.eventsService.emitToUser(userId, 'level:up', { newLevel, previousLevel: user.level });
+      // Post-commit delivery via durable outbox — rows commit with this
+      // tx, so a rollback or retry can never emit a phantom level-up.
+      await t.rewardOutboxEvent.create({
+        data: {
+          userId,
+          kind: 'notification',
+          notificationType: NotificationType.LEVEL_UP,
+          title: `Level ${newLevel} reached!`,
+          body: `You advanced to level ${newLevel}. Keep it up!`,
+          data: { previousLevel: user.level, newLevel },
+        },
+      });
+      await t.rewardOutboxEvent.create({
+        data: { userId, kind: 'socket', socketEvent: 'level:up', socketPayload: { newLevel, previousLevel: user.level } },
+      });
 
       // Award bonus VP for leveling up (same tx — commits atomically)
       const vpReward = VP_REWARDS.LEVEL_UP_MULTIPLIER * newLevel;
       await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`, t);
 
-      void this.notificationsService.createNotification(
-        userId,
-        NotificationType.VIP_POINTS_EARNED,
-        'Level-Up Bonus',
-        `You earned ${vpReward} VIP Points for reaching level ${newLevel}!`,
-        { source: 'level_up', level: newLevel, vpEarned: vpReward },
-      ).catch(() => null);
+      await t.rewardOutboxEvent.create({
+        data: {
+          userId,
+          kind: 'notification',
+          notificationType: NotificationType.VIP_POINTS_EARNED,
+          title: 'Level-Up Bonus',
+          body: `You earned ${vpReward} VIP Points for reaching level ${newLevel}!`,
+          data: { source: 'level_up', level: newLevel, vpEarned: vpReward },
+        },
+      });
     }
 
     return { newXp, newLevel, leveledUp };
   };
 
   if (tx) return apply(tx);
-  return withTransactionRetry(this.prisma, apply);
+  const result = await withTransactionRetry(this.prisma, apply);
+  await this.flushRewardOutbox();
+  return result;
 }
 
   // ─── Get my stats ──────────────────────────────────────────
@@ -278,6 +324,20 @@ export class GamificationService implements OnModuleInit {
       });
       if (!user) return { newVp: 0, tierUp: false, newTier: null };
 
+      // Replay protection — same stable-identity rule as awardXp.
+      if (referenceId != null) {
+        const dup = await t.vpEvent.findFirst({
+          where: { userId, source, referenceId },
+          select: { id: true },
+        });
+        if (dup) {
+          const currentTier = user.vipTierId
+            ? await t.vipTier.findUnique({ where: { id: user.vipTierId } })
+            : null;
+          return { newVp: user.vp, tierUp: false, newTier: currentTier, deduplicated: true };
+        }
+      }
+
       const newVp = user.vp + amount;
       const oldTier = user.vipTierId
         ? await t.vipTier.findUnique({ where: { id: user.vipTierId } })
@@ -296,17 +356,28 @@ export class GamificationService implements OnModuleInit {
       });
 
     if (tierUp) {
-      void this.notificationsService.createNotification(
-        userId,
-        'LEVEL_UP',
-        `${newTier.displayName} Reached!`,
-        `You've unlocked ${newTier.displayName} status. New perks active!`,
-        { previousTier: oldTier?.name ?? null, newTier: newTier.name, newTierLevel: newTier.level },
-      ).catch(() => null);
-      this.eventsService.emitToUser(userId, 'vip:tier-up', {
-        newTier: newTier.name,
-        newTierDisplay: newTier.displayName,
-        previousTier: oldTier?.name ?? null,
+      // Durable outbox — delivered only after this tx commits.
+      await t.rewardOutboxEvent.create({
+        data: {
+          userId,
+          kind: 'notification',
+          notificationType: 'LEVEL_UP',
+          title: `${newTier.displayName} Reached!`,
+          body: `You've unlocked ${newTier.displayName} status. New perks active!`,
+          data: { previousTier: oldTier?.name ?? null, newTier: newTier.name, newTierLevel: newTier.level },
+        },
+      });
+      await t.rewardOutboxEvent.create({
+        data: {
+          userId,
+          kind: 'socket',
+          socketEvent: 'vip:tier-up',
+          socketPayload: {
+            newTier: newTier.name,
+            newTierDisplay: newTier.displayName,
+            previousTier: oldTier?.name ?? null,
+          },
+        },
       });
     }
 
@@ -314,8 +385,42 @@ export class GamificationService implements OnModuleInit {
   };
 
   if (tx) return apply(tx);
-  return withTransactionRetry(this.prisma, apply);
+  const result = await withTransactionRetry(this.prisma, apply);
+  await this.flushRewardOutbox();
+  return result;
 }
+
+  /**
+   * Single outcome path for a verified task/challenge completion.
+   *
+   * EVERY completion surface — auto-verify, creator review, admin review,
+   * challenge settlement — must route through here so XP, VP, mission
+   * progress, and achievement checks are identical. Exactly-once is
+   * enforced upstream by the completion claim CAS (a completion can only
+   * transition to VERIFIED once); `referenceId` is the unique completion
+   * id — never the campaign/challenge id, which can have many completions.
+   *
+   * Each effect is isolated: a failure in one is logged and does not
+   * suppress the others (the upstream claim cannot re-fire, so skipping
+   * would permanently lose the effect).
+   */
+  async awardTaskCompletionOutcome(userId: string, completionId: string) {
+    const effects: Array<[string, () => Promise<unknown>]> = [
+      ['xp', () => this.awardXp(userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', completionId)],
+      ['vp', () => this.awardVp(userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', completionId)],
+      ['mission', () => this.updateMissionProgress(userId, MissionType.COMPLETE_N_TASKS)],
+      ['achievements', () => this.checkAchievements(userId)],
+    ];
+    for (const [name, run] of effects) {
+      try {
+        await run();
+      } catch (err) {
+        this.logger.error(
+          `Task-completion ${name} reward failed for completion ${completionId} (user ${userId}): ${(err as Error)?.message}`,
+        );
+      }
+    }
+  }
 
   async getUserVipTier(userId: string, currentVp?: number, tx?: Prisma.TransactionClient) {
     const db = tx ?? this.prisma;
@@ -767,8 +872,11 @@ export class GamificationService implements OnModuleInit {
         description: `Daily reward — day ${newStreak} streak`,
       }, tx);
 
-      await this.awardXp(userId, xpReward, 'daily_login', undefined, undefined, tx);
-      await this.awardVp(userId, vpReward, 'daily_login', undefined, `Day ${newStreak} streak`, tx);
+      // Stable per-day source identity — the 24h claim CAS already
+      // guarantees once-per-window; the date ref makes events traceable.
+      const dailyRef = new Date().toISOString().slice(0, 10);
+      await this.awardXp(userId, xpReward, 'daily_login', dailyRef, undefined, tx);
+      await this.awardVp(userId, vpReward, 'daily_login', dailyRef, `Day ${newStreak} streak`, tx);
 
       // ── Sprint 3: milestone loot boxes ──
       if (milestoneDays.includes(newStreak)) {
@@ -942,20 +1050,31 @@ export class GamificationService implements OnModuleInit {
           referenceId: mission.id,
           referenceType: 'mission',
         }, tx);
-        await this.awardXp(userId, mission.xpReward, 'mission_complete', mission.id, mission.name, tx);
+        // Stable per-day identity: same mission legitimately completes once
+        // per day, so the ref must include the date, not just the mission.
+        const missionRef = `${mission.id}:${today.toISOString().slice(0, 10)}`;
+        await this.awardXp(userId, mission.xpReward, 'mission_complete', missionRef, mission.name, tx);
 
         return { completed: true, alreadyDone: false };
       });
 
       if (outcome.completed) {
-        void this.notificationsService.createNotification(
-          userId,
-          'CREDIT_EARNED',
-          'Mission Complete',
-          `You completed "${mission.name}" and earned ${mission.creditReward} credits`,
-          { missionId: mission.id, missionName: mission.name, creditReward: mission.creditReward, xpReward: mission.xpReward },
-        ).catch(() => null);
-        this.eventsService.emitToUser(userId, 'mission:completed', { missionId: mission.id, missionName: mission.name });
+        // Durable outbox rows (autocommitted) + immediate flush — survives
+        // a crash between mission commit and delivery.
+        await this.prisma.rewardOutboxEvent.create({
+          data: {
+            userId,
+            kind: 'notification',
+            notificationType: 'CREDIT_EARNED',
+            title: 'Mission Complete',
+            body: `You completed "${mission.name}" and earned ${mission.creditReward} credits`,
+            data: { missionId: mission.id, missionName: mission.name, creditReward: mission.creditReward, xpReward: mission.xpReward },
+          },
+        });
+        await this.prisma.rewardOutboxEvent.create({
+          data: { userId, kind: 'socket', socketEvent: 'mission:completed', socketPayload: { missionId: mission.id, missionName: mission.name } },
+        });
+        await this.flushRewardOutbox();
       }
     }
   }
@@ -1037,6 +1156,21 @@ export class GamificationService implements OnModuleInit {
       if (xpReward > 0) {
         await this.awardXp(userId, xpReward, 'achievement', achievementId, name, t);
       }
+
+      // Durable outbox — commits with the settlement, delivered post-commit.
+      await t.rewardOutboxEvent.create({
+        data: {
+          userId,
+          kind: 'notification',
+          notificationType: 'ACHIEVEMENT_UNLOCKED',
+          title: 'Achievement Unlocked',
+          body: `You earned "${name}"${creditReward > 0 ? ` (+${creditReward} credits)` : ''}`,
+          data: { achievementId, name, creditReward, xpReward },
+        },
+      });
+      await t.rewardOutboxEvent.create({
+        data: { userId, kind: 'socket', socketEvent: 'achievement:unlocked', socketPayload: { achievementId, name } },
+      });
       return true;
     };
 
@@ -1053,17 +1187,74 @@ export class GamificationService implements OnModuleInit {
         if ((err as { code?: string })?.code === 'P2002') return;
         throw err;
       }
+      if (unlocked) await this.flushRewardOutbox();
     }
     if (!unlocked) return;
+  }
 
-    void this.notificationsService.createNotification(
-      userId,
-      'ACHIEVEMENT_UNLOCKED',
-      'Achievement Unlocked',
-      `You earned "${name}"${creditReward > 0 ? ` (+${creditReward} credits)` : ''}`,
-      { achievementId, name, creditReward, xpReward },
-    ).catch(() => null);
-    this.eventsService.emitToUser(userId, 'achievement:unlocked', { achievementId, name });
+  /**
+   * Deliver committed reward-outbox rows (notifications + socket events).
+   *
+   * At-least-once delivery: each row is claimed atomically via
+   * `processingAt` before sending so concurrent flushes cannot
+   * double-deliver; a crash mid-delivery leaves the row claimable again
+   * after the 2-minute stale window. NEVER throws — reward settlement
+   * must not fail because notification delivery did.
+   */
+  async flushRewardOutbox() {
+    try {
+      const staleBefore = new Date(Date.now() - 2 * 60 * 1000);
+      const pending = await this.prisma.rewardOutboxEvent.findMany({
+        where: {
+          status: 'PENDING',
+          OR: [{ processingAt: null }, { processingAt: { lt: staleBefore } }],
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+      });
+
+      for (const ev of pending) {
+        const claimed = await this.prisma.rewardOutboxEvent.updateMany({
+          where: {
+            id: ev.id,
+            status: 'PENDING',
+            OR: [{ processingAt: null }, { processingAt: { lt: staleBefore } }],
+          },
+          data: { processingAt: new Date(), attempts: { increment: 1 } },
+        });
+        if (claimed.count === 0) continue;
+
+        try {
+          if (ev.kind === 'notification') {
+            await this.notificationsService.createNotification(
+              ev.userId,
+              (ev.notificationType as NotificationType) ?? 'SYSTEM_ANNOUNCEMENT',
+              ev.title ?? '',
+              ev.body ?? '',
+              (ev.data as Prisma.InputJsonValue | undefined) ?? undefined,
+            );
+          } else if (ev.kind === 'socket' && ev.socketEvent) {
+            this.eventsService.emitToUser(ev.userId, ev.socketEvent, ev.socketPayload);
+          }
+          await this.prisma.rewardOutboxEvent.update({
+            where: { id: ev.id },
+            data: { status: 'DELIVERED', deliveredAt: new Date(), processingAt: null },
+          });
+        } catch (err) {
+          const attempts = ev.attempts + 1;
+          await this.prisma.rewardOutboxEvent.update({
+            where: { id: ev.id },
+            data: {
+              processingAt: null,
+              lastError: ((err as Error)?.message ?? 'delivery failed').slice(0, 500),
+              status: attempts >= 5 ? 'FAILED' : 'PENDING',
+            },
+          });
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Reward outbox flush failed: ${(err as Error)?.message ?? err}`);
+    }
   }
 
   // ─── Admin: Achievements ──────────────────────────────────
