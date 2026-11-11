@@ -6,12 +6,30 @@ Recorded on 7 November 2026. This document is the follow-up checklist for Jomar'
 
 Source feedback is in [Jomar's document](https://docs.google.com/document/d/1UHCvWj2ptECL148068yEFo51Q7fL12dE/edit). Treat it as product feedback subject to the owner's decisions. Status below reflects the reported releases in the project conversation and requires verification against current main and the signed-in product before implementation.
 
+## Authoritative status — 11 Nov 2026 (main `a1153e8`)
+
+This table is the single source of truth for Jomar's eight requests. Detailed
+sections below are retained as history; where they conflict with this table,
+the table wins. Verified against current main + production evidence cited.
+
+| # | Request | Status | Shipped behavior / source | Verification evidence | Remaining gaps / owner decisions |
+|---|---------|--------|---------------------------|----------------------|----------------------------------|
+| 1 | Manageable task discovery (2-3 choices, platform select) | **Partially shipped - acceptance open** | Platform filter chips + paginated "Show more" feed (initial batch **6**, not 2-3); `browseActive` filters platformPrefix/taskType/geo, excludes completed + own campaigns. `apps/api/src/modules/campaigns/campaigns.service.ts:633`, `apps/web/src/app/(dashboard)/tasks/page.tsx` | PR #46 `a03732c` live-verified: chips filter, 6-card batch, Show more, own-work exclusion | **OPEN:** Jomar asked for two/three choices - shipped six initial cards (two desktop rows); needs his sign-off or a batch-size change. Visual-design satisfaction also open (item 6). |
+| 2 | Hide self-owned work + Accept & open target | **Shipped + live-verified** | Own campaigns excluded from `GET /tasks` at API level; creators keep `/campaigns` + `tasks/my`. "Accept & open [platform]" opens target synchronously post-assign with popup-blocked fallback + pinned accepted panel | PR #46; live PASS on engganyo.com (popup + fallback + panel) | None known. |
+| 3 | Optional account linking for manual tasks | **Shipped + live-verified** | `SocialAuthService.requiresLinkedAccount(taskType, autoVerify)` - link required only for API-verified autoVerify types; manual-proof tasks accept unlinked; challenges never require linking. `social-auth.service.ts:760`, `tasks.service.ts:135` | PR #47 `bcb5371`; live manual-task accept unlinked; CI 28-case matrix + real-PG specs | Jomar's "no OAuth at all" is not fully met - OAuth linking remains for the 4 API-verified task types (needed for automated verification). Multi-account support exists via Settings > Connected Accounts. Deferred funded-crypto qualification retained. |
+| 4 | User-to-user marketplace | **Proposal ready - owner decision pending** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** - users sell eligible inventory (boosts etc.) for wallet credits; credits themselves are NOT tradable. Proposal: `docs/proposals/player-item-marketplace.md`. Supersedes credit-resale draft `credit-trading.md` (removed). Audit: `StoreItem`/`UserInventory`/`StorePurchase`/`useItem`/`equipCosmetic`/`UserActiveEffect` + locked `purchaseItem` tx (`store.service.ts:163`) are a complete foundation; no listing/reservation/transfer exists | Source audit on `a1153e8`; prod catalog: 2 BOOST + 2 COSMETIC + 2 CONVENIENCE items, ~1 tradable inventory row | Owner decisions: launch categories (consumables-only?), fee %, price bounds, listing expiry, cosmetic tradability. |
+| 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
+| 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
+| 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
+| 8 | Paid Discover ads | **Proposal ready - owner decision pending** | Proposal refined with audit: `docs/proposals/paid-discover-ads.md`. Real-money payment via existing PayMongo/PayPal/USDT deposit-provider integrations (parallel purchase flow, not credits); scrollable `/discover` ads rail; per-ad impression analytics (new tables - visitor analytics does NOT count ad views); moderation before publication | Source audit on `a1153e8`; Discover page + visitor-analytics + payment modules located | Owner decisions: providers, price tiers, refund method, placement scope, moderation SLA, advertiser eligibility. |
+| 9 | Supported-platform logos (owner item) | **Shipped + live-verified** | Landing "Supported platforms" strip, local SVGs, before "Two ways to participate" | PR #49 `6c4f2b5`; live 390px+1440px | None. |
+
 ## Delivery order
 
 1. Improve Find tasks and the accept-to-proof journey.
 2. Simplify manual-task onboarding and make Top up visible.
 3. Refine the visual design and add supported-platform logos to the landing page.
-4. Prepare proposals for credit trading and paid Discover ads.
+4. Prepare proposals for the player item marketplace and paid Discover ads. (Credit-resale interpretation superseded by owner clarification, 11 Nov.)
 
 Track each item through verification, implementation, review, and deployment. Record the PR, tested SHA, evidence, and outstanding decisions here as work progresses. Existing wheel/streak releases do not close these items.
 
@@ -75,16 +93,24 @@ Jomar wants beginners to complete manually reviewed tasks using their chosen soc
 - Verify a fresh user's signup-to-first-submission journey and show actionable explanations for any remaining prerequisite.
 - Document any unresolved verification dependency before implementation.
 
-## 4. User-to-user credit marketplace
+## 4. Player item marketplace (was: user-to-user credit marketplace)
 
-**Status — proposal required.**
+**Status — proposal ready for owner review (11 Nov).** `docs/proposals/player-item-marketplace.md`.
 
-Jomar describes listings where users buy credits from other users and receive the purchased credits immediately.
+> **Interpretation corrected by owner (11 Nov 2026):** Jomar means a
+> **player item marketplace** — users sell eligible Engganyo inventory
+> (boosts and similar items) and buyers pay with wallet credits; sellers
+> receive credits. The earlier credit-resale reading (peer transfer of
+> credits, `credit-trading.md`) is **superseded and removed**. Credits and
+> P2P points remain non-transferable.
 
-- Clarify the tradable asset and payment currency with the owner. Wallet credits and P2P ranking points have different purposes.
-- Propose listing ownership, balance reservation, atomic purchase/transfer, cancellation, fee accounting, purchase history, and dispute handling.
-- Specify how concurrent purchases, insufficient funds, duplicate requests, and failed external payments behave.
-- Bring the economics and lifecycle to design review before implementation.
+The proposal covers the tradability matrix (unused consumables tradable;
+activated effects, equipped cosmetics, credits, and points not), atomic
+list/reserve/cancel/purchase settlement reusing the locked store-purchase
+pattern, fees/price bounds/expiry as owner decisions, and abuse cases
+(insufficient funds, self-purchase, races, forged attributes, suspended
+accounts, admin takedowns). No marketplace economics implemented — awaiting
+owner approval.
 
 ## 5. Discoverable Top up
 
@@ -98,36 +124,48 @@ Jomar describes listings where users buy credits from other users and receive th
 
 ## 6. Distinct and usable visual design
 
-**Status — earlier redesign shipped, further refinement requested.**
+**Status — earlier redesign shipped; Jomar's satisfaction review OPEN (see authoritative table).** Existing logo preserved per owner decision below.
 
 Jomar still finds the presentation generic. Review layout and interactions alongside color and typography.
 
 - Prioritize the user's next action and the task information needed to take it.
 - Inspect the current screens, shared components, and theme before selecting patterns.
 - Improve hierarchy, spacing, navigation, information density, and confirmation states with a consistent Engganyo identity.
-- Preserve the existing Engganyo logo artwork and colors per the owner's instruction. Jomar's suggestion to generate a replacement logo requires a new owner decision.
+- Preserve the existing Engganyo logo artwork and colors - **owner decision recorded 11 Nov: the existing logo stays**; Jomar's replacement-logo suggestion is declined unless he re-raises it with the owner.
 - Provide matched before/after screenshots using the same fixture at 390px and 1440px, plus keyboard, contrast, and state verification.
 
 ## 7. Fewer avoidable prerequisites
 
-**Status — onboarding audit required.**
+**Status — audit complete 11 Nov; simplification proposals pending owner review.**
 
-- Trace signup → discovery → acceptance → task opening → proof → review tracking.
-- List each blocking prerequisite, its purpose, and whether it is necessary for that action.
-- Remove avoidable steps and explain required checks at the point where they matter.
-- Keep ownership, proof validation, payment verification, and duplicate-credit controls effective.
-- Test with a fresh account and record the actions and requests needed to complete the journey.
+Beginner journey trace (verified against `a1153e8` source):
+
+| Step | Blocking prerequisites | Why it exists | Simplify? |
+|---|---|---|---|
+| Signup | reCAPTCHA v3, username/password rules | Bot/abuse prevention | Keep — invisible to users |
+| First login | Email verification field exists (`User.isVerified`) but **no task flow gates on it** | Anti-fraud groundwork | Currently non-blocking — leave as is |
+| Welcome | 200 credits granted automatically (`auth.service.ts` `WELCOME_CREDITS`) | Lets beginners try paid actions | Keep |
+| Discovery | Onboarding tour overlay (dismissible), cookie consent | Guidance | Keep; tour already optional |
+| Accept task | Platform enabled check; **linked account required ONLY for autoVerify+API-verified types** (`requiresLinkedAccount`); trust-level daily cap (NEW = 5/day); own-campaign + duplicate-completion + slot guards | Verification dependency + anti-farm | Manual tasks already link-free (PR #47). Trust cap is protective — its error already explains it. |
+| Open target | Synchronous popup; blocked-popup fallback + pinned panel | Direct-to-task UX (Jomar's request) | Shipped |
+| Submit proof | Proof upload validation (image decode), completion ownership | Proof integrity | Keep |
+| Review tracking | `tasks/my` status, notifications | Transparency | Keep |
+
+**Conclusion:** the only hard blockers for a fresh user are reCAPTCHA (invisible),
+the trust daily cap (5/day, rises with trust), and linking *only* when the
+task's verification actually needs the platform API. No email-verification or
+KYC wall exists. Ownership, proof, payment, and duplicate-reward protections
+are all intact. Simplification candidates for owner review: surface the daily
+cap proactively on the tasks page, and consider whether NEW-tier 5/day feels
+restrictive for Jomar's "spoon-fed beginner" goal — raising it is an
+anti-abuse tradeoff decision, not a code change. Fresh-account retest still
+pending.
 
 ## 8. Paid Discover ads
 
-**Status — proposal required.**
+**Status — proposal ready for owner review (11 Nov).** `docs/proposals/paid-discover-ads.md` — refined with source audit (payment providers, Discover surface, visitor-analytics limits, moderation lifecycle, per-ad impression design).
 
-Jomar wants an affordable feed of user-submitted ads, paid directly with money, with visible per-ad views and content moderation.
-
-- Propose placement, pricing, duration, supported content, and payment methods.
-- Define moderation before publication, reporting/takedown, rejected-ad refunds, and behavior when payment succeeds but moderation fails.
-- Specify impression/view definitions, duplicate and bot handling, and advertiser analytics. Existing visitor analytics does not establish ad views.
-- Bring the payment/moderation lifecycle and mobile/desktop layouts to review before implementation.
+Jomar wants an affordable feed of user-submitted ads, paid directly with money, with visible per-ad views and content moderation. The proposal defines checkout correlation (`ad_purchases` ↔ provider `paymentRef`, parallel to but separate from credit deposits), the DRAFT→PAYMENT→MODERATION→LIVE lifecycle with idempotent rejection refunds, reporting/takedown, per-ad impression counting (IntersectionObserver ≥50%/1s, 24h dedupe, bot filtering — new tables required; visitor analytics does not count ad views), pricing/duration tiers, and mobile/desktop wireframes. No ad economics implemented — awaiting owner approval.
 
 ## 9. Supported-platform logos on the landing page
 

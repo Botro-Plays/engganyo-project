@@ -1902,3 +1902,19 @@ status is unknown. `.deployed-sha` verified `a1153e8`.
 - Socket auto-reconnect verified in CI; live reconnect check used reload path.
 - EventsGateway Redis-adapter boot warning unchanged (single-instance OK).
 - Friend testing checklist for owners/friends: `docs/P2P_FRIEND_TEST_CHECKLIST.md`.
+
+### Records update — Jomar priorities reconciliation + proposals (11 Nov 2026)
+
+Documentation-only change on `docs/repo-records`; no code deploy.
+`docs/JOMAR_IMMEDIATE_PRIORITIES.md` now opens with an authoritative
+8-request status table (shipped behavior, source paths, verification
+evidence, gaps, owner decisions). Conflicting older entries marked
+historical; acceptance questions kept open (6-card batch vs 2–3, visual
+design satisfaction, beginner prerequisites); existing logo preserved;
+funded-crypto qualification remains deferred. Marketplace request
+reinterpreted per owner as a **player item marketplace** —
+`docs/proposals/credit-trading.md` removed, replaced by
+`docs/proposals/player-item-marketplace.md` (Ready for review; no
+economics implemented). `docs/proposals/paid-discover-ads.md` refined
+with payment/moderation/impression audit (Ready for review). Beginner
+onboarding traced end-to-end in priorities §7.

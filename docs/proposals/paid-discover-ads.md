@@ -1,61 +1,141 @@
-# Proposal: paid Discover ads
+# Proposal: paid Discover ads (user-submitted, real-money)
 
-**Status: design review — no implementation authorized.**
+**Status: Ready for review — no implementation authorized.**
 
-Jomar wants an affordable feed of user-submitted ads, paid directly with money (not credits), with visible per-ad view counts and content moderation before publication.
+Jomar wants an affordable scrollable feed where users post their own ads,
+paid **directly with money** (not credits), each ad showing view analytics,
+with moderation before publication.
 
-## Placement
+## Audit — what already exists (main `a1153e8`)
 
-- New **Discover** surface (or a promoted slot inside Find tasks feed) — decide whether ads mix into task discovery or live on a separate `/discover` page. Mixing into Find tasks risks distracting earners; a separate feed keeps task conversion clean but needs its own traffic.
-- Mobile + desktop layouts; ads must not push task cards below the fold on 390px.
+| Layer | Path | State |
+|---|---|---|
+| Real-money deposits | `apps/api/src/modules/wallet/wallet.controller.ts` — `deposit/initiate`, `deposit/options`, `deposit/packages`, crypto challenge/submit/verify | Implemented |
+| Providers | `apps/api/src/modules/paymongo/` (PayMongo, PHP), `apps/api/src/modules/paypal/` (create-order/capture/webhook), `wallet/crypto-verification.service.ts` (USDT BEP20/Base) | Implemented for **credits** — ads need a parallel purchase flow, not wallet credit |
+| Deposit model | `Deposit`/`DepositPackage` schema: `paymentRef` unique, `gatewayData`, provider fee/net fields, PENDING→COMPLETED lifecycle | Reusable pattern |
+| Discover surface | `apps/web/src/app/(dashboard)/discover/page.tsx` — sections: campaigns, forum topics, leaderboard | Implemented; natural host for an ads rail |
+| Visitor analytics | `apps/api/src/modules/analytics/visitor-analytics.service.ts` + `apps/web/src/components/visitor-beacon.tsx` — beacon ingest, 30-min visit window, eventId dedupe, bot filtering | Site-level only — **does not count ad impressions**; patterns reusable |
+| Moderation tooling | `apps/api/src/modules/admin/` queue/report patterns (rooms reports, store items, users) | Patterns exist; no ad queue yet |
+| Promotion/boost | `SPEND_CAMPAIGN_BOOST`/`PLATFORM_FEE_CAMPAIGN` enum values exist; **no campaign-promotion feature found in service code** — defined but unwired | Foundation only |
+| Open branches/PRs | None touch ads/promotions/payments. Checked all 72 remote heads on `a1153e8`; payment-adjacent branches (`fix/paymongo-*`, `fix/paypal-*`, `fix/crypto-*`, `feat/paymongo-*`, `feat/paypal-*`, `feat/crypto-wallet-ownership`) are all merged ancestors. | Clean |
 
-## Pricing & payment
+## Product shape
 
-- Direct-money payment only (PayMongo/PayPal/crypto — reuse existing deposit provider integrations, but as a **purchase**, not a wallet credit). No credit purchases for ads (avoids mixing promotional spend with task economy).
-- Pricing unit: flat fee per campaign duration (e.g. ₱X / 24h) vs. CPM. Recommend flat daily rate for v1 — simpler accounting, no impression fraud surface.
-- Server-calculated price shown before payment; payment success creates a `PENDING_REVIEW` ad, never a live ad.
+Advertisers compose an ad (text + image + link + category), pick a duration,
+pay real money at checkout, pass moderation, then the ad runs in a
+**scrollable ads rail on `/discover`** (between content sections) with a
+persistent view counter on the ad card itself.
 
-## Moderation lifecycle (hard requirement)
+```
+Desktop                                        Mobile (390px)
+┌──────────────────────────────────────┐       ┌─────────────────────┐
+│ Discover                             │       │ Discover            │
+│ ┌─ New campaigns ────────────────┐   │       │ ┌─ Ads ────────────┐ │
+│ │ [ad card]      [ad card]       │   │       │ │ [ad card]        │ │
+│ │ "Ad" badge · 1.2k views        │   │       │ │ Ad · 1.2k views  │ │
+│ └────────────────────────────────┘   │       │ └──────────────────┘ │
+│ ┌─ Forum topics ─────────────────┐   │       │ ‹ scroll ›          │
+│ ...                                │       │ ┌─ New campaigns ──┐ │
+└──────────────────────────────────────┘       │ ...               │
+                                              └─────────────────────┘
+```
+
+## Payment → moderation → publication
 
 ```
 DRAFT → AWAITING_PAYMENT → PAID/PENDING_REVIEW → APPROVED → LIVE → ENDED
-                                     ↘ REJECTED → REFUND
-                                     ↘ PAYMENT_FAILED → cancel
+                │                │
+                │                ├─ REJECTED → REFUND (idempotent)
+                │                └─ APPROVED_LATE → still goes LIVE
+                └─ PAYMENT_FAILED/EXPIRED → abandon, no charge
+LIVE → REPORTED → UNDER_REVIEW → REMOVED (immediate unpublish)
 ```
 
-- **Payment succeeds but moderation fails** → automatic refund to original payment method (PayMongo/PayPal refund APIs) or account credit — decide which; refund must be idempotent.
-- **Payment fails** → no ad record or `PAYMENT_FAILED` state; checkout recovery reuses existing payment-return patterns.
-- Moderation queue reuses admin tooling patterns; ads contain text/image/link — define prohibited content (mirrors existing content policy + ad-specific: no misleading claims, no off-platform payment solicitation, no adult content).
-- Advertiser can edit → returns to review. Takedown on report → immediate unpublish + review.
+- **Checkout correlation:** ad checkout reuses the deposit-provider
+  integrations but creates an `ad_purchases` row (`paymentRef` ↔ `adId`,
+  amount, currency, provider, status) — **not** a wallet deposit. PayMongo
+  checkout + PayPal order + (decision) USDT. Payment success webhook/
+  capture flips `ad.status = PENDING_REVIEW`; the ad is never visible
+  before approval.
+- **Pricing/duration:** flat fee per duration tier (proposed: 24h / 72h /
+  7d packages, server-calculated, shown before payment). v1 flat pricing —
+  no CPM (avoids impression-fraud accounting).
+- **Rejection/refund:** moderation reject → automatic refund via provider
+  refund API (PayMongo/PayPal support refunds); crypto refunds → manual
+  review queue or wallet credit — **decision**. Refund is idempotent
+  (unique `refundRef`); a `REFUNDED` ledger/audit row is written either way.
+- **Payment succeeds, moderation fails:** covered above — refund path is
+  part of the lifecycle, not an edge case.
+- **Reporting/takedown:** every ad card has Report + dismiss; report →
+  `UNDER_REVIEW` → admin removes → advertiser notified; repeated violations
+  → advertiser suspension.
 
-## Views / analytics
+## Per-ad view analytics (the actual requirement)
 
-- "Views" must be defined: an impression = ad card rendered ≥50% visible for ≥1s (IntersectionObserver), deduplicated per user/session per ad per 24h.
-- Bot filtering: reuse visitor-analytics bot rules; exclude owner/admin/preview renders.
-- Advertiser dashboard: impressions, unique viewers, clicks (link clicks), CTR — stored as daily rollups like visitor analytics.
-- Existing visitor analytics does NOT count ad views — new `ad_impressions`/`ad_events` tables needed; do not overload visitor events.
+Site visitor analytics does **not** satisfy this — new tables required:
 
-## Abuse controls
+- `ad_impressions` (or daily rollup `ad_analytics_daily`): adId, viewer
+  key (hashed userId or anonymous sessionId), timestamp, placement.
+- **Impression definition:** card ≥50% visible ≥1s via IntersectionObserver
+  beacon — same pattern as `visitor-beacon.tsx`.
+- **Dedup/bot controls:** reuse visitor-analytics bot rules; dedupe
+  viewer+ad per 24h for the "views" counter; exclude admins/owners and
+  preview renders; rate-limit the beacon endpoint.
+- **Advertiser dashboard:** impressions, unique viewers, link clicks, CTR —
+  daily rollups like visitor analytics.
+- **Ad card** shows the public "views" count (unique-24h basis) — label it
+  "views" honestly.
 
-- One ad per user per slot; frequency cap per viewer (e.g. max N ad impressions/session).
-- Click fraud: rate-limit outbound clicks, flag anomalies.
-- Prohibited: ads impersonating Engganyo, ads soliciting credentials/payments off-platform.
+## Abuse / policy controls
+
+- Prohibited content mirrors existing policy + ad-specific: no misleading
+  claims, no off-platform payment/credential solicitation, no adult, no
+  impersonation of Engganyo or staff.
+- One active ad per user; per-viewer frequency cap (max N ad impressions
+  per session); click fraud rate-limiting on outbound links.
+- Moderation SLA + queue reuse admin patterns; every decision logged.
 
 ## Accounting
 
-- Ad revenue is platform revenue (`PlatformRevenue`-style ledger or a separate `AD_REVENUE` entry) — real money, not credits. Refunds must write reversing entries.
-- Tax/VAT on ad sales per jurisdiction — same legal gate as credit trading.
+- Ad revenue is **real money platform revenue** — separate from credits and
+  from `PLATFORM_FEE_*` credit ledger entries. Record provider settlement
+  figures like `Deposit` does (fee/net/currency). Refunds write reversing
+  records. Tax/VAT treatment per jurisdiction — same legal review as any
+  paid feature.
+
+**Accounting example (illustrative):** advertiser buys a 24h placement at
+₱300 via PayMongo. Checkout creates `ad_purchases` row; provider reports
+settlement ₱291.60 net of ₱8.40 fee. Records written: `ad_purchase` audit
+row (gross/fee/net/currency/paymentRef), `AD_REVENUE` settlement entry.
+Moderation rejects → provider refund ₱300 initiated once (`refundRef`
+unique); a reversing `AD_REFUND` row is written; advertiser sees refund
+status in dashboard. If payment captured but moderation never completes,
+the ad stays `PENDING_REVIEW` and a reconciliation job alerts ops rather
+than auto-publishing.
 
 ## Mobile/desktop UX
 
-- Clearly labeled "Ad" / "Promoted" badge (transparency requirement).
-- Dismiss/report affordance on every ad.
-- Empty states when no ads approved.
+- Persistent "Ad"/"Promoted" badge (transparency), report + dismiss on
+  every card, graceful empty state ("No ads yet").
+- Ads rail must not push task cards below the fold at 390px — horizontal
+  snap rail, max 2 visible cards.
+
+## Implementation scope (for planning)
+
+- API: `ads` module — ad CRUD, checkout (provider adapters reused),
+  webhook/capture correlation, moderation queue actions, impression
+  beacon + rollups, report/takedown, advertiser analytics endpoints.
+- Web: `/discover` ads rail + ad composer/checkout flow + advertiser
+  dashboard (my ads, stats) + moderation queue in admin.
+- Tests: payment→moderation→publication state machine (real-PG), refund
+  idempotency, impression dedupe/bot filtering, concurrent checkout.
 
 ## Open questions for the owner
 
-1. Discover as separate page or promoted slots in Find tasks?
-2. Flat daily pricing vs CPM — and price points?
-3. Refund method on moderation rejection: original payment method or account credit?
-4. Who moderates — admin queue SLA?
-5. Are ads allowed from any verified user or approved advertisers only?
+1. Providers for v1: PayMongo + PayPal only, or include USDT crypto?
+2. Price points per duration tier?
+3. Rejection refund: original payment method vs wallet credit?
+4. Ads rail on `/discover` only, or also promoted slots in Find tasks?
+   (Recommend discover-only v1 — keeps task conversion clean.)
+5. Who moderates — admin queue SLA, auto-flag rules?
+6. Eligibility: any registered user, or verified/tenured advertisers only?
