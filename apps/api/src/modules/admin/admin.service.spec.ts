@@ -103,6 +103,7 @@ describe('AdminService', () => {
   const mockGamificationService = {
     awardVp: jest.fn().mockResolvedValue({ newVp: 0, tierUp: false, newTier: null }),
     awardTaskCompletionOutcome: jest.fn().mockResolvedValue(undefined),
+    recordTaskCompletionOutcome: jest.fn().mockResolvedValue(undefined),
     getVipStatus: jest.fn().mockResolvedValue({ currentTier: null, nextTier: null, vp: 0, progressPercent: 0, perks: { taskLimitBonus: 0, feeDiscountPercent: 0 } }),
   };
 

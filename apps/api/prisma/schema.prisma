@@ -939,6 +939,51 @@ model UserMissionProgress {
   @@map("user_mission_progress")
 }
 
+// Durable per-completion reward outcome. Created atomically inside the
+// VERIFIED transition transaction; a processor then settles each effect
+// (XP, VP, mission, achievements, referral) with persistent per-effect
+// flags so a crash mid-processing resumes instead of losing rewards.
+// Exactly-once per effect is enforced by each effect's own dedupe
+// (xp/vp events, mission progress events, achievement unique row,
+// referral milestone map) — flags only track progress.
+model TaskCompletionOutcome {
+  id                  String    @id @default(cuid())
+  completionId        String    @unique @map("completion_id")
+  userId              String    @map("user_id")
+  status              String    @default("PENDING") // PENDING | DONE | FAILED | CANCELLED
+  xpSettled           Boolean   @default(false) @map("xp_settled")
+  vpSettled           Boolean   @default(false) @map("vp_settled")
+  missionSettled      Boolean   @default(false) @map("mission_settled")
+  achievementsSettled Boolean   @default(false) @map("achievements_settled")
+  referralSettled     Boolean   @default(false) @map("referral_settled")
+  attempts            Int       @default(0)
+  lastError           String?   @map("last_error")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  processedAt         DateTime? @map("processed_at")
+
+  @@index([status, createdAt])
+  @@map("task_completion_outcomes")
+}
+
+// Per-mission qualifying-event dedupe. A repeated delivery of the same
+// source event (e.g. outcome recovery re-running mission progress for a
+// completionId) must not count the task twice; distinct events each
+// count once per mission.
+model MissionProgressEvent {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  missionId  String   @map("mission_id")
+  sourceType String   @map("source_type") // MissionType value
+  sourceId   String   @map("source_id")   // e.g. task completion id
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([missionId, sourceType, sourceId])
+  @@index([userId, date])
+  @@map("mission_progress_events")
+}
+
 model XpEvent {
   id          String  @id @default(cuid())
   userId      String  @map("user_id")
@@ -1165,6 +1210,10 @@ model Notification {
 
   isRead Boolean   @default(false) @map("is_read")
   readAt DateTime? @map("read_at")
+
+  // Stable delivery identity for outbox-driven notifications: a retried
+  // delivery finds the existing row instead of creating a duplicate.
+  dedupeKey String? @unique @map("dedupe_key")
 
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -532,10 +532,10 @@ export class TasksService {
           referenceId: campaignId,
           referenceType: 'campaign',
         }, tx);
-      });
 
-      void this.referralsService.qualifyReferral(userId).catch(() => null);
-      void this.referralsService.checkMilestones(userId).catch(() => null);
+        // Durable reward outcome — commits atomically with VERIFIED.
+        await this.gamificationService.recordTaskCompletionOutcome(tx, userId, completion.id);
+      });
 
       await this.gamificationService.awardTaskCompletionOutcome(userId, completion.id);
       void this.antiAbuseService.queueRecalculate(userId);
@@ -785,10 +785,10 @@ export class TasksService {
           referenceId: campaignId,
           referenceType: 'campaign',
         }, tx);
-      });
 
-      void this.referralsService.qualifyReferral(userId).catch(() => null);
-      void this.referralsService.checkMilestones(userId).catch(() => null);
+        // Durable reward outcome — commits atomically with VERIFIED.
+        await this.gamificationService.recordTaskCompletionOutcome(tx, userId, completion.id);
+      });
 
       await this.gamificationService.awardTaskCompletionOutcome(userId, completion.id);
       void this.antiAbuseService.queueRecalculate(userId);

@@ -138,6 +138,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
         extendOrCreateActiveEffect: jest.fn(async () => ({ expiresAt: new Date().toISOString(), extended: false })),
         syncEffectCaches: jest.fn(async () => {}),
       } as never,
+      { qualifyReferral: jest.fn(async () => {}), checkMilestones: jest.fn(async () => {}) } as never,
     );
     await prisma.$connect();
 

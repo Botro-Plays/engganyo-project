@@ -16,9 +16,14 @@ export class NotificationsService {
     title: string,
     body: string,
     data?: Prisma.InputJsonValue,
+    opts?: { dedupeKey?: string },
   ) {
     const notification = await this.prisma.notification.create({
-      data: { userId, type, title, body, ...(data !== undefined && { data }) },
+      data: {
+        userId, type, title, body,
+        ...(data !== undefined && { data }),
+        ...(opts?.dedupeKey && { dedupeKey: opts.dedupeKey }),
+      },
     });
     this.eventsService.emitToUser(userId, 'notification:new', notification);
     return notification;

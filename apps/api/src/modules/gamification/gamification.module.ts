@@ -4,11 +4,12 @@ import { WalletModule } from '../wallet/wallet.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
 import { StoreModule } from '../store/store.module';
+import { ReferralsModule } from '../referrals/referrals.module';
 import { GamificationController } from './gamification.controller';
 import { GamificationService } from './gamification.service';
 
 @Module({
-  imports: [forwardRef(() => WalletModule), NotificationsModule, EventsModule, forwardRef(() => StoreModule)],
+  imports: [forwardRef(() => WalletModule), NotificationsModule, EventsModule, forwardRef(() => StoreModule), forwardRef(() => ReferralsModule)],
   controllers: [GamificationController],
   providers: [GamificationService],
   exports: [GamificationService],
