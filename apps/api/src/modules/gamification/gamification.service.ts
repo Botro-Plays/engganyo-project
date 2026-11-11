@@ -1279,7 +1279,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
             INSERT INTO mission_progress_events
               (id, user_id, mission_id, source_type, source_id, "date", created_at)
             VALUES
-              (${randomUUID()}, ${userId}, ${mission.id}, ${String(type)}, ${opts.sourceId}, ${day.toISOString().slice(0, 10)}, NOW())
+              (${randomUUID()}, ${userId}, ${mission.id}, ${String(type)}, ${opts.sourceId}, ${day.toISOString().slice(0, 10)}::date, NOW())
             ON CONFLICT (mission_id, source_type, source_id) DO NOTHING`;
           if (inserted === 0) return { completed: false, alreadyCounted: true };
         }
