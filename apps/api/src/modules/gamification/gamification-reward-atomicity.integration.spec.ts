@@ -12,7 +12,7 @@
  * - unlockAchievement settles row + credit + XP atomically; concurrent
  *   unlocks pay exactly once via the unique constraint.
  */
-import { PrismaClient, MissionType, AchievementCategory, TransactionType } from '@prisma/client';
+import { PrismaClient, MissionType, AchievementCategory, TransactionType, TaskType } from '@prisma/client';
 import { GamificationService } from './gamification.service';
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
@@ -335,10 +335,38 @@ run('reward atomicity — real PostgreSQL', () => {
 
   // ─── Durable task-completion outcomes ─────────────────────
 
+  // task_completions_single_offer requires exactly one of
+  // campaign_id/challenge_id — completions need a campaign parent.
+  // One shared campaign is fine: (campaignId, userId) is unique and
+  // every test uses a fresh user.
+  let outcomeCampaignId: string | null = null;
+  const ensureOutcomeCampaign = async (uid: string) => {
+    if (outcomeCampaignId) return outcomeCampaignId;
+    const c = await prisma.campaign.create({
+      data: {
+        userId: uid,
+        title: `${PREFIX}outcome-campaign`,
+        taskType: TaskType.GOOGLE_REVIEW,
+        targetUrl: 'https://example.com/review',
+        totalSlots: 1000,
+        completedSlots: 0,
+        pendingSlots: 0,
+        creditPerTask: 10,
+        totalCost: 10000,
+        targetCountries: [],
+        targetLanguages: [],
+        status: 'ACTIVE',
+      },
+    });
+    outcomeCampaignId = c.id;
+    return c.id;
+  };
+
   const mkVerifiedCompletion = async (uid: string, status: 'VERIFIED' | 'SUBMITTED' = 'VERIFIED') =>
     prisma.taskCompletion.create({
       data: {
         userId: uid,
+        campaignId: await ensureOutcomeCampaign(uid),
         status,
         verifiedAt: status === 'VERIFIED' ? new Date() : null,
         verifiedBy: status === 'VERIFIED' ? 'system' : null,
