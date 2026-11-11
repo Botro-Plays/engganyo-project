@@ -12,6 +12,8 @@ This table is the single source of truth for Jomar's eight requests. Detailed
 sections below are retained as history; where they conflict with this table,
 the table wins. Verified against current main + production evidence cited.
 
+**Final decision package for items 4 & 8:** `docs/IMPLEMENTATION_DECISION_PACKAGE.md` (rev-5 ads proposal + rev-2 marketplace proposal, owner approval tables, measured-traffic pricing basis).
+
 | # | Request | Status | Shipped behavior / source | Verification evidence | Remaining gaps / owner decisions |
 |---|---------|--------|---------------------------|----------------------|----------------------------------|
 | 1 | Manageable task discovery (2-3 choices, platform select) | **Partially shipped - acceptance open** | Platform filter chips + paginated "Show more" feed (initial batch **6**, not 2-3); `browseActive` filters platformPrefix/taskType/geo, excludes completed + own campaigns. `apps/api/src/modules/campaigns/campaigns.service.ts:633`, `apps/web/src/app/(dashboard)/tasks/page.tsx` | PR #46 `a03732c` live-verified: chips filter, 6-card batch, Show more, own-work exclusion | **OPEN:** Jomar asked for two/three choices - shipped six initial cards (two desktop rows); needs his sign-off or a batch-size change. Visual-design satisfaction also open (item 6). |

@@ -1,6 +1,6 @@
 # Proposal: external banner advertising — real-money bookings and intelligent placement
 
-**Status: Ready for review (rev 4 — corrected guarantees/clock/packages) — no implementation authorized.**
+**Status: Ready for review (rev 5 — decision package aligned) — no implementation authorized.**
 
 > **Owner clarification (11 Nov 2026):** this feature is for **external
 > customers** (businesses/brands, not necessarily Engganyo users) buying
@@ -137,26 +137,46 @@ refunds handled offline with an audit note.
 
 ## 5. Packages — illustrative placeholders pending traffic data
 
-> **All prices below are illustrative placeholders.** They have not been
-> validated against measured zone traffic (no per-zone impression data
-> exists yet). They are starting points for owner review, not commitments.
+> **All prices are illustrative placeholders — nothing is configured or
+> charged at these rates.** Measured traffic (visitor analytics, last 30
+> days, non-bot human page views) grounds the assumptions:
 
-### Launch option (recommended v1)
+| Zone-bearing page | Human views / 30d | Est. viewable impressions / 30d* |
+|---|---|---|
+| `/` (LANDING_TOP) | 23 | ~12–15 |
+| `/tasks` (TASKS_TOP) | 39 | ~20–25 |
+| `/discover` (DISCOVER_RAIL) | 3 | ~1–2 |
+| `/forum` (FORUM_SIDEBAR) | 6 | ~2–4 |
 
-| Package | Zones | Price (PHP, placeholder) | Terms |
-|---|---|---|---|
-| Shared placement — Leaderboard zones (`LANDING_TOP`, `TASKS_TOP`) | Fair rotation | 7d ₱1,500 · 30d ₱3,900 | No traffic guarantee; actual delivery reported |
-| Shared placement — Rectangle zones (`DISCOVER_RAIL`, `FORUM_SIDEBAR`) | Fair rotation | 7d ₱1,000 · 30d ₱2,600 | Same |
-| Multi-zone bundle (3+ zones) | Rotation in each | 10% off summed prices | Per-zone reporting |
+\* Assumes ~50–65% of page views produce a viewable banner impression
+(zone position + scroll depth). Shared across all concurrent advertisers
+in fair rotation — per-advertiser yield is impressions ÷ active bookings.
 
-### Premium option (deferred — added scheduling complexity)
+**At current traffic, honest per-advertiser yield is single-digit
+impressions/month on the best zone.** Prices below are therefore split:
 
-| Package | Placement | Price (PHP, placeholder) | Terms |
-|---|---|---|---|
-| Exclusive — any launch/premium zone | Sole advertiser for reserved window | 7d ₱4,500–9,000 by zone · 30d ₱11,500–23,000 | Reservation rules §3; pause/make-good bounded by non-displacement |
+### Launch option — INTRODUCTORY prices (v1, pending traffic growth)
 
-Pricing should be revisited once real impression data exists (the
-measurement layer in §7 produces it from day one).
+| Package | Zones | 7-day | 30-day | Terms |
+|---|---|---|---|---|
+| Shared — Leaderboard zones (`LANDING_TOP`, `TASKS_TOP`) | Fair rotation | ₱300 | ₱800 | No traffic guarantee; actual delivery reported |
+| Shared — Rectangle zones (`DISCOVER_RAIL`, `FORUM_SIDEBAR`) | Fair rotation | ₱200 | ₱500 | Same |
+| Multi-zone bundle (both tiers) | Rotation in each | 10% off | 10% off | Per-zone reporting |
+
+Introductory rates are deliberately low — they validate the booking →
+moderation → measurement pipeline, not revenue. Revisit when sustained
+human traffic reaches ~500+ page views/day.
+
+### Possible future rates (NOT v1 — requires traffic validation)
+
+| Package | 7-day | 30-day |
+|---|---|---|
+| Shared — Leaderboard zones | ₱1,500 | ₱3,900 |
+| Shared — Rectangle zones | ₱1,000 | ₱2,600 |
+| Exclusive — any zone (premium option) | ₱4,500–9,000 by tier | ₱11,500–23,000 |
+
+Future rates assume meaningfully higher traffic; exclusive pricing also
+carries the reservation/scheduling complexity in §3.
 
 ## 6. Lifecycle — one consistent delivery clock
 
@@ -197,16 +217,27 @@ ANY → CANCELLED → refund per policy
   remaining time.
 - After **rejection**: the advertiser gets a **defined revision window**
   (proposed 7 days / 3 revisions max) **or** a refund — their choice.
-  While a refund is `REFUND_REQUESTED/PENDING/SUCCEEDED`, the booking
-  cannot be published or replaced by a new paid booking for the same
-  slot; a `REFUND_FAILED` returns it to the revision-or-manual-refund
-  queue.
-- **Edited creative during review:** proposed rule — the booking **pauses**
-  during re-review (consistent with the approved scheduling rules); the
-  last approved creative does **not** keep serving, because the advertiser
-  asked to change it and the old creative may be the thing being
-  replaced. Alternative (serve last-approved during review) is a decision
-  — it maximizes delivered time but risks serving stale creative.
+  **Refund blocks only the affected booking**: while a refund is
+  `REFUND_REQUESTED/PENDING/SUCCEEDED`, *that booking* cannot be
+  published, edited, or replaced — but the zone/placement stays fully
+  bookable by this and every other advertiser (no global or per-slot
+  lock). Unrelated bookings by the same advertiser are unaffected.
+  **Failed-refund recovery:** `REFUND_FAILED` does not deadlock the
+  booking — it returns to a manual ops queue with the original
+  `refundRef` preserved; ops retries via the provider dashboard or
+  issues a wallet credit / offline refund, then marks
+  `REFUND_SUCCEEDED` manually with an audit note. A booking stuck in
+  refund-pending past the ops SLA (proposed 5 business days) escalates
+  automatically rather than silently waiting.
+- **Edited creative during review — confirmed rule:** when an advertiser
+  submits an edit to a LIVE booking, the booking **PAUSES immediately**
+  (banner stops serving) and the revision enters `PENDING_REVIEW`.
+  The last approved creative does **NOT** keep serving during review —
+  serving it would display content the advertiser just asked to replace.
+  On approval the booking resumes with its remaining time (`endsAt`
+  extended by the paused duration, non-displacing per §3). On rejection
+  the advertiser may revise again within the revision window or take the
+  refund path.
 
 **Refunds:** state machine `REFUND_REQUESTED → REFUND_PENDING →
 REFUND_SUCCEEDED/FAILED` with per-provider capability check (PayMongo/
