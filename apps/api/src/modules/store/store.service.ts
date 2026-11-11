@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { StoreCategory, TransactionType, NotificationType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { withTransactionRetry } from '../../database/tx-retry';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -158,6 +159,38 @@ export class StoreService implements OnModuleInit {
     }));
   }
 
+  /**
+   * Serialize equip-state changes for one (user, cosmeticType) slot.
+   * Every writer that can set `equipped` — equipCosmetic, purchaseItem
+   * auto-equip, loot-box cosmetic grants — must hold this advisory lock
+   * before reading or changing equipped rows, so two different items in
+   * the same slot can never both end up equipped.
+   *
+   * Lock ordering contract: catalog row (store_items) → advisory slot
+   * locks → user_inventory rows → users row → wallet row → effect rows.
+   * Advisory locks DO participate in Postgres deadlock detection; safety
+   * comes from the consistent acquisition order plus withTxRetry's
+   * bounded whole-transaction retry, not from the lock type.
+   */
+  private async lockEquipSlot(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    cosmeticType: string,
+  ): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`equip:${userId}:${cosmeticType}`}, 0))`;
+  }
+
+  /**
+   * Bounded whole-transaction retry on deadlock (40P01) / serialization
+   * failure (40001) / Prisma write-conflict (P2034) — see tx-retry.ts.
+   */
+  private async withTxRetry<T>(
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    attempts = 3,
+  ): Promise<T> {
+    return withTransactionRetry(this.prisma, fn, attempts);
+  }
+
   // ─── Purchase an item ────────────────────────────────────────
 
   async purchaseItem(userId: string, itemId: string, quantity = 1) {
@@ -177,7 +210,7 @@ export class StoreService implements OnModuleInit {
     // VIP/cosmetic/ownership/stock guards below cannot be raced by a
     // concurrent purchase. A failure anywhere rolls the debit back — no
     // compensating refund path is needed.
-    const { purchase, walletTx, item } = await this.prisma.$transaction(async (tx) => {
+    const { purchase, walletTx, item } = await this.withTxRetry(async (tx) => {
       // Lock the item row and re-read its current settings.
       await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${itemId} FOR UPDATE`;
       const item = await tx.storeItem.findUniqueOrThrow({ where: { id: itemId } });
@@ -268,6 +301,9 @@ export class StoreService implements OnModuleInit {
         const meta = item.metadata as Record<string, unknown>;
         const cosmeticType = meta?.['cosmeticType'] as string | undefined;
         if (cosmeticType) {
+          // Serialize with equipCosmetic/loot-box grants on this slot before
+          // touching equipped rows (lock order: advisory → inventory rows).
+          await this.lockEquipSlot(tx, userId, cosmeticType);
           const otherEquipped = await tx.userInventory.findMany({
             where: { userId, equipped: true },
             include: { item: { select: { metadata: true } } },
@@ -370,7 +406,7 @@ export class StoreService implements OnModuleInit {
     // can never be consumed without its benefit (or vice versa). Redis cache
     // writes are deferred to post-commit; readers fall back to the DB, so a
     // cache failure cannot lose the effect.
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.withTxRetry(async (tx) => {
       await tx.$executeRaw`SELECT id FROM user_inventory WHERE id = ${inventoryId} FOR UPDATE`;
 
       const inventory = await tx.userInventory.findFirst({
@@ -395,8 +431,10 @@ export class StoreService implements OnModuleInit {
       // Read via the tx client so the check sees committed state under the lock.
       if (effectType === 'xp_boost' || effectType === 'task_limit_boost') {
         // Serialize same-type effect creation per user across ALL transactions
-        // (useItem, wheel, loot box). Advisory xact locks live outside the row-
-        // lock domain, so this cannot deadlock against wallet/user row locks.
+        // (useItem, wheel, loot box). Advisory xact locks participate in
+        // Postgres deadlock detection — safety comes from the consistent
+        // lock order (advisory slots before inventory/user/wallet rows) and
+        // withTxRetry's bounded whole-transaction retry on 40P01/40001/P2034.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${effectType}`}, 0))`;
         const active = await tx.userActiveEffect.findFirst({
           where: { userId, type: effectType, expiresAt: { gt: new Date() } },
@@ -586,10 +624,23 @@ export class StoreService implements OnModuleInit {
   // ─── Equip / unequip a cosmetic ────────────────────────────
 
   async equipCosmetic(userId: string, inventoryId: string) {
-    // Single transaction under a row lock: the equip state change and any
-    // same-type unequip commit atomically, so a concurrent use/listing/
-    // purchase receipt on this row serializes instead of interleaving.
-    const result = await this.prisma.$transaction(async (tx) => {
+    // Lock order: advisory equip-slot lock BEFORE the inventory row lock,
+    // matching purchaseItem (store_items → advisory → inventory rows). The
+    // slot lock serializes every writer that can set `equipped` for this
+    // (user, cosmeticType) — this method, purchaseItem auto-equip, and
+    // loot-box cosmetic grants — so two different items in the same slot
+    // can never both end up equipped.
+    const result = await this.withTxRetry(async (tx) => {
+      // Unlocked pre-read only to learn the slot key; cosmeticType is
+      // immutable per item and authoritative state is re-read under locks.
+      const pre = await tx.userInventory.findFirst({
+        where: { id: inventoryId, userId },
+        include: { item: { select: { metadata: true } } },
+      });
+      if (!pre) throw new NotFoundException('Item not found in your inventory');
+      const slotType = (pre.item.metadata as Record<string, unknown>)?.['cosmeticType'] as string | undefined;
+      if (slotType) await this.lockEquipSlot(tx, userId, slotType);
+
       await tx.$executeRaw`SELECT id FROM user_inventory WHERE id = ${inventoryId} FOR UPDATE`;
 
       const inventory = await tx.userInventory.findFirst({
@@ -747,6 +798,8 @@ export class StoreService implements OnModuleInit {
             const cMeta = cosmeticItem.metadata as Record<string, unknown>;
             const cosmeticType = cMeta?.['cosmeticType'] as string | undefined;
             if (cosmeticType) {
+              // Same equip-slot serialization as equipCosmetic/purchaseItem.
+              await this.lockEquipSlot(tx, userId, cosmeticType);
               const otherEquipped = await tx.userInventory.findMany({
                 where: { userId, equipped: true },
                 include: { item: { select: { metadata: true } } },

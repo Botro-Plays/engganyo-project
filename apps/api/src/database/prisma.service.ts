@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { withTransactionRetry } from './tx-retry';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -43,6 +44,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async withTransaction<T>(
     fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
   ): Promise<T> {
-    return this.$transaction(fn);
+    // Bounded whole-transaction retry on deadlock/serialization conflicts —
+    // safe because a failed attempt rolls back completely.
+    return withTransactionRetry(
+      this,
+      fn as (tx: import('@prisma/client').Prisma.TransactionClient) => Promise<T>,
+    );
   }
 }
