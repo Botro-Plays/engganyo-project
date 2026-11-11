@@ -2173,3 +2173,35 @@ Full report: `docs/HISTORICAL_REWARD_RECONCILIATION_2026-11-11.md`
 **Final deployed SHA: `4d01040`** — deploy run `43016773147` success;
 `.deployed-sha` confirmed on VPS; `/api/health` ok (db+redis) at
 12:26 UTC. All three PRs (#75, #76, #77) live.
+
+## Outcome claim/lease + mission-date binding (2026-11-11, late)
+
+- **PR #78** `fix/outcome-claim-mission-date` @ `63e0b57` — OPEN,
+  awaiting E2E (see blocker below). API CI job GREEN: lint, unit,
+  real-Postgres integration (incl. 4 new regressions), build.
+  - `task_completion_outcomes` lease: `claimed_at`/`claim_token`
+    (migration `20261113020000_outcome_claim_lease`). Claim via
+    conditional updateMany; all outcome writes claim-conditional —
+    stale workers cannot overwrite DONE/CANCELLED or ack another's
+    work; 2-min lease expiry preserves crash recovery; attempts count
+    claims.
+  - Mission progress/events bind to completion `verifiedAt ??
+    createdAt` UTC date, not processing day.
+  - Mission event dedupe → `INSERT ... ON CONFLICT DO NOTHING`
+    (P2002 inside interactive tx would abort it; `::date` cast for
+    the @db.Date column — CI caught text→date 42804).
+- **E2E blocker**: `npx playwright install chromium --with-deps` fails
+  on GitHub-hosted runners — `azure.archive.ubuntu.com` DNS
+  unresolvable, 5 attempts over ~90 min (runs `43042726088` attempts
+  1–5). Infrastructure outage, unrelated to the API-only diff. Merge
+  + deploy held until E2E green; main deploy is gated on the same job.
+- **Live recovery verified on `4d01040`**: flipped DELIVERED outbox
+  rows `cmwc2x2hq…` (notification) and `cmwc2x2hu…` (socket) back to
+  PENDING via psql — the 15s sweeper re-delivered both (attempts=2);
+  `notifications.dedupe_key` count stayed 1 — no duplicate.
+- **jhing +180 XP RESOLVED** (read-only): purchased "XP Boost (24h)"
+  (2×) at 2026-11-07 08:41Z; the 180 base XP awarded at 08:59Z was
+  doubled to 360 while pre-#73 `xp_events.amount` recorded base only.
+  Balance correct; ledger semantics fixed prospectively by #73. No
+  correction proposed — see `docs/HISTORICAL_REWARD_RECONCILIATION_
+  2026-11-11.md` @ records `a80fc2e`.
