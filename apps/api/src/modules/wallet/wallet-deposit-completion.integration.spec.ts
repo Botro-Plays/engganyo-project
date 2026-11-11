@@ -502,14 +502,20 @@ run('Deposit completion — real PostgreSQL integration', () => {
     });
     expect(ent.status).toBe('UNRESOLVED');
 
-    // Sweep while still unresolvable — entitlement retained, no award.
+    // Sweep while still unresolvable — entitlement retained, no award,
+    // and nextAttemptAt is pushed out (backoff) so it can't starve
+    // later eligible work.
     await wallet.processRewardEntitlements();
     ent = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: ent.id } });
     expect(ent.status).toBe('UNRESOLVED');
+    expect(ent.nextAttemptAt).not.toBeNull();
+    expect(ent.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now());
     expect(gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id)).toHaveLength(0);
 
-    // Admin backfills the initiation-time rate → next sweep settles once.
+    // Admin backfills the initiation-time rate → next eligible sweep
+    // settles once. (Simulate the backoff window having passed.)
     await prisma.deposit.update({ where: { id: d.id }, data: { exchangeRate: 58 } });
+    await prisma.rewardEntitlement.update({ where: { id: ent.id }, data: { nextAttemptAt: null } });
     await wallet.processRewardEntitlements();
     ent = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: ent.id } });
     expect(ent.status).toBe('SETTLED');
@@ -520,5 +526,144 @@ run('Deposit completion — real PostgreSQL integration', () => {
     await expect(wallet.completeDeposit(d.id)).rejects.toThrow();
     const calls = gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id);
     expect(calls).toHaveLength(1);
+  });
+
+  it('never backfills entitlements for pre-rollout (historical) deposits', async () => {
+    const user = await makeUser();
+    // Completed before ENTITLEMENT_ROLLOUT_AT — historical reconciliation
+    // territory: the sweep must not auto-create an entitlement (which
+    // would auto-award VP) for it.
+    const d = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYPAL,
+        amountFiat: 20,
+        currency: 'USD',
+        usdValue: 20,
+        creditsToAward: 100000,
+        status: DepositStatus.COMPLETED,
+        creditsAwarded: 100000,
+        completedAt: new Date('2026-11-01T00:00:00.000Z'),
+      },
+    });
+    const { wallet, gamification } = gamificationWallet();
+    await wallet.processRewardEntitlements();
+
+    const ent = await prisma.rewardEntitlement.findUnique({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: d.id } },
+    });
+    expect(ent).toBeNull();
+    expect(gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id)).toHaveLength(0);
+  });
+
+  it('backfill progresses through bounded batches until all eligible deposits are covered', async () => {
+    const user = await makeUser();
+    const ids: string[] = [];
+    // Five post-rollout completed deposits missing entitlements, oldest
+    // first — a limit=2 sweep can never cover them in one pass.
+    for (let i = 0; i < 5; i++) {
+      const d = await prisma.deposit.create({
+        data: {
+          userId: user.id,
+          method: DepositMethod.PAYPAL,
+          amountFiat: 5,
+          currency: 'USD',
+          usdValue: 5,
+          creditsToAward: 25000,
+          status: DepositStatus.COMPLETED,
+          creditsAwarded: 25000,
+          completedAt: new Date(Date.UTC(2026, 10, 11, 12, 0, i)),
+        },
+      });
+      ids.push(d.id);
+    }
+    const { wallet, gamification } = gamificationWallet();
+    const myEnts = () =>
+      prisma.rewardEntitlement.count({ where: { referenceId: { in: ids } } });
+
+    await wallet.processRewardEntitlements(2);
+    // Bounded batch: at most `limit` of ours per sweep.
+    expect(await myEnts()).toBeLessThanOrEqual(2);
+
+    // Successive sweeps progress deterministically until all are covered.
+    for (let i = 0; i < 10 && (await myEnts()) < 5; i++) {
+      await wallet.processRewardEntitlements(2);
+    }
+    expect(await myEnts()).toBe(5);
+    for (const id of ids) {
+      const ent = await prisma.rewardEntitlement.findUniqueOrThrow({
+        where: { source_referenceId: { source: 'deposit_completed', referenceId: id } },
+      });
+      expect(ent.status).toBe('SETTLED');
+      expect(gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === id)).toHaveLength(1);
+    }
+  });
+
+  it('a persistently UNRESOLVED entitlement backs off and cannot starve later eligible work', async () => {
+    const user = await makeUser();
+    // Stuck entitlement: real deposit, unresolvable valuation, oldest
+    // createdAt so it heads the queue.
+    const stuckDeposit = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYMONGO,
+        amountFiat: 580,
+        currency: 'PHP',
+        exchangeRate: null,
+        creditsToAward: 50000,
+      },
+    });
+    const { wallet } = gamificationWallet();
+    await wallet.completeDeposit(stuckDeposit.id); // → UNRESOLVED entitlement
+    const stuck = await prisma.rewardEntitlement.findUniqueOrThrow({
+      where: { source_referenceId: { source: 'deposit_completed', referenceId: stuckDeposit.id } },
+    });
+    // Age it to the head of the sweep queue.
+    await prisma.rewardEntitlement.update({
+      where: { id: stuck.id },
+      data: { createdAt: new Date('2026-01-01T00:00:00.000Z') },
+    });
+
+    // A later, settleable entitlement (PENDING, resolvable deposit).
+    const okDeposit = await prisma.deposit.create({
+      data: {
+        userId: user.id,
+        method: DepositMethod.PAYPAL,
+        amountFiat: 10,
+        currency: 'USD',
+        usdValue: 10,
+        creditsToAward: 50000,
+        status: DepositStatus.COMPLETED,
+        creditsAwarded: 50000,
+        completedAt: new Date(),
+      },
+    });
+    const settleable = await prisma.rewardEntitlement.create({
+      data: {
+        userId: user.id,
+        kind: 'vp',
+        amount: 100,
+        source: 'deposit_completed',
+        referenceId: okDeposit.id,
+        referenceType: 'Deposit',
+        status: 'PENDING',
+      },
+    });
+
+    // Sweep with batch size 1 repeatedly: the stuck row gets one attempt,
+    // then backs off — the settleable row must still be reached.
+    for (let i = 0; i < 10; i++) {
+      await wallet.processRewardEntitlements(1);
+      const s = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: settleable.id } });
+      if (s.status === 'SETTLED') break;
+    }
+
+    const afterSettleable = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: settleable.id } });
+    expect(afterSettleable.status).toBe('SETTLED');
+    expect(afterSettleable.amount).toBe(100);
+
+    const afterStuck = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: stuck.id } });
+    expect(afterStuck.status).toBe('UNRESOLVED'); // retained, never awarded
+    expect(afterStuck.nextAttemptAt).not.toBeNull();
   });
 });

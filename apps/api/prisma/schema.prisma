@@ -1001,12 +1001,17 @@ model RewardEntitlement {
   status           String    @default("PENDING") // PENDING | SETTLED | UNRESOLVED | CANCELLED
   unresolvedReason String?   @map("unresolved_reason")
   metadata         Json?
+  // Sweep backoff: unresolvable entitlements are retried at most once per
+  // window so they cannot starve newer eligible work at the head of the
+  // queue. Null = eligible now.
+  nextAttemptAt    DateTime? @map("next_attempt_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
   settledAt        DateTime? @map("settled_at")
 
   @@unique([source, referenceId])
   @@index([status])
+  @@index([status, nextAttemptAt])
   @@map("reward_entitlements")
 }
 
