@@ -1969,21 +1969,35 @@ stacked consumption, purchase stacking, equip serialization, and
 cross-user rejection. Stage-1 audit + invariants + marketplace launch
 plan: `docs/GAMIFICATION_WORKSTREAM_STAGE1.md`.
 
-### Stage-1 hardening — in flight (11 Nov 2026)
+### Stage-1 hardening — merged & deployed (11 Nov 2026)
 
-- **PR #70** `fix/inventory-hardening`: cosmetic equip-slot serialization
-  (`pg_advisory_xact_lock` on `equip:{userId}:{cosmeticType}` across
-  equipCosmetic / purchaseItem auto-equip / loot-box grants), corrected
-  deadlock claim (advisory locks DO participate in PG deadlock
-  detection), consistent lock order documented, and
-  `src/database/tx-retry.ts` bounded whole-tx retry (40P01/40001/P2034)
-  wired into `PrismaService.withTransaction`, store writers, wheel settle.
-  CI pending at record time.
-- **PR #71** `fix/deposit-vp-currency`: deposit VP now uses authoritative
-  USD value (`package.usdAmount` → `amountFiat/exchangeRate` → USD
-  amountFiat) instead of gateway-currency `amountFiat` — fixes ~58× VP
-  inflation on PayMongo PHP deposits. PayMongo regression added. CI
-  pending at record time.
+- **PR #70** `fix/inventory-hardening` → merged `62276d9`, deployed by
+  run `42987088854` (success). Equip-slot serialization, corrected
+  deadlock documentation, opt-in `tx-retry.ts` bounded whole-tx retry.
+- **PR #71** `fix/deposit-vp-currency` → merged `e647a0d`, deployed by
+  run `42987094248` (success). Deposit VP uses an **immutable
+  initiation-time USD valuation snapshot** (`deposits` migration
+  `20261111120000_deposit_usd_value`), never the live package price;
+  PHP deposits without a valid snapshot record an unresolved
+  reconciliation case instead of peso-as-dollar fallback. Policy:
+  USD deposits → USD amountFiat; PHP → snapshot usdValue only; ₱1
+  minimum-charge package handled explicitly. Historical VP changes
+  remain read-only pending owner review.
+- **PR #72** `fix/gamification-reward-atomicity` → merged `9797c43`,
+  deploy run `42990228353`. `awardXp`/`awardVp` serialize the
+  user-row read-modify-write under `SELECT ... FOR UPDATE` inside a
+  bounded-retry tx; `updateMissionProgress` pays progress+credit+XP in
+  one advisory-locked tx (exactly-once under concurrency); 
+  `unlockAchievement` settles row+credit+XP atomically with
+  P2002 = already-unlocked semantics. New
+  `gamification-reward-atomicity.integration.spec.ts` (real Postgres,
+  CI-gated on TEST_DATABASE_URL) covers concurrent mission payout,
+  XP/VP lost-update, and achievement settlement.
+- **Mixed-provenance inventory design** proposed (not implemented):
+  `docs/proposals/inventory-provenance-binding.md` — per-stack
+  bound/tradable quantities recommended for launch, conservative
+  all-bound default for pre-existing rows, `inventory_events` ledger.
+  Owner decisions P1–P4 pending; required gate before marketplace.
 - **Deposit-VP historical impact (read-only, pending DB access)**: bug
   live since VP-on-deposit shipped (~mid-2026); only PAYMONGO (PHP)
   deposits affected — PayPal/USDT are USD-denominated. Impact query for
@@ -1991,8 +2005,9 @@ plan: `docs/GAMIFICATION_WORKSTREAM_STAGE1.md`.
   `deposit_packages` to compare awarded vs correct VP; no retroactive
   correction proposed pending owner review. SSH to VPS currently
   unavailable from agent shell — query to be run when access restored.
-- **Still open**: reward atomicity PR (mission progress/payout,
-  awardXp/awardVp lost-updates, unlockAchievement lost payout);
-  mixed-provenance inventory design (bound vs tradable lots — required
-  before marketplace); manual-approval gamification parity; campaign
-  slot-expiry sweep; tip idempotency; stage-2 design docs.
+- **Still open**: mixed-provenance inventory implementation (design
+  proposed, owner decisions P1–P4 pending — required before
+  marketplace); manual-approval gamification parity; campaign
+  slot-expiry sweep; tip/rain idempotency; deposit-VP historical
+  impact query (SSH unavailable from agent shell); stage-2 design
+  docs (weekly journal, catch-up XP, P2P reputation, observability).
