@@ -227,8 +227,11 @@ run('reward atomicity — real PostgreSQL', () => {
 
   it('a rolled-back award leaves no XP, no event, and no outbox rows', async () => {
     const u = await mkUser();
-    const spy = jest.spyOn(prisma.xpEvent, 'create').mockRejectedValueOnce(new Error('boom'));
-    await expect(service.awardXp(u.id, 10, 'rollback_test', 'rb-1')).rejects.toThrow('boom');
+    // Force failure INSIDE the tx via the level-up VP award (100 XP →
+    // level 2 → leveledUp). The whole award must roll back: no xp, no
+    // xpEvent, no outbox rows.
+    const spy = jest.spyOn(service, 'awardVp').mockRejectedValueOnce(new Error('vp boom'));
+    await expect(service.awardXp(u.id, 100, 'rollback_test', 'rb-1')).rejects.toThrow('vp boom');
     spy.mockRestore();
 
     expect((await xpOf(u.id)).xp).toBe(0);
@@ -238,13 +241,16 @@ run('reward atomicity — real PostgreSQL', () => {
 
   it('a retryable tx failure retries the whole award exactly once', async () => {
     const u = await mkUser();
+    // P2034 inside the tx → withTransactionRetry re-runs the whole
+    // callback; the rolled-back first attempt cannot double-pay.
     const spy = jest
-      .spyOn(prisma.xpEvent, 'create')
+      .spyOn(service, 'awardVp')
       .mockRejectedValueOnce(Object.assign(new Error('deadlock'), { code: 'P2034' }));
-    await service.awardXp(u.id, 15, 'retry_test', 'rt-1');
+    await service.awardXp(u.id, 100, 'retry_test', 'rt-1');
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2); // failed attempt + retry
     spy.mockRestore();
 
-    expect((await xpOf(u.id)).xp).toBe(15);
+    expect((await xpOf(u.id)).xp).toBe(100);
     expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'retry_test' } })).toBe(1);
   });
 
