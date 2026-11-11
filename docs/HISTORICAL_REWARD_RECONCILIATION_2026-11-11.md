@@ -74,3 +74,31 @@ its 50 XP** — a permanently lost effect from the pre-durable outcome path
 - Outstanding owner decisions: (a) reverse/adjust ~20 VP deposit over-award;
   (b) investigate jhing's +180 XP surplus; (c) whether to backfill the missing
   50 XP for `devin_earn_test` (test account — likely moot).
+
+## 6. jhing +180 XP — RESOLVED (explained, no correction needed)
+
+Follow-up investigation (2026-11-11, read-only) fully explains the surplus:
+
+- `transactions` shows jhing bought **"XP Boost (24h)"** (2× multiplier,
+  store item `xp_boost`, −150 credits) at **2026-11-07 08:41:06Z**.
+- The four XP awards at **08:59:58Z** — task_completion 50 +
+  mission_complete 30 + achievement 50 + achievement 50 = **180 base XP**
+  — all landed inside the boost window.
+- Pre-#73 `awardXp` wrote `user.xp += boostedAmount` (360) but recorded
+  `xp_events.amount = amount` (**base only**, 180) — the exact accounting
+  defect PR #73 fixed (`amount` now stores the applied delta with
+  `baseAmount`/`boostMultiplier` retained).
+- Math checks exactly: balance 400 = 40 unboosted daily-login XP +
+  360 boosted batch; `SUM(xp_events.amount)` = 220 = 40 + 180 base.
+
+**Conclusion:** jhing's balance is correct — every XP point is
+legitimately earned. The "discrepancy" is historical ledger semantics,
+not missing or phantom XP. The boost effect expired after 24h (no
+`user_active_effects` row remains).
+
+**Proposed correction:** NONE to balances or progression. Optional
+cosmetic backfill — set `base_amount`/`boost_multiplier=2` on jhing's
+four 2026-11-07 events and adjust `amount` to applied values — would
+make `SUM(amount)` reconcile but rewrites history; recommend leaving
+as-is since post-#73 events already carry correct semantics. Awaiting
+owner decision; default = no change.
