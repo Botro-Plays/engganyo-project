@@ -27,6 +27,7 @@ import { AntiAbuseService } from '../anti-abuse/anti-abuse.service';
 import { SocialAuthService } from '../social-auth/social-auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
 import type {
   CreateChallengeDto,
@@ -108,6 +109,7 @@ export class ChallengesService {
     private readonly socialAuthService: SocialAuthService,
     private readonly notificationsService: NotificationsService,
     private readonly eventsService: EventsService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   // ─── Config ────────────────────────────────────────────────
@@ -699,9 +701,9 @@ export class ChallengesService {
         });
       });
 
-      void this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', challengeId).catch(() => null);
-      void this.gamificationService.updateMissionProgress(completion.userId, 'COMPLETE_N_TASKS' as never).catch(() => null);
-      void this.gamificationService.checkAchievements(completion.userId).catch(() => null);
+      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
+      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
+      await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
       void this.antiAbuseService.queueRecalculate(completion.userId).catch(() => null);
 
       void this.notificationsService.createNotification(

@@ -942,7 +942,9 @@ model UserMissionProgress {
 model XpEvent {
   id          String  @id @default(cuid())
   userId      String  @map("user_id")
-  amount      Int
+  amount      Int // applied delta actually added to user.xp (post-boost)
+  baseAmount  Int?    @map("base_amount") // pre-boost amount
+  boostMultiplier Float? @map("boost_multiplier")
   source      String // 'task_completion' | 'campaign_create' | 'achievement' | 'daily_login'
   referenceId String? @map("reference_id")
   description String?
@@ -951,7 +953,35 @@ model XpEvent {
 
   @@index([userId])
   @@index([createdAt])
+  @@index([userId, source, referenceId])
   @@map("xp_events")
+}
+
+// Durable post-commit delivery queue for reward side-effects
+// (notifications + socket events). Rows are written INSIDE the reward
+// transaction so they commit or roll back with it; delivery happens only
+// after commit via flushRewardOutbox (inline) and a periodic sweeper, so
+// rolled-back or retried attempts can never emit premature/duplicate
+// notifications.
+model RewardOutboxEvent {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  kind             String    // 'notification' | 'socket'
+  notificationType String?   @map("notification_type")
+  title            String?
+  body             String?
+  data             Json?
+  socketEvent      String?   @map("socket_event")
+  socketPayload    Json?     @map("socket_payload")
+  status           String    @default("PENDING") // PENDING | DELIVERED | FAILED
+  attempts         Int       @default(0)
+  lastError        String?   @map("last_error")
+  processingAt     DateTime? @map("processing_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deliveredAt      DateTime? @map("delivered_at")
+
+  @@index([status, createdAt])
+  @@map("reward_outbox_events")
 }
 
 model VpEvent {
@@ -966,6 +996,7 @@ model VpEvent {
 
   @@index([userId])
   @@index([createdAt])
+  @@index([userId, source, referenceId])
   @@map("vp_events")
 }
 

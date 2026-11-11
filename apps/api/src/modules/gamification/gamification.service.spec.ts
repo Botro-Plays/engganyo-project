@@ -223,8 +223,8 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     expect(wallet.credit).toHaveBeenCalledWith(
       'u1', 80, expect.objectContaining({ type: 'EARN_DAILY_REWARD' }), prisma,
     );
-    expect(service.awardXp).toHaveBeenCalledWith('u1', 20, 'daily_login', undefined, undefined, prisma);
-    expect(service.awardVp).toHaveBeenCalledWith('u1', expect.any(Number), 'daily_login', undefined, expect.any(String), prisma);
+    expect(service.awardXp).toHaveBeenCalledWith('u1', 20, 'daily_login', expect.any(String), undefined, prisma);
+    expect(service.awardVp).toHaveBeenCalledWith('u1', expect.any(Number), 'daily_login', expect.any(String), expect.any(String), prisma);
   });
 
   it.each([

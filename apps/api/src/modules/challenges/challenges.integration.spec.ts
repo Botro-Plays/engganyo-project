@@ -101,6 +101,7 @@ run('1v1 challenges — real PostgreSQL', () => {
     awardVp: jest.fn().mockResolvedValue(undefined),
     updateMissionProgress: jest.fn().mockResolvedValue(undefined),
     checkAchievements: jest.fn().mockResolvedValue(undefined),
+    awardTaskCompletionOutcome: jest.fn().mockResolvedValue(undefined),
   };
   const noopAbuse = {
     flagUser: jest.fn().mockResolvedValue(undefined),
@@ -142,6 +143,7 @@ run('1v1 challenges — real PostgreSQL', () => {
       socialStub as never,
       noopNotify as never,
       noopEvents as never,
+      { qualifyReferral: jest.fn(async () => {}), checkMilestones: jest.fn(async () => {}) } as never,
     );
     await prisma.$connect();
 

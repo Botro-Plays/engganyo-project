@@ -718,9 +718,10 @@ export class AdminService {
       });
 
       void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
+      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
 
-      // Award VP for task completion (admin approval path)
-      await this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', campaign.id);
+      // Full gamification outcome — same path as auto-verify (parity)
+      await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
 
       void this.notificationsService.createNotification(
         completion.userId,
@@ -837,7 +838,9 @@ export class AdminService {
         });
       });
 
-      void this.gamificationService.awardVp(completion.userId, VP_REWARDS.TASK_COMPLETION, 'task_completion', challenge.id).catch(() => null);
+      void this.referralsService.qualifyReferral(completion.userId).catch(() => null);
+      void this.referralsService.checkMilestones(completion.userId).catch(() => null);
+      await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completion.id);
       void this.notificationsService.createNotification(
         completion.userId,
         NotificationType.TASK_COMPLETED,

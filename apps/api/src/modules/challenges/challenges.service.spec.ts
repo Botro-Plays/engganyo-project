@@ -268,11 +268,12 @@ function makeService(overrides: Partial<Record<string, any>> = {}) {
     prisma,
     { get: jest.fn().mockResolvedValue(null), set: jest.fn(), del: jest.fn().mockResolvedValue(1), incr: jest.fn(), incrWithExpiry: jest.fn().mockResolvedValue(1), expire: jest.fn() } as any,
     walletService as any,
-    { awardVp: jest.fn().mockResolvedValue(undefined), updateMissionProgress: jest.fn().mockResolvedValue(undefined), checkAchievements: jest.fn().mockResolvedValue(undefined) } as any,
+    { awardVp: jest.fn().mockResolvedValue(undefined), updateMissionProgress: jest.fn().mockResolvedValue(undefined), checkAchievements: jest.fn().mockResolvedValue(undefined), awardTaskCompletionOutcome: jest.fn().mockResolvedValue(undefined) } as any,
     { flagUser: jest.fn().mockResolvedValue(undefined), queueRecalculate: jest.fn().mockResolvedValue(undefined) } as any,
     { isPlatformEnabled: jest.fn().mockResolvedValue(true), hasLinkedAccount: jest.fn().mockResolvedValue(true), getPlatformForTaskType: jest.fn().mockReturnValue(null) } as any,
     { createNotification: jest.fn().mockResolvedValue(undefined) } as any,
     noop as any,
+    { qualifyReferral: jest.fn().mockResolvedValue(undefined), checkMilestones: jest.fn().mockResolvedValue(undefined) } as any,
   );
 
   // Allow tests to tweak state

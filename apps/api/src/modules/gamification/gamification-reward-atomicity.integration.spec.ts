@@ -126,10 +126,12 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(payouts[0].amount).toBe(50);
 
     const xpEvents = await prisma.xpEvent.findMany({
-      where: { userId: u.id, source: 'mission_complete', referenceId: mission.id },
+      where: { userId: u.id, source: 'mission_complete' },
     });
     expect(xpEvents).toHaveLength(1);
     expect(xpEvents[0].amount).toBe(25);
+    // Stable per-day identity: mission.id + UTC date.
+    expect(xpEvents[0].referenceId).toMatch(new RegExp(`^${mission.id}:\\d{4}-\\d{2}-\\d{2}$`));
 
     const progress = await prisma.userMissionProgress.findUnique({
       where: {
@@ -196,5 +198,132 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(await balanceOf(u.id)).toBe(30);
     const xpEvents = await prisma.xpEvent.count({ where: { userId: u.id, source: 'achievement', referenceId: achievement.id } });
     expect(xpEvents).toBe(1);
+  });
+
+  it('awardXp records the applied delta; boosted and unboosted reconcile', async () => {
+    const u = await mkUser();
+    await service.awardXp(u.id, 10, 'acct_test', 'acct-1');
+    let ev = await prisma.xpEvent.findFirstOrThrow({ where: { userId: u.id, source: 'acct_test' } });
+    expect(ev.amount).toBe(10);
+    expect(ev.baseAmount).toBe(10);
+    expect(ev.boostMultiplier).toBeNull();
+    expect((await xpOf(u.id)).xp).toBe(10);
+
+    // Boosted award: event.amount = applied delta, base + multiplier kept.
+    const boostStore = (service as any).storeService;
+    const orig = boostStore.getActiveXpBoost;
+    boostStore.getActiveXpBoost = jest.fn(async () => ({ multiplier: 2 }));
+    try {
+      await service.awardXp(u.id, 10, 'acct_test', 'acct-2');
+    } finally {
+      boostStore.getActiveXpBoost = orig;
+    }
+    ev = await prisma.xpEvent.findFirstOrThrow({ where: { userId: u.id, source: 'acct_test', referenceId: 'acct-2' } });
+    expect(ev.amount).toBe(20);
+    expect(ev.baseAmount).toBe(10);
+    expect(ev.boostMultiplier).toBe(2);
+    expect((await xpOf(u.id)).xp).toBe(30);
+  });
+
+  it('a rolled-back award leaves no XP, no event, and no outbox rows', async () => {
+    const u = await mkUser();
+    // Force failure INSIDE the tx via the level-up VP award (100 XP →
+    // level 2 → leveledUp). The whole award must roll back: no xp, no
+    // xpEvent, no outbox rows.
+    const spy = jest.spyOn(service, 'awardVp').mockRejectedValueOnce(new Error('vp boom'));
+    await expect(service.awardXp(u.id, 100, 'rollback_test', 'rb-1')).rejects.toThrow('vp boom');
+    spy.mockRestore();
+
+    expect((await xpOf(u.id)).xp).toBe(0);
+    expect(await prisma.xpEvent.count({ where: { userId: u.id } })).toBe(0);
+    expect(await prisma.rewardOutboxEvent.count({ where: { userId: u.id } })).toBe(0);
+  });
+
+  it('a retryable tx failure retries the whole award exactly once', async () => {
+    const u = await mkUser();
+    // P2034 inside the tx → withTransactionRetry re-runs the whole
+    // callback; the rolled-back first attempt cannot double-pay.
+    const spy = jest
+      .spyOn(service, 'awardVp')
+      .mockRejectedValueOnce(Object.assign(new Error('deadlock'), { code: 'P2034' }));
+    await service.awardXp(u.id, 100, 'retry_test', 'rt-1');
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2); // failed attempt + retry
+    spy.mockRestore();
+
+    expect((await xpOf(u.id)).xp).toBe(100);
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'retry_test' } })).toBe(1);
+  });
+
+  it('flushRewardOutbox delivers committed rows once and retries failures', async () => {
+    const u = await mkUser();
+    const notes: any[] = [];
+    const emitted: any[] = [];
+    (service as any).notificationsService.createNotification = jest.fn(async (...a: any[]) => {
+      notes.push(a);
+      return {};
+    });
+    (service as any).eventsService.emitToUser = jest.fn((...a: any[]) => emitted.push(a));
+
+    const n = await prisma.rewardOutboxEvent.create({
+      data: { userId: u.id, kind: 'notification', notificationType: 'LEVEL_UP', title: 'T', body: 'B', data: { k: 1 } },
+    });
+    const s = await prisma.rewardOutboxEvent.create({
+      data: { userId: u.id, kind: 'socket', socketEvent: 'level:up', socketPayload: { lvl: 2 } },
+    });
+
+    await service.flushRewardOutbox();
+    await service.flushRewardOutbox(); // second flush must not redeliver
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0][0]).toBe(u.id);
+    expect(notes[0][2]).toBe('T');
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0][1]).toBe('level:up');
+    expect((await prisma.rewardOutboxEvent.findUniqueOrThrow({ where: { id: n.id } })).status).toBe('DELIVERED');
+    expect((await prisma.rewardOutboxEvent.findUniqueOrThrow({ where: { id: s.id } })).status).toBe('DELIVERED');
+  });
+
+  it('a failing outbox row retries then lands FAILED without affecting rewards', async () => {
+    const u = await mkUser();
+    (service as any).notificationsService.createNotification = jest.fn(async () => {
+      throw new Error('notify down');
+    });
+    const row = await prisma.rewardOutboxEvent.create({
+      data: { userId: u.id, kind: 'notification', notificationType: 'LEVEL_UP', title: 'X', body: 'Y' },
+    });
+
+    for (let i = 0; i < 5; i++) await service.flushRewardOutbox();
+    const after = await prisma.rewardOutboxEvent.findUniqueOrThrow({ where: { id: row.id } });
+    expect(after.status).toBe('FAILED');
+    expect(after.attempts).toBe(5);
+    expect(after.lastError).toContain('notify down');
+  });
+
+  it('duplicate source delivery pays once; concurrent distinct rewards each pay', async () => {
+    const u = await mkUser();
+    // Same (source, referenceId) delivered twice — sequentially and
+    // concurrently — must settle exactly once.
+    await Promise.all([
+      service.awardXp(u.id, 10, 'dup_test', 'dup-ref'),
+      service.awardXp(u.id, 10, 'dup_test', 'dup-ref'),
+      service.awardVp(u.id, 4, 'dup_test', 'dup-ref'),
+      service.awardVp(u.id, 4, 'dup_test', 'dup-ref'),
+    ]);
+    // Sequential replay after commit.
+    await service.awardXp(u.id, 10, 'dup_test', 'dup-ref');
+    await service.awardVp(u.id, 4, 'dup_test', 'dup-ref');
+
+    expect((await xpOf(u.id)).xp).toBe(10);
+    expect(await vpOf(u.id)).toBe(4);
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'dup_test' } })).toBe(1);
+    expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'dup_test' } })).toBe(1);
+
+    // Distinct references are distinct rewards — both pay.
+    await Promise.all([
+      service.awardXp(u.id, 10, 'dup_test', 'dup-ref-A'),
+      service.awardXp(u.id, 10, 'dup_test', 'dup-ref-B'),
+    ]);
+    expect((await xpOf(u.id)).xp).toBe(30);
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'dup_test' } })).toBe(3);
   });
 });
