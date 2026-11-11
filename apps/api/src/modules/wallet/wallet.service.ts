@@ -45,6 +45,19 @@ export interface DebitOptions {
 const MAX_RETRY = 5;
 
 /**
+ * Rollout boundary for entitlement backfill: deposits completed before
+ * the durable-entitlement deploy (1c9b622, ~10:18 UTC 11 Nov 2026) are
+ * HISTORICAL — their VP was never entitlement-backed, so the sweep must
+ * not auto-create entitlements (and thus auto-award VP) for them.
+ * Those cases go through the read-only impact audit + owner approval.
+ */
+const ENTITLEMENT_ROLLOUT_AT = new Date('2026-11-11T10:18:00.000Z');
+
+/** How long an unresolvable entitlement waits before its next sweep
+ *  attempt — keeps persistent UNRESOLVED rows from starving the queue. */
+const ENTITLEMENT_RETRY_BACKOFF_MS = 60 * 60 * 1000; // 1 hour
+
+/**
  * Thrown when the optimistic-lock retry budget is exhausted inside a
  * caller-provided transaction. Still a BadRequestException for HTTP
  * callers, but distinguishable via `instanceof` so transaction-owning
@@ -933,6 +946,11 @@ export class WalletService {
    * — covers backfilled valuations and legacy crash-window losses.
    * Idempotent: status is re-checked inside the tx and awardVp dedupes
    * on (userId, source, referenceId).
+   *
+   * When the valuation is still unresolvable the entitlement's
+   * nextAttemptAt is pushed out by ENTITLEMENT_RETRY_BACKOFF_MS so
+   * persistent unresolved cases cannot occupy the head of every sweep
+   * and starve newer eligible work.
    */
   private async trySettleDepositVpEntitlement(depositId: string) {
     const ent = await this.prisma.rewardEntitlement.findUnique({
@@ -940,9 +958,26 @@ export class WalletService {
     });
     if (!ent || (ent.status !== 'UNRESOLVED' && ent.status !== 'PENDING')) return;
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
-    if (!deposit) return;
+    if (!deposit) {
+      // No deposit to value — the entitlement can never settle. Cancel it
+      // rather than retrying a permanently impossible case every sweep.
+      await this.prisma.rewardEntitlement.update({
+        where: { id: ent.id },
+        data: { status: 'CANCELLED', unresolvedReason: 'deposit_missing', nextAttemptAt: null },
+      });
+      return;
+    }
     const vpUsd = this.depositUsdValue(deposit);
-    if (vpUsd == null) return; // still unresolvable — retained
+    if (vpUsd == null) {
+      // Still unresolvable — retain the entitlement but back off so the
+      // sweep reaches other eligible work. Manual valuation backfill
+      // clears this on the next eligible attempt.
+      await this.prisma.rewardEntitlement.update({
+        where: { id: ent.id },
+        data: { nextAttemptAt: new Date(Date.now() + ENTITLEMENT_RETRY_BACKOFF_MS) },
+      });
+      return;
+    }
     const vpAmount = Math.round(vpUsd * VP_REWARDS.DEPOSIT_PER_DOLLAR);
 
     await withTransactionRetry(this.prisma, async (tx) => {
@@ -959,21 +994,45 @@ export class WalletService {
       }
       await tx.rewardEntitlement.update({
         where: { id: ent.id },
-        data: { status: 'SETTLED', settledAt: new Date(), amount: vpAmount, unresolvedReason: null },
+        data: { status: 'SETTLED', settledAt: new Date(), amount: vpAmount, unresolvedReason: null, nextAttemptAt: null },
       });
     });
     void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
   }
 
   /**
-   * Bounded reconciliation sweep: settle retained entitlements and
-   * backfill COMPLETED deposits that have no entitlement row (legacy
-   * crash-window VP losses and pre-entitlement unresolved cases).
-   * Every step is idempotent — safe to run repeatedly.
+   * Ongoing recovery sweep — TWO separate concerns:
+   *
+   * 1} RETAINED ENTITLEMENTS (PENDING/UNRESOLVED): settle idempotently.
+   *    Eligibility is gated by nextAttemptAt so unresolved cases retry
+   *    at most once per ENTITLEMENT_RETRY_BACKOFF_MS and cannot starve
+   *    later eligible work. Oldest-first ordering is deterministic.
+   *
+   * 2} ENTITLEMENT BACKFILL: COMPLETED deposits with NO entitlement row.
+   *    Restricted to deposits completed at/after ENTITLEMENT_ROLLOUT_AT
+   *    (the 1c9b622 deploy) — the in-tx entitlement writer covers every
+   *    post-rollout completion, so a missing row there is an anomaly
+   *    worth repairing. Pre-rollout deposits are HISTORICAL
+   *    RECONCILIATION: their VP was never entitlement-backed and any
+   *    award requires the read-only impact audit + owner approval —
+   *    this sweep must never create entitlements for them.
+   *
+   * Backfill scans oldest-first (completed_at ASC, id ASC) over deposits
+   * still missing an entitlement — each settled deposit drops out of
+   * the result set, so successive bounded batches progress
+   * deterministically through the whole eligible range instead of
+   * re-scanning the newest N forever.
    */
   async processRewardEntitlements(limit = 100) {
+    const now = new Date();
     const entitlements = await this.prisma.rewardEntitlement.findMany({
-      where: { status: { in: ['PENDING', 'UNRESOLVED'] }, kind: 'vp', source: 'deposit_completed' },
+      where: {
+        status: { in: ['PENDING', 'UNRESOLVED'] },
+        kind: 'vp',
+        source: 'deposit_completed',
+        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      },
+      orderBy: { createdAt: 'asc' },
       take: limit,
     });
     for (const ent of entitlements) {
@@ -984,13 +1043,22 @@ export class WalletService {
       }
     }
 
-    const deposits = await this.prisma.deposit.findMany({
-      where: { status: DepositStatus.COMPLETED },
-      orderBy: { completedAt: 'desc' },
-      take: limit,
-      select: { id: true },
-    });
-    for (const d of deposits) {
+    // Deterministic progressing scan: oldest eligible deposits missing
+    // an entitlement first. Raw NOT EXISTS because RewardEntitlement
+    // has no Prisma relation back to Deposit.
+    const missing = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT d.id
+      FROM deposits d
+      WHERE d.status::text = ${DepositStatus.COMPLETED}
+        AND d.completed_at IS NOT NULL
+        AND d.completed_at >= ${ENTITLEMENT_ROLLOUT_AT}
+        AND NOT EXISTS (
+          SELECT 1 FROM reward_entitlements e
+          WHERE e.source = 'deposit_completed' AND e.reference_id = d.id
+        )
+      ORDER BY d.completed_at ASC, d.id ASC
+      LIMIT ${limit}`;
+    for (const d of missing) {
       try {
         await withTransactionRetry(this.prisma, async (tx) => {
           const existing = await tx.rewardEntitlement.findUnique({
@@ -1005,6 +1073,17 @@ export class WalletService {
       }
     }
     void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
+  }
+
+  /** Periodic ongoing recovery — retained entitlements only need
+   *  minutes-scale latency; backfill is bounded per run. */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async scheduledRewardEntitlementSweep() {
+    try {
+      await this.processRewardEntitlements();
+    } catch (err) {
+      this.logger.warn(`Reward entitlement sweep failed: ${(err as Error)?.message}`);
+    }
   }
 
   // ─── Submit txHash for an existing PENDING crypto deposit ──
