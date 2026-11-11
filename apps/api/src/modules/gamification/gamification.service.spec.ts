@@ -40,6 +40,10 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     vipTier: { findMany: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock };
     xpEvent: { create: jest.Mock };
     vpEvent: { create: jest.Mock };
+    dailyMission: { findMany: jest.Mock };
+    userMissionProgress: { findUnique: jest.Mock; upsert: jest.Mock };
+    $executeRaw: jest.Mock;
+    $transaction: jest.Mock;
     withTransaction: jest.Mock;
   };
 
@@ -57,11 +61,16 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
       vipTier: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
       xpEvent: { create: jest.fn() },
       vpEvent: { create: jest.fn() },
+      dailyMission: { findMany: jest.fn().mockResolvedValue([]) },
+      userMissionProgress: { findUnique: jest.fn(), upsert: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(0),
+      $transaction: jest.fn(),
       // The tx client delegates to the same mocks so every assertion can
       // verify that ALL writes went through the transaction boundary.
       withTransaction: jest.fn(),
     };
     prisma.withTransaction.mockImplementation((cb: (tx: typeof prisma) => Promise<unknown>) => cb(prisma));
+    prisma.$transaction.mockImplementation((cb: (tx: typeof prisma) => Promise<unknown>) => cb(prisma));
     wallet = { credit: jest.fn().mockResolvedValue({ id: 'tx-1' }), debit: jest.fn() };
     notifications = { createNotification: jest.fn().mockResolvedValue({}) };
     events = { emitToUser: jest.fn() };

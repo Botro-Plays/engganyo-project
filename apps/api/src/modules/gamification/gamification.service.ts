@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Logger, BadRequestException, ConflictExceptio
 import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
+import { withTransactionRetry } from '../../database/tx-retry';
 import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -146,7 +147,6 @@ export class GamificationService implements OnModuleInit {
     description?: string,
     tx?: Prisma.TransactionClient,
   ) {
-    const db = tx ?? this.prisma;
     // Apply active XP boost multiplier if present (DB-backed with Redis cache)
     const xpBoost = await this.storeService.getActiveXpBoost(userId);
     let boostedAmount = amount;
@@ -154,26 +154,32 @@ export class GamificationService implements OnModuleInit {
       boostedAmount = Math.floor(amount * xpBoost.multiplier);
     }
 
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { xp: true, level: true },
-    });
-    if (!user) return;
+    const apply = async (t: Prisma.TransactionClient) => {
+      // Serialize the read-modify-write on the user row. FOR UPDATE is
+      // re-entrant when the caller's tx already holds the lock, so this is
+      // safe both standalone and inside larger transactions.
+      await t.$executeRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
 
-    const newXp = user.xp + boostedAmount;
-    const newLevel = getLevelFromXp(newXp);
-    const leveledUp = newLevel > user.level;
+      const user = await t.user.findUnique({
+        where: { id: userId },
+        select: { xp: true, level: true },
+      });
+      if (!user) return null;
 
-    await db.user.update({
-      where: { id: userId },
-      data: { xp: newXp, level: newLevel },
-    });
+      const newXp = user.xp + boostedAmount;
+      const newLevel = getLevelFromXp(newXp);
+      const leveledUp = newLevel > user.level;
 
-    await db.xpEvent.create({
-      data: { userId, amount, source, referenceId, description },
-    });
+      await t.user.update({
+        where: { id: userId },
+        data: { xp: newXp, level: newLevel },
+      });
 
-    if (leveledUp) {
+      await t.xpEvent.create({
+        data: { userId, amount, source, referenceId, description },
+      });
+
+      if (leveledUp) {
       void this.notificationsService.createNotification(
         userId,
         NotificationType.LEVEL_UP,
@@ -183,9 +189,9 @@ export class GamificationService implements OnModuleInit {
       ).catch(() => null);
       this.eventsService.emitToUser(userId, 'level:up', { newLevel, previousLevel: user.level });
 
-      // Award bonus VP for leveling up
+      // Award bonus VP for leveling up (same tx — commits atomically)
       const vpReward = VP_REWARDS.LEVEL_UP_MULTIPLIER * newLevel;
-      await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`, tx);
+      await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`, t);
 
       void this.notificationsService.createNotification(
         userId,
@@ -197,7 +203,11 @@ export class GamificationService implements OnModuleInit {
     }
 
     return { newXp, newLevel, leveledUp };
-  }
+  };
+
+  if (tx) return apply(tx);
+  return this.prisma.withTransaction(apply);
+}
 
   // ─── Get my stats ──────────────────────────────────────────
 
@@ -257,29 +267,33 @@ export class GamificationService implements OnModuleInit {
   ) {
     if (amount <= 0) return { newVp: 0, tierUp: false, newTier: null };
 
-    const db = tx ?? this.prisma;
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: { vp: true, vipTierId: true },
-    });
-    if (!user) return { newVp: 0, tierUp: false, newTier: null };
+    const apply = async (t: Prisma.TransactionClient) => {
+      // Serialize the read-modify-write on the user row (re-entrant if the
+      // caller's tx already holds it).
+      await t.$executeRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
 
-    const newVp = user.vp + amount;
-    const oldTier = user.vipTierId
-      ? await db.vipTier.findUnique({ where: { id: user.vipTierId } })
-      : null;
-    const newTier = await this.getUserVipTier(userId, newVp, tx);
+      const user = await t.user.findUnique({
+        where: { id: userId },
+        select: { vp: true, vipTierId: true },
+      });
+      if (!user) return { newVp: 0, tierUp: false, newTier: null };
 
-    const tierUp = newTier !== null && newTier.id !== user.vipTierId;
+      const newVp = user.vp + amount;
+      const oldTier = user.vipTierId
+        ? await t.vipTier.findUnique({ where: { id: user.vipTierId } })
+        : null;
+      const newTier = await this.getUserVipTier(userId, newVp, t);
 
-    await db.user.update({
-      where: { id: userId },
-      data: { vp: newVp, ...(tierUp ? { vipTierId: newTier.id } : {}) },
-    });
+      const tierUp = newTier !== null && newTier.id !== user.vipTierId;
 
-    await db.vpEvent.create({
-      data: { userId, amount, source, referenceId, description },
-    });
+      await t.user.update({
+        where: { id: userId },
+        data: { vp: newVp, ...(tierUp ? { vipTierId: newTier.id } : {}) },
+      });
+
+      await t.vpEvent.create({
+        data: { userId, amount, source, referenceId, description },
+      });
 
     if (tierUp) {
       void this.notificationsService.createNotification(
@@ -297,7 +311,11 @@ export class GamificationService implements OnModuleInit {
     }
 
     return { newVp, tierUp, newTier };
-  }
+  };
+
+  if (tx) return apply(tx);
+  return this.prisma.withTransaction(apply);
+}
 
   async getUserVipTier(userId: string, currentVp?: number, tx?: Prisma.TransactionClient) {
     const db = tx ?? this.prisma;
@@ -879,41 +897,53 @@ export class GamificationService implements OnModuleInit {
     });
 
     for (const mission of missions) {
-      const existing = await this.prisma.userMissionProgress.findUnique({
-        where: { userId_missionId_date: { userId, missionId: mission.id, date: today } },
-      });
+      // One transaction per mission: advisory lock serializes concurrent
+      // progress updates for the same (user, mission), and the payout +
+      // progress row commit or roll back together — no double-pay, no
+      // lost payout.
+      const outcome = await withTransactionRetry(this.prisma, async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`mission:${userId}:${mission.id}`}, 0))`;
 
-      if (existing?.isCompleted) continue;
+        const existing = await tx.userMissionProgress.findUnique({
+          where: { userId_missionId_date: { userId, missionId: mission.id, date: today } },
+        });
 
-      const newProgress = (existing?.progress ?? 0) + increment;
-      const isCompleted = newProgress >= mission.requirement;
+        if (existing?.isCompleted) return { completed: false, alreadyDone: true };
 
-      await this.prisma.userMissionProgress.upsert({
-        where: { userId_missionId_date: { userId, missionId: mission.id, date: today } },
-        create: {
-          userId,
-          missionId: mission.id,
-          date: today,
-          progress: newProgress,
-          isCompleted,
-          completedAt: isCompleted ? new Date() : null,
-        },
-        update: {
-          progress: newProgress,
-          isCompleted,
-          completedAt: isCompleted ? new Date() : null,
-        },
-      });
+        const newProgress = (existing?.progress ?? 0) + increment;
+        const isCompleted = newProgress >= mission.requirement;
 
-      if (isCompleted) {
+        await tx.userMissionProgress.upsert({
+          where: { userId_missionId_date: { userId, missionId: mission.id, date: today } },
+          create: {
+            userId,
+            missionId: mission.id,
+            date: today,
+            progress: newProgress,
+            isCompleted,
+            completedAt: isCompleted ? new Date() : null,
+          },
+          update: {
+            progress: newProgress,
+            isCompleted,
+            completedAt: isCompleted ? new Date() : null,
+          },
+        });
+
+        if (!isCompleted) return { completed: false, alreadyDone: false };
+
         await this.walletService.credit(userId, mission.creditReward, {
           type: TransactionType.EARN_MISSION_COMPLETE,
           description: `Mission complete: ${mission.name}`,
           referenceId: mission.id,
           referenceType: 'mission',
-        });
-        await this.awardXp(userId, mission.xpReward, 'mission_complete', mission.id, mission.name);
+        }, tx);
+        await this.awardXp(userId, mission.xpReward, 'mission_complete', mission.id, mission.name, tx);
 
+        return { completed: true, alreadyDone: false };
+      });
+
+      if (outcome.completed) {
         void this.notificationsService.createNotification(
           userId,
           'CREDIT_EARNED',
@@ -975,23 +1005,52 @@ export class GamificationService implements OnModuleInit {
     name: string,
     tx?: Prisma.TransactionClient,
   ) {
-    const db = tx ?? this.prisma;
-    await db.userAchievement.create({
-      data: { userId, achievementId, notified: true },
-    });
+    // Achievement row + credit + XP settle in ONE transaction: the unique
+    // (userId, achievementId) constraint is the exactly-once guard — a
+    // concurrent unlock either wins (and pays once) or hits P2002 and pays
+    // nothing. A failure anywhere rolls back the whole settlement, so the
+    // reward can never be lost after the row is recorded.
+    const settle = async (t: Prisma.TransactionClient) => {
+      const already = await t.userAchievement.findUnique({
+        where: { userId_achievementId: { userId, achievementId } },
+        select: { id: true },
+      });
+      if (already) return false;
 
-    if (creditReward > 0) {
-      await this.walletService.credit(userId, creditReward, {
-        type: TransactionType.EARN_ACHIEVEMENT,
-        description: `Achievement unlocked: ${name}`,
-        referenceId: achievementId,
-        referenceType: 'achievement',
-      }, tx);
-    }
+      await t.userAchievement.create({
+        data: { userId, achievementId, notified: true },
+      });
 
-    if (xpReward > 0) {
-      await this.awardXp(userId, xpReward, 'achievement', achievementId, name, tx);
+      if (creditReward > 0) {
+        await this.walletService.credit(userId, creditReward, {
+          type: TransactionType.EARN_ACHIEVEMENT,
+          description: `Achievement unlocked: ${name}`,
+          referenceId: achievementId,
+          referenceType: 'achievement',
+        }, t);
+      }
+
+      if (xpReward > 0) {
+        await this.awardXp(userId, xpReward, 'achievement', achievementId, name, t);
+      }
+      return true;
+    };
+
+    let unlocked: boolean;
+    if (tx) {
+      // Inside a caller tx a P2002 aborts that tx — propagate so the caller's
+      // whole operation rolls back atomically (previous behavior, now safe).
+      unlocked = await settle(tx);
+    } else {
+      try {
+        unlocked = await withTransactionRetry(this.prisma, settle);
+      } catch (err) {
+        // P2002 = a concurrent unlock committed first and paid the reward.
+        if ((err as { code?: string })?.code === 'P2002') return;
+        throw err;
+      }
     }
+    if (!unlocked) return;
 
     void this.notificationsService.createNotification(
       userId,
