@@ -309,7 +309,8 @@ export class MarketplaceService {
       description: (snap['description'] as string | null) ?? item.description,
       isActive: item.isActive,
       viewerIsSeller: viewerId === listing.sellerId,
-      canPurchase: active && viewerId !== listing.sellerId,
+      // Anonymous viewers can't purchase — require a signed-in non-seller.
+      canPurchase: active && viewerId != null && viewerId !== listing.sellerId,
       expiresAt: listing.expiresAt,
       createdAt: listing.createdAt,
     };

@@ -4,6 +4,7 @@ import { StoreCategory } from '@prisma/client';
 
 import { MarketplaceService, getMarketplacePublicConfig } from './marketplace.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalAuth } from '../../common/decorators/public.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -42,10 +43,12 @@ export class MarketplaceController {
   }
 
   @Get('listings/:id')
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
   @HttpCode(HttpStatus.OK)
-  async detail(@CurrentUser() user: JwtPayload | undefined, @Param('id') id: string) {
-    // Public route — viewerId only used to flag viewerIsSeller/canPurchase.
-    // JwtAuthGuard is optional here; when absent user is undefined.
+  async detail(@CurrentUser() user: JwtPayload | null | undefined, @Param('id') id: string) {
+    // Optional auth — anonymous callers get viewerIsSeller=false and
+    // canPurchase=false; signed-in sellers/buyers get correct flags.
     return this.marketplaceService.getListingDetail(id, user?.sub);
   }
 
