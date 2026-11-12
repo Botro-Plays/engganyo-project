@@ -124,6 +124,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [ci-api, ci-web]
+    # Official Playwright image pinned to the exact @playwright/test
+    # version in package-lock.json (1.60.0). Browsers + OS deps are
+    # preinstalled, so the job no longer runs `playwright install
+    # --with-deps` (apt against the Ubuntu mirror). Service containers
+    # are reached by label hostname on the shared network — see the
+    # postgres/redis env URLs below (NOT localhost).
+    container: mcr.microsoft.com/playwright:v1.60.0-noble
 
     services:
       postgres:
@@ -152,9 +159,9 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://engganyo:testpassword@localhost:5432/engganyo_test
-      REDIS_URL: redis://localhost:6379
-      REDIS_HOST: localhost
+      DATABASE_URL: postgresql://engganyo:testpassword@postgres:5432/engganyo_test
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
       REDIS_PASSWORD: ""
       JWT_ACCESS_SECRET: e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       JWT_REFRESH_SECRET: e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -183,7 +190,9 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
+        # Container image already ships chromium + OS deps for
+        # playwright 1.60.0 — verify presence only, no apt needed.
+        run: npx playwright install chromium
         working-directory: apps/web
 
       - name: Run API migrations + seed
@@ -208,9 +217,9 @@ jobs:
       - name: Start API server
         run: |
           export NODE_ENV=test
-          export DATABASE_URL=postgresql://engganyo:testpassword@localhost:5432/engganyo_test
-          export REDIS_URL=redis://localhost:6379
-          export REDIS_HOST=localhost
+          export DATABASE_URL=postgresql://engganyo:testpassword@postgres:5432/engganyo_test
+          export REDIS_URL=redis://redis:6379
+          export REDIS_HOST=redis
           export REDIS_PASSWORD=""
           export JWT_ACCESS_SECRET=e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
           export JWT_REFRESH_SECRET=e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
