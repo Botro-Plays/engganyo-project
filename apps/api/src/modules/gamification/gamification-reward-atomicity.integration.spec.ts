@@ -761,4 +761,221 @@ run('reward atomicity — real PostgreSQL', () => {
       }),
     ).toBe(1);
   });
+
+  it('mission terms frozen at VERIFIED: later edit/disable/new mission cannot change the reward', async () => {
+    const u = await mkUser();
+    const mission = await prisma.dailyMission.create({
+      data: {
+        name: `${PREFIX}frozen-mission`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 1,
+        creditReward: 50,
+        xpReward: 25,
+        isActive: true,
+      },
+    });
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+
+    // Configuration drifts between the qualifying event and recovery:
+    // original mission edited + disabled, a NEW mission appears.
+    await prisma.dailyMission.update({
+      where: { id: mission.id },
+      data: { isActive: false, creditReward: 999, xpReward: 999 },
+    });
+    const lateMission = await prisma.dailyMission.create({
+      data: {
+        name: `${PREFIX}late-mission`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 1,
+        creditReward: 77,
+        xpReward: 88,
+        isActive: true,
+      },
+    });
+
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+    expect(outcome.status).toBe('DONE');
+    const snap = outcome.rewardSnapshot as { missions?: Array<{ id: string; creditReward: number; xpReward: number }> };
+    expect(snap.missions?.some((m) => m.id === mission.id && m.creditReward === 50 && m.xpReward === 25)).toBe(true);
+    expect(snap.missions?.some((m) => m.id === lateMission.id)).toBe(false);
+
+    // Frozen mission still paid its recorded terms despite being disabled+edited.
+    const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+    const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+      where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+    });
+    expect(progress.isCompleted).toBe(true);
+    const payout = await prisma.transaction.findFirstOrThrow({
+      where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+    });
+    expect(payout.amount).toBe(50); // frozen, not the edited 999
+    const missionXp = await prisma.xpEvent.findFirstOrThrow({
+      where: { userId: u.id, source: 'mission_complete', referenceId: { startsWith: `${mission.id}:` } },
+    });
+    expect(missionXp.amount).toBe(25); // frozen, not the edited 999
+
+    // Mission created after the qualifying event got nothing.
+    expect(
+      await prisma.userMissionProgress.count({ where: { userId: u.id, missionId: lateMission.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.missionProgressEvent.count({ where: { missionId: lateMission.id, sourceId: completion.id } }),
+    ).toBe(0);
+  });
+
+  it('XP boost frozen at VERIFIED: expiry before recovery cannot change the award; later activation cannot add one', async () => {
+    const boostMock = (service as any).storeService.getActiveXpBoost as jest.Mock;
+
+    // Case 1: 2x boost active at the qualifying event, gone by recovery.
+    const u1 = await mkUser();
+    const c1 = await mkVerifiedCompletion(u1.id);
+    boostMock.mockResolvedValue({ multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() });
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u1.id, c1.id);
+    });
+    boostMock.mockResolvedValue(null); // boost "expired" before processing
+    await service.awardTaskCompletionOutcome(u1.id, c1.id);
+
+    const xp1 = await prisma.xpEvent.findFirstOrThrow({
+      where: { userId: u1.id, source: 'task_completion', referenceId: c1.id },
+    });
+    expect(xp1.amount).toBe(100); // 50 × frozen 2
+    expect(xp1.baseAmount).toBe(50);
+    expect(xp1.boostMultiplier).toBe(2);
+
+    // Case 2: no boost at the qualifying event, 2x appears before recovery.
+    const u2 = await mkUser();
+    const c2 = await mkVerifiedCompletion(u2.id);
+    boostMock.mockResolvedValue(null);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u2.id, c2.id);
+    });
+    boostMock.mockResolvedValue({ multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() });
+    await service.awardTaskCompletionOutcome(u2.id, c2.id);
+
+    const xp2 = await prisma.xpEvent.findFirstOrThrow({
+      where: { userId: u2.id, source: 'task_completion', referenceId: c2.id },
+    });
+    expect(xp2.amount).toBe(50); // frozen "no boost" — later activation irrelevant
+    expect(xp2.boostMultiplier).toBeNull();
+
+    boostMock.mockResolvedValue(null);
+  });
+
+  it('recovery scan skips live leases before the batch limit — later claimable rows are not starved', async () => {
+    const base = Date.now();
+    // 50 oldest outcomes held under live leases (synthetic completionIds —
+    // they are never reached because the scan excludes them).
+    for (let i = 0; i < 50; i += 1) {
+      await prisma.taskCompletionOutcome.create({
+        data: {
+          completionId: `${PREFIX}lease-held-${i}`,
+          userId: `${PREFIX}lease-user-${i}`,
+          status: 'PENDING',
+          claimedAt: new Date(base + i),
+          claimToken: `held-${i}`,
+          createdAt: new Date(base + i),
+        },
+      });
+    }
+    // 5 newer claimable outcomes backed by real VERIFIED completions.
+    const freeIds: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const u = await mkUser();
+      const completion = await mkVerifiedCompletion(u.id);
+      await prisma.taskCompletionOutcome.create({
+        data: {
+          completionId: completion.id,
+          userId: u.id,
+          status: 'PENDING',
+          createdAt: new Date(base + 60_000 + i),
+        },
+      });
+      freeIds.push(completion.id);
+    }
+
+    // Batch limit 50: previously the 50 leased rows would fill the batch
+    // and nothing would process. The claimable-predicate scan must reach
+    // the 5 recoverable rows instead.
+    await service.processPendingTaskOutcomes(50);
+
+    for (const cid of freeIds) {
+      const o = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { completionId: cid } });
+      expect(o.status).toBe('DONE');
+    }
+    const leased = await prisma.taskCompletionOutcome.findMany({
+      where: { completionId: { startsWith: `${PREFIX}lease-held-` } },
+    });
+    expect(leased).toHaveLength(50);
+    for (const o of leased) {
+      expect(o.status).toBe('PENDING');
+      expect(o.claimToken).toMatch(/^held-/);
+      expect(o.attempts).toBe(0); // never claimed — filtered before the limit
+    }
+  });
+
+  it('a paused worker resuming after lease takeover cannot overwrite the new owner\'s DONE', async () => {
+    const u = await mkUser();
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+
+    // Worker A claims, then pauses inside its first effect (awardXp).
+    const origAwardXp = service.awardXp.bind(service);
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredP = new Promise<void>((r) => (entered = r));
+    const gate = new Promise<void>((r) => (release = r));
+    let xpCalls = 0;
+    const spy = jest.spyOn(service, 'awardXp').mockImplementation(async (...args: any[]) => {
+      xpCalls += 1;
+      if (xpCalls === 1) {
+        entered();
+        await gate;
+      }
+      return origAwardXp(...(args as Parameters<GamificationService['awardXp']>));
+    });
+
+    const workerA = service.processTaskCompletionOutcome(outcome.id);
+    await enteredP; // A holds claim token A and is mid-effect
+
+    // A's lease expires; worker B claims and completes the outcome.
+    await prisma.taskCompletionOutcome.update({
+      where: { id: outcome.id },
+      data: { claimedAt: new Date(Date.now() - 3 * 60 * 1000) },
+    });
+    await service.processTaskCompletionOutcome(outcome.id);
+    const afterB = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
+    expect(afterB.status).toBe('DONE');
+    expect(afterB.claimToken).toBeNull();
+
+    // A resumes: its awardXp dedupes against B's event, then every
+    // claim-conditional write matches zero rows and it stops.
+    release();
+    await workerA;
+    spy.mockRestore();
+
+    const final = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
+    expect(final.status).toBe('DONE');
+    expect(final.claimToken).toBeNull();
+    expect(
+      await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } }),
+    ).toBe(1);
+    expect(
+      await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } }),
+    ).toBe(1);
+  });
 });

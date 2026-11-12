@@ -965,6 +965,12 @@ model TaskCompletionOutcome {
   // stale after the lease TTL and becomes re-claimable.
   claimedAt           DateTime? @map("claimed_at")
   claimToken          String?   @map("claim_token")
+  // Reward terms frozen at the qualifying VERIFIED event: eligible
+  // mission IDs + requirement/credit/xp terms and the XP boost
+  // multiplier observed at that instant. NULL = legacy/defensive row —
+  // processing falls back to live configuration (documented policy for
+  // outcomes recorded before this column existed).
+  rewardSnapshot      Json?     @map("reward_snapshot")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
   processedAt         DateTime? @map("processed_at")
