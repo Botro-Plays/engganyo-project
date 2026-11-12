@@ -2284,3 +2284,48 @@ Accounts `devin_earn_test` / `devin_create_test`; campaign
 - Campaign slot-expiry sweep + tip/rain idempotency: still open.
 - Events-gateway `Redis adapter failed: server.adapter is not a
   function` still logged; reward persistence unaffected — monitor.
+
+## Outcome reward-term snapshot + claimable scan (2026-11-12)
+
+Audit follow-up on `b733dc7`; two focused PRs.
+
+### PR #79 `fix/outcome-reward-terms` → merged `eb7eaeb`
+
+- Heads `846db24` → `b7db707` (migration renamed
+  `20261113030000_outcome_reward_snapshot` after CI caught it sorting
+  before the table-creating `20261113000000`). PR CI `43134349696`
+  green; deploy run `43135829521` success.
+- `task_completion_outcomes.reward_snapshot` JSONB written inside the
+  VERIFIED tx: eligible COMPLETE_N_TASKS missions with frozen
+  requirement/credit/xp terms + XP boost multiplier at the qualifying
+  event. NULL = documented live-config fallback for legacy/defensive
+  rows (explicit historical-pending policy).
+- `awardXp` boostOverride (undefined=live, null=frozen-none,
+  number=frozen); same multiplier threads through task/mission/
+  achievement XP of the outcome — one qualifying-event policy.
+- `updateMissionProgress` accepts frozen mission terms (deleted rows
+  skipped); recovery scan now filters live leases BEFORE the batch
+  limit (same predicate as atomic claim) + createdAt/id ordering.
+- 4 new real-PG regressions (all green in CI): mission edit/disable/
+  create between completion and recovery; boost expiry/activation;
+  55 PENDING rows with 50 live-leased; paused worker resuming after
+  lease takeover.
+
+### PR #80 `ci/playwright-pin-check` → merged `20002ca`
+
+- Pre-install step fails the E2E job if the container image semver
+  drifts from `@playwright/test`/`playwright-core` in package-lock.
+
+### Live verification on `eb7eaeb`
+
+Instagram campaign `cmw66gqf900fi5vv87p2bhy0q`, completion
+`cmwcw9j5l000qo12fc381lgq8` VERIFIED 2026-11-12T01:53:52Z:
+
+- Outcome `cmwcw9jrz0012o12f4vuan7z3` DONE, attempts=1;
+  `reward_snapshot` = {Daily Grind 1req/20cr/30xp, Task Sprint
+  3req/50cr/75xp, xpBoostMultiplier:null} — frozen at VERIFIED.
+- XP exactly 1×50, VP exactly 1×1 (completionId-keyed).
+- Mission event: Task Sprint only, date=2026-11-12 = verifiedAt UTC;
+  Daily Grind skipped (already completed today — correct).
+- Outbox 3 notification + 2 socket DELIVERED; LEVEL_UP/VIP notifications
+  carry outbox dedupe keys; TASK_ASSIGNED/TASK_COMPLETED are direct.
