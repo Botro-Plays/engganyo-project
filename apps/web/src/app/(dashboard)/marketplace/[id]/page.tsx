@@ -4,14 +4,14 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, Loader2, Lock, Minus, Package, Plus, RotateCcw, ShoppingCart, User, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, Loader2, Lock, Minus, Package, Plus, RotateCcw, ShoppingCart, User, X } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useToast } from '@/components/toast-provider';
 import { formatCredits } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
-import type { MarketplaceListingDetail } from '../_components/types';
+import type { MarketplaceListingDetail, MarketplaceOrder } from '../_components/types';
 
 const CATEGORY_COLORS: Record<string, string> = {
   BOOST: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -69,6 +69,24 @@ export default function MarketplaceListingPage() {
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<MarketplaceListingDetail>>(`marketplace/listings/${listingId}`);
       return res.data.data;
+    },
+  });
+
+  // Recovery lookup: while a purchase intent is unresolved, ask the server
+  // (read-only, buyer-scoped) whether this purchaseKey already committed an
+  // order. A committed order is displayed regardless of current balance,
+  // stock, or listing status; only a null result leaves the intent
+  // "unconfirmed" and therefore eligible for a funds-checked retry.
+  const purchaseLookup = useQuery({
+    queryKey: ['marketplace', 'purchase-lookup', pending?.purchaseKey],
+    enabled: !!pending && !!user?.id,
+    staleTime: 0,
+    retry: 1,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ order: MarketplaceOrder | null }>>(
+        `marketplace/orders/lookup/${pending!.purchaseKey}`,
+      );
+      return res.data.data.order;
     },
   });
 
@@ -158,6 +176,11 @@ export default function MarketplaceListingPage() {
   const total = listing.unitPrice * qty;
   const balance = user?.creditBalance ?? 0;
   const canAfford = balance >= total;
+  // A committed order for the pending key resolves the intent — show it
+  // even when the listing sold out, paused, expired, or funds are now
+  // insufficient (the debit already happened server-side).
+  const committedOrder = pending ? (purchaseLookup.data ?? null) : null;
+  const lookupChecking = !!pending && purchaseLookup.isFetching;
   const endsIn = Math.max(0, Math.ceil((new Date(listing.expiresAt).getTime() - Date.now()) / 86_400_000));
   const discardPending = () => {
     clearPending();
@@ -222,6 +245,38 @@ export default function MarketplaceListingPage() {
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
             <Link href="/login" className="text-brand-400 underline">Sign in</Link> to purchase this item.
           </div>
+        ) : committedOrder ? (
+          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-emerald-300">Purchase completed</div>
+                <div className="text-sm text-zinc-200 mt-1">
+                  {committedOrder.quantity}× {committedOrder.itemName} —{' '}
+                  {formatCredits(committedOrder.totalPrice)} credits
+                </div>
+                <div className="text-xs text-zinc-500 mt-1">
+                  Order {committedOrder.id.slice(-8)} · {new Date(committedOrder.createdAt).toLocaleString()} ·{' '}
+                  {committedOrder.status.toLowerCase()}
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-2">
+                  This purchase was already settled — no additional charge was made and no
+                  extra items were transferred. Your items are in inventory.
+                </p>
+                <div className="flex items-center gap-4 mt-3">
+                  <Link href="/marketplace" className="text-xs text-brand-400 underline">
+                    View order history
+                  </Link>
+                  <button
+                    onClick={discardPending}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : !purchasable && !pending ? (
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
             {listing.status === 'PAUSED' ? (
@@ -245,7 +300,9 @@ export default function MarketplaceListingPage() {
                 <RotateCcw className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <div className="flex-1">
                   <span className="font-medium">Unconfirmed purchase attempt.</span>{' '}
-                  Retrying confirms the same order — you will not be charged twice.
+                  {lookupChecking
+                    ? 'Checking whether it already completed…'
+                    : 'If it already completed, your order is shown above. Otherwise, confirming retries the same order — you will not be charged twice.'}
                   {pending.quantity > listing.remainingQuantity && (
                     <span className="block mt-1 text-amber-300/90">
                       Note: only {listing.remainingQuantity} unit(s) remain — if the original attempt did not complete, this retry may fail.
@@ -261,6 +318,22 @@ export default function MarketplaceListingPage() {
                 </button>
               </div>
             )}
+            {pending && !purchasable ? (
+              <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-3 text-sm text-zinc-400">
+                This listing is{' '}
+                {listing.status === 'PAUSED'
+                  ? 'paused'
+                  : listing.status !== 'ACTIVE'
+                    ? listing.status.toLowerCase().replace('_', ' ')
+                    : listing.isExpired
+                      ? 'expired'
+                      : 'sold out'}{' '}
+                — the unconfirmed attempt cannot complete. If it had already gone through, the
+                committed order would be displayed instead. Check Order history, then discard
+                this attempt.
+              </div>
+            ) : (
+            <>
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-2">
                 <button
@@ -292,10 +365,12 @@ export default function MarketplaceListingPage() {
               </div>
               <button
                 onClick={() => purchaseMutation.mutate()}
-                disabled={!canAfford || purchaseMutation.isPending}
+                disabled={lookupChecking || !canAfford || purchaseMutation.isPending}
                 className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {purchaseMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : lookupChecking ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : !canAfford ? (
                   <Lock className="w-4 h-4" />
@@ -304,12 +379,22 @@ export default function MarketplaceListingPage() {
                 ) : (
                   <ShoppingCart className="w-4 h-4" />
                 )}
-                {purchaseMutation.isPending ? 'Confirming…' : !canAfford ? 'Insufficient credits' : pending ? 'Confirm purchase' : 'Buy now'}
+                {purchaseMutation.isPending
+                  ? 'Confirming…'
+                  : lookupChecking
+                    ? 'Checking…'
+                    : !canAfford
+                      ? 'Insufficient credits'
+                      : pending
+                        ? 'Confirm purchase'
+                        : 'Buy now'}
               </button>
             </div>
             <p className="text-[11px] text-zinc-500 mt-3">
               Credits only · no fees · item is delivered to your inventory instantly. Purchases are final.
             </p>
+            </>
+            )}
           </div>
         )}
       </div>

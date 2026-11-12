@@ -475,6 +475,45 @@ run('marketplace — real PostgreSQL', () => {
     expect(orderCount).toBe(2);
   });
 
+  it('purchaseKey lookup returns the committed order regardless of listing state, buyer-scoped', async () => {
+    const seller = await mkUser();
+    const buyer = await mkUser(120);
+    const other = await mkUser(0);
+    await mkInventory(seller.id, convItemId, 1);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: convItemId } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 120 });
+
+    // Unknown key → null (uncommitted attempt).
+    expect((await service.findPurchaseByKey(buyer.id, purchaseKey('missing'))).order).toBeNull();
+
+    // Buyer spends their entire balance — the committed order must still
+    // be discoverable afterwards (zero balance must not hide it).
+    const key = purchaseKey('lookup');
+    const bought = await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: key });
+    expect(await balance(buyer.id)).toBe(0);
+
+    const found = await service.findPurchaseByKey(buyer.id, key);
+    expect(found.order).not.toBeNull();
+    expect(found.order!.id).toBe(bought.order.id);
+    expect(found.order!.listingId).toBe(listing.id);
+    expect(found.order!.quantity).toBe(1);
+    expect(found.order!.unitPrice).toBe(120);
+    expect(found.order!.totalPrice).toBe(120);
+    expect(found.order!.status).toBe('COMPLETED');
+    expect(typeof found.order!.itemName).toBe('string');
+
+    // Buyer-scoped: another user with the same key sees nothing.
+    expect((await service.findPurchaseByKey(other.id, key)).order).toBeNull();
+
+    // Listing is now SOLD_OUT — the lookup is unaffected by listing state.
+    const db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.SOLD_OUT);
+    expect((await service.findPurchaseByKey(buyer.id, key)).order!.id).toBe(bought.order.id);
+
+    // Invalid key shapes are rejected like the purchase path.
+    await expect(service.findPurchaseByKey(buyer.id, 'short')).rejects.toThrow(BadRequestException);
+  });
+
   it('cancel vs purchase race resolves to exactly one consistent outcome', async () => {
     const seller = await mkUser();
     const buyer = await mkUser(500);

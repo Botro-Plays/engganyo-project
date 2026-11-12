@@ -73,6 +73,18 @@ export class MarketplaceController {
     return this.marketplaceService.getOrderHistory(user.sub);
   }
 
+  /**
+   * Recovery lookup for an unresolved purchase intent — authenticated,
+   * buyer-scoped, read-only. Lets the UI show an already-committed order
+   * (or confirm none exists) without re-issuing the purchase.
+   */
+  @Get('orders/lookup/:purchaseKey')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async lookupPurchase(@CurrentUser() user: JwtPayload, @Param('purchaseKey') purchaseKey: string) {
+    return this.marketplaceService.findPurchaseByKey(user.sub, purchaseKey);
+  }
+
   @Post('listings')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 20, ttl: 60 } })
