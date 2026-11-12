@@ -2205,3 +2205,82 @@ Full report: `docs/HISTORICAL_REWARD_RECONCILIATION_2026-11-11.md`
   Balance correct; ledger semantics fixed prospectively by #73. No
   correction proposed — see `docs/HISTORICAL_REWARD_RECONCILIATION_
   2026-11-11.md` @ records `a80fc2e`.
+
+## PR #78 merged + deployed; E2E CI repaired via Playwright container (2026-11-12)
+
+### CI failure analysis (exact)
+
+- Failing step on runs `43041515515`/`43042726088` (heads `803c307`,
+  `63e0b57`): `npx playwright install chromium --with-deps` — apt
+  could not resolve `azure.archive.ubuntu.com` (Ubuntu mirror DNS on
+  the runner). Browser tests never started; API/web jobs green.
+  Characterized as runner mirror/DNS setup failure, not an
+  application/test failure; not claimed as a GitHub-wide outage.
+
+### Focused CI repair (`.github/workflows/deploy.yml`)
+
+- E2E job moved into `container: mcr.microsoft.com/playwright:v1.60.0-noble`
+  — official image pinned to the exact `@playwright/test` version in
+  `package-lock.json` (1.60.0). Browsers + OS deps preinstalled;
+  install step is verify-only (`npx playwright install chromium`,
+  no `--with-deps`, no apt).
+- Service networking audited for container jobs: postgres/redis reached
+  by Docker label hostname on the shared network — `DATABASE_URL`,
+  `REDIS_URL`, `REDIS_HOST` updated `localhost` → `postgres`/`redis`
+  in job env and the API start step. App URLs stay `localhost`
+  (same container). Node stays setup-node 24; migrations, seed,
+  builds, server startup, Playwright run, and artifact upload
+  unchanged. No checks skipped, no `continue-on-error`.
+- First containerized run `43125987884` (head `4a1f284`): checkout
+  `pull/78/merge` correct, all setup green, **73 passed / 1 failed** —
+  `gold-frame.spec.ts` fixture gate `refusing Redis target "redis" —
+  loopback only` (safety allowlist is loopback-only by design).
+- Fix `56d6c07`: `ALLOWED_REDIS_HOSTS` extended via explicit
+  `E2E_REDIS_ALLOWED_HOSTS` env opt-in (default unchanged); set to
+  `redis` on the Playwright step only.
+
+### Results
+
+- PR CI run `43128125262` on `56d6c07`: **all green** — API lint/test/
+  build, web lint/build, E2E Playwright (containerized), build/deploy
+  correctly skipped on PR.
+- PR #78 merged → `b733dc7`. Deploy run `43129347483` **success** —
+  including first containerized E2E on main, image build/push, VPS
+  deploy. `/api/health` ok (db+redis).
+- **Deployed SHA: `b733dc7`** (`.deployed-sha` verified over SSH).
+  60 migrations, schema up to date; `task_completion_outcomes`
+  `claimed_at`/`claim_token` present
+  (`20261113020000_outcome_claim_lease` applied).
+
+### Live labeled verification on `b733dc7`
+
+Accounts `devin_earn_test` / `devin_create_test`; campaign
+`cmw66gptq00f85vv8ln2iw3z9` (DEVIN-TEST Discord join, manual review).
+
+- assign → submit (proofHash `claim-lease-live-001`) → creator approve
+  → completion `cmwcuk9gb000qnmx7y1fuvaht` **VERIFIED**
+  2026-11-12T01:06:19Z, 10 credits.
+- Outcome `cmwcuke9y0012nmx7hlkai4ps`: **DONE**, all 5 effect flags
+  settled, `attempts=1`, claim released (`claimed_at`/`claim_token`
+  NULL on completion — expected signature of a clean single pass).
+- `xp_events`: exactly 1 row, 50 XP; `vp_events`: exactly 1 row, 1 VP —
+  both keyed by completionId, no duplicates.
+- `mission_progress_events`: 2 rows (two active COMPLETE_N_TASKS
+  missions), `source_id`=completionId, `date=2026-11-12` =
+  `verifiedAt` UTC date — mission dating bound to authoritative
+  completion time, not processing day.
+- `reward_outbox_events`: notification + socket rows **DELIVERED**
+  first attempt; notification `dedupe_key` = outbox event id
+  (`cmwcukej3001enmx782y9yrvz`) — idempotent persistence confirmed.
+
+### Remaining gaps
+
+- Marketplace economics + inventory-provenance P1–P4: pending owner
+  approval. No weekly rewards / catch-up bonuses added.
+- Historical deposit-VP over-award (~20 VP, two PHP deposits) and
+  jhing XP (resolved — legitimate 2× boost, no correction): unchanged,
+  pending owner decision. See
+  `docs/HISTORICAL_REWARD_RECONCILIATION_2026-11-11.md`.
+- Campaign slot-expiry sweep + tip/rain idempotency: still open.
+- Events-gateway `Redis adapter failed: server.adapter is not a
+  function` still logged; reward persistence unaffected — monitor.
