@@ -180,12 +180,20 @@ test.describe('purchase recovery — committed order survives lost response', ()
     await expect(page.getByRole('button', { name: 'Buy now' })).toBeEnabled({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Buy now' }).click();
 
-    // Intent persisted before the request; the lost response keeps it
-    // unresolved. Wait for the retry loop to exhaust (~7s of backoff).
-    await expect(page.getByText('Unconfirmed purchase attempt')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Confirm purchase' })).toBeVisible({ timeout: 30_000 });
-    expect(state.postCount).toBeGreaterThan(0);
+    // Every POST response is "lost" — wait for the full retry loop
+    // (initial + 3 backoff retries ≈ 7s). The pending intent is persisted
+    // before the first request regardless of which UI state renders: the
+    // lookup may already resolve the committed order (showing
+    // 'Purchase completed'), or the 'Unconfirmed purchase attempt' banner
+    // may appear first — both are valid recovery states.
+    await expect
+      .poll(() => state.postCount, { timeout: 30_000 })
+      .toBeGreaterThanOrEqual(4);
     expect(state.committed).not.toBeNull();
+    const persisted = await page.evaluate(() =>
+      localStorage.getItem('engganyo:marketplace:pending:u1:L1'),
+    );
+    expect(persisted).not.toBeNull();
 
     // The debit leaves zero balance — update persisted auth AND the
     // mocked server balance, then reload.
