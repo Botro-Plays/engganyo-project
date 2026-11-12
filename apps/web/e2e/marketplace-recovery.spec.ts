@@ -92,6 +92,9 @@ interface MockState {
   committed: Record<string, unknown> | null;
   postCount: number;
   lookupCount: number;
+  /** Server-side wallet balance — wallet/me + auth/me echo it, and the
+   *  dashboard syncs it into the auth store (canAfford source). */
+  balance: number;
 }
 
 /** Routes every /api call the detail page can make. `detailFor` lets the
@@ -109,9 +112,9 @@ async function mockMarketplace(
       : r.fulfill(json({})),
   );
   await page.route('**/api/auth/me**', (r) =>
-    r.fulfill(json({ id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 0, level: 1, xp: 0 })),
+    r.fulfill(json({ id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: state.balance, level: 1, xp: 0 })),
   );
-  await page.route('**/api/wallet/**', (r) => r.fulfill(json({ balance: 0, transactions: [] })));
+  await page.route('**/api/wallet/**', (r) => r.fulfill(json({ balance: state.balance, transactions: [] })));
   await page.route('**/api/notifications**', (r) => r.fulfill(json({ items: [], meta: { total: 0 } })));
   await page.route('**/api/store/active-effects**', (r) => r.fulfill(json([])));
   await page.route('**/api/users/cosmetics**', (r) => r.fulfill(json([])));
@@ -163,7 +166,7 @@ test.describe('purchase recovery — committed order survives lost response', ()
   test.use({ storageState: authState(120) });
 
   test('zero balance + sold out: reload shows committed order, no second purchase', async ({ page }) => {
-    const state: MockState = { committed: null, postCount: 0, lookupCount: 0 };
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 120 };
     // Buyer can afford exactly one unit; after it commits the listing is
     // sold out — the harshest case for recovery.
     await mockMarketplace(page, state, {
@@ -184,7 +187,9 @@ test.describe('purchase recovery — committed order survives lost response', ()
     expect(state.postCount).toBeGreaterThan(0);
     expect(state.committed).not.toBeNull();
 
-    // The debit leaves zero balance — update persisted auth, then reload.
+    // The debit leaves zero balance — update persisted auth AND the
+    // mocked server balance, then reload.
+    state.balance = 0;
     await page.evaluate(() => {
       const raw = localStorage.getItem('engganyo-auth');
       if (raw) {
@@ -222,7 +227,7 @@ test.describe('purchase recovery — pre-seeded intent on sold-out listing', () 
   test.use({ storageState: authState(0, pending) });
 
   test('committed order displays regardless of balance and listing status', async ({ page }) => {
-    const state: MockState = { committed: null, postCount: 0, lookupCount: 0 };
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
     const committedOrder = {
       id: 'ord-e2e-2',
       listingId: 'L2',
@@ -252,7 +257,7 @@ test.describe('purchase recovery — pre-seeded intent on sold-out listing', () 
   });
 
   test('uncommitted attempt on sold-out listing cannot be retried — discard only', async ({ page }) => {
-    const state: MockState = { committed: null, postCount: 0, lookupCount: 0 };
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
     await mockMarketplace(page, state, {
       listingId: 'L2',
       detailFor: () => detail({ ...SOLD_OUT, id: 'L2' }),
