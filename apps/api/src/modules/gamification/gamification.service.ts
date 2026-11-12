@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, BadRequestException, ConflictException, forwardRef, Inject } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType, CompletionStatus } from '@prisma/client';
+import { Prisma, AchievementCategory, MissionType, TransactionType, UserRole, NotificationType, CompletionStatus, InventoryProvenance } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { withTransactionRetry } from '../../database/tx-retry';
@@ -1384,12 +1384,19 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
           where: { name: 'Mystery Gift Box', isActive: true },
         });
         if (lootBoxItem) {
-          // Upsert on the (userId,itemId) unique key — stacks onto an existing
-          // box row instead of creating a duplicate.
+          // Upsert on the (userId,itemId,provenance) unique key — stacks onto
+          // an existing reward-provenance row. Reward grants are bound.
           await tx.userInventory.upsert({
-            where: { userId_itemId: { userId, itemId: lootBoxItem.id } },
-            create: { userId, itemId: lootBoxItem.id, quantity: 1 },
+            where: { userId_itemId_provenance: { userId, itemId: lootBoxItem.id, provenance: InventoryProvenance.REWARD } },
+            create: { userId, itemId: lootBoxItem.id, quantity: 1, provenance: InventoryProvenance.REWARD },
             update: { quantity: { increment: 1 }, consumedAt: null },
+          });
+          await tx.inventoryMovement.create({
+            data: {
+              userId, itemId: lootBoxItem.id, delta: 1, quantityAfter: null,
+              reason: 'daily_reward', refType: 'daily_reward_log', refId: null,
+              provenance: InventoryProvenance.REWARD,
+            },
           });
           bonusLootBox = true;
         }
@@ -2189,9 +2196,16 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       });
       if (lootBoxItem) {
         await tx.userInventory.upsert({
-          where: { userId_itemId: { userId, itemId: lootBoxItem.id } },
-          create: { userId, itemId: lootBoxItem.id, quantity: 1 },
+          where: { userId_itemId_provenance: { userId, itemId: lootBoxItem.id, provenance: InventoryProvenance.REWARD } },
+          create: { userId, itemId: lootBoxItem.id, quantity: 1, provenance: InventoryProvenance.REWARD },
           update: { quantity: { increment: 1 }, consumedAt: null },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            userId, itemId: lootBoxItem.id, delta: 1, quantityAfter: null,
+            reason: 'wheel', refType: 'wheel_spin', refId: null,
+            provenance: InventoryProvenance.REWARD,
+          },
         });
       }
       result = { ...result, itemName: 'Mystery Gift Box' };

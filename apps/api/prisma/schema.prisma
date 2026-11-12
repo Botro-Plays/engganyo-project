@@ -70,6 +70,9 @@ enum TransactionType {
   SPEND_ROOM_CLAIM
   REFUND_ROOM_CLOSE
   REFUND_ROOM_RESOLUTION
+  // Player item marketplace (credits-only)
+  SPEND_MARKETPLACE_PURCHASE
+  EARN_MARKETPLACE_SALE
 }
 
 enum DepositStatus {
@@ -1719,8 +1722,9 @@ model StoreItem {
   requiredVipTierLevel Int?          @map("required_vip_tier_level") // NULL = no requirement
   metadata             Json // item-specific data (boost duration, cosmetic URL, etc.)
 
-  purchases StorePurchase[]
-  inventory UserInventory[]
+  purchases          StorePurchase[]
+  inventory          UserInventory[]
+  marketplaceListings MarketplaceListing[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1730,21 +1734,56 @@ model StoreItem {
   @@map("store_items")
 }
 
-model UserInventory {
-  id         String    @id @default(cuid())
-  userId     String    @map("user_id")
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId     String    @map("item_id")
-  item       StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  quantity   Int       @default(1)
-  consumedAt DateTime? @map("consumed_at") // for consumables like boosts
-  equipped   Boolean   @default(false) @map("equipped") // for cosmetics: whether this item is currently active
-  acquiredAt DateTime  @default(now()) @map("acquired_at")
+// Where a stack of inventory units came from. Bound classes (LEGACY,
+// ADMIN_GRANT, REWARD) can never be listed on the marketplace; only
+// credit-acquired classes (PURCHASE, MARKETPLACE) are tradable. Stacks are
+// segregated per provenance so bound and tradable units can never merge.
+enum InventoryProvenance {
+  LEGACY
+  PURCHASE
+  ADMIN_GRANT
+  REWARD
+  MARKETPLACE
+}
 
-  @@unique([userId, itemId])
+model UserInventory {
+  id          String              @id @default(cuid())
+  userId      String              @map("user_id")
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId      String              @map("item_id")
+  item        StoreItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity    Int                 @default(1)
+  provenance  InventoryProvenance @default(LEGACY)
+  consumedAt  DateTime?           @map("consumed_at") // for consumables like boosts
+  equipped    Boolean             @default(false) @map("equipped") // for cosmetics: whether this item is currently active
+  acquiredAt  DateTime            @default(now()) @map("acquired_at")
+
+  @@unique([userId, itemId, provenance])
   @@index([userId])
   @@index([itemId])
   @@map("user_inventory")
+}
+
+// Append-only audit trail for every user_inventory quantity change.
+// Written inside the same transaction as the mutation so a committed
+// inventory change always has its movement row (and vice versa).
+model InventoryMovement {
+  id            String              @id @default(cuid())
+  userId        String              @map("user_id")
+  itemId        String              @map("item_id")
+  inventoryId   String?             @map("inventory_id")
+  delta         Int
+  quantityAfter Int?                @map("quantity_after")
+  reason        String // purchase | use | grant | loot_box | wheel | daily_reward | marketplace_list | marketplace_return | marketplace_receive | admin_adjust
+  refType       String?             @map("ref_type")
+  refId         String?             @map("ref_id")
+  provenance    InventoryProvenance?
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([itemId])
+  @@index([reason])
+  @@map("inventory_movements")
 }
 
 model StorePurchase {
@@ -1778,6 +1817,76 @@ model UserActiveEffect {
   @@index([expiresAt])
   @@index([userId, type])
   @@map("user_active_effects")
+}
+
+// =============================================================
+// PLAYER ITEM MARKETPLACE — credits-only, consumables v1
+// =============================================================
+
+// A listing escrows `quantity` units out of the seller's inventory at
+// creation (the inventory row is decremented in the same transaction).
+// remainingQuantity decrements per completed order; at 0 the listing is
+// SOLD_OUT. Listings are never deleted — terminal states keep history.
+enum MarketplaceListingStatus {
+  ACTIVE
+  PAUSED // catalog drift detected — escrow held until seller cancels/expires
+  SOLD_OUT
+  CANCELLED
+  EXPIRED
+  REMOVED // admin takedown
+}
+
+model MarketplaceListing {
+  id               String                    @id @default(cuid())
+  sellerId         String                    @map("seller_id")
+  itemId           String                    @map("item_id")
+  item             StoreItem                 @relation(fields: [itemId], references: [id])
+  inventoryId      String                    @map("inventory_id") // provenance stack the escrow came from
+  provenance       InventoryProvenance // stack class the escrowed units belong to (for correct returns)
+  itemSnapshot     Json                      @map("item_snapshot") // immutable name/category/description at list time
+  originalQuantity Int                       @map("original_quantity")
+  remainingQuantity Int                      @map("remaining_quantity")
+  unitPrice        Int                       @map("unit_price") // credits per unit
+  status           MarketplaceListingStatus  @default(ACTIVE)
+  expiresAt        DateTime                  @map("expires_at")
+  removedReason    String?                   @map("removed_reason")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  closedAt         DateTime?                 @map("closed_at")
+
+  orders MarketplaceOrder[]
+
+  @@index([status, expiresAt])
+  @@index([sellerId, status])
+  @@index([itemId])
+  @@map("marketplace_listings")
+}
+
+// One row per completed purchase. purchaseKey is the buyer-supplied
+// idempotency key — unique per buyer so retries/double-submits replay the
+// committed order instead of double-charging.
+model MarketplaceOrder {
+  id                   String   @id @default(cuid())
+  listingId            String   @map("listing_id")
+  listing              MarketplaceListing @relation(fields: [listingId], references: [id])
+  buyerId              String   @map("buyer_id")
+  sellerId             String   @map("seller_id")
+  itemId               String   @map("item_id")
+  quantity             Int
+  unitPrice            Int      @map("unit_price")
+  totalPrice           Int      @map("total_price")
+  feeAmount            Int      @default(0) @map("fee_amount") // 0% during internal test; permanent fee disabled
+  status               String   @default("COMPLETED") // COMPLETED | REFUNDED
+  purchaseKey          String   @map("purchase_key")
+  buyerTransactionId   String?  @map("buyer_transaction_id")
+  sellerTransactionId  String?  @map("seller_transaction_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@unique([buyerId, purchaseKey])
+  @@index([listingId])
+  @@index([sellerId, createdAt])
+  @@index([buyerId, createdAt])
+  @@map("marketplace_orders")
 }
 
 // =============================================================

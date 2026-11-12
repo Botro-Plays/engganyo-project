@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { StoreCategory, TransactionType, NotificationType, Prisma } from '@prisma/client';
+import { StoreCategory, TransactionType, NotificationType, Prisma, InventoryProvenance } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { withTransactionRetry } from '../../database/tx-retry';
@@ -8,6 +8,7 @@ import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { effectiveOwnedQuantity, lockOwnershipSlot } from '../../common/inventory-ownership';
 
 // ─── Default store items ─────────────────────────────────────
 const DEFAULT_STORE_ITEMS: Array<{
@@ -255,12 +256,12 @@ export class StoreService implements OnModuleInit {
       }
 
       // ── Max owned per user guard (under the lock) ──────────
+      // Serialized per (user,item) via advisory lock and counted across
+      // on-hand stacks + marketplace escrow so a store purchase can't
+      // race a marketplace receipt past the same cap.
       if (item.maxOwnedPerUser !== null) {
-        const ownedCount = await tx.userInventory.aggregate({
-          where: { userId, itemId },
-          _sum: { quantity: true },
-        });
-        const currentTotal = ownedCount._sum.quantity ?? 0;
+        await lockOwnershipSlot(tx, userId, itemId);
+        const currentTotal = await effectiveOwnedQuantity(tx, userId, itemId);
         if (currentTotal + quantity > item.maxOwnedPerUser) {
           throw new BadRequestException(
             `Max ownership limit reached (${item.maxOwnedPerUser} total). You currently own ${currentTotal}.`,
@@ -321,15 +322,33 @@ export class StoreService implements OnModuleInit {
             }
           }
         }
-        await tx.userInventory.create({ data: { userId, itemId, quantity: 1, equipped: true } });
+        const created = await tx.userInventory.create({
+          data: { userId, itemId, quantity: 1, equipped: true, provenance: InventoryProvenance.PURCHASE },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            userId, itemId, inventoryId: created.id, delta: 1, quantityAfter: 1,
+            reason: 'purchase', refType: 'store_item', refId: itemId,
+            provenance: InventoryProvenance.PURCHASE,
+          },
+        });
       } else {
-        // Consumables: stack onto the single (userId,itemId) row or create it.
-        // The compound unique index makes this upsert race-safe against
-        // concurrent grants/purchases/loot-box rewards.
+        // Consumables: stack onto the single (userId,itemId,provenance) row
+        // or create it. The compound unique index makes this upsert
+        // race-safe against concurrent grants/purchases/loot-box rewards,
+        // and provenance segregation keeps credit-purchased units distinct
+        // from bound reward/admin grants.
         await tx.userInventory.upsert({
-          where: { userId_itemId: { userId, itemId } },
-          create: { userId, itemId, quantity },
+          where: { userId_itemId_provenance: { userId, itemId, provenance: InventoryProvenance.PURCHASE } },
+          create: { userId, itemId, quantity, provenance: InventoryProvenance.PURCHASE },
           update: { quantity: { increment: quantity }, consumedAt: null },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            userId, itemId, delta: quantity, quantityAfter: null,
+            reason: 'purchase', refType: 'store_item', refId: itemId,
+            provenance: InventoryProvenance.PURCHASE,
+          },
         });
       }
 
@@ -472,6 +491,14 @@ export class StoreService implements OnModuleInit {
           data: { quantity: newQty },
         });
       }
+      await tx.inventoryMovement.create({
+        data: {
+          userId, itemId: item.id, inventoryId, delta: -1,
+          quantityAfter: Math.max(newQty, 0),
+          reason: 'use', refType: 'inventory', refId: inventoryId,
+          provenance: inventory.provenance,
+        },
+      });
 
       return {
         inventoryId,
@@ -820,8 +847,15 @@ export class StoreService implements OnModuleInit {
                 }
               }
             }
-            await tx.userInventory.create({
-              data: { userId, itemId: cosmeticItem.id, quantity: 1, equipped: true },
+            const granted = await tx.userInventory.create({
+              data: { userId, itemId: cosmeticItem.id, quantity: 1, equipped: true, provenance: InventoryProvenance.REWARD },
+            });
+            await tx.inventoryMovement.create({
+              data: {
+                userId, itemId: cosmeticItem.id, inventoryId: granted.id, delta: 1, quantityAfter: 1,
+                reason: 'loot_box', refType: 'store_item', refId: cosmeticItem.id,
+                provenance: InventoryProvenance.REWARD,
+              },
             });
             return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic: cosmeticItem.name };
           }

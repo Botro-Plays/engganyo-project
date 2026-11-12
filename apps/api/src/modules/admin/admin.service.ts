@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { CampaignStatus, ChallengeStatus, CompletionStatus, DepositMethod, DepositStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus } from '@prisma/client';
+import { CampaignStatus, ChallengeStatus, CompletionStatus, DepositMethod, DepositStatus, NotificationType, Prisma, ReportStatus, SocialPlatform, TransactionType, UserRole, UserStatus, InventoryProvenance } from '@prisma/client';
 import type { CreatePlatformTaskDto } from './dto/create-platform-task.dto';
 import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
@@ -3132,15 +3132,24 @@ export class AdminService {
     if (!item) throw new NotFoundException('Store item not found');
     if (dto.quantity < 1 || dto.quantity > 999) throw new BadRequestException('Quantity must be 1–999');
 
-    // Single transaction: the (userId,itemId) unique index makes the upsert
-    // race-safe — concurrent grants/purchases can never fragment a stack.
-    // Audit log + notification stay outside so a notification failure cannot
-    // roll back a committed grant.
+    // Single transaction: the (userId,itemId,provenance) unique index makes
+    // the upsert race-safe — concurrent grants/purchases can never fragment
+    // a stack, and ADMIN_GRANT provenance keeps granted units bound (never
+    // interchangeable with credit-purchased stock). Audit log + movement
+    // row commit with the grant; the notification stays outside so a
+    // notification failure cannot roll back a committed grant.
     await this.prisma.$transaction(async (tx) => {
       await tx.userInventory.upsert({
-        where: { userId_itemId: { userId: dto.userId, itemId: dto.itemId } },
-        create: { userId: dto.userId, itemId: dto.itemId, quantity: dto.quantity },
+        where: { userId_itemId_provenance: { userId: dto.userId, itemId: dto.itemId, provenance: InventoryProvenance.ADMIN_GRANT } },
+        create: { userId: dto.userId, itemId: dto.itemId, quantity: dto.quantity, provenance: InventoryProvenance.ADMIN_GRANT },
         update: { quantity: { increment: dto.quantity }, consumedAt: null },
+      });
+      await tx.inventoryMovement.create({
+        data: {
+          userId: dto.userId, itemId: dto.itemId, delta: dto.quantity, quantityAfter: null,
+          reason: 'admin_grant', refType: 'admin', refId: adminId,
+          provenance: InventoryProvenance.ADMIN_GRANT,
+        },
       });
 
       await tx.auditLog.create({
