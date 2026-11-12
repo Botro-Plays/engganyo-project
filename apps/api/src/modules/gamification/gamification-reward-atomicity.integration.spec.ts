@@ -585,4 +585,180 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(await prisma.notification.count({ where: { userId: u.id, dedupeKey: ev.id } })).toBe(1);
     expect((await prisma.rewardOutboxEvent.findUniqueOrThrow({ where: { id: ev.id } })).status).toBe('DELIVERED');
   });
+
+  // ─── Outcome claim/lease + mission-date binding ──────────
+
+  it('concurrent processors claim the outcome once — no duplicate effects', async () => {
+    const u = await mkUser();
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+
+    // Slow the XP effect so all three callers overlap the claim window.
+    const origAwardXp = service.awardXp.bind(service);
+    const spy = jest.spyOn(service, 'awardXp').mockImplementation(async (...args: any[]) => {
+      await new Promise((r) => setTimeout(r, 150));
+      return (origAwardXp as any)(...args);
+    });
+    try {
+      await Promise.all([
+        service.processTaskCompletionOutcome(outcome.id),
+        service.processTaskCompletionOutcome(outcome.id),
+        service.processTaskCompletionOutcome(outcome.id),
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
+
+    const after = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
+    expect(after.status).toBe('DONE');
+    expect(after.claimToken).toBeNull();
+    expect(after.claimedAt).toBeNull();
+    // Exactly one pass ran: one claim → attempts == 1.
+    expect(after.attempts).toBe(1);
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
+    expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
+    // Mission events: one per active COMPLETE_N_TASKS mission, none doubled.
+    const missionEvents = await prisma.missionProgressEvent.findMany({
+      where: { sourceId: completion.id },
+    });
+    const activeMissions = await prisma.dailyMission.count({
+      where: { type: MissionType.COMPLETE_N_TASKS, isActive: true },
+    });
+    expect(missionEvents.length).toBe(activeMissions);
+    expect(new Set(missionEvents.map((e) => e.missionId)).size).toBe(missionEvents.length);
+  });
+
+  it('a held claim blocks other workers; an expired claim is recovered', async () => {
+    const u = await mkUser();
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+
+    // Simulate a live worker holding the lease.
+    await prisma.taskCompletionOutcome.update({
+      where: { id: outcome.id },
+      data: { claimedAt: new Date(), claimToken: 'worker-A' },
+    });
+    await service.processTaskCompletionOutcome(outcome.id);
+    await service.processPendingTaskOutcomes();
+
+    let row = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
+    expect(row.status).toBe('PENDING');
+    expect(row.claimToken).toBe('worker-A');
+    expect(row.attempts).toBe(0); // blocked workers never claimed
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion' } })).toBe(0);
+
+    // Worker A "crashes": lease goes stale → sweeper re-claims and finishes.
+    await prisma.taskCompletionOutcome.update({
+      where: { id: outcome.id },
+      data: { claimedAt: new Date(Date.now() - 3 * 60 * 1000) },
+    });
+    await service.processPendingTaskOutcomes();
+
+    row = await prisma.taskCompletionOutcome.findUniqueOrThrow({ where: { id: outcome.id } });
+    expect(row.status).toBe('DONE');
+    expect(row.claimToken).toBeNull();
+    expect(row.attempts).toBe(1);
+    expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
+    expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
+  });
+
+  it('mission progress binds to the VERIFIED date — recovery after midnight cannot advance today', async () => {
+    const u = await mkUser();
+    const mission = await prisma.dailyMission.create({
+      data: {
+        name: `${PREFIX}datebind-mission`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 1,
+        creditReward: 10,
+        xpReward: 5,
+        isActive: true,
+      },
+    });
+
+    // Completion verified yesterday 23:30 UTC; processed today.
+    const verifiedAt = new Date();
+    verifiedAt.setUTCDate(verifiedAt.getUTCDate() - 1);
+    verifiedAt.setUTCHours(23, 30, 0, 0);
+    const campaignId = await ensureOutcomeCampaign(u.id);
+    const completion = await prisma.taskCompletion.create({
+      data: {
+        userId: u.id,
+        campaignId,
+        status: 'VERIFIED',
+        verifiedAt,
+        verifiedBy: 'system',
+      },
+    });
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+
+    const yesterday = new Date(verifiedAt);
+    yesterday.setUTCHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const ev = await prisma.missionProgressEvent.findFirstOrThrow({
+      where: { missionId: mission.id, sourceId: completion.id },
+    });
+    expect(ev.date.toISOString().slice(0, 10)).toBe(yesterday.toISOString().slice(0, 10));
+
+    const yProgress = await prisma.userMissionProgress.findUnique({
+      where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: yesterday } },
+    });
+    expect(yProgress?.progress).toBe(1);
+    expect(yProgress?.isCompleted).toBe(true);
+
+    // No progress was written against the processing (today) period.
+    const tProgress = await prisma.userMissionProgress.findUnique({
+      where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+    });
+    expect(tProgress).toBeNull();
+  });
+
+  it('concurrent duplicate mission-event delivery counts once (conflict-safe path)', async () => {
+    const u = await mkUser();
+    const mission = await prisma.dailyMission.create({
+      data: {
+        name: `${PREFIX}dupcon-mission`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 5,
+        creditReward: 10,
+        xpReward: 5,
+        isActive: true,
+      },
+    });
+
+    // Same sourceId delivered concurrently — ON CONFLICT DO NOTHING
+    // keeps the tx valid and exactly one delivery counts.
+    await Promise.all([
+      service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'dup-concurrent-1' }),
+      service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'dup-concurrent-1' }),
+      service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'dup-concurrent-1' }),
+    ]);
+
+    const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+    const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+      where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+    });
+    expect(progress.progress).toBe(1);
+    expect(
+      await prisma.missionProgressEvent.count({
+        where: { missionId: mission.id, sourceId: 'dup-concurrent-1' },
+      }),
+    ).toBe(1);
+  });
 });
