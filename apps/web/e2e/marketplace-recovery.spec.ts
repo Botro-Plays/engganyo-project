@@ -171,7 +171,10 @@ test.describe('purchase recovery — committed order survives lost response', ()
     });
 
     await page.goto('/marketplace/L1');
-    await expect(page.getByRole('button', { name: 'Buy now' })).toBeEnabled();
+    // Cold route compile on first hit can exceed the default 5s expect
+    // timeout — wait for the listing itself before touching controls.
+    await expect(page.getByRole('heading', { name: 'Streak Freeze (3 days)' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Buy now' })).toBeEnabled({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Buy now' }).click();
 
     // Intent persisted before the request; the lost response keeps it
