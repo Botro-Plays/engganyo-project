@@ -2365,3 +2365,45 @@ review, NOT merged):
   disable/type change, next-day activation, deletion/retirement,
   pre-boundary legacy, plus all prior boost/ordering/lease/scan
   tests.
+
+## 2026-11-12 — PR #81 merged + deployed (c3d761d)
+
+- PR #81 `fix/outcome-period-terms` merged at `c3d761dd72ed9b6ce0dcbe4ca4eb92a18df29f2b`.
+- Deploy workflow run `43173550131` — all jobs success (CI Web/API/E2E,
+  build+push, VPS deploy).
+- VPS verified: `.deployed-sha` = `c3d761d…`, containers healthy
+  (nginx/web/api/redis/postgres), `/api/health` ok.
+- Migration `20261113040000_mission_period_terms` applied — 62 total.
+- `MISSION_PERIOD_TERMS_EFFECTIVE` unset on VPS → default
+  `2026-11-14T00:00:00Z` applies, future-dated vs deploy day (11-12).
+  Pre-boundary periods and in-flight outcomes keep legacy policy.
+- reCAPTCHA env present; no heavy local services run.
+
+## 2026-11-12 — Player item marketplace implementation started (PR #82, NOT deployed)
+
+- Branch `feat/player-item-marketplace`, PR #82 — Ready for review,
+  deployment gated on owner confirmation of proposed test settings.
+- Proposed internal-test settings implemented as constants in
+  `marketplace.service.ts` (MARKETPLACE_CONFIG): BOOST+CONVENIENCE
+  consumables only, no loot boxes/cosmetics, credits-only, 0% fee,
+  10–100,000 credits/unit, 7-day listings, manual relisting,
+  5 active listings/seller, permanent seller fee disabled.
+- Provenance model: `user_inventory.provenance`
+  (LEGACY/PURCHASE/ADMIN_GRANT/REWARD/MARKETPLACE); stack key now
+  (userId,itemId,provenance) — bound/tradable can never merge.
+  Only PURCHASE+MARKETPLACE stacks listable.
+- `inventory_movements` append-only audit inside every inventory tx.
+- `marketplace_listings` (escrow at creation, never deleted) +
+  `marketplace_orders` (buyerId+purchaseKey idempotency unique).
+- Real-PG spec: list-vs-use, competing buyers, reciprocal purchases,
+  insufficient funds, duplicate/concurrent keys, cancel/expiry races,
+  bound rejection, cap, takedown, lifecycle accounting.
+- Read-only production inventory classification (pre-migration):
+  exactly 1 row — `devin_earn_test` ×1 "Streak Freeze (3 days)"
+  CONVENIENCE, unused, acquired 2026-11-07, 1 matching store_purchase
+  → classifies as PURCHASE/tradable. 0 bound/ambiguous rows.
+  Migration defaults it to LEGACY; flipping to PURCHASE post-deploy
+  is a one-row UPDATE pending owner confirmation.
+- Web UI: /marketplace (Browse/Sell/My Listings/Orders tabs),
+  /marketplace/[id] detail + purchase confirmation with stable
+  purchaseKey, provenance badges on inventory, nav entry.
