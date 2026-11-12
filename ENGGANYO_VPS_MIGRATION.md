@@ -2415,3 +2415,43 @@ review, NOT merged):
   Next.js page named-export rule; spec wallet stub needed atomic
   increments for reciprocal-purchase concurrency; store spec mock
   gained inventoryMovement delegate.
+
+### 2026-11-12 — PR #82 review-hardening round (head `233c3f3`, CI pending)
+
+Five blocking findings fixed; first CI run `43186716619` caught a real
+idempotency bug (fixed in `233c3f3`, rerun `43187601432`):
+
+1. **Idempotency identity** — purchaseKey now binds buyer+listing+
+   quantity+agreed unit price. Validated on all three replay paths
+   (fast lookup, locked tx recheck, P2002 recovery) against the
+   REQUESTED listing — initial impl compared against the order's own
+   listing (trivially true) and silently replayed wrong orders; CI
+   caught it. Mismatch → 409 `IDEMPOTENCY_KEY_REUSED`. Sequential +
+   concurrent conflict specs added.
+2. **Catalog protection** — `itemSnapshot` now freezes all material
+   fields (name/description/category/creditCost/isConsumable/isActive/
+   requiredVipTierLevel/maxOwnedPerUser/metadata-effect). Any drift →
+   new PAUSED status (escrow held); detail view lazily persists pause,
+   purchase returns 409 `LISTING_PAUSED`, seller cancels to recover.
+   Deletion FK-blocked; missing rows also pause. Browse/My Listings
+   flag `catalogChanged`; UI shows terms-changed states.
+3. **Ownership serialization** — `common/inventory-ownership.ts`:
+   `invcap:{userId}:{itemId}` advisory xact lock + effective count =
+   on-hand stacks (all provenances) + seller's ACTIVE/PAUSED escrow.
+   Wired into store `purchaseItem` and marketplace `purchaseListing`.
+   Admin/gamification grants do not enforce maxOwnedPerUser (verified)
+   so no lock needed there. Real-PG specs: two listings competing for
+   one cap slot, marketplace-vs-store race, escrow-counts-toward-cap.
+4. **Lazy expiry commit-then-throw** — purchase tx now returns
+   'expired'/'paused' sentinels that COMMIT the transition + escrow
+   return; the BadRequest/Conflict error throws only after commit.
+   Exactly-once verified against concurrent cancel/sweep/purchase.
+5. **Proposed settings visible** — `GET /marketplace/config` returns
+   the proposed rules (`awaitingOwnerConfirmation: true`, 0% fee,
+   permanentSellerFeeEnabled: false); web banner + sell-panel/detail
+   copy render from it. No permanent fee enabled.
+
+New real-PG regressions: key-conflict sequential/concurrent, catalog
+edit + deactivation pause with cancel recovery, competing-listings cap,
+marketplace-vs-store cap race, escrow-aware cap, expired purchase/
+cancel/sweep exactly-once races.
