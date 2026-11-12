@@ -37,6 +37,30 @@ interface TaskOutcomeRewardSnapshot {
   xpBoostMultiplier?: number | null;
 }
 
+/**
+ * Rollout boundary for the mission period-catalog policy. Period terms
+ * only govern periods on/after this UTC date; earlier dates (including
+ * the deployment day) keep the legacy per-outcome snapshot / live-config
+ * behavior so in-flight progress is never silently repriced.
+ *
+ * Default = the UTC day AFTER the planned deploy (deploy expected
+ * 2026-11-12/13). If deployment slips past 2026-11-13 UTC, bump the
+ * default (or set MISSION_PERIOD_TERMS_EFFECTIVE) before merging so the
+ * policy still starts the day after deploy. Env override exists for
+ * tests and ops.
+ */
+const MISSION_PERIOD_TERMS_EFFECTIVE_DEFAULT = '2026-11-14T00:00:00.000Z';
+const missionPeriodEffectiveDate = () =>
+  new Date(process.env.MISSION_PERIOD_TERMS_EFFECTIVE ?? MISSION_PERIOD_TERMS_EFFECTIVE_DEFAULT);
+
+const utcDay = (d: Date) => {
+  const day = new Date(d);
+  day.setUTCHours(0, 0, 0, 0);
+  return day;
+};
+
+const nextUtcDay = (d: Date) => new Date(utcDay(d).getTime() + 24 * 60 * 60 * 1000);
+
 // ─── XP per action ────────────────────────────────────────────
 export const XP_REWARDS = {
   TASK_COMPLETION:  50,
@@ -445,6 +469,16 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     completionId: string,
   ) {
+    // The qualifying event's authoritative timestamp — VERIFIED time,
+    // falling back to the completion's creation time exactly as the
+    // processor does.
+    const completion = await tx.taskCompletion.findUnique({
+      where: { id: completionId },
+      select: { verifiedAt: true, createdAt: true },
+    });
+    const eventTime = completion?.verifiedAt ?? completion?.createdAt ?? new Date();
+    const periodDay = utcDay(eventTime);
+
     // Freeze the reward terms that apply to THIS qualifying event inside
     // the VERIFIED transaction: the missions active right now (with their
     // current requirement/credit/xp terms) and the XP boost multiplier
@@ -457,13 +491,31 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       select: { id: true, name: true, requirement: true, creditReward: true, xpReward: true },
     });
     const snapshot: TaskOutcomeRewardSnapshot = { missions };
-    try {
-      const boost = await this.storeService.getActiveXpBoost(userId);
-      snapshot.xpBoostMultiplier = boost && boost.multiplier > 1 ? boost.multiplier : null;
-    } catch {
-      // Boost lookup is best-effort: leave the key absent so processing
-      // falls back to the live read for XP only; missions stay frozen.
-    }
+
+    // Boost eligibility is read from the authoritative DB inside this
+    // transaction — never Redis — and evaluated against the event
+    // timestamp, not wall-clock processing time. Every new outcome
+    // explicitly records its multiplier or null (no boost); a lookup
+    // failure aborts the VERIFIED tx rather than writing an incomplete
+    // snapshot that would silently fall back to future live state.
+    const boostEffect = await tx.userActiveEffect.findFirst({
+      where: { userId, type: 'xp_boost', expiresAt: { gt: eventTime } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    const boostMeta = boostEffect?.metadata as { multiplier?: unknown } | null;
+    snapshot.xpBoostMultiplier =
+      typeof boostMeta?.multiplier === 'number' && boostMeta.multiplier > 1
+        ? boostMeta.multiplier
+        : null;
+
+    // Freeze this period's mission catalog inside the VERIFIED tx:
+    // every active mission's display/eligibility/settlement terms are
+    // written once per UTC period (first touch wins). Edits schedule
+    // into the next period and every worker pays identical terms for
+    // (mission, date) regardless of processing order. No-op before the
+    // rollout boundary — legacy snapshot terms govern those periods.
+    await this.ensureMissionPeriodTerms(periodDay, tx);
+
     await tx.taskCompletionOutcome.upsert({
       where: { completionId },
       create: {
@@ -848,10 +900,149 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   // ─── Daily missions ────────────────────────────────────────
 
-  async getDailyMissions(userId: string) {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+  /**
+   * Freeze the period's mission catalog INSIDE a caller-owned
+   * transaction: marker row + complete term set commit or roll back
+   * together, so a failed initialization leaves neither a marker nor
+   * partial terms and the next attempt starts clean. Only the
+   * transaction that inserts the mission_period_catalogs marker writes
+   * term rows — the catalog is all-or-nothing and a mission created
+   * mid-period can never acquire a current-period term. Scheduled
+   * next-period rows are preserved (term createMany skips existing
+   * mission rows, keeping the values scheduled at mutation time =
+   * intended period-start config). A period with zero active missions
+   * is a legitimate empty catalog — the marker still commits.
+   */
+  private async freezeMissionPeriodCatalogTx(
+    tx: Prisma.TransactionClient,
+    periodDay: Date,
+  ) {
+    const { count } = await tx.missionPeriodCatalog.createMany({
+      data: [{ periodDate: periodDay }],
+      skipDuplicates: true,
+    });
+    if (count === 0) return; // period already frozen atomically
+    const missions = await tx.dailyMission.findMany({
+      where: { isActive: true },
+    });
+    if (missions.length === 0) return;
+    await tx.missionPeriodTerm.createMany({
+      data: missions.map((m) => ({
+        missionId: m.id,
+        periodDate: periodDay,
+        name: m.name,
+        description: m.description,
+        type: m.type,
+        icon: m.icon,
+        requirement: m.requirement,
+        creditReward: m.creditReward,
+        xpReward: m.xpReward,
+        sortOrder: m.sortOrder,
+      })),
+      skipDuplicates: true,
+    });
+  }
 
+  /**
+   * Materialize the period catalog atomically. Callers holding a
+   * transaction (VERIFIED outcome tx, admin mutation tx) pass it and
+   * the freeze joins that transaction; callers without one get a
+   * dedicated transaction so marker and terms can never commit
+   * separately. No-op for periods before the rollout boundary.
+   */
+  private async ensureMissionPeriodTerms(periodDay: Date, tx?: Prisma.TransactionClient) {
+    if (periodDay.getTime() < missionPeriodEffectiveDate().getTime()) return;
+    if (tx) {
+      await this.freezeMissionPeriodCatalogTx(tx, periodDay);
+      return;
+    }
+    await withTransactionRetry(this.prisma, (t) => this.freezeMissionPeriodCatalogTx(t, periodDay));
+  }
+
+  /**
+   * Write a mission's terms for the NEXT UTC period — used by admin
+   * mutations so config changes take effect at the period boundary
+   * instead of silently altering the current one. `active` mirrors the
+   * mission's post-mutation isActive: an inactive/retired mission gets
+   * no next-period row (any stale one is removed by the caller).
+   */
+  private async scheduleMissionPeriodTerm(
+    mission: { id: string; name: string; description: string; type: MissionType; icon: string | null; requirement: number; creditReward: number; xpReward: number; sortOrder: number; isActive: boolean },
+    periodDay: Date,
+    tx: Prisma.TransactionClient,
+  ) {
+    if (periodDay.getTime() < missionPeriodEffectiveDate().getTime()) return;
+    if (!mission.isActive) {
+      await tx.missionPeriodTerm.deleteMany({
+        where: { missionId: mission.id, periodDate: periodDay },
+      });
+      return;
+    }
+    await tx.missionPeriodTerm.upsert({
+      where: { missionId_periodDate: { missionId: mission.id, periodDate: periodDay } },
+      create: {
+        missionId: mission.id,
+        periodDate: periodDay,
+        name: mission.name,
+        description: mission.description,
+        type: mission.type,
+        icon: mission.icon,
+        requirement: mission.requirement,
+        creditReward: mission.creditReward,
+        xpReward: mission.xpReward,
+        sortOrder: mission.sortOrder,
+      },
+      update: {
+        name: mission.name,
+        description: mission.description,
+        type: mission.type,
+        icon: mission.icon,
+        requirement: mission.requirement,
+        creditReward: mission.creditReward,
+        xpReward: mission.xpReward,
+        sortOrder: mission.sortOrder,
+      },
+    });
+  }
+
+  async getDailyMissions(userId: string, at?: Date) {
+    const today = utcDay(at ?? new Date());
+
+    // Period-catalog policy: display, eligibility, progress and
+    // settlement all read the same frozen per-period terms — a mid-day
+    // edit cannot make the UI promise different rewards than payout.
+    if (today.getTime() >= missionPeriodEffectiveDate().getTime()) {
+      await this.ensureMissionPeriodTerms(today);
+      const terms = await this.prisma.missionPeriodTerm.findMany({
+        where: { periodDate: today },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+      const progress = await this.prisma.userMissionProgress.findMany({
+        where: { userId, date: today },
+      });
+      const progressMap = new Map(progress.map((p) => [p.missionId, p]));
+      return terms.map((t) => {
+        const p = progressMap.get(t.missionId);
+        return {
+          id: t.missionId,
+          name: t.name,
+          description: t.description,
+          type: t.type,
+          icon: t.icon,
+          requirement: t.requirement,
+          creditReward: t.creditReward,
+          xpReward: t.xpReward,
+          isActive: true,
+          sortOrder: t.sortOrder,
+          createdAt: t.createdAt,
+          progress: p?.progress ?? 0,
+          isCompleted: p?.isCompleted ?? false,
+          completedAt: p?.completedAt ?? null,
+        };
+      });
+    }
+
+    // Legacy path (pre-rollout periods): live catalog + live progress.
     const missions = await this.prisma.dailyMission.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: 'asc' },
@@ -1331,11 +1522,34 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     // processing delayed/recovered events (e.g. task outcomes) pass the
     // authoritative event timestamp so a late recovery attributes
     // progress to the correct day instead of the processing day.
-    const day = new Date(opts?.date ?? Date.now());
-    day.setUTCHours(0, 0, 0, 0);
+    const day = utcDay(opts?.date ?? new Date());
 
     let missions: MissionRewardTerms[];
-    if (opts?.missions) {
+    if (day.getTime() >= missionPeriodEffectiveDate().getTime()) {
+      // Period-catalog policy: the frozen per-period term rows ARE the
+      // eligibility + reward definition for (mission, date). Display,
+      // progress and settlement all read them, so a mid-period config
+      // edit cannot change today's payout by processing order, a mission
+      // created mid-period has no term row and cannot join, a disabled
+      // mission keeps its row and still pays earned progress, and a
+      // deleted mission's preserved terms still settle. Caller-supplied
+      // snapshot terms are intentionally ignored on this path.
+      await this.ensureMissionPeriodTerms(day);
+      const terms = await this.prisma.missionPeriodTerm.findMany({
+        where: { periodDate: day, type },
+      });
+      missions = terms.map((t) => ({
+        id: t.missionId,
+        name: t.name,
+        requirement: t.requirement,
+        creditReward: t.creditReward,
+        xpReward: t.xpReward,
+      }));
+    } else if (opts?.missions) {
+      // Legacy path (pre-rollout periods): frozen terms from a task
+      // outcome's reward snapshot — delayed recovery cannot acquire
+      // later missions or lose rewards to config edits. Entries whose
+      // mission row was deleted are skipped.
       const ids = opts.missions.map((m) => m.id);
       const alive = await this.prisma.dailyMission.findMany({
         where: { id: { in: ids } },
@@ -1689,19 +1903,34 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.dailyMission.findMany({ orderBy: { sortOrder: 'asc' } });
   }
 
+  // Mission catalog mutations are period-aware once the rollout
+  // boundary passes: the CURRENT period's catalog is materialized
+  // before mutating (so today's eligibility/display/settlement are
+  // already frozen), the live row is updated, and the post-mutation
+  // state is scheduled into the NEXT UTC period. Before the boundary
+  // the mutations behave exactly as before (immediate effect).
+
   async adminCreateMission(body: Record<string, unknown>) {
     const { name, description, type, requirement, creditReward, xpReward, isActive, sortOrder } = body;
-    return this.prisma.dailyMission.create({
-      data: {
-        name: String(name),
-        description: String(description),
-        type: type as MissionType,
-        requirement: Number(requirement),
-        creditReward: Number(creditReward ?? 0),
-        xpReward: Number(xpReward ?? 0),
-        isActive: isActive !== false,
-        sortOrder: Number(sortOrder ?? 0),
-      },
+    return withTransactionRetry(this.prisma, async (tx) => {
+      const today = utcDay(new Date());
+      await this.ensureMissionPeriodTerms(today, tx);
+      const mission = await tx.dailyMission.create({
+        data: {
+          name: String(name),
+          description: String(description),
+          type: type as MissionType,
+          requirement: Number(requirement),
+          creditReward: Number(creditReward ?? 0),
+          xpReward: Number(xpReward ?? 0),
+          isActive: isActive !== false,
+          sortOrder: Number(sortOrder ?? 0),
+        },
+      });
+      // A mission created mid-period joins the catalog NEXT period —
+      // today's frozen set is untouched. Inactive missions get no row.
+      await this.scheduleMissionPeriodTerm(mission, nextUtcDay(today), tx);
+      return mission;
     });
   }
 
@@ -1711,12 +1940,30 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     for (const key of allowedFields) {
       if (key in body) data[key] = body[key];
     }
-    return this.prisma.dailyMission.update({ where: { id }, data });
+    return withTransactionRetry(this.prisma, async (tx) => {
+      const today = utcDay(new Date());
+      await this.ensureMissionPeriodTerms(today, tx);
+      const mission = await tx.dailyMission.update({ where: { id }, data });
+      // Changes to active status, type, requirements or rewards apply
+      // from the next UTC period; today keeps its frozen terms.
+      await this.scheduleMissionPeriodTerm(mission, nextUtcDay(today), tx);
+      return mission;
+    });
   }
 
   async adminDeleteMission(id: string) {
-    await this.prisma.dailyMission.delete({ where: { id } });
-    return { deleted: true };
+    return withTransactionRetry(this.prisma, async (tx) => {
+      const today = utcDay(new Date());
+      await this.ensureMissionPeriodTerms(today, tx);
+      // Missions are always RETIRED, never hard-deleted: user_mission_
+      // progress rows FK-reference daily_missions, and today's frozen
+      // term rows must keep settling in-flight progress. Retirement
+      // removes the mission from every future catalog while preserving
+      // the referenced historical definition.
+      const mission = await tx.dailyMission.update({ where: { id }, data: { isActive: false } });
+      await this.scheduleMissionPeriodTerm({ ...mission, isActive: false }, nextUtcDay(today), tx);
+      return { deleted: false, retired: true, mission };
+    });
   }
 
   // ─── Spin the Wheel (Sprint 3) ─────────────────────────────

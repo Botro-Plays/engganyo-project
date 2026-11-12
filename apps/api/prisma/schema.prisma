@@ -979,6 +979,45 @@ model TaskCompletionOutcome {
   @@map("task_completion_outcomes")
 }
 
+// Freeze marker for one UTC period's mission catalog. Inserted once by
+// the first touch of the period (missions read, VERIFIED outcome, or
+// admin mutation); only the winner writes mission_period_terms, so the
+// catalog is all-or-nothing — missions created mid-period can never
+// acquire a term row for the current period.
+model MissionPeriodCatalog {
+  periodDate DateTime @id @map("period_date") @db.Date
+  frozenAt   DateTime @default(now()) @map("frozen_at")
+
+  @@map("mission_period_catalogs")
+}
+
+// Immutable mission catalog for one UTC period. The first touch of the
+// period (daily-missions read, qualifying event, or admin mutation)
+// freezes every active mission's display + eligibility + settlement
+// terms (ON CONFLICT DO NOTHING); later config edits are scheduled into
+// the next period by the admin mutations, so mid-period changes cannot
+// alter today's eligibility and every worker pays identical terms.
+// Rows survive daily_missions deletion — they ARE the referenced
+// historical definition for in-flight progress and payouts.
+model MissionPeriodTerm {
+  id           String   @id @default(cuid())
+  missionId    String   @map("mission_id")
+  periodDate   DateTime @map("period_date") @db.Date
+  name         String
+  description  String   @default("")
+  type         String
+  icon         String?
+  requirement  Int
+  creditReward Int      @map("credit_reward")
+  xpReward     Int      @map("xp_reward")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([missionId, periodDate])
+  @@index([periodDate, type])
+  @@map("mission_period_terms")
+}
+
 // Per-mission qualifying-event dedupe. A repeated delivery of the same
 // source event (e.g. outcome recovery re-running mission progress for a
 // completionId) must not count the task twice; distinct events each

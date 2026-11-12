@@ -77,7 +77,36 @@ run('reward atomicity — real PostgreSQL', () => {
   const balanceOf = async (uid: string) =>
     (await prisma.wallet.findUniqueOrThrow({ where: { userId: uid } })).balance;
 
+  // Pin the period-catalog rollout boundary far in the future so every
+  // pre-existing test exercises the LEGACY path regardless of the date
+  // CI runs on. Period-catalog tests opt in per-test via
+  // withPeriodCatalog().
+  const EFFECTIVE_ENV = 'MISSION_PERIOD_TERMS_EFFECTIVE';
+  let savedEffective: string | undefined;
+
+  // The period catalog is keyed by real UTC day and shared across the
+  // suite — reset it so each period-catalog test freezes a fresh
+  // catalog containing exactly the missions it created.
+  const resetPeriodCatalog = async () => {
+    await prisma.missionPeriodTerm.deleteMany({});
+    await prisma.missionPeriodCatalog.deleteMany({});
+  };
+
+  const withPeriodCatalog = async (fn: () => Promise<void>) => {
+    const prev = process.env[EFFECTIVE_ENV];
+    process.env[EFFECTIVE_ENV] = '2020-01-01'; // every real date is post-boundary
+    try {
+      await resetPeriodCatalog();
+      await fn();
+    } finally {
+      if (prev === undefined) delete process.env[EFFECTIVE_ENV];
+      else process.env[EFFECTIVE_ENV] = prev;
+    }
+  };
+
   beforeAll(async () => {
+    savedEffective = process.env[EFFECTIVE_ENV];
+    process.env[EFFECTIVE_ENV] = '2999-01-01';
     prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
     referralsStub = {
       qualifyReferral: jest.fn(async () => {}),
@@ -101,6 +130,8 @@ run('reward atomicity — real PostgreSQL', () => {
   });
 
   afterAll(async () => {
+    if (savedEffective === undefined) delete process.env[EFFECTIVE_ENV];
+    else process.env[EFFECTIVE_ENV] = savedEffective;
     await prisma.$disconnect();
   });
 
@@ -337,15 +368,18 @@ run('reward atomicity — real PostgreSQL', () => {
 
   // task_completions_single_offer requires exactly one of
   // campaign_id/challenge_id — completions need a campaign parent.
-  // One shared campaign is fine: (campaignId, userId) is unique and
-  // every test uses a fresh user.
-  let outcomeCampaignId: string | null = null;
-  const ensureOutcomeCampaign = async (uid: string) => {
-    if (outcomeCampaignId) return outcomeCampaignId;
+  // One shared campaign per variant is fine: (campaignId, userId) is
+  // unique and every test uses a fresh user (variant allows a second
+  // completion per user for period-term tests).
+  const outcomeCampaignIds = new Map<string, string>();
+  const ensureOutcomeCampaign = async (uid: string, variant = '') => {
+    const key = variant || 'default';
+    const cached = outcomeCampaignIds.get(key);
+    if (cached) return cached;
     const c = await prisma.campaign.create({
       data: {
         userId: uid,
-        title: `${PREFIX}outcome-campaign`,
+        title: `${PREFIX}outcome-campaign${variant ? `-${variant}` : ''}`,
         taskType: TaskType.GOOGLE_REVIEW,
         targetUrl: 'https://example.com/review',
         totalSlots: 1000,
@@ -358,15 +392,15 @@ run('reward atomicity — real PostgreSQL', () => {
         status: 'ACTIVE',
       },
     });
-    outcomeCampaignId = c.id;
+    outcomeCampaignIds.set(key, c.id);
     return c.id;
   };
 
-  const mkVerifiedCompletion = async (uid: string, status: 'VERIFIED' | 'SUBMITTED' = 'VERIFIED') =>
+  const mkVerifiedCompletion = async (uid: string, status: 'VERIFIED' | 'SUBMITTED' = 'VERIFIED', variant = '') =>
     prisma.taskCompletion.create({
       data: {
         userId: uid,
-        campaignId: await ensureOutcomeCampaign(uid),
+        campaignId: await ensureOutcomeCampaign(uid, variant),
         status,
         verifiedAt: status === 'VERIFIED' ? new Date() : null,
         verifiedBy: status === 'VERIFIED' ? 'system' : null,
@@ -833,16 +867,27 @@ run('reward atomicity — real PostgreSQL', () => {
   });
 
   it('XP boost frozen at VERIFIED: expiry before recovery cannot change the award; later activation cannot add one', async () => {
-    const boostMock = (service as any).storeService.getActiveXpBoost as jest.Mock;
+    // Boost eligibility is read from user_active_effects inside the
+    // VERIFIED tx — create/delete rows to move the boost across the
+    // completion→recovery boundary.
+    const mkBoost = (userId: string, multiplier: number, ttlMs: number) =>
+      prisma.userActiveEffect.create({
+        data: {
+          userId,
+          type: 'xp_boost',
+          metadata: { multiplier, expiresAt: new Date(Date.now() + ttlMs).toISOString() },
+          expiresAt: new Date(Date.now() + ttlMs),
+        },
+      });
 
     // Case 1: 2x boost active at the qualifying event, gone by recovery.
     const u1 = await mkUser();
+    const boost1 = await mkBoost(u1.id, 2, 3600_000);
     const c1 = await mkVerifiedCompletion(u1.id);
-    boostMock.mockResolvedValue({ multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() });
     await prisma.$transaction(async (tx) => {
       await service.recordTaskCompletionOutcome(tx as never, u1.id, c1.id);
     });
-    boostMock.mockResolvedValue(null); // boost "expired" before processing
+    await prisma.userActiveEffect.delete({ where: { id: boost1.id } }); // "expired" before processing
     await service.awardTaskCompletionOutcome(u1.id, c1.id);
 
     const xp1 = await prisma.xpEvent.findFirstOrThrow({
@@ -855,11 +900,10 @@ run('reward atomicity — real PostgreSQL', () => {
     // Case 2: no boost at the qualifying event, 2x appears before recovery.
     const u2 = await mkUser();
     const c2 = await mkVerifiedCompletion(u2.id);
-    boostMock.mockResolvedValue(null);
     await prisma.$transaction(async (tx) => {
       await service.recordTaskCompletionOutcome(tx as never, u2.id, c2.id);
     });
-    boostMock.mockResolvedValue({ multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() });
+    await mkBoost(u2.id, 2, 3600_000); // "activated" after recording
     await service.awardTaskCompletionOutcome(u2.id, c2.id);
 
     const xp2 = await prisma.xpEvent.findFirstOrThrow({
@@ -867,8 +911,6 @@ run('reward atomicity — real PostgreSQL', () => {
     });
     expect(xp2.amount).toBe(50); // frozen "no boost" — later activation irrelevant
     expect(xp2.boostMultiplier).toBeNull();
-
-    boostMock.mockResolvedValue(null);
   });
 
   it('recovery scan skips live leases before the batch limit — later claimable rows are not starved', async () => {
@@ -978,4 +1020,565 @@ run('reward atomicity — real PostgreSQL', () => {
       await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } }),
     ).toBe(1);
   });
+
+  it('boost snapshot reads authoritative DB inside VERIFIED tx — Redis failure cannot corrupt it', async () => {
+    const boostMock = (service as any).storeService.getActiveXpBoost as jest.Mock;
+    boostMock.mockRejectedValue(new Error('redis down')); // cache path dead
+
+    const u = await mkUser();
+    // Active 2x boost in the authoritative table, expiring after the event.
+    await prisma.userActiveEffect.create({
+      data: {
+        userId: u.id,
+        type: 'xp_boost',
+        metadata: { multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() },
+        expiresAt: new Date(Date.now() + 3600_000),
+      },
+    });
+    // An already-expired boost must NOT be eligible.
+    await prisma.userActiveEffect.create({
+      data: {
+        userId: u.id,
+        type: 'xp_boost',
+        metadata: { multiplier: 5, expiresAt: new Date(Date.now() - 3600_000).toISOString() },
+        expiresAt: new Date(Date.now() - 3600_000),
+      },
+    });
+
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+    const snap = outcome.rewardSnapshot as { xpBoostMultiplier?: number | null };
+    // Explicitly recorded from DB — not absent (no live-state fallback).
+    expect(snap.xpBoostMultiplier).toBe(2);
+
+    // Recovery pays the frozen multiplier even though Redis is still down.
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+    const xp = await prisma.xpEvent.findFirstOrThrow({
+      where: { userId: u.id, source: 'task_completion', referenceId: completion.id },
+    });
+    expect(xp.amount).toBe(100);
+    expect(xp.boostMultiplier).toBe(2);
+
+    // User with only an expired boost records explicit null.
+    const u2 = await mkUser();
+    await prisma.userActiveEffect.create({
+      data: {
+        userId: u2.id,
+        type: 'xp_boost',
+        metadata: { multiplier: 5, expiresAt: new Date(Date.now() - 60_000).toISOString() },
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const c2 = await mkVerifiedCompletion(u2.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u2.id, c2.id);
+    });
+    const o2 = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: c2.id },
+    });
+    expect((o2.rewardSnapshot as { xpBoostMultiplier?: number | null }).xpBoostMultiplier).toBeNull();
+
+    boostMock.mockResolvedValue(null);
+  });
+
+  it('mission period terms freeze once — completions spanning an edit pay identical terms in either processing order', () =>
+    withPeriodCatalog(async () => {
+    // Scenario A: sequential recovery, later completion processed FIRST.
+    const runScenario = async (order: 'early-first' | 'late-first' | 'concurrent') => {
+      // The catalog freezes once per UTC day — reset so this scenario's
+      // mission is inside today's frozen set.
+      await resetPeriodCatalog();
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}period-${order}-mission`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 2,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+
+      const cEarly = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, cEarly.id);
+      });
+      // Config edit between the two qualifying events.
+      await prisma.dailyMission.update({
+        where: { id: mission.id },
+        data: { creditReward: 999, xpReward: 999 },
+      });
+      const cLate = await mkVerifiedCompletion(u.id, 'VERIFIED', 'b');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, cLate.id);
+      });
+
+      // Exactly one period-terms row, holding the FIRST event's terms.
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      const periodRows = await prisma.missionPeriodTerm.findMany({
+        where: { missionId: mission.id, periodDate: today },
+      });
+      expect(periodRows).toHaveLength(1);
+      expect(periodRows[0].creditReward).toBe(50);
+      expect(periodRows[0].xpReward).toBe(25);
+
+      if (order === 'concurrent') {
+        await Promise.all([
+          service.awardTaskCompletionOutcome(u.id, cEarly.id),
+          service.awardTaskCompletionOutcome(u.id, cLate.id),
+        ]);
+      } else if (order === 'late-first') {
+        await service.awardTaskCompletionOutcome(u.id, cLate.id);
+        await service.awardTaskCompletionOutcome(u.id, cEarly.id);
+      } else {
+        await service.awardTaskCompletionOutcome(u.id, cEarly.id);
+        await service.awardTaskCompletionOutcome(u.id, cLate.id);
+      }
+
+      // Both completions counted (progress 2/2) but exactly ONE payout,
+      // at the period-frozen terms — never the edited 999.
+      const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+        where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+      });
+      expect(progress.progress).toBe(2);
+      expect(progress.isCompleted).toBe(true);
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(50);
+      const missionXp = await prisma.xpEvent.findMany({
+        where: { userId: u.id, source: 'mission_complete', referenceId: { startsWith: `${mission.id}:` } },
+      });
+      expect(missionXp).toHaveLength(1);
+      expect(missionXp[0].amount).toBe(25);
+      expect(
+        await prisma.missionProgressEvent.count({
+          where: { missionId: mission.id, sourceId: { in: [cEarly.id, cLate.id] } },
+        }),
+      ).toBe(2);
+    };
+
+    await runScenario('early-first');
+    await runScenario('late-first');
+    await runScenario('concurrent');
+    }));
+
+  it('display matches payout: mid-period reward edit freezes today\'s terms and schedules the change next period', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}display-edit`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 2,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // First touch freezes today's catalog.
+      const before = await service.getDailyMissions(u.id);
+      const shownBefore = before.find((m: any) => m.id === mission.id);
+      expect(shownBefore!.creditReward).toBe(50);
+      expect(shownBefore!.xpReward).toBe(25);
+
+      // Mid-period edit via the admin path.
+      await service.adminUpdateMission(mission.id, { creditReward: 999, xpReward: 999 });
+
+      // Display still shows the frozen terms — not the live edit.
+      const after = await service.getDailyMissions(u.id);
+      const shownAfter = after.find((m: any) => m.id === mission.id);
+      expect(shownAfter!.creditReward).toBe(50);
+      expect(shownAfter!.xpReward).toBe(25);
+
+      // Settlement pays the same frozen terms.
+      const c1 = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
+      const c2 = await mkVerifiedCompletion(u.id, 'VERIFIED', 'b');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, c1.id);
+      });
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, c2.id);
+      });
+      await service.awardTaskCompletionOutcome(u.id, c1.id);
+      await service.awardTaskCompletionOutcome(u.id, c2.id);
+
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(50); // never the edited 999
+      const missionXp = await prisma.xpEvent.findMany({
+        where: { userId: u.id, source: 'mission_complete', referenceId: { startsWith: `${mission.id}:` } },
+      });
+      expect(missionXp).toHaveLength(1);
+      expect(missionXp[0].amount).toBe(25);
+
+      // Next period displays and will pay the edited terms.
+      const nextDay = await service.getDailyMissions(u.id, tomorrow);
+      const shownNext = nextDay.find((m: any) => m.id === mission.id);
+      expect(shownNext!.creditReward).toBe(999);
+      expect(shownNext!.xpReward).toBe(999);
+    }));
+
+  it('mid-period disable keeps today\'s eligibility; mission retires next period', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}disable-midday`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 10,
+          xpReward: 5,
+          isActive: true,
+        },
+      });
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await service.getDailyMissions(u.id); // freeze today
+      await service.adminUpdateMission(mission.id, { isActive: false });
+
+      // Today's frozen catalog still offers it.
+      const todayDisplay = await service.getDailyMissions(u.id);
+      expect(todayDisplay.find((m: any) => m.id === mission.id)).toBeDefined();
+
+      // And it still settles earned progress.
+      const c = await mkVerifiedCompletion(u.id);
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, c.id);
+      });
+      await service.awardTaskCompletionOutcome(u.id, c.id);
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(10);
+
+      // Tomorrow it is gone from the catalog.
+      const nextDay = await service.getDailyMissions(u.id, tomorrow);
+      expect(nextDay.find((m: any) => m.id === mission.id)).toBeUndefined();
+    }));
+
+  it('mid-period type change cannot alter today\'s eligibility; new type applies next period', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}type-change`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 10,
+          xpReward: 5,
+          isActive: true,
+        },
+      });
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await service.getDailyMissions(u.id); // freeze today as COMPLETE_N_TASKS
+      await service.adminUpdateMission(mission.id, { type: MissionType.EARN_N_CREDITS });
+
+      // A task completion still counts it today under the frozen type.
+      const c = await mkVerifiedCompletion(u.id);
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, c.id);
+      });
+      await service.awardTaskCompletionOutcome(u.id, c.id);
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(10);
+
+      // Display: frozen type today, edited type tomorrow.
+      const todayDisplay = await service.getDailyMissions(u.id);
+      expect(todayDisplay.find((m: any) => m.id === mission.id)!.type).toBe('COMPLETE_N_TASKS');
+      const nextDay = await service.getDailyMissions(u.id, tomorrow);
+      expect(nextDay.find((m: any) => m.id === mission.id)!.type).toBe('EARN_N_CREDITS');
+    }));
+
+  it('a mission created mid-period joins the catalog next period, not today', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      await service.getDailyMissions(u.id); // freeze today first
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      const mission = await service.adminCreateMission({
+        name: `${PREFIX}created-midday`,
+        description: 'test',
+        type: MissionType.COMPLETE_N_TASKS,
+        requirement: 1,
+        creditReward: 10,
+        xpReward: 5,
+      });
+
+      const todayDisplay = await service.getDailyMissions(u.id);
+      expect(todayDisplay.find((m: any) => m.id === mission.id)).toBeUndefined();
+      const nextDay = await service.getDailyMissions(u.id, tomorrow);
+      expect(nextDay.find((m: any) => m.id === mission.id)).toBeDefined();
+
+      // A task completion today does not advance it.
+      const c = await mkVerifiedCompletion(u.id);
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, c.id);
+      });
+      await service.awardTaskCompletionOutcome(u.id, c.id);
+      const progress = await prisma.userMissionProgress.findFirst({
+        where: { userId: u.id, missionId: mission.id },
+      });
+      expect(progress).toBeNull();
+    }));
+
+  it('deletion retires missions and preserves frozen terms — in-flight progress still settles', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Both missions exist BEFORE today's catalog freezes.
+      const withProgress = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}delete-with-progress`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 10,
+          xpReward: 5,
+          isActive: true,
+        },
+      });
+      const noProgress = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}delete-no-progress`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 7,
+          xpReward: 3,
+          isActive: true,
+        },
+      });
+      await service.getDailyMissions(u.id); // freeze today — both inside
+
+      // Case A: mission WITH progress → retired, not deleted.
+      const cA = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, cA.id);
+      });
+      await service.awardTaskCompletionOutcome(u.id, cA.id);
+      expect(
+        await prisma.userMissionProgress.count({ where: { userId: u.id, missionId: withProgress.id } }),
+      ).toBe(1);
+
+      const delA = await service.adminDeleteMission(withProgress.id);
+      expect(delA.retired).toBe(true);
+      const rowA = await prisma.dailyMission.findUniqueOrThrow({ where: { id: withProgress.id } });
+      expect(rowA.isActive).toBe(false); // FK target preserved
+      // Still displayed today (frozen catalog), gone tomorrow.
+      expect((await service.getDailyMissions(u.id)).find((m: any) => m.id === withProgress.id)).toBeDefined();
+      expect((await service.getDailyMissions(u.id, tomorrow)).find((m: any) => m.id === withProgress.id)).toBeUndefined();
+
+      // Case B: mission WITHOUT progress → also retired (deletion is
+      // always retirement to preserve FK targets and frozen terms),
+      // and today's frozen terms still settle a completion.
+      const delB = await service.adminDeleteMission(noProgress.id);
+      expect(delB.retired).toBe(true);
+      const rowB = await prisma.dailyMission.findUniqueOrThrow({ where: { id: noProgress.id } });
+      expect(rowB.isActive).toBe(false);
+
+      // The frozen term row survives and still pays a completion today.
+      const termB = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: noProgress.id, periodDate: new Date(new Date().setUTCHours(0, 0, 0, 0)) },
+      });
+      expect(termB).not.toBeNull();
+      expect(termB!.creditReward).toBe(7);
+
+      const cB = await mkVerifiedCompletion(u.id, 'VERIFIED', 'b');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, cB.id);
+      });
+      await service.awardTaskCompletionOutcome(u.id, cB.id);
+      const payoutsB = await prisma.transaction.findMany({
+        where: { referenceId: noProgress.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payoutsB).toHaveLength(1);
+      expect(payoutsB[0].amount).toBe(7);
+      expect((await service.getDailyMissions(u.id, tomorrow)).find((m: any) => m.id === noProgress.id)).toBeUndefined();
+    }));
+
+  it('pre-boundary periods keep legacy behavior: live display, live/snapshot settlement, no period terms', async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}legacy-day`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 10,
+          xpReward: 5,
+          isActive: true,
+        },
+      });
+
+      // Legacy display follows the live row immediately.
+      await service.adminUpdateMission(mission.id, { creditReward: 42 });
+      const display = await service.getDailyMissions(u.id);
+      expect(display.find((m: any) => m.id === mission.id)!.creditReward).toBe(42);
+
+      // Legacy settlement uses live config too (no opts.missions).
+      await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1);
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(42);
+
+      // No period-term rows were materialized for today.
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      expect(
+        await prisma.missionPeriodTerm.count({ where: { periodDate: today, missionId: mission.id } }),
+      ).toBe(0);
+    });
+
+  it('failed catalog initialization leaves neither marker nor partial terms; the next attempt succeeds', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}freeze-abort`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 10,
+          xpReward: 5,
+          isActive: true,
+        },
+      });
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+
+      // Simulate a crash after the freeze helper ran inside a
+      // transaction: the whole tx — marker AND term rows — must roll
+      // back, leaving no partially built catalog behind.
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await (service as any).freezeMissionPeriodCatalogTx(tx, today);
+          throw new Error('simulated crash after freeze');
+        }),
+      ).rejects.toThrow('simulated crash');
+
+      expect(await prisma.missionPeriodCatalog.count({ where: { periodDate: today } })).toBe(0);
+      expect(await prisma.missionPeriodTerm.count({ where: { periodDate: today } })).toBe(0);
+
+      // The next attempt materializes the complete catalog cleanly.
+      const missions = await service.getDailyMissions(u.id);
+      expect(missions.length).toBeGreaterThan(0);
+      expect(await prisma.missionPeriodCatalog.count({ where: { periodDate: today } })).toBe(1);
+      const activeCount = await prisma.dailyMission.count({ where: { isActive: true } });
+      expect(await prisma.missionPeriodTerm.count({ where: { periodDate: today } })).toBe(activeCount);
+    }));
+
+  it('concurrent first-touch readers and reward processors freeze one complete catalog and pay once', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}freeze-race`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 2,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+      const c1 = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
+      const c2 = await mkVerifiedCompletion(u.id, 'VERIFIED', 'b');
+      // Pre-create outcome rows so processors don't race the upsert.
+      await prisma.taskCompletionOutcome.createMany({
+        data: [
+          { completionId: c1.id, userId: u.id },
+          { completionId: c2.id, userId: u.id },
+        ],
+      });
+
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      await Promise.all([
+        ...Array.from({ length: 4 }, () => service.getDailyMissions(u.id)),
+        service.awardTaskCompletionOutcome(u.id, c1.id),
+        service.awardTaskCompletionOutcome(u.id, c2.id),
+      ]);
+
+      // Exactly one freeze, one complete catalog, one payout.
+      expect(await prisma.missionPeriodCatalog.count({ where: { periodDate: today } })).toBe(1);
+      const term = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: mission.id, periodDate: today },
+      });
+      expect(term).not.toBeNull();
+      expect(term!.creditReward).toBe(50);
+
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(50);
+      const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+        where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+      });
+      expect(progress.progress).toBe(2);
+      expect(progress.isCompleted).toBe(true);
+    }));
+
+  it('admin mutation racing first-touch freeze keeps pre-edit terms today and schedules next period', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}freeze-admin-race`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+      // Race the mutation against concurrent first-touch readers. The
+      // admin tx freezes-then-mutates atomically, so today's terms are
+      // always the pre-edit values regardless of who wins the marker.
+      await Promise.all([
+        service.adminUpdateMission(mission.id, { creditReward: 777, xpReward: 777 }),
+        service.getDailyMissions(u.id),
+        service.getDailyMissions(u.id),
+      ]);
+
+      const todayTerm = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: mission.id, periodDate: today },
+      });
+      expect(todayTerm).not.toBeNull();
+      expect(todayTerm!.creditReward).toBe(50);
+      expect(todayTerm!.xpReward).toBe(25);
+
+      const tomorrowTerm = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: mission.id, periodDate: tomorrow },
+      });
+      expect(tomorrowTerm).not.toBeNull();
+      expect(tomorrowTerm!.creditReward).toBe(777);
+      expect(tomorrowTerm!.xpReward).toBe(777);
+    }));
 });
