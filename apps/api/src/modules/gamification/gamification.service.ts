@@ -16,6 +16,27 @@ export const getLevelFromXp = (xp: number) => Math.floor(Math.sqrt(xp / 100)) + 
 export const getXpForLevel = (level: number) => Math.pow(level - 1, 2) * 100;
 export const getXpForNextLevel = (level: number) => Math.pow(level, 2) * 100;
 
+/** Mission terms frozen into a task outcome's reward snapshot. */
+interface MissionRewardTerms {
+  id: string;
+  name: string;
+  requirement: number;
+  creditReward: number;
+  xpReward: number;
+}
+
+/**
+ * Reward terms bound to the qualifying VERIFIED event, persisted on the
+ * outcome row inside the verification transaction. Missions listed here
+ * were active at that instant with these exact terms; xpBoostMultiplier
+ * is the boost observed then (null = none, absent = unknown → live read).
+ * A NULL snapshot (legacy/defensive rows) falls back to live config.
+ */
+interface TaskOutcomeRewardSnapshot {
+  missions?: MissionRewardTerms[];
+  xpBoostMultiplier?: number | null;
+}
+
 // ─── XP per action ────────────────────────────────────────────
 export const XP_REWARDS = {
   TASK_COMPLETION:  50,
@@ -171,13 +192,21 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     referenceId?: string,
     description?: string,
     tx?: Prisma.TransactionClient,
+    // XP boost policy: callers replaying a delayed qualifying event pass
+    // the multiplier captured at that event so retries/recovery cannot
+    // change the reward — undefined reads the currently active boost,
+    // null means "no boost applied at the event", a number is the frozen
+    // multiplier.
+    boostOverride?: number | null,
   ) {
-    // Apply active XP boost multiplier if present (DB-backed with Redis cache)
-    const xpBoost = await this.storeService.getActiveXpBoost(userId);
-    let boostedAmount = amount;
-    if (xpBoost && xpBoost.multiplier > 1) {
-      boostedAmount = Math.floor(amount * xpBoost.multiplier);
+    let boostMultiplier: number | null = null;
+    if (boostOverride !== undefined) {
+      boostMultiplier = boostOverride != null && boostOverride > 1 ? boostOverride : null;
+    } else {
+      const xpBoost = await this.storeService.getActiveXpBoost(userId);
+      boostMultiplier = xpBoost && xpBoost.multiplier > 1 ? xpBoost.multiplier : null;
     }
+    const boostedAmount = boostMultiplier != null ? Math.floor(amount * boostMultiplier) : amount;
 
     const apply = async (t: Prisma.TransactionClient) => {
       // Serialize the read-modify-write on the user row. FOR UPDATE is
@@ -219,7 +248,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
           userId,
           amount: boostedAmount,
           baseAmount: amount,
-          boostMultiplier: xpBoost && xpBoost.multiplier > 1 ? xpBoost.multiplier : null,
+          boostMultiplier,
           source,
           referenceId,
           description,
@@ -416,9 +445,32 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     completionId: string,
   ) {
+    // Freeze the reward terms that apply to THIS qualifying event inside
+    // the VERIFIED transaction: the missions active right now (with their
+    // current requirement/credit/xp terms) and the XP boost multiplier
+    // observed now. Delayed recovery replays these terms verbatim — a
+    // mission created afterward cannot join, a later edit/disable cannot
+    // change or erase an earned reward, and a boost that expires before
+    // recovery still applies to this event's XP.
+    const missions = await tx.dailyMission.findMany({
+      where: { type: MissionType.COMPLETE_N_TASKS, isActive: true },
+      select: { id: true, name: true, requirement: true, creditReward: true, xpReward: true },
+    });
+    const snapshot: TaskOutcomeRewardSnapshot = { missions };
+    try {
+      const boost = await this.storeService.getActiveXpBoost(userId);
+      snapshot.xpBoostMultiplier = boost && boost.multiplier > 1 ? boost.multiplier : null;
+    } catch {
+      // Boost lookup is best-effort: leave the key absent so processing
+      // falls back to the live read for XP only; missions stay frozen.
+    }
     await tx.taskCompletionOutcome.upsert({
       where: { completionId },
-      create: { completionId, userId },
+      create: {
+        completionId,
+        userId,
+        rewardSnapshot: snapshot as Prisma.InputJsonValue,
+      },
       update: {},
     });
   }
@@ -479,9 +531,12 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    * Mission progress is attributed to the completion's VERIFIED UTC
    * date (verifiedAt, falling back to createdAt), NOT the processing
    * day — a delayed recovery can never advance a later day's mission.
-   * Missions are evaluated against the config active at processing
-   * time; a mission created after the verified date can still receive
-   * the event (progress row is dated to the verified day).
+   * Mission eligibility and reward terms come from the snapshot frozen
+   * at the VERIFIED event (reward_snapshot): missions created after it
+   * cannot join and later edits/disables cannot change or erase an
+   * earned reward. Outcomes without a snapshot (recorded before this
+   * column existed, or the defensive upsert path) fall back to the
+   * missions active at processing time — the explicit legacy policy.
    *
    * Each effect is tracked by its own flag, committed independently:
    * a crash after an effect commits but before its flag update simply
@@ -542,6 +597,12 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     // not the processing day.
     const missionDate = completion.verifiedAt ?? completion.createdAt;
 
+    // Reward terms frozen at the qualifying event. NULL snapshot =
+    // legacy/defensive row → live config + live boost (documented
+    // fallback for outcomes recorded before snapshots existed).
+    const snapshot = (fresh.rewardSnapshot ?? null) as TaskOutcomeRewardSnapshot | null;
+    const boostOverride = snapshot ? snapshot.xpBoostMultiplier : undefined;
+
     const effects: Array<{
       key: 'xpSettled' | 'vpSettled' | 'missionSettled' | 'achievementsSettled' | 'referralSettled';
       name: string;
@@ -550,7 +611,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       {
         key: 'xpSettled',
         name: 'xp',
-        run: () => this.awardXp(fresh.userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', fresh.completionId),
+        run: () => this.awardXp(fresh.userId, XP_REWARDS.TASK_COMPLETION, 'task_completion', fresh.completionId, undefined, undefined, boostOverride),
       },
       {
         key: 'vpSettled',
@@ -562,12 +623,17 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         name: 'mission',
         // completionId is the mission-event dedupe identity — outcome
         // recovery can never count the same task twice.
-        run: () => this.updateMissionProgress(fresh.userId, MissionType.COMPLETE_N_TASKS, 1, { sourceId: fresh.completionId, date: missionDate }),
+        run: () => this.updateMissionProgress(fresh.userId, MissionType.COMPLETE_N_TASKS, 1, {
+          sourceId: fresh.completionId,
+          date: missionDate,
+          missions: snapshot?.missions,
+          boostMultiplier: boostOverride,
+        }),
       },
       {
         key: 'achievementsSettled',
         name: 'achievements',
-        run: () => this.checkAchievements(fresh.userId),
+        run: () => this.checkAchievements(fresh.userId, boostOverride),
       },
       {
         key: 'referralSettled',
@@ -643,9 +709,17 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    * batch, and settled effects are never re-run.
    */
   async processPendingTaskOutcomes(limit = 50) {
+    // Claimable-only scan: the WHERE clause mirrors the atomic claim's
+    // predicate (PENDING + claim absent-or-stale) so rows under a live
+    // lease cannot consume batch slots ahead of recoverable work.
+    // Deterministic order: createdAt then id tiebreak.
+    const staleBefore = new Date(Date.now() - GamificationService.OUTCOME_CLAIM_STALE_MS);
     const pending = await this.prisma.taskCompletionOutcome.findMany({
-      where: { status: 'PENDING' },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        status: 'PENDING',
+        OR: [{ claimedAt: null }, { claimedAt: { lt: staleBefore } }],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
     });
     for (const o of pending) {
@@ -1180,7 +1254,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   // ─── Check & unlock achievements (called after relevant actions) ─
 
-  async checkAchievements(userId: string) {
+  async checkAchievements(userId: string, boostOverride?: number | null) {
     const [user, wallet, unlockedIds] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
@@ -1228,7 +1302,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (qualifies) {
-        await this.unlockAchievement(userId, a.id, a.creditReward, a.xpReward, a.name);
+        await this.unlockAchievement(userId, a.id, a.creditReward, a.xpReward, a.name, undefined, boostOverride);
       }
     }
   }
@@ -1239,7 +1313,19 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     type: MissionType,
     increment = 1,
-    opts?: { sourceId?: string; date?: Date },
+    opts?: {
+      sourceId?: string;
+      date?: Date;
+      // Frozen terms from a task outcome's reward snapshot: when present,
+      // these exact mission IDs/terms are used instead of whatever is
+      // active now — delayed recovery cannot acquire later missions or
+      // lose rewards to config edits. Entries whose mission row was
+      // deleted are skipped.
+      missions?: MissionRewardTerms[];
+      // Frozen XP boost multiplier for mission XP (same qualifying-event
+      // policy as the task XP award).
+      boostMultiplier?: number | null;
+    },
   ) {
     // Mission period = the UTC day of the qualifying event. Callers
     // processing delayed/recovered events (e.g. task outcomes) pass the
@@ -1248,9 +1334,20 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     const day = new Date(opts?.date ?? Date.now());
     day.setUTCHours(0, 0, 0, 0);
 
-    const missions = await this.prisma.dailyMission.findMany({
-      where: { type, isActive: true },
-    });
+    let missions: MissionRewardTerms[];
+    if (opts?.missions) {
+      const ids = opts.missions.map((m) => m.id);
+      const alive = await this.prisma.dailyMission.findMany({
+        where: { id: { in: ids } },
+        select: { id: true },
+      });
+      const aliveIds = new Set(alive.map((m) => m.id));
+      missions = opts.missions.filter((m) => aliveIds.has(m.id));
+    } else {
+      missions = await this.prisma.dailyMission.findMany({
+        where: { type, isActive: true },
+      });
+    }
 
     let anyCompleted = false;
     for (const mission of missions) {
@@ -1315,7 +1412,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         // Stable per-day identity: same mission legitimately completes once
         // per day, so the ref must include the date, not just the mission.
         const missionRef = `${mission.id}:${day.toISOString().slice(0, 10)}`;
-        await this.awardXp(userId, mission.xpReward, 'mission_complete', missionRef, mission.name, tx);
+        await this.awardXp(userId, mission.xpReward, 'mission_complete', missionRef, mission.name, tx, opts?.boostMultiplier);
 
         // Durable outbox rows INSIDE the payout tx — they commit or roll
         // back with the reward itself, so there is no window where the
@@ -1393,6 +1490,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     xpReward: number,
     name: string,
     tx?: Prisma.TransactionClient,
+    boostOverride?: number | null,
   ) {
     // Achievement row + credit + XP settle in ONE transaction: the unique
     // (userId, achievementId) constraint is the exactly-once guard — a
@@ -1420,7 +1518,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (xpReward > 0) {
-        await this.awardXp(userId, xpReward, 'achievement', achievementId, name, t);
+        await this.awardXp(userId, xpReward, 'achievement', achievementId, name, t, boostOverride);
       }
 
       // Durable outbox — commits with the settlement, delivered post-commit.
