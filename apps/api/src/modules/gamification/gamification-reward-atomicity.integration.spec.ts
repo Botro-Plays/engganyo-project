@@ -1452,4 +1452,133 @@ run('reward atomicity — real PostgreSQL', () => {
         await prisma.missionPeriodTerm.count({ where: { periodDate: today, missionId: mission.id } }),
       ).toBe(0);
     });
+
+  it('failed catalog initialization leaves neither marker nor partial terms; the next attempt succeeds', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}freeze-abort`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 10,
+          xpReward: 5,
+          isActive: true,
+        },
+      });
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+
+      // Simulate a crash after the freeze helper ran inside a
+      // transaction: the whole tx — marker AND term rows — must roll
+      // back, leaving no partially built catalog behind.
+      await expect(
+        prisma.$transaction(async (tx) => {
+          await (service as any).freezeMissionPeriodCatalogTx(tx, today);
+          throw new Error('simulated crash after freeze');
+        }),
+      ).rejects.toThrow('simulated crash');
+
+      expect(await prisma.missionPeriodCatalog.count({ where: { periodDate: today } })).toBe(0);
+      expect(await prisma.missionPeriodTerm.count({ where: { periodDate: today } })).toBe(0);
+
+      // The next attempt materializes the complete catalog cleanly.
+      const missions = await service.getDailyMissions(u.id);
+      expect(missions.length).toBeGreaterThan(0);
+      expect(await prisma.missionPeriodCatalog.count({ where: { periodDate: today } })).toBe(1);
+      const activeCount = await prisma.dailyMission.count({ where: { isActive: true } });
+      expect(await prisma.missionPeriodTerm.count({ where: { periodDate: today } })).toBe(activeCount);
+    }));
+
+  it('concurrent first-touch readers and reward processors freeze one complete catalog and pay once', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}freeze-race`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 2,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+      const c1 = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
+      const c2 = await mkVerifiedCompletion(u.id, 'VERIFIED', 'b');
+      // Pre-create outcome rows so processors don't race the upsert.
+      await prisma.taskCompletionOutcome.createMany({
+        data: [
+          { completionId: c1.id, userId: u.id },
+          { completionId: c2.id, userId: u.id },
+        ],
+      });
+
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      await Promise.all([
+        ...Array.from({ length: 4 }, () => service.getDailyMissions(u.id)),
+        service.awardTaskCompletionOutcome(u.id, c1.id),
+        service.awardTaskCompletionOutcome(u.id, c2.id),
+      ]);
+
+      // Exactly one freeze, one complete catalog, one payout.
+      expect(await prisma.missionPeriodCatalog.count({ where: { periodDate: today } })).toBe(1);
+      const term = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: mission.id, periodDate: today },
+      });
+      expect(term).not.toBeNull();
+      expect(term!.creditReward).toBe(50);
+
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(50);
+      const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+        where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+      });
+      expect(progress.progress).toBe(2);
+      expect(progress.isCompleted).toBe(true);
+    }));
+
+  it('admin mutation racing first-touch freeze keeps pre-edit terms today and schedules next period', () =>
+    withPeriodCatalog(async () => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}freeze-admin-race`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+      // Race the mutation against concurrent first-touch readers. The
+      // admin tx freezes-then-mutates atomically, so today's terms are
+      // always the pre-edit values regardless of who wins the marker.
+      await Promise.all([
+        service.adminUpdateMission(mission.id, { creditReward: 777, xpReward: 777 }),
+        service.getDailyMissions(u.id),
+        service.getDailyMissions(u.id),
+      ]);
+
+      const todayTerm = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: mission.id, periodDate: today },
+      });
+      expect(todayTerm).not.toBeNull();
+      expect(todayTerm!.creditReward).toBe(50);
+      expect(todayTerm!.xpReward).toBe(25);
+
+      const tomorrowTerm = await prisma.missionPeriodTerm.findFirst({
+        where: { missionId: mission.id, periodDate: tomorrow },
+      });
+      expect(tomorrowTerm).not.toBeNull();
+      expect(tomorrowTerm!.creditReward).toBe(777);
+      expect(tomorrowTerm!.xpReward).toBe(777);
+    }));
 });

@@ -901,34 +901,32 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   // ─── Daily missions ────────────────────────────────────────
 
   /**
-   * Freeze the period's mission catalog: every currently-active mission
-   * gets an immutable term row for `periodDay`. The freeze is
-   * all-or-nothing via the mission_period_catalogs marker — only the
-   * transaction that inserts the marker writes term rows, so a mission
-   * created mid-period can never acquire a current-period term even if
-   * a later touch re-runs this method. Scheduled next-period rows are
-   * preserved (term createMany skips existing mission rows, keeping the
-   * values scheduled at mutation time = intended period-start config).
-   * Admin mutations call this BEFORE mutating inside the same
-   * transaction, so a mid-period edit can never leak post-edit values
-   * into today's catalog. No-op for periods before the rollout
-   * boundary.
+   * Freeze the period's mission catalog INSIDE a caller-owned
+   * transaction: marker row + complete term set commit or roll back
+   * together, so a failed initialization leaves neither a marker nor
+   * partial terms and the next attempt starts clean. Only the
+   * transaction that inserts the mission_period_catalogs marker writes
+   * term rows — the catalog is all-or-nothing and a mission created
+   * mid-period can never acquire a current-period term. Scheduled
+   * next-period rows are preserved (term createMany skips existing
+   * mission rows, keeping the values scheduled at mutation time =
+   * intended period-start config). A period with zero active missions
+   * is a legitimate empty catalog — the marker still commits.
    */
-  private async ensureMissionPeriodTerms(
+  private async freezeMissionPeriodCatalogTx(
+    tx: Prisma.TransactionClient,
     periodDay: Date,
-    client: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    if (periodDay.getTime() < missionPeriodEffectiveDate().getTime()) return;
-    const { count } = await client.missionPeriodCatalog.createMany({
+    const { count } = await tx.missionPeriodCatalog.createMany({
       data: [{ periodDate: periodDay }],
       skipDuplicates: true,
     });
-    if (count === 0) return; // period already frozen
-    const missions = await client.dailyMission.findMany({
+    if (count === 0) return; // period already frozen atomically
+    const missions = await tx.dailyMission.findMany({
       where: { isActive: true },
     });
     if (missions.length === 0) return;
-    await client.missionPeriodTerm.createMany({
+    await tx.missionPeriodTerm.createMany({
       data: missions.map((m) => ({
         missionId: m.id,
         periodDate: periodDay,
@@ -946,6 +944,22 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Materialize the period catalog atomically. Callers holding a
+   * transaction (VERIFIED outcome tx, admin mutation tx) pass it and
+   * the freeze joins that transaction; callers without one get a
+   * dedicated transaction so marker and terms can never commit
+   * separately. No-op for periods before the rollout boundary.
+   */
+  private async ensureMissionPeriodTerms(periodDay: Date, tx?: Prisma.TransactionClient) {
+    if (periodDay.getTime() < missionPeriodEffectiveDate().getTime()) return;
+    if (tx) {
+      await this.freezeMissionPeriodCatalogTx(tx, periodDay);
+      return;
+    }
+    await withTransactionRetry(this.prisma, (t) => this.freezeMissionPeriodCatalogTx(t, periodDay));
+  }
+
+  /**
    * Write a mission's terms for the NEXT UTC period — used by admin
    * mutations so config changes take effect at the period boundary
    * instead of silently altering the current one. `active` mirrors the
@@ -955,16 +969,16 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   private async scheduleMissionPeriodTerm(
     mission: { id: string; name: string; description: string; type: MissionType; icon: string | null; requirement: number; creditReward: number; xpReward: number; sortOrder: number; isActive: boolean },
     periodDay: Date,
-    client: Prisma.TransactionClient | PrismaService = this.prisma,
+    tx: Prisma.TransactionClient,
   ) {
     if (periodDay.getTime() < missionPeriodEffectiveDate().getTime()) return;
     if (!mission.isActive) {
-      await client.missionPeriodTerm.deleteMany({
+      await tx.missionPeriodTerm.deleteMany({
         where: { missionId: mission.id, periodDate: periodDay },
       });
       return;
     }
-    await client.missionPeriodTerm.upsert({
+    await tx.missionPeriodTerm.upsert({
       where: { missionId_periodDate: { missionId: mission.id, periodDate: periodDay } },
       create: {
         missionId: mission.id,
