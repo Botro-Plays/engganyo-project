@@ -1829,6 +1829,7 @@ model UserActiveEffect {
 // SOLD_OUT. Listings are never deleted — terminal states keep history.
 enum MarketplaceListingStatus {
   ACTIVE
+  PAUSED // catalog drift detected — escrow held until seller cancels/expires
   SOLD_OUT
   CANCELLED
   EXPIRED

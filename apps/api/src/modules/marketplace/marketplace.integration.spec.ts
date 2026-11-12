@@ -15,7 +15,7 @@
  *   can never be listed;
  * - wallet ledger, inventory quantities, and movement audit stay exact.
  */
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import {
   InventoryProvenance,
   MarketplaceListingStatus,
@@ -622,5 +622,327 @@ run('marketplace — real PostgreSQL', () => {
     const final = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
     expect(final.status).toBe(MarketplaceListingStatus.ACTIVE);
     expect(final.remainingQuantity).toBe(1);
+  });
+
+  // ─── Idempotency key reuse conflicts ───────────────────────
+
+  const responseCode = (e: unknown): string | undefined => {
+    const res = (e as { getResponse?: () => unknown })?.getResponse?.();
+    return res && typeof res === 'object' ? (res as Record<string, unknown>).code as string | undefined : undefined;
+  };
+
+  it('same purchaseKey with different listing or quantity returns 409 IDEMPOTENCY_KEY_REUSED', async () => {
+    const seller = await mkUser();
+    const seller2 = await mkUser();
+    const buyer = await mkUser(10_000);
+    await mkInventory(seller.id, convItemId, 5);
+    await mkInventory(seller2.id, boostItemId, 5);
+    const inv1 = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: convItemId } });
+    const inv2 = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller2.id, itemId: boostItemId } });
+    const l1 = await service.createListing(seller.id, { inventoryId: inv1.id, quantity: 3, unitPrice: 100 });
+    const l2 = await service.createListing(seller2.id, { inventoryId: inv2.id, quantity: 3, unitPrice: 100 });
+
+    const key = purchaseKey('conflict');
+    const first = await service.purchaseListing(buyer.id, l1.id, { quantity: 1, purchaseKey: key });
+    expect(first.replayed).toBe(false);
+
+    // Sequential replays with mismatched identity must conflict, not replay.
+    for (const bad of [
+      { listingId: l2.id, quantity: 1 },   // different listing
+      { listingId: l1.id, quantity: 2 },   // different quantity
+    ]) {
+      try {
+        await service.purchaseListing(buyer.id, bad.listingId, { quantity: bad.quantity, purchaseKey: key });
+        throw new Error('expected conflict');
+      } catch (e) {
+        expect(e).toBeInstanceOf(ConflictException);
+        expect(responseCode(e)).toBe('IDEMPOTENCY_KEY_REUSED');
+      }
+    }
+
+    // Exact replay still returns the committed order.
+    const replay = await service.purchaseListing(buyer.id, l1.id, { quantity: 1, purchaseKey: key });
+    expect(replay.replayed).toBe(true);
+    expect(replay.order.id).toBe(first.order.id);
+
+    // No extra orders or charges from the rejected replays.
+    expect(await prisma.marketplaceOrder.count({ where: { buyerId: buyer.id } })).toBe(1);
+    expect(await balance(buyer.id)).toBe(9_900);
+  });
+
+  it('concurrent same-key requests with different listings resolve to one order and one conflict', async () => {
+    const seller = await mkUser();
+    const seller2 = await mkUser();
+    const buyer = await mkUser(10_000);
+    await mkInventory(seller.id, convItemId, 5);
+    await mkInventory(seller2.id, boostItemId, 5);
+    const inv1 = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: convItemId } });
+    const inv2 = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller2.id, itemId: boostItemId } });
+    const l1 = await service.createListing(seller.id, { inventoryId: inv1.id, quantity: 3, unitPrice: 100 });
+    const l2 = await service.createListing(seller2.id, { inventoryId: inv2.id, quantity: 3, unitPrice: 100 });
+
+    const key = purchaseKey('confc');
+    const results = await Promise.allSettled([
+      service.purchaseListing(buyer.id, l1.id, { quantity: 1, purchaseKey: key }),
+      service.purchaseListing(buyer.id, l2.id, { quantity: 1, purchaseKey: key }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(responseCode((rejected[0] as PromiseRejectedResult).reason)).toBe('IDEMPOTENCY_KEY_REUSED');
+
+    // Exactly one order exists; buyer charged once.
+    const orders = await prisma.marketplaceOrder.findMany({ where: { buyerId: buyer.id } });
+    expect(orders).toHaveLength(1);
+    expect(await balance(buyer.id)).toBe(9_900);
+  });
+
+  // ─── Catalog drift protection ──────────────────────────────
+
+  it('catalog edits pause the listing; purchase conflicts and seller can recover via cancel', async () => {
+    // Dedicated item — shared suite items must not drift for other tests.
+    const driftItem = await mkItem({
+      name: `${PREFIX}Drift Boost`,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const seller = await mkUser();
+    const buyer = await mkUser(5_000);
+    await mkInventory(seller.id, driftItem.id, 2);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: driftItem.id } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
+
+    // Sanity: detail shows live terms, no drift flag.
+    const before = await service.getListingDetail(listing.id);
+    expect(before.status).toBe(MarketplaceListingStatus.ACTIVE);
+    expect(before.catalogChanged).toBe(false);
+
+    // Material catalog change: effect metadata multiplier 2 → 3.
+    await prisma.storeItem.update({
+      where: { id: driftItem.id },
+      data: { metadata: { boostType: 'xp', multiplier: 3, durationHours: 24, effectType: 'xp_boost' } },
+    });
+
+    // Browse flags drift; detail lazily persists PAUSED.
+    const browse = await service.browseListings({});
+    const card = browse.listings.find((l) => l.id === listing.id);
+    expect(card?.catalogChanged).toBe(true);
+    const paused = await service.getListingDetail(listing.id);
+    expect(paused.status).toBe(MarketplaceListingStatus.PAUSED);
+    const dbListing = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(dbListing.status).toBe(MarketplaceListingStatus.PAUSED);
+    expect(dbListing.removedReason).toBe('catalog_changed');
+
+    // Purchase rejects with LISTING_PAUSED — no order, escrow untouched.
+    try {
+      await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('drift') });
+      throw new Error('expected pause conflict');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ConflictException);
+      expect(responseCode(e)).toBe('LISTING_PAUSED');
+    }
+    expect(await prisma.marketplaceOrder.count({ where: { listingId: listing.id } })).toBe(0);
+    const stillPaused = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(stillPaused.remainingQuantity).toBe(2);
+
+    // Actionable exit: seller cancels → escrow returns even though paused.
+    await service.cancelListing(seller.id, listing.id);
+    expect(await invQty(seller.id, driftItem.id, InventoryProvenance.PURCHASE)).toBe(2);
+    const moves = await prisma.inventoryMovement.findMany({
+      where: { userId: seller.id, itemId: driftItem.id, reason: 'marketplace_cancel' },
+    });
+    expect(moves).toHaveLength(1);
+    expect(moves[0].delta).toBe(2);
+  });
+
+  it('deactivation pauses the listing; restoring terms does not silently resume it', async () => {
+    const item = await mkItem({
+      name: `${PREFIX}Deactivate Boost`,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const seller = await mkUser();
+    const buyer = await mkUser(5_000);
+    await mkInventory(seller.id, item.id, 1);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: item.id } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
+
+    // Deactivate the catalog item — advertised terms no longer fulfillable.
+    await prisma.storeItem.update({ where: { id: item.id }, data: { isActive: false } });
+    const detail = await service.getListingDetail(listing.id);
+    expect(detail.status).toBe(MarketplaceListingStatus.PAUSED);
+
+    await expect(
+      service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('deact') }),
+    ).rejects.toThrow(ConflictException);
+
+    // Even after reactivation the paused listing stays paused — the seller
+    // must cancel and relist so a fresh snapshot is taken.
+    await prisma.storeItem.update({ where: { id: item.id }, data: { isActive: true } });
+    const still = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(still.status).toBe(MarketplaceListingStatus.PAUSED);
+    await service.cancelListing(seller.id, listing.id);
+    expect(await invQty(seller.id, item.id)).toBe(1);
+  });
+
+  // ─── Ownership cap serialization ───────────────────────────
+
+  it('competing listings for the same item cannot both pass the buyer ownership cap', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}Capped Boost`,
+      maxOwnedPerUser: 2,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const buyer = await mkUser(10_000);
+    await mkInventory(buyer.id, capped.id, 1); // already owns 1 of cap 2
+
+    const s1 = await mkUser();
+    const s2 = await mkUser();
+    await mkInventory(s1.id, capped.id, 1);
+    await mkInventory(s2.id, capped.id, 1);
+    const inv1 = await prisma.userInventory.findFirstOrThrow({ where: { userId: s1.id, itemId: capped.id } });
+    const inv2 = await prisma.userInventory.findFirstOrThrow({ where: { userId: s2.id, itemId: capped.id } });
+    const l1 = await service.createListing(s1.id, { inventoryId: inv1.id, quantity: 1, unitPrice: 100 });
+    const l2 = await service.createListing(s2.id, { inventoryId: inv2.id, quantity: 1, unitPrice: 100 });
+
+    // Two concurrent receipts for one remaining cap slot — exactly one wins.
+    const results = await Promise.allSettled([
+      service.purchaseListing(buyer.id, l1.id, { quantity: 1, purchaseKey: purchaseKey('cap1') }),
+      service.purchaseListing(buyer.id, l2.id, { quantity: 1, purchaseKey: purchaseKey('cap2') }),
+    ]);
+    const ok = results.filter((r) => r.status === 'fulfilled');
+    const bad = results.filter((r) => r.status === 'rejected');
+    expect(ok).toHaveLength(1);
+    expect(bad).toHaveLength(1);
+    expect((bad[0] as PromiseRejectedResult).reason).toBeInstanceOf(BadRequestException);
+
+    // Buyer ends at exactly the cap: 1 owned + 1 received.
+    expect(await invQty(buyer.id, capped.id)).toBe(2);
+    expect(await prisma.marketplaceOrder.count({ where: { buyerId: buyer.id } })).toBe(1);
+  });
+
+  it('marketplace receipt and store purchase serialize on the same ownership cap', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}CapRace Boost`,
+      creditCost: 50,
+      maxOwnedPerUser: 2,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const buyer = await mkUser(10_000);
+    await mkInventory(buyer.id, capped.id, 1); // owns 1 of cap 2
+
+    const seller = await mkUser();
+    await mkInventory(seller.id, capped.id, 1);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: capped.id } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
+
+    // Marketplace buy (100cr) races a store purchase (50cr) for the last slot.
+    const results = await Promise.allSettled([
+      service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('mktstore') }),
+      storeService.purchaseItem(buyer.id, capped.id, 1),
+    ]);
+    const ok = results.filter((r) => r.status === 'fulfilled');
+    const bad = results.filter((r) => r.status === 'rejected');
+    expect(ok).toHaveLength(1);
+    expect(bad).toHaveLength(1);
+
+    // Exactly at cap — never 3.
+    expect(await invQty(buyer.id, capped.id)).toBe(2);
+  });
+
+  it('escrowed units count toward the seller ownership cap', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}EscrowCap Boost`,
+      creditCost: 50,
+      maxOwnedPerUser: 2,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const seller = await mkUser(10_000);
+    await mkInventory(seller.id, capped.id, 2);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: capped.id } });
+    // List 1 → on-hand 1 + escrow 1 = effective 2 = cap.
+    await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
+
+    // A store purchase would take effective ownership to 3 — must reject even
+    // though only 1 unit sits on hand.
+    await expect(storeService.purchaseItem(seller.id, capped.id, 1)).rejects.toThrow(/Max ownership/);
+    expect(await invQty(seller.id, capped.id)).toBe(1);
+  });
+
+  // ─── Lazy expiry commit-then-throw ─────────────────────────
+
+  it('purchase on an expired listing commits expiry once and returns escrow exactly once', async () => {
+    const seller = await mkUser();
+    const buyer = await mkUser(5_000);
+    await mkInventory(seller.id, convItemId, 3);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: convItemId } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
+    await prisma.marketplaceListing.update({
+      where: { id: listing.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    // First attempt: expiry commits, then the purchase error is thrown.
+    await expect(
+      service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('exp1') }),
+    ).rejects.toThrow(/expired/i);
+
+    let db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.EXPIRED);
+    expect(db.remainingQuantity).toBe(0);
+    expect(await invQty(seller.id, convItemId, InventoryProvenance.PURCHASE)).toBe(3);
+
+    // Second attempt hits the already-EXPIRED status — no second return.
+    await expect(
+      service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('exp2') }),
+    ).rejects.toThrow(/expired/i);
+    const expireMoves = await prisma.inventoryMovement.findMany({
+      where: { userId: seller.id, itemId: convItemId, reason: 'marketplace_expire', refId: listing.id },
+    });
+    expect(expireMoves).toHaveLength(1);
+    expect(expireMoves[0].delta).toBe(2);
+    expect(await invQty(seller.id, convItemId)).toBe(3);
+
+    // Concurrent cancel against the expired listing also resolves safely.
+    await expect(service.cancelListing(seller.id, listing.id)).rejects.toThrow(BadRequestException);
+    expect(await invQty(seller.id, convItemId)).toBe(3);
+    db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.EXPIRED);
+  });
+
+  it('expired-listing purchase races cancel and sweep — escrow returns exactly once', async () => {
+    const seller = await mkUser();
+    const buyer = await mkUser(5_000);
+    await mkInventory(seller.id, boostItemId, 2);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: boostItemId } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
+    await prisma.marketplaceListing.update({
+      where: { id: listing.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const results = await Promise.allSettled([
+      service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('exprace') }),
+      service.cancelListing(seller.id, listing.id),
+      service.sweepExpiredListings(),
+    ]);
+    // Purchase always rejects; cancel may win or lose to the expiry commit;
+    // sweep always resolves.
+    expect(results[0].status).toBe('rejected');
+    expect(results[2].status).toBe('fulfilled');
+
+    const db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.EXPIRED);
+    expect(db.remainingQuantity).toBe(0);
+    expect(await prisma.marketplaceOrder.count({ where: { listingId: listing.id } })).toBe(0);
+
+    // Escrow returned exactly once regardless of which path committed it.
+    const returnMoves = await prisma.inventoryMovement.findMany({
+      where: { userId: seller.id, itemId: boostItemId, refId: listing.id, reason: { in: ['marketplace_expire', 'marketplace_cancel'] } },
+    });
+    expect(returnMoves).toHaveLength(1);
+    expect(returnMoves[0].delta).toBe(2);
+    expect(await invQty(seller.id, boostItemId)).toBe(2);
+    expect(await balance(buyer.id)).toBe(5_000);
   });
 });

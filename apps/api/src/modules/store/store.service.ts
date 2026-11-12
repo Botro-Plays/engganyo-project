@@ -8,6 +8,7 @@ import { RedisService } from '../../database/redis.service';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { effectiveOwnedQuantity, lockOwnershipSlot } from '../../common/inventory-ownership';
 
 // ─── Default store items ─────────────────────────────────────
 const DEFAULT_STORE_ITEMS: Array<{
@@ -255,12 +256,12 @@ export class StoreService implements OnModuleInit {
       }
 
       // ── Max owned per user guard (under the lock) ──────────
+      // Serialized per (user,item) via advisory lock and counted across
+      // on-hand stacks + marketplace escrow so a store purchase can't
+      // race a marketplace receipt past the same cap.
       if (item.maxOwnedPerUser !== null) {
-        const ownedCount = await tx.userInventory.aggregate({
-          where: { userId, itemId },
-          _sum: { quantity: true },
-        });
-        const currentTotal = ownedCount._sum.quantity ?? 0;
+        await lockOwnershipSlot(tx, userId, itemId);
+        const currentTotal = await effectiveOwnedQuantity(tx, userId, itemId);
         if (currentTotal + quantity > item.maxOwnedPerUser) {
           throw new BadRequestException(
             `Max ownership limit reached (${item.maxOwnedPerUser} total). You currently own ${currentTotal}.`,

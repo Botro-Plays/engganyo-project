@@ -155,11 +155,19 @@ export default function MarketplaceListingPage() {
           </div>
         ) : !purchasable ? (
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
-            {listing.status !== 'ACTIVE'
-              ? `This listing is ${listing.status.toLowerCase().replace('_', ' ')}.`
-              : listing.isExpired
-                ? 'This listing has expired.'
-                : 'This listing is sold out.'}
+            {listing.status === 'PAUSED' ? (
+              <>
+                <span className="text-amber-300 font-medium">This listing is paused.</span>{' '}
+                The item&apos;s store terms changed after it was listed, so it can&apos;t be sold as
+                advertised. The seller can cancel it to recover the items.
+              </>
+            ) : listing.status !== 'ACTIVE' ? (
+              `This listing is ${listing.status.toLowerCase().replace('_', ' ')}.`
+            ) : listing.isExpired ? (
+              'This listing has expired.'
+            ) : (
+              'This listing is sold out.'
+            )}
           </div>
         ) : (
           <div className="rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">

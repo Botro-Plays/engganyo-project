@@ -15,6 +15,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
+  PAUSED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   SOLD_OUT: 'bg-zinc-700/50 text-zinc-400 border-zinc-600/30',
   CANCELLED: 'bg-zinc-700/50 text-zinc-400 border-zinc-600/30',
   EXPIRED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -50,7 +51,10 @@ export function MarketplaceListingCard({ listing }: { listing: MarketplaceListin
       {listing.sellerUsername && (
         <div className="mt-2 text-[11px] text-zinc-500 truncate">Seller: {listing.sellerUsername}</div>
       )}
-      {soldOut && listing.status === 'ACTIVE' && (
+      {listing.catalogChanged && listing.status === 'ACTIVE' && (
+        <div className="mt-2 text-[11px] text-amber-400">Item terms changed — listing will pause</div>
+      )}
+      {soldOut && listing.status === 'ACTIVE' && !listing.catalogChanged && (
         <div className="mt-2 text-[11px] text-amber-400">Listing expired</div>
       )}
     </Link>

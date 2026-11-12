@@ -11,6 +11,7 @@ import type { ApiResponse } from '@/types';
 import {
   MARKETPLACE_MAX_PRICE,
   MARKETPLACE_MIN_PRICE,
+  type MarketplaceConfig,
   type SellableInventoryResponse,
   type SellableStack,
 } from './types';
@@ -43,6 +44,19 @@ export function SellPanel() {
     },
   });
 
+  // Server-provided rules (proposed defaults pending owner confirmation).
+  const { data: config } = useQuery({
+    queryKey: ['marketplace', 'config'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<MarketplaceConfig>>('marketplace/config');
+      return res.data.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const minPrice = config?.minUnitPrice ?? MARKETPLACE_MIN_PRICE;
+  const maxPrice = config?.maxUnitPrice ?? MARKETPLACE_MAX_PRICE;
+  const ttlDays = config?.listingTtlDays ?? 7;
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await apiClient.post<ApiResponse<unknown>>('marketplace/listings', {
@@ -69,7 +83,7 @@ export function SellPanel() {
   const stacks = data?.stacks ?? [];
   const selected: SellableStack | undefined = stacks.find((s) => s.inventoryId === selectedId);
   const priceNum = Number(unitPrice);
-  const priceValid = Number.isInteger(priceNum) && priceNum >= MARKETPLACE_MIN_PRICE && priceNum <= MARKETPLACE_MAX_PRICE;
+  const priceValid = Number.isInteger(priceNum) && priceNum >= minPrice && priceNum <= maxPrice;
   const qtyValid = selected ? quantity >= 1 && quantity <= selected.quantity : false;
   const canSubmit = !!selected?.listable && qtyValid && priceValid && !createMutation.isPending;
 
@@ -162,14 +176,14 @@ export function SellPanel() {
             </div>
             <div>
               <label htmlFor="mkt-price" className="block text-xs text-zinc-400 mb-1">
-                Price per unit ({MARKETPLACE_MIN_PRICE}–{formatCredits(MARKETPLACE_MAX_PRICE)} credits)
+                Price per unit ({minPrice}–{formatCredits(maxPrice)} credits)
               </label>
               <input
                 id="mkt-price"
                 type="number"
                 inputMode="numeric"
-                min={MARKETPLACE_MIN_PRICE}
-                max={MARKETPLACE_MAX_PRICE}
+                min={minPrice}
+                max={maxPrice}
                 placeholder="e.g. 100"
                 value={unitPrice}
                 onChange={(e) => setUnitPrice(e.target.value)}
@@ -180,7 +194,7 @@ export function SellPanel() {
           {priceValid && qtyValid && (
             <p className="text-sm text-zinc-400">
               Total if sold: <span className="text-brand-300 font-semibold">{formatCredits(priceNum * quantity)} credits</span>
-              {' '}· expires in 7 days
+              {' '}· expires in {ttlDays} days
             </p>
           )}
           <button

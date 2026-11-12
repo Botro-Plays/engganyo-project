@@ -13,6 +13,7 @@ import type { MarketplaceListing } from './types';
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
+  PAUSED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   SOLD_OUT: 'bg-zinc-700/50 text-zinc-400 border-zinc-600/30',
   CANCELLED: 'bg-zinc-700/50 text-zinc-400 border-zinc-600/30',
   EXPIRED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -71,6 +72,8 @@ export function MyListings() {
     <div className="space-y-3">
       {listings.map((l) => {
         const active = l.status === 'ACTIVE' && !l.isExpired && l.remainingQuantity > 0;
+        const paused = l.status === 'PAUSED';
+        const cancellable = active || paused;
         const sold = l.originalQuantity - l.remainingQuantity;
         return (
           <div
@@ -94,15 +97,26 @@ export function MyListings() {
                 {sold > 0 && ` · ${sold} sold`}
                 {' · '}expires {new Date(l.expiresAt).toLocaleDateString()}
               </p>
+              {paused && (
+                <p className="text-xs text-amber-400/90 mt-1">
+                  Paused — the item&apos;s store terms changed, so it can&apos;t sell as listed.
+                  Cancel to return your units, then relist if still eligible.
+                </p>
+              )}
+              {active && l.catalogChanged && (
+                <p className="text-xs text-amber-400/90 mt-1">
+                  The item&apos;s store terms changed — this listing will pause on next view or purchase attempt.
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {active && (
+              {cancellable && (
                 <button
                   onClick={() => setCancelTarget(l)}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
                 >
                   <XCircle className="w-3.5 h-3.5" />
-                  Cancel
+                  {paused ? 'Cancel & recover' : 'Cancel'}
                 </button>
               )}
             </div>

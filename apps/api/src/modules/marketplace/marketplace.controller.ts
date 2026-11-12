@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query
 import { Throttle } from '@nestjs/throttler';
 import { StoreCategory } from '@prisma/client';
 
-import { MarketplaceService } from './marketplace.service';
+import { MarketplaceService, getMarketplacePublicConfig } from './marketplace.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -15,6 +15,13 @@ import { TakedownListingDto } from './dto/takedown-listing.dto';
 @Controller('marketplace')
 export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
+
+  /** Proposed internal-test rules — public so the UI can display exact terms. */
+  @Get('config')
+  @HttpCode(HttpStatus.OK)
+  config() {
+    return getMarketplacePublicConfig();
+  }
 
   @Get('listings')
   @HttpCode(HttpStatus.OK)

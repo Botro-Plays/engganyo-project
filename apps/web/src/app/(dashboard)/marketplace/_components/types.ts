@@ -7,11 +7,13 @@ export interface MarketplaceListing {
   unitPrice: number;
   remainingQuantity: number;
   originalQuantity: number;
-  status: 'ACTIVE' | 'SOLD_OUT' | 'CANCELLED' | 'EXPIRED' | 'REMOVED';
+  status: 'ACTIVE' | 'PAUSED' | 'SOLD_OUT' | 'CANCELLED' | 'EXPIRED' | 'REMOVED';
   expiresAt: string;
   createdAt: string;
   sellerUsername: string | null;
   isExpired: boolean;
+  /** Store terms changed since listing — purchase will pause/reject it. */
+  catalogChanged?: boolean;
 }
 
 export interface MarketplaceListingDetail extends MarketplaceListing {
@@ -70,6 +72,22 @@ export interface BrowseResponse {
   limit: number;
   total: number;
   hasMore: boolean;
+}
+
+export interface MarketplaceConfig {
+  status: 'proposed';
+  awaitingOwnerConfirmation: boolean;
+  paymentMethod: 'credits';
+  sellerFeeBps: number;
+  permanentSellerFeeEnabled: boolean;
+  minUnitPrice: number;
+  maxUnitPrice: number;
+  listingTtlDays: number;
+  relisting: 'manual';
+  maxActiveListingsPerSeller: number;
+  eligibleCategories: string[];
+  excludedCategories: string[];
+  notes: string[];
 }
 
 export const MARKETPLACE_MIN_PRICE = 10;

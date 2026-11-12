@@ -21,6 +21,7 @@ import { withTransactionRetry } from '../../database/tx-retry';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
+import { effectiveOwnedQuantity, lockOwnershipSlot } from '../../common/inventory-ownership';
 
 /**
  * Player item marketplace — internal-test configuration.
@@ -39,6 +40,59 @@ export const MARKETPLACE_CONFIG = {
   FEE_BPS: 0,
   TRADABLE_PROVENANCE: [InventoryProvenance.PURCHASE, InventoryProvenance.MARKETPLACE] as const,
   LISTABLE_CATEGORIES: [StoreCategory.BOOST, StoreCategory.CONVENIENCE] as const,
+} as const;
+
+/**
+ * Public view of the marketplace rules. These are PROPOSED internal-test
+ * defaults pending owner confirmation — surfaced so the UI can display the
+ * exact terms instead of hardcoding copy that could drift from enforcement.
+ */
+export function getMarketplacePublicConfig() {
+  return {
+    status: 'proposed' as const,
+    awaitingOwnerConfirmation: true,
+    paymentMethod: 'credits' as const,
+    sellerFeeBps: MARKETPLACE_CONFIG.FEE_BPS,
+    permanentSellerFeeEnabled: false,
+    minUnitPrice: MARKETPLACE_CONFIG.MIN_UNIT_PRICE,
+    maxUnitPrice: MARKETPLACE_CONFIG.MAX_UNIT_PRICE,
+    listingTtlDays: MARKETPLACE_CONFIG.LISTING_TTL_MS / 86_400_000,
+    relisting: 'manual' as const,
+    maxActiveListingsPerSeller: MARKETPLACE_CONFIG.MAX_ACTIVE_LISTINGS_PER_SELLER,
+    eligibleCategories: [...MARKETPLACE_CONFIG.LISTABLE_CATEGORIES],
+    excludedCategories: [StoreCategory.COSMETIC],
+    notes: [
+      'Only unused BOOST and CONVENIENCE consumables can be listed; loot boxes and cosmetics are excluded.',
+      'Credits-only purchases; no permanent seller fee (0% test fee).',
+      'Listings expire after 7 days; relisting is manual.',
+      'At most 5 active listings per seller.',
+    ],
+  };
+}
+
+/** Material catalog fields frozen into itemSnapshot at list time. */
+interface CatalogSnapshot {
+  name: string;
+  description: string | null;
+  category: StoreCategory;
+  creditCost: number;
+  isConsumable: boolean;
+  isActive: boolean;
+  requiredVipTierLevel: number | null;
+  maxOwnedPerUser: number | null;
+  metadata: unknown;
+}
+
+type CatalogItem = {
+  name: string;
+  description: string | null;
+  category: StoreCategory;
+  creditCost: number;
+  isConsumable: boolean;
+  isActive: boolean;
+  requiredVipTierLevel: number | null;
+  maxOwnedPerUser: number | null;
+  metadata: unknown;
 };
 
 @Injectable()
@@ -78,6 +132,74 @@ export class MarketplaceService {
     return (MARKETPLACE_CONFIG.TRADABLE_PROVENANCE as readonly InventoryProvenance[]).includes(provenance);
   }
 
+  // ─── Catalog drift protection ───────────────────────────────
+  //
+  // The advertised terms frozen at list time must equal what the buyer
+  // receives. Any material catalog change (name/description/category/
+  // price/consumable/active/VIP/ownership/metadata — metadata carries the
+  // effect definition: multiplier, duration, protectedDays, loot odds)
+  // pauses the listing instead of silently transferring changed terms.
+  // The seller keeps escrow and can cancel (units return) then relist.
+
+  private catalogSnapshot(item: CatalogItem): CatalogSnapshot {
+    return {
+      name: item.name,
+      description: item.description,
+      category: item.category,
+      creditCost: item.creditCost,
+      isConsumable: item.isConsumable,
+      isActive: item.isActive,
+      requiredVipTierLevel: item.requiredVipTierLevel,
+      maxOwnedPerUser: item.maxOwnedPerUser,
+      metadata: item.metadata ?? {},
+    };
+  }
+
+  private stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+    if (Array.isArray(value)) return `[${value.map((v) => this.stableStringify(v)).join(',')}]`;
+    const obj = value as Record<string, unknown>;
+    return `{${Object.keys(obj)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${this.stableStringify(obj[k])}`)
+      .join(',')}}`;
+  }
+
+  private catalogDrifted(snapshot: Prisma.JsonValue, item: CatalogItem | null | undefined): boolean {
+    if (!item) return true; // deleted/inaccessible catalog row — treat as drift
+    const snap = snapshot as unknown as CatalogSnapshot;
+    return (
+      snap.name !== item.name ||
+      (snap.description ?? null) !== (item.description ?? null) ||
+      snap.category !== item.category ||
+      snap.creditCost !== item.creditCost ||
+      snap.isConsumable !== item.isConsumable ||
+      snap.isActive !== item.isActive ||
+      (snap.requiredVipTierLevel ?? null) !== (item.requiredVipTierLevel ?? null) ||
+      (snap.maxOwnedPerUser ?? null) !== (item.maxOwnedPerUser ?? null) ||
+      this.stableStringify(snap.metadata ?? {}) !== this.stableStringify(item.metadata ?? {})
+    );
+  }
+
+  // ─── Idempotent replay validation ───────────────────────────
+  //
+  // A purchaseKey identifies ONE purchase intent. Replaying it with a
+  // different listing, quantity, or agreed unit price is a client bug or
+  // abuse — return 409 rather than silently replaying the wrong order.
+
+  private assertReplayMatches(
+    order: { listingId: string; quantity: number; unitPrice: number },
+    listing: { id: string; unitPrice: number },
+    quantity: number,
+  ): void {
+    if (order.listingId !== listing.id || order.quantity !== quantity || order.unitPrice !== listing.unitPrice) {
+      throw new ConflictException({
+        code: 'IDEMPOTENCY_KEY_REUSED',
+        message: 'purchaseKey was already used for a different purchase',
+      });
+    }
+  }
+
   // ─── Browse / detail ────────────────────────────────────────
 
   async browseListings(opts: { category?: StoreCategory; itemId?: string; sort?: 'price_asc' | 'price_desc' | 'newest'; page?: number; limit?: number }) {
@@ -112,7 +234,11 @@ export class MarketplaceService {
     const itemIds = [...new Set(rows.map((r) => r.itemId))];
     const items = await this.prisma.storeItem.findMany({
       where: { id: { in: itemIds } },
-      select: { id: true, name: true, category: true, creditCost: true, metadata: true },
+      select: {
+        id: true, name: true, description: true, category: true, creditCost: true,
+        isConsumable: true, isActive: true, requiredVipTierLevel: true,
+        maxOwnedPerUser: true, metadata: true,
+      },
     });
     const itemById = new Map(items.map((i) => [i.id, i]));
 
@@ -133,23 +259,44 @@ export class MarketplaceService {
   }
 
   async getListingDetail(listingId: string, viewerId?: string) {
-    const listing = await this.prisma.marketplaceListing.findUnique({ where: { id: listingId } });
+    let listing = await this.prisma.marketplaceListing.findUnique({ where: { id: listingId } });
     if (!listing) throw new NotFoundException('Listing not found');
 
     const [item, seller] = await Promise.all([
       this.prisma.storeItem.findUnique({
         where: { id: listing.itemId },
-        select: { id: true, name: true, description: true, category: true, creditCost: true, metadata: true, isActive: true },
+        select: {
+          id: true, name: true, description: true, category: true, creditCost: true,
+          isConsumable: true, isActive: true, requiredVipTierLevel: true,
+          maxOwnedPerUser: true, metadata: true,
+        },
       }),
       this.prisma.user.findUnique({ where: { id: listing.sellerId }, select: { id: true, username: true } }),
     ]);
     if (!item) throw new NotFoundException('Listing item no longer exists');
 
+    // Lazily persist PAUSED when the catalog drifted — display must agree
+    // with what fulfillment would actually deliver.
+    if (listing.status === MarketplaceListingStatus.ACTIVE && this.catalogDrifted(listing.itemSnapshot, item)) {
+      listing = await this.withTxRetry(async (tx) => {
+        await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${listingId} FOR UPDATE`;
+        const locked = await tx.marketplaceListing.findUniqueOrThrow({ where: { id: listingId } });
+        if (locked.status !== MarketplaceListingStatus.ACTIVE) return locked;
+        const freshItem = await tx.storeItem.findUniqueOrThrow({ where: { id: locked.itemId } });
+        if (!this.catalogDrifted(locked.itemSnapshot, freshItem)) return locked;
+        return tx.marketplaceListing.update({
+          where: { id: listingId },
+          data: { status: MarketplaceListingStatus.PAUSED, removedReason: 'catalog_changed' },
+        });
+      });
+    }
+
     const active = listing.status === MarketplaceListingStatus.ACTIVE && listing.expiresAt > new Date() && listing.remainingQuantity > 0;
+    const snap = listing.itemSnapshot as Record<string, unknown>;
 
     return {
       ...this.serializeListing(listing, item, seller?.username),
-      description: item.description,
+      description: (snap['description'] as string | null) ?? item.description,
       isActive: item.isActive,
       viewerIsSeller: viewerId === listing.sellerId,
       canPurchase: active && viewerId !== listing.sellerId,
@@ -171,10 +318,12 @@ export class MarketplaceService {
       createdAt: Date;
       itemSnapshot: Prisma.JsonValue;
     },
-    item: { name: string; category: StoreCategory; creditCost: number; metadata?: unknown } | undefined,
+    item: CatalogItem | undefined,
     sellerUsername?: string,
   ) {
     const snap = (l.itemSnapshot ?? {}) as Record<string, unknown>;
+    const catalogChanged =
+      l.status === MarketplaceListingStatus.ACTIVE && !!item && this.catalogDrifted(l.itemSnapshot, item);
     return {
       id: l.id,
       itemId: l.itemId,
@@ -188,6 +337,7 @@ export class MarketplaceService {
       expiresAt: l.expiresAt,
       createdAt: l.createdAt,
       sellerUsername: sellerUsername ?? null,
+      catalogChanged,
       isExpired: l.status === MarketplaceListingStatus.ACTIVE && l.expiresAt <= new Date(),
     };
   }
@@ -312,12 +462,7 @@ export class MarketplaceService {
       if (dup) throw new ConflictException('You already have an active listing for this item');
 
       const expiresAt = new Date(now.getTime() + MARKETPLACE_CONFIG.LISTING_TTL_MS);
-      const snapshot = {
-        name: inv.item.name,
-        description: inv.item.description,
-        category: inv.item.category,
-        creditCost: inv.item.creditCost,
-      };
+      const snapshot = this.catalogSnapshot(inv.item);
 
       const created = await tx.marketplaceListing.create({
         data: {
@@ -325,7 +470,7 @@ export class MarketplaceService {
           itemId: inv.itemId,
           inventoryId: inv.id,
           provenance: inv.provenance,
-          itemSnapshot: snapshot as Prisma.InputJsonValue,
+          itemSnapshot: snapshot as unknown as Prisma.InputJsonValue,
           originalQuantity: quantity,
           remainingQuantity: quantity,
           unitPrice,
@@ -402,7 +547,9 @@ export class MarketplaceService {
       const listing = await tx.marketplaceListing.findUnique({ where: { id: listingId } });
       if (!listing) throw new NotFoundException('Listing not found');
       if (listing.sellerId !== userId) throw new ForbiddenException('Not your listing');
-      if (listing.status !== MarketplaceListingStatus.ACTIVE) {
+      // ACTIVE and PAUSED listings both hold escrow — either can be
+      // cancelled to return units (the actionable exit for paused stock).
+      if (listing.status !== MarketplaceListingStatus.ACTIVE && listing.status !== MarketplaceListingStatus.PAUSED) {
         throw new BadRequestException(`Listing is already ${listing.status.toLowerCase()}`);
       }
 
@@ -431,7 +578,7 @@ export class MarketplaceService {
   async sweepExpiredListings(): Promise<void> {
     const stale = await this.prisma.marketplaceListing.findMany({
       where: {
-        status: MarketplaceListingStatus.ACTIVE,
+        status: { in: [MarketplaceListingStatus.ACTIVE, MarketplaceListingStatus.PAUSED] },
         expiresAt: { lte: new Date() },
       },
       select: { id: true },
@@ -442,7 +589,11 @@ export class MarketplaceService {
         await this.withTxRetry(async (tx) => {
           await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${id} FOR UPDATE`;
           const listing = await tx.marketplaceListing.findUnique({ where: { id } });
-          if (!listing || listing.status !== MarketplaceListingStatus.ACTIVE || listing.expiresAt > new Date()) {
+          if (
+            !listing ||
+            (listing.status !== MarketplaceListingStatus.ACTIVE && listing.status !== MarketplaceListingStatus.PAUSED) ||
+            listing.expiresAt > new Date()
+          ) {
             return;
           }
           await this.returnEscrowedUnits(tx, listing, 'marketplace_expire');
@@ -462,7 +613,7 @@ export class MarketplaceService {
       await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${listingId} FOR UPDATE`;
       const found = await tx.marketplaceListing.findUnique({ where: { id: listingId } });
       if (!found) throw new NotFoundException('Listing not found');
-      if (found.status !== MarketplaceListingStatus.ACTIVE) {
+      if (found.status !== MarketplaceListingStatus.ACTIVE && found.status !== MarketplaceListingStatus.PAUSED) {
         throw new BadRequestException(`Listing is already ${found.status.toLowerCase()}`);
       }
       await this.returnEscrowedUnits(tx, found, 'marketplace_takedown');
@@ -518,12 +669,13 @@ export class MarketplaceService {
       include: { listing: true },
     });
     if (existing) {
+      this.assertReplayMatches(existing, existing.listing, quantity);
       return { order: this.serializeOrder(existing), replayed: true };
     }
 
-    let order: MarketplaceOrderResult;
+    let result: PurchaseTxResult;
     try {
-      order = await this.withTxRetry(async (tx) => {
+      result = await this.withTxRetry(async (tx) => {
         // Lock the listing row — serializes all purchases/cancels/expiry
         // races for THIS listing.
         await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${listingId} FOR UPDATE`;
@@ -534,19 +686,30 @@ export class MarketplaceService {
         const dupOrder = await tx.marketplaceOrder.findUnique({
           where: { buyerId_purchaseKey: { buyerId, purchaseKey } },
         });
-        if (dupOrder) return { order: dupOrder, listing, replayed: true } as MarketplaceOrderResult;
+        if (dupOrder) {
+          this.assertReplayMatches(dupOrder, listing, quantity);
+          return { kind: 'replayed' as const, order: dupOrder };
+        }
 
         if (listing.status !== MarketplaceListingStatus.ACTIVE) {
+          if (listing.status === MarketplaceListingStatus.PAUSED) {
+            throw new ConflictException({
+              code: 'LISTING_PAUSED',
+              message: 'This listing is paused — the item\'s store terms changed. The seller can cancel it to recover the items.',
+            });
+          }
           throw new BadRequestException(`Listing is ${listing.status.toLowerCase()}`);
         }
         if (listing.expiresAt <= new Date()) {
-          // Lazy expiry: close it and return escrow in the same tx, then fail.
+          // Commit the expiry transition + escrow return FIRST; the caller
+          // throws the expired-listing error only after this tx commits,
+          // otherwise the throw would roll the return back.
           await this.returnEscrowedUnits(tx, listing, 'marketplace_expire');
           await tx.marketplaceListing.update({
             where: { id: listingId },
             data: { status: MarketplaceListingStatus.EXPIRED, remainingQuantity: 0, closedAt: new Date() },
           });
-          throw new BadRequestException('Listing has expired');
+          return { kind: 'expired' as const };
         }
         if (listing.remainingQuantity <= 0) {
           throw new BadRequestException('Listing is sold out');
@@ -559,6 +722,17 @@ export class MarketplaceService {
         }
 
         const item = await tx.storeItem.findUnique({ where: { id: listing.itemId } });
+
+        // Catalog drift: the advertised terms (snapshot) no longer match the
+        // live catalog row. Pause + keep escrow rather than silently
+        // transferring changed terms; seller can cancel to recover units.
+        if (this.catalogDrifted(listing.itemSnapshot, item)) {
+          await tx.marketplaceListing.update({
+            where: { id: listingId },
+            data: { status: MarketplaceListingStatus.PAUSED, removedReason: 'catalog_changed' },
+          });
+          return { kind: 'paused' as const };
+        }
         if (!item) throw new NotFoundException('Listing item no longer exists');
 
         // Buyer eligibility mirrors store purchase guards.
@@ -574,12 +748,11 @@ export class MarketplaceService {
             );
           }
         }
+        // Ownership cap, serialized per (user,item) across store purchases,
+        // marketplace receipts, and the seller's own escrowed listings.
         if (item.maxOwnedPerUser !== null) {
-          const owned = await tx.userInventory.aggregate({
-            where: { userId: buyerId, itemId: listing.itemId },
-            _sum: { quantity: true },
-          });
-          const current = owned._sum.quantity ?? 0;
+          await lockOwnershipSlot(tx, buyerId, listing.itemId);
+          const current = await effectiveOwnedQuantity(tx, buyerId, listing.itemId);
           if (current + quantity > item.maxOwnedPerUser) {
             throw new BadRequestException(
               `Max ownership limit reached (${item.maxOwnedPerUser} total). You currently own ${current}.`,
@@ -667,57 +840,87 @@ export class MarketplaceService {
           },
         });
 
-        return { order: created, listing, replayed: false } as MarketplaceOrderResult;
+        return { kind: 'order' as const, order: created, listing };
       });
     } catch (err) {
       // Concurrent same-key purchase lost the unique-index race: its whole
-      // tx (including wallet moves) rolled back. Replay the committed order.
+      // tx (including wallet moves) rolled back. Replay the committed order —
+      // but only if the request identity matches.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const committed = await this.prisma.marketplaceOrder.findUnique({
           where: { buyerId_purchaseKey: { buyerId, purchaseKey } },
           include: { listing: true },
         });
-        if (committed) return { order: this.serializeOrder(committed), replayed: true };
+        if (committed) {
+          this.assertReplayMatches(committed, committed.listing, quantity);
+          return { order: this.serializeOrder(committed), replayed: true };
+        }
       }
       throw err;
     }
 
-    if (!order.replayed) {
-      void this.notificationsService
-        .createNotification(
-          buyerId,
-          NotificationType.CREDIT_SPENT,
-          'Marketplace purchase complete',
-          `You bought ${order.order.quantity}x ${(order.listing.itemSnapshot as Record<string, unknown>)['name'] ?? 'item'} for ${order.order.totalPrice} credits.`,
-          { listingId, orderId: order.order.id, totalPrice: order.order.totalPrice },
-        )
-        .catch(() => null);
-      void this.notificationsService
-        .createNotification(
-          order.listing.sellerId,
-          NotificationType.CREDIT_EARNED,
-          'Item sold on marketplace',
-          `You sold ${order.order.quantity}x ${(order.listing.itemSnapshot as Record<string, unknown>)['name'] ?? 'item'} for ${order.order.totalPrice} credits.`,
-          { listingId, orderId: order.order.id, totalPrice: order.order.totalPrice },
-        )
-        .catch(() => null);
-      this.eventsService.emitToUser(buyerId, 'marketplace:purchased', {
-        listingId,
-        orderId: order.order.id,
-        itemId: order.listing.itemId,
-        quantity: order.order.quantity,
-        totalPrice: order.order.totalPrice,
-      });
-      this.eventsService.emitToUser(order.listing.sellerId, 'marketplace:sold', {
-        listingId,
-        orderId: order.order.id,
-        itemId: order.listing.itemId,
-        quantity: order.order.quantity,
-        totalPrice: order.order.totalPrice,
+    // Terminal states committed inside the tx — surface them as errors only
+    // now that the escrow return / pause transition is durable.
+    if (result.kind === 'expired') {
+      throw new BadRequestException('Listing has expired');
+    }
+    if (result.kind === 'paused') {
+      const pausedListing = await this.prisma.marketplaceListing.findUnique({ where: { id: listingId } });
+      if (pausedListing) {
+        void this.notificationsService
+          .createNotification(
+            pausedListing.sellerId,
+            NotificationType.SYSTEM_ANNOUNCEMENT,
+            'Listing paused',
+            'A marketplace listing was paused because the item\'s store terms changed. Cancel it to return your items, then relist if still eligible.',
+            { listingId, reason: 'catalog_changed' },
+          )
+          .catch(() => null);
+      }
+      throw new ConflictException({
+        code: 'LISTING_PAUSED',
+        message: 'This listing was paused because the item\'s terms changed. The seller can cancel it to recover the items.',
       });
     }
+    if (result.kind === 'replayed') {
+      return { order: this.serializeOrder(result.order), replayed: true };
+    }
 
-    return { order: this.serializeOrder(order.order), replayed: order.replayed };
+    const order = result;
+    void this.notificationsService
+      .createNotification(
+        buyerId,
+        NotificationType.CREDIT_SPENT,
+        'Marketplace purchase complete',
+        `You bought ${order.order.quantity}x ${(order.listing.itemSnapshot as Record<string, unknown>)['name'] ?? 'item'} for ${order.order.totalPrice} credits.`,
+        { listingId, orderId: order.order.id, totalPrice: order.order.totalPrice },
+      )
+      .catch(() => null);
+    void this.notificationsService
+      .createNotification(
+        order.listing.sellerId,
+        NotificationType.CREDIT_EARNED,
+        'Item sold on marketplace',
+        `You sold ${order.order.quantity}x ${(order.listing.itemSnapshot as Record<string, unknown>)['name'] ?? 'item'} for ${order.order.totalPrice} credits.`,
+        { listingId, orderId: order.order.id, totalPrice: order.order.totalPrice },
+      )
+      .catch(() => null);
+    this.eventsService.emitToUser(buyerId, 'marketplace:purchased', {
+      listingId,
+      orderId: order.order.id,
+      itemId: order.listing.itemId,
+      quantity: order.order.quantity,
+      totalPrice: order.order.totalPrice,
+    });
+    this.eventsService.emitToUser(order.listing.sellerId, 'marketplace:sold', {
+      listingId,
+      orderId: order.order.id,
+      itemId: order.listing.itemId,
+      quantity: order.order.quantity,
+      totalPrice: order.order.totalPrice,
+    });
+
+    return { order: this.serializeOrder(order.order), replayed: false };
   }
 
   // ─── History ────────────────────────────────────────────────
@@ -732,7 +935,11 @@ export class MarketplaceService {
     const itemIds = [...new Set(listings.map((l) => l.itemId))];
     const items = await this.prisma.storeItem.findMany({
       where: { id: { in: itemIds } },
-      select: { id: true, name: true, category: true, creditCost: true },
+      select: {
+        id: true, name: true, description: true, category: true, creditCost: true,
+        isConsumable: true, isActive: true, requiredVipTierLevel: true,
+        maxOwnedPerUser: true, metadata: true,
+      },
     });
     const itemById = new Map(items.map((i) => [i.id, i]));
     return listings.map((l) => ({
@@ -813,8 +1020,14 @@ export class MarketplaceService {
   }
 }
 
-type MarketplaceOrderResult = {
-  order: Prisma.MarketplaceOrderGetPayload<Record<string, never>>;
-  listing: Prisma.MarketplaceListingGetPayload<Record<string, never>>;
-  replayed: boolean;
-};
+type MarketplaceOrderRow = Prisma.MarketplaceOrderGetPayload<Record<string, never>>;
+type MarketplaceListingRow = Prisma.MarketplaceListingGetPayload<Record<string, never>>;
+
+// Discriminated union returned by the purchase transaction. 'expired' and
+// 'paused' are committed terminal transitions — the service throws the
+// client-facing error only after commit so the escrow return persists.
+type PurchaseTxResult =
+  | { kind: 'replayed'; order: MarketplaceOrderRow }
+  | { kind: 'order'; order: MarketplaceOrderRow; listing: MarketplaceListingRow }
+  | { kind: 'expired' }
+  | { kind: 'paused' };

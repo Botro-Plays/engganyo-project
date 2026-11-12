@@ -6,12 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftRight, Loader2, Package, Store } from 'lucide-react';
 
 import { apiClient } from '@/lib/api';
+import { formatCredits } from '@/lib/utils';
 import type { ApiResponse } from '@/types';
 import { SellPanel } from './_components/sell-panel';
 import { MyListings } from './_components/my-listings';
 import { OrderHistory } from './_components/order-history';
 import { MarketplaceListingCard } from './_components/listing-card';
-import type { BrowseResponse } from './_components/types';
+import type { BrowseResponse, MarketplaceConfig } from './_components/types';
 
 const CATEGORY_LABELS: Record<string, string> = {
   ALL: 'All',
@@ -40,6 +41,17 @@ export default function MarketplacePage() {
     placeholderData: (prev) => prev,
   });
 
+  // Proposed internal-test rules — displayed verbatim from the API so the
+  // copy can never drift from what the backend actually enforces.
+  const { data: config } = useQuery({
+    queryKey: ['marketplace', 'config'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<MarketplaceConfig>>('marketplace/config');
+      return res.data.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const listings = data?.listings ?? [];
 
   const tabs = [
@@ -59,7 +71,8 @@ export default function MarketplacePage() {
             Marketplace
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Buy and sell unused store items for credits. Listings expire after 7 days.
+            Buy and sell unused store items for credits.{' '}
+            {config ? `Listings expire after ${config.listingTtlDays} days.` : 'Listings expire after 7 days.'}
           </p>
         </div>
         <Link
@@ -70,6 +83,24 @@ export default function MarketplacePage() {
           Store
         </Link>
       </div>
+
+      {/* Proposed test settings — visible until the owner confirms them */}
+      {config?.awaitingOwnerConfirmation && (
+        <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
+          <p className="text-xs font-semibold text-amber-300 uppercase tracking-wide mb-1">
+            Internal test — settings awaiting owner confirmation
+          </p>
+          <ul className="text-xs text-amber-200/80 space-y-0.5 list-disc list-inside">
+            {config.notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+            <li>
+              Price range {formatCredits(config.minUnitPrice)}–{formatCredits(config.maxUnitPrice)} credits/unit ·{' '}
+              {config.maxActiveListingsPerSeller} active listings per seller · manual relisting
+            </li>
+          </ul>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-surface-hover border border-surface-border rounded-lg p-1 w-fit max-w-full overflow-x-auto">

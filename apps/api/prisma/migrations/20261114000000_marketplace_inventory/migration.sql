@@ -10,7 +10,7 @@ ALTER TYPE "TransactionType" ADD VALUE 'SPEND_MARKETPLACE_PURCHASE';
 ALTER TYPE "TransactionType" ADD VALUE 'EARN_MARKETPLACE_SALE';
 
 -- CreateEnum
-CREATE TYPE "MarketplaceListingStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'CANCELLED', 'EXPIRED', 'REMOVED');
+CREATE TYPE "MarketplaceListingStatus" AS ENUM ('ACTIVE', 'PAUSED', 'SOLD_OUT', 'CANCELLED', 'EXPIRED', 'REMOVED');
 
 -- AlterTable: provenance-segregated stacks. Bound and tradable units can
 -- never merge because the stack key now includes provenance.
