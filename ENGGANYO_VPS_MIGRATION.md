@@ -2330,7 +2330,7 @@ Instagram campaign `cmw66gqf900fi5vv87p2bhy0q`, completion
 - Outbox 3 notification + 2 socket DELIVERED; LEVEL_UP/VIP notifications
   carry outbox dedupe keys; TASK_ASSIGNED/TASK_COMPLETED are direct.
 
-## Pending review — PR #81 `fix/outcome-period-terms` @ `6209794`
+## Pending review — PR #81 `fix/outcome-period-terms` @ `3cd5f89`
 
 Snapshot + mission period-catalog hardening on `eb7eaeb` (Ready for
 review, NOT merged):
@@ -2355,7 +2355,13 @@ review, NOT merged):
   past 11-13). Deployment day + earlier periods keep legacy
   snapshot/live behavior; in-flight outcomes verified pre-boundary
   continue under legacy policy; no repricing, no backfill.
-- Real-PG regressions green in CI run `43164921092`: display-vs-
-  payout after edit, mid-day disable/type change, next-day
-  activation, deletion/retirement, pre-boundary legacy, plus all
-  prior boost/ordering/lease/scan tests.
+- Atomicity fix: freezeMissionPeriodCatalogTx requires a
+  TransactionClient — marker + complete term set commit or roll back
+  together; ensureMissionPeriodTerms uses caller tx or opens a
+  dedicated retryable transaction.
+- Real-PG regressions green in CI run `43169350113`: atomic freeze
+  failure/retry, concurrent first-touch + reward processing, admin
+  mutation racing first-touch, display-vs-payout after edit, mid-day
+  disable/type change, next-day activation, deletion/retirement,
+  pre-boundary legacy, plus all prior boost/ordering/lease/scan
+  tests.
