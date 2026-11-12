@@ -138,9 +138,21 @@ credits+XP only); the only earned inventory is daily/wheel gift boxes and
 loot-box cosmetics, all bound by policy. PR #83 (Ready for review) adds
 `ACTIVITY_REWARD` provenance + per-item `metadata.activityRewardTradable`
 whitelist — mechanism ready, zero behavior change until a grant path
-opts in and owner approves specific items. Jomar's earned-item selling
-requirement stays **partially complete** until that path exists and is
-verified.
+opts in and owner approves specific items. PR #83 body now carries a
+quantified, capped recommendation (≤1 XP Boost/24h per user per UTC day
+= ≤7/week/account; non-stacking 2× multiplier; ≤1,050cr/week nominal;
+replay-safe grant ledger) — **awaiting owner approval; not enabled**.
+Jomar's earned-item selling requirement stays **partially complete**
+until that path exists and is verified.
+
+**Post-acceptance recovery defect → PR #85 (open):** the unresolved-
+purchase retry reused the funds gate, hiding committed orders at zero
+balance / sold-out listings. Fix adds read-only
+`GET /marketplace/orders/lookup/:purchaseKey` + committed-order panel
+regardless of balance/stock/status + Playwright regression. Test-account
+credentials rotated after shared-password exposure (5 accounts, unique
+creds at `~/.engganyo-test-accounts.env`, 14 sessions revoked); temp
+browser profiles closed.
 
 ## 5. Discoverable Top up
 

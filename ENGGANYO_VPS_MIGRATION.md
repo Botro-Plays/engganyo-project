@@ -2566,17 +2566,68 @@ buyer `devin_p2p_b` 7705, `devin_earn_test` 295 (untouched).
 Inventory: buyer MARKETPLACE Streak×3; seller PURCHASE stacks intact;
 **classified LEGACY row unchanged** (devin_earn_test Streak×1 LEGACY).
 
-Method note: CDP `page.route`/`route.fetch` interception hung repeatedly
-over connectOverCDP, so the lost-response scenario was simulated
-faithfully — a real purchase committed via API with a known purchaseKey
-(the exact server state a lost response leaves) plus the identical
-pending-intent localStorage record the UI persists pre-request. The UI
-then hydrated 'Unconfirmed purchase attempt' on reload and 'Confirm
-purchase' replayed the key → server returned the committed order,
-wallet delta 0, order count unchanged. Server-side idempotent replay is
-independently covered by real-PG specs in CI.
+Method note (corrected 2026-11-12 late): the lost-response *setup* was
+server-assisted, not a real network fault — a purchase was committed via
+the API with a known purchaseKey (the exact server state a lost response
+leaves) and the identical pending-intent localStorage record the UI
+persists pre-request was injected. Everything after that was the **fully
+exercised rendered recovery path**: reload → 'Unconfirmed purchase
+attempt' hydration → 'Confirm purchase' click → idempotent replay →
+committed order displayed, wallet delta 0, no second debit/transfer.
+What was NOT exercised in-browser: the initial POST returning a real
+transport failure (CDP `route.fetch` hung; covered instead by the new
+Playwright regression in PR #85 and real-PG idempotency specs).
+
+**Defect found post-acceptance → PR #85**: the recovery retry reused the
+`!canAfford` funds gate, so a buyer whose committed debit left
+insufficient balance (or whose listing sold out/paused/expired) could
+never surface the order. Fix: read-only buyer-scoped
+`GET /marketplace/orders/lookup/:purchaseKey` + UI that displays the
+committed order regardless of balance/stock/status; uncommitted intents
+stay retryable only behind explicit confirm + funds check.
 
 Test credit changes this session: seller +6000 granted / spent on test
 stock; buyer +6000 granted; net flows recorded in results.json.
 `devin_mod_test` role reverted MODERATOR; DEVIN TEST item deactivated.
-Edge test-profile windows left open for owner inspection.
+Edge test-profile windows (`C:\tmp\edge-mp-*`) closed and deleted after
+evidence capture; shared test password `DevinTest!2026` was exposed in a
+report → all five affected accounts rotated to unique credentials
+(stored outside repos at `~/.engganyo-test-accounts.env`) and 14
+sessions revoked.
+
+### 2026-11-12 (late) — purchase-recovery defect fix (PR #85) + test-account credential rotation
+
+- **Defect:** unresolved-purchase retry reused `!canAfford` — a buyer whose
+  committed debit left insufficient balance, or whose listing was
+  sold-out/paused/expired, could never surface the committed order.
+- **PR #85** `fix/marketplace-purchase-recovery-lookup` @ `47125fc`:
+  - `GET /marketplace/orders/lookup/:purchaseKey` — authenticated,
+    buyer-scoped, read-only; returns committed order or `null`.
+  - Detail page shows "Purchase completed" panel for a committed order
+    regardless of balance/stock/listing status; `null` keeps the intent
+    retryable only behind explicit confirm + normal funds check;
+    uncommitted intents on unavailable listings explain they cannot
+    complete (Order history → discard).
+  - Real-PG spec: zero-balance + SOLD_OUT lookup, buyer scoping, key
+    validation. Playwright `marketplace-recovery.spec.ts`: exactly-
+    affordable purchase → commit + lost response → zero balance →
+    reload → committed order, zero additional POSTs; sold-out
+    committed/uncommitted intent cases.
+- **Credential rotation (exposed shared test password):** argon2 verify
+  showed `DevinTest!2026` still valid on 5 accounts
+  (`devin_p2p_a`, `devin_p2p_b`, `devin_earn_test`, `devin_create_test`,
+  `devin_ref_test`); `devin_mod_test` has placeholder hash `x` (no
+  password login possible — left as-is). Rotated all five to unique
+  random credentials; `UPDATE 5` + `UPDATE 14` sessions revoked.
+  New credentials stored outside all repos at
+  `C:\Users\aquar\.engganyo-test-accounts.env` (user-profile ACL:
+  SYSTEM/Admins/owner only). No passwords/tokens in repos, reports, or
+  evidence. JWT access tokens are stateless and expire on their own;
+  refresh sessions are revoked.
+- **Browser profiles:** `C:\tmp\edge-mp-{seller,buyer,bound}` Edge
+  processes terminated (30 processes, edge-mp-* command lines only) and
+  profile dirs deleted after evidence was committed (`0229999`).
+- **PR #83** body updated with quantified reward economics (supply,
+  stacking, price impact, farming exposure, completions-per-item) and a
+  capped deterministic recommendation — still Ready for review, reward
+  NOT enabled.
