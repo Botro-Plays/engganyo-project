@@ -1000,6 +1000,30 @@ export class MarketplaceService {
     }));
   }
 
+  /**
+   * Non-mutating recovery lookup: returns the committed order for a
+   * buyer-scoped purchaseKey, or null when the attempt never committed.
+   * The UI uses this to distinguish "already purchased" from "unconfirmed"
+   * without re-issuing the purchase — and to display the order regardless
+   * of current balance, stock, or listing status.
+   */
+  async findPurchaseByKey(buyerId: string, purchaseKey: string) {
+    if (!purchaseKey || purchaseKey.length < 8 || purchaseKey.length > 128) {
+      throw new BadRequestException('A valid purchaseKey (8–128 chars) is required');
+    }
+    const order = await this.prisma.marketplaceOrder.findUnique({
+      where: { buyerId_purchaseKey: { buyerId, purchaseKey } },
+      include: { listing: { select: { itemSnapshot: true } } },
+    });
+    if (!order) return { order: null };
+    return {
+      order: {
+        ...this.serializeOrder(order),
+        itemName: ((order.listing.itemSnapshot as Record<string, unknown>)['name'] as string) ?? 'Unknown item',
+      },
+    };
+  }
+
   async getOrderHistory(userId: string) {
     const [purchases, sales] = await Promise.all([
       this.prisma.marketplaceOrder.findMany({
