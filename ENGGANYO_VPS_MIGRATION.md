@@ -2407,3 +2407,11 @@ review, NOT merged):
 - Web UI: /marketplace (Browse/Sell/My Listings/Orders tabs),
   /marketplace/[id] detail + purchase confirmation with stable
   purchaseKey, provenance badges on inventory, nav entry.
+- PR #82 CI green at `ae7d22f` (run `43179700114`): API incl. all
+  real-PG marketplace regressions, Web build, E2E — all success.
+  PR is Ready for review; NOT merged — deployment waits for owner
+  confirmation of proposed test settings.
+- CI repairs en route: unique was an INDEX not constraint (DROP INDEX);
+  Next.js page named-export rule; spec wallet stub needed atomic
+  increments for reciprocal-purchase concurrency; store spec mock
+  gained inventoryMovement delegate.
