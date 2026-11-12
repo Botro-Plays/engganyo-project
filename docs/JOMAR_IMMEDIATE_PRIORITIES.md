@@ -19,7 +19,7 @@ the table wins. Verified against current main + production evidence cited.
 | 1 | Manageable task discovery (2-3 choices, platform select) | **Partially shipped - acceptance open** | Platform filter chips + paginated "Show more" feed (initial batch **6**, not 2-3); `browseActive` filters platformPrefix/taskType/geo, excludes completed + own campaigns. `apps/api/src/modules/campaigns/campaigns.service.ts:633`, `apps/web/src/app/(dashboard)/tasks/page.tsx` | PR #46 `a03732c` live-verified: chips filter, 6-card batch, Show more, own-work exclusion | **OPEN:** Jomar asked for two/three choices - shipped six initial cards (two desktop rows); needs his sign-off or a batch-size change. Visual-design satisfaction also open (item 6). |
 | 2 | Hide self-owned work + Accept & open target | **Shipped + live-verified** | Own campaigns excluded from `GET /tasks` at API level; creators keep `/campaigns` + `tasks/my`. "Accept & open [platform]" opens target synchronously post-assign with popup-blocked fallback + pinned accepted panel | PR #46; live PASS on engganyo.com (popup + fallback + panel) | None known. |
 | 3 | Optional account linking for manual tasks | **Shipped + live-verified** | `SocialAuthService.requiresLinkedAccount(taskType, autoVerify)` - link required only for API-verified autoVerify types; manual-proof tasks accept unlinked; challenges never require linking. `social-auth.service.ts:760`, `tasks.service.ts:135` | PR #47 `bcb5371`; live manual-task accept unlinked; CI 28-case matrix + real-PG specs | Jomar's "no OAuth at all" is not fully met - OAuth linking remains for the 4 API-verified task types (needed for automated verification). Multi-account support exists via Settings > Connected Accounts. Deferred funded-crypto qualification retained. |
-| 4 | User-to-user marketplace | **LIVE on prod `7456b7b`; earned-item path pending PR #83** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** — implemented via PR #82 (provenance-separated inventory, escrow listings, idempotent settlement, catalog-drift pause, cap serialization) and live-verified 12 Nov. Earned/farmed-item selling partially complete: `ACTIVITY_REWARD` provenance + whitelist in PR #83 awaiting review; no verified-activity grant path exists yet | Deploy run `43199829734` ✅; live evidence `evidence/marketplace-live-2026-11-12/`; audit: no task/mission/achievement path grants inventory today | Owner approved internal-test settings 12 Nov (0% fee, BOOST/CONVENIENCE only, 7-day, 5 listings/seller). Remaining: whitelist specific earned items + wire a grant path. |
+| 4 | User-to-user marketplace | **LIVE on prod `5c86793`; rendered browser acceptance done; earned-item path pending PR #83** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** — implemented via PR #82 + viewer/recovery fixes PR #84 (optional-auth listing detail, persisted purchase intent). Live API verification + full rendered browser journey (Edge/CDP, 1440px+390px, labeled accounts) complete 12 Nov. Earned/farmed-item selling partially complete: `ACTIVITY_REWARD` provenance + whitelist in PR #83 awaiting review; no verified-activity grant path exists yet | Deploy runs `43199829734` + `43213268757` ✅; evidence `evidence/marketplace-live-2026-11-12/` + `evidence/marketplace-browser-2026-11-12/`; audit: no task/mission/achievement path grants inventory today | Owner approved internal-test settings 12 Nov (0% fee, BOOST/CONVENIENCE only, 7-day, 5 listings/seller). Remaining: whitelist specific earned items + wire a grant path (milestone proposal in PR #83 awaits approval). |
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
 | 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
@@ -97,7 +97,7 @@ Jomar wants beginners to complete manually reviewed tasks using their chosen soc
 
 ## 4. Player item marketplace (was: user-to-user credit marketplace)
 
-**Status — IMPLEMENTED + LIVE on prod `7456b7b` (12 Nov); earned-item path PARTIALLY COMPLETE.**
+**Status — IMPLEMENTED + LIVE on prod `5c86793` (12 Nov); rendered browser acceptance COMPLETE; earned-item path PARTIALLY COMPLETE.**
 
 > **Interpretation corrected by owner (11 Nov 2026):** Jomar means a
 > **player item marketplace** — users sell eligible Engganyo inventory
@@ -118,6 +118,19 @@ settings (BOOST/CONVENIENCE consumables, no loot boxes/cosmetics,
 credits-only, 0% fee, 10–100k/unit, 7-day expiry, manual relist,
 5 listings/seller). Live-verified end-to-end on labeled accounts
 (`evidence/marketplace-live-2026-11-12/`).
+
+**Viewer + recovery hardening (PR #84, merged `5c86793`, deploy run
+`43213268757` ✅):** listing-detail optional-auth resolves
+seller/buyer/anonymous correctly; purchase intent persisted to
+localStorage before the request so committed-then-lost purchases
+recover via 'Confirm purchase' replay without double-charging.
+
+**Rendered browser acceptance (12 Nov, real Edge via CDP, reCAPTCHA
+enforced, owner-assisted logins):** full journey at 1440px + 390px —
+store purchase → Sell → listing → buyer partial buy → committed-purchase
+recovery (wallet delta 0, order replayed) → buyer Use → cancel →
+catalog-pause recovery → expiry — all verified with exact wallet/
+order/inventory outcomes (`evidence/marketplace-browser-2026-11-12/`).
 
 **Remaining — earned/farmed items:** audit found NO verified
 task/mission/achievement path grants inventory today (missions pay

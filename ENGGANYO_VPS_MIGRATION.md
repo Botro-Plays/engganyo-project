@@ -2526,3 +2526,57 @@ reCAPTCHA env present, unchanged.
 Audit: no verified task/mission/achievement path grants inventory today;
 only earned inventory is daily/wheel gift boxes + loot-box cosmetics
 (all bound). Jomar earned-item requirement marked partially complete.
+
+### 2026-11-12 — PR #84 MERGED + DEPLOYED; rendered browser acceptance complete
+
+- **PR #84** `fix/marketplace-viewer-purchase-recovery` merged `5c867935b95e476962ffcfb5d0ee6576ba1f319c`
+  (CI all green: Web/API/E2E). Deploy run `43213268757` all jobs success;
+  `.deployed-sha` = `5c86793`; containers healthy; latest migration remains
+  `20261114000000_marketplace_inventory` (PR #83's `20261115000000` is NOT
+  merged — stays Ready for review).
+- **Fixes shipped:** listing-detail optional-auth (`@OptionalAuth` +
+  JwtAuthGuard) so seller/buyer/anonymous resolve `viewerIsSeller`/
+  `canPurchase` correctly with server-side self-purchase rejection
+  preserved; purchase intent persisted to localStorage
+  (`engganyo:marketplace:pending:{userId}:{listingId}`) BEFORE the request —
+  committed-then-lost purchases recover via 'Confirm purchase' replay
+  without double-charging; quantity frozen while pending.
+
+**Rendered browser acceptance** — real Edge via CDP (reCAPTCHA enforced,
+owner-assisted logins), labeled accounts, evidence
+`evidence/marketplace-browser-2026-11-12/` (results.json + screenshots).
+
+Desktop 1440px + mobile 390px, both passes verified:
+
+| Step | Desktop | Mobile |
+|---|---|---|
+| Store purchase → inventory | Streak×2+XP+test PURCHASE | same (qty grew) |
+| Sell → create listing | ACTIVE, escrow held | ACTIVE |
+| Bound stack in Sell panel | 'Bound — not sellable' | same |
+| Buyer partial buy (1 of 2) | −120 exact (4185→4065) | −120 exact (7945→7825) |
+| Purchase recovery | committed order + pending UI → Confirm → **Δwallet 0**, 2 orders | same (7705→7705) |
+| Buyer Use (MARKETPLACE stack) | qty 3→2, effect applied | qty 4→3 |
+| Cancel listing (UI) | XP listing CANCELLED, escrow returned | same |
+| Catalog pause → cancel → relist path | PAUSED visible → 'Cancel & recover' | same |
+| Expiry → escrow return | 'has expired' → cancelled | same |
+
+Orders: 4 COMPLETED (2 per pass), all 1×120cr, fee 0. Wallets reconciled
+via `/wallet/me` during UI + final psql: seller `devin_p2p_a` 7715,
+buyer `devin_p2p_b` 7705, `devin_earn_test` 295 (untouched).
+Inventory: buyer MARKETPLACE Streak×3; seller PURCHASE stacks intact;
+**classified LEGACY row unchanged** (devin_earn_test Streak×1 LEGACY).
+
+Method note: CDP `page.route`/`route.fetch` interception hung repeatedly
+over connectOverCDP, so the lost-response scenario was simulated
+faithfully — a real purchase committed via API with a known purchaseKey
+(the exact server state a lost response leaves) plus the identical
+pending-intent localStorage record the UI persists pre-request. The UI
+then hydrated 'Unconfirmed purchase attempt' on reload and 'Confirm
+purchase' replayed the key → server returned the committed order,
+wallet delta 0, order count unchanged. Server-side idempotent replay is
+independently covered by real-PG specs in CI.
+
+Test credit changes this session: seller +6000 granted / spent on test
+stock; buyer +6000 granted; net flows recorded in results.json.
+`devin_mod_test` role reverted MODERATOR; DEVIN TEST item deactivated.
+Edge test-profile windows left open for owner inspection.

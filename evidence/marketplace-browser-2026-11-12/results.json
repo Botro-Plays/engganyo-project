@@ -1,0 +1,306 @@
+{
+  "startedAt": "2026-11-12T13:20:28.606Z",
+  "passes": {
+    "desktop-finish": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "steps": {
+        "lostPurchaseCommitted": {
+          "status": 200,
+          "orderId": "cmwdksvm1007ijec1ahqq8pri",
+          "replayed": false
+        },
+        "recoveryPendingVisible": true,
+        "recovery": {
+          "before": 4065,
+          "afterLost": 3945,
+          "afterConfirm": 3945
+        },
+        "orderCount": 2,
+        "orders": [
+          {
+            "qty": 1,
+            "price": 120,
+            "status": "COMPLETED"
+          },
+          {
+            "qty": 1,
+            "price": 120,
+            "status": "COMPLETED"
+          }
+        ],
+        "itemUsed": true,
+        "marketplaceStackQtyAfterUse": 2,
+        "cancelDone": true,
+        "catalogPauseVisible": true,
+        "pauseCancelDone": true,
+        "expiredVisible": true,
+        "expiryCancelDone": true,
+        "sellerFinalBalance": 3835,
+        "buyerFinalBalance": 3945
+      }
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "steps": {
+        "storePurchase": "attempted",
+        "inventory": [
+          {
+            "name": "Streak Freeze (3 days)",
+            "qty": 4,
+            "prov": "PURCHASE"
+          },
+          {
+            "name": "DEVIN TEST Earned Boost",
+            "qty": 2,
+            "prov": "PURCHASE"
+          },
+          {
+            "name": "XP Boost (24h)",
+            "qty": 4,
+            "prov": "PURCHASE"
+          }
+        ],
+        "boundShowsNonSellable": true,
+        "partialBuy": {
+          "before": 7945,
+          "after": 7825,
+          "delta": -120
+        },
+        "lostPurchaseCommitted": {
+          "status": 200,
+          "orderId": "cmwdkyzb200axjec1ljzswy1p",
+          "replayed": false
+        },
+        "recoveryPendingVisible": true,
+        "recovery": {
+          "afterLost": 7705,
+          "afterConfirm": 7705
+        },
+        "orderCount": 2,
+        "orders": [
+          {
+            "qty": 1,
+            "price": 120,
+            "status": "COMPLETED"
+          },
+          {
+            "qty": 1,
+            "price": 120,
+            "status": "COMPLETED"
+          }
+        ],
+        "itemUsed": true,
+        "marketplaceStackQtyAfterUse": 3,
+        "cancelDone": true,
+        "catalogPauseVisible": true,
+        "pauseCancelDone": true,
+        "expiredVisible": true,
+        "expiryCancelDone": true,
+        "sellerFinalBalance": 7715,
+        "buyerFinalBalance": 7705
+      },
+      "listingId": "cmwdkxdal00a7jec10smd71yk",
+      "xpListingId": "cmwdkxspc00abjec124jxnzb6"
+    }
+  },
+  "edgeCases": {},
+  "notes": [
+    {
+      "k": "desktop-lost-commit",
+      "v": {
+        "status": 200,
+        "orderId": "cmwdksvm1007ijec1ahqq8pri",
+        "replayed": false
+      },
+      "at": "2026-11-12T13:20:44.855Z"
+    },
+    {
+      "k": "desktop-recovery-pending",
+      "v": {
+        "visible": true
+      },
+      "at": "2026-11-12T13:20:51.105Z"
+    },
+    {
+      "k": "desktop-recovery-wallets",
+      "v": {
+        "before": 4065,
+        "afterLost": 3945,
+        "afterConfirm": 3945
+      },
+      "at": "2026-11-12T13:20:56.467Z"
+    },
+    {
+      "k": "desktop-orders",
+      "v": [
+        {
+          "qty": 1,
+          "price": 120,
+          "status": "COMPLETED"
+        },
+        {
+          "qty": 1,
+          "price": 120,
+          "status": "COMPLETED"
+        }
+      ],
+      "at": "2026-11-12T13:20:56.718Z"
+    },
+    {
+      "k": "desktop-use-result",
+      "v": {
+        "marketplaceStackQty": 2
+      },
+      "at": "2026-11-12T13:21:08.973Z"
+    },
+    {
+      "k": "desktop-catalog-pause",
+      "v": {
+        "visible": true
+      },
+      "at": "2026-11-12T13:22:18.686Z"
+    },
+    {
+      "k": "desktop-expiry",
+      "v": {
+        "visible": true
+      },
+      "at": "2026-11-12T13:23:00.749Z"
+    },
+    {
+      "k": "desktop-final-balances",
+      "v": {
+        "seller": 3835,
+        "buyer": 3945
+      },
+      "at": "2026-11-12T13:23:01.577Z"
+    },
+    {
+      "k": "fund-mobile",
+      "v": "seller+buyer +2000cr via admin grant",
+      "at": "2026-11-12T13:23:02.832Z"
+    },
+    {
+      "k": "mobile-inventory",
+      "v": [
+        {
+          "name": "Streak Freeze (3 days)",
+          "qty": 4,
+          "prov": "PURCHASE"
+        },
+        {
+          "name": "DEVIN TEST Earned Boost",
+          "qty": 2,
+          "prov": "PURCHASE"
+        },
+        {
+          "name": "XP Boost (24h)",
+          "qty": 4,
+          "prov": "PURCHASE"
+        }
+      ],
+      "at": "2026-11-12T13:23:44.331Z"
+    },
+    {
+      "k": "mobile-listing-created",
+      "v": true,
+      "at": "2026-11-12T13:24:20.378Z"
+    },
+    {
+      "k": "mobile-listing-id",
+      "v": "cmwdkxdal00a7jec10smd71yk",
+      "at": "2026-11-12T13:24:20.641Z"
+    },
+    {
+      "k": "mobile-bound-panel",
+      "v": {
+        "nonSellable": true
+      },
+      "at": "2026-11-12T13:25:00.965Z"
+    },
+    {
+      "k": "mobile-partial-buy",
+      "v": {
+        "before": 7945,
+        "after": 7825,
+        "delta": -120
+      },
+      "at": "2026-11-12T13:25:24.390Z"
+    },
+    {
+      "k": "mobile-lost-commit",
+      "v": {
+        "status": 200,
+        "orderId": "cmwdkyzb200axjec1ljzswy1p",
+        "replayed": false
+      },
+      "at": "2026-11-12T13:25:29.472Z"
+    },
+    {
+      "k": "mobile-recovery-pending",
+      "v": {
+        "visible": true
+      },
+      "at": "2026-11-12T13:25:53.697Z"
+    },
+    {
+      "k": "mobile-recovery-wallets",
+      "v": {
+        "afterLost": 7705,
+        "afterConfirm": 7705
+      },
+      "at": "2026-11-12T13:26:03.718Z"
+    },
+    {
+      "k": "mobile-orders",
+      "v": [
+        {
+          "qty": 1,
+          "price": 120,
+          "status": "COMPLETED"
+        },
+        {
+          "qty": 1,
+          "price": 120,
+          "status": "COMPLETED"
+        }
+      ],
+      "at": "2026-11-12T13:26:03.966Z"
+    },
+    {
+      "k": "mobile-use-result",
+      "v": {
+        "marketplaceStackQty": 3
+      },
+      "at": "2026-11-12T13:26:37.070Z"
+    },
+    {
+      "k": "mobile-catalog-pause",
+      "v": {
+        "visible": true
+      },
+      "at": "2026-11-12T13:27:42.202Z"
+    },
+    {
+      "k": "mobile-expiry",
+      "v": {
+        "visible": true
+      },
+      "at": "2026-11-12T13:28:25.305Z"
+    },
+    {
+      "k": "mobile-final-balances",
+      "v": {
+        "seller": 7715,
+        "buyer": 7705
+      },
+      "at": "2026-11-12T13:28:26.034Z"
+    }
+  ]
+}
