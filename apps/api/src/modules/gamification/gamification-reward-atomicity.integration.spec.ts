@@ -836,16 +836,27 @@ run('reward atomicity — real PostgreSQL', () => {
   });
 
   it('XP boost frozen at VERIFIED: expiry before recovery cannot change the award; later activation cannot add one', async () => {
-    const boostMock = (service as any).storeService.getActiveXpBoost as jest.Mock;
+    // Boost eligibility is read from user_active_effects inside the
+    // VERIFIED tx — create/delete rows to move the boost across the
+    // completion→recovery boundary.
+    const mkBoost = (userId: string, multiplier: number, ttlMs: number) =>
+      prisma.userActiveEffect.create({
+        data: {
+          userId,
+          type: 'xp_boost',
+          metadata: { multiplier, expiresAt: new Date(Date.now() + ttlMs).toISOString() },
+          expiresAt: new Date(Date.now() + ttlMs),
+        },
+      });
 
     // Case 1: 2x boost active at the qualifying event, gone by recovery.
     const u1 = await mkUser();
+    const boost1 = await mkBoost(u1.id, 2, 3600_000);
     const c1 = await mkVerifiedCompletion(u1.id);
-    boostMock.mockResolvedValue({ multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() });
     await prisma.$transaction(async (tx) => {
       await service.recordTaskCompletionOutcome(tx as never, u1.id, c1.id);
     });
-    boostMock.mockResolvedValue(null); // boost "expired" before processing
+    await prisma.userActiveEffect.delete({ where: { id: boost1.id } }); // "expired" before processing
     await service.awardTaskCompletionOutcome(u1.id, c1.id);
 
     const xp1 = await prisma.xpEvent.findFirstOrThrow({
@@ -858,11 +869,10 @@ run('reward atomicity — real PostgreSQL', () => {
     // Case 2: no boost at the qualifying event, 2x appears before recovery.
     const u2 = await mkUser();
     const c2 = await mkVerifiedCompletion(u2.id);
-    boostMock.mockResolvedValue(null);
     await prisma.$transaction(async (tx) => {
       await service.recordTaskCompletionOutcome(tx as never, u2.id, c2.id);
     });
-    boostMock.mockResolvedValue({ multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() });
+    await mkBoost(u2.id, 2, 3600_000); // "activated" after recording
     await service.awardTaskCompletionOutcome(u2.id, c2.id);
 
     const xp2 = await prisma.xpEvent.findFirstOrThrow({
@@ -870,8 +880,6 @@ run('reward atomicity — real PostgreSQL', () => {
     });
     expect(xp2.amount).toBe(50); // frozen "no boost" — later activation irrelevant
     expect(xp2.boostMultiplier).toBeNull();
-
-    boostMock.mockResolvedValue(null);
   });
 
   it('recovery scan skips live leases before the batch limit — later claimable rows are not starved', async () => {
