@@ -2329,3 +2329,22 @@ Instagram campaign `cmw66gqf900fi5vv87p2bhy0q`, completion
   Daily Grind skipped (already completed today — correct).
 - Outbox 3 notification + 2 socket DELIVERED; LEVEL_UP/VIP notifications
   carry outbox dedupe keys; TASK_ASSIGNED/TASK_COMPLETED are direct.
+
+## Pending review — PR #81 `fix/outcome-period-terms` @ `f83617e`
+
+Snapshot hardening follow-up on `eb7eaeb` (Ready for review, NOT merged):
+
+- Boost eligibility now read from `user_active_effects` inside the
+  VERIFIED tx (never Redis), evaluated at `verifiedAt ?? createdAt`;
+  every new outcome explicitly records multiplier-or-null; lookup
+  failure aborts the tx. Legacy NULL-snapshot fallback unchanged.
+- New `mission_period_terms` (migration `20261113040000`): first
+  qualifying event of the UTC day freezes mission terms; processor
+  prefers period terms → config edits apply next period, processing
+  order cannot change payouts, no double-payable daily versions.
+- Real-PG regressions green in CI run `43139409903`: Redis-down boost
+  snapshot, expired-vs-active boost, mission edit across completions
+  in early-first/late-first/concurrent orderings.
+- Product policy (proposed, in PR body): terms freeze per
+  (mission, UTC day) at first qualifying event post-deploy; existing
+  progress/historical rewards untouched; no backfill.
