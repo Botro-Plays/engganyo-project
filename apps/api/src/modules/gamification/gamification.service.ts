@@ -445,6 +445,17 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     completionId: string,
   ) {
+    // The qualifying event's authoritative timestamp — VERIFIED time,
+    // falling back to the completion's creation time exactly as the
+    // processor does.
+    const completion = await tx.taskCompletion.findUnique({
+      where: { id: completionId },
+      select: { verifiedAt: true, createdAt: true },
+    });
+    const eventTime = completion?.verifiedAt ?? completion?.createdAt ?? new Date();
+    const periodDay = new Date(eventTime);
+    periodDay.setUTCHours(0, 0, 0, 0);
+
     // Freeze the reward terms that apply to THIS qualifying event inside
     // the VERIFIED transaction: the missions active right now (with their
     // current requirement/credit/xp terms) and the XP boost multiplier
@@ -457,13 +468,41 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       select: { id: true, name: true, requirement: true, creditReward: true, xpReward: true },
     });
     const snapshot: TaskOutcomeRewardSnapshot = { missions };
-    try {
-      const boost = await this.storeService.getActiveXpBoost(userId);
-      snapshot.xpBoostMultiplier = boost && boost.multiplier > 1 ? boost.multiplier : null;
-    } catch {
-      // Boost lookup is best-effort: leave the key absent so processing
-      // falls back to the live read for XP only; missions stay frozen.
+
+    // Boost eligibility is read from the authoritative DB inside this
+    // transaction — never Redis — and evaluated against the event
+    // timestamp, not wall-clock processing time. Every new outcome
+    // explicitly records its multiplier or null (no boost); a lookup
+    // failure aborts the VERIFIED tx rather than writing an incomplete
+    // snapshot that would silently fall back to future live state.
+    const boostEffect = await tx.userActiveEffect.findFirst({
+      where: { userId, type: 'xp_boost', expiresAt: { gt: eventTime } },
+      orderBy: { expiresAt: 'desc' },
+    });
+    const boostMeta = boostEffect?.metadata as { multiplier?: unknown } | null;
+    snapshot.xpBoostMultiplier =
+      typeof boostMeta?.multiplier === 'number' && boostMeta.multiplier > 1
+        ? boostMeta.multiplier
+        : null;
+
+    // Freeze this period's mission terms: the first qualifying event of
+    // the UTC day wins (ON CONFLICT DO NOTHING); edits take effect in a
+    // future period and every worker pays identical terms for
+    // (mission, date) regardless of processing order.
+    if (missions.length > 0) {
+      await tx.missionPeriodTerm.createMany({
+        data: missions.map((m) => ({
+          missionId: m.id,
+          periodDate: periodDay,
+          name: m.name,
+          requirement: m.requirement,
+          creditReward: m.creditReward,
+          xpReward: m.xpReward,
+        })),
+        skipDuplicates: true,
+      });
     }
+
     await tx.taskCompletionOutcome.upsert({
       where: { completionId },
       create: {
@@ -1347,6 +1386,26 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       missions = await this.prisma.dailyMission.findMany({
         where: { type, isActive: true },
       });
+    }
+
+    // Period terms are immutable once written: the first qualifying
+    // event of the UTC day froze them inside its VERIFIED tx. Prefer
+    // them over whatever the caller carried so config edits cannot
+    // change the payout according to worker processing order, and every
+    // completion of the same (mission, date) pays identical terms.
+    if (missions.length > 0) {
+      const periodTerms = await this.prisma.missionPeriodTerm.findMany({
+        where: { missionId: { in: missions.map((m) => m.id) }, periodDate: day },
+      });
+      if (periodTerms.length > 0) {
+        const byMission = new Map(periodTerms.map((t) => [t.missionId, t]));
+        missions = missions.map((m) => {
+          const t = byMission.get(m.id);
+          return t
+            ? { id: m.id, name: t.name, requirement: t.requirement, creditReward: t.creditReward, xpReward: t.xpReward }
+            : m;
+        });
+      }
     }
 
     let anyCompleted = false;

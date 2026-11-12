@@ -337,15 +337,18 @@ run('reward atomicity — real PostgreSQL', () => {
 
   // task_completions_single_offer requires exactly one of
   // campaign_id/challenge_id — completions need a campaign parent.
-  // One shared campaign is fine: (campaignId, userId) is unique and
-  // every test uses a fresh user.
-  let outcomeCampaignId: string | null = null;
-  const ensureOutcomeCampaign = async (uid: string) => {
-    if (outcomeCampaignId) return outcomeCampaignId;
+  // One shared campaign per variant is fine: (campaignId, userId) is
+  // unique and every test uses a fresh user (variant allows a second
+  // completion per user for period-term tests).
+  const outcomeCampaignIds = new Map<string, string>();
+  const ensureOutcomeCampaign = async (uid: string, variant = '') => {
+    const key = variant || 'default';
+    const cached = outcomeCampaignIds.get(key);
+    if (cached) return cached;
     const c = await prisma.campaign.create({
       data: {
         userId: uid,
-        title: `${PREFIX}outcome-campaign`,
+        title: `${PREFIX}outcome-campaign${variant ? `-${variant}` : ''}`,
         taskType: TaskType.GOOGLE_REVIEW,
         targetUrl: 'https://example.com/review',
         totalSlots: 1000,
@@ -358,15 +361,15 @@ run('reward atomicity — real PostgreSQL', () => {
         status: 'ACTIVE',
       },
     });
-    outcomeCampaignId = c.id;
+    outcomeCampaignIds.set(key, c.id);
     return c.id;
   };
 
-  const mkVerifiedCompletion = async (uid: string, status: 'VERIFIED' | 'SUBMITTED' = 'VERIFIED') =>
+  const mkVerifiedCompletion = async (uid: string, status: 'VERIFIED' | 'SUBMITTED' = 'VERIFIED', variant = '') =>
     prisma.taskCompletion.create({
       data: {
         userId: uid,
-        campaignId: await ensureOutcomeCampaign(uid),
+        campaignId: await ensureOutcomeCampaign(uid, variant),
         status,
         verifiedAt: status === 'VERIFIED' ? new Date() : null,
         verifiedBy: status === 'VERIFIED' ? 'system' : null,
@@ -977,5 +980,152 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(
       await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } }),
     ).toBe(1);
+  });
+
+  it('boost snapshot reads authoritative DB inside VERIFIED tx — Redis failure cannot corrupt it', async () => {
+    const boostMock = (service as any).storeService.getActiveXpBoost as jest.Mock;
+    boostMock.mockRejectedValue(new Error('redis down')); // cache path dead
+
+    const u = await mkUser();
+    // Active 2x boost in the authoritative table, expiring after the event.
+    await prisma.userActiveEffect.create({
+      data: {
+        userId: u.id,
+        type: 'xp_boost',
+        metadata: { multiplier: 2, expiresAt: new Date(Date.now() + 3600_000).toISOString() },
+        expiresAt: new Date(Date.now() + 3600_000),
+      },
+    });
+    // An already-expired boost must NOT be eligible.
+    await prisma.userActiveEffect.create({
+      data: {
+        userId: u.id,
+        type: 'xp_boost',
+        metadata: { multiplier: 5, expiresAt: new Date(Date.now() - 3600_000).toISOString() },
+        expiresAt: new Date(Date.now() - 3600_000),
+      },
+    });
+
+    const completion = await mkVerifiedCompletion(u.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
+    });
+
+    const outcome = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: completion.id },
+    });
+    const snap = outcome.rewardSnapshot as { xpBoostMultiplier?: number | null };
+    // Explicitly recorded from DB — not absent (no live-state fallback).
+    expect(snap.xpBoostMultiplier).toBe(2);
+
+    // Recovery pays the frozen multiplier even though Redis is still down.
+    await service.awardTaskCompletionOutcome(u.id, completion.id);
+    const xp = await prisma.xpEvent.findFirstOrThrow({
+      where: { userId: u.id, source: 'task_completion', referenceId: completion.id },
+    });
+    expect(xp.amount).toBe(100);
+    expect(xp.boostMultiplier).toBe(2);
+
+    // User with only an expired boost records explicit null.
+    const u2 = await mkUser();
+    await prisma.userActiveEffect.create({
+      data: {
+        userId: u2.id,
+        type: 'xp_boost',
+        metadata: { multiplier: 5, expiresAt: new Date(Date.now() - 60_000).toISOString() },
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const c2 = await mkVerifiedCompletion(u2.id);
+    await prisma.$transaction(async (tx) => {
+      await service.recordTaskCompletionOutcome(tx as never, u2.id, c2.id);
+    });
+    const o2 = await prisma.taskCompletionOutcome.findUniqueOrThrow({
+      where: { completionId: c2.id },
+    });
+    expect((o2.rewardSnapshot as { xpBoostMultiplier?: number | null }).xpBoostMultiplier).toBeNull();
+
+    boostMock.mockResolvedValue(null);
+  });
+
+  it('mission period terms freeze once — completions spanning an edit pay identical terms in either processing order', async () => {
+    // Scenario A: sequential recovery, later completion processed FIRST.
+    const runScenario = async (order: 'early-first' | 'late-first' | 'concurrent') => {
+      const u = await mkUser();
+      const mission = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}period-${order}-mission`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 2,
+          creditReward: 50,
+          xpReward: 25,
+          isActive: true,
+        },
+      });
+
+      const cEarly = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, cEarly.id);
+      });
+      // Config edit between the two qualifying events.
+      await prisma.dailyMission.update({
+        where: { id: mission.id },
+        data: { creditReward: 999, xpReward: 999 },
+      });
+      const cLate = await mkVerifiedCompletion(u.id, 'VERIFIED', 'b');
+      await prisma.$transaction(async (tx) => {
+        await service.recordTaskCompletionOutcome(tx as never, u.id, cLate.id);
+      });
+
+      // Exactly one period-terms row, holding the FIRST event's terms.
+      const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
+      const periodRows = await prisma.missionPeriodTerm.findMany({
+        where: { missionId: mission.id, periodDate: today },
+      });
+      expect(periodRows).toHaveLength(1);
+      expect(periodRows[0].creditReward).toBe(50);
+      expect(periodRows[0].xpReward).toBe(25);
+
+      if (order === 'concurrent') {
+        await Promise.all([
+          service.awardTaskCompletionOutcome(u.id, cEarly.id),
+          service.awardTaskCompletionOutcome(u.id, cLate.id),
+        ]);
+      } else if (order === 'late-first') {
+        await service.awardTaskCompletionOutcome(u.id, cLate.id);
+        await service.awardTaskCompletionOutcome(u.id, cEarly.id);
+      } else {
+        await service.awardTaskCompletionOutcome(u.id, cEarly.id);
+        await service.awardTaskCompletionOutcome(u.id, cLate.id);
+      }
+
+      // Both completions counted (progress 2/2) but exactly ONE payout,
+      // at the period-frozen terms — never the edited 999.
+      const progress = await prisma.userMissionProgress.findUniqueOrThrow({
+        where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
+      });
+      expect(progress.progress).toBe(2);
+      expect(progress.isCompleted).toBe(true);
+      const payouts = await prisma.transaction.findMany({
+        where: { referenceId: mission.id, referenceType: 'mission', type: TransactionType.EARN_MISSION_COMPLETE },
+      });
+      expect(payouts).toHaveLength(1);
+      expect(payouts[0].amount).toBe(50);
+      const missionXp = await prisma.xpEvent.findMany({
+        where: { userId: u.id, source: 'mission_complete', referenceId: { startsWith: `${mission.id}:` } },
+      });
+      expect(missionXp).toHaveLength(1);
+      expect(missionXp[0].amount).toBe(25);
+      expect(
+        await prisma.missionProgressEvent.count({
+          where: { missionId: mission.id, sourceId: { in: [cEarly.id, cLate.id] } },
+        }),
+      ).toBe(2);
+    };
+
+    await runScenario('early-first');
+    await runScenario('late-first');
+    await runScenario('concurrent');
   });
 });

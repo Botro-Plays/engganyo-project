@@ -979,6 +979,25 @@ model TaskCompletionOutcome {
   @@map("task_completion_outcomes")
 }
 
+// Immutable mission terms for one UTC period. The first qualifying
+// event of the day freezes name/requirement/credit/xp inside the
+// VERIFIED transaction (ON CONFLICT DO NOTHING); later config edits
+// take effect in a future period, and every worker processing the same
+// (mission, date) pays identical terms regardless of order.
+model MissionPeriodTerm {
+  id           String   @id @default(cuid())
+  missionId    String   @map("mission_id")
+  periodDate   DateTime @map("period_date") @db.Date
+  name         String
+  requirement  Int
+  creditReward Int      @map("credit_reward")
+  xpReward     Int      @map("xp_reward")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([missionId, periodDate])
+  @@map("mission_period_terms")
+}
+
 // Per-mission qualifying-event dedupe. A repeated delivery of the same
 // source event (e.g. outcome recovery re-running mission progress for a
 // completionId) must not count the task twice; distinct events each
