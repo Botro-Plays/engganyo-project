@@ -249,6 +249,10 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
           E2E_TEST_EMAIL: admin@engganyo.com
           E2E_TEST_PASSWORD: Admin@123456
+          # Containerized job reaches the redis service container by its
+          # Docker label hostname; the spec's fixture allowlist is loopback
+          # by default and only accepts this explicit opt-in.
+          E2E_REDIS_ALLOWED_HOSTS: redis
 
       - name: Show server logs on failure
         if: failure()

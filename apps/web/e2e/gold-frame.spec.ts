@@ -15,7 +15,17 @@ const FRAME_RING = '[class*="ring-amber-400"]';
 // targets. Anything else fails loudly — never write to a production database.
 const ALLOWED_DB_NAMES = new Set(['engganyo_test', 'engganyo_db']);
 // Redis targets must be loopback (CI service or local dev instance).
-const ALLOWED_REDIS_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+// Containerized CI reaches the service by its Docker label hostname, so
+// hosts may be added explicitly via E2E_REDIS_ALLOWED_HOSTS.
+const ALLOWED_REDIS_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  '::1',
+  ...(process.env['E2E_REDIS_ALLOWED_HOSTS'] ?? '')
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean),
+]);
 
 let fixtureOk = true;
 // Minimal shapes — clients are lazy-required in beforeAll so that a missing
