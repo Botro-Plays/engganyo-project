@@ -189,10 +189,18 @@ export class MarketplaceService {
 
   private assertReplayMatches(
     order: { listingId: string; quantity: number; unitPrice: number },
-    listing: { id: string; unitPrice: number },
+    requestedListing: { id: string; unitPrice: number } | null,
     quantity: number,
   ): void {
-    if (order.listingId !== listing.id || order.quantity !== quantity || order.unitPrice !== listing.unitPrice) {
+    // The identity check must compare the stored order against the listing
+    // the client is asking to buy NOW — never the order's own listing row,
+    // which would make the listingId comparison trivially true.
+    if (
+      !requestedListing ||
+      order.listingId !== requestedListing.id ||
+      order.quantity !== quantity ||
+      order.unitPrice !== requestedListing.unitPrice
+    ) {
       throw new ConflictException({
         code: 'IDEMPOTENCY_KEY_REUSED',
         message: 'purchaseKey was already used for a different purchase',
@@ -662,14 +670,22 @@ export class MarketplaceService {
       throw new BadRequestException('Quantity must be a positive integer');
     }
 
+    // Requested listing identity — needed to validate replay params on the
+    // fast path before any transaction opens.
+    const requestedListing = await this.prisma.marketplaceListing.findUnique({
+      where: { id: listingId },
+      select: { id: true, unitPrice: true },
+    });
+
     // Fast-path idempotent replay: a committed order for this key returns
-    // its result without touching wallets or stock again.
+    // its result without touching wallets or stock again — but only when
+    // the request identity (listing, quantity, agreed price) matches.
     const existing = await this.prisma.marketplaceOrder.findUnique({
       where: { buyerId_purchaseKey: { buyerId, purchaseKey } },
       include: { listing: true },
     });
     if (existing) {
-      this.assertReplayMatches(existing, existing.listing, quantity);
+      this.assertReplayMatches(existing, requestedListing, quantity);
       return { order: this.serializeOrder(existing), replayed: true };
     }
 
@@ -690,6 +706,7 @@ export class MarketplaceService {
           this.assertReplayMatches(dupOrder, listing, quantity);
           return { kind: 'replayed' as const, order: dupOrder };
         }
+
 
         if (listing.status !== MarketplaceListingStatus.ACTIVE) {
           if (listing.status === MarketplaceListingStatus.PAUSED) {
@@ -852,7 +869,7 @@ export class MarketplaceService {
           include: { listing: true },
         });
         if (committed) {
-          this.assertReplayMatches(committed, committed.listing, quantity);
+          this.assertReplayMatches(committed, requestedListing, quantity);
           return { order: this.serializeOrder(committed), replayed: true };
         }
       }
