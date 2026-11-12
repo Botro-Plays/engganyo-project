@@ -15,7 +15,7 @@ CREATE TYPE "MarketplaceListingStatus" AS ENUM ('ACTIVE', 'SOLD_OUT', 'CANCELLED
 -- AlterTable: provenance-segregated stacks. Bound and tradable units can
 -- never merge because the stack key now includes provenance.
 ALTER TABLE "user_inventory" ADD COLUMN "provenance" "InventoryProvenance" NOT NULL DEFAULT 'LEGACY';
-ALTER TABLE "user_inventory" DROP CONSTRAINT "user_inventory_user_id_item_id_key";
+DROP INDEX IF EXISTS "user_inventory_user_id_item_id_key";
 CREATE UNIQUE INDEX "user_inventory_user_id_item_id_provenance_key" ON "user_inventory"("user_id", "item_id", "provenance");
 
 -- CreateTable: append-only inventory movement audit
