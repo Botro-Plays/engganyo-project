@@ -21,7 +21,7 @@ import { withTransactionRetry } from '../../database/tx-retry';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
-import { effectiveOwnedQuantity, lockOwnershipSlot } from '../../common/inventory-ownership';
+import { effectiveOwnedQuantity, lockOwnershipSlots } from '../../common/inventory-ownership';
 
 /**
  * Player item marketplace — internal-test configuration.
@@ -290,6 +290,8 @@ export class MarketplaceService {
         await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${listingId} FOR UPDATE`;
         const locked = await tx.marketplaceListing.findUniqueOrThrow({ where: { id: listingId } });
         if (locked.status !== MarketplaceListingStatus.ACTIVE) return locked;
+        // Catalog row lock — same serialization as purchase fulfillment.
+        await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${locked.itemId} FOR UPDATE`;
         const freshItem = await tx.storeItem.findUniqueOrThrow({ where: { id: locked.itemId } });
         if (!this.catalogDrifted(locked.itemSnapshot, freshItem)) return locked;
         return tx.marketplaceListing.update({
@@ -425,6 +427,17 @@ export class MarketplaceService {
       // Serialize listing creation per seller: the 5-listing cap and the
       // one-active-listing-per-item rule are count-then-insert checks.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`marketplace:seller:${userId}`}, 0))`;
+
+      // Ownership lock BEFORE the inventory row lock (global order): the
+      // escrow decrement changes the seller's (user,item) representation
+      // and must serialize against concurrent cap counts. Lock-free
+      // pre-read only resolves itemId — everything is revalidated below.
+      const preInv = await tx.userInventory.findFirst({
+        where: { id: inventoryId, userId },
+        select: { itemId: true },
+      });
+      if (!preInv) throw new NotFoundException('Inventory item not found');
+      await lockOwnershipSlots(tx, [{ userId, itemId: preInv.itemId }]);
 
       // Lock the inventory row and re-validate everything under the lock —
       // a concurrent useItem/grant cannot race the escrow decrement.
@@ -562,6 +575,9 @@ export class MarketplaceService {
       }
 
       const expired = listing.expiresAt <= new Date();
+      // Escrow return is an ownership-representation change — hold the
+      // seller's (user,item) lock so concurrent cap counts stay consistent.
+      await lockOwnershipSlots(tx, [{ userId: listing.sellerId, itemId: listing.itemId }]);
       await this.returnEscrowedUnits(tx, listing, expired ? 'marketplace_expire' : 'marketplace_cancel');
       const updated = await tx.marketplaceListing.update({
         where: { id: listingId },
@@ -604,6 +620,7 @@ export class MarketplaceService {
           ) {
             return;
           }
+          await lockOwnershipSlots(tx, [{ userId: listing.sellerId, itemId: listing.itemId }]);
           await this.returnEscrowedUnits(tx, listing, 'marketplace_expire');
           await tx.marketplaceListing.update({
             where: { id },
@@ -624,6 +641,7 @@ export class MarketplaceService {
       if (found.status !== MarketplaceListingStatus.ACTIVE && found.status !== MarketplaceListingStatus.PAUSED) {
         throw new BadRequestException(`Listing is already ${found.status.toLowerCase()}`);
       }
+      await lockOwnershipSlots(tx, [{ userId: found.sellerId, itemId: found.itemId }]);
       await this.returnEscrowedUnits(tx, found, 'marketplace_takedown');
       return tx.marketplaceListing.update({
         where: { id: listingId },
@@ -707,7 +725,6 @@ export class MarketplaceService {
           return { kind: 'replayed' as const, order: dupOrder };
         }
 
-
         if (listing.status !== MarketplaceListingStatus.ACTIVE) {
           if (listing.status === MarketplaceListingStatus.PAUSED) {
             throw new ConflictException({
@@ -720,7 +737,10 @@ export class MarketplaceService {
         if (listing.expiresAt <= new Date()) {
           // Commit the expiry transition + escrow return FIRST; the caller
           // throws the expired-listing error only after this tx commits,
-          // otherwise the throw would roll the return back.
+          // otherwise the throw would roll the return back. The seller's
+          // (user,item) ownership lock serializes this representation
+          // change against concurrent cap counts.
+          await lockOwnershipSlots(tx, [{ userId: listing.sellerId, itemId: listing.itemId }]);
           await this.returnEscrowedUnits(tx, listing, 'marketplace_expire');
           await tx.marketplaceListing.update({
             where: { id: listingId },
@@ -738,6 +758,11 @@ export class MarketplaceService {
           throw new BadRequestException(`Only ${listing.remainingQuantity} unit(s) remain`);
         }
 
+        // Catalog lock: serialize against admin catalog edits for the whole
+        // fulfillment. An edit either commits before this read (→ drift →
+        // pause) or waits for this tx and applies after the validated
+        // purchase commits.
+        await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${listing.itemId} FOR UPDATE`;
         const item = await tx.storeItem.findUnique({ where: { id: listing.itemId } });
 
         // Catalog drift: the advertised terms (snapshot) no longer match the
@@ -752,6 +777,15 @@ export class MarketplaceService {
         }
         if (!item) throw new NotFoundException('Listing item no longer exists');
 
+        // Ownership locks for BOTH sides of the transfer, in sorted order:
+        // the seller's escrow decrement and the buyer's receipt+cap check
+        // are representation changes that must serialize against every
+        // other count/transition on those (user,item) pairs.
+        await lockOwnershipSlots(tx, [
+          { userId: listing.sellerId, itemId: listing.itemId },
+          { userId: buyerId, itemId: listing.itemId },
+        ]);
+
         // Buyer eligibility mirrors store purchase guards.
         if (item.requiredVipTierLevel !== null) {
           const buyer = await tx.user.findUnique({
@@ -765,10 +799,10 @@ export class MarketplaceService {
             );
           }
         }
-        // Ownership cap, serialized per (user,item) across store purchases,
-        // marketplace receipts, and the seller's own escrowed listings.
+        // Ownership cap — invcap locks already held above (sorted with the
+        // seller pair). effectiveOwnedQuantity reads on-hand + escrow in a
+        // single atomic statement.
         if (item.maxOwnedPerUser !== null) {
-          await lockOwnershipSlot(tx, buyerId, listing.itemId);
           const current = await effectiveOwnedQuantity(tx, buyerId, listing.itemId);
           if (current + quantity > item.maxOwnedPerUser) {
             throw new BadRequestException(

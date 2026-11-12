@@ -160,13 +160,14 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
         create: jest.fn().mockResolvedValue({ id: 'inv-new' }),
         update: jest.fn(),
         findFirst: jest.fn().mockResolvedValue(null),
-        aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
       },
       inventoryMovement: { create: jest.fn().mockResolvedValue({ id: 'mv-1' }) },
-      marketplaceListing: { aggregate: jest.fn().mockResolvedValue({ _sum: { remainingQuantity: 0 } }) },
     };
     (tx as Record<string, jest.Mock | Record<string, jest.Mock>>).$executeRaw =
       jest.fn().mockResolvedValue(1);
+    // effectiveOwnedQuantity runs as ONE atomic $queryRaw — return 0 owned.
+    (tx as Record<string, jest.Mock | Record<string, jest.Mock>>).$queryRaw =
+      jest.fn().mockResolvedValue([{ total: 0 }]);
 
     prisma = {
       storeItem: { findUnique: jest.fn().mockResolvedValue({ id: GOLD_FRAME.id }) },

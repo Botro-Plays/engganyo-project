@@ -945,4 +945,198 @@ run('marketplace — real PostgreSQL', () => {
     expect(await invQty(seller.id, boostItemId)).toBe(2);
     expect(await balance(buyer.id)).toBe(5_000);
   });
+
+  // ─── Ownership ↔ escrow transition coordination ────────────
+
+  it('capped buyer at cap via on-hand + own escrow: cancel-during-purchase cannot exceed cap', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}CapCancel Boost`,
+      maxOwnedPerUser: 3,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const buyer = await mkUser(10_000);
+    await mkInventory(buyer.id, capped.id, 2);
+    const buyerInv = await prisma.userInventory.findFirstOrThrow({ where: { userId: buyer.id, itemId: capped.id } });
+    // List 1 → on-hand 1 + own escrow 1 = effective 2 (cap 3).
+    const ownListing = await service.createListing(buyer.id, { inventoryId: buyerInv.id, quantity: 1, unitPrice: 50 });
+    const seller = await mkUser();
+    await mkInventory(seller.id, capped.id, 3);
+    const sInv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: capped.id } });
+    const listing = await service.createListing(seller.id, { inventoryId: sInv.id, quantity: 2, unitPrice: 100 });
+
+    // Race: buyer cancels own listing (escrow 1 → on-hand) while buying 2 units
+    // (would make effective 2+2=4 > cap 3 regardless of cancel timing — escrow
+    // transitions preserve the sum, so the count must stay consistent).
+    const [cancelRes, buyRes] = await Promise.allSettled([
+      service.cancelListing(buyer.id, ownListing.id),
+      service.purchaseListing(buyer.id, listing.id, { quantity: 2, purchaseKey: purchaseKey('capcancel') }),
+    ]);
+    expect(cancelRes.status).toBe('fulfilled');
+    expect(buyRes.status).toBe('rejected');
+    expect((buyRes as PromiseRejectedResult).reason).toBeInstanceOf(BadRequestException);
+
+    // Final effective ownership = on-hand + remaining escrow ≤ cap.
+    const onHand = await invQty(buyer.id, capped.id);
+    const escrow = await prisma.marketplaceListing.aggregate({
+      where: { sellerId: buyer.id, itemId: capped.id, status: { in: [MarketplaceListingStatus.ACTIVE, MarketplaceListingStatus.PAUSED] } },
+      _sum: { remainingQuantity: true },
+    });
+    expect(onHand + (escrow._sum.remainingQuantity ?? 0)).toBeLessThanOrEqual(3);
+    expect(await prisma.marketplaceOrder.count({ where: { buyerId: buyer.id, listingId: listing.id } })).toBe(0);
+  });
+
+  it('expiry return vs store purchase: escrow-aware cap holds across the transition', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}CapExpiry Boost`,
+      creditCost: 50,
+      maxOwnedPerUser: 2,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const seller = await mkUser(10_000);
+    await mkInventory(seller.id, capped.id, 2);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: capped.id } });
+    // on-hand 1 + escrow 1 = effective 2 = cap.
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
+    await prisma.marketplaceListing.update({
+      where: { id: listing.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    // Sweep (escrow → on-hand, sum preserved at 2) races a store purchase (+1).
+    const [sweepRes, buyRes] = await Promise.allSettled([
+      service.sweepExpiredListings(),
+      storeService.purchaseItem(seller.id, capped.id, 1),
+    ]);
+    expect(sweepRes.status).toBe('fulfilled');
+    expect(buyRes.status).toBe('rejected');
+    expect((buyRes as PromiseRejectedResult).reason).toBeInstanceOf(BadRequestException);
+
+    // Effective stays at cap: on-hand 2, no escrow, no store purchase.
+    expect(await invQty(seller.id, capped.id)).toBe(2);
+    expect(await prisma.storePurchase.count({ where: { userId: seller.id, itemId: capped.id } })).toBe(0);
+    const db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.EXPIRED);
+  });
+
+  it('takedown return vs store purchase: escrow-aware cap holds across the transition', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}CapTakedown Boost`,
+      creditCost: 50,
+      maxOwnedPerUser: 2,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const seller = await mkUser(10_000);
+    await mkInventory(seller.id, capped.id, 2);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: capped.id } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
+    const admin = await mkUser();
+
+    const [tdRes, buyRes] = await Promise.allSettled([
+      service.adminTakedown(admin.id, listing.id, 'test'),
+      storeService.purchaseItem(seller.id, capped.id, 1),
+    ]);
+    expect(tdRes.status).toBe('fulfilled');
+    expect(buyRes.status).toBe('rejected');
+
+    expect(await invQty(seller.id, capped.id)).toBe(2);
+    expect(await prisma.storePurchase.count({ where: { userId: seller.id, itemId: capped.id } })).toBe(0);
+  });
+
+  it('listing creation vs store purchase: escrow move cannot let the cap be exceeded', async () => {
+    const capped = await mkItem({
+      name: `${PREFIX}CapCreate Boost`,
+      creditCost: 50,
+      maxOwnedPerUser: 2,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const user = await mkUser(10_000);
+    await mkInventory(user.id, capped.id, 2); // effective 2 = cap
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: user.id, itemId: capped.id } });
+
+    // createListing preserves the effective total (on-hand→escrow); the
+    // concurrent store purchase (+1) must see the consistent total and fail.
+    const [listRes, buyRes] = await Promise.allSettled([
+      service.createListing(user.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 }),
+      storeService.purchaseItem(user.id, capped.id, 1),
+    ]);
+    expect(listRes.status).toBe('fulfilled');
+    expect(buyRes.status).toBe('rejected');
+    expect((buyRes as PromiseRejectedResult).reason).toBeInstanceOf(BadRequestException);
+
+    // on-hand 1 + escrow 1 = 2 = cap; no store purchase recorded.
+    expect(await invQty(user.id, capped.id)).toBe(1);
+    expect(await prisma.storePurchase.count({ where: { userId: user.id, itemId: capped.id } })).toBe(0);
+    const db = await prisma.marketplaceListing.findFirstOrThrow({
+      where: { sellerId: user.id, itemId: capped.id },
+    });
+    expect(db.status).toBe(MarketplaceListingStatus.ACTIVE);
+    expect(db.remainingQuantity).toBe(1);
+  });
+
+  // ─── Catalog lock through fulfillment ──────────────────────
+
+  it('admin catalog edit serializes with purchase: edit-first pauses, purchase-first commits', async () => {
+    const item = await mkItem({
+      name: `${PREFIX}EditRace Boost`,
+      metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
+    });
+    const seller = await mkUser();
+    const buyer = await mkUser(10_000);
+    await mkInventory(seller.id, item.id, 2);
+    const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: item.id } });
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
+
+    // Phase A — edit wins the catalog row lock first: the in-flight purchase
+    // must observe the NEW terms, detect drift, and pause the listing.
+    const editFirst = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${item.id} FOR UPDATE`;
+      await new Promise((r) => setTimeout(r, 400));
+      await tx.storeItem.update({
+        where: { id: item.id },
+        data: { metadata: { boostType: 'xp', multiplier: 3, durationHours: 24, effectType: 'xp_boost' } },
+      });
+    });
+    await new Promise((r) => setTimeout(r, 150)); // let the edit tx take the row lock
+    const [editRes, buyRes] = await Promise.allSettled([
+      editFirst,
+      service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('editfirst') }),
+    ]);
+    expect(editRes.status).toBe('fulfilled');
+    expect(buyRes.status).toBe('rejected');
+    expect(responseCode((buyRes as PromiseRejectedResult).reason)).toBe('LISTING_PAUSED');
+
+    let db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.PAUSED);
+    expect(await prisma.marketplaceOrder.count({ where: { listingId: listing.id } })).toBe(0);
+    expect(db.remainingQuantity).toBe(2); // escrow intact for seller recovery
+
+    // Phase B — purchase commits BEFORE the edit: the order settles under the
+    // validated (pre-edit) terms; the listing pauses afterwards.
+    await service.cancelListing(seller.id, listing.id); // recover escrow (PAUSED cancellable)
+    // Restore catalog to snapshot terms, then relist → fresh snapshot.
+    await prisma.storeItem.update({
+      where: { id: item.id },
+      data: { metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' } },
+    });
+    const inv2 = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: item.id } });
+    // List 2, buy 1 → 1 escrow unit remains ACTIVE so the post-edit pause is visible.
+    const listing2 = await service.createListing(seller.id, { inventoryId: inv2.id, quantity: 2, unitPrice: 100 });
+
+    const bought = await service.purchaseListing(buyer.id, listing2.id, { quantity: 1, purchaseKey: purchaseKey('editafter') });
+    expect(bought.replayed).toBe(false);
+    expect(await invQty(buyer.id, item.id, InventoryProvenance.MARKETPLACE)).toBe(1);
+
+    // Edit lands AFTER the validated purchase committed — the remaining
+    // ACTIVE listing pauses on next view; the completed order is untouched.
+    await prisma.storeItem.update({
+      where: { id: item.id },
+      data: { metadata: { boostType: 'xp', multiplier: 3, durationHours: 24, effectType: 'xp_boost' } },
+    });
+    const pausedDetail = await service.getListingDetail(listing2.id);
+    expect(pausedDetail.status).toBe(MarketplaceListingStatus.PAUSED);
+    db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing2.id } });
+    expect(db.status).toBe(MarketplaceListingStatus.PAUSED);
+    expect(db.remainingQuantity).toBe(1); // unsold escrow still held for seller
+    expect(await prisma.marketplaceOrder.count({ where: { listingId: listing2.id } })).toBe(1);
+  });
 });
