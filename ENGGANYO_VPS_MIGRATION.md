@@ -2631,3 +2631,11 @@ sessions revoked.
   stacking, price impact, farming exposure, completions-per-item) and a
   capped deterministic recommendation — still Ready for review, reward
   NOT enabled.
+
+- **PR #85 MERGED + DEPLOYED:** head `323baa6` (CI all green incl. new
+  `marketplace-recovery.spec.ts` — 3 tests: zero-balance/sold-out
+  committed-order recovery with zero extra POSTs, pre-seeded sold-out
+  committed + uncommitted intents), merge `c42225338c6e288952f821610af2e2bef0f6e79a`,
+  deploy run `43251090835` all jobs success. `.deployed-sha` = `c422253`;
+  containers healthy. Live check: `GET /api/marketplace/orders/lookup/:key`
+  → 401 unauthenticated, `{order:null}` for unknown key with buyer JWT.
