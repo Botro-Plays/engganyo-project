@@ -18,6 +18,7 @@ interface InventoryItem {
   consumedAt: string | null;
   equipped: boolean;
   acquiredAt: string;
+  provenance?: 'LEGACY' | 'PURCHASE' | 'ADMIN_GRANT' | 'REWARD' | 'MARKETPLACE';
   item: {
     id: string;
     name: string;
@@ -43,6 +44,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   CONVENIENCE: 'border-sky-500/30 bg-sky-500/10 text-sky-400',
   CREDIT_PACK: 'border-green-500/30 bg-green-500/10 text-green-400',
   GUILD_PERK: 'border-rose-500/30 bg-rose-500/10 text-rose-400',
+};
+
+const PROVENANCE_LABELS: Record<string, string> = {
+  PURCHASE: 'Purchased',
+  MARKETPLACE: 'Marketplace',
+  LEGACY: 'Legacy',
+  ADMIN_GRANT: 'Admin grant',
+  REWARD: 'Reward',
 };
 
 export default function InventoryPage() {
@@ -211,6 +220,14 @@ export default function InventoryPage() {
                     {!isCosmetic && (
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">
                         x{entry.quantity}
+                      </span>
+                    )}
+                    {!isCosmetic && entry.provenance && entry.provenance !== 'PURCHASE' && (
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/5 text-zinc-500 border border-white/10"
+                        title={entry.provenance === 'MARKETPLACE' ? 'Bought on the marketplace — resellable' : 'Bound to your account'}
+                      >
+                        {PROVENANCE_LABELS[entry.provenance] ?? entry.provenance}
                       </span>
                     )}
                   </div>
