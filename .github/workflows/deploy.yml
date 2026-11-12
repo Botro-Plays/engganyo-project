@@ -186,12 +186,29 @@ jobs:
           node-version: '24'
           cache: npm
 
+      - name: Verify Playwright image matches installed version
+        # The job container's browser builds must match the
+        # @playwright/test version resolved from package-lock.json —
+        # a dependency bump without an image-tag update would silently
+        # run mismatched browsers. Fails fast before npm ci.
+        run: |
+          TAG=$(grep 'container: mcr.microsoft.com/playwright' .github/workflows/deploy.yml | grep -oE 'v[^ ]+' | head -1)
+          IMG=$(echo "${TAG#v}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+          PKG=$(node -e "const l=require('./package-lock.json');const k=Object.keys(l.packages).find(k=>k.endsWith('node_modules/@playwright/test'));if(!k)process.exit(2);console.log(l.packages[k].version)")
+          CORE=$(node -e "const l=require('./package-lock.json');const k=Object.keys(l.packages).find(k=>k.endsWith('node_modules/playwright-core'));if(!k)process.exit(2);console.log(l.packages[k].version)")
+          echo "container image: $TAG (semver $IMG)"
+          echo "@playwright/test: $PKG | playwright-core: $CORE"
+          if [ "$IMG" != "$PKG" ] || [ "$PKG" != "$CORE" ]; then
+            echo "::error::Playwright container image v$IMG does not match installed @playwright/test $PKG / playwright-core $CORE — update the container tag in deploy.yml"
+            exit 1
+          fi
+
       - name: Install dependencies
         run: npm ci
 
       - name: Install Playwright browsers
-        # Container image already ships chromium + OS deps for
-        # playwright 1.60.0 — verify presence only, no apt needed.
+        # Container image already ships chromium + OS deps matching the
+        # pinned @playwright/test version — verify presence only, no apt.
         run: npx playwright install chromium
         working-directory: apps/web
 
