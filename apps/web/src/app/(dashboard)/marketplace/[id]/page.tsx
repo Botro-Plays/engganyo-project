@@ -1,10 +1,10 @@
 'use client';
 
-import { use, useRef, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Clock, Loader2, Lock, Minus, Package, Plus, ShoppingCart, User } from 'lucide-react';
+import { ArrowLeft, Clock, Loader2, Lock, Minus, Package, Plus, RotateCcw, ShoppingCart, User, X } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -18,6 +18,37 @@ const CATEGORY_COLORS: Record<string, string> = {
   CONVENIENCE: 'border-sky-500/30 bg-sky-500/10 text-sky-400',
 };
 
+/**
+ * An unresolved purchase intent survives reloads/navigation: the idempotency
+ * key + quantity are persisted BEFORE the request fires, so a committed
+ * purchase whose response was lost can be retried into the same order
+ * instead of double-charging. The quantity is locked while pending — the
+ * key is bound to its parameters server-side.
+ */
+interface PendingPurchase {
+  purchaseKey: string;
+  quantity: number;
+  unitPrice: number;
+  listingId: string;
+  userId: string;
+  createdAt: string;
+}
+
+// Scoped per user — a shared browser must never replay one account's
+// purchase intent under another account's identity.
+const pendingKey = (userId: string, listingId: string) => `engganyo:marketplace:pending:${userId}:${listingId}`;
+
+function readPending(userId: string, listingId: string): PendingPurchase | null {
+  try {
+    const raw = localStorage.getItem(pendingKey(userId, listingId));
+    if (!raw) return null;
+    const p = JSON.parse(raw) as PendingPurchase;
+    return p?.purchaseKey && p?.listingId === listingId && p?.userId === userId ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function MarketplaceListingPage() {
   const params = useParams<{ id: string }>();
   const listingId = params.id;
@@ -25,9 +56,13 @@ export default function MarketplaceListingPage() {
   const { user } = useAuthStore();
   const { addToast } = useToast();
   const [quantity, setQuantity] = useState(1);
-  // One idempotency key per purchase intent — stable across retries so a
-  // lost response can never double-charge.
-  const purchaseKeyRef = useRef<string | null>(null);
+  const [pending, setPending] = useState<PendingPurchase | null>(null);
+
+  // Hydrate any unresolved purchase intent for THIS user+listing once the
+  // session identity is known (localStorage is client-only).
+  useEffect(() => {
+    setPending(user?.id ? readPending(user.id, listingId) : null);
+  }, [listingId, user?.id]);
 
   const { data: listing, isLoading, error } = useQuery({
     queryKey: ['marketplace', 'listing', listingId],
@@ -37,12 +72,39 @@ export default function MarketplaceListingPage() {
     },
   });
 
+  const clearPending = () => {
+    if (user?.id) {
+      try {
+        localStorage.removeItem(pendingKey(user.id, listingId));
+      } catch { /* storage unavailable — state still clears */ }
+    }
+    setPending(null);
+  };
+
   const purchaseMutation = useMutation({
     mutationFn: async () => {
-      if (!purchaseKeyRef.current) purchaseKeyRef.current = crypto.randomUUID();
+      // Reuse the persisted intent when one exists; otherwise mint a new key
+      // and persist it BEFORE the request so an interrupted attempt stays
+      // recoverable. Params are frozen at intent creation — never mutated.
+      let intent = pending;
+      if (!intent) {
+        if (!user?.id) throw new Error('Sign in required to purchase');
+        intent = {
+          purchaseKey: crypto.randomUUID(),
+          quantity,
+          unitPrice: listing?.unitPrice ?? 0,
+          listingId,
+          userId: user.id,
+          createdAt: new Date().toISOString(),
+        };
+        try {
+          localStorage.setItem(pendingKey(user.id, listingId), JSON.stringify(intent));
+        } catch { /* storage unavailable — in-memory retry still works */ }
+        setPending(intent);
+      }
       const res = await apiClient.post<ApiResponse<{ order: { id: string; totalPrice: number }; replayed: boolean }>>(
         `marketplace/listings/${listingId}/purchase`,
-        { quantity, purchaseKey: purchaseKeyRef.current },
+        { quantity: intent.quantity, purchaseKey: intent.purchaseKey },
       );
       return res.data.data;
     },
@@ -50,10 +112,10 @@ export default function MarketplaceListingPage() {
       addToast(
         data?.replayed
           ? 'Purchase already completed — showing your existing order.'
-          : `Purchased ${quantity}× ${listing?.itemName ?? 'item'} for ${formatCredits(data?.order?.totalPrice ?? 0)} credits!`,
+          : `Purchased ${pending?.quantity ?? quantity}× ${listing?.itemName ?? 'item'} for ${formatCredits(data?.order?.totalPrice ?? 0)} credits!`,
         'success',
       );
-      purchaseKeyRef.current = null;
+      clearPending();
       setQuantity(1);
       void queryClient.invalidateQueries({ queryKey: ['marketplace'], type: 'all' });
       void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
@@ -61,8 +123,8 @@ export default function MarketplaceListingPage() {
     },
     onError: (err) => {
       addToast(getApiErrorMessage(err), 'error');
-      // Keep the same purchaseKey — a retry after a network failure must
-      // replay the same order, not create a second charge.
+      // Keep the pending intent — a retry replays the same order, not a
+      // second charge. Params stay frozen; the user may explicitly discard.
       void queryClient.invalidateQueries({ queryKey: ['marketplace', 'listing', listingId] });
     },
   });
@@ -89,11 +151,18 @@ export default function MarketplaceListingPage() {
 
   const colorClass = CATEGORY_COLORS[listing.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
   const purchasable = listing.canPurchase && listing.remainingQuantity > 0;
-  const qty = Math.max(1, Math.min(listing.remainingQuantity, quantity));
+  // While a purchase intent is unresolved its quantity is frozen — the
+  // idempotency key is bound to these exact params server-side.
+  const effectiveQty = pending ? pending.quantity : Math.max(1, Math.min(listing.remainingQuantity, quantity));
+  const qty = effectiveQty;
   const total = listing.unitPrice * qty;
   const balance = user?.creditBalance ?? 0;
   const canAfford = balance >= total;
   const endsIn = Math.max(0, Math.ceil((new Date(listing.expiresAt).getTime() - Date.now()) / 86_400_000));
+  const discardPending = () => {
+    clearPending();
+    addToast('Unconfirmed purchase attempt discarded — check Order history in case it completed.', 'info');
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -153,7 +222,7 @@ export default function MarketplaceListingPage() {
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
             <Link href="/login" className="text-brand-400 underline">Sign in</Link> to purchase this item.
           </div>
-        ) : !purchasable ? (
+        ) : !purchasable && !pending ? (
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
             {listing.status === 'PAUSED' ? (
               <>
@@ -171,11 +240,32 @@ export default function MarketplaceListingPage() {
           </div>
         ) : (
           <div className="rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">
+            {pending && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-200">
+                <RotateCcw className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <span className="font-medium">Unconfirmed purchase attempt.</span>{' '}
+                  Retrying confirms the same order — you will not be charged twice.
+                  {pending.quantity > listing.remainingQuantity && (
+                    <span className="block mt-1 text-amber-300/90">
+                      Note: only {listing.remainingQuantity} unit(s) remain — if the original attempt did not complete, this retry may fail.
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={discardPending}
+                  aria-label="Discard unconfirmed purchase attempt"
+                  className="p-1 rounded text-amber-300/70 hover:text-amber-200 hover:bg-amber-500/10 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  disabled={qty <= 1}
+                  disabled={!!pending || qty <= 1}
                   aria-label="Decrease quantity"
                   className="p-2 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white disabled:opacity-40"
                 >
@@ -184,7 +274,7 @@ export default function MarketplaceListingPage() {
                 <span className="w-10 text-center text-white font-semibold" aria-live="polite">{qty}</span>
                 <button
                   onClick={() => setQuantity((q) => Math.min(listing.remainingQuantity, q + 1))}
-                  disabled={qty >= listing.remainingQuantity}
+                  disabled={!!pending || qty >= listing.remainingQuantity}
                   aria-label="Increase quantity"
                   className="p-2 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white disabled:opacity-40"
                 >
@@ -209,10 +299,12 @@ export default function MarketplaceListingPage() {
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : !canAfford ? (
                   <Lock className="w-4 h-4" />
+                ) : pending ? (
+                  <RotateCcw className="w-4 h-4" />
                 ) : (
                   <ShoppingCart className="w-4 h-4" />
                 )}
-                {purchaseMutation.isPending ? 'Purchasing…' : !canAfford ? 'Insufficient credits' : 'Buy now'}
+                {purchaseMutation.isPending ? 'Confirming…' : !canAfford ? 'Insufficient credits' : pending ? 'Confirm purchase' : 'Buy now'}
               </button>
             </div>
             <p className="text-[11px] text-zinc-500 mt-3">

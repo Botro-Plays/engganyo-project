@@ -237,6 +237,25 @@ run('marketplace — real PostgreSQL', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('resolves viewer flags correctly for seller, buyer, and anonymous', async () => {
+    const seller = await mkUser();
+    const buyer = await mkUser(10_000);
+    const inv = await mkInventory(seller.id, convItemId, 1);
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
+
+    const asSeller = await service.getListingDetail(listing.id, seller.id);
+    expect(asSeller.viewerIsSeller).toBe(true);
+    expect(asSeller.canPurchase).toBe(false);
+
+    const asBuyer = await service.getListingDetail(listing.id, buyer.id);
+    expect(asBuyer.viewerIsSeller).toBe(false);
+    expect(asBuyer.canPurchase).toBe(true);
+
+    const anonymous = await service.getListingDetail(listing.id);
+    expect(anonymous.viewerIsSeller).toBe(false);
+    expect(anonymous.canPurchase).toBe(false);
+  });
+
   it('rejects bound provenance and non-eligible items', async () => {
     const seller = await mkUser();
 
