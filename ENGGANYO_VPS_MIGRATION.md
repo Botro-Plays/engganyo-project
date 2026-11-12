@@ -2330,21 +2330,32 @@ Instagram campaign `cmw66gqf900fi5vv87p2bhy0q`, completion
 - Outbox 3 notification + 2 socket DELIVERED; LEVEL_UP/VIP notifications
   carry outbox dedupe keys; TASK_ASSIGNED/TASK_COMPLETED are direct.
 
-## Pending review — PR #81 `fix/outcome-period-terms` @ `f83617e`
+## Pending review — PR #81 `fix/outcome-period-terms` @ `6209794`
 
-Snapshot hardening follow-up on `eb7eaeb` (Ready for review, NOT merged):
+Snapshot + mission period-catalog hardening on `eb7eaeb` (Ready for
+review, NOT merged):
 
-- Boost eligibility now read from `user_active_effects` inside the
-  VERIFIED tx (never Redis), evaluated at `verifiedAt ?? createdAt`;
-  every new outcome explicitly records multiplier-or-null; lookup
-  failure aborts the tx. Legacy NULL-snapshot fallback unchanged.
-- New `mission_period_terms` (migration `20261113040000`): first
-  qualifying event of the UTC day freezes mission terms; processor
-  prefers period terms → config edits apply next period, processing
-  order cannot change payouts, no double-payable daily versions.
-- Real-PG regressions green in CI run `43139409903`: Redis-down boost
-  snapshot, expired-vs-active boost, mission edit across completions
-  in early-first/late-first/concurrent orderings.
-- Product policy (proposed, in PR body): terms freeze per
-  (mission, UTC day) at first qualifying event post-deploy; existing
-  progress/historical rewards untouched; no backfill.
+- Boost eligibility read from `user_active_effects` inside the
+  VERIFIED tx (never Redis) at `verifiedAt ?? createdAt`; every new
+  outcome explicitly records multiplier-or-null; lookup failure
+  aborts the tx. Legacy NULL-snapshot fallback unchanged.
+- Unified mission period catalog: `mission_period_catalogs` freeze
+  marker + `mission_period_terms` (full row: type/desc/icon/sort/
+  requirement/credit/xp). First touch of a UTC period freezes all
+  active missions all-or-nothing; `getDailyMissions`,
+  `updateMissionProgress` and settlement all read the same frozen
+  terms — display can no longer diverge from payout.
+- Admin create/update/delete: freeze current period → mutate →
+  schedule post-mutation state into next UTC period. Mid-period
+  isActive/type/requirement/reward changes cannot alter today's
+  eligibility. Delete is always retirement (FK + frozen terms
+  preserved).
+- Rollout boundary `MISSION_PERIOD_TERMS_EFFECTIVE`, default
+  **2026-11-14 UTC** (day after planned deploy; bump if deploy slips
+  past 11-13). Deployment day + earlier periods keep legacy
+  snapshot/live behavior; in-flight outcomes verified pre-boundary
+  continue under legacy policy; no repricing, no backfill.
+- Real-PG regressions green in CI run `43164921092`: display-vs-
+  payout after edit, mid-day disable/type change, next-day
+  activation, deletion/retirement, pre-boundary legacy, plus all
+  prior boost/ordering/lease/scan tests.
