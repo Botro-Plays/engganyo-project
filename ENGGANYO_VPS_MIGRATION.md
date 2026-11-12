@@ -2416,10 +2416,12 @@ review, NOT merged):
   increments for reciprocal-purchase concurrency; store spec mock
   gained inventoryMovement delegate.
 
-### 2026-11-12 — PR #82 review-hardening round (head `233c3f3`, CI pending)
+### 2026-11-12 — PR #82 review-hardening round (head `233c3f3`, CI GREEN)
 
-Five blocking findings fixed; first CI run `43186716619` caught a real
-idempotency bug (fixed in `233c3f3`, rerun `43187601432`):
+Five blocking findings fixed; CI run `43187601432` all jobs success
+(API incl. new real-PG regressions, Web, E2E; deploy skipped — PR open).
+First attempt `43186716619` on `a47d814` caught a real idempotency bug
+(fixed in `233c3f3`):
 
 1. **Idempotency identity** — purchaseKey now binds buyer+listing+
    quantity+agreed unit price. Validated on all three replay paths
