@@ -302,7 +302,7 @@ export default function MarketplaceListingPage() {
                   <span className="font-medium">Unconfirmed purchase attempt.</span>{' '}
                   {lookupChecking
                     ? 'Checking whether it already completed…'
-                    : 'If it already completed, your order is shown above. Otherwise, confirming retries the same order — you will not be charged twice.'}
+                    : 'If it already completed, your order is shown instead. Otherwise, confirming retries the same order — you will not be charged twice.'}
                   {pending.quantity > listing.remainingQuantity && (
                     <span className="block mt-1 text-amber-300/90">
                       Note: only {listing.remainingQuantity} unit(s) remain — if the original attempt did not complete, this retry may fail.
