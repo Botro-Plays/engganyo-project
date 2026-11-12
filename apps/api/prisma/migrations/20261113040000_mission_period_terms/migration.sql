@@ -18,3 +18,12 @@ CREATE TABLE "mission_period_terms" (
 );
 CREATE UNIQUE INDEX "mission_period_terms_mission_id_period_date_key" ON "mission_period_terms"("mission_id", "period_date");
 CREATE INDEX "mission_period_terms_period_date_type_idx" ON "mission_period_terms"("period_date", "type");
+
+-- All-or-nothing freeze marker: only the transaction that inserts the
+-- period's marker row writes mission terms, so mid-period creations
+-- cannot slip into the current catalog.
+CREATE TABLE "mission_period_catalogs" (
+    "period_date" DATE NOT NULL,
+    "frozen_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "mission_period_catalogs_pkey" PRIMARY KEY ("period_date")
+);

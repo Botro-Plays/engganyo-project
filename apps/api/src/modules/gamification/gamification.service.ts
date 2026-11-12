@@ -902,24 +902,28 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Freeze the period's mission catalog: every currently-active mission
-   * gets an immutable term row for `periodDay`. First touch wins
-   * (ON CONFLICT DO NOTHING); admin mutations materialize the current
-   * period BEFORE mutating inside the same transaction, so a mid-period
-   * edit can never leak post-edit values into today's catalog — a
-   * concurrent materializer either sees the pre-mutation rows (its rows
-   * win, the mutation's createMany skips) or the committed mutation
-   * (whose own materialize already wrote pre-mutation rows).
-   * No-op for periods before the rollout boundary.
+   * gets an immutable term row for `periodDay`. The freeze is
+   * all-or-nothing via the mission_period_catalogs marker — only the
+   * transaction that inserts the marker writes term rows, so a mission
+   * created mid-period can never acquire a current-period term even if
+   * a later touch re-runs this method. Scheduled next-period rows are
+   * preserved (term createMany skips existing mission rows, keeping the
+   * values scheduled at mutation time = intended period-start config).
+   * Admin mutations call this BEFORE mutating inside the same
+   * transaction, so a mid-period edit can never leak post-edit values
+   * into today's catalog. No-op for periods before the rollout
+   * boundary.
    */
   private async ensureMissionPeriodTerms(
     periodDay: Date,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     if (periodDay.getTime() < missionPeriodEffectiveDate().getTime()) return;
-    // Always run createMany ... ON CONFLICT DO NOTHING: scheduled
-    // next-period rows may already cover SOME missions, so a count
-    // check cannot detect a complete catalog — skipDuplicates is the
-    // arbiter and keeps this idempotent under concurrency.
+    const { count } = await client.missionPeriodCatalog.createMany({
+      data: [{ periodDate: periodDay }],
+      skipDuplicates: true,
+    });
+    if (count === 0) return; // period already frozen
     const missions = await client.dailyMission.findMany({
       where: { isActive: true },
     });
@@ -1937,19 +1941,14 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     return withTransactionRetry(this.prisma, async (tx) => {
       const today = utcDay(new Date());
       await this.ensureMissionPeriodTerms(today, tx);
-      // Preserve referenced historical definitions: a mission with any
-      // recorded progress is RETIRED (isActive=false) rather than
-      // deleted, so progress rows keep their FK target and today's
-      // frozen terms can still settle. Missions with no progress are
-      // hard-deleted; their period-term rows (no FK) remain as the
-      // historical definition for the current period only.
-      const progressCount = await tx.userMissionProgress.count({ where: { missionId: id } });
-      const mission =
-        progressCount > 0
-          ? await tx.dailyMission.update({ where: { id }, data: { isActive: false } })
-          : await tx.dailyMission.delete({ where: { id } });
+      // Missions are always RETIRED, never hard-deleted: user_mission_
+      // progress rows FK-reference daily_missions, and today's frozen
+      // term rows must keep settling in-flight progress. Retirement
+      // removes the mission from every future catalog while preserving
+      // the referenced historical definition.
+      const mission = await tx.dailyMission.update({ where: { id }, data: { isActive: false } });
       await this.scheduleMissionPeriodTerm({ ...mission, isActive: false }, nextUtcDay(today), tx);
-      return progressCount > 0 ? { deleted: false, retired: true, mission } : { deleted: true, retired: false, mission };
+      return { deleted: false, retired: true, mission };
     });
   }
 

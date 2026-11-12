@@ -84,10 +84,19 @@ run('reward atomicity — real PostgreSQL', () => {
   const EFFECTIVE_ENV = 'MISSION_PERIOD_TERMS_EFFECTIVE';
   let savedEffective: string | undefined;
 
+  // The period catalog is keyed by real UTC day and shared across the
+  // suite — reset it so each period-catalog test freezes a fresh
+  // catalog containing exactly the missions it created.
+  const resetPeriodCatalog = async () => {
+    await prisma.missionPeriodTerm.deleteMany({});
+    await prisma.missionPeriodCatalog.deleteMany({});
+  };
+
   const withPeriodCatalog = async (fn: () => Promise<void>) => {
     const prev = process.env[EFFECTIVE_ENV];
     process.env[EFFECTIVE_ENV] = '2020-01-01'; // every real date is post-boundary
     try {
+      await resetPeriodCatalog();
       await fn();
     } finally {
       if (prev === undefined) delete process.env[EFFECTIVE_ENV];
@@ -1082,6 +1091,9 @@ run('reward atomicity — real PostgreSQL', () => {
     withPeriodCatalog(async () => {
     // Scenario A: sequential recovery, later completion processed FIRST.
     const runScenario = async (order: 'early-first' | 'late-first' | 'concurrent') => {
+      // The catalog freezes once per UTC day — reset so this scenario's
+      // mission is inside today's frozen set.
+      await resetPeriodCatalog();
       const u = await mkUser();
       const mission = await prisma.dailyMission.create({
         data: {
@@ -1331,12 +1343,12 @@ run('reward atomicity — real PostgreSQL', () => {
       expect(progress).toBeNull();
     }));
 
-  it('deletion retires missions with progress and preserves terms; no-progress missions still settle today from frozen terms', () =>
+  it('deletion retires missions and preserves frozen terms — in-flight progress still settles', () =>
     withPeriodCatalog(async () => {
       const u = await mkUser();
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      // Case A: mission WITH progress → retired, not deleted.
+      // Both missions exist BEFORE today's catalog freezes.
       const withProgress = await prisma.dailyMission.create({
         data: {
           name: `${PREFIX}delete-with-progress`,
@@ -1348,7 +1360,20 @@ run('reward atomicity — real PostgreSQL', () => {
           isActive: true,
         },
       });
-      await service.getDailyMissions(u.id); // freeze
+      const noProgress = await prisma.dailyMission.create({
+        data: {
+          name: `${PREFIX}delete-no-progress`,
+          description: 'test',
+          type: MissionType.COMPLETE_N_TASKS,
+          requirement: 1,
+          creditReward: 7,
+          xpReward: 3,
+          isActive: true,
+        },
+      });
+      await service.getDailyMissions(u.id); // freeze today — both inside
+
+      // Case A: mission WITH progress → retired, not deleted.
       const cA = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
       await prisma.$transaction(async (tx) => {
         await service.recordTaskCompletionOutcome(tx as never, u.id, cA.id);
@@ -1366,21 +1391,13 @@ run('reward atomicity — real PostgreSQL', () => {
       expect((await service.getDailyMissions(u.id)).find((m: any) => m.id === withProgress.id)).toBeDefined();
       expect((await service.getDailyMissions(u.id, tomorrow)).find((m: any) => m.id === withProgress.id)).toBeUndefined();
 
-      // Case B: mission WITHOUT progress → hard-deleted, but today's
-      // frozen terms remain the historical definition and still settle.
-      const noProgress = await service.adminCreateMission({
-        name: `${PREFIX}delete-no-progress`,
-        description: 'test',
-        type: MissionType.COMPLETE_N_TASKS,
-        requirement: 1,
-        creditReward: 7,
-        xpReward: 3,
-      });
-      // Materialize today explicitly so the delete path freezes first.
-      await service.getDailyMissions(u.id);
+      // Case B: mission WITHOUT progress → also retired (deletion is
+      // always retirement to preserve FK targets and frozen terms),
+      // and today's frozen terms still settle a completion.
       const delB = await service.adminDeleteMission(noProgress.id);
-      expect(delB.deleted).toBe(true);
-      expect(await prisma.dailyMission.findUnique({ where: { id: noProgress.id } })).toBeNull();
+      expect(delB.retired).toBe(true);
+      const rowB = await prisma.dailyMission.findUniqueOrThrow({ where: { id: noProgress.id } });
+      expect(rowB.isActive).toBe(false);
 
       // The frozen term row survives and still pays a completion today.
       const termB = await prisma.missionPeriodTerm.findFirst({
