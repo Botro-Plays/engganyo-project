@@ -81,16 +81,17 @@ export class MarketplaceService {
   // ─── Browse / detail ────────────────────────────────────────
 
   async browseListings(opts: { category?: StoreCategory; itemId?: string; sort?: 'price_asc' | 'price_desc' | 'newest'; page?: number; limit?: number }) {
-    const page = Math.max(1, opts.page ?? 1);
-    const limit = Math.min(50, Math.max(1, opts.limit ?? 24));
+    const page = Number.isFinite(opts.page) && (opts.page ?? 0) > 0 ? Math.floor(opts.page!) : 1;
+    const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.min(50, Math.floor(opts.limit!)) : 24;
     const now = new Date();
+    const category = opts.category && Object.values(StoreCategory).includes(opts.category) ? opts.category : undefined;
 
     const where: Prisma.MarketplaceListingWhereInput = {
       status: MarketplaceListingStatus.ACTIVE,
       expiresAt: { gt: now },
       remainingQuantity: { gt: 0 },
       ...(opts.itemId && { itemId: opts.itemId }),
-      ...(opts.category && { item: { category: opts.category } }),
+      ...(category && { item: { category } }),
     };
 
     const [rows, total] = await Promise.all([
