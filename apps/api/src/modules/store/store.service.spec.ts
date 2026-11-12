@@ -162,6 +162,7 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         aggregate: jest.fn().mockResolvedValue({ _sum: { quantity: 0 } }),
       },
+      inventoryMovement: { create: jest.fn().mockResolvedValue({ id: 'mv-1' }) },
     };
     (tx as Record<string, jest.Mock | Record<string, jest.Mock>>).$executeRaw =
       jest.fn().mockResolvedValue(1);
@@ -187,7 +188,7 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
 
     expect(wallet.debit).toHaveBeenCalledWith('user-1', 500, expect.anything(), tx);
     expect(tx.userInventory.create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', itemId: GOLD_FRAME.id, quantity: 1, equipped: true },
+      data: { userId: 'user-1', itemId: GOLD_FRAME.id, quantity: 1, equipped: true, provenance: 'PURCHASE' },
     });
     expect(redis.invalidateUserCaches).toHaveBeenCalledTimes(1);
     expect(redis.invalidateUserCaches).toHaveBeenCalledWith('user-1');

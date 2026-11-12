@@ -50,23 +50,25 @@ run('marketplace — real PostgreSQL', () => {
     invalidateUserCaches: jest.fn(async () => {}),
   };
 
+  // Atomic balance mutations — mirrors WalletService semantics closely
+  // enough for concurrency tests: increments/decrements are single
+  // UPDATEs so reciprocal purchases can't lost-update each other.
   const walletStub = {
     debit: jest.fn(async (uid: string, amount: number, opts: any, tx?: any) => {
       const client = tx ?? prisma;
-      const wallet = await client.wallet.findUnique({ where: { userId: uid } });
-      if (!wallet || wallet.balance < amount) throw new BadRequestException('Insufficient balance');
-      const before = wallet.balance;
-      await client.wallet.update({
-        where: { id: wallet.id },
-        data: { balance: before - amount, lifetimeSpent: { increment: amount }, version: { increment: 1 } },
+      const res = await client.wallet.updateMany({
+        where: { userId: uid, balance: { gte: amount } },
+        data: { balance: { decrement: amount }, lifetimeSpent: { increment: amount }, version: { increment: 1 } },
       });
+      if (res.count === 0) throw new BadRequestException('Insufficient balance');
+      const wallet = await client.wallet.findUniqueOrThrow({ where: { userId: uid } });
       return client.transaction.create({
         data: {
           walletId: wallet.id,
           type: opts.type,
           amount: -amount,
-          balanceBefore: before,
-          balanceAfter: before - amount,
+          balanceBefore: wallet.balance + amount,
+          balanceAfter: wallet.balance,
           description: opts.description,
           referenceId: opts.referenceId,
           referenceType: opts.referenceType,
@@ -76,20 +78,19 @@ run('marketplace — real PostgreSQL', () => {
     }),
     credit: jest.fn(async (uid: string, amount: number, opts: any, tx?: any) => {
       const client = tx ?? prisma;
-      const wallet = await client.wallet.findUnique({ where: { userId: uid } });
-      if (!wallet) throw new BadRequestException('Wallet not found');
-      const before = wallet.balance;
-      await client.wallet.update({
-        where: { id: wallet.id },
-        data: { balance: before + amount, lifetimeEarned: { increment: amount }, version: { increment: 1 } },
+      const res = await client.wallet.updateMany({
+        where: { userId: uid },
+        data: { balance: { increment: amount }, lifetimeEarned: { increment: amount }, version: { increment: 1 } },
       });
+      if (res.count === 0) throw new BadRequestException('Wallet not found');
+      const wallet = await client.wallet.findUniqueOrThrow({ where: { userId: uid } });
       return client.transaction.create({
         data: {
           walletId: wallet.id,
           type: opts.type,
           amount,
-          balanceBefore: before,
-          balanceAfter: before + amount,
+          balanceBefore: wallet.balance - amount,
+          balanceAfter: wallet.balance,
           description: opts.description,
           referenceId: opts.referenceId,
           referenceType: opts.referenceType,
