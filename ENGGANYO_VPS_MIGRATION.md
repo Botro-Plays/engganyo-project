@@ -2457,3 +2457,29 @@ New real-PG regressions: key-conflict sequential/concurrent, catalog
 edit + deactivation pause with cancel recovery, competing-listings cap,
 marketplace-vs-store cap race, escrow-aware cap, expired purchase/
 cancel/sweep exactly-once races.
+
+### 2026-11-12 — PR #82 second concurrency round (head `fd53104`, CI pending)
+
+Two remaining gaps closed:
+
+1. **Ownership ↔ escrow coordination** — `effectiveOwnedQuantity` is now
+   a single atomic SQL statement (on-hand + ACTIVE/PAUSED escrow in one
+   snapshot; a concurrent return can't be missed between reads). Every
+   representation-changing transition holds `invcap:{userId}:{itemId}`:
+   createListing escrow-out, purchase receipt + sale-side decrement
+   (both sides sorted), cancel/sweep/takedown/lazy-expiry returns.
+   Documented global lock order in `common/inventory-ownership.ts`;
+   bounded deadlock recovery via withTransactionRetry (P2034/40P01).
+2. **Catalog lock through fulfillment** — purchase takes
+   `store_items ... FOR UPDATE` before re-reading material terms (same
+   row lock as store purchaseItem + sole catalog writer
+   adminUpdateStoreItem). Edit-before-validation → drift → PAUSED;
+   edit-after-commit → order settles under validated terms.
+
+New real-PG regressions: cancel-during-count at cap, expiry/takedown
+returns vs store purchase, createListing vs store purchase, edit-vs-
+purchase both orderings. CI run `43194626460` pending at write time.
+
+Reward-tradability decision table added to PR body for owner review
+(proposal only — REWARD stays bound; suggested future `EARNED`
+provenance for verified-activity rewards, still gated by eligibility).
