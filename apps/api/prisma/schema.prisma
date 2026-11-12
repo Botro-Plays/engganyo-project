@@ -1744,6 +1744,7 @@ enum InventoryProvenance {
   ADMIN_GRANT
   REWARD
   MARKETPLACE
+  ACTIVITY_REWARD
 }
 
 model UserInventory {

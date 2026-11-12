@@ -84,13 +84,15 @@ export default function MarketplacePage() {
         </Link>
       </div>
 
-      {/* Proposed test settings — visible until the owner confirms them */}
-      {config?.awaitingOwnerConfirmation && (
-        <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
-          <p className="text-xs font-semibold text-amber-300 uppercase tracking-wide mb-1">
-            Internal test — settings awaiting owner confirmation
+      {/* Internal-test rules — owner-approved settings stay visible */}
+      {config && (
+        <div className="mb-6 rounded-xl border border-brand-500/25 bg-brand-500/5 px-4 py-3">
+          <p className="text-xs font-semibold text-brand-300 uppercase tracking-wide mb-1">
+            {config.awaitingOwnerConfirmation
+              ? 'Internal test — settings awaiting owner confirmation'
+              : 'Internal test — marketplace rules'}
           </p>
-          <ul className="text-xs text-amber-200/80 space-y-0.5 list-disc list-inside">
+          <ul className="text-xs text-zinc-300/80 space-y-0.5 list-disc list-inside">
             {config.notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
