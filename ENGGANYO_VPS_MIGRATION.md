@@ -2483,3 +2483,46 @@ purchase both orderings. CI run `43194626460` pending at write time.
 Reward-tradability decision table added to PR body for owner review
 (proposal only — REWARD stays bound; suggested future `EARNED`
 provenance for verified-activity rewards, still gated by eligibility).
+
+### 2026-11-12 — PR #82 MERGED + DEPLOYED; live marketplace verification
+
+- **Merge:** PR #82 squash-merged `7456b7b46fb59960f188036659caac1db9d88ce8`
+  (head `fd53104`, CI run `43194626460` all green).
+- **Deploy:** run `43199829734` all jobs success; `.deployed-sha` =
+  `7456b7b`; containers healthy; migration
+  `20261114000000_marketplace_inventory` applied (2 marketplace tables,
+  `inventory_movements` live).
+- **Owner approved internal-test settings** (12 Nov): unused
+  BOOST/CONVENIENCE consumables, loot boxes/cosmetics excluded,
+  credits-only, 0% fee, 10–100,000cr/unit, 7-day expiry, manual
+  relisting, 5 active listings/seller. Permanent fee stays disabled.
+
+**Live journey on labeled accounts** (`devin_p2p_a` seller,
+`devin_p2p_b` buyer, `devin_earn_test` bound-row owner,
+`devin_mod_test` admin-path; evidence
+`evidence/marketplace-live-2026-11-12/results.json`):
+
+| Step | Result |
+|---|---|
+| Store acquire | Seller −150 XP Boost, −200 2× Streak Freeze (425→75) |
+| List 2× Streak Freeze @120 | ACTIVE, escrow −2 (`marketplace_list`) |
+| Buyer partial buy 1 | −120 buyer / +120 seller, fee 0, order COMPLETED, remaining 1 |
+| Buyer final unit | SOLD_OUT; seller 315, buyer 185 (ledger exact) |
+| List XP Boost @200 → cancel | CANCELLED, escrow +1 returned |
+| Bound rejection | `devin_earn_test` LEGACY row → 403 bound; row unchanged (qty 1 LEGACY) |
+| Forced expiry | purchase → 400 expired; listing EXPIRED; escrow +1 once |
+| Catalog edit 10→25cr | listing PAUSED; cancel → escrow +1; relist after restore OK |
+| Admin takedown | REMOVED; escrow +1 PURCHASE returned; history preserved |
+| Buyer use | MARKETPLACE-provenance Streak Freeze used → streak_freeze effect, qty 2→1 |
+
+Ledger verified: `SPEND_MARKETPLACE_PURCHASE` −120×2, `EARN_MARKETPLACE_SALE`
++120×2, all `inventory_movements` reasons present (list/receive/cancel/
+expire/takedown/use). `devin_mod_test` role reverted to MODERATOR; labeled
+test catalog item deactivated. Classified legacy row untouched.
+reCAPTCHA env present, unchanged.
+
+**Follow-up:** PR #83 `feat/activity-reward-provenance` @ `577e233` —
+`ACTIVITY_REWARD` provenance + `metadata.activityRewardTradable` whitelist.
+Audit: no verified task/mission/achievement path grants inventory today;
+only earned inventory is daily/wheel gift boxes + loot-box cosmetics
+(all bound). Jomar earned-item requirement marked partially complete.

@@ -1,0 +1,385 @@
+{
+  "startedAt": "2026-11-12T10:39:50.680Z",
+  "phases": {
+    "00-config": {
+      "at": "2026-11-12T10:39:51.066Z",
+      "status": 200,
+      "body": {
+        "status": "proposed",
+        "awaitingOwnerConfirmation": true,
+        "paymentMethod": "credits",
+        "sellerFeeBps": 0,
+        "permanentSellerFeeEnabled": false,
+        "minUnitPrice": 10,
+        "maxUnitPrice": 100000,
+        "listingTtlDays": 7,
+        "relisting": "manual",
+        "maxActiveListingsPerSeller": 5,
+        "eligibleCategories": [
+          "BOOST",
+          "CONVENIENCE"
+        ],
+        "excludedCategories": [
+          "COSMETIC"
+        ],
+        "notes": [
+          "Only unused BOOST and CONVENIENCE consumables can be listed; loot boxes and cosmetics are excluded.",
+          "Credits-only purchases; no permanent seller fee (0% test fee).",
+          "Listings expire after 7 days; relisting is manual.",
+          "At most 5 active listings per seller."
+        ]
+      }
+    },
+    "00-baseline-wallets": {
+      "at": "2026-11-12T10:39:51.554Z",
+      "seller": 425,
+      "buyer": 425
+    },
+    "01-catalog": {
+      "at": "2026-11-12T10:39:51.824Z",
+      "xpBoost": "cmvi95vkf0000nl393q30xrv6",
+      "streak": "cmvi95vkx0004nl39iats78vy",
+      "costs": [
+        150,
+        100
+      ]
+    },
+    "01-store-purchases": {
+      "at": "2026-11-12T10:39:52.488Z",
+      "xp": {
+        "status": 200,
+        "body": {
+          "purchase": {
+            "id": "cmwdf1zxq000sakcj72xi3y8h",
+            "userId": "cdevinp2pa000000000000001",
+            "itemId": "cmvi95vkf0000nl393q30xrv6",
+            "transactionId": "cmwdf1zx2000qakcjobeyp3m0",
+            "quantity": 1,
+            "creditCostAtPurchase": 150,
+            "createdAt": "2026-11-12T10:39:52.622Z"
+          },
+          "transaction": {
+            "id": "cmwdf1zx2000qakcjobeyp3m0",
+            "walletId": "cdevinp2wa00000000000001",
+            "type": "SPEND_STORE_PURCHASE",
+            "status": "COMPLETED",
+            "amount": -150,
+            "balanceBefore": 425,
+            "balanceAfter": 275,
+            "description": "Purchased 1x XP Boost (24h)",
+            "referenceId": "cmvi95vkf0000nl393q30xrv6",
+            "referenceType": "store_item",
+            "metadata": {
+              "itemName": "XP Boost (24h)",
+              "quantity": 1,
+              "unitCost": 150
+            },
+            "createdAt": "2026-11-12T10:39:52.598Z"
+          },
+          "item": {
+            "id": "cmvi95vkf0000nl393q30xrv6",
+            "name": "XP Boost (24h)",
+            "category": "BOOST",
+            "creditCost": 150
+          }
+        }
+      },
+      "streak": {
+        "status": 200,
+        "body": {
+          "purchase": {
+            "id": "cmwdf20620012akcjloy9hopa",
+            "userId": "cdevinp2pa000000000000001",
+            "itemId": "cmvi95vkx0004nl39iats78vy",
+            "transactionId": "cmwdf205s0010akcjdr5lcpxg",
+            "quantity": 2,
+            "creditCostAtPurchase": 100,
+            "createdAt": "2026-11-12T10:39:52.922Z"
+          },
+          "transaction": {
+            "id": "cmwdf205s0010akcjdr5lcpxg",
+            "walletId": "cdevinp2wa00000000000001",
+            "type": "SPEND_STORE_PURCHASE",
+            "status": "COMPLETED",
+            "amount": -200,
+            "balanceBefore": 275,
+            "balanceAfter": 75,
+            "description": "Purchased 2x Streak Freeze (3 days)",
+            "referenceId": "cmvi95vkx0004nl39iats78vy",
+            "referenceType": "store_item",
+            "metadata": {
+              "itemName": "Streak Freeze (3 days)",
+              "quantity": 2,
+              "unitCost": 100
+            },
+            "createdAt": "2026-11-12T10:39:52.912Z"
+          },
+          "item": {
+            "id": "cmvi95vkx0004nl39iats78vy",
+            "name": "Streak Freeze (3 days)",
+            "category": "CONVENIENCE",
+            "creditCost": 100
+          }
+        }
+      }
+    },
+    "02-sellable": {
+      "at": "2026-11-12T10:39:52.756Z",
+      "max": 5,
+      "count": 0,
+      "stacks": [
+        {
+          "item": "Streak Freeze (3 days)",
+          "qty": 2,
+          "prov": "PURCHASE",
+          "tradable": true,
+          "listable": true
+        },
+        {
+          "item": "XP Boost (24h)",
+          "qty": 1,
+          "prov": "PURCHASE",
+          "tradable": true,
+          "listable": true
+        }
+      ]
+    },
+    "02-create-listing": {
+      "at": "2026-11-12T10:39:53.069Z",
+      "status": 201,
+      "id": "cmwdf20lg001aakcjo6du9npl",
+      "status_": "ACTIVE",
+      "remaining": 2
+    },
+    "03-browse": {
+      "at": "2026-11-12T10:39:53.329Z",
+      "status": 200,
+      "found": true,
+      "unitPrice": 120,
+      "remaining": 2
+    },
+    "03-detail": {
+      "at": "2026-11-12T10:39:53.582Z",
+      "status": 200,
+      "canPurchase": true,
+      "seller": "devin_p2p_a"
+    },
+    "03-partial-purchase": {
+      "at": "2026-11-12T10:39:54.919Z",
+      "status": 200,
+      "body": {
+        "order": {
+          "id": "cmwdf21o0001iakcj4ynprkzn",
+          "listingId": "cmwdf20lg001aakcjo6du9npl",
+          "buyerId": "cdevinp2pb000000000000001",
+          "sellerId": "cdevinp2pa000000000000001",
+          "itemId": "cmvi95vkx0004nl39iats78vy",
+          "quantity": 1,
+          "unitPrice": 120,
+          "totalPrice": 120,
+          "feeAmount": 0,
+          "status": "COMPLETED",
+          "createdAt": "2026-11-12T10:39:54.864Z"
+        },
+        "replayed": false
+      },
+      "buyerDelta": -120,
+      "sellerDelta": 120
+    },
+    "03-after-partial": {
+      "at": "2026-11-12T10:39:55.150Z",
+      "status": "ACTIVE",
+      "remaining": 1
+    },
+    "04-final-unit": {
+      "at": "2026-11-12T10:39:56.221Z",
+      "status": 200,
+      "listingStatus": "SOLD_OUT",
+      "sellerBalance": 315,
+      "buyerBalance": 185
+    },
+    "05-cancel": {
+      "at": "2026-11-12T10:39:57.478Z",
+      "createStatus": 201,
+      "listingId": "cmwdf23fv0026akcjzpr4uwo7",
+      "cancelStatus": 200,
+      "cancelBody": {
+        "id": "cmwdf23fv0026akcjzpr4uwo7",
+        "itemId": "cmvi95vkf0000nl393q30xrv6",
+        "itemName": "XP Boost (24h)",
+        "category": "BOOST",
+        "storeCreditCost": 150,
+        "unitPrice": 200,
+        "remainingQuantity": 0,
+        "originalQuantity": 1,
+        "status": "CANCELLED",
+        "expiresAt": "2026-11-19T10:39:57.154Z",
+        "createdAt": "2026-11-12T10:39:57.163Z",
+        "sellerUsername": "devin_p2p_a",
+        "catalogChanged": false,
+        "isExpired": false,
+        "description": "Earn 2x XP on all task completions for 24 hours.",
+        "isActive": true,
+        "viewerIsSeller": true,
+        "canPurchase": false
+      },
+      "xpQtyAfter": 1
+    },
+    "06-bound-rejection": {
+      "at": "2026-11-12T10:39:57.996Z",
+      "stacks": [
+        {
+          "item": "Streak Freeze (3 days)",
+          "prov": "LEGACY",
+          "tradable": false,
+          "listable": false
+        }
+      ],
+      "attemptStatus": 403,
+      "attemptBody": {
+        "statusCode": 403,
+        "message": "This item is bound to your account and cannot be sold",
+        "error": "Forbidden",
+        "timestamp": "2026-11-12T10:39:58.443Z",
+        "path": "/api/marketplace/listings"
+      }
+    },
+    "07-expiry": {
+      "at": "2026-11-12T10:40:03.465Z",
+      "listingId": "cmwdf24sr002fakcjr223iu7h",
+      "purchaseStatus": 400,
+      "purchaseBody": {
+        "statusCode": 400,
+        "message": "Listing has expired",
+        "error": "Bad Request",
+        "timestamp": "2026-11-12T10:40:03.421Z",
+        "path": "/api/marketplace/listings/cmwdf24sr002fakcjr223iu7h/purchase"
+      },
+      "listingStatus": "EXPIRED",
+      "sellerXpQty": 1
+    },
+    "08-test-item-create": {
+      "at": "2026-11-12T10:40:06.711Z",
+      "status": 201,
+      "id": "cmwdf2b49002lakcjbjl76t2s",
+      "body": {
+        "id": "cmwdf2b49002lakcjbjl76t2s",
+        "name": "DEVIN TEST Earned Boost",
+        "description": "labeled marketplace test item",
+        "category": "BOOST",
+        "creditCost": 10,
+        "isLimited": false,
+        "limitedQty": null,
+        "startsAt": null,
+        "endsAt": null,
+        "isActive": true,
+        "isConsumable": true,
+        "maxOwnedPerUser": null,
+        "requiredVipTierLevel": null,
+        "metadata": {
+          "boostType": "xp",
+          "effectType": "xp_boost",
+          "multiplier": 2,
+          "durationHours": 1
+        },
+        "createdAt": "2026-11-12T10:40:07.113Z",
+        "updatedAt": "2026-11-12T10:40:07.113Z"
+      }
+    },
+    "08-catalog-pause": {
+      "at": "2026-11-12T10:40:08.137Z",
+      "purchaseStatus": 200,
+      "listStatus": 201,
+      "listingId": "cmwdf2bst0030akcj7g59924l",
+      "editStatus": 200,
+      "listingStatus": "PAUSED",
+      "catalogChanged": false
+    },
+    "08-pause-cancel": {
+      "at": "2026-11-12T10:40:08.652Z",
+      "cancelStatus": 200,
+      "stackQty": 1,
+      "stackProv": "PURCHASE"
+    },
+    "08-relist": {
+      "at": "2026-11-12T10:40:09.198Z",
+      "status": 201,
+      "id": "cmwdf2d1u003dakcjps8krlhr"
+    },
+    "09-takedown": {
+      "at": "2026-11-12T10:40:09.957Z",
+      "status": 200,
+      "body": {
+        "id": "cmwdf2d1u003dakcjps8krlhr",
+        "itemId": "cmwdf2b49002lakcjbjl76t2s",
+        "itemName": "DEVIN TEST Earned Boost",
+        "category": "BOOST",
+        "storeCreditCost": 10,
+        "unitPrice": 60,
+        "remainingQuantity": 0,
+        "originalQuantity": 1,
+        "status": "REMOVED",
+        "expiresAt": "2026-11-19T10:40:09.609Z",
+        "createdAt": "2026-11-12T10:40:09.618Z",
+        "sellerUsername": "devin_p2p_a",
+        "catalogChanged": false,
+        "isExpired": false,
+        "description": "labeled marketplace test item",
+        "isActive": true,
+        "viewerIsSeller": false,
+        "canPurchase": false
+      },
+      "listingStatus": "REMOVED",
+      "returnedStack": {
+        "qty": 1,
+        "prov": "PURCHASE"
+      }
+    },
+    "10-use-item": {
+      "at": "2026-11-12T10:40:14.013Z",
+      "found": true,
+      "inventoryId": "cmwdf21o6001kakcj5f1n5q1q",
+      "prov": "MARKETPLACE",
+      "useStatus": 200,
+      "useBody": {
+        "inventoryId": "cmwdf21o6001kakcj5f1n5q1q",
+        "itemName": "Streak Freeze (3 days)",
+        "effectType": "streak_freeze",
+        "effectResult": {
+          "applied": true,
+          "type": "streak_freeze",
+          "protectedDays": 3,
+          "totalCharges": 3
+        },
+        "remainingQuantity": 1
+      },
+      "qtyAfter": 1,
+      "consumedAt": null
+    },
+    "99-orders": {
+      "at": "2026-11-12T10:40:14.517Z",
+      "buyerPurchases": 2,
+      "sellerSales": 2,
+      "sample": [
+        {
+          "item": "Streak Freeze (3 days)",
+          "qty": 1,
+          "price": 120,
+          "status": "COMPLETED"
+        },
+        {
+          "item": "Streak Freeze (3 days)",
+          "qty": 1,
+          "price": 120,
+          "status": "COMPLETED"
+        }
+      ]
+    }
+  },
+  "notes": [],
+  "listing1": "cmwdf20lg001aakcjo6du9npl",
+  "listing2": "cmwdf23fv0026akcjzpr4uwo7",
+  "listing3": "cmwdf24sr002fakcjr223iu7h",
+  "listing4": "cmwdf2bst0030akcj7g59924l",
+  "listing5": "cmwdf2d1u003dakcjps8krlhr"
+}

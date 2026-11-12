@@ -19,7 +19,7 @@ the table wins. Verified against current main + production evidence cited.
 | 1 | Manageable task discovery (2-3 choices, platform select) | **Partially shipped - acceptance open** | Platform filter chips + paginated "Show more" feed (initial batch **6**, not 2-3); `browseActive` filters platformPrefix/taskType/geo, excludes completed + own campaigns. `apps/api/src/modules/campaigns/campaigns.service.ts:633`, `apps/web/src/app/(dashboard)/tasks/page.tsx` | PR #46 `a03732c` live-verified: chips filter, 6-card batch, Show more, own-work exclusion | **OPEN:** Jomar asked for two/three choices - shipped six initial cards (two desktop rows); needs his sign-off or a batch-size change. Visual-design satisfaction also open (item 6). |
 | 2 | Hide self-owned work + Accept & open target | **Shipped + live-verified** | Own campaigns excluded from `GET /tasks` at API level; creators keep `/campaigns` + `tasks/my`. "Accept & open [platform]" opens target synchronously post-assign with popup-blocked fallback + pinned accepted panel | PR #46; live PASS on engganyo.com (popup + fallback + panel) | None known. |
 | 3 | Optional account linking for manual tasks | **Shipped + live-verified** | `SocialAuthService.requiresLinkedAccount(taskType, autoVerify)` - link required only for API-verified autoVerify types; manual-proof tasks accept unlinked; challenges never require linking. `social-auth.service.ts:760`, `tasks.service.ts:135` | PR #47 `bcb5371`; live manual-task accept unlinked; CI 28-case matrix + real-PG specs | Jomar's "no OAuth at all" is not fully met - OAuth linking remains for the 4 API-verified task types (needed for automated verification). Multi-account support exists via Settings > Connected Accounts. Deferred funded-crypto qualification retained. |
-| 4 | User-to-user marketplace | **Proposal ready - owner decision pending** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** - users sell eligible inventory (boosts etc.) for wallet credits; direct credit resale is out of scope (tipping already moves credits peer-to-peer). Proposal (rev 2): `docs/proposals/player-item-marketplace.md`. Supersedes credit-resale draft `credit-trading.md` (removed). Audit: `StoreItem`/`UserInventory`/`StorePurchase`/`useItem`/`equipCosmetic`/`UserActiveEffect` + locked `purchaseItem` tx (`store.service.ts:163`) are a complete foundation; no listing/reservation/transfer exists | Source audit on `a1153e8`; prod catalog: 2 BOOST + 2 COSMETIC + 2 CONVENIENCE items, ~1 tradable inventory row | Owner decisions: launch categories (consumables-only?), fee %, price bounds, listing expiry, cosmetic tradability. |
+| 4 | User-to-user marketplace | **LIVE on prod `7456b7b`; earned-item path pending PR #83** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** — implemented via PR #82 (provenance-separated inventory, escrow listings, idempotent settlement, catalog-drift pause, cap serialization) and live-verified 12 Nov. Earned/farmed-item selling partially complete: `ACTIVITY_REWARD` provenance + whitelist in PR #83 awaiting review; no verified-activity grant path exists yet | Deploy run `43199829734` ✅; live evidence `evidence/marketplace-live-2026-11-12/`; audit: no task/mission/achievement path grants inventory today | Owner approved internal-test settings 12 Nov (0% fee, BOOST/CONVENIENCE only, 7-day, 5 listings/seller). Remaining: whitelist specific earned items + wire a grant path. |
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
 | 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
@@ -97,7 +97,7 @@ Jomar wants beginners to complete manually reviewed tasks using their chosen soc
 
 ## 4. Player item marketplace (was: user-to-user credit marketplace)
 
-**Status — proposal ready for owner review (11 Nov, rev 2).** `docs/proposals/player-item-marketplace.md`.
+**Status — IMPLEMENTED + LIVE on prod `7456b7b` (12 Nov); earned-item path PARTIALLY COMPLETE.**
 
 > **Interpretation corrected by owner (11 Nov 2026):** Jomar means a
 > **player item marketplace** — users sell eligible Engganyo inventory
@@ -107,13 +107,27 @@ Jomar wants beginners to complete manually reviewed tasks using their chosen soc
 > resale stays out of scope (chat tipping legitimately transfers credits);
 > P2P points remain reputation-only.
 
-The proposal covers the tradability matrix (unused consumables tradable;
-activated effects, equipped cosmetics, credits, and points not), atomic
-list/reserve/cancel/purchase settlement reusing the locked store-purchase
-pattern, fees/price bounds/expiry as owner decisions, and abuse cases
-(insufficient funds, self-purchase, races, forged attributes, suspended
-accounts, admin takedowns). No marketplace economics implemented — awaiting
-owner approval.
+**Delivered (PR #82, merged `7456b7b`, deploy run `43199829734` ✅):**
+`/marketplace` browse/detail/purchase-confirm, Sell from inventory, My
+Listings, order history; provenance-separated inventory stacks
+(LEGACY/PURCHASE/ADMIN_GRANT/REWARD/MARKETPLACE) with append-only
+`inventory_movements`; atomic escrow, idempotent settlement, cancel/
+expiry/takedown with preserved history; catalog-drift pause; ownership-cap
+serialization across marketplace+store; owner-approved internal-test
+settings (BOOST/CONVENIENCE consumables, no loot boxes/cosmetics,
+credits-only, 0% fee, 10–100k/unit, 7-day expiry, manual relist,
+5 listings/seller). Live-verified end-to-end on labeled accounts
+(`evidence/marketplace-live-2026-11-12/`).
+
+**Remaining — earned/farmed items:** audit found NO verified
+task/mission/achievement path grants inventory today (missions pay
+credits+XP only); the only earned inventory is daily/wheel gift boxes and
+loot-box cosmetics, all bound by policy. PR #83 (Ready for review) adds
+`ACTIVITY_REWARD` provenance + per-item `metadata.activityRewardTradable`
+whitelist — mechanism ready, zero behavior change until a grant path
+opts in and owner approves specific items. Jomar's earned-item selling
+requirement stays **partially complete** until that path exists and is
+verified.
 
 ## 5. Discoverable Top up
 
