@@ -2639,3 +2639,46 @@ sessions revoked.
   deploy run `43251090835` all jobs success. `.deployed-sha` = `c422253`;
   containers healthy. Live check: `GET /api/marketplace/orders/lookup/:key`
   → 401 unauthenticated, `{order:null}` for unknown key with buyer JWT.
+
+### 2026-11-13 — purchase-status lookup error state (PR #86) + verification/economy corrections
+
+- **PR #86** `fix/marketplace-lookup-error-state` @ `70b3a9e`: the
+  `orders/lookup/:purchaseKey` query now inherits the shared
+  `shouldRetryQuery` policy (explicit `retry: 1` removed — axios already
+  retries 5xx x3, so failures could need ~8 HTTP calls before surfacing).
+  Lookup states are explicit: loading / committed order / confirmed-null
+  / failed. Failure renders "Purchase status unavailable" + "Retry
+  status check"; purchase key and params stay preserved and NO
+  failed/discard/rebuy affordance is shown while status is unknown.
+  "Cannot complete" copy on unavailable listings now requires a
+  confirmed-null lookup. E2E (`marketplace-recovery.spec.ts`): committed
+  order + lookup 429 at zero balance/sold-out -> unavailable -> Retry ->
+  completed, zero purchase POSTs; null lookup + active listing + zero
+  balance keeps the insufficient-credits gate.
+- **MERGED + DEPLOYED:** merge `6dbbc70e2a0c91be4e9f170c869d2c64ec0cbbb8`,
+  deploy run `43350496324` all jobs success. `.deployed-sha` = `6dbbc70`;
+  containers healthy; lookup 401 unauth / config 200 / site 200 live.
+- **Access-token lifetime audit:** prod `JWT_ACCESS_EXPIRES_IN=15m`,
+  `JWT_REFRESH_EXPIRES_IN=7d`. Access tokens are stateless JWTs
+  (signature+exp only, no per-request session check). All previously
+  issued tokens (last issuance ~2026-11-12 16:00 UTC) are >9h old ->
+  expired; max remaining lifetime is now zero. Refresh is dead: the 14
+  sessions for rotated accounts were revoked and refresh tokens are
+  session-bound.
+- **Verification limitation (owner directive):** stop minting production
+  JWTs for verification. Prior live checks used short-lived minted
+  tokens (incl. a temporarily-ADMIN `devin_mod_test` JWT for the takedown
+  call, role reverted). Future admin/verification flows require
+  owner-assisted login through the normal auth/2FA path; automated
+  verification is limited to public endpoints and CI.
+- **PR #83 economics corrected (reward still disabled):** removed the
+  "~70cr/week realized" resale claim -- the 10cr floor bounds the minimum
+  ask only and does not establish realized sales or demand. Boost
+  stacking re-traced across ALL xp_boost write paths: store `useItem`
+  creates independent rows (no extension, coverage = latest expiry, ~24h
+  after last use if spaced <24h); loot-box/daily-wheel/gamification-wheel
+  rewards extend the latest-expiry row additively via
+  `extendOrCreateActiveEffect`; XP resolution reads the single
+  latest-expiry row's multiplier -- never compounds. Added weekly-
+  milestone Option B (<=1 boost/week vs <=7/day-option) comparison;
+  supply/farming quantified without demand assumptions.
