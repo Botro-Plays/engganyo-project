@@ -2682,3 +2682,33 @@ sessions revoked.
   latest-expiry row's multiplier -- never compounds. Added weekly-
   milestone Option B (<=1 boost/week vs <=7/day-option) comparison;
   supply/farming quantified without demand assumptions.
+
+### 2026-11-13 (later) — lookup retry single-owner fix (PR #87) + PR #83 Option B prep
+
+- **PR #87** `fix/marketplace-lookup-retry-owner` @ `5cbd1d4`: the
+  purchase-status lookup now passes `skipRetry: true` to axios — the
+  interceptor no longer amplifies each query attempt 4x; the query's
+  `shouldRetryQuery` is the single retry owner (1 bounded retry for
+  network/5xx, 0 for 4xx). Worst case is now 2 HTTP calls before
+  'Purchase status unavailable' (was ~8).
+- **E2E added:** repeated-500 and network-abort (`route.abort()`) specs
+  assert exactly 2 lookup requests before the error state, the
+  purchaseKey in every lookup URL + preserved localStorage intent
+  (key/qty/unitPrice/listingId), 0 purchase POSTs, then Retry ->
+  'Purchase completed'. 429 and zero-balance cases retained. All green
+  in CI run on `5cbd1d4`.
+- **MERGED + DEPLOYED:** merge `dc71614718da6eb894137d60efcdfb6e1147ad81`,
+  deploy run `43354149983` all jobs success. `.deployed-sha` = `dc71614`;
+  containers healthy; lookup 401 unauth / marketplace 200 live.
+- **Rendered error/retry verification:** still pending — requires an
+  owner-assisted labeled-account session (Edge profiles closed; reCAPTCHA
+  blocks automated login; minted JWTs discontinued per directive). CI
+  mocked-route evidence covers the state machine; live rendered pass is
+  a labeled gap.
+- **PR #83:** Option B prepared as recommended launch — <=1
+  ACTIVITY_REWARD XP Boost (24h) per user per ISO week, threshold >=10
+  VERIFIED task completions across >=3 distinct UTC days, grant-ledger
+  replay identity `(userId, itemId, ACTIVITY_REWARD, isoWeek)` inside
+  the settlement tx, shared-account controls (per-account cap,
+  distinct-days requirement, account-bound until consumed, monitoring).
+  Reward remains disabled; awaiting owner approval.
