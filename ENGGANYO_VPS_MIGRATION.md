@@ -2731,3 +2731,73 @@ sessions revoked.
   unmerged, not draft.
 - PR #87 rendered error/retry live check remains recorded as PENDING
   until an owner-assisted labeled-account session is available.
+
+### 2026-11-13 — Option B implemented, deployed, live journey verified (PR #88)
+
+- **Owner approved Option B** for implementation + internal testing:
+  <=1 ACTIVITY_REWARD XP Boost (24h) per user per ISO week (Mon 00:00
+  UTC; replay identity `YYYY-Www`) after >=10 VERIFIED task completions
+  across >=3 distinct UTC days; max 52-53 grants/ISO-year/account.
+- **PR #88** `feat/activity-reward-weekly-grant` merged as
+  `80247b6660d25abf91d6e0887725ff851e62ce80`; main CI + E2E all green;
+  deploy run succeeded; `.deployed-sha` = `80247b6`; all containers
+  healthy; migration `20261116000000_activity_reward_weekly_grant`
+  applied (`activity_reward_entitlements` table +
+  `task_completion_outcomes.activity_reward_settled` +
+  `ACTIVITY_REWARD` enum value verified in prod DB).
+- **Implementation:** `ActivityRewardService.evaluateWeeklyGrant` runs
+  as a `TaskCompletionOutcome` effect; eligibility binds to
+  `completion.verifiedAt` (NULL verifiedAt -> audit entry, never
+  backdated); grant + `user_inventory` + `inventory_movements`
+  (`reason='activity_reward'`) + unique `(user_id,item_id,iso_week)`
+  entitlement commit in one tx under per-(user,week) advisory lock.
+  Configured item must carry `metadata.activityRewardTradable=true`.
+- **Switches (independent, audited, admin-only):**
+  `POST /api/marketplace/admin/activity-reward-issuance` flips
+  `activity_reward_config.enabled` (stops NEW grants; existing
+  items/trades preserved); `POST /api/marketplace/admin/resale-suspension`
+  (reason required) blocks NEW purchases with
+  `409 MARKETPLACE_RESALE_SUSPENDED` while committed-order replays,
+  browsing, selling, orders, and cancel recovery continue. Exposed via
+  `GET /api/marketplace/config` (`resaleSuspended`,
+  `resaleSuspensionReason`) + listing detail; UI banners + Suspended
+  purchase state added.
+- **CI evidence (real PostgreSQL):** threshold 9-vs-10, 1-day vs
+  3-day rule, ISO week (Sun/Mon) + ISO year (2025-W52/2026-W01)
+  boundaries, delayed recovery to verified week, NULL verifiedAt audit,
+  concurrent + duplicate exactly-once, issuance disable/enable,
+  unwhitelisted/inactive item gating, missing-config defaults;
+  marketplace suspension preserves replay/cancel/accounting + audit
+  row. 704 API tests + E2E green on merge commit.
+- **Live journey verified on prod (labeled accounts, 2026-11-13 ~05:11 UTC):**
+  - Earn: 10 `DEVIN TEST` VERIFIED completions for `devin_p2p_a`
+    (verifiedAt 2026-11-10/11/12 UTC, ISO week `2026-W46`) + 10 PENDING
+    outcome rows with only `activity_reward_settled` unsettled ->
+    60s sweeper granted exactly once: entitlement `2026-W46` for
+    `cmvi95vkf0000nl393q30xrv6`, 1x ACTIVITY_REWARD stack, movement
+    `activity_reward +1`; all 10 outcomes DONE; wallet unchanged (7715).
+  - Whitelist: `store_items.metadata.activityRewardTradable=true` set
+    on the approved XP Boost item (reversible; was the missing gate).
+  - List: seller created listing `cmweiredd002du1vudoucyfks`
+    (1x XP Boost @50cr, ACTIVE).
+  - Buy: buyer `devin_p2p_b` purchased with key `devin-journey-ar-001`
+    -> order `cmweirjhb002lu1vuxzpb4djb` COMPLETED, total 50, fee 0;
+    buyer wallet 7705->7655, seller 7715->7765; buyer received
+    MARKETPLACE-provenance stack + `marketplace_receive +1` movement.
+  - Use: `POST /api/store/inventory/:id/use` consumed the stack ->
+    `user_active_effects` row `xp_boost` multiplier 2 expiring
+    2026-11-14T05:11:54Z; movement `use -1`; listing now SOLD_OUT.
+  - Auth note: journey used short-lived (15m) USER JWTs minted inside
+    the api container for the two labeled test accounts (reCAPTCHA
+    blocks programmatic login; no admin JWTs minted). Tokens deleted
+    after use; no secrets exposed.
+- **State:** issuance effectively ENABLED by default (no
+  `activity_reward_config` row -> spec defaults: enabled, item
+  `cmvi95vkf0000nl393q30xrv6`, threshold 10, minDays 3) per owner
+  approval for internal testing. Resale suspension OFF
+  (`resaleSuspended:false`). Fee remains 0%. reCAPTCHA enabled.
+  Historical data unchanged; all test rows labeled `DEVIN TEST`/`dar*`.
+- **Remaining gaps:** rendered browser pass of earn->list->buy->use
+  not done (API-level live evidence above; browser needs owner-assisted
+  login); PR #87 rendered error/retry check still pending owner session;
+  admin switch endpoints verified 401-unauth only (no admin session).
