@@ -12,7 +12,7 @@ This table is the single source of truth for Jomar's eight requests. Detailed
 sections below are retained as history; where they conflict with this table,
 the table wins. Verified against current main + production evidence cited.
 
-**Final decision package for items 4 & 8:** `docs/IMPLEMENTATION_DECISION_PACKAGE.md` (rev-5 ads proposal + rev-2 marketplace proposal, owner approval tables, measured-traffic pricing basis).
+**Final decision package for items 4 & 8:** `docs/IMPLEMENTATION_DECISION_PACKAGE.md` (rev-5 ads proposal — now **deferred**, consolidated at `docs/FUTURE_MONETIZATION_BANNER_ADS.md` + rev-2 marketplace proposal, owner approval tables, measured-traffic pricing basis).
 
 | # | Request | Status | Shipped behavior / source | Verification evidence | Remaining gaps / owner decisions |
 |---|---------|--------|---------------------------|----------------------|----------------------------------|
@@ -23,7 +23,7 @@ the table wins. Verified against current main + production evidence cited.
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
 | 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
-| 8 | External banner advertising - real-money bookings and intelligent placement | **Proposal ready - owner decision pending** | **Re-scoped (owner, 11 Nov rev 3):** external customers buy banner placements across named public/dashboard/Discover/community zones with artwork + external URL, paid in real money. Proposal (rev 4): `docs/proposals/external-banner-ads.md` (replaces Discover-feed `paid-discover-ads.md`, removed). Launch option: 4 shared-rotation zones, static banners, time packages, no traffic guarantees, transparent delivery reporting; premium option deferred: exclusive placements w/ atomic reservation. Full lifecycle (single delivery clock, bounded prerequisite window, revision-vs-refund resolution, non-displacing make-goods), per-campaign impressions/reach/clicks/CTR | Source audit on `a1153e8` route map + payment/analytics modules | Owner decisions: zone list, package prices, advertiser account model, refund/cancellation policy, providers, eligibility. |
+| 8 | External banner advertising - real-money bookings and intelligent placement | **DEFERRED — future monetization (owner decision 13 Nov); implementation requires owner approval** | **Intentionally postponed until after platform launch.** Consolidated future plan: `docs/FUTURE_MONETIZATION_BANNER_ADS.md` (supersedes rev-5 proposal `docs/proposals/external-banner-ads.md`). Retains placements/specs/flows, scheduling/rotation/moderation/reporting, real-money booking/settlement/refund requirements, security/perf/a11y/accounting, unresolved decisions, readiness criteria. All prices = historical unapproved placeholders | Measured-traffic analysis in `docs/IMPLEMENTATION_DECISION_PACKAGE.md` §A (~20–40 human page views/day — far below viable ad yield) | Revisit only when readiness criteria met: stable core workflows, actual traffic, moderation capacity, owner approval. No ad code in launch release. |
 | 9 | Supported-platform logos (owner item) | **Shipped + live-verified** | Landing "Supported platforms" strip, local SVGs, before "Two ways to participate" | PR #49 `6c4f2b5`; live 390px+1440px | None. |
 
 ## Delivery order
@@ -217,22 +217,25 @@ pending.
 
 ## 8. External banner advertising — real-money bookings and intelligent placement
 
-**Status — proposal ready for owner review (11 Nov, rev 4).** `docs/proposals/external-banner-ads.md` (supersedes the Discover-feed draft `paid-discover-ads.md`, removed). Rev 4 corrections: impossible 80% shared-impression guarantee removed (fair rotation + actuals reporting; future guarantees need atomic ≤100% capacity reservation); exclusive bookings clarified (atomic window reservation, expiry, non-displacing make-goods, bounded reschedule/refund); single time-based delivery clock with bounded prerequisite window; revision-vs-refund conflict resolved; prices marked illustrative placeholders; launch option = 4 shared zones/static/no-guarantee, premium/exclusive deferred.
+**Status — DEFERRED — future monetization (owner decision 13 Nov 2026); implementation requires owner approval.** Consolidated plan: `docs/FUTURE_MONETIZATION_BANNER_ADS.md` — supersedes `docs/proposals/external-banner-ads.md` (rev 4/5, retained for history). Advertising is intentionally postponed until after platform launch; **no banner placeholders, advertising navigation, booking interfaces, payment configuration, or other advertising code ships in the launch release.** All package prices remain historical, unapproved placeholders.
 
 > **Owner clarification (11 Nov 2026):** external customers buy **banner
 > placements** across suitable Engganyo areas — artwork + external
 > destination URL + real-money payment. Not a user-submitted Discover feed.
 
-The proposal defines 10 named zones across public/dashboard/community
-screens (with live previews, per-zone desktop+mobile specs, and ad-density
-limits), artwork/URL validation and Sponsored labeling, intelligent
-delivery (schedule, fair rotation, frequency caps, shared-vs-exclusive
-allocation), self-serve `/advertise` + admin-assisted booking, time-based
-shared/exclusive packages with proposed prices, a consistent
-payment→moderation→delivery lifecycle covering edits/pauses/rejection/
-outages/cancellation/refunds/reconciliation, and per-campaign
-impressions/unique-reach/clicks/CTR reporting with abuse controls. No ad
-economics implemented — awaiting owner approval.
+The consolidated plan retains the full proposal scope: named zones across
+public/dashboard/community screens (live previews, per-zone desktop+mobile
+specs, ad-density limits), artwork/URL validation and Sponsored labeling,
+intelligent delivery (schedule, fair rotation, frequency caps,
+shared-vs-exclusive allocation with atomic reservation), self-serve
+`/advertise` + admin-assisted booking, the single time-based delivery
+clock with bounded prerequisite window, revision-vs-refund resolution,
+non-displacing make-goods, real-money booking/settlement/cancellation/
+refund requirements, per-campaign impressions/reach/clicks/CTR reporting
+with abuse controls, and security/performance/accessibility/accounting
+considerations. Revisit only when the readiness criteria are met:
+stable core workflows, actual traffic, moderation capacity, and explicit
+owner approval.
 
 ## 9. Supported-platform logos on the landing page
 

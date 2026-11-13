@@ -1,6 +1,10 @@
 # Proposal: external banner advertising — real-money bookings and intelligent placement
 
-**Status: Ready for review (rev 5 — decision package aligned) — no implementation authorized.**
+**Status: SUPERSEDED (13 Nov 2026) — consolidated into
+`docs/FUTURE_MONETIZATION_BANNER_ADS.md`, which is DEFERRED — future
+monetization; implementation requires owner approval.** This rev-5
+proposal is retained for history; all decisions and prices remain
+unapproved placeholders.
 
 > **Owner clarification (11 Nov 2026):** this feature is for **external
 > customers** (businesses/brands, not necessarily Engganyo users) buying

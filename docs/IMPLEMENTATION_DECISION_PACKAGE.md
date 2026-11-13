@@ -4,12 +4,27 @@
 **Status:** Ready for review — **recommendations only; nothing here is owner approval.**
 No economics are configured or charged.
 
+> **Update (13 Nov 2026):** item 8 (external banner advertising) is
+> **intentionally DEFERRED until after platform launch** per owner
+> decision. The consolidated future plan — placements, specs, flows,
+> scheduling/rotation/moderation/reporting, real-money
+> booking/settlement/refund requirements, security/performance/a11y/
+> accounting, unresolved decisions, and readiness criteria — lives at
+> `docs/FUTURE_MONETIZATION_BANNER_ADS.md`. All price figures in §A
+> below are historical, unapproved placeholders. Section A is retained
+> for its measured-traffic analysis only.
+
 Proposals: `docs/proposals/player-item-marketplace.md` ·
-`docs/proposals/external-banner-ads.md`
+`docs/proposals/external-banner-ads.md` (superseded →
+`docs/FUTURE_MONETIZATION_BANNER_ADS.md`)
 
 ---
 
-## A. External banner advertising
+## A. External banner advertising — DEFERRED (13 Nov 2026)
+
+> **Deferred — future monetization; implementation requires owner
+> approval.** Consolidated plan: `docs/FUTURE_MONETIZATION_BANNER_ADS.md`.
+> The analysis below is retained for context; nothing here is scheduled.
 
 ### A1. Pricing — PENDING traffic measurement and owner selection
 
@@ -119,8 +134,11 @@ equipped-cosmetic handling, legal/tax reviewer assignment.
   useItem/equipCosmetic/grantStoreItem transactional refactor** (required
   for race safety) + `/marketplace` UI + ledger types, per approved
   category/fee/bounds/expiry.
-- **Ads:** pricing awaits measured per-zone traffic; implementation can
-  proceed on non-price decisions but **no bookings open for payment until
-  the owner selects rates**.
+- **Ads:** **DEFERRED until after platform launch** (owner decision
+  13 Nov) — consolidated future plan at
+  `docs/FUTURE_MONETIZATION_BANNER_ADS.md`. No advertising code,
+  placeholders, booking UI, or payment config ships in the launch
+  release; pricing remains parked until measured per-zone traffic
+  exists AND the owner re-approves scope/rates.
 - Both ship through PR → GitHub Actions CI → deploy; `engganyo.com` for
   authorized labeled testing; reCAPTCHA stays enabled.

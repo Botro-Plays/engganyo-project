@@ -2944,3 +2944,21 @@ sessions revoked.
   across ≥3 UTC days via normal task → proof → review accumulation is
   tracked as a pending friend-testing acceptance item in
   `docs/JOMAR_IMMEDIATE_PRIORITIES.md`.
+
+## 2026-11-13 — Banner advertising deferred (documentation only)
+
+- Owner decision: external banner advertising is **deferred until after
+  platform launch** — supersedes the prior implementation prompt.
+- Created `docs/FUTURE_MONETIZATION_BANNER_ADS.md` — consolidated future
+  plan marked "Deferred — future monetization; implementation requires
+  owner approval." Retains placements/specs/flows, scheduling/rotation/
+  frequency/moderation/reporting, real-money booking/settlement/
+  cancellation/refund requirements, security/performance/accessibility/
+  accounting, unresolved decisions, and readiness criteria (stable core
+  workflows, actual traffic, moderation capacity, owner approval).
+- `docs/proposals/external-banner-ads.md` marked SUPERSEDED;
+  `docs/IMPLEMENTATION_DECISION_PACKAGE.md` §A marked deferred with
+  link; `docs/JOMAR_IMMEDIATE_PRIORITIES.md` item 8 + section 8 updated.
+- All package prices treated as historical, unapproved placeholders.
+- Documentation only — no banner placeholders, ad navigation, booking
+  UI, payment config, or advertising code added; no deployment.
