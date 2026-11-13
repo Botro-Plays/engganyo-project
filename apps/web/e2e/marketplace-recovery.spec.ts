@@ -110,6 +110,8 @@ async function mockMarketplace(
     lookupFailures?: number;
     /** HTTP status for lookup failures — 429 exercises the no-auto-retry path. */
     lookupFailureStatus?: number;
+    /** First N lookup calls abort at the network layer (no HTTP response). */
+    lookupNetworkFailures?: number;
   } = {},
 ) {
   const listingId = opts.listingId ?? 'L1';
@@ -159,6 +161,10 @@ async function mockMarketplace(
 
   await page.route('**/api/marketplace/orders/lookup/*', (route) => {
     state.lookupCount += 1;
+    if ((opts.lookupNetworkFailures ?? 0) > 0) {
+      opts.lookupNetworkFailures!--;
+      return route.abort();
+    }
     if ((opts.lookupFailures ?? 0) > 0) {
       opts.lookupFailures!--;
       return route.fulfill({
@@ -376,5 +382,107 @@ test.describe('purchase recovery — null lookup keeps funds gate on new purchas
     await expect(page.getByRole('button', { name: 'Insufficient credits' })).toBeDisabled({ timeout: 15_000 });
     await expect(page.getByText('Unconfirmed purchase attempt')).toBeVisible();
     expect(state.postCount).toBe(0);
+  });
+});
+
+function committedOrderFor(key: string, listingId: string) {
+  return {
+    id: 'ord-e2e-retry',
+    listingId,
+    buyerId: 'u1',
+    sellerId: 'seller1',
+    itemId: 'item1',
+    itemName: 'Streak Freeze (3 days)',
+    quantity: 1,
+    unitPrice: 120,
+    totalPrice: 120,
+    feeAmount: 0,
+    status: 'COMPLETED',
+    purchaseKey: key,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Shared assertions for the bounded-retry contract: exactly one query
+ *  retry (axios skipRetry) -> timely error -> manual Retry -> committed
+ *  order, with the purchase key preserved and zero purchase POSTs. */
+async function expectBoundedLookupRecovery(
+  page: Page,
+  state: MockState,
+  pending: PendingIntent,
+  lookupUrls: string[],
+) {
+  await page.goto(`/marketplace/${pending.listingId}`);
+  await expect(page.getByText('Purchase status unavailable')).toBeVisible({ timeout: 15_000 });
+  // Bounded: initial attempt + exactly one query retry. Axios contributes
+  // zero extra calls because the lookup opts out via skipRetry.
+  expect(state.lookupCount).toBe(2);
+  // Every lookup used the preserved purchaseKey; intent params untouched.
+  expect(lookupUrls.length).toBe(2);
+  for (const url of lookupUrls) expect(url).toContain(encodeURIComponent(pending.purchaseKey));
+  const stored = await page.evaluate((k) => localStorage.getItem(k), `engganyo:marketplace:pending:${pending.userId}:${pending.listingId}`);
+  expect(stored).toBeTruthy();
+  expect(JSON.parse(stored!)).toMatchObject({
+    purchaseKey: pending.purchaseKey,
+    quantity: pending.quantity,
+    unitPrice: pending.unitPrice,
+    listingId: pending.listingId,
+  });
+  expect(state.postCount).toBe(0);
+
+  await page.getByRole('button', { name: 'Retry status check' }).click();
+  await expect(page.getByText('Purchase completed')).toBeVisible({ timeout: 15_000 });
+  expect(state.lookupCount).toBe(3);
+  expect(state.postCount).toBe(0);
+}
+
+test.describe('purchase recovery — bounded retry on repeated 500s', () => {
+  const pending: PendingIntent = {
+    purchaseKey: 'e2e-500-retry-key-0001',
+    quantity: 1,
+    unitPrice: 120,
+    listingId: 'L5',
+    userId: 'u1',
+    createdAt: new Date().toISOString(),
+  };
+  test.use({ storageState: authState(0, pending) });
+
+  test('two 500s -> unavailable after exactly 2 lookups -> Retry -> completed', async ({ page }) => {
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
+    const lookupUrls: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/orders/lookup/')) lookupUrls.push(r.url()); });
+    await mockMarketplace(page, state, {
+      listingId: 'L5',
+      detailFor: () => detail({ ...SOLD_OUT, id: 'L5' }),
+      orderFor: () => committedOrderFor(pending.purchaseKey, 'L5'),
+      lookupFailures: 2,
+      lookupFailureStatus: 500,
+    });
+    await expectBoundedLookupRecovery(page, state, pending, lookupUrls);
+  });
+});
+
+test.describe('purchase recovery — bounded retry on network failures', () => {
+  const pending: PendingIntent = {
+    purchaseKey: 'e2e-net-retry-key-0001',
+    quantity: 1,
+    unitPrice: 120,
+    listingId: 'L6',
+    userId: 'u1',
+    createdAt: new Date().toISOString(),
+  };
+  test.use({ storageState: authState(0, pending) });
+
+  test('two aborted lookups -> unavailable after exactly 2 lookups -> Retry -> completed', async ({ page }) => {
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
+    const lookupUrls: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/orders/lookup/')) lookupUrls.push(r.url()); });
+    await mockMarketplace(page, state, {
+      listingId: 'L6',
+      detailFor: () => detail({ ...SOLD_OUT, id: 'L6' }),
+      orderFor: () => committedOrderFor(pending.purchaseKey, 'L6'),
+      lookupNetworkFailures: 2,
+    });
+    await expectBoundedLookupRecovery(page, state, pending, lookupUrls);
   });
 });
