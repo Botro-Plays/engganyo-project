@@ -81,7 +81,6 @@ export default function MarketplaceListingPage() {
     queryKey: ['marketplace', 'purchase-lookup', pending?.purchaseKey],
     enabled: !!pending && !!user?.id,
     staleTime: 0,
-    retry: 1,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ order: MarketplaceOrder | null }>>(
         `marketplace/orders/lookup/${pending!.purchaseKey}`,
@@ -181,6 +180,12 @@ export default function MarketplaceListingPage() {
   // insufficient (the debit already happened server-side).
   const committedOrder = pending ? (purchaseLookup.data ?? null) : null;
   const lookupChecking = !!pending && purchaseLookup.isFetching;
+  // Lookup outcome states: order / confirmed-null / still-loading / failed.
+  // A failed status check must NOT claim the purchase failed or invite a
+  // discard/rebuy — the key and params stay preserved until the server
+  // answers definitively.
+  const lookupFailed = !!pending && purchaseLookup.isError && !purchaseLookup.isFetching;
+  const lookupResolvedNull = !!pending && purchaseLookup.isSuccess && purchaseLookup.data === null;
   const endsIn = Math.max(0, Math.ceil((new Date(listing.expiresAt).getTime() - Date.now()) / 86_400_000));
   const discardPending = () => {
     clearPending();
@@ -277,6 +282,37 @@ export default function MarketplaceListingPage() {
               </div>
             </div>
           </div>
+        ) : pending && lookupFailed ? (
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <RotateCcw className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-amber-200">Purchase status unavailable</div>
+                <p className="text-sm text-zinc-300 mt-1">
+                  We couldn&apos;t confirm whether your earlier purchase completed. Your attempt
+                  details are saved on this device — please check again before taking any other
+                  action. Do not start a new purchase for this listing yet.
+                </p>
+                <div className="flex items-center gap-4 mt-3">
+                  <button
+                    onClick={() => purchaseLookup.refetch()}
+                    disabled={purchaseLookup.isFetching}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium disabled:opacity-50 transition-colors"
+                  >
+                    {purchaseLookup.isFetching ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    )}
+                    {purchaseLookup.isFetching ? 'Checking…' : 'Retry status check'}
+                  </button>
+                  <Link href="/marketplace" className="text-xs text-brand-400 underline">
+                    Check Order history
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : !purchasable && !pending ? (
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
             {listing.status === 'PAUSED' ? (
@@ -320,17 +356,23 @@ export default function MarketplaceListingPage() {
             )}
             {pending && !purchasable ? (
               <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-3 text-sm text-zinc-400">
-                This listing is{' '}
-                {listing.status === 'PAUSED'
-                  ? 'paused'
-                  : listing.status !== 'ACTIVE'
-                    ? listing.status.toLowerCase().replace('_', ' ')
-                    : listing.isExpired
-                      ? 'expired'
-                      : 'sold out'}{' '}
-                — the unconfirmed attempt cannot complete. If it had already gone through, the
-                committed order would be displayed instead. Check Order history, then discard
-                this attempt.
+                {lookupResolvedNull ? (
+                  <>
+                    This listing is{' '}
+                    {listing.status === 'PAUSED'
+                      ? 'paused'
+                      : listing.status !== 'ACTIVE'
+                        ? listing.status.toLowerCase().replace('_', ' ')
+                        : listing.isExpired
+                          ? 'expired'
+                          : 'sold out'}{' '}
+                    — the unconfirmed attempt cannot complete. If it had already gone through, the
+                    committed order would be displayed instead. Check Order history, then discard
+                    this attempt.
+                  </>
+                ) : (
+                  'Checking whether your earlier purchase already completed…'
+                )}
               </div>
             ) : (
             <>
