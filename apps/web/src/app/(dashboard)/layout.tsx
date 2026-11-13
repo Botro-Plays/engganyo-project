@@ -19,6 +19,7 @@ import {
   MessageCircle,
   Bell,
   ShoppingBag,
+  Package,
   ArrowLeftRight,
   MoreHorizontal,
   Plus,
@@ -57,6 +58,7 @@ const navGroups = [
       { href: '/tasks?tab=mine', icon: ListTodo, label: 'My tasks' },
       { href: '/campaigns', icon: Megaphone, label: 'My campaigns' },
       { href: '/wallet', icon: Wallet, label: 'Wallet' },
+      { href: '/store/inventory', icon: Package, label: 'Inventory' },
     ],
   },
   {
@@ -95,6 +97,7 @@ const mobileNavPrimary = [
 
 // All remaining items for the More drawer
 const mobileNavSecondary = [
+  { href: '/store/inventory', icon: Package, label: 'Inventory' },
   { href: '/forum', icon: MessageSquare, label: 'Forum' },
   { href: '/chat', icon: MessageCircle, label: 'Chat' },
   { href: '/rooms', icon: Swords, label: 'P2P Rooms' },
@@ -145,6 +148,7 @@ function isNavItemActive(
   const shadowed = allItems.some((other) => {
     if (other === item) return false;
     const o = splitHref(other.href);
+    if (o.path.startsWith(`${path}/`) && pathnameMatches(pathname, o.path)) return true;
     return o.path === path && o.query !== null && queryMatches(o.query, searchParams);
   });
   return !shadowed;
