@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query
 import { Throttle } from '@nestjs/throttler';
 import { StoreCategory } from '@prisma/client';
 
-import { MarketplaceService, getMarketplacePublicConfig } from './marketplace.service';
+import { MarketplaceService } from './marketplace.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalAuth } from '../../common/decorators/public.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,16 +12,18 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { PurchaseListingDto } from './dto/purchase-listing.dto';
 import { TakedownListingDto } from './dto/takedown-listing.dto';
+import { ActivityRewardIssuanceDto, ResaleSuspensionDto } from './dto/operational-switches.dto';
 
 @Controller('marketplace')
 export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
 
-  /** Proposed internal-test rules — public so the UI can display exact terms. */
+  /** Proposed internal-test rules + live operational switches — public so
+   *  the UI can display exact terms and suspension state. */
   @Get('config')
   @HttpCode(HttpStatus.OK)
-  config() {
-    return getMarketplacePublicConfig();
+  async config() {
+    return this.marketplaceService.getPublicConfig();
   }
 
   @Get('listings')
@@ -114,5 +116,26 @@ export class MarketplaceController {
   @HttpCode(HttpStatus.OK)
   async takedown(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: TakedownListingDto) {
     return this.marketplaceService.adminTakedown(user.sub, id, dto.reason);
+  }
+
+  /** Emergency brake on NEW marketplace purchases. Stock, orders,
+   *  accounting, and seller cancellation recovery are preserved; a reason
+   *  is required and every change is audit-logged. */
+  @Post('admin/resale-suspension')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async resaleSuspension(@CurrentUser() user: JwtPayload, @Body() dto: ResaleSuspensionDto) {
+    return this.marketplaceService.setResaleSuspension(user.sub, dto);
+  }
+
+  /** Turn ACTIVITY_REWARD issuance on/off. Disabling stops new grants
+   *  only — existing earned items and all trades are preserved. */
+  @Post('admin/activity-reward-issuance')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async activityRewardIssuance(@CurrentUser() user: JwtPayload, @Body() dto: ActivityRewardIssuanceDto) {
+    return this.marketplaceService.setActivityRewardIssuance(user.sub, dto);
   }
 }

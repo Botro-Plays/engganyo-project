@@ -413,6 +413,7 @@ model User {
   createdChannels        Channel[]               @relation("ChannelCreator")
   storePurchases         StorePurchase[]
   inventory              UserInventory[]
+  activityRewardEntitlements ActivityRewardEntitlement[]
   activeEffects          UserActiveEffect[]
   wheelSpins             WheelSpin[]
   wheelSpinAttempts      WheelSpinAttempt[]
@@ -959,6 +960,7 @@ model TaskCompletionOutcome {
   missionSettled      Boolean   @default(false) @map("mission_settled")
   achievementsSettled Boolean   @default(false) @map("achievements_settled")
   referralSettled     Boolean   @default(false) @map("referral_settled")
+  activityRewardSettled Boolean @default(false) @map("activity_reward_settled")
   attempts            Int       @default(0)
   lastError           String?   @map("last_error")
   // Processing lease: a worker claims the outcome with a unique token
@@ -980,6 +982,27 @@ model TaskCompletionOutcome {
 
   @@index([status, createdAt])
   @@map("task_completion_outcomes")
+}
+
+// Weekly earned-item entitlement for verified-activity rewards. One row
+// per (user, item, ISO week) — the unique key is the replay identity that
+// makes grant settlement exactly-once even under concurrent qualifying
+// completions or outcome recovery. isoWeek uses ISO week-year+week
+// ('2026-W47'), Monday 00:00 UTC based.
+model ActivityRewardEntitlement {
+  id                 String    @id @default(cuid())
+  userId             String    @map("user_id")
+  user               User      @relation(fields: [userId], references: [id])
+  itemId             String    @map("item_id")
+  item               StoreItem @relation(fields: [itemId], references: [id])
+  isoWeek            String    @map("iso_week")
+  sourceCompletionId String?   @map("source_completion_id")
+  grantedAt          DateTime  @default(now()) @map("granted_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  @@unique([userId, itemId, isoWeek])
+  @@index([userId, isoWeek])
+  @@map("activity_reward_entitlements")
 }
 
 // Freeze marker for one UTC period's mission catalog. Inserted once by
@@ -1724,6 +1747,7 @@ model StoreItem {
 
   purchases          StorePurchase[]
   inventory          UserInventory[]
+  activityRewardEntitlements ActivityRewardEntitlement[]
   marketplaceListings MarketplaceListing[]
 
   createdAt DateTime @default(now()) @map("created_at")

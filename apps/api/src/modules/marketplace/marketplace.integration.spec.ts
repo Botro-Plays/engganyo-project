@@ -1268,4 +1268,73 @@ run('marketplace — real PostgreSQL', () => {
       service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 50 }),
     ).rejects.toMatchObject({ status: 403 });
   });
+
+  // ─── Resale suspension switch ──────────────────────────────
+
+  it('resale suspension blocks new purchases but preserves orders, stock, accounting, and cancel recovery', async () => {
+    const seller = await mkUser();
+    const buyer = await mkUser(1000);
+    const inv = await mkInventory(seller.id, convItemId, 4);
+    const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
+
+    // A committed purchase BEFORE suspension — its replay must still
+    // resolve while suspended (orders are preserved).
+    const committedKey = purchaseKey('pre');
+    await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: committedKey });
+    const buyerAfterFirst = await balance(buyer.id);
+
+    // Reason is mandatory for suspension.
+    await expect(service.setResaleSuspension(seller.id, { suspended: true })).rejects.toThrow(BadRequestException);
+
+    await service.setResaleSuspension(seller.id, { suspended: true, reason: 'incident review' });
+    const susp = await service.getResaleSuspension();
+    expect(susp.suspended).toBe(true);
+    expect(susp.reason).toBe('incident review');
+
+    // Public config exposes the suspension.
+    const pub = await service.getPublicConfig();
+    expect(pub.resaleSuspended).toBe(true);
+    expect(pub.resaleSuspensionReason).toBe('incident review');
+
+    // Committed-order replay still resolves — no error, no second debit.
+    const replay = await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: committedKey });
+    expect((replay as { replayed?: boolean }).replayed).toBe(true);
+    expect(await balance(buyer.id)).toBe(buyerAfterFirst);
+
+    // New purchase blocked — nothing moves.
+    try {
+      await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('susp') });
+      throw new Error('should have thrown');
+    } catch (e) {
+      expect(responseCode(e)).toBe('MARKETPLACE_RESALE_SUSPENDED');
+    }
+    expect(await balance(buyer.id)).toBe(buyerAfterFirst);
+    expect(await prisma.marketplaceOrder.count({ where: { listingId: listing.id } })).toBe(1);
+
+    // Seller cancellation recovery still works during suspension —
+    // remaining escrow returns to inventory.
+    const cancelled = await service.cancelListing(seller.id, listing.id);
+    expect(cancelled.status).toBe(MarketplaceListingStatus.CANCELLED);
+    // Stack: 4 minted − 2 escrowed; 1 sold; cancel returns the last escrowed
+    // unit → 2 untouched + 1 returned = 3.
+    expect(await invQty(seller.id, convItemId)).toBe(3);
+
+    // Audit trail recorded the suspension with actor + reason.
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'marketplace.resale_suspend', entityId: 'marketplace_resale_suspension' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(audit).toBeTruthy();
+    expect(audit!.userId).toBe(seller.id);
+
+    // Resume → new purchases work again. The seller's stack (inv) holds
+    // the 3 returned/untouched units — (userId,itemId,provenance) is unique
+    // so a second mkInventory for the same triple would violate it.
+    await service.setResaleSuspension(seller.id, { suspended: false });
+    expect((await service.getResaleSuspension()).suspended).toBe(false);
+    expect((await service.getPublicConfig()).resaleSuspended).toBe(false);
+    const listing3 = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 50 });
+    const ok = await service.purchaseListing(buyer.id, listing3.id, { quantity: 1, purchaseKey: purchaseKey('post') });
+    expect((ok.order as { status?: string }).status).toBe('COMPLETED');
+  });
 });

@@ -21,6 +21,10 @@ export interface MarketplaceListingDetail extends MarketplaceListing {
   isActive: boolean;
   viewerIsSeller: boolean;
   canPurchase: boolean;
+  /** Emergency resale suspension — new purchases blocked server-side;
+   *  committed-order recovery, browsing, and seller cancel still work. */
+  resaleSuspended?: boolean;
+  resaleSuspensionReason?: string | null;
 }
 
 export interface SellableStack {
@@ -88,6 +92,8 @@ export interface MarketplaceConfig {
   eligibleCategories: string[];
   excludedCategories: string[];
   activityRewardTradable?: 'whitelist';
+  resaleSuspended?: boolean;
+  resaleSuspensionReason?: string | null;
   notes: string[];
 }
 

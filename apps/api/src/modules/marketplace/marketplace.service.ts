@@ -315,6 +315,7 @@ export class MarketplaceService {
 
     const active = listing.status === MarketplaceListingStatus.ACTIVE && listing.expiresAt > new Date() && listing.remainingQuantity > 0;
     const snap = listing.itemSnapshot as Record<string, unknown>;
+    const suspension = await this.getResaleSuspension();
 
     return {
       ...this.serializeListing(listing, item, seller?.username),
@@ -323,6 +324,8 @@ export class MarketplaceService {
       viewerIsSeller: viewerId === listing.sellerId,
       // Anonymous viewers can't purchase — require a signed-in non-seller.
       canPurchase: active && viewerId != null && viewerId !== listing.sellerId,
+      resaleSuspended: suspension.suspended,
+      resaleSuspensionReason: suspension.reason,
       expiresAt: listing.expiresAt,
       createdAt: listing.createdAt,
     };
@@ -686,6 +689,106 @@ export class MarketplaceService {
     return this.getListingDetail(listingId);
   }
 
+  // ─── Operational switches ───────────────────────────────────
+  //
+  // Two independent brakes, both stored in platform_configs and audited:
+  //
+  // - `marketplace_resale_suspension` {suspended, reason, suspendedBy,
+  //   suspendedAt}: emergency brake on NEW purchases only. Stock,
+  //   listings, orders, wallet accounting, and seller cancellation
+  //   recovery are all preserved; committed-order replays still return.
+  // - `activity_reward_config.enabled` (managed by the issuance endpoint
+  //   below): stops NEW ACTIVITY_REWARD grants while leaving existing
+  //   items and marketplace trades untouched.
+
+  private static readonly RESALE_SUSPENSION_KEY = 'marketplace_resale_suspension';
+
+  async getResaleSuspension() {
+    const row = await this.prisma.platformConfig.findUnique({
+      where: { key: MarketplaceService.RESALE_SUSPENSION_KEY },
+    });
+    const v = (row?.value ?? {}) as Record<string, unknown>;
+    return {
+      suspended: v['suspended'] === true,
+      reason: typeof v['reason'] === 'string' ? v['reason'] : null,
+    };
+  }
+
+  /** Public config = static rules + live suspension state. */
+  async getPublicConfig() {
+    const suspension = await this.getResaleSuspension();
+    return {
+      ...getMarketplacePublicConfig(),
+      resaleSuspended: suspension.suspended,
+      resaleSuspensionReason: suspension.reason,
+    };
+  }
+
+  async setResaleSuspension(
+    adminId: string,
+    dto: { suspended: boolean; reason?: string },
+  ) {
+    if (dto.suspended && (!dto.reason || !dto.reason.trim())) {
+      throw new BadRequestException('A reason is required to suspend marketplace resales');
+    }
+    const value = dto.suspended
+      ? {
+          suspended: true,
+          reason: dto.reason!.trim(),
+          suspendedBy: adminId,
+          suspendedAt: new Date().toISOString(),
+        }
+      : { suspended: false, reason: null, suspendedBy: null, suspendedAt: null };
+
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.platformConfig.findUnique({ where: { key: MarketplaceService.RESALE_SUSPENSION_KEY } });
+      await tx.platformConfig.upsert({
+        where: { key: MarketplaceService.RESALE_SUSPENSION_KEY },
+        create: { key: MarketplaceService.RESALE_SUSPENSION_KEY, value: value as Prisma.InputJsonValue },
+        update: { value: value as Prisma.InputJsonValue },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: dto.suspended ? 'marketplace.resale_suspend' : 'marketplace.resale_resume',
+          entityType: 'PlatformConfig',
+          entityId: MarketplaceService.RESALE_SUSPENSION_KEY,
+          oldValue: (before?.value ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          newValue: value as Prisma.InputJsonValue,
+        },
+      });
+    });
+    return this.getResaleSuspension();
+  }
+
+  /** Flip ACTIVITY_REWARD issuance without touching existing stock/trades. */
+  async setActivityRewardIssuance(adminId: string, dto: { enabled: boolean; reason?: string }) {
+    const KEY = 'activity_reward_config';
+    const next = await this.prisma.$transaction(async (tx) => {
+      const before = await tx.platformConfig.findUnique({ where: { key: KEY } });
+      const beforeVal = (before?.value ?? {}) as Record<string, unknown>;
+      const merged = { ...beforeVal, enabled: dto.enabled };
+      const row = await tx.platformConfig.upsert({
+        where: { key: KEY },
+        create: { key: KEY, value: merged as Prisma.InputJsonValue },
+        update: { value: merged as Prisma.InputJsonValue },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: dto.enabled ? 'activity_reward.issuance_enable' : 'activity_reward.issuance_disable',
+          entityType: 'PlatformConfig',
+          entityId: KEY,
+          oldValue: (before?.value ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          newValue: row.value as Prisma.InputJsonValue,
+          metadata: { reason: dto.reason ?? null } as Prisma.InputJsonValue,
+        },
+      });
+      return row;
+    });
+    return { enabled: dto.enabled, updatedAt: next.updatedAt };
+  }
+
   // ─── Purchase ───────────────────────────────────────────────
 
   async purchaseListing(
@@ -718,6 +821,19 @@ export class MarketplaceService {
     if (existing) {
       this.assertReplayMatches(existing, requestedListing, quantity);
       return { order: this.serializeOrder(existing), replayed: true };
+    }
+
+    // Emergency resale suspension blocks NEW purchases only — committed
+    // order replays above still resolve, and cancel/refund paths are
+    // untouched. Stock, orders, and accounting are preserved.
+    const suspension = await this.getResaleSuspension();
+    if (suspension.suspended) {
+      throw new ConflictException({
+        code: 'MARKETPLACE_RESALE_SUSPENDED',
+        message: suspension.reason
+          ? `Marketplace purchases are temporarily suspended: ${suspension.reason}`
+          : 'Marketplace purchases are temporarily suspended',
+      });
     }
 
     let result: PurchaseTxResult;
