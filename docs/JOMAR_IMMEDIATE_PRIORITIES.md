@@ -132,18 +132,17 @@ recovery (wallet delta 0, order replayed) → buyer Use → cancel →
 catalog-pause recovery → expiry — all verified with exact wallet/
 order/inventory outcomes (`evidence/marketplace-browser-2026-11-12/`).
 
-**Remaining — earned/farmed items:** audit found NO verified
-task/mission/achievement path grants inventory today (missions pay
-credits+XP only); the only earned inventory is daily/wheel gift boxes and
-loot-box cosmetics, all bound by policy. PR #83 (Ready for review) adds
-`ACTIVITY_REWARD` provenance + per-item `metadata.activityRewardTradable`
-whitelist — mechanism ready, zero behavior change until a grant path
-opts in and owner approves specific items. PR #83 body now carries a
-quantified, capped recommendation (≤1 XP Boost/24h per user per UTC day
-= ≤7/week/account; non-stacking 2× multiplier; ≤1,050cr/week nominal;
-replay-safe grant ledger) — **awaiting owner approval; not enabled**.
-Jomar's earned-item selling requirement stays **partially complete**
-until that path exists and is verified.
+**Earned-item path — IMPLEMENTED + LIVE on prod `80247b6` (13 Nov, PR #88):**
+owner approved Option B — ≤1 ACTIVITY_REWARD XP Boost (24h) per user per
+ISO week after ≥10 VERIFIED task completions across ≥3 distinct UTC
+days; exactly-once via unique `(user,item,isoWeek)` entitlement in the
+settlement tx; `verifiedAt`-bound eligibility; issuance + resale
+suspension switches (admin, audited). Live journey verified on prod with
+labeled accounts: 10 seeded VERIFIED completions → sweeper grant →
+ACTIVITY_REWARD stack → seller listing → buyer purchase (50cr, fee 0)
+→ buyer use → 2× XP effect 24h. Jomar's earned-item selling requirement
+is now **complete for internal testing** (whitelist-gated; other
+provenances remain bound).
 
 **Post-acceptance recovery defect → PR #85 (open):** the unresolved-
 purchase retry reused the funds gate, hiding committed orders at zero
