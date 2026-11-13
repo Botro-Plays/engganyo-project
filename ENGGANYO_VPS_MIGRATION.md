@@ -2712,3 +2712,22 @@ sessions revoked.
   the settlement tx, shared-account controls (per-account cap,
   distinct-days requirement, account-bound until consumed, monitoring).
   Reward remains disabled; awaiting owner approval.
+
+### 2026-11-13 (final) — PR #83 Option B finalized for approval
+
+- Final approval spec written into PR #83 body: XP Boost (24h)
+  `cmvi95vkf0000nl393q30xrv6` as ACTIVITY_REWARD; threshold >=10 VERIFIED
+  completions across >=3 distinct UTC days; <=1 grant/user/ISO week
+  (Mon 00:00 UTC, ISO week-year replay identity `2026-W47`); eligibility
+  bound to `verifiedAt`/`createdAt` so delayed processing credits the
+  verified week; grant+inventory+movement+entitlement atomic in the
+  settlement tx; tradable only while unused via provenance+whitelist,
+  consumed effects unlistable; non-compounding 2x stacking; max supply
+  <=52 boosts/year/account (~150cr/week nominal). Abuse statement
+  corrected: per-account cap does not prevent multi-account farming --
+  repeated creator/worker pairs, suspicious timing, and related-account
+  concentration reported for review; shared IP alone insufficient.
+  Issuance remains DISABLED pending owner approval. PR #83 open,
+  unmerged, not draft.
+- PR #87 rendered error/retry live check remains recorded as PENDING
+  until an owner-assisted labeled-account session is available.
