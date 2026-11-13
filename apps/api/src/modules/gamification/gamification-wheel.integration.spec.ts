@@ -12,6 +12,7 @@
 import { PrismaClient, TransactionType } from '@prisma/client';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { GamificationService } from './gamification.service';
+import { ActivityRewardService } from './activity-reward.service';
 import { GamificationController } from './gamification.controller';
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
@@ -139,6 +140,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
         syncEffectCaches: jest.fn(async () => {}),
       } as never,
       { qualifyReferral: jest.fn(async () => {}), checkMilestones: jest.fn(async () => {}) } as never,
+      new ActivityRewardService(prisma as never),
     );
     await prisma.$connect();
 

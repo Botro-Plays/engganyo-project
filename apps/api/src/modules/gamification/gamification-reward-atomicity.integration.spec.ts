@@ -14,6 +14,7 @@
  */
 import { PrismaClient, MissionType, AchievementCategory, TransactionType, TaskType } from '@prisma/client';
 import { GamificationService } from './gamification.service';
+import { ActivityRewardService } from './activity-reward.service';
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
 const run = TEST_DB ? describe : describe.skip;
@@ -125,6 +126,7 @@ run('reward atomicity — real PostgreSQL', () => {
         syncEffectCaches: jest.fn(async () => {}),
       } as never,
       referralsStub as never,
+      new ActivityRewardService(prisma as never),
     );
     await prisma.$connect();
   });

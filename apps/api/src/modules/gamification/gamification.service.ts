@@ -10,6 +10,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventsService } from '../events/events.service';
 import { StoreService } from '../store/store.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { ActivityRewardService } from './activity-reward.service';
 
 // ─── Level formula (matches frontend utils.ts) ────────────────
 export const getLevelFromXp = (xp: number) => Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -144,6 +145,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     private readonly storeService: StoreService,
     @Inject(forwardRef(() => ReferralsService))
     private readonly referralsService: ReferralsService,
+    private readonly activityRewardService: ActivityRewardService,
   ) {}
 
   async onModuleInit() {
@@ -656,7 +658,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     const boostOverride = snapshot ? snapshot.xpBoostMultiplier : undefined;
 
     const effects: Array<{
-      key: 'xpSettled' | 'vpSettled' | 'missionSettled' | 'achievementsSettled' | 'referralSettled';
+      key: 'xpSettled' | 'vpSettled' | 'missionSettled' | 'achievementsSettled' | 'referralSettled' | 'activityRewardSettled';
       name: string;
       run: () => Promise<unknown>;
     }> = [
@@ -694,6 +696,15 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
           await this.referralsService.qualifyReferral(fresh.userId);
           await this.referralsService.checkMilestones(fresh.userId);
         },
+      },
+      {
+        key: 'activityRewardSettled',
+        name: 'activity_reward',
+        // Weekly ACTIVITY_REWARD grant. Eligibility binds to the
+        // completion's authoritative verifiedAt (never processing time);
+        // the service no-ops safely when issuance is disabled or the
+        // (user, item, ISO week) entitlement already exists.
+        run: () => this.activityRewardService.evaluateWeeklyGrant(fresh.userId, fresh.completionId, completion.verifiedAt),
       },
     ];
 
