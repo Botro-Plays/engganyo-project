@@ -555,8 +555,10 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Maximum processing passes before an outcome is marked FAILED for
-   *  operator visibility. Each pass retries only unsettled effects. */
-  private static readonly MAX_OUTCOME_ATTEMPTS = 25;
+   *  operator visibility. Each pass retries only unsettled effects.
+   *  Sized for recoverable configuration blockers (e.g. a temporarily
+   *  inactive reward item): at the 60s sweep cadence 240 passes ≈ 4h. */
+  private static readonly MAX_OUTCOME_ATTEMPTS = 240;
 
   /** Processing lease TTL: a claim older than this is presumed crashed
    *  and may be re-claimed by another worker. */

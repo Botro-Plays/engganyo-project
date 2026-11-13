@@ -13,10 +13,14 @@
  *   backdated to createdAt;
  * - concurrent/duplicate evaluation grants exactly once;
  * - issuance disablement stops grants while preserving everything else;
- * - unwhitelisted/inactive items cannot mint tradable stock.
+ * - unwhitelisted/inactive items raise a recoverable retry error —
+ *   the same completion grants after configuration recovery, and a
+ *   midweek itemId change cannot mint a second grant (per-program
+ *   weekly identity; awarded itemId kept on the entitlement).
  */
 import { CompletionStatus, InventoryProvenance, PrismaClient, StoreCategory, TaskType } from '@prisma/client';
 import {
+  ActivityRewardRetryableError,
   ActivityRewardService,
   ACTIVITY_REWARD_CONFIG_KEY,
   ACTIVITY_REWARD_DEFAULT_ITEM_ID,
@@ -325,34 +329,75 @@ run('activity reward weekly grant — real PostgreSQL', () => {
     expect(await entitlements(u.id)).toHaveLength(1);
   });
 
-  it('unwhitelisted configured item → no grant (bound-by-policy stock never minted)', async () => {
+  it('unwhitelisted configured item → recoverable retry error; fixing the flag grants the SAME completion', async () => {
     const u = await mkUser();
     await completionsAcrossDays(u.id, '2026-11-09', [4, 3, 3]);
     const trigger = await mkVerified(u.id, new Date('2026-11-11T00:00:00Z'));
+    const verifiedAt = new Date('2026-11-11T01:00:00Z');
     await setConfig({ enabled: true, itemId: unflaggedItemId, thresholdCompletions: 10, minDistinctDays: 3 });
     try {
-      const res = await service.evaluateWeeklyGrant(u.id, trigger.id, new Date('2026-11-11T01:00:00Z'));
-      expect(res.outcome).toBe('item_not_whitelisted');
+      // Recoverable: throws so the outcome flag stays unset and the
+      // sweeper retries — never settles as a silent no-award.
+      await expect(service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt)).rejects.toThrow(
+        ActivityRewardRetryableError,
+      );
       expect(await entitlements(u.id)).toHaveLength(0);
       expect(await rewardMovements(u.id)).toHaveLength(0);
     } finally {
       await setConfig({ enabled: true, itemId, thresholdCompletions: 10, minDistinctDays: 3 });
     }
+    // Configuration recovered → the SAME completion's evaluation now
+    // grants; no additional task completion is required.
+    const res = await service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt);
+    expect(res.outcome).toBe('granted');
+    expect(await entitlements(u.id)).toHaveLength(1);
   });
 
-  it('inactive configured item → item_unavailable, zero partial state', async () => {
+  it('inactive configured item → recoverable retry error; reactivating grants the SAME completion', async () => {
     const u = await mkUser();
     await completionsAcrossDays(u.id, '2026-11-09', [4, 3, 3]);
     const trigger = await mkVerified(u.id, new Date('2026-11-11T00:00:00Z'));
+    const verifiedAt = new Date('2026-11-11T01:00:00Z');
     await prisma.storeItem.update({ where: { id: itemId }, data: { isActive: false } });
     try {
-      const res = await service.evaluateWeeklyGrant(u.id, trigger.id, new Date('2026-11-11T01:00:00Z'));
-      expect(res.outcome).toBe('item_unavailable');
+      await expect(service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt)).rejects.toThrow(
+        ActivityRewardRetryableError,
+      );
       expect(await entitlements(u.id)).toHaveLength(0);
       expect(await prisma.userInventory.count({ where: { userId: u.id } })).toBe(0);
       expect(await prisma.inventoryMovement.count({ where: { userId: u.id } })).toBe(0);
     } finally {
       await prisma.storeItem.update({ where: { id: itemId }, data: { isActive: true } });
+    }
+    const res = await service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt);
+    expect(res.outcome).toBe('granted');
+    expect(await entitlements(u.id)).toHaveLength(1);
+  });
+
+  it('config itemId changed midweek → still one grant per user/week; entitlement keeps awarded item', async () => {
+    const u = await mkUser();
+    await completionsAcrossDays(u.id, '2026-11-09', [4, 3, 3]);
+    const trigger = await mkVerified(u.id, new Date('2026-11-11T00:00:00Z'));
+    const verifiedAt = new Date('2026-11-11T01:00:00Z');
+    const secondItem = await mkItem();
+    try {
+      await setConfig({ enabled: true, itemId, thresholdCompletions: 10, minDistinctDays: 3 });
+      expect((await service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt)).outcome).toBe('granted');
+
+      // Operator repoints the reward at a different whitelisted item —
+      // the (user, week) entitlement must block any second grant.
+      await setConfig({ enabled: true, itemId: secondItem.id, thresholdCompletions: 10, minDistinctDays: 3 });
+      const again = await service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt);
+      expect(again.outcome).toBe('already_granted');
+
+      const rows = await entitlements(u.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].itemId).toBe(itemId); // awarded item preserved for audit
+      expect(rows[0].isoWeek).toBe('2026-W46');
+      expect(await rewardMovements(u.id)).toHaveLength(1);
+      expect(await rewardStock(u.id)).toHaveLength(1);
+    } finally {
+      await setConfig({ enabled: true, itemId, thresholdCompletions: 10, minDistinctDays: 3 });
     }
   });
 
@@ -364,9 +409,11 @@ run('activity reward weekly grant — real PostgreSQL', () => {
     await setConfig(null);
     try {
       const c = await mkVerified(u.id, new Date('2026-11-10T00:00:00Z'));
-      const res = await service.evaluateWeeklyGrant(u.id, c.id, new Date('2026-11-10T01:00:00Z'));
-      // Prod default item id does not exist in the test DB → safe skip.
-      expect(['item_unavailable', 'below_threshold']).toContain(res.outcome);
+      // Prod default item id does not exist in the test DB → the
+      // recoverable item_unavailable path throws (flag stays unset).
+      await expect(service.evaluateWeeklyGrant(u.id, c.id, new Date('2026-11-10T01:00:00Z'))).rejects.toThrow(
+        ActivityRewardRetryableError,
+      );
       expect(ACTIVITY_REWARD_DEFAULT_ITEM_ID).toBeTruthy();
       expect(ACTIVITY_REWARD_CONFIG_KEY).toBe('activity_reward_config');
     } finally {
