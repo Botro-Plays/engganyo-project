@@ -173,6 +173,7 @@ export default function MarketplaceListingPage() {
 
   const colorClass = CATEGORY_COLORS[listing.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
   const purchasable = listing.canPurchase && listing.remainingQuantity > 0;
+  const suspended = listing.resaleSuspended === true;
   // While a purchase intent is unresolved its quantity is frozen — the
   // idempotency key is bound to these exact params server-side.
   const effectiveQty = pending ? pending.quantity : Math.max(1, Math.min(listing.remainingQuantity, quantity));
@@ -318,6 +319,14 @@ export default function MarketplaceListingPage() {
               </div>
             </div>
           </div>
+        ) : suspended && !pending ? (
+          <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-4 text-sm">
+            <div className="font-semibold text-red-300">Purchases temporarily suspended</div>
+            <p className="text-zinc-300 mt-1">
+              {listing.resaleSuspensionReason ?? 'Marketplace purchases are paused.'} You can still
+              browse listings; selling, order history, and cancellation are unaffected.
+            </p>
+          </div>
         ) : !purchasable && !pending ? (
           <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
             {listing.status === 'PAUSED' ? (
@@ -412,7 +421,7 @@ export default function MarketplaceListingPage() {
               </div>
               <button
                 onClick={() => purchaseMutation.mutate()}
-                disabled={lookupChecking || !canAfford || purchaseMutation.isPending}
+                disabled={lookupChecking || suspended || !canAfford || purchaseMutation.isPending}
                 className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {purchaseMutation.isPending ? (
@@ -430,11 +439,13 @@ export default function MarketplaceListingPage() {
                   ? 'Confirming…'
                   : lookupChecking
                     ? 'Checking…'
-                    : !canAfford
-                      ? 'Insufficient credits'
-                      : pending
-                        ? 'Confirm purchase'
-                        : 'Buy now'}
+                    : suspended
+                      ? 'Suspended'
+                      : !canAfford
+                        ? 'Insufficient credits'
+                        : pending
+                          ? 'Confirm purchase'
+                          : 'Buy now'}
               </button>
             </div>
             <p className="text-[11px] text-zinc-500 mt-3">

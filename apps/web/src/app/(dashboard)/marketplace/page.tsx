@@ -84,6 +84,17 @@ export default function MarketplacePage() {
         </Link>
       </div>
 
+      {/* Emergency resale suspension — purchases blocked, everything else lives */}
+      {config?.resaleSuspended && (
+        <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+          <p className="text-sm font-semibold text-red-300">Purchases temporarily suspended</p>
+          <p className="text-xs text-zinc-300 mt-1">
+            {config.resaleSuspensionReason ?? 'Marketplace purchases are paused.'} Browsing, selling,
+            order history, and cancellations are unaffected.
+          </p>
+        </div>
+      )}
+
       {/* Internal-test rules — owner-approved settings stay visible */}
       {config && (
         <div className="mb-6 rounded-xl border border-brand-500/25 bg-brand-500/5 px-4 py-3">
