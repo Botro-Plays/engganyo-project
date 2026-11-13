@@ -68,38 +68,31 @@ run('activity reward weekly grant — real PostgreSQL', () => {
       } as never,
     });
 
-  // task_completions requires exactly one of campaign_id/challenge_id —
-  // one campaign per user is enough (campaignId is not unique there).
-  const campaignIds = new Map<string, string>();
-  const ensureCampaign = async (userId: string) => {
-    let id = campaignIds.get(userId);
-    if (!id) {
-      const c = await prisma.campaign.create({
-        data: {
-          userId,
-          title: `${PREFIX}campaign`,
-          taskType: TaskType.GOOGLE_REVIEW,
-          targetUrl: 'https://example.com/review',
-          totalSlots: 100000,
-          completedSlots: 0,
-          pendingSlots: 0,
-          creditPerTask: 10,
-          totalCost: 1000000,
-          targetCountries: [],
-          targetLanguages: [],
-          status: 'ACTIVE',
-        },
-      });
-      id = c.id;
-      campaignIds.set(userId, id);
-    }
-    return id;
-  };
+  // task_completions requires exactly one of campaign_id/challenge_id,
+  // and (campaign_id, user_id) is unique — one completion per user per
+  // campaign, so each VERIFIED fixture gets its own campaign row.
+  const mkCampaign = (userId: string) =>
+    prisma.campaign.create({
+      data: {
+        userId,
+        title: `${PREFIX}campaign_${Math.random().toString(36).slice(2, 8)}`,
+        taskType: TaskType.GOOGLE_REVIEW,
+        targetUrl: 'https://example.com/review',
+        totalSlots: 100000,
+        completedSlots: 0,
+        pendingSlots: 0,
+        creditPerTask: 10,
+        totalCost: 1000000,
+        targetCountries: [],
+        targetLanguages: [],
+        status: 'ACTIVE',
+      },
+    });
 
   /** VERIFIED completion with an authoritative verifiedAt. */
   const mkVerified = async (userId: string, verifiedAt: Date | null) =>
     prisma.taskCompletion.create({
-      data: { userId, campaignId: await ensureCampaign(userId), status: CompletionStatus.VERIFIED, verifiedAt },
+      data: { userId, campaignId: (await mkCampaign(userId)).id, status: CompletionStatus.VERIFIED, verifiedAt },
     });
 
   /** n completions spread across `days` distinct UTC dates starting at `startIso` (YYYY-MM-DD),
