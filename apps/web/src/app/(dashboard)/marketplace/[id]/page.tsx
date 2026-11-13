@@ -82,8 +82,13 @@ export default function MarketplaceListingPage() {
     enabled: !!pending && !!user?.id,
     staleTime: 0,
     queryFn: async () => {
+      // Axios retries are disabled for this call so retry ownership lives
+      // in exactly one place: the query's shouldRetryQuery policy (one
+      // bounded retry for network/5xx, none for 4xx). Without this the
+      // axios layer would amplify each query attempt 4x.
       const res = await apiClient.get<ApiResponse<{ order: MarketplaceOrder | null }>>(
         `marketplace/orders/lookup/${pending!.purchaseKey}`,
+        { skipRetry: true },
       );
       return res.data.data.order;
     },
