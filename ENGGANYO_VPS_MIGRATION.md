@@ -2801,3 +2801,62 @@ sessions revoked.
   not done (API-level live evidence above; browser needs owner-assisted
   login); PR #87 rendered error/retry check still pending owner session;
   admin switch endpoints verified 401-unauth only (no admin session).
+
+## 2026-11-13 (later) — Inventory nav rollout + weekly-reward hardening (PRs #89, #90)
+
+- **PR #89 `feat(web): add Inventory navigation beside Wallet`** —
+  reviewed commit `fddb440` on `codex/inventory-navigation`: Inventory
+  (`/store/inventory`) added below Wallet in the sidebar and to the
+  mobile More drawer; `isNavItemActive` shadowing fixed so `/store`
+  no longer also highlights on `/store/inventory`. All CI + E2E green;
+  squash-merged `43e4557cc4fbb6a9011f666470db0a7fa1e30882`; deploy run
+  `43379216876` success; API image `api:43e4557…` live, containers
+  healthy. Rendered desktop/mobile nav verification pending
+  owner-assisted session.
+- **PR #90 `fix(gamification): per-program weekly reward identity +
+  recoverable grant blockers`** — two review findings on PR #88:
+  1. Entitlement uniqueness `(user_id,item_id,iso_week)` →
+     `(user_id,iso_week)` (migration `20261117000000_activity_reward_program_week`,
+     applied on prod — old triple index dropped, new
+     `activity_reward_entitlements_user_id_iso_week_key` verified via
+     `pg_indexes`). One grant per user/program/week regardless of
+     configured `itemId`; awarded `item_id` retained on the row for
+     audit. `already_granted` is now checked before item resolution.
+  2. `item_unavailable` / `item_not_whitelisted` now throw
+     `ActivityRewardRetryableError` → `activityRewardSettled` stays
+     false → the 60s sweeper retries the SAME completion after config
+     recovery (no new task completion needed). Threshold evaluation
+     was moved ahead of item resolution so non-qualifying completions
+     still settle `below_threshold` during an item outage. Terminal
+     outcomes unchanged (`granted`, `already_granted`,
+     `below_threshold`, `issuance_disabled` — deliberate skip stays
+     explicit, `missing_verified_at` — audited). `MAX_OUTCOME_ATTEMPTS`
+     25 → 240 (~4h at 60s cadence) keeps transient outages recoverable.
+- **CI evidence (real PostgreSQL):** midweek `itemId` config change →
+  `already_granted`, exactly 1 entitlement preserving awarded itemId +
+  `2026-W46`; unwhitelisted and inactive item → retryable error →
+  same-completion grant after repair; missing config row → recoverable
+  path against prod default id; all prior specs green (705 API tests).
+  Two CI iterations: migration initially used `DROP CONSTRAINT` on a
+  unique *index* (P3018, fixed to `DROP INDEX`); then threshold ordering
+  fix after atomicity specs showed non-qualifying outcomes churning.
+- **Merge/deploy:** squash `864e54537886016ae429788023bd64acecafb6e4`;
+  deploy run `43381196890` success; `.deployed-sha` = `864e545…`, all
+  containers healthy, migration finished in `_prisma_migrations`.
+- **Synthetic-fixture labeling:** the 10 `dar*` VERIFIED
+  `task_completions` + 10 PENDING `task_completion_outcomes` created
+  for `devin_p2p_a` on 2026-11-13 (~05:05 UTC) were **synthetic setup** —
+  `verifiedAt`/`status` were written directly via SQL to exercise the
+  sweeper path; they did NOT come from real task proof/review flow.
+  Same labeling applies to any repeated earn-fixture used for the
+  pending browser pass. All remain labeled test data (`dar*` prefix,
+  `DEVIN TEST` campaign titles).
+- **Config state (prod):** no `activity_reward_config` row → approved
+  defaults (enabled, item `cmvi95vkf0000nl393q30xrv6`, 10 completions /
+  3 distinct days); item `is_active=true`,
+  `activityRewardTradable=true`; no `marketplace_resale_suspension`
+  row → resale active; fee 0%.
+- **Remaining gaps:** rendered browser pass of earned-item journey +
+  desktop/mobile nav pending owner-assisted labeled-account login
+  (reCAPTCHA enforced; no minted JWTs per directive); PR #87 error/retry
+  rendered check still pending same session.
