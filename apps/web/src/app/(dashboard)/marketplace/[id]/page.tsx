@@ -81,7 +81,6 @@ export default function MarketplaceListingPage() {
     queryKey: ['marketplace', 'purchase-lookup', pending?.purchaseKey],
     enabled: !!pending && !!user?.id,
     staleTime: 0,
-    retry: 1,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ order: MarketplaceOrder | null }>>(
         `marketplace/orders/lookup/${pending!.purchaseKey}`,

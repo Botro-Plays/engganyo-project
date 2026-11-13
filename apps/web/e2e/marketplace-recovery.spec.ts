@@ -106,8 +106,10 @@ async function mockMarketplace(
     listingId?: string;
     detailFor?: () => Record<string, unknown>;
     orderFor?: (key: string) => Record<string, unknown> | null;
-    /** First N lookup calls fail with 500 (status check unavailable). */
+    /** First N lookup calls fail (status check unavailable). */
     lookupFailures?: number;
+    /** HTTP status for lookup failures — 429 exercises the no-auto-retry path. */
+    lookupFailureStatus?: number;
   } = {},
 ) {
   const listingId = opts.listingId ?? 'L1';
@@ -160,7 +162,7 @@ async function mockMarketplace(
     if ((opts.lookupFailures ?? 0) > 0) {
       opts.lookupFailures!--;
       return route.fulfill({
-        status: 500,
+        status: opts.lookupFailureStatus ?? 500,
         headers: CORS_HEADERS,
         contentType: 'application/json',
         body: JSON.stringify({ success: false, message: 'lookup unavailable' }),
@@ -332,8 +334,10 @@ test.describe('purchase recovery — lookup failure then retry', () => {
       listingId: 'L3',
       detailFor: () => detail({ ...SOLD_OUT, id: 'L3' }),
       orderFor: () => committedOrder,
-      // Initial fetch + React Query auto-retry both fail; manual Retry succeeds.
-      lookupFailures: 2,
+      // 429: axios interceptor does not retry 4xx and the global query
+      // policy does not either — the error state surfaces immediately.
+      lookupFailures: 1,
+      lookupFailureStatus: 429,
     });
 
     await page.goto('/marketplace/L3');
@@ -344,7 +348,7 @@ test.describe('purchase recovery — lookup failure then retry', () => {
 
     await page.getByRole('button', { name: 'Retry status check' }).click();
     await expect(page.getByText('Purchase completed')).toBeVisible({ timeout: 15_000 });
-    expect(state.lookupCount).toBe(3);
+    expect(state.lookupCount).toBe(2);
     expect(state.postCount).toBe(0);
   });
 });
