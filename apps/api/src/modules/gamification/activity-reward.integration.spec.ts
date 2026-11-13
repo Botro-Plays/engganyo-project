@@ -145,6 +145,8 @@ run('activity reward weekly grant — real PostgreSQL', () => {
     };
     await prisma.activityRewardEntitlement.deleteMany({ where: { userId: userIds } });
     await prisma.taskCompletion.deleteMany({ where: { userId: userIds } });
+    // Campaign fixtures are owned by the test users — remove before users.
+    await prisma.campaign.deleteMany({ where: { userId: userIds } });
     await prisma.inventoryMovement.deleteMany({ where: { userId: userIds } });
     await prisma.userInventory.deleteMany({ where: { userId: userIds } });
     await prisma.auditLog.deleteMany({ where: { action: { startsWith: 'activity_reward.' } } });
