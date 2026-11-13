@@ -2860,3 +2860,38 @@ sessions revoked.
   desktop/mobile nav pending owner-assisted labeled-account login
   (reCAPTCHA enforced; no minted JWTs per directive); PR #87 error/retry
   rendered check still pending same session.
+
+## 2026-11-13 (browser acceptance) — nav + earned-item rendered verification
+
+- **Method:** real Edge via CDP, owner-assisted logins on labeled
+  accounts (`devin_p2p_b` seller/earner, `devin_p2p_a` buyer) — normal
+  authentication, reCAPTCHA enforced, NO minted JWTs. Evidence:
+  `evidence/earned-nav-2026-11-13/` (results.json + 11 screenshots).
+- **Synthetic setup (labeled):** `darbC*/darbV*/darbO*` rows — 10
+  VERIFIED completions for `devin_p2p_b` (verifiedAt 2026-11-11/12/13,
+  ISO `2026-W46`) + 10 PENDING outcomes with only
+  `activity_reward_settled=false`, written directly via SQL. NOT real
+  task proof/review flow — same synthetic labeling as `dar*`.
+- **Earn (new code path):** 60s sweeper granted exactly once at
+  2026-11-13 07:05:24 UTC — entitlement `(devin_p2p_b,
+  cmvi95vkf0000nl393q30xrv6, 2026-W46)`, 1x ACTIVITY_REWARD stack,
+  `activity_reward +1` movement; all 10 outcomes DONE; wallet untouched.
+- **Nav (PR #89, rendered):** sidebar order Wallet(idx6)→Inventory(idx7)
+  adjacent on desktop; on `/store/inventory` `aria-current` =
+  `/store/inventory` ONLY (`/store` idx14 present but not active) — both
+  accounts verified. Mobile 390px: More drawer contains Inventory →
+  navigates → active state correct → boost visible.
+- **List→Buy→Use (visible flow):** seller listed ACTIVITY_REWARD XP
+  Boost @50cr via Sell panel (listing `cmwen5tli0020pfpzb3ufkpoy`) →
+  buyer opened detail → purchased → order `cmwen5yyf0028pfpzp6cp4qxv`
+  COMPLETED total 50 fee 0 → listing SOLD_OUT. Wallets exact:
+  seller 7655→7705 (+50), buyer 7765→7715 (−50). Movements:
+  `marketplace_list -1` ACTIVITY_REWARD (escrow),
+  `marketplace_receive +1` MARKETPLACE, `use -1` MARKETPLACE.
+  Buyer Use consumed via session API (UI Use-button lookup timed out —
+  recorded); `user_active_effects` `xp_boost` ×2 expires
+  2026-11-14T07:17:44Z. Buyer inventory after: PURCHASE ×4 only.
+- **Remaining gaps:** the Use click itself was API-with-session, not a
+  rendered button click (selector timing); purchase-recovery error
+  panel (PR #87) still lacks a rendered pass — same pending owner
+  session could cover it; Edge test windows left open for inspection.
