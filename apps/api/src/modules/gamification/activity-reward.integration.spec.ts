@@ -404,16 +404,15 @@ run('activity reward weekly grant — real PostgreSQL', () => {
   it('defaults: missing config row → enabled with spec defaults (10 completions / 3 days / default item)', async () => {
     const u = await mkUser();
     // Point the default item id at our test item is impossible (cuid) —
-    // instead verify the missing-row path resolves to item_unavailable
-    // for the prod default id, proving defaults engage safely.
+    // qualify the user so evaluation reaches item resolution, then the
+    // missing prod default id exercises the recoverable item path.
+    await completionsAcrossDays(u.id, '2026-11-09', [4, 3, 3]);
+    const trigger = await mkVerified(u.id, new Date('2026-11-11T00:00:00Z'));
     await setConfig(null);
     try {
-      const c = await mkVerified(u.id, new Date('2026-11-10T00:00:00Z'));
-      // Prod default item id does not exist in the test DB → the
-      // recoverable item_unavailable path throws (flag stays unset).
-      await expect(service.evaluateWeeklyGrant(u.id, c.id, new Date('2026-11-10T01:00:00Z'))).rejects.toThrow(
-        ActivityRewardRetryableError,
-      );
+      await expect(
+        service.evaluateWeeklyGrant(u.id, trigger.id, new Date('2026-11-11T01:00:00Z')),
+      ).rejects.toThrow(ActivityRewardRetryableError);
       expect(ACTIVITY_REWARD_DEFAULT_ITEM_ID).toBeTruthy();
       expect(ACTIVITY_REWARD_CONFIG_KEY).toBe('activity_reward_config');
     } finally {

@@ -165,24 +165,9 @@ export class ActivityRewardService {
       });
       if (existing) return { outcome: 'already_granted' as const, isoWeek };
 
-      const item = await tx.storeItem.findUnique({ where: { id: cfg.itemId } });
-      if (!item || !item.isActive) {
-        this.logger.warn(`activity_reward: configured item ${cfg.itemId} missing/inactive — will retry`);
-        throw new ActivityRewardRetryableError(
-          `activity_reward: configured item ${cfg.itemId} missing or inactive`,
-        );
-      }
-      const meta = (item.metadata ?? {}) as Record<string, unknown>;
-      if (meta['activityRewardTradable'] !== true) {
-        this.logger.warn(`activity_reward: item ${item.id} lacks activityRewardTradable whitelist — will retry`);
-        throw new ActivityRewardRetryableError(
-          `activity_reward: item ${item.id} lacks activityRewardTradable whitelist`,
-        );
-      }
-
-      // Count VERIFIED completions whose authoritative verifiedAt falls
-      // inside this ISO week. NULL verifiedAt rows are excluded by the
-      // query itself — they can never be silently backdated into a count.
+      // Threshold first: non-qualifying completions settle cleanly even
+      // while the reward item is unavailable — only a qualifying
+      // evaluation depends on item configuration.
       const completions = await tx.taskCompletion.findMany({
         where: {
           userId,
@@ -200,6 +185,21 @@ export class ActivityRewardService {
           isoWeek,
           detail: { completions: completions.length, distinctDays },
         };
+      }
+
+      const item = await tx.storeItem.findUnique({ where: { id: cfg.itemId } });
+      if (!item || !item.isActive) {
+        this.logger.warn(`activity_reward: configured item ${cfg.itemId} missing/inactive — will retry`);
+        throw new ActivityRewardRetryableError(
+          `activity_reward: configured item ${cfg.itemId} missing or inactive`,
+        );
+      }
+      const meta = (item.metadata ?? {}) as Record<string, unknown>;
+      if (meta['activityRewardTradable'] !== true) {
+        this.logger.warn(`activity_reward: item ${item.id} lacks activityRewardTradable whitelist — will retry`);
+        throw new ActivityRewardRetryableError(
+          `activity_reward: item ${item.id} lacks activityRewardTradable whitelist`,
+        );
       }
 
       const entitlement = await tx.activityRewardEntitlement.create({
