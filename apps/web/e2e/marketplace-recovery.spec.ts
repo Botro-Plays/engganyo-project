@@ -102,7 +102,13 @@ interface MockState {
 async function mockMarketplace(
   page: Page,
   state: MockState,
-  opts: { listingId?: string; detailFor?: () => Record<string, unknown>; orderFor?: (key: string) => Record<string, unknown> | null } = {},
+  opts: {
+    listingId?: string;
+    detailFor?: () => Record<string, unknown>;
+    orderFor?: (key: string) => Record<string, unknown> | null;
+    /** First N lookup calls fail with 500 (status check unavailable). */
+    lookupFailures?: number;
+  } = {},
 ) {
   const listingId = opts.listingId ?? 'L1';
 
@@ -151,6 +157,15 @@ async function mockMarketplace(
 
   await page.route('**/api/marketplace/orders/lookup/*', (route) => {
     state.lookupCount += 1;
+    if ((opts.lookupFailures ?? 0) > 0) {
+      opts.lookupFailures!--;
+      return route.fulfill({
+        status: 500,
+        headers: CORS_HEADERS,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, message: 'lookup unavailable' }),
+      });
+    }
     const key = decodeURIComponent(route.request().url().split('/lookup/')[1] ?? '');
     const order = opts.orderFor ? opts.orderFor(key) : state.committed;
     return route.fulfill(json({ order }));
@@ -281,6 +296,81 @@ test.describe('purchase recovery — pre-seeded intent on sold-out listing', () 
     // Discard clears the intent → normal sold-out state.
     await page.getByLabel('Discard unconfirmed purchase attempt').click();
     await expect(page.getByText('This listing is sold out.')).toBeVisible();
+    expect(state.postCount).toBe(0);
+  });
+});
+
+test.describe('purchase recovery — lookup failure then retry', () => {
+  const pending: PendingIntent = {
+    purchaseKey: 'e2e-lookup-fail-key-01',
+    quantity: 1,
+    unitPrice: 120,
+    listingId: 'L3',
+    userId: 'u1',
+    createdAt: new Date().toISOString(),
+  };
+  test.use({ storageState: authState(0, pending) });
+
+  test('committed order + lookup 500s → status unavailable → Retry → completed, zero POSTs', async ({ page }) => {
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
+    const committedOrder = {
+      id: 'ord-e2e-3',
+      listingId: 'L3',
+      buyerId: 'u1',
+      sellerId: 'seller1',
+      itemId: 'item1',
+      itemName: 'Streak Freeze (3 days)',
+      quantity: 1,
+      unitPrice: 120,
+      totalPrice: 120,
+      feeAmount: 0,
+      status: 'COMPLETED',
+      purchaseKey: pending.purchaseKey,
+      createdAt: new Date().toISOString(),
+    };
+    await mockMarketplace(page, state, {
+      listingId: 'L3',
+      detailFor: () => detail({ ...SOLD_OUT, id: 'L3' }),
+      orderFor: () => committedOrder,
+      // Initial fetch + React Query auto-retry both fail; manual Retry succeeds.
+      lookupFailures: 2,
+    });
+
+    await page.goto('/marketplace/L3');
+    await expect(page.getByText('Purchase status unavailable')).toBeVisible({ timeout: 15_000 });
+    // While status is unknown: no failed/discard/rebuy claims, no controls.
+    await expect(page.getByText(/purchase failed/i)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /confirm purchase|buy now|discard/i })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Retry status check' }).click();
+    await expect(page.getByText('Purchase completed')).toBeVisible({ timeout: 15_000 });
+    expect(state.lookupCount).toBe(3);
+    expect(state.postCount).toBe(0);
+  });
+});
+
+test.describe('purchase recovery — null lookup keeps funds gate on new purchase', () => {
+  const pending: PendingIntent = {
+    purchaseKey: 'e2e-null-lookup-key-1',
+    quantity: 1,
+    unitPrice: 120,
+    listingId: 'L4',
+    userId: 'u1',
+    createdAt: new Date().toISOString(),
+  };
+  test.use({ storageState: authState(0, pending) });
+
+  test('uncommitted attempt + active listing + zero balance → insufficient credits, no POST', async ({ page }) => {
+    const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
+    await mockMarketplace(page, state, {
+      listingId: 'L4',
+      detailFor: () => detail({ id: 'L4' }),
+      orderFor: () => null,
+    });
+
+    await page.goto('/marketplace/L4');
+    await expect(page.getByRole('button', { name: 'Insufficient credits' })).toBeDisabled({ timeout: 15_000 });
+    await expect(page.getByText('Unconfirmed purchase attempt')).toBeVisible();
     expect(state.postCount).toBe(0);
   });
 });
