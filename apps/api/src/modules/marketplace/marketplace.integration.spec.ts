@@ -1327,12 +1327,13 @@ run('marketplace — real PostgreSQL', () => {
     expect(audit).toBeTruthy();
     expect(audit!.userId).toBe(seller.id);
 
-    // Resume → new purchases work again.
+    // Resume → new purchases work again. The seller's stack (inv) holds
+    // the 3 returned/untouched units — (userId,itemId,provenance) is unique
+    // so a second mkInventory for the same triple would violate it.
     await service.setResaleSuspension(seller.id, { suspended: false });
     expect((await service.getResaleSuspension()).suspended).toBe(false);
     expect((await service.getPublicConfig()).resaleSuspended).toBe(false);
-    const inv3 = await mkInventory(seller.id, convItemId, 1);
-    const listing3 = await service.createListing(seller.id, { inventoryId: inv3.id, quantity: 1, unitPrice: 50 });
+    const listing3 = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 50 });
     const ok = await service.purchaseListing(buyer.id, listing3.id, { quantity: 1, purchaseKey: purchaseKey('post') });
     expect((ok.order as { status?: string }).status).toBe('COMPLETED');
   });

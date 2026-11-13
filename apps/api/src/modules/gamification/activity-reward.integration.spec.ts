@@ -15,7 +15,7 @@
  * - issuance disablement stops grants while preserving everything else;
  * - unwhitelisted/inactive items cannot mint tradable stock.
  */
-import { CompletionStatus, InventoryProvenance, PrismaClient, StoreCategory } from '@prisma/client';
+import { CompletionStatus, InventoryProvenance, PrismaClient, StoreCategory, TaskType } from '@prisma/client';
 import {
   ActivityRewardService,
   ACTIVITY_REWARD_CONFIG_KEY,
@@ -68,10 +68,38 @@ run('activity reward weekly grant — real PostgreSQL', () => {
       } as never,
     });
 
+  // task_completions requires exactly one of campaign_id/challenge_id —
+  // one campaign per user is enough (campaignId is not unique there).
+  const campaignIds = new Map<string, string>();
+  const ensureCampaign = async (userId: string) => {
+    let id = campaignIds.get(userId);
+    if (!id) {
+      const c = await prisma.campaign.create({
+        data: {
+          userId,
+          title: `${PREFIX}campaign`,
+          taskType: TaskType.GOOGLE_REVIEW,
+          targetUrl: 'https://example.com/review',
+          totalSlots: 100000,
+          completedSlots: 0,
+          pendingSlots: 0,
+          creditPerTask: 10,
+          totalCost: 1000000,
+          targetCountries: [],
+          targetLanguages: [],
+          status: 'ACTIVE',
+        },
+      });
+      id = c.id;
+      campaignIds.set(userId, id);
+    }
+    return id;
+  };
+
   /** VERIFIED completion with an authoritative verifiedAt. */
-  const mkVerified = (userId: string, verifiedAt: Date | null) =>
+  const mkVerified = async (userId: string, verifiedAt: Date | null) =>
     prisma.taskCompletion.create({
-      data: { userId, status: CompletionStatus.VERIFIED, verifiedAt },
+      data: { userId, campaignId: await ensureCampaign(userId), status: CompletionStatus.VERIFIED, verifiedAt },
     });
 
   /** n completions spread across `days` distinct UTC dates starting at `startIso` (YYYY-MM-DD),
