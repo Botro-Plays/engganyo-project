@@ -1,0 +1,22 @@
+{
+  "setup": "SIMULATED: sessionStorage-gated fetch/XHR failure for /orders/lookup/; committed order + pending intent are real state",
+  "steps": {
+    "unavailable": {
+      "unavailable": true,
+      "completed": false,
+      "retryBtn": true,
+      "noDiscard": true,
+      "intent": "{\"purchaseKey\":\"7998f9a2-ccab-4a16-9567-2a8b0389ebfd\",\"quantity\":1,\"unitPrice\":50,\"listingId\":\"cmwen5tli0020pfpzb3ufkpoy\",\"userId\":\"cdevinp2pa000000000000001\",\"createdAt\":\"2026-11-13T07:14:40.000Z\"}",
+      "purchasePosts": 0
+    },
+    "afterRetry": {
+      "unavailable": false,
+      "completed": true,
+      "orderSnippet": "Order p6cp4qxv",
+      "intentStillThere": true,
+      "purchasePosts": 0
+    }
+  },
+  "walletAfter": 7715,
+  "intentAfterDismiss": null
+}

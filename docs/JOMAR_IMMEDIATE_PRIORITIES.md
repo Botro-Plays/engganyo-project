@@ -19,7 +19,7 @@ the table wins. Verified against current main + production evidence cited.
 | 1 | Manageable task discovery (2-3 choices, platform select) | **Partially shipped - acceptance open** | Platform filter chips + paginated "Show more" feed (initial batch **6**, not 2-3); `browseActive` filters platformPrefix/taskType/geo, excludes completed + own campaigns. `apps/api/src/modules/campaigns/campaigns.service.ts:633`, `apps/web/src/app/(dashboard)/tasks/page.tsx` | PR #46 `a03732c` live-verified: chips filter, 6-card batch, Show more, own-work exclusion | **OPEN:** Jomar asked for two/three choices - shipped six initial cards (two desktop rows); needs his sign-off or a batch-size change. Visual-design satisfaction also open (item 6). |
 | 2 | Hide self-owned work + Accept & open target | **Shipped + live-verified** | Own campaigns excluded from `GET /tasks` at API level; creators keep `/campaigns` + `tasks/my`. "Accept & open [platform]" opens target synchronously post-assign with popup-blocked fallback + pinned accepted panel | PR #46; live PASS on engganyo.com (popup + fallback + panel) | None known. |
 | 3 | Optional account linking for manual tasks | **Shipped + live-verified** | `SocialAuthService.requiresLinkedAccount(taskType, autoVerify)` - link required only for API-verified autoVerify types; manual-proof tasks accept unlinked; challenges never require linking. `social-auth.service.ts:760`, `tasks.service.ts:135` | PR #47 `bcb5371`; live manual-task accept unlinked; CI 28-case matrix + real-PG specs | Jomar's "no OAuth at all" is not fully met - OAuth linking remains for the 4 API-verified task types (needed for automated verification). Multi-account support exists via Settings > Connected Accounts. Deferred funded-crypto qualification retained. |
-| 4 | User-to-user marketplace | **LIVE on prod `5c86793`; rendered browser acceptance done; earned-item path pending PR #83** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** — implemented via PR #82 + viewer/recovery fixes PR #84 (optional-auth listing detail, persisted purchase intent). Live API verification + full rendered browser journey (Edge/CDP, 1440px+390px, labeled accounts) complete 12 Nov. Earned/farmed-item selling partially complete: `ACTIVITY_REWARD` provenance + whitelist in PR #83 awaiting review; no verified-activity grant path exists yet | Deploy runs `43199829734` + `43213268757` ✅; evidence `evidence/marketplace-live-2026-11-12/` + `evidence/marketplace-browser-2026-11-12/`; audit: no task/mission/achievement path grants inventory today | Owner approved internal-test settings 12 Nov (0% fee, BOOST/CONVENIENCE only, 7-day, 5 listings/seller). Remaining: whitelist specific earned items + wire a grant path (milestone proposal in PR #83 awaits approval). |
+| 4 | User-to-user marketplace | **LIVE on prod `864e545`; rendered browser acceptance done incl. earned-item grant→list→buy→use; real-earning journey pending friend test** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** — PRs #82/#84/#85/#86/#87/#88/#89/#90 all deployed. Earned-item path live: weekly ACTIVITY_REWARD XP Boost grant (Option B), per-program weekly identity, recoverable config blockers, issuance/resale switches, Inventory nav. Grant settlement proven via labeled synthetic fixtures + rendered browser journey; real 3-day task→proof→review earning remains pending | Deploy runs through `43381196890` ✅; evidence `evidence/marketplace-live-2026-11-12/` + `marketplace-browser-2026-11-12/` + `earned-nav-2026-11-13/` | Owner approved internal-test settings (0% fee, BOOST/CONVENIENCE only, 7-day, 5 listings/seller). Remaining: friend-testing acceptance — earn ≥10 VERIFIED completions across ≥3 UTC days through the REAL task flow, then list/buy/use. |
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
 | 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
@@ -132,26 +132,39 @@ recovery (wallet delta 0, order replayed) → buyer Use → cancel →
 catalog-pause recovery → expiry — all verified with exact wallet/
 order/inventory outcomes (`evidence/marketplace-browser-2026-11-12/`).
 
-**Earned-item path — IMPLEMENTED + LIVE on prod `80247b6` (13 Nov, PR #88):**
-owner approved Option B — ≤1 ACTIVITY_REWARD XP Boost (24h) per user per
-ISO week after ≥10 VERIFIED task completions across ≥3 distinct UTC
-days; exactly-once via unique `(user,item,isoWeek)` entitlement in the
-settlement tx; `verifiedAt`-bound eligibility; issuance + resale
-suspension switches (admin, audited). Live journey verified on prod with
-labeled accounts: 10 seeded VERIFIED completions → sweeper grant →
-ACTIVITY_REWARD stack → seller listing → buyer purchase (50cr, fee 0)
-→ buyer use → 2× XP effect 24h. Jomar's earned-item selling requirement
-is now **complete for internal testing** (whitelist-gated; other
+**Earned-item path — IMPLEMENTED + LIVE on prod `864e545` (13 Nov, PRs
+#88 + #90):** owner approved Option B — ≤1 ACTIVITY_REWARD XP Boost (24h)
+per user per ISO week (Mon 00:00 UTC) after ≥10 VERIFIED task
+completions across ≥3 distinct UTC days; exactly-once via unique
+`(user,isoWeek)` entitlement in the settlement tx (awarded itemId kept
+for audit — midweek config item changes cannot double-grant);
+`verifiedAt`-bound eligibility; recoverable item-config blockers retry
+the same completion (no new task needed); issuance + resale suspension
+switches (admin, audited). **Rendered browser acceptance COMPLETE**
+(owner-assisted labeled login, real Edge): grant → ACTIVITY_REWARD
+stack → Sell → listing @50cr → buyer purchase (order COMPLETED, fee 0,
+exact wallet deltas) → buyer Use → `xp_boost` ×2 effect 24h; nav rollout
+PR #89 verified (Inventory below Wallet, mobile More, correct active
+states). **Caveat:** grant-settlement proof used SYNTHETIC backdated
+VERIFIED fixtures (`dar*`/`darb*` written via SQL) — this proves the
+settlement/grant path, NOT the real earning journey. Earning the
+threshold through normal task → proof → review accumulation across 3
+UTC days remains a **pending friend-testing acceptance item**.
+Jomar's earned-item selling requirement is **complete for internal
+testing** pending that real-journey check (whitelist-gated; other
 provenances remain bound).
 
-**Post-acceptance recovery defect → PR #85 (open):** the unresolved-
-purchase retry reused the funds gate, hiding committed orders at zero
-balance / sold-out listings. Fix adds read-only
-`GET /marketplace/orders/lookup/:purchaseKey` + committed-order panel
-regardless of balance/stock/status + Playwright regression. Test-account
+**Post-acceptance recovery defect → RESOLVED + rendered-verified:**
+PR #85 added `GET /marketplace/orders/lookup/:purchaseKey` +
+committed-order panel; PR #86 split lookup loading/success/null/
+failure states ("Purchase status unavailable" + Retry, key preserved,
+no failed-claim/discard/rebuy while unknown); PR #87 made the query the
+single retry owner (`skipRetry` axios + one bounded query retry).
+Rendered live verification 13 Nov (simulated lookup outage, labeled):
+unavailable → Retry → committed order `…p6cp4qxv` on a SOLD_OUT
+listing, wallet unchanged 7715, zero purchase POSTs. Test-account
 credentials rotated after shared-password exposure (5 accounts, unique
-creds at `~/.engganyo-test-accounts.env`, 14 sessions revoked); temp
-browser profiles closed.
+creds at `~/.engganyo-test-accounts.env`, 14 sessions revoked).
 
 ## 5. Discoverable Top up
 

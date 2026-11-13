@@ -2895,3 +2895,52 @@ sessions revoked.
   rendered button click (selector timing); purchase-recovery error
   panel (PR #87) still lacks a rendered pass — same pending owner
   session could cover it; Edge test windows left open for inspection.
+
+## 2026-11-13 (acceptance completion) — Use-button investigation + rendered recovery panel
+
+- **Use-button "timeout" — NO product defect.** Root cause was the
+  verification script's over-broad selector, not the UI. Rendered
+  re-test on the live session (seller `devin_p2p_b`, MARKETPLACE
+  Streak Freeze ×2): exactly one enabled Use button on the card;
+  click → mutation committed (`use -1` MARKETPLACE 07:32:13 UTC) →
+  refetch shows x1. No confirmation dialog exists for item use (single
+  click mutates; toast confirms). Earlier XP Boost Use had already
+  succeeded via session API (`use -1` MARKETPLACE 07:17:44, effect
+  `xp_boost`×2 to 2026-11-14T07:17:44Z). Evidence:
+  `evidence/earned-nav-2026-11-13/use-0*.png`.
+- **Purchase-recovery error panel — rendered live pass COMPLETE.**
+  On buyer `devin_p2p_a` at `/marketplace/cmwen5tli0020pfpzb3ufkpoy`
+  (SOLD_OUT): injected the REAL persisted pending intent (purchaseKey
+  `7998f9a2-…` = committed order `cmwen5yyf0028pfpzp6cp4qxv`) +
+  sessionStorage-gated fetch/XHR failure for `/orders/lookup/` only
+  (**simulated outage — labeled**). Rendered: "Purchase status
+  unavailable" + Retry status check; intent preserved verbatim;
+  zero purchase POSTs; no failed-claim/discard/rebuy affordance.
+  Cleared flag → Retry → "Purchase completed" panel with order
+  `…p6cp4qxv`, still zero purchase POSTs, wallet unchanged 7715.
+  Dismiss cleared the intent. Evidence: `recovery2-0*.png` +
+  `recovery-results.json`.
+- **Outcome health:** prod `task_completion_outcomes` = 23 DONE, 0
+  PENDING, 0 FAILED. Bounded retry window (MAX_OUTCOME_ATTEMPTS=240,
+  ~4h at 60s sweep) currently has nothing to recover.
+- **Operator recovery procedure (FAILED outcomes):** there is no
+  requeue endpoint — manual SQL only:
+  `UPDATE task_completion_outcomes SET status='PENDING', attempts=0,
+  last_error=NULL, claimed_at=NULL, claim_token=NULL WHERE id='<id>'`
+  (scope by `status='FAILED'` + `last_error LIKE 'activity_reward:%'`
+  for reward blockers). Safe to reprocess: settled per-effect flags
+  skip completed effects; the `(user_id,iso_week)` entitlement unique
+  key + advisory lock make a repeated grant evaluation return
+  `already_granted` — configuration repair + requeue cannot
+  double-grant.
+- **Owner manual test artifacts:** two ACTIVE 10cr listings created
+  by the owner in the open test windows ~07:29-07:30 UTC —
+  `cmwenp051003lpfpzf4uqoorc` (p2p_a) and `cmwenps4e003tpfpzlzky6k31`
+  (p2p_b, MARKETPLACE Streak Freeze). Left as-is; cancellable via UI.
+- **Record correction:** synthetic `dar*`/`darb*` VERIFIED fixtures
+  prove grant SETTLEMENT only (threshold count, ISO week, atomic
+  entitlement/inventory/movement, replay protection) — they do NOT
+  prove the real earning journey. Earning ≥10 VERIFIED completions
+  across ≥3 UTC days via normal task → proof → review accumulation is
+  tracked as a pending friend-testing acceptance item in
+  `docs/JOMAR_IMMEDIATE_PRIORITIES.md`.
