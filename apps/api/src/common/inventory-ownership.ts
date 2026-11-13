@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client';
-import { MarketplaceListingStatus } from '@prisma/client';
 
 /**
  * Ownership-cap serialization for (userId, itemId).

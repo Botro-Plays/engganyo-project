@@ -1197,4 +1197,75 @@ run('marketplace — real PostgreSQL', () => {
     expect(db.remainingQuantity).toBe(1); // unsold escrow still held for seller
     expect(await prisma.marketplaceOrder.count({ where: { listingId: listing2.id } })).toBe(1);
   });
+
+  // ─── ACTIVITY_REWARD provenance (whitelist-gated) ─────────
+
+  it('lists and settles an ACTIVITY_REWARD stack only when the catalog item is whitelisted', async () => {
+    const flagged = await mkItem({
+      name: `${PREFIX}Earned Boost`,
+      metadata: {
+        boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost',
+        activityRewardTradable: true,
+      },
+    });
+    const unflagged = await mkItem({
+      name: `${PREFIX}Earned Freeze`,
+      category: StoreCategory.CONVENIENCE,
+      metadata: { convenienceType: 'streak_freeze', protectedDays: 3, effectType: 'streak_freeze' },
+    });
+    const seller = await mkUser();
+    const buyer = await mkUser(10_000);
+    await mkInventory(seller.id, flagged.id, 2, InventoryProvenance.ACTIVITY_REWARD);
+    await mkInventory(seller.id, unflagged.id, 2, InventoryProvenance.ACTIVITY_REWARD);
+
+    const sellable = await service.getSellableInventory(seller.id);
+    const flaggedStack = sellable.stacks.find((s) => s.itemId === flagged.id)!;
+    const unflaggedStack = sellable.stacks.find((s) => s.itemId === unflagged.id)!;
+    expect(flaggedStack.tradable).toBe(true);
+    expect(flaggedStack.listable).toBe(true);
+    expect(unflaggedStack.tradable).toBe(false);
+    expect(unflaggedStack.listable).toBe(false);
+
+    const flaggedInv = await prisma.userInventory.findFirstOrThrow({
+      where: { userId: seller.id, itemId: flagged.id },
+    });
+    const listing = await service.createListing(seller.id, {
+      inventoryId: flaggedInv.id, quantity: 1, unitPrice: 120,
+    });
+    expect(listing.status).toBe(MarketplaceListingStatus.ACTIVE);
+
+    const unflaggedInv = await prisma.userInventory.findFirstOrThrow({
+      where: { userId: seller.id, itemId: unflagged.id },
+    });
+    await expect(
+      service.createListing(seller.id, { inventoryId: unflaggedInv.id, quantity: 1, unitPrice: 120 }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    // Purchase settles normally — buyer receives MARKETPLACE provenance.
+    await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('actreward') });
+    expect(await invQty(buyer.id, flagged.id, InventoryProvenance.MARKETPLACE)).toBe(1);
+    expect(await invQty(seller.id, flagged.id, InventoryProvenance.ACTIVITY_REWARD)).toBe(1);
+  });
+
+  it('keeps REWARD stacks bound even on a whitelisted catalog item', async () => {
+    const flagged = await mkItem({
+      name: `${PREFIX}Reward Boost`,
+      metadata: {
+        boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost',
+        activityRewardTradable: true,
+      },
+    });
+    const seller = await mkUser();
+    await mkInventory(seller.id, flagged.id, 1, InventoryProvenance.REWARD);
+
+    const sellable = await service.getSellableInventory(seller.id);
+    expect(sellable.stacks.find((s) => s.itemId === flagged.id)!.tradable).toBe(false);
+
+    const inv = await prisma.userInventory.findFirstOrThrow({
+      where: { userId: seller.id, itemId: flagged.id },
+    });
+    await expect(
+      service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 50 }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
 });

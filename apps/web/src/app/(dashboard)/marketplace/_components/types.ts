@@ -31,7 +31,7 @@ export interface SellableStack {
   category: string;
   storeCreditCost: number;
   quantity: number;
-  provenance: 'LEGACY' | 'PURCHASE' | 'ADMIN_GRANT' | 'REWARD' | 'MARKETPLACE';
+  provenance: 'LEGACY' | 'PURCHASE' | 'ADMIN_GRANT' | 'REWARD' | 'MARKETPLACE' | 'ACTIVITY_REWARD';
   tradable: boolean;
   listable: boolean;
   alreadyListed: boolean;
@@ -75,7 +75,7 @@ export interface BrowseResponse {
 }
 
 export interface MarketplaceConfig {
-  status: 'proposed';
+  status: 'proposed' | 'internal_test';
   awaitingOwnerConfirmation: boolean;
   paymentMethod: 'credits';
   sellerFeeBps: number;
@@ -87,6 +87,7 @@ export interface MarketplaceConfig {
   maxActiveListingsPerSeller: number;
   eligibleCategories: string[];
   excludedCategories: string[];
+  activityRewardTradable?: 'whitelist';
   notes: string[];
 }
 

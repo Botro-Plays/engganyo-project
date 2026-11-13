@@ -18,7 +18,7 @@ interface InventoryItem {
   consumedAt: string | null;
   equipped: boolean;
   acquiredAt: string;
-  provenance?: 'LEGACY' | 'PURCHASE' | 'ADMIN_GRANT' | 'REWARD' | 'MARKETPLACE';
+  provenance?: 'LEGACY' | 'PURCHASE' | 'ADMIN_GRANT' | 'REWARD' | 'MARKETPLACE' | 'ACTIVITY_REWARD';
   item: {
     id: string;
     name: string;
@@ -52,6 +52,7 @@ const PROVENANCE_LABELS: Record<string, string> = {
   LEGACY: 'Legacy',
   ADMIN_GRANT: 'Admin grant',
   REWARD: 'Reward',
+  ACTIVITY_REWARD: 'Activity reward',
 };
 
 export default function InventoryPage() {

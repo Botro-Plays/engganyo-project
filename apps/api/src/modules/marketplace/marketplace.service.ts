@@ -30,7 +30,7 @@ import { effectiveOwnedQuantity, lockOwnershipSlots } from '../../common/invento
  * policy. Credits-only, 0% fee (permanent seller fee stays disabled),
  * BOOST + CONVENIENCE consumables only (loot boxes and cosmetics excluded),
  * 10–100,000 credits/unit, 7-day listings, manual relisting, 5 active
- * listings per seller.
+ * listings per seller. Owner-approved for internal testing (11 Nov 2026).
  */
 export const MARKETPLACE_CONFIG = {
   MIN_UNIT_PRICE: 10,
@@ -43,14 +43,13 @@ export const MARKETPLACE_CONFIG = {
 } as const;
 
 /**
- * Public view of the marketplace rules. These are PROPOSED internal-test
- * defaults pending owner confirmation — surfaced so the UI can display the
- * exact terms instead of hardcoding copy that could drift from enforcement.
+ * Public view of the marketplace rules. Owner-approved for internal
+ * testing (11 Nov 2026); the permanent seller fee stays disabled.
  */
 export function getMarketplacePublicConfig() {
   return {
-    status: 'proposed' as const,
-    awaitingOwnerConfirmation: true,
+    status: 'internal_test' as const,
+    awaitingOwnerConfirmation: false,
     paymentMethod: 'credits' as const,
     sellerFeeBps: MARKETPLACE_CONFIG.FEE_BPS,
     permanentSellerFeeEnabled: false,
@@ -61,11 +60,13 @@ export function getMarketplacePublicConfig() {
     maxActiveListingsPerSeller: MARKETPLACE_CONFIG.MAX_ACTIVE_LISTINGS_PER_SELLER,
     eligibleCategories: [...MARKETPLACE_CONFIG.LISTABLE_CATEGORIES],
     excludedCategories: [StoreCategory.COSMETIC],
+    activityRewardTradable: 'whitelist' as const,
     notes: [
       'Only unused BOOST and CONVENIENCE consumables can be listed; loot boxes and cosmetics are excluded.',
       'Credits-only purchases; no permanent seller fee (0% test fee).',
       'Listings expire after 7 days; relisting is manual.',
       'At most 5 active listings per seller.',
+      'Verified-activity reward items are tradable only when the catalog item is explicitly whitelisted (metadata.activityRewardTradable).',
     ],
   };
 }
@@ -110,8 +111,11 @@ export class MarketplaceService {
 
   /**
    * An inventory stack is listable only when the item is a non-loot-box
-   * BOOST/CONVENIENCE consumable AND the stack provenance is tradable
-   * (credit-acquired). LEGACY/ADMIN_GRANT/REWARD stacks are bound.
+   * BOOST/CONVENIENCE consumable AND the stack provenance is tradable.
+   * PURCHASE/MARKETPLACE stacks are always tradable; ACTIVITY_REWARD
+   * stacks are tradable only for catalog items explicitly whitelisted
+   * via `metadata.activityRewardTradable`. LEGACY/ADMIN_GRANT/REWARD
+   * stacks are bound.
    */
   private isListableItem(item: {
     category: StoreCategory;
@@ -128,7 +132,15 @@ export class MarketplaceService {
     return true;
   }
 
-  private isTradable(provenance: InventoryProvenance): boolean {
+  private isTradable(
+    provenance: InventoryProvenance,
+    item?: { id: string; metadata: unknown },
+  ): boolean {
+    if (provenance === InventoryProvenance.ACTIVITY_REWARD) {
+      if (!item) return false;
+      const meta = (item.metadata ?? {}) as Record<string, unknown>;
+      return meta['activityRewardTradable'] === true;
+    }
     return (MARKETPLACE_CONFIG.TRADABLE_PROVENANCE as readonly InventoryProvenance[]).includes(provenance);
   }
 
@@ -390,7 +402,7 @@ export class MarketplaceService {
       activeListingCount: activeCount,
       stacks: rows.map((r) => {
         const listable =
-          this.isTradable(r.provenance) &&
+          this.isTradable(r.provenance, r.item) &&
           this.isListableItem(r.item) &&
           !activeListingItemIds.has(r.itemId);
         return {
@@ -402,7 +414,7 @@ export class MarketplaceService {
           storeCreditCost: r.item.creditCost,
           quantity: r.quantity,
           provenance: r.provenance,
-          tradable: this.isTradable(r.provenance),
+          tradable: this.isTradable(r.provenance, r.item),
           listable,
           alreadyListed: activeListingItemIds.has(r.itemId),
           acquiredAt: r.acquiredAt,
@@ -452,7 +464,7 @@ export class MarketplaceService {
         throw new BadRequestException(`Only ${inv.quantity} unit(s) available`);
       }
       if (inv.consumedAt) throw new BadRequestException('Item has already been used');
-      if (!this.isTradable(inv.provenance)) {
+      if (!this.isTradable(inv.provenance, inv.item)) {
         throw new ForbiddenException('This item is bound to your account and cannot be sold');
       }
       if (!this.isListableItem(inv.item)) {

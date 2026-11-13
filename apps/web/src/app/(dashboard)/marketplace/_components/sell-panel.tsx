@@ -27,6 +27,7 @@ const PROVENANCE_LABELS: Record<string, string> = {
   LEGACY: 'Legacy',
   ADMIN_GRANT: 'Admin grant',
   REWARD: 'Reward',
+  ACTIVITY_REWARD: 'Activity reward',
 };
 
 export function SellPanel() {
