@@ -1000,7 +1000,10 @@ model ActivityRewardEntitlement {
   grantedAt          DateTime  @default(now()) @map("granted_at")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  @@unique([userId, itemId, isoWeek])
+  // One grant per user per program(=activity_reward) per ISO week —
+  // independent of which itemId the config points at. itemId records
+  // the item actually awarded for audit.
+  @@unique([userId, isoWeek])
   @@index([userId, isoWeek])
   @@map("activity_reward_entitlements")
 }

@@ -16,7 +16,10 @@ import { PrismaService } from '../../database/prisma.service';
  *   anomaly: it is NEVER backdated to createdAt — an audit entry is
  *   written for investigation and the row is excluded from counts.
  * - Grant + user_inventory stack + inventory_movements row + unique
- *   (userId, itemId, isoWeek) entitlement commit in ONE transaction.
+ *   (userId, isoWeek) entitlement commit in ONE transaction. The
+ *   entitlement identity is per user+program+week — changing the
+ *   configured itemId midweek can never mint a second grant; the
+ *   awarded itemId is preserved on the row for audit.
  * - A per-(user, week) advisory xact lock serializes concurrent
  *   qualifying completions; the entitlement unique key is the backstop.
  * - Issuance is controlled by PlatformConfig `activity_reward_config`
@@ -25,7 +28,23 @@ import { PrismaService } from '../../database/prisma.service';
  * - The configured item must carry metadata.activityRewardTradable so a
  *   misconfiguration cannot mint tradable-by-policy stock for an
  *   unapproved item.
+ * - Outcomes split into terminal vs recoverable: issuance_disabled,
+ *   below_threshold, already_granted, granted and missing_verified_at
+ *   settle the outcome flag; a missing/inactive/unwhitelisted item
+ *   throws ActivityRewardRetryableError so the outcome stays PENDING
+ *   and the sweeper retries after the configuration is repaired —
+ *   no additional task completion is required.
  */
+
+/** Thrown for recoverable grant blockers — the outcome effect leaves
+ *  activityRewardSettled=false so the sweeper retries the same
+ *  completion's evaluation after configuration recovery. */
+export class ActivityRewardRetryableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ActivityRewardRetryableError';
+  }
+}
 
 export const ACTIVITY_REWARD_CONFIG_KEY = 'activity_reward_config';
 export const ACTIVITY_REWARD_DEFAULT_ITEM_ID = 'cmvi95vkf0000nl393q30xrv6'; // XP Boost (24h)
@@ -49,8 +68,6 @@ export type WeeklyGrantOutcome =
   | 'already_granted'
   | 'below_threshold'
   | 'issuance_disabled'
-  | 'item_unavailable'
-  | 'item_not_whitelisted'
   | 'missing_verified_at';
 
 @Injectable()
@@ -140,25 +157,17 @@ export class ActivityRewardService {
       const cfg = this.parseConfig(cfgRow?.value);
       if (!cfg.enabled) return { outcome: 'issuance_disabled' as const, isoWeek };
 
-      const item = await tx.storeItem.findUnique({ where: { id: cfg.itemId } });
-      if (!item || !item.isActive) {
-        this.logger.warn(`activity_reward: configured item ${cfg.itemId} missing/inactive — grant skipped`);
-        return { outcome: 'item_unavailable' as const, isoWeek };
-      }
-      const meta = (item.metadata ?? {}) as Record<string, unknown>;
-      if (meta['activityRewardTradable'] !== true) {
-        this.logger.warn(`activity_reward: item ${item.id} lacks activityRewardTradable whitelist — grant skipped`);
-        return { outcome: 'item_not_whitelisted' as const, isoWeek };
-      }
-
-      const existing = await tx.activityRewardEntitlement.findUnique({
-        where: { userId_itemId_isoWeek: { userId, itemId: item.id, isoWeek } },
+      // Per-program weekly identity: one grant per user per ISO week no
+      // matter which itemId the config currently points at. The stored
+      // itemId records WHICH item was actually awarded (audit).
+      const existing = await tx.activityRewardEntitlement.findFirst({
+        where: { userId, isoWeek },
       });
       if (existing) return { outcome: 'already_granted' as const, isoWeek };
 
-      // Count VERIFIED completions whose authoritative verifiedAt falls
-      // inside this ISO week. NULL verifiedAt rows are excluded by the
-      // query itself — they can never be silently backdated into a count.
+      // Threshold first: non-qualifying completions settle cleanly even
+      // while the reward item is unavailable — only a qualifying
+      // evaluation depends on item configuration.
       const completions = await tx.taskCompletion.findMany({
         where: {
           userId,
@@ -176,6 +185,21 @@ export class ActivityRewardService {
           isoWeek,
           detail: { completions: completions.length, distinctDays },
         };
+      }
+
+      const item = await tx.storeItem.findUnique({ where: { id: cfg.itemId } });
+      if (!item || !item.isActive) {
+        this.logger.warn(`activity_reward: configured item ${cfg.itemId} missing/inactive — will retry`);
+        throw new ActivityRewardRetryableError(
+          `activity_reward: configured item ${cfg.itemId} missing or inactive`,
+        );
+      }
+      const meta = (item.metadata ?? {}) as Record<string, unknown>;
+      if (meta['activityRewardTradable'] !== true) {
+        this.logger.warn(`activity_reward: item ${item.id} lacks activityRewardTradable whitelist — will retry`);
+        throw new ActivityRewardRetryableError(
+          `activity_reward: item ${item.id} lacks activityRewardTradable whitelist`,
+        );
       }
 
       const entitlement = await tx.activityRewardEntitlement.create({
