@@ -1,0 +1,66 @@
+{
+  "startedAt": "2026-11-13T07:07:36.007Z",
+  "desktop": {
+    "navOrder": {
+      "walletIdx": 6,
+      "invIdx": 7,
+      "walletBeforeInv": true
+    },
+    "activeState": {
+      "current": [
+        "/store/inventory"
+      ],
+      "invActive": true,
+      "storeActive": false
+    },
+    "inventoryShowsBoost": true,
+    "inventoryShowsRewardBadge": true,
+    "listingId": "cmwen5tli0020pfpzb3ufkpoy",
+    "listingPrice": 50,
+    "buyerBalanceBefore": 7765,
+    "purchaseVisible": true,
+    "buyerBalanceAfter": 7715
+  },
+  "mobile": {
+    "moreHasInventory": true,
+    "invPageLoaded": true,
+    "activeHrefs": [
+      "/store/inventory"
+    ],
+    "sellerBoostVisible": true
+  },
+  "db": {
+    "entitlements": "cdevinp2pb000000000000001|cmvi95vkf0000nl393q30xrv6|2026-W46|granted 2026-11-13 07:05:24 UTC (sweeper, exactly once; 10/10 barbO outcomes DONE)",
+    "order": "cmwen5yyf0028pfpzp6cp4qxv|COMPLETED|total=50|fee=0|qty=1|buyer=cdevinp2pa|seller=cdevinp2pb",
+    "listing": "cmwen5tli0020pfpzb3ufkpoy|SOLD_OUT|qty=0|price=50",
+    "wallets": "seller devin_p2p_b 7655->7705 (+50); buyer devin_p2p_a 7765->7715 (-50)",
+    "movements": "seller marketplace_list -1 ACTIVITY_REWARD (escrow); buyer marketplace_receive +1 MARKETPLACE; buyer use -1 MARKETPLACE 07:17:44 UTC",
+    "effect": "user_active_effects xp_boost multiplier=2 expires 2026-11-14T07:17:44.697Z",
+    "buyerInvAfter": "XP Boost stacks: PURCHASE x4 only (MARKETPLACE consumed)"
+  },
+  "finishedAt": "2026-11-13T07:17:11.287Z",
+  "order": "cmwen5yyf0028pfpzp6cp4qxv|COMPLETED|50|0|1|cdevinp2pa000000000000001|cdevinp2pb000000000000001",
+  "useTarget": {
+    "id": "cmwen5yym002apfpzdopuk2gz",
+    "qty": 1,
+    "prov": "MARKETPLACE"
+  },
+  "buyerEffect": "xp_boost|multiplier=2|expires=2026-11-14T07:17:44.697Z (verified via user_active_effects psql — first query used wrong table name user_effects)",
+  "buyerMoves": "-1|use|MARKETPLACE|2026-11-13 07:17:44.734\n1|marketplace_receive|MARKETPLACE|2026-11-13 07:14:41.096\n-1|marketplace_list|ACTIVITY_REWARD|2026-11-13 05:11:22.765\n1|activity_reward|ACTIVITY_REWARD|2026-11-13 04:58:21.254",
+  "buyerInvAfter": "4|PURCHASE",
+  "sellerWallet": "7705",
+  "buyerWallet": "7715",
+  "buyerNav": {
+    "walletIdx": 6,
+    "invIdx": 7,
+    "storeIdx": 14,
+    "walletBeforeInv": true,
+    "current": [
+      "/store/inventory"
+    ]
+  },
+  "buyerInvText": "has XP Boost",
+  "useViaApi": {
+    "note": "UI Use click did not find a matching button in time; consumed via POST /api/store/inventory/:id/use with the buyer session token — movement use -1 MARKETPLACE at 07:17:44 UTC"
+  }
+}
