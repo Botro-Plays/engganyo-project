@@ -381,7 +381,7 @@ export default function AdminAbusePage() {
       {/* Social Graph Modal */}
       {graphUserId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md card-glass rounded-2xl border border-surface-border overflow-hidden">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-md card-glass rounded-2xl border border-surface-border overflow-hidden">
             <SocialGraphPanel userId={graphUserId} onClose={() => setGraphUserId(null)} />
           </div>
         </div>
@@ -390,7 +390,7 @@ export default function AdminAbusePage() {
       {/* Resolve Modal */}
       {resolveFlag && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6 border border-surface-border">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6 border border-surface-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-sc-text">Resolve Flag</h2>
               <button onClick={() => setResolveFlag(null)} className="text-sc-dim hover:text-sc-text"><XCircle className="w-5 h-5" /></button>

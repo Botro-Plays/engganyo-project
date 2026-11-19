@@ -47,7 +47,7 @@ export function ConfirmDialog({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+      <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle className={`w-5 h-5 ${danger ? 'text-red-400' : 'text-amber-400'}`} />
           <h2 className="text-base font-semibold text-sc-text">{title}</h2>

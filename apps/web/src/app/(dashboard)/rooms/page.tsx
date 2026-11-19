@@ -158,7 +158,7 @@ function CreateRoomModal({ quote, onClose, onCreated }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] overflow-y-auto w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-sc-text">Create a P2P room</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-sc-text hover:bg-sc-panel-2 hover:text-sc-text" aria-label="Close">
@@ -473,7 +473,7 @@ export default function RoomsPage() {
       {/* Join modal */}
       {joinTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setJoinTarget(null)}>
-          <div className="w-full max-w-sm rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-sc-text">Join room</h2>
             <p className="mt-1 text-sm text-sc-muted">
               <span className="font-medium text-sc-text">{joinTarget.title}</span> — your contribution:{' '}

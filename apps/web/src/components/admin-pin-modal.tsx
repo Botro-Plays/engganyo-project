@@ -66,7 +66,7 @@ export function AdminPinModal() {
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop — no click handler, blocking */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-      <div className="relative z-10 w-full max-w-sm mx-4 card-glass rounded-xl p-6 border border-surface-border">
+      <div className="max-h-[90vh] overflow-y-auto relative z-10 w-full max-w-sm mx-4 card-glass rounded-xl p-6 border border-surface-border">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
             <Lock className="w-4 h-4 text-red-400" />

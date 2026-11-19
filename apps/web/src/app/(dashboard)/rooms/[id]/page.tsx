@@ -294,7 +294,7 @@ function ProofModal({ roomId, offer, onClose }: { roomId: string; offer: RoomOff
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] overflow-y-auto w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-sc-text">Submit proof</h2>
         <p className="mt-1 text-xs text-sc-text">Screenshot showing you completed: {offer.actionText.slice(0, 80)}</p>
         <div className="mt-4 space-y-3">
@@ -359,7 +359,7 @@ function ReviewModal({ roomId, submission, onClose }: { roomId: string; submissi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] overflow-y-auto w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-sc-text">Review proof</h2>
         {submission.proofUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -1196,7 +1196,7 @@ function RoomWorkspace() {
       {/* Dispute */}
       {showDispute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowDispute(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-sc-text">Open a dispute</h2>
             <p className="mt-1 text-xs text-sc-text">
               Freezes room actions while a moderator reviews. A moderator&apos;s decision is recorded for the record — it does not resume the room, complete it, or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
@@ -1235,7 +1235,7 @@ function RoomWorkspace() {
       {/* Rating */}
       {showRating && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowRating(false)}>
-          <div className="w-full max-w-sm rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-sc-text">Rate @{room.counterparty?.username}</h2>
             <p className="mt-1 text-xs text-sc-text">One rating per room. Hidden from them until you both submit or the window ends.</p>
             <div className="mt-4 flex justify-center gap-1">
@@ -1276,7 +1276,7 @@ function ReportModal({ onClose, onSubmit, pending }: { onClose: () => void; onSu
   const reasons = ['HARASSMENT', 'FAKE_COMPLETION', 'MISLEADING_TASK', 'MULTI_ACCOUNTING', 'BOT_ACTIVITY', 'INAPPROPRIATE_CONTENT', 'OTHER'];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] overflow-y-auto w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-sc-text">Report participant</h2>
         <p className="mt-1 text-xs text-sc-text">Room-scoped evidence (status, offers, messages) is attached automatically.</p>
         <select

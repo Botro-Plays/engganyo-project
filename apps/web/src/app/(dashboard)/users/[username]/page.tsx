@@ -325,7 +325,7 @@ export default function UserProfilePage() {
       {/* ── Report modal ── */}
       {showReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-md card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-sc-text flex items-center gap-2">
                 <Flag className="w-4 h-4 text-red-400" />

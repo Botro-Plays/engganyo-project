@@ -872,7 +872,7 @@ export default function ServerConfigPage() {
       {/* ── Reset confirmation modal ── */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md card-glass rounded-2xl p-6 border border-red-500/30">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-md card-glass rounded-2xl p-6 border border-red-500/30">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <RotateCcw className="w-5 h-5 text-red-400" />

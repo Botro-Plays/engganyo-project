@@ -337,7 +337,7 @@ export function MyChallenges() {
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
           onClick={() => { URL.revokeObjectURL(proofView.url); setProofView(null); }}
         >
-          <div className="relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="max-h-[90vh] overflow-y-auto relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
               <p className="text-sm font-medium text-sc-text">Proof by @{proofView.username}</p>
               <button
