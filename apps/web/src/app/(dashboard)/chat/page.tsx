@@ -341,7 +341,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] -mx-4 -my-6">
+    <div className="flex h-[calc(100dvh-4rem-58px)] md:h-[calc(100vh-4rem)] -mx-4 -my-6">
       {/* ── Channel List (Sidebar) ── */}
       <div
         className={`${
@@ -638,7 +638,7 @@ export default function ChatPage() {
       {/* ── Tip Modal ── */}
       {tipModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+          <div className="max-h-[90vh] overflow-y-auto bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <h3 className="text-lg font-bold text-sc-text mb-1">Send Tip</h3>
             <p className="text-sm text-sc-muted mb-4">Show appreciation with credits.</p>
 
@@ -683,7 +683,7 @@ export default function ChatPage() {
       {/* ── Report Modal ── */}
       {reportModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
+          <div className="max-h-[90vh] overflow-y-auto bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-lg font-bold text-sc-text">Report Message</h3>
               <button onClick={() => setReportModal(null)} className="text-sc-dim hover:text-sc-text">

@@ -252,10 +252,12 @@ function BottomNavWithQuery({
 function MoreDrawerWithQuery({ onClose, adminHref }: { onClose: () => void; adminHref: string | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const logout = useAuthStore((s) => s.logout);
   const all = adminHref
     ? [...mobileNavSecondary, { href: adminHref, icon: ShieldAlert, label: 'Admin' }]
     : mobileNavSecondary;
   return (
+    <>
     <div className="grid grid-cols-4 gap-1 p-3">
       {all.map((item) => {
         const active = isNavItemActive(pathname, searchParams, allNavItems, item);
@@ -275,6 +277,18 @@ function MoreDrawerWithQuery({ onClose, adminHref }: { onClose: () => void; admi
         );
       })}
     </div>
+    <button
+      type="button"
+      onClick={() => {
+        logout();
+        onClose();
+      }}
+      className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+    >
+      <LogOut className="w-4 h-4" />
+      Sign out
+    </button>
+    </>
   );
 }
 
@@ -429,10 +443,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <header className="h-16 border-b border-sc-border flex items-center justify-between px-4 sm:px-6 shrink-0 bg-sc-bg/80 backdrop-blur-sm">
               <div className="flex items-center gap-3 md:hidden">
                 <Link href="/dashboard" className="flex items-center" aria-label="Engganyo dashboard">
-                  <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
+                  <BrandLogo className="h-7 w-7" wordmarkClassName="text-base hidden min-[380px]:inline" />
                 </Link>
               </div>
-              <div className="flex items-center gap-3 ml-auto">
+              <div className="flex items-center gap-2 sm:gap-3 ml-auto">
                 {/* Mobile balance chip — wallet/top-up entry point */}
                 {user && (
                   <Link
@@ -475,13 +489,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <p className="text-xs text-sc-dim">Level {user.level}</p>
                       </div>
                     </Link>
-                    <button
-                      onClick={() => logout()}
-                      className="md:hidden flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
-                      title="Sign out"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </button>
                   </>
                 )}
               </div>

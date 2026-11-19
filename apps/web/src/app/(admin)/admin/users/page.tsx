@@ -585,7 +585,7 @@ export default function AdminUsersPage() {
       {/* Role change modal — SUPER_ADMIN only */}
       {roleUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-brand-400" />
@@ -624,7 +624,7 @@ export default function AdminUsersPage() {
       {/* Grant/deduct credits modal */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-sc-text">Adjust Credits</h2>
               <button onClick={() => setSelectedUser(null)} className="text-sc-dim hover:text-sc-text">
@@ -665,7 +665,7 @@ export default function AdminUsersPage() {
       {/* Edit user details modal — SUPER_ADMIN only */}
       {editUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-sc-text">Edit User Details</h2>
               <button onClick={() => setEditUser(null)} className="text-sc-dim hover:text-sc-text">
@@ -712,7 +712,7 @@ export default function AdminUsersPage() {
       {/* Adjust trust score modal */}
       {trustUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-sc-text">Adjust Trust Score</h2>
               <button onClick={() => setTrustUser(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
@@ -751,7 +751,7 @@ export default function AdminUsersPage() {
       {/* Disable 2FA confirmation modal */}
       {disable2faUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <ShieldOff className="w-5 h-5 text-amber-400" />
@@ -785,7 +785,7 @@ export default function AdminUsersPage() {
       {/* Delete user confirmation modal — SUPER_ADMIN only */}
       {deleteUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-red-400" />

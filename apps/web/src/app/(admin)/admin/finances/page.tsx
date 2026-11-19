@@ -133,7 +133,7 @@ function ReviewModal({ deposit, onClose, onSave }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md card-glass rounded-2xl p-6 border border-surface-border">
+      <div className="max-h-[90vh] overflow-y-auto w-full max-w-md card-glass rounded-2xl p-6 border border-surface-border">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-sc-text">Review Deposit</h2>
           <button onClick={onClose} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
@@ -479,7 +479,7 @@ export default function FinancesPage() {
       {/* Package form modal */}
       {showPkgForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-sm card-glass rounded-2xl p-6 border border-surface-border">
+          <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6 border border-surface-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-sc-text">{editingPkg ? 'Edit Package' : 'New Package'}</h2>
               <button onClick={() => setShowPkgForm(false)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
