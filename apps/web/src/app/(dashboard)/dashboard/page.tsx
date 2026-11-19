@@ -318,14 +318,14 @@ function DashboardPageInner() {
     <div>
       {/* ── Greeting + next action ─────────────────────────── */}
       <div className="mb-6">
-        <p className="text-sm text-zinc-500 mb-0.5">
+        <p className="text-sm text-sc-text mb-0.5">
           {isWelcome ? "Welcome to Engganyo" : `Good to see you${user ? `, @${user.username}` : ''}`}
         </p>
-        <h1 className="text-2xl font-bold text-white">
+        <h1 className="text-2xl font-bold text-sc-text">
           {isWelcome ? "You have 200 credits to start." : "What can you do now?"}
         </h1>
         {user?.referredBy && (
-          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
+          <p className="text-xs text-sc-text mt-1 flex items-center gap-1">
             <Crown className="w-3 h-3 text-amber-400" />
             Referred by <Link href={`/users/${user.referredBy.username}`} className="text-brand-400 hover:text-brand-300 transition-colors">@{user.referredBy.username}</Link>
           </p>
@@ -338,19 +338,19 @@ function DashboardPageInner() {
           href={nextAction.href}
           className={`block rounded-2xl p-5 sm:p-6 mb-6 group transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
             nextAction.muted
-              ? 'card-glass hover:border-zinc-600'
+              ? 'card-glass hover:border-sc-line'
               : 'bg-brand-500/10 border border-brand-500/25 hover:bg-brand-500/15 hover:border-brand-500/40'
           }`}
         >
           <div className="flex items-center gap-4">
             <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${nextAction.muted ? 'bg-surface-hover border-surface-border' : 'bg-brand-500/20 border-brand-500/30'}`}>
-              <CheckSquare className={`w-5 h-5 ${nextAction.muted ? 'text-zinc-500' : 'text-brand-300'}`} />
+              <CheckSquare className={`w-5 h-5 ${nextAction.muted ? 'text-sc-text' : 'text-brand-300'}`} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`font-semibold text-base ${nextAction.muted ? 'text-zinc-300' : 'text-white'}`}>{nextAction.title}</p>
-              <p className="text-sm text-zinc-400 mt-0.5 leading-snug">{nextAction.body}</p>
+              <p className={`font-semibold text-base ${nextAction.muted ? 'text-sc-text' : 'text-sc-text'}`}>{nextAction.title}</p>
+              <p className="text-sm text-sc-muted mt-0.5 leading-snug">{nextAction.body}</p>
             </div>
-            <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-semibold transition-colors ${nextAction.muted ? 'text-zinc-400 group-hover:text-zinc-300' : 'text-brand-300 group-hover:text-brand-200'}`}>
+            <span className={`shrink-0 inline-flex items-center gap-1 text-sm font-semibold transition-colors ${nextAction.muted ? 'text-sc-muted group-hover:text-sc-text' : 'text-brand-300 group-hover:text-brand-200'}`}>
               {nextAction.cta}
               <ChevronRight className="w-4 h-4" />
             </span>
@@ -363,16 +363,16 @@ function DashboardPageInner() {
         {statCards.slice(0, 4).map((s) => (
           <div key={s.label} className="card-glass rounded-xl px-4 py-3">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[11px] text-zinc-500 uppercase tracking-wide font-medium">{s.label}</p>
+              <p className="text-[11px] text-sc-text uppercase tracking-wide font-medium">{s.label}</p>
               {s.icon && <s.icon className={`w-3.5 h-3.5 ${s.color}`} />}
             </div>
             <p className={`text-xl font-bold tabular-nums ${s.color}`}>{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}</p>
             {s.progress !== undefined && (
-              <div className="mt-1.5 h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="mt-1.5 h-0.5 bg-sc-panel-2 rounded-full overflow-hidden">
                 <div className="h-full bg-purple-400 rounded-full transition-all" style={{ width: `${s.progress}%` }} />
               </div>
             )}
-            <p className="text-[11px] text-zinc-600 mt-0.5 truncate">{s.sub}</p>
+            <p className="text-[11px] text-sc-dim mt-0.5 truncate">{s.sub}</p>
           </div>
         ))}
       </div>
@@ -400,8 +400,8 @@ function DashboardPageInner() {
                 <RotateCcw className="w-4 h-4 text-purple-400" />
               </div>
               <div>
-                <h2 className="font-semibold text-white text-sm">Spin the Wheel</h2>
-                <p className="text-xs text-zinc-500">
+                <h2 className="font-semibold text-sc-text text-sm">Spin the Wheel</h2>
+                <p className="text-xs text-sc-text">
                   {wheelStatus.freeSpinAvailable
                     ? 'Free spin today · up to 100 credits'
                     : `${wheelStatus.paidSpinsRemaining} paid left · ${wheelStatus.costPerSpin}cr each`}
@@ -458,8 +458,8 @@ function DashboardPageInner() {
       <div className="grid lg:grid-cols-2 gap-6 mt-6">
         {/* Activity sparkline */}
         <div className="card-glass rounded-xl p-6">
-          <h2 className="font-semibold text-white mb-1">Task Activity</h2>
-          <p className="text-xs text-zinc-500 mb-4">Verified completions — last 30 days</p>
+          <h2 className="font-semibold text-sc-text mb-1">Task Activity</h2>
+          <p className="text-xs text-sc-text mb-4">Verified completions — last 30 days</p>
           {activityData.length > 0 ? (
             <ResponsiveContainer width="100%" height={160}>
               <AreaChart data={activityData}>
@@ -477,57 +477,57 @@ function DashboardPageInner() {
             </ResponsiveContainer>
           ) : (
             <div className="h-40 flex items-center justify-center">
-              <p className="text-zinc-500 text-sm">No activity yet — complete some tasks!</p>
+              <p className="text-sc-text text-sm">No activity yet — complete some tasks!</p>
             </div>
           )}
         </div>
 
         {/* Your Stats (read-only metrics only) */}
         <div className="card-glass rounded-xl p-6 space-y-4">
-          <h2 className="font-semibold text-white">Your Stats</h2>
+          <h2 className="font-semibold text-sc-text">Your Stats</h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <Flame className="w-4 h-4 text-orange-400" /> Current streak
               </div>
-              <span className="text-white font-medium">{stats?.gamification.currentStreak ?? gamStats?.currentStreak ?? 0} days</span>
+              <span className="text-sc-text font-medium">{stats?.gamification.currentStreak ?? gamStats?.currentStreak ?? 0} days</span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <Flame className="w-4 h-4 text-red-400" /> Longest streak
               </div>
-              <span className="text-white font-medium">{stats?.gamification.longestStreak ?? gamStats?.longestStreak ?? 0} days</span>
+              <span className="text-sc-text font-medium">{stats?.gamification.longestStreak ?? gamStats?.longestStreak ?? 0} days</span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <Trophy className="w-4 h-4 text-yellow-400" /> Leaderboard rank
               </div>
-              <span className="text-white font-medium">#{stats?.gamification.leaderboardRank ?? '—'}</span>
+              <span className="text-sc-text font-medium">#{stats?.gamification.leaderboardRank ?? '—'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <CheckSquare className="w-4 h-4 text-emerald-400" /> Tasks this month
               </div>
-              <span className="text-white font-medium">{stats?.tasks.last30Days ?? 0}</span>
+              <span className="text-sc-text font-medium">{stats?.tasks.last30Days ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <CheckSquare className="w-4 h-4 text-blue-400" /> Credits earned (lifetime)
               </div>
-              <span className="text-white font-medium">{formatCredits(stats?.credits.lifetimeEarned ?? 0)}</span>
+              <span className="text-sc-text font-medium">{formatCredits(stats?.credits.lifetimeEarned ?? 0)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <Users className="w-4 h-4 text-sky-400" /> Referrals invited
               </div>
-              <span className="text-white font-medium">{referralStats?.total ?? 0} <span className="text-zinc-500 text-xs">({referralStats?.qualified ?? 0} qualified)</span></span>
+              <span className="text-sc-text font-medium">{referralStats?.total ?? 0} <span className="text-sc-text text-xs">({referralStats?.qualified ?? 0} qualified)</span></span>
             </div>
             {referralStats && referralStats.totalCreditsEarned > 0 && (
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-zinc-400">
+                <div className="flex items-center gap-2 text-sm text-sc-muted">
                   <Award className="w-4 h-4 text-amber-400" /> Referral credits
                 </div>
-                <span className="text-white font-medium">{formatCredits(referralStats.totalCreditsEarned)}</span>
+                <span className="text-sc-text font-medium">{formatCredits(referralStats.totalCreditsEarned)}</span>
               </div>
             )}
           </div>
