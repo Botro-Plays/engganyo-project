@@ -1,0 +1,28 @@
+[
+  {
+    "page": "landing",
+    "viewport": "mobile390",
+    "error": "page.screenshot: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n"
+  },
+  {
+    "page": "login",
+    "viewport": "mobile390",
+    "overflow": false,
+    "fontCheck": "DotGothic16, VT323, ui-monospace, monospace",
+    "file": "C:\\engganyo-records\\evidence\\pixel-redesign-2026-11-19\\login-mobile390.png"
+  },
+  {
+    "page": "landing",
+    "viewport": "desktop1440",
+    "overflow": false,
+    "fontCheck": "DotGothic16, VT323, ui-monospace, monospace",
+    "file": "C:\\engganyo-records\\evidence\\pixel-redesign-2026-11-19\\landing-desktop1440.png"
+  },
+  {
+    "page": "login",
+    "viewport": "desktop1440",
+    "overflow": false,
+    "fontCheck": "DotGothic16, VT323, ui-monospace, monospace",
+    "file": "C:\\engganyo-records\\evidence\\pixel-redesign-2026-11-19\\login-desktop1440.png"
+  }
+]

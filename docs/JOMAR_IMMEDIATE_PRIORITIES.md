@@ -21,7 +21,7 @@ the table wins. Verified against current main + production evidence cited.
 | 3 | Optional account linking for manual tasks | **Shipped + live-verified** | `SocialAuthService.requiresLinkedAccount(taskType, autoVerify)` - link required only for API-verified autoVerify types; manual-proof tasks accept unlinked; challenges never require linking. `social-auth.service.ts:760`, `tasks.service.ts:135` | PR #47 `bcb5371`; live manual-task accept unlinked; CI 28-case matrix + real-PG specs | Jomar's "no OAuth at all" is not fully met - OAuth linking remains for the 4 API-verified task types (needed for automated verification). Multi-account support exists via Settings > Connected Accounts. Deferred funded-crypto qualification retained. |
 | 4 | User-to-user marketplace | **LIVE on prod `864e545`; rendered browser acceptance done incl. earned-item grant→list→buy→use; real-earning journey pending friend test** | **Reinterpreted (owner, 11 Nov): PLAYER ITEM MARKETPLACE** — PRs #82/#84/#85/#86/#87/#88/#89/#90 all deployed. Earned-item path live: weekly ACTIVITY_REWARD XP Boost grant (Option B), per-program weekly identity, recoverable config blockers, issuance/resale switches, Inventory nav. Grant settlement proven via labeled synthetic fixtures + rendered browser journey; real 3-day task→proof→review earning remains pending | Deploy runs through `43381196890` ✅; evidence `evidence/marketplace-live-2026-11-12/` + `marketplace-browser-2026-11-12/` + `earned-nav-2026-11-13/` | Owner approved internal-test settings (0% fee, BOOST/CONVENIENCE only, 7-day, 5 listings/seller). Remaining: friend-testing acceptance — earn ≥10 VERIFIED completions across ≥3 UTC days through the REAL task flow, then list/buy/use. |
 | 5 | Discoverable Top up | **Shipped + live-verified** | Sidebar credit chip + mobile balance pill -> `/wallet?tab=deposit` ("Top up" lands on Deposit Credits); public landing check PASS | PR #48 `1b5181f`; live-verified desktop+mobile | Deferred funded-crypto + PayPal-return checks remain tracked elsewhere. |
-| 6 | Distinct visual design + logo | **Partially shipped - acceptance open** | Earlier redesign shipped; **owner decision: preserve existing logo** (Jomar's replacement-logo suggestion declined) | Prior before/after evidence in repo | **OPEN:** Jomar's satisfaction with the visual design itself - needs his review of current UI. |
+| 6 | Distinct visual design + logo | **Redesign shipped to prod `0f74bf2`+`ca25890`; Jomar review open** | **Owner superseded logo decision (19 Nov):** SeeCareer-inspired deep-purple pixel overhaul + official Drive logo assets. PR #91 design system/fonts/branding/shells deployed; PR #92 all-surface sc-palette migration merged `ca25890`; PR #93 chart tokens in CI. DotGothic16+VT323 self-hosted OFL | Deploy run `44516684608` ✅; evidence `evidence/pixel-redesign-2026-11-19/` | **OPEN:** rendered pass on authenticated surfaces (owner-assisted login), Jomar design review. |
 | 7 | Fewer avoidable prerequisites | **Audit complete - simplification pending review** | Trace below (signup -> discovery -> accept -> open -> proof -> review). Blocking gates identified with purpose; most are protection-required | This audit, 11 Nov | Owner review of which gates to simplify; fresh-account journey retest pending. |
 | 8 | External banner advertising - real-money bookings and intelligent placement | **DEFERRED — future monetization (owner decision 13 Nov); implementation requires owner approval** | **Intentionally postponed until after platform launch.** Consolidated future plan: `docs/FUTURE_MONETIZATION_BANNER_ADS.md` (supersedes rev-5 proposal `docs/proposals/external-banner-ads.md`). Retains placements/specs/flows, scheduling/rotation/moderation/reporting, real-money booking/settlement/refund requirements, security/perf/a11y/accounting, unresolved decisions, readiness criteria. All prices = historical unapproved placeholders | Measured-traffic analysis in `docs/IMPLEMENTATION_DECISION_PACKAGE.md` §A (~20–40 human page views/day — far below viable ad yield) | Revisit only when readiness criteria met: stable core workflows, actual traffic, moderation capacity, owner approval. No ad code in launch release. |
 | 9 | Supported-platform logos (owner item) | **Shipped + live-verified** | Landing "Supported platforms" strip, local SVGs, before "Two ways to participate" | PR #49 `6c4f2b5`; live 390px+1440px | None. |
@@ -348,3 +348,28 @@ Immediate flow and visual changes should be delivered in focused PRs with exact 
 - **Live result on `3ffe744`** (same-IP labeled accounts, reCAPTCHA on): dashboard 14+14 reqs, marketplace 8+8, room 9+9 — **1×429 total** (`friends/status`, non-critical) vs 10×429 on the prior deploy and 19 originally. Zero required-content/action failures. Chat: both `ready`; A→B live delivery without refresh; B→A message during A's reload backfilled exactly once. Room `cmwaigb4m0012tf4k5lpcvi4f` (labeled test, auto-refunds on expiry).
 - **Release-record accuracy:** required room content/actions passed the reported shared-IP cold-load test on `3ffe744`; exactly one non-critical 429 remained (`friends/status` — fixed in PR #68, deployed `a1153e8`, deploy run 42809813164); socket auto-reconnect was CI-tested while the live check used the reload path.
 - **Friend testing:** `docs/P2P_FRIEND_TEST_CHECKLIST.md` — create→join→chat→offers→approval→proofs→reviews→completion→rating plus reconnect and expiry/refund; collect failures with room ID, timestamp, affected action.
+
+## Pixel redesign rollout — IN PROGRESS (2026-11-19)
+
+- **Owner directive:** complete visual/layout overhaul using Jomar's
+  SeeCareer site + supplied screenshot as reference; official logo
+  assets from Google Drive (supersedes earlier preserve-logo decision);
+  DotGothic16 primary + VT323 fallback self-hosted (SIL OFL 1.1);
+  verified palette #0d0919/#171028/#221839/#4a3391/#f3eeff/#b9addb/
+  #a68aff/#7c4dff; square panels, thin borders, hard offset shadows,
+  violet grid, pixel controls.
+- **PR #91** merged `0f74bf2`, deploy run `44516684608` — design tokens,
+  self-hosted fonts, `BrandLogo` component, official favicon/OG/email
+  branding, dashboard/admin/auth shells + landing/static pages.
+- **PR #92** merged `ca25890`, deploy run `44525019455` — class-only
+  migration of ALL surfaces (79 files) off zinc/neutral utilities onto
+  `sc-*` tokens; zero behavior/route/accounting/reward/moderation
+  changes; marketplace recovery + P2P workspace structure preserved.
+- **PR #93** in CI — Recharts inline colors + tooltip radii remapped
+  (last hardcoded-neutral audit item).
+- **Banner ads remain deferred** — no ad surfaces added.
+- **Pending:** rendered verification 390/768/1024/1440px incl. overflow,
+  long text, loading/error/empty, dialogs, keyboard, reduced-motion —
+  authenticated surfaces need owner-assisted login (no token minting);
+  page-by-page checklist at
+  `evidence/pixel-redesign-2026-11-19/COVERAGE.md`.
