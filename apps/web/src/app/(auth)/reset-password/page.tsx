@@ -74,14 +74,14 @@ function ResetPasswordForm() {
       <div className="w-full max-w-md">
         <div className="card-glass rounded-2xl p-8">
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-white mb-2">Invalid reset link</h1>
-            <p className="text-zinc-400 text-sm">
+            <h1 className="text-2xl font-bold text-sc-text mb-2">Invalid reset link</h1>
+            <p className="text-sc-muted text-sm">
               The password reset link is invalid or has expired. Please request a new one.
             </p>
           </div>
           <Link
             href="/forgot-password"
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium transition-all"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text font-medium transition-all"
           >
             Request new link
           </Link>
@@ -99,13 +99,13 @@ function ResetPasswordForm() {
               <CheckCircle className="w-7 h-7 text-green-400" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-white text-center mb-2">Password updated</h1>
-          <p className="text-zinc-400 text-sm text-center mb-6">
+          <h1 className="text-2xl font-bold text-sc-text text-center mb-2">Password updated</h1>
+          <p className="text-sc-muted text-sm text-center mb-6">
             Your password has been reset successfully. You can now sign in with your new password.
           </p>
           <Link
             href="/login"
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium transition-all"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text font-medium transition-all"
           >
             Go to sign in
           </Link>
@@ -118,8 +118,8 @@ function ResetPasswordForm() {
     <div className="w-full max-w-md">
       <div className="card-glass rounded-2xl p-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white mb-2">Create new password</h1>
-          <p className="text-zinc-400 text-sm">
+          <h1 className="text-2xl font-bold text-sc-text mb-2">Create new password</h1>
+          <p className="text-sc-muted text-sm">
             Enter a new password below. Make sure it&apos;s strong and unique.
           </p>
         </div>
@@ -134,23 +134,23 @@ function ResetPasswordForm() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* Password */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-1.5">
+            <label htmlFor="password" className="block text-sm font-medium text-sc-text mb-1.5">
               New password
             </label>
             <div className="relative">
-              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sc-dim" />
               <input
                 {...register('password')}
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder="••••••••"
-                className="w-full bg-surface-hover border border-surface-border rounded-lg pl-10 pr-10 py-2.5 text-white placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg pl-10 pr-10 py-2.5 text-sc-text placeholder-sc-dim text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-text transition-colors"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -162,23 +162,23 @@ function ResetPasswordForm() {
 
           {/* Confirm Password */}
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-zinc-300 mb-1.5">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-sc-text mb-1.5">
               Confirm password
             </label>
             <div className="relative">
-              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sc-dim" />
               <input
                 {...register('confirmPassword')}
                 id="confirmPassword"
                 type={showConfirm ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder="••••••••"
-                className="w-full bg-surface-hover border border-surface-border rounded-lg pl-10 pr-10 py-2.5 text-white placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg pl-10 pr-10 py-2.5 text-sc-text placeholder-sc-dim text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-text transition-colors"
               >
                 {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -191,7 +191,7 @@ function ResetPasswordForm() {
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-all"
+            className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-sc-text font-medium py-2.5 rounded-lg transition-all"
           >
             {mutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -201,7 +201,7 @@ function ResetPasswordForm() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-zinc-500">
+        <p className="mt-6 text-center text-sm text-sc-dim">
           <Link href="/login" className="text-brand-400 hover:text-brand-300 transition-colors">
             ← Back to sign in
           </Link>

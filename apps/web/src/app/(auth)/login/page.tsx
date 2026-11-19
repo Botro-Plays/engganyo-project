@@ -167,8 +167,8 @@ export default function LoginPage() {
               <ShieldCheck className="w-7 h-7 text-brand-400" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-white text-center mb-2">Two-factor authentication</h1>
-          <p className="text-zinc-400 text-sm text-center mb-6">
+          <h1 className="text-2xl font-bold text-sc-text text-center mb-2">Two-factor authentication</h1>
+          <p className="text-sc-muted text-sm text-center mb-6">
             {twoFactorMethod === 'totp' && 'Enter the 6-digit code from your authenticator app.'}
             {twoFactorMethod === 'email' && (emailCodeSent ? 'Enter the code sent to your email.' : 'Click below to send a code to your email.')}
             {twoFactorMethod === 'backup' && 'Enter one of your saved backup codes.'}
@@ -187,7 +187,7 @@ export default function LoginPage() {
                 <button
                   key={m}
                   onClick={() => { setTwoFactorMethod(m); setTwoFactorCode(''); setServerError(null); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium transition-all border ${twoFactorMethod === m ? 'bg-brand-500/20 border-brand-500/50 text-brand-300' : 'border-surface-border text-zinc-500 hover:text-zinc-300'}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-medium transition-all border ${twoFactorMethod === m ? 'bg-brand-500/20 border-brand-500/50 text-brand-300' : 'border-surface-border text-sc-dim hover:text-sc-text'}`}
                 >
                   {m === 'totp' ? <Smartphone className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
                   {m === 'totp' ? 'Authenticator' : 'Email'}
@@ -200,7 +200,7 @@ export default function LoginPage() {
           {twoFactorMethod === 'email' && !emailCodeSent && (
             <button
               onClick={sendEmailCode}
-              className="w-full mb-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-all"
+              className="w-full mb-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-all"
             >
               Send code to my email
             </button>
@@ -216,13 +216,13 @@ export default function LoginPage() {
                 onKeyDown={(e) => { if (e.key === 'Enter') verifyTwoFactor.mutate(); }}
                 placeholder={twoFactorMethod === 'backup' ? 'XXXXXXXXXX' : '000000'}
                 maxLength={twoFactorMethod === 'backup' ? 10 : 6}
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-3 text-white text-center text-xl font-mono tracking-widest placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent mb-4"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-3 text-sc-text text-center text-xl font-mono tracking-widest placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent mb-4"
                 autoFocus
               />
               <button
                 onClick={() => verifyTwoFactor.mutate()}
                 disabled={verifyTwoFactor.isPending || !twoFactorCode}
-                className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-sc-text font-medium py-2.5 rounded-lg transition-all"
               >
                 {verifyTwoFactor.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify'}
               </button>
@@ -232,13 +232,13 @@ export default function LoginPage() {
           <div className="mt-5 space-y-2 text-center">
             <button
               onClick={() => { setTwoFactorMethod('backup'); setTwoFactorCode(''); setServerError(null); }}
-              className="flex items-center gap-1.5 mx-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="flex items-center gap-1.5 mx-auto text-xs text-sc-dim hover:text-sc-text transition-colors"
             >
               <Key className="w-3.5 h-3.5" /> Use a backup code
             </button>
             <button
               onClick={() => { setTwoFactorState(null); setServerError(null); }}
-              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+              className="text-xs text-sc-dim hover:text-sc-muted transition-colors"
             >
               ← Back to sign in
             </button>
@@ -253,8 +253,8 @@ export default function LoginPage() {
       {/* Card */}
       <div className="card-glass rounded-2xl p-8">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white mb-2">Welcome back</h1>
-          <p className="text-zinc-400 text-sm">Sign in to your Engganyo account</p>
+          <h1 className="text-2xl font-bold text-sc-text mb-2">Welcome back</h1>
+          <p className="text-sc-muted text-sm">Sign in to your Engganyo account</p>
         </div>
 
         {/* Server Error */}
@@ -267,7 +267,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* Email / Username */}
           <div>
-            <label htmlFor="emailOrUsername" className="block text-sm font-medium text-zinc-300 mb-1.5">
+            <label htmlFor="emailOrUsername" className="block text-sm font-medium text-sc-text mb-1.5">
               Email or username
             </label>
             <input
@@ -276,7 +276,7 @@ export default function LoginPage() {
               type="text"
               autoComplete="username"
               placeholder="you@example.com"
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sc-text placeholder-sc-dim text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
             />
             {errors.emailOrUsername && (
               <p className="mt-1.5 text-xs text-red-400">{errors.emailOrUsername.message}</p>
@@ -286,7 +286,7 @@ export default function LoginPage() {
           {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="password" className="block text-sm font-medium text-zinc-300">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-sc-text">Password</label>
               <Link
                 href="/forgot-password"
                 className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
@@ -301,12 +301,12 @@ export default function LoginPage() {
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 pr-10 text-white placeholder-zinc-600 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 pr-10 text-sc-text placeholder-sc-dim text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-text transition-colors"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -331,7 +331,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loginMutation.isPending}
-            className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-all mt-2"
+            className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed text-sc-text font-medium py-2.5 rounded-lg transition-all mt-2"
           >
             {loginMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -345,7 +345,7 @@ export default function LoginPage() {
         </form>
 
         {/* Register link */}
-        <p className="mt-6 text-center text-sm text-zinc-500">
+        <p className="mt-6 text-center text-sm text-sc-dim">
           Don&apos;t have an account?{' '}
           <Link href="/register" className="text-brand-400 hover:text-brand-300 transition-colors">
             Create one free

@@ -100,7 +100,7 @@ export default function WebhooksPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <AlertCircle className="w-10 h-10 text-red-500/60 mb-3" />
-        <p className="text-zinc-400 text-sm">This page is restricted to Super Admins only.</p>
+        <p className="text-sc-muted text-sm">This page is restricted to Super Admins only.</p>
       </div>
     );
   }
@@ -112,17 +112,17 @@ export default function WebhooksPage() {
         <div className="flex items-center gap-2 mb-1">
           <Link
             href="/admin/server-config"
-            className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-sc-dim hover:text-sc-text transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Server Config
           </Link>
         </div>
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-xl font-bold text-sc-text flex items-center gap-2">
           <Webhook className="w-5 h-5 text-amber-400" />
           Webhook Endpoints
         </h1>
-        <p className="text-zinc-400 text-sm mt-1">
+        <p className="text-sc-muted text-sm mt-1">
           Public webhook URLs for external payment provider configuration. Copy these into your PayPal / PayMongo dashboard.
         </p>
       </div>
@@ -131,12 +131,12 @@ export default function WebhooksPage() {
       <div className="card-glass rounded-xl p-4 border border-surface-border mb-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs text-zinc-500 mb-0.5">API Base URL</p>
-            <p className="text-sm text-white font-mono">{baseUrl}</p>
+            <p className="text-xs text-sc-dim mb-0.5">API Base URL</p>
+            <p className="text-sm text-sc-text font-mono">{baseUrl}</p>
           </div>
           <button
             onClick={() => handleCopy(baseUrl, 'base-url')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-xs text-zinc-300 hover:text-white hover:border-zinc-500 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-xs text-sc-text hover:text-sc-text hover:border-sc-border transition-all"
           >
             {copied === 'base-url' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
             {copied === 'base-url' ? 'Copied' : 'Copy'}
@@ -164,8 +164,8 @@ export default function WebhooksPage() {
                       <wh.icon className={`w-4 h-4 ${wh.color}`} />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-white">{wh.label}</h3>
-                      <p className="text-xs text-zinc-500 mt-0.5">{wh.description}</p>
+                      <h3 className="text-sm font-semibold text-sc-text">{wh.label}</h3>
+                      <p className="text-xs text-sc-dim mt-0.5">{wh.description}</p>
                     </div>
                   </div>
                   {wh.docsUrl && (
@@ -183,11 +183,11 @@ export default function WebhooksPage() {
 
                 {/* URL row */}
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-surface-border mb-3">
-                  <Link2 className="w-4 h-4 text-zinc-500 shrink-0" />
-                  <code className="text-xs text-zinc-300 font-mono flex-1 truncate">{fullUrl}</code>
+                  <Link2 className="w-4 h-4 text-sc-dim shrink-0" />
+                  <code className="text-xs text-sc-text font-mono flex-1 truncate">{fullUrl}</code>
                   <button
                     onClick={() => handleCopy(fullUrl, wh.label)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-xs text-zinc-300 hover:text-white hover:border-zinc-500 transition-all shrink-0"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-xs text-sc-text hover:text-sc-text hover:border-sc-border transition-all shrink-0"
                   >
                     {copied === wh.label ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                     {copied === wh.label ? 'Copied' : 'Copy'}
@@ -222,8 +222,8 @@ export default function WebhooksPage() {
 
       {/* Setup Guide */}
       <div className="mt-6 card-glass rounded-xl p-5 border border-surface-border">
-        <h3 className="text-sm font-semibold text-white mb-3">Setup Guide</h3>
-        <div className="space-y-3 text-xs text-zinc-400">
+        <h3 className="text-sm font-semibold text-sc-text mb-3">Setup Guide</h3>
+        <div className="space-y-3 text-xs text-sc-muted">
           <div className="flex gap-3">
             <span className="w-5 h-5 rounded-full bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 text-[10px] font-bold shrink-0">1</span>
             <p>Copy the webhook URL above for the provider you want to configure.</p>

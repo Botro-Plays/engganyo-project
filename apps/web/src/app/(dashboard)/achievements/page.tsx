@@ -87,45 +87,45 @@ export default function AchievementsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Achievements</h1>
-        <p className="text-zinc-400 text-sm mt-1">Track your progress and unlock rewards.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Achievements</h1>
+        <p className="text-sc-muted text-sm mt-1">Track your progress and unlock rewards.</p>
       </div>
 
       {/* ── Stats row ── */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Level</p>
+            <p className="text-xs text-sc-dim mb-1">Level</p>
             <p className="text-2xl font-bold text-yellow-400">{stats.level}</p>
-            <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="mt-2 h-1 bg-sc-panel-2 rounded-full overflow-hidden">
               <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${levelInfo?.progress ?? 0}%` }} />
             </div>
-            <p className="text-xs text-zinc-600 mt-1">{stats.xpToNext} XP to next</p>
+            <p className="text-xs text-sc-dim mt-1">{stats.xpToNext} XP to next</p>
           </div>
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Total XP</p>
+            <p className="text-xs text-sc-dim mb-1">Total XP</p>
             <p className="text-2xl font-bold text-brand-300">{formatCredits(stats.xp)}</p>
-            <p className="text-xs text-zinc-600 mt-2">{stats.totalTasks} tasks done</p>
+            <p className="text-xs text-sc-dim mt-2">{stats.totalTasks} tasks done</p>
           </div>
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Streak</p>
+            <p className="text-xs text-sc-dim mb-1">Streak</p>
             <p className="text-2xl font-bold text-orange-400 flex items-center gap-1">
               <Flame className="w-5 h-5" />{stats.currentStreak}
             </p>
-            <p className="text-xs text-zinc-600 mt-2">Best: {stats.longestStreak} days</p>
+            <p className="text-xs text-sc-dim mt-2">Best: {stats.longestStreak} days</p>
           </div>
         </div>
       )}
 
       {/* ── Progress summary ── */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="flex-1 h-2 bg-sc-panel-2 rounded-full overflow-hidden">
           <div
             className="h-full bg-brand-500 rounded-full transition-all"
             style={{ width: `${totalCount > 0 ? (unlockedCount / totalCount) * 100 : 0}%` }}
           />
         </div>
-        <span className="text-xs text-zinc-500 shrink-0">
+        <span className="text-xs text-sc-dim shrink-0">
           {unlockedCount}/{totalCount} unlocked
         </span>
       </div>
@@ -140,7 +140,7 @@ export default function AchievementsPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {(achievements ?? []).map((a) => {
-            const catColor = CATEGORY_COLORS[a.category] ?? 'text-zinc-400 bg-zinc-500/10';
+            const catColor = CATEGORY_COLORS[a.category] ?? 'text-sc-muted bg-sc-soft/10';
             return (
               <div
                 key={a.id}
@@ -153,12 +153,12 @@ export default function AchievementsPage() {
                   {a.isUnlocked ? (
                     <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
                   ) : (
-                    <Lock className="w-4 h-4 text-zinc-600 shrink-0" />
+                    <Lock className="w-4 h-4 text-sc-dim shrink-0" />
                   )}
                 </div>
-                <p className="text-sm font-semibold text-white mb-0.5">{a.name}</p>
-                <p className="text-xs text-zinc-500 mb-2">{a.description}</p>
-                <div className="flex items-center gap-3 text-xs text-zinc-600">
+                <p className="text-sm font-semibold text-sc-text mb-0.5">{a.name}</p>
+                <p className="text-xs text-sc-dim mb-2">{a.description}</p>
+                <div className="flex items-center gap-3 text-xs text-sc-dim">
                   {a.creditReward > 0 && <span className="text-green-400">+{formatCredits(a.creditReward)} {creditLabel(a.creditReward)}</span>}
                   {a.xpReward > 0 && <span className="text-brand-400">+{a.xpReward} XP</span>}
                 </div>

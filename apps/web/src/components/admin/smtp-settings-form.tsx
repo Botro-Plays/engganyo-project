@@ -21,10 +21,10 @@ interface SmtpSettings {
 type EditableSettings = Omit<SmtpSettings, 'source' | 'passwordSet'>;
 
 const INPUT_BASE =
-  'w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500';
+  'w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500';
 const INPUT = `${INPUT_BASE} text-sm`;
 const INPUT_MONO = `${INPUT_BASE} text-xs font-mono`;
-const LABEL = 'block text-xs text-zinc-500 mb-1';
+const LABEL = 'block text-xs text-sc-dim mb-1';
 
 function Toggle({ checked, disabled, onChange, label }: { checked: boolean; disabled?: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -35,7 +35,7 @@ function Toggle({ checked, disabled, onChange, label }: { checked: boolean; disa
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-green-500' : 'bg-zinc-600'}`}
+      className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-green-500' : 'bg-sc-soft'}`}
     >
       <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
     </button>
@@ -118,7 +118,7 @@ export function SmtpSettingsForm() {
 
   return (
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <p className="text-zinc-400 text-sm">
+      <p className="text-sc-muted text-sm">
         Configure Resend, SendGrid, or another SMTP provider. Changes apply to verification, password-reset, and
         announcement emails immediately — no server restart required.
       </p>
@@ -137,13 +137,13 @@ export function SmtpSettingsForm() {
       <div className="card-glass rounded-xl p-5 border border-surface-border">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-white font-medium">Use Server Config for email delivery</p>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <p className="text-sm text-sc-text font-medium">Use Server Config for email delivery</p>
+            <p className="text-xs text-sc-dim mt-0.5">
               When off, the existing server environment settings are used. This switch does not disable outgoing email.
             </p>
           </div>
           <div className="shrink-0 flex items-center gap-2">
-            <span className="text-xs text-zinc-500">{values.enabled ? 'Enabled' : 'Disabled'}</span>
+            <span className="text-xs text-sc-dim">{values.enabled ? 'Enabled' : 'Disabled'}</span>
             <Toggle checked={values.enabled} disabled={!!busy} onChange={(v) => setEdits((c) => ({ ...c, enabled: v }))} label="Use Server Config for email delivery" />
           </div>
         </div>
@@ -151,7 +151,7 @@ export function SmtpSettingsForm() {
 
       {/* Provider fields */}
       <fieldset disabled={!!busy} className="card-glass rounded-xl p-5 border border-surface-border space-y-4">
-        <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-sc-text flex items-center gap-2">
           <Mail className="w-4 h-4 text-amber-400" />
           Provider
         </h3>
@@ -159,14 +159,14 @@ export function SmtpSettingsForm() {
           <button
             type="button"
             onClick={() => applyPreset({ host: 'smtp.resend.com', port: 465, secure: true, user: 'resend' })}
-            className="px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-all"
+            className="px-3 py-1.5 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-xs font-medium transition-all"
           >
             Use Resend preset
           </button>
           <button
             type="button"
             onClick={() => applyPreset({ host: 'smtp.sendgrid.net', port: 587, secure: false, user: 'apikey' })}
-            className="px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-all"
+            className="px-3 py-1.5 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-xs font-medium transition-all"
           >
             Use SendGrid preset
           </button>
@@ -187,7 +187,7 @@ export function SmtpSettingsForm() {
           <div>
             <label className={LABEL} htmlFor="smtp-password">
               Password / API key{' '}
-              {data.passwordSet && <span className="text-zinc-600">(a value is stored — leave blank to keep)</span>}
+              {data.passwordSet && <span className="text-sc-dim">(a value is stored — leave blank to keep)</span>}
             </label>
             <div className="relative">
               <input
@@ -200,7 +200,7 @@ export function SmtpSettingsForm() {
                 placeholder={data.passwordSet ? '••••••••••••' : 'Enter password or API key'}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <button type="button" onClick={() => setShowPassword((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400" aria-label={showPassword ? 'Hide password' : 'Show password'}>
+              <button type="button" onClick={() => setShowPassword((s) => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-muted" aria-label={showPassword ? 'Hide password' : 'Show password'}>
                 {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -216,8 +216,8 @@ export function SmtpSettingsForm() {
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-white font-medium">TLS from connection start</p>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <p className="text-sm text-sc-text font-medium">TLS from connection start</p>
+            <p className="text-xs text-sc-dim mt-0.5">
               Usually port 465. For port 587 leave this off; authenticated connections require STARTTLS.
             </p>
           </div>
@@ -225,7 +225,7 @@ export function SmtpSettingsForm() {
             <Toggle checked={values.secure} onChange={(v) => setEdits((c) => ({ ...c, secure: v }))} label="TLS from connection start" />
           </div>
         </div>
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-sc-dim">
           The sender must be verified with your provider. Leave the username blank only for a server that does not
           require authentication.{' '}
           {envCredential
@@ -247,7 +247,7 @@ export function SmtpSettingsForm() {
           type="button"
           disabled={!!busy || dirty}
           onClick={() => { void sendTest(); }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sc-panel-2 hover:bg-sc-soft disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
         >
           {busy === 'test' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           {busy === 'test' ? 'Sending…' : 'Send test to my email'}
@@ -255,13 +255,13 @@ export function SmtpSettingsForm() {
         <button
           type="submit"
           disabled={!!busy || !dirty}
-          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+          className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
         >
           {busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {busy === 'save' ? 'Saving…' : 'Save email settings'}
         </button>
       </div>
-      {dirty && <p className="text-xs text-zinc-500 text-right">Save your changes before sending a test.</p>}
+      {dirty && <p className="text-xs text-sc-dim text-right">Save your changes before sending a test.</p>}
 
       {/* Security note */}
       <div className="px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2">

@@ -82,45 +82,45 @@ export default function MissionsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Daily Missions</h1>
-        <p className="text-zinc-400 text-sm mt-1">Complete daily goals to earn bonus rewards.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Daily Missions</h1>
+        <p className="text-sc-muted text-sm mt-1">Complete daily goals to earn bonus rewards.</p>
       </div>
 
       {/* ── Stats row ── */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Level</p>
+            <p className="text-xs text-sc-dim mb-1">Level</p>
             <p className="text-2xl font-bold text-yellow-400">{stats.level}</p>
-            <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="mt-2 h-1 bg-sc-panel-2 rounded-full overflow-hidden">
               <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${levelInfo?.progress ?? 0}%` }} />
             </div>
-            <p className="text-xs text-zinc-600 mt-1">{stats.xpToNext} XP to next</p>
+            <p className="text-xs text-sc-dim mt-1">{stats.xpToNext} XP to next</p>
           </div>
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Total XP</p>
+            <p className="text-xs text-sc-dim mb-1">Total XP</p>
             <p className="text-2xl font-bold text-brand-300">{formatCredits(stats.xp)}</p>
-            <p className="text-xs text-zinc-600 mt-2">{stats.totalTasks} tasks done</p>
+            <p className="text-xs text-sc-dim mt-2">{stats.totalTasks} tasks done</p>
           </div>
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Streak</p>
+            <p className="text-xs text-sc-dim mb-1">Streak</p>
             <p className="text-2xl font-bold text-orange-400 flex items-center gap-1">
               <Flame className="w-5 h-5" />{stats.currentStreak}
             </p>
-            <p className="text-xs text-zinc-600 mt-2">Best: {stats.longestStreak} days</p>
+            <p className="text-xs text-sc-dim mt-2">Best: {stats.longestStreak} days</p>
           </div>
         </div>
       )}
 
       {/* ── Progress summary ── */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="flex-1 h-2 bg-sc-panel-2 rounded-full overflow-hidden">
           <div
             className="h-full bg-brand-500 rounded-full transition-all"
             style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
           />
         </div>
-        <span className="text-xs text-zinc-500 shrink-0">
+        <span className="text-xs text-sc-dim shrink-0">
           {completedCount}/{totalCount} completed today
         </span>
       </div>
@@ -140,26 +140,26 @@ export default function MissionsPage() {
               <div key={m.id} className={`card-glass rounded-xl p-4 ${m.isCompleted ? 'opacity-60' : ''}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Star className={`w-4 h-4 ${m.isCompleted ? 'text-green-400' : 'text-zinc-500'}`} />
-                    <p className="text-sm font-semibold text-white">{m.name}</p>
+                    <Star className={`w-4 h-4 ${m.isCompleted ? 'text-green-400' : 'text-sc-dim'}`} />
+                    <p className="text-sm font-semibold text-sc-text">{m.name}</p>
                     {m.isCompleted && (
                       <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Done</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-zinc-500 shrink-0">
+                  <div className="flex items-center gap-2 text-xs text-sc-dim shrink-0">
                     {m.creditReward > 0 && <span className="text-green-400">+{formatCredits(m.creditReward)} {creditLabel(m.creditReward)}</span>}
                     {m.xpReward > 0 && <span className="text-brand-400">+{m.xpReward} XP</span>}
                   </div>
                 </div>
-                <p className="text-xs text-zinc-500 mb-2">{m.description}</p>
+                <p className="text-xs text-sc-dim mb-2">{m.description}</p>
                 <div className="flex items-center gap-3">
-                  <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-sc-panel-2 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${m.isCompleted ? 'bg-green-400' : 'bg-brand-500'}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-xs text-zinc-500 shrink-0">{m.progress}/{m.requirement}</span>
+                  <span className="text-xs text-sc-dim shrink-0">{m.progress}/{m.requirement}</span>
                 </div>
               </div>
             );

@@ -42,7 +42,7 @@ const STATUS_COLORS: Record<string, string> = {
   AI_HANDLING: 'text-blue-400 bg-blue-500/10',
   PENDING_HUMAN: 'text-yellow-400 bg-yellow-500/10',
   HUMAN_HANDLING: 'text-green-400 bg-green-500/10',
-  CLOSED: 'text-zinc-400 bg-zinc-500/10',
+  CLOSED: 'text-sc-muted bg-sc-soft/10',
 };
 
 export default function AdminAiSupportPage() {
@@ -180,8 +180,8 @@ export default function AdminAiSupportPage() {
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-2">AI Support</h1>
-          <p className="text-zinc-400">Manage and respond to AI chat conversations</p>
+          <h1 className="text-2xl font-bold text-sc-text mb-2">AI Support</h1>
+          <p className="text-sc-muted">Manage and respond to AI chat conversations</p>
         </div>
         <button
           onClick={handleDeleteAll}
@@ -203,12 +203,12 @@ export default function AdminAiSupportPage() {
         {/* Chat List */}
         <div className="lg:col-span-1 bg-surface border border-surface-border rounded-xl overflow-hidden">
           <div className="p-4 border-b border-surface-border">
-            <h2 className="font-semibold text-white">Conversations</h2>
+            <h2 className="font-semibold text-sc-text">Conversations</h2>
           </div>
           
           {isLoadingChats ? (
             <div className="flex items-center justify-center p-8">
-              <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+              <Loader2 className="w-6 h-6 text-sc-dim animate-spin" />
             </div>
           ) : (
             <div className="divide-y divide-surface-border max-h-[600px] overflow-y-auto">
@@ -222,8 +222,8 @@ export default function AdminAiSupportPage() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-zinc-500" />
-                      <span className="text-sm font-medium text-white">
+                      <User className="w-4 h-4 text-sc-dim" />
+                      <span className="text-sm font-medium text-sc-text">
                         {chat.user?.username || 'Anonymous'}
                       </span>
                     </div>
@@ -231,12 +231,12 @@ export default function AdminAiSupportPage() {
                       {chat.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-500 flex items-center gap-2">
+                  <div className="text-xs text-sc-dim flex items-center gap-2">
                     <Clock className="w-3 h-3" />
                     {formatDate(chat.createdAt)}
                   </div>
                   {chat.agent && (
-                    <div className="text-xs text-zinc-500 mt-1">
+                    <div className="text-xs text-sc-dim mt-1">
                       Assigned to: {chat.agent.displayName || chat.agent.username}
                     </div>
                   )}
@@ -244,7 +244,7 @@ export default function AdminAiSupportPage() {
               ))}
               
               {chatsData?.length === 0 && (
-                <div className="p-8 text-center text-zinc-500">
+                <div className="p-8 text-center text-sc-dim">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No conversations yet</p>
                 </div>
@@ -260,10 +260,10 @@ export default function AdminAiSupportPage() {
               {/* Header */}
               <div className="p-4 border-b border-surface-border flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-white">
+                  <h3 className="font-semibold text-sc-text">
                     {currentChat.user?.username || 'Anonymous User'}
                   </h3>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-sc-dim">
                     {currentChat.user?.email || currentChat.ipAddress || 'Unknown'}
                   </p>
                 </div>
@@ -272,7 +272,7 @@ export default function AdminAiSupportPage() {
                     <button
                       onClick={() => handleTransfer(currentChat.id)}
                       disabled={transferMutation.isPending}
-                      className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border text-white text-sm rounded-lg transition-colors"
+                      className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border text-sc-text text-sm rounded-lg transition-colors"
                     >
                       {transferMutation.isPending ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -301,7 +301,7 @@ export default function AdminAiSupportPage() {
                     <button
                       onClick={() => handleClose(currentChat.id)}
                       disabled={closeMutation.isPending}
-                      className="px-3 py-1.5 bg-zinc-500/10 hover:bg-zinc-500/20 text-zinc-400 border border-zinc-500/30 text-sm rounded-lg transition-colors"
+                      className="px-3 py-1.5 bg-sc-soft/10 hover:bg-sc-soft/20 text-sc-muted border border-sc-border/30 text-sm rounded-lg transition-colors"
                     >
                       {closeMutation.isPending ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -334,7 +334,7 @@ export default function AdminAiSupportPage() {
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {isLoadingChat ? (
                   <div className="flex items-center justify-center h-full">
-                    <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-sc-dim animate-spin" />
                   </div>
                 ) : (
                   currentChat.messages.map((msg) => (
@@ -345,10 +345,10 @@ export default function AdminAiSupportPage() {
                       <div
                         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
                           msg.role === 'USER'
-                            ? 'bg-surface-hover text-zinc-300'
+                            ? 'bg-surface-hover text-sc-text'
                             : msg.isHuman
                             ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
-                            : 'bg-surface-hover text-zinc-300'
+                            : 'bg-surface-hover text-sc-text'
                         }`}
                       >
                         {msg.isHuman && (
@@ -357,7 +357,7 @@ export default function AdminAiSupportPage() {
                           </p>
                         )}
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                        <p className="text-xs text-zinc-500 mt-1">
+                        <p className="text-xs text-sc-dim mt-1">
                           {formatDate(msg.createdAt)}
                         </p>
                       </div>
@@ -376,13 +376,13 @@ export default function AdminAiSupportPage() {
                       onChange={(e) => setMessageInput(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                       placeholder="Type your response..."
-                      className="flex-1 bg-surface-hover border border-surface-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-brand-500/50 transition-colors"
+                      className="flex-1 bg-surface-hover border border-surface-border rounded-xl px-4 py-2.5 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:border-brand-500/50 transition-colors"
                       disabled={sendMessageMutation.isPending}
                     />
                     <button
                       onClick={handleSendMessage}
                       disabled={!messageInput.trim() || sendMessageMutation.isPending}
-                      className="p-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border disabled:text-zinc-500 text-white rounded-xl transition-colors"
+                      className="p-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border disabled:text-sc-dim text-sc-text rounded-xl transition-colors"
                     >
                       {sendMessageMutation.isPending ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -395,7 +395,7 @@ export default function AdminAiSupportPage() {
               )}
             </>
           ) : (
-            <div className="flex items-center justify-center h-full text-zinc-500">
+            <div className="flex items-center justify-center h-full text-sc-dim">
               <div className="text-center">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>Select a conversation to view</p>

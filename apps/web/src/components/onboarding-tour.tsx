@@ -698,7 +698,7 @@ export function OnboardingTour() {
     ? createPortal(
         <div
           role="status"
-          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-brand-500/40 bg-[#161b2e] px-4 py-2 text-sm text-white shadow-2xl"
+          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-brand-500/40 bg-[#161b2e] px-4 py-2 text-sm text-sc-text shadow-2xl"
         >
           You&apos;re all set. Replay the tour any time from the help button.
         </div>,
@@ -783,14 +783,14 @@ export function OnboardingTour() {
             <p id="tour-step" className="mb-1 text-xs font-medium text-brand-300">
               Step {stepIndex + 1} of {TOUR_STEPS.length}
             </p>
-            <p id="tour-title" className="text-sm font-semibold text-white">
+            <p id="tour-title" className="text-sm font-semibold text-sc-text">
               {step.title}
             </p>
-            <p id="tour-desc" className="mt-1 text-sm text-zinc-400">
+            <p id="tour-desc" className="mt-1 text-sm text-sc-muted">
               {description}
             </p>
             {step.type === 'navigate' && !missing && (
-              <p id="tour-hint" className="mt-2 text-xs text-zinc-500">
+              <p id="tour-hint" className="mt-2 text-xs text-sc-dim">
                 Click the highlighted link to continue. With the keyboard, press Tab to reach it, then Enter.
               </p>
             )}
@@ -801,7 +801,7 @@ export function OnboardingTour() {
                     type="button"
                     data-tour-action="back"
                     onClick={handleBack}
-                    className={`min-h-[44px] rounded-md px-3 text-sm text-zinc-400 hover:text-white ${focusRing}`}
+                    className={`min-h-[44px] rounded-md px-3 text-sm text-sc-muted hover:text-sc-text ${focusRing}`}
                   >
                     Back
                   </button>
@@ -810,7 +810,7 @@ export function OnboardingTour() {
                   type="button"
                   data-tour-action="skip"
                   onClick={handleSkip}
-                  className={`min-h-[44px] rounded-md px-3 text-sm text-zinc-400 hover:text-white ${focusRing}`}
+                  className={`min-h-[44px] rounded-md px-3 text-sm text-sc-muted hover:text-sc-text ${focusRing}`}
                 >
                   Skip tour
                 </button>
@@ -819,7 +819,7 @@ export function OnboardingTour() {
                 type="button"
                 data-tour-action="primary"
                 onClick={handlePrimary}
-                className={`min-h-[44px] rounded-md bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 ${focusRing}`}
+                className={`min-h-[44px] rounded-md bg-brand-500 px-4 text-sm font-medium text-sc-text hover:bg-brand-600 ${focusRing}`}
               >
                 {primaryLabel}
               </button>
@@ -851,7 +851,7 @@ export function TourReplayButton() {
       onClick={handleReplay}
       aria-label="Replay onboarding tour"
       title="Replay tour"
-      className="flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-surface-hover hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      className="flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-full text-sc-dim transition-all hover:bg-surface-hover hover:text-sc-text focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
     >
       <HelpCircle className="h-4 w-4" />
     </button>

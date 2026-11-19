@@ -54,8 +54,8 @@ export default function ReferralsPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Referrals</h1>
-        <p className="text-zinc-400 text-sm mt-1">Invite friends and earn rewards at every milestone.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Referrals</h1>
+        <p className="text-sc-muted text-sm mt-1">Invite friends and earn rewards at every milestone.</p>
       </div>
 
       {/* Stats */}
@@ -63,31 +63,31 @@ export default function ReferralsPage() {
         <div className="card-glass rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <Users className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs text-zinc-500">Total Invited</span>
+            <span className="text-xs text-sc-dim">Total Invited</span>
           </div>
-          <p className="text-2xl font-bold text-white">{data?.total ?? 0}</p>
+          <p className="text-2xl font-bold text-sc-text">{data?.total ?? 0}</p>
         </div>
         <div className="card-glass rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <Trophy className="w-4 h-4 text-yellow-400" />
-            <span className="text-xs text-zinc-500">Qualified</span>
+            <span className="text-xs text-sc-dim">Qualified</span>
           </div>
-          <p className="text-2xl font-bold text-white">{data?.qualified ?? 0}</p>
+          <p className="text-2xl font-bold text-sc-text">{data?.qualified ?? 0}</p>
         </div>
         <div className="card-glass rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <CreditCard className="w-4 h-4 text-purple-400" />
-            <span className="text-xs text-zinc-500">Credits Earned</span>
+            <span className="text-xs text-sc-dim">Credits Earned</span>
           </div>
-          <p className="text-2xl font-bold text-white">{data?.totalCreditsEarned ?? 0}</p>
+          <p className="text-2xl font-bold text-sc-text">{data?.totalCreditsEarned ?? 0}</p>
         </div>
       </div>
 
       {/* Referral Link */}
       <div className="card-glass rounded-xl p-6">
-        <h2 className="font-semibold text-white mb-3">Your Referral Link</h2>
+        <h2 className="font-semibold text-sc-text mb-3">Your Referral Link</h2>
         <div className="flex items-center gap-2">
-          <div className="flex-1 bg-zinc-800/50 rounded-lg px-4 py-2.5 text-sm text-zinc-300 truncate">
+          <div className="flex-1 bg-sc-panel-2/50 rounded-lg px-4 py-2.5 text-sm text-sc-text truncate">
             {referralUrl || 'Loading...'}
           </div>
           <button
@@ -98,23 +98,23 @@ export default function ReferralsPage() {
             {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
-        <p className="text-xs text-zinc-500 mt-2">
+        <p className="text-xs text-sc-dim mt-2">
           Share this link. You earn credits when friends hit milestones: sign up, first task, 10 tasks, deposit, and Silver tier.
         </p>
       </div>
 
       {/* Referral List */}
       <div className="card-glass rounded-xl p-6">
-        <h2 className="font-semibold text-white mb-4">Your Invited Friends</h2>
+        <h2 className="font-semibold text-sc-text mb-4">Your Invited Friends</h2>
         {(!data?.referrals || data.referrals.length === 0) ? (
-          <p className="text-sm text-zinc-500">No referrals yet. Share your link to get started!</p>
+          <p className="text-sm text-sc-dim">No referrals yet. Share your link to get started!</p>
         ) : (
           <div className="space-y-3">
             {data.referrals.map((r) => (
-              <div key={r.id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/30">
+              <div key={r.id} className="flex items-center justify-between p-3 rounded-lg bg-sc-panel-2/30">
                 <div>
-                  <p className="text-sm text-white font-medium">@{r.referee.username}</p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-sm text-sc-text font-medium">@{r.referee.username}</p>
+                  <p className="text-xs text-sc-dim">
                     {r.isQualified ? 'Qualified' : 'Pending'} · {r.creditsAwarded} credits earned
                   </p>
                   {r.milestones && Object.keys(r.milestones).length > 0 && (
@@ -129,7 +129,7 @@ export default function ReferralsPage() {
                     </div>
                   )}
                 </div>
-                <span className={`text-xs font-medium ${r.isQualified ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                <span className={`text-xs font-medium ${r.isQualified ? 'text-emerald-400' : 'text-sc-dim'}`}>
                   {r.isQualified ? 'Active' : 'Pending'}
                 </span>
               </div>

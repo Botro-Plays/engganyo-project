@@ -93,7 +93,7 @@ interface GamStats {
   nextTierProgress: number;
 }
 
-const RANK_STYLES = ['text-yellow-400', 'text-zinc-300', 'text-amber-600'];
+const RANK_STYLES = ['text-yellow-400', 'text-sc-text', 'text-amber-600'];
 
 type MainTab = 'level' | 'achievements' | 'missions' | 'vip' | 'referrals';
 type TimeTab = 'alltime' | 'weekly';
@@ -204,7 +204,7 @@ export default function LeaderboardPage() {
     <div className="card-glass rounded-xl divide-y divide-surface-border">
       {entries.map((entry) => {
         const isSelf = entry.id === authUser?.id;
-        const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-zinc-500';
+        const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-sc-dim';
         return (
           <div
             key={entry.id}
@@ -216,7 +216,7 @@ export default function LeaderboardPage() {
             <UserLink user={entry} cosmetics={cosmeticsMap[entry.id]} showAvatar size="md" />
             <div className="flex-1 min-w-0">
               {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
-              <p className="text-xs text-zinc-500">Lvl {entry.level}</p>
+              <p className="text-xs text-sc-dim">Lvl {entry.level}</p>
             </div>
             <div className="text-right shrink-0">
               <p className="text-sm font-semibold text-brand-300 flex items-center gap-1">
@@ -237,32 +237,32 @@ export default function LeaderboardPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Leaderboards</h1>
-        <p className="text-zinc-400 text-sm mt-1">Public rankings across all players.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Leaderboards</h1>
+        <p className="text-sc-muted text-sm mt-1">Public rankings across all players.</p>
       </div>
 
       {/* ── Stats row ── */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Level</p>
+            <p className="text-xs text-sc-dim mb-1">Level</p>
             <p className="text-2xl font-bold text-yellow-400">{stats.level}</p>
-            <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="mt-2 h-1 bg-sc-panel-2 rounded-full overflow-hidden">
               <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${levelInfo?.progress ?? 0}%` }} />
             </div>
-            <p className="text-xs text-zinc-600 mt-1">{stats.xpToNext} XP to next</p>
+            <p className="text-xs text-sc-dim mt-1">{stats.xpToNext} XP to next</p>
           </div>
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Total XP</p>
+            <p className="text-xs text-sc-dim mb-1">Total XP</p>
             <p className="text-2xl font-bold text-brand-300">{formatCredits(stats.xp)}</p>
-            <p className="text-xs text-zinc-600 mt-2">{stats.totalTasks} tasks done</p>
+            <p className="text-xs text-sc-dim mt-2">{stats.totalTasks} tasks done</p>
           </div>
           <div className="card-glass rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">Streak</p>
+            <p className="text-xs text-sc-dim mb-1">Streak</p>
             <p className="text-2xl font-bold text-orange-400 flex items-center gap-1">
               <Flame className="w-5 h-5" />{stats.currentStreak}
             </p>
-            <p className="text-xs text-zinc-600 mt-2">Best: {stats.longestStreak} days</p>
+            <p className="text-xs text-sc-dim mt-2">Best: {stats.longestStreak} days</p>
           </div>
         </div>
       )}
@@ -280,7 +280,7 @@ export default function LeaderboardPage() {
             key={t.key}
             onClick={() => setMainTab(t.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              mainTab === t.key ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'
+              mainTab === t.key ? 'bg-sc-panel-2 text-sc-text' : 'text-sc-dim hover:text-sc-text'
             }`}
           >
             <t.icon className="w-3.5 h-3.5" />
@@ -300,7 +300,7 @@ export default function LeaderboardPage() {
               key={t.key}
               onClick={() => setTimeTab(t.key)}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                timeTab === t.key ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-white'
+                timeTab === t.key ? 'bg-sc-soft text-sc-text' : 'text-sc-dim hover:text-sc-text'
               }`}
             >
               <t.icon className="w-3.5 h-3.5" />
@@ -323,7 +323,7 @@ export default function LeaderboardPage() {
               key={t.key}
               onClick={() => setReferralPeriod(t.key)}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                referralPeriod === t.key ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-white'
+                referralPeriod === t.key ? 'bg-sc-soft text-sc-text' : 'text-sc-dim hover:text-sc-text'
               }`}
             >
               {t.label}
@@ -343,7 +343,7 @@ export default function LeaderboardPage() {
             </div>
           ) : !lbData?.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-zinc-500 text-sm">No data yet. Complete tasks to appear here!</p>
+              <p className="text-sc-dim text-sm">No data yet. Complete tasks to appear here!</p>
             </div>
           ) : (
             renderRankList(lbData, (e) => `${formatCredits(timeTab === 'weekly' ? (e.weeklyXp ?? 0) : e.xp)} XP`)
@@ -362,7 +362,7 @@ export default function LeaderboardPage() {
             </div>
           ) : !achLbData?.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-zinc-500 text-sm">No data yet. Unlock achievements to appear here!</p>
+              <p className="text-sc-dim text-sm">No data yet. Unlock achievements to appear here!</p>
             </div>
           ) : (
             renderRankList(achLbData, (e) => `${e.achievementCount} achievements`)
@@ -381,7 +381,7 @@ export default function LeaderboardPage() {
             </div>
           ) : !missionLbData?.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-zinc-500 text-sm">No data yet. Complete missions to appear here!</p>
+              <p className="text-sc-dim text-sm">No data yet. Complete missions to appear here!</p>
             </div>
           ) : (
             renderRankList(missionLbData, (e) => `${e.missionCount} missions`)
@@ -400,13 +400,13 @@ export default function LeaderboardPage() {
             </div>
           ) : !vipLbData?.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-zinc-500 text-sm">No data yet. Earn VIP Points to appear here!</p>
+              <p className="text-sc-dim text-sm">No data yet. Earn VIP Points to appear here!</p>
             </div>
           ) : (
             <div className="card-glass rounded-xl divide-y divide-surface-border">
               {vipLbData.map((entry) => {
                 const isSelf = entry.id === authUser?.id;
-                const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-zinc-500';
+                const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-sc-dim';
                 return (
                   <div
                     key={entry.id}
@@ -418,7 +418,7 @@ export default function LeaderboardPage() {
                     <UserLink user={entry} cosmetics={cosmeticsMap[entry.id]} showAvatar size="md" />
                     <div className="flex-1 min-w-0">
                       {isSelf && <span className="ml-2 text-xs text-brand-400">(you)</span>}
-                      <p className="text-xs text-zinc-500">Lvl {entry.level}</p>
+                      <p className="text-xs text-sc-dim">Lvl {entry.level}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-purple-300 flex items-center gap-1">
@@ -454,13 +454,13 @@ export default function LeaderboardPage() {
             </div>
           ) : !refLbData?.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-zinc-500 text-sm">No referrals yet. Invite friends to appear here!</p>
+              <p className="text-sc-dim text-sm">No referrals yet. Invite friends to appear here!</p>
             </div>
           ) : (
             <div className="card-glass rounded-xl divide-y divide-surface-border">
               {refLbData.map((entry) => {
                 const isSelf = entry.userId === authUser?.id;
-                const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-zinc-500';
+                const rankColor = RANK_STYLES[entry.rank - 1] ?? 'text-sc-dim';
                 return (
                   <div
                     key={entry.userId}
@@ -475,7 +475,7 @@ export default function LeaderboardPage() {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold text-brand-300">{entry.referralCount} invited</p>
-                      <p className="text-xs text-zinc-500">{formatCredits(entry.creditsEarned)} credits earned</p>
+                      <p className="text-xs text-sc-dim">{formatCredits(entry.creditsEarned)} credits earned</p>
                     </div>
                   </div>
                 );

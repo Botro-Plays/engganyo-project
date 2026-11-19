@@ -78,7 +78,7 @@ const REPORT_REASONS: { value: string; label: string }[] = [
 
 const PLATFORM_COLORS: Record<string, string> = {
   YOUTUBE:   'text-red-400',
-  TIKTOK:    'text-white',
+  TIKTOK:    'text-sc-text',
   INSTAGRAM: 'text-pink-400',
   TWITTER:   'text-sky-400',
   FACEBOOK:  'text-blue-400',
@@ -159,8 +159,8 @@ export default function UserProfilePage() {
     return (
       <div className="max-w-2xl mx-auto">
         <div className="card-glass rounded-xl p-12 text-center">
-          <User className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-          <p className="text-zinc-400">User not found or profile is private.</p>
+          <User className="w-12 h-12 text-sc-dim mx-auto mb-4" />
+          <p className="text-sc-muted">User not found or profile is private.</p>
           <Link href="/forum" className="inline-flex items-center gap-2 mt-4 text-indigo-400 hover:text-indigo-300 text-sm">
             <ArrowLeft className="w-4 h-4" /> Back
           </Link>
@@ -176,7 +176,7 @@ export default function UserProfilePage() {
     <div className="max-w-2xl mx-auto">
       <button
         onClick={() => router.back()}
-        className="inline-flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors text-sm"
+        className="inline-flex items-center gap-2 text-sc-muted hover:text-sc-text mb-6 transition-colors text-sm"
       >
         <ArrowLeft className="w-4 h-4" />
         Back
@@ -185,7 +185,7 @@ export default function UserProfilePage() {
       {/* ── Profile card ── */}
       <div className={`rounded-xl p-6 mb-4 transition-all ${cosmeticStyles.themeCardClass}`}>
         <div className="flex items-start gap-4">
-          <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl shrink-0 overflow-hidden ${cosmeticStyles.frameClass}`}
+          <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sc-text font-bold text-2xl shrink-0 overflow-hidden ${cosmeticStyles.frameClass}`}
             style={cosmeticStyles.frameStyle}
           >
             {data.avatarUrl
@@ -194,7 +194,7 @@ export default function UserProfilePage() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-white">{data.displayName ?? data.username}</h1>
+              <h1 className="text-xl font-bold text-sc-text">{data.displayName ?? data.username}</h1>
               {data.role !== 'USER' && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   {data.role.replace('_', ' ')}
@@ -224,7 +224,7 @@ export default function UserProfilePage() {
                         ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
                         : cosmeticType === 'avatar_frame'
                         ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                        : 'bg-zinc-700/50 text-zinc-300 border-zinc-600/50'
+                        : 'bg-sc-panel-2/50 text-sc-text border-sc-line/50'
                     }`}
                   >
                     <Sparkles className="w-3 h-3" />
@@ -233,9 +233,9 @@ export default function UserProfilePage() {
                 );
               })}
             </div>
-            <p className="text-sm text-zinc-400">@{data.username}</p>
-            {data.bio && <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{data.bio}</p>}
-            <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-zinc-500">
+            <p className="text-sm text-sc-muted">@{data.username}</p>
+            {data.bio && <p className="text-sm text-sc-text mt-2 leading-relaxed">{data.bio}</p>}
+            <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-sc-dim">
               {data.profile?.location && (
                 <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{data.profile.location}</span>
               )}
@@ -250,7 +250,7 @@ export default function UserProfilePage() {
           {!isSelf && currentUser && (
             <button
               onClick={() => { setShowReport(true); setReportSuccess(false); setReportError(null); }}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-red-400 border border-zinc-700 hover:border-red-500/40 transition-colors"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-sc-muted hover:text-red-400 border border-sc-line hover:border-red-500/40 transition-colors"
             >
               <Flag className="w-3.5 h-3.5" />
               Report
@@ -259,7 +259,7 @@ export default function UserProfilePage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-5 pt-4 border-t border-zinc-700/50">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-5 pt-4 border-t border-sc-line/50">
           {[
             { icon: Zap,         label: 'Level',       value: data.level },
             { icon: Star,        label: 'XP',          value: data.xp.toLocaleString() },
@@ -269,8 +269,8 @@ export default function UserProfilePage() {
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center">
               <Icon className="w-4 h-4 text-indigo-400 mx-auto mb-1" />
-              <p className="text-sm font-semibold text-white">{value}</p>
-              <p className="text-xs text-zinc-500">{label}</p>
+              <p className="text-sm font-semibold text-sc-text">{value}</p>
+              <p className="text-xs text-sc-dim">{label}</p>
             </div>
           ))}
         </div>
@@ -279,7 +279,7 @@ export default function UserProfilePage() {
       {/* ── Social accounts ── */}
       {data.socialAccounts.length > 0 && (
         <div className="card-glass rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-zinc-300 mb-3">Connected Platforms</h2>
+          <h2 className="text-sm font-semibold text-sc-text mb-3">Connected Platforms</h2>
           <div className="flex flex-wrap gap-2">
             {data.socialAccounts.map((s) => {
               const socialUrl = getSocialUrl(s.platform, s.profileUrl, s.platformUsername);
@@ -292,23 +292,23 @@ export default function UserProfilePage() {
                 <>
                   {label}
                   {s.platformUsername && (
-                    <span className="text-zinc-500">
+                    <span className="text-sc-dim">
                       {showAt ? '@' : ''}{displayHandle}
                     </span>
                   )}
                   {s.followerCount != null && (
-                    <span className="text-zinc-600">{s.followerCount.toLocaleString()} followers</span>
+                    <span className="text-sc-dim">{s.followerCount.toLocaleString()} followers</span>
                   )}
                 </>
               );
-              const baseClass = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700 text-xs ${PLATFORM_COLORS[s.platform] ?? 'text-zinc-300'}`;
+              const baseClass = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sc-panel-2/60 border border-sc-line text-xs ${PLATFORM_COLORS[s.platform] ?? 'text-sc-text'}`;
               return socialUrl ? (
                 <a
                   key={s.id}
                   href={socialUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`${baseClass} hover:bg-zinc-700/60 transition-colors`}
+                  className={`${baseClass} hover:bg-sc-panel-2/60 transition-colors`}
                 >
                   {content}
                 </a>
@@ -327,21 +327,21 @@ export default function UserProfilePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
+              <h2 className="text-base font-semibold text-sc-text flex items-center gap-2">
                 <Flag className="w-4 h-4 text-red-400" />
                 Report @{data.username}
               </h2>
-              <button onClick={() => setShowReport(false)} className="text-zinc-500 hover:text-white transition-colors">✕</button>
+              <button onClick={() => setShowReport(false)} className="text-sc-dim hover:text-sc-text transition-colors">✕</button>
             </div>
 
             {reportSuccess ? (
               <div className="text-center py-6">
                 <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
-                <p className="text-white font-medium mb-1">Report submitted</p>
-                <p className="text-zinc-400 text-sm">Our moderation team will review it shortly.</p>
+                <p className="text-sc-text font-medium mb-1">Report submitted</p>
+                <p className="text-sc-muted text-sm">Our moderation team will review it shortly.</p>
                 <button
                   onClick={() => setShowReport(false)}
-                  className="mt-4 px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-sm transition-colors"
+                  className="mt-4 px-4 py-2 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-sm transition-colors"
                 >
                   Close
                 </button>
@@ -350,11 +350,11 @@ export default function UserProfilePage() {
               <>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Reason</label>
+                    <label className="block text-xs font-medium text-sc-muted mb-1.5">Reason</label>
                     <select
                       value={reportReason}
                       onChange={(e) => setReportReason(e.target.value)}
-                      className="w-full bg-zinc-800/60 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                      className="w-full bg-sc-panel-2/60 border border-sc-line rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-red-500/50"
                     >
                       {REPORT_REASONS.map((r) => (
                         <option key={r.value} value={r.value}>{r.label}</option>
@@ -362,13 +362,13 @@ export default function UserProfilePage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">Description <span className="text-zinc-600">(min 10 chars)</span></label>
+                    <label className="block text-xs font-medium text-sc-muted mb-1.5">Description <span className="text-sc-dim">(min 10 chars)</span></label>
                     <textarea
                       value={reportDesc}
                       onChange={(e) => setReportDesc(e.target.value)}
                       rows={4}
                       placeholder="Describe what happened..."
-                      className="w-full bg-zinc-800/60 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
+                      className="w-full bg-sc-panel-2/60 border border-sc-line rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500/50 resize-none"
                     />
                   </div>
                 </div>
@@ -380,14 +380,14 @@ export default function UserProfilePage() {
                 <div className="flex gap-2 mt-5">
                   <button
                     onClick={() => setShowReport(false)}
-                    className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white text-sm transition-colors"
+                    className="flex-1 px-4 py-2 rounded-lg border border-sc-line text-sc-muted hover:text-sc-text text-sm transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => reportMutation.mutate()}
                     disabled={reportMutation.isPending || reportDesc.length < 10}
-                    className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+                    className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text text-sm font-medium transition-colors"
                   >
                     {reportMutation.isPending ? 'Submitting...' : 'Submit Report'}
                   </button>

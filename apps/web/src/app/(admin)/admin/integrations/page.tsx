@@ -89,7 +89,7 @@ export default function IntegrationsPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <AlertCircle className="w-10 h-10 text-red-500/60 mb-3" />
-        <p className="text-zinc-400 text-sm">This page is restricted to Super Admins only.</p>
+        <p className="text-sc-muted text-sm">This page is restricted to Super Admins only.</p>
       </div>
     );
   }
@@ -97,13 +97,13 @@ export default function IntegrationsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-xl font-bold text-sc-text flex items-center gap-2">
           <KeyRound className="w-5 h-5 text-amber-400" />
           OAuth Integrations
         </h1>
-        <p className="text-zinc-400 text-sm mt-1">
+        <p className="text-sc-muted text-sm mt-1">
           Configure OAuth client credentials for social platform verification. Stored securely in the database.
-          Values here take precedence over <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">.env</code> fallbacks.
+          Values here take precedence over <code className="text-xs bg-sc-panel-2 px-1 py-0.5 rounded">.env</code> fallbacks.
         </p>
       </div>
 
@@ -132,21 +132,21 @@ export default function IntegrationsPage() {
                       <KeyRound className={`w-4 h-4 ${meta.color}`} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">{meta.label}</p>
+                      <p className="text-sm font-semibold text-sc-text">{meta.label}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         {cfg.clientId ? (
                           <span className="flex items-center gap-1 text-xs text-green-400">
                             <CheckCircle2 className="w-3 h-3" /> Client ID set
                           </span>
                         ) : (
-                          <span className="text-xs text-zinc-600">No client ID</span>
+                          <span className="text-xs text-sc-dim">No client ID</span>
                         )}
                         {cfg.clientSecretSet ? (
                           <span className="flex items-center gap-1 text-xs text-green-400">
                             <CheckCircle2 className="w-3 h-3" /> Secret set
                           </span>
                         ) : (
-                          <span className="text-xs text-zinc-600">No secret</span>
+                          <span className="text-xs text-sc-dim">No secret</span>
                         )}
                       </div>
                     </div>
@@ -154,7 +154,7 @@ export default function IntegrationsPage() {
 
                   {/* Enabled toggle */}
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">{edit.enabled ? 'Enabled' : 'Disabled'}</span>
+                    <span className="text-xs text-sc-dim">{edit.enabled ? 'Enabled' : 'Disabled'}</span>
                     <button
                       type="button"
                       onClick={() =>
@@ -164,7 +164,7 @@ export default function IntegrationsPage() {
                         }))
                       }
                       className={`relative w-9 h-[18px] rounded-full transition-colors ${
-                        edit.enabled ? 'bg-green-500' : 'bg-zinc-600'
+                        edit.enabled ? 'bg-green-500' : 'bg-sc-soft'
                       }`}
                     >
                       <span
@@ -179,7 +179,7 @@ export default function IntegrationsPage() {
                 {/* Fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Client ID</label>
+                    <label className="block text-xs text-sc-dim mb-1">Client ID</label>
                     <input
                       value={edit.clientId}
                       onChange={(e) =>
@@ -189,11 +189,11 @@ export default function IntegrationsPage() {
                         }))
                       }
                       placeholder="Paste Client ID"
-                      className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                      className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">
+                    <label className="block text-xs text-sc-dim mb-1">
                       Client Secret {cfg.clientSecretSet && <span className="text-green-400">(already set — leave blank to keep)</span>}
                     </label>
                     <div className="relative">
@@ -207,12 +207,12 @@ export default function IntegrationsPage() {
                           }))
                         }
                         placeholder={cfg.clientSecretSet ? '••••••••••••' : 'Paste Client Secret'}
-                        className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 pr-9 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                        className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 pr-9 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                       />
                       <button
                         type="button"
                         onClick={() => setShowSecret((s) => ({ ...s, [cfg.platform]: !s[cfg.platform] }))}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-muted"
                       >
                         {showSecret[cfg.platform] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
@@ -221,7 +221,7 @@ export default function IntegrationsPage() {
                 </div>
 
                 {/* Hint */}
-                <p className="text-xs text-zinc-600 mb-3">
+                <p className="text-xs text-sc-dim mb-3">
                   {meta.hint}{' '}
                   <a href={meta.docsUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">
                     Open console ↗
@@ -251,7 +251,7 @@ export default function IntegrationsPage() {
                       saveMutation.mutate({ platform: cfg.platform, dto });
                     }}
                     disabled={isPending || (!isDirty && !edit.clientSecret)}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium transition-all"
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-xs font-medium transition-all"
                   >
                     {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     Save
@@ -259,7 +259,7 @@ export default function IntegrationsPage() {
                 </div>
 
                 {cfg.updatedAt && (
-                  <p className="text-xs text-zinc-700 mt-2 text-right">
+                  <p className="text-xs text-sc-dim mt-2 text-right">
                     Last updated {new Date(cfg.updatedAt).toLocaleString()}
                   </p>
                 )}

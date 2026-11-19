@@ -50,21 +50,21 @@ export function ConfirmDialog({
       <div className="w-full max-w-sm card-glass rounded-2xl p-6">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle className={`w-5 h-5 ${danger ? 'text-red-400' : 'text-amber-400'}`} />
-          <h2 className="text-base font-semibold text-white">{title}</h2>
+          <h2 className="text-base font-semibold text-sc-text">{title}</h2>
         </div>
-        <p className="text-sm text-zinc-400 mb-5">{description}</p>
+        <p className="text-sm text-sc-muted mb-5">{description}</p>
         <div className="flex gap-3">
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors disabled:opacity-50"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex-1 flex items-center justify-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all disabled:opacity-60 ${
+            className={`flex-1 flex items-center justify-center gap-2 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all disabled:opacity-60 ${
               danger
                 ? 'bg-red-600 hover:bg-red-700'
                 : 'bg-brand-600 hover:bg-brand-700'

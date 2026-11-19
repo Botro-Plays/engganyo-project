@@ -376,7 +376,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 title="Open wallet to top up"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Credits</p>
+                  <p className="text-[10px] text-sc-dim uppercase tracking-wide font-medium">Credits</p>
                   <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-brand-300 opacity-80 group-hover:opacity-100 transition-opacity">
                     Top up <Plus className="w-3 h-3" />
                   </span>
@@ -462,17 +462,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         />
                       ) : (
                         <div
-                          className={`w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-white text-xs font-bold ${headerFrame.frameClass}`}
+                          className={`w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center text-sc-text text-xs font-bold ${headerFrame.frameClass}`}
                           style={headerFrame.frameStyle}
                         >
                           {(user.displayName ?? user.username).charAt(0).toUpperCase()}
                         </div>
                       )}
                       <div className="hidden sm:block">
-                        <p className="text-sm font-medium text-white leading-none">
+                        <p className="text-sm font-medium text-sc-text leading-none">
                           {user.displayName ?? user.username}
                         </p>
-                        <p className="text-xs text-zinc-500">Level {user.level}</p>
+                        <p className="text-xs text-sc-dim">Level {user.level}</p>
                       </div>
                     </Link>
                     <button
@@ -550,10 +550,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="fixed bottom-[57px] left-0 right-0 z-50 md:hidden bg-sc-panel border-t border-sc-border shadow-2xl animate-fade-in max-h-[calc(100dvh-130px)] overflow-y-auto"
             >
               <div className="flex items-center justify-between px-4 pt-3 pb-1">
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">More</p>
+                <p className="text-xs font-semibold text-sc-dim uppercase tracking-wider">More</p>
                 <button
                   onClick={closeDrawer}
-                  className="p-2 rounded-lg text-zinc-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                  className="p-2 rounded-lg text-sc-dim hover:text-sc-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                   aria-label="Close more navigation"
                 >
                   <X className="w-4 h-4" />

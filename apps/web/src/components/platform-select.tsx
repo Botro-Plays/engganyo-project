@@ -20,7 +20,7 @@ interface PlatformSelectProps {
 
 const PLATFORM_COLOR: Record<string, string> = {
   YOUTUBE: 'text-red-400',
-  TIKTOK: 'text-white',
+  TIKTOK: 'text-sc-text',
   INSTAGRAM: 'text-pink-400',
   TWITTER: 'text-sky-400',
   FACEBOOK: 'text-blue-400',
@@ -53,19 +53,19 @@ export function PlatformSelect({ options, value, onChange, placeholder = 'Select
         type="button"
         id={id}
         onClick={() => setOpen((v) => !v)}
-        className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 flex items-center justify-between gap-2"
+        className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 flex items-center justify-between gap-2"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className="flex items-center gap-2 truncate">
           {selected?.platform && (
-            <span className={PLATFORM_COLOR[selected.platform] ?? 'text-zinc-400'}>
+            <span className={PLATFORM_COLOR[selected.platform] ?? 'text-sc-muted'}>
               <PlatformIcon platform={selected.platform} className="w-4 h-4" />
             </span>
           )}
           <span className="truncate">{selected?.label ?? placeholder}</span>
         </span>
-        <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-sc-dim shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -75,7 +75,7 @@ export function PlatformSelect({ options, value, onChange, placeholder = 'Select
         >
           {options.map((opt) => {
             const isActive = opt.value === value;
-            const color = opt.platform ? PLATFORM_COLOR[opt.platform] ?? 'text-zinc-400' : 'text-zinc-400';
+            const color = opt.platform ? PLATFORM_COLOR[opt.platform] ?? 'text-sc-muted' : 'text-sc-muted';
             return (
               <li
                 key={opt.value}
@@ -86,7 +86,7 @@ export function PlatformSelect({ options, value, onChange, placeholder = 'Select
                   setOpen(false);
                 }}
                 className={`cursor-pointer select-none px-3 py-2 flex items-center gap-2 ${
-                  isActive ? 'bg-brand-500/10 text-white' : 'text-zinc-300 hover:bg-surface-hover'
+                  isActive ? 'bg-brand-500/10 text-sc-text' : 'text-sc-text hover:bg-surface-hover'
                 }`}
               >
                 {opt.platform && (

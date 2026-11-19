@@ -71,10 +71,10 @@ export function AdminPinModal() {
           <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
             <Lock className="w-4 h-4 text-red-400" />
           </div>
-          <h3 className="font-semibold text-white text-sm">Admin Access PIN</h3>
+          <h3 className="font-semibold text-sc-text text-sm">Admin Access PIN</h3>
         </div>
 
-        <p className="text-sm text-zinc-400 mb-4">
+        <p className="text-sm text-sc-muted mb-4">
           This admin account requires an additional PIN. Enter it to continue.
         </p>
 
@@ -93,12 +93,12 @@ export function AdminPinModal() {
             placeholder="Enter admin PIN"
             value={pin}
             onChange={(e) => setPin(e.target.value)}
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sc-text text-sm font-mono tracking-widest text-center placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500"
             autoFocus
           />
           <button
             type="submit"
-            className="w-full py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all"
+            className="w-full py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-sc-text text-sm font-medium transition-all"
           >
             Verify & Continue
           </button>
@@ -107,7 +107,7 @@ export function AdminPinModal() {
         <div className="mt-3 text-center">
           <a
             href="/settings/security"
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="text-xs text-sc-dim hover:text-sc-text transition-colors"
           >
             Manage PIN in Security Settings
           </a>

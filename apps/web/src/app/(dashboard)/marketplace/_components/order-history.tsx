@@ -38,7 +38,7 @@ export function OrderHistory() {
             key={s}
             onClick={() => setSide(s)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-              side === s ? 'bg-brand-500/20 text-brand-300' : 'text-zinc-400 hover:text-white'
+              side === s ? 'bg-brand-500/20 text-brand-300' : 'text-sc-muted hover:text-sc-text'
             }`}
           >
             {s === 'purchases' ? 'My purchases' : 'My sales'}
@@ -48,8 +48,8 @@ export function OrderHistory() {
 
       {orders.length === 0 ? (
         <div className="text-center py-16">
-          <ShoppingBag className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-500">No {side} yet.</p>
+          <ShoppingBag className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+          <p className="text-sc-dim">No {side} yet.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -62,10 +62,10 @@ export function OrderHistory() {
                 {side === 'purchases' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">
+                <p className="text-sm text-sc-text font-medium truncate">
                   {o.quantity}× {o.itemName}
                 </p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-sc-dim">
                   {new Date(o.createdAt).toLocaleString()}
                   {o.status !== 'COMPLETED' && ` · ${o.status}`}
                 </p>
@@ -74,7 +74,7 @@ export function OrderHistory() {
                 <p className={`text-sm font-semibold ${side === 'purchases' ? 'text-red-300' : 'text-green-300'}`}>
                   {side === 'purchases' ? '−' : '+'}{formatCredits(o.totalPrice)}
                 </p>
-                <p className="text-[11px] text-zinc-500">{formatCredits(o.unitPrice)}/unit</p>
+                <p className="text-[11px] text-sc-dim">{formatCredits(o.unitPrice)}/unit</p>
               </div>
             </div>
           ))}

@@ -121,7 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (user && !canAccessAdmin(user)) {
     return (
       <div className="min-h-screen bg-sc flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     );
   }
@@ -149,7 +149,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   isActive
                     ? 'bg-red-500/15 text-red-300 border border-red-500/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+                    : 'text-sc-muted hover:text-sc-text hover:bg-surface-hover'
                 }`}
               >
                 <item.icon className="w-4 h-4 shrink-0" />
@@ -167,7 +167,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   pathname.startsWith('/admin/server-config')
                     ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+                    : 'text-sc-muted hover:text-sc-text hover:bg-surface-hover'
                 }`}
               >
                 <Settings2 className="w-4 h-4 shrink-0" />
@@ -178,7 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   pathname.startsWith('/admin/webhooks')
                     ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+                    : 'text-sc-muted hover:text-sc-text hover:bg-surface-hover'
                 }`}
               >
                 <Webhook className="w-4 h-4 shrink-0" />
@@ -188,14 +188,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
           <Link
             href="/dashboard"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sc-muted hover:text-sc-text hover:bg-surface-hover transition-all"
           >
             <Zap className="w-4 h-4" />
             Back to App
           </Link>
           <button
             onClick={logout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sc-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
           >
             <LogOut className="w-4 h-4" />
             Sign out
@@ -209,7 +209,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-3 md:hidden">
             <button
               onClick={() => setMobileOpen(true)}
-              className="p-2 rounded-lg hover:bg-surface-hover text-zinc-400 hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-surface-hover text-sc-muted hover:text-sc-text transition-colors"
               aria-label="Open menu"
             >
               <Menu className="w-5 h-5" />
@@ -218,7 +218,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <BrandLogo className="h-6 w-6" wordmarkClassName="text-sm" />
             </Link>
           </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <div className="flex items-center gap-2 text-xs text-sc-dim">
             <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
             <span className="text-red-400 font-medium">Admin Panel</span>
             <span>·</span>
@@ -228,7 +228,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
         <main className="flex-1 overflow-auto p-6">
           {pinStatus?.hasPin && !adminPin ? (
-            <div className="h-full flex items-center justify-center text-zinc-500 text-sm">
+            <div className="h-full flex items-center justify-center text-sc-dim text-sm">
               Admin access requires PIN verification
             </div>
           ) : (
@@ -248,13 +248,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="p-5 border-b border-surface-border flex items-center justify-between">
               <Link href="/admin" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
                 <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">
-                  <ShieldAlert className="w-4 h-4 text-white" />
+                  <ShieldAlert className="w-4 h-4 text-sc-text" />
                 </div>
-                <span className="font-bold text-base tracking-tight text-white">Admin</span>
+                <span className="font-bold text-base tracking-tight text-sc-text">Admin</span>
               </Link>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="p-1 rounded-lg hover:bg-surface-hover text-zinc-400 hover:text-white transition-colors"
+                className="p-1 rounded-lg hover:bg-surface-hover text-sc-muted hover:text-sc-text transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -270,7 +270,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                       isActive
                         ? 'bg-red-500/15 text-red-300 border border-red-500/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+                        : 'text-sc-muted hover:text-sc-text hover:bg-surface-hover'
                     }`}
                   >
                     <item.icon className="w-4 h-4 shrink-0" />
@@ -288,7 +288,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                       pathname.startsWith('/admin/server-config')
                         ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+                        : 'text-sc-muted hover:text-sc-text hover:bg-surface-hover'
                     }`}
                   >
                     <Settings2 className="w-4 h-4 shrink-0" />
@@ -300,7 +300,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                       pathname.startsWith('/admin/webhooks')
                         ? 'bg-amber-500/15 text-amber-300 border border-amber-500/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+                        : 'text-sc-muted hover:text-sc-text hover:bg-surface-hover'
                     }`}
                   >
                     <Webhook className="w-4 h-4 shrink-0" />
@@ -311,14 +311,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 href="/dashboard"
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sc-muted hover:text-sc-text hover:bg-surface-hover transition-all"
               >
                 <Zap className="w-4 h-4" />
                 Back to App
               </Link>
               <button
                 onClick={() => { setMobileOpen(false); logout(); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sc-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
               >
                 <LogOut className="w-4 h-4" />
                 Sign out

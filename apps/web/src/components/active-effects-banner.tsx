@@ -15,7 +15,7 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
     return () => clearInterval(id);
   }, [target]);
 
-  if (left <= 0) return <span className="text-zinc-500 text-xs">Expired</span>;
+  if (left <= 0) return <span className="text-sc-dim text-xs">Expired</span>;
 
   const totalSeconds = Math.floor(left / 1000);
   const s = totalSeconds % 60;

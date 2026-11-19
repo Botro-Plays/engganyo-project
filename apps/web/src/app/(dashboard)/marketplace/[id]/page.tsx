@@ -162,8 +162,8 @@ export default function MarketplaceListingPage() {
   if (error || !listing) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-6 text-center">
-        <Package className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-        <p className="text-zinc-500">Listing not found or no longer available.</p>
+        <Package className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+        <p className="text-sc-dim">Listing not found or no longer available.</p>
         <Link href="/marketplace" className="text-brand-400 text-sm mt-2 inline-block underline">
           Back to Marketplace
         </Link>
@@ -171,7 +171,7 @@ export default function MarketplaceListingPage() {
     );
   }
 
-  const colorClass = CATEGORY_COLORS[listing.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
+  const colorClass = CATEGORY_COLORS[listing.category] ?? 'border-sc-line bg-sc-panel-2/50 text-sc-muted';
   const purchasable = listing.canPurchase && listing.remainingQuantity > 0;
   const suspended = listing.resaleSuspended === true;
   // While a purchase intent is unresolved its quantity is frozen — the
@@ -202,7 +202,7 @@ export default function MarketplaceListingPage() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <Link
         href="/marketplace"
-        className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white mb-6 transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text mb-6 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Marketplace
@@ -211,39 +211,39 @@ export default function MarketplaceListingPage() {
       <div className={`rounded-2xl border p-6 ${colorClass}`}>
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h1 className="text-xl font-bold text-white">{listing.itemName}</h1>
-            {listing.description && <p className="text-sm text-zinc-400 mt-1">{listing.description}</p>}
+            <h1 className="text-xl font-bold text-sc-text">{listing.itemName}</h1>
+            {listing.description && <p className="text-sm text-sc-muted mt-1">{listing.description}</p>}
           </div>
-          <span className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-zinc-300 border border-white/10">
+          <span className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-sc-text border border-white/10">
             {listing.category}
           </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="rounded-lg bg-black/20 p-3">
-            <div className="text-[11px] text-zinc-500 uppercase tracking-wide">Price</div>
+            <div className="text-[11px] text-sc-dim uppercase tracking-wide">Price</div>
             <div className="text-brand-300 font-bold">{formatCredits(listing.unitPrice)}</div>
-            <div className="text-[10px] text-zinc-600">per unit</div>
+            <div className="text-[10px] text-sc-dim">per unit</div>
           </div>
           <div className="rounded-lg bg-black/20 p-3">
-            <div className="text-[11px] text-zinc-500 uppercase tracking-wide">Available</div>
-            <div className="text-white font-bold">{listing.remainingQuantity}</div>
-            <div className="text-[10px] text-zinc-600">of {listing.originalQuantity}</div>
+            <div className="text-[11px] text-sc-dim uppercase tracking-wide">Available</div>
+            <div className="text-sc-text font-bold">{listing.remainingQuantity}</div>
+            <div className="text-[10px] text-sc-dim">of {listing.originalQuantity}</div>
           </div>
           <div className="rounded-lg bg-black/20 p-3">
-            <div className="text-[11px] text-zinc-500 uppercase tracking-wide">Seller</div>
-            <div className="text-white font-bold flex items-center gap-1 text-sm">
-              <User className="w-3.5 h-3.5 text-zinc-500" />
+            <div className="text-[11px] text-sc-dim uppercase tracking-wide">Seller</div>
+            <div className="text-sc-text font-bold flex items-center gap-1 text-sm">
+              <User className="w-3.5 h-3.5 text-sc-dim" />
               {listing.sellerUsername ?? 'Unknown'}
             </div>
           </div>
           <div className="rounded-lg bg-black/20 p-3">
-            <div className="text-[11px] text-zinc-500 uppercase tracking-wide">Expires</div>
-            <div className="text-white font-bold flex items-center gap-1 text-sm">
-              <Clock className="w-3.5 h-3.5 text-zinc-500" />
+            <div className="text-[11px] text-sc-dim uppercase tracking-wide">Expires</div>
+            <div className="text-sc-text font-bold flex items-center gap-1 text-sm">
+              <Clock className="w-3.5 h-3.5 text-sc-dim" />
               {endsIn}d
             </div>
-            <div className="text-[10px] text-zinc-600">{new Date(listing.expiresAt).toLocaleDateString()}</div>
+            <div className="text-[10px] text-sc-dim">{new Date(listing.expiresAt).toLocaleDateString()}</div>
           </div>
         </div>
 
@@ -253,7 +253,7 @@ export default function MarketplaceListingPage() {
             This is your listing. Manage it from Marketplace → My Listings.
           </div>
         ) : !user ? (
-          <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
+          <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-sc-muted">
             <Link href="/login" className="text-brand-400 underline">Sign in</Link> to purchase this item.
           </div>
         ) : committedOrder ? (
@@ -262,15 +262,15 @@ export default function MarketplaceListingPage() {
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-semibold text-emerald-300">Purchase completed</div>
-                <div className="text-sm text-zinc-200 mt-1">
+                <div className="text-sm text-sc-text mt-1">
                   {committedOrder.quantity}× {committedOrder.itemName} —{' '}
                   {formatCredits(committedOrder.totalPrice)} credits
                 </div>
-                <div className="text-xs text-zinc-500 mt-1">
+                <div className="text-xs text-sc-dim mt-1">
                   Order {committedOrder.id.slice(-8)} · {new Date(committedOrder.createdAt).toLocaleString()} ·{' '}
                   {committedOrder.status.toLowerCase()}
                 </div>
-                <p className="text-[11px] text-zinc-500 mt-2">
+                <p className="text-[11px] text-sc-dim mt-2">
                   This purchase was already settled — no additional charge was made and no
                   extra items were transferred. Your items are in inventory.
                 </p>
@@ -280,7 +280,7 @@ export default function MarketplaceListingPage() {
                   </Link>
                   <button
                     onClick={discardPending}
-                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="text-xs text-sc-dim hover:text-sc-text transition-colors"
                   >
                     Dismiss
                   </button>
@@ -294,7 +294,7 @@ export default function MarketplaceListingPage() {
               <RotateCcw className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-semibold text-amber-200">Purchase status unavailable</div>
-                <p className="text-sm text-zinc-300 mt-1">
+                <p className="text-sm text-sc-text mt-1">
                   We couldn&apos;t confirm whether your earlier purchase completed. Your attempt
                   details are saved on this device — please check again before taking any other
                   action. Do not start a new purchase for this listing yet.
@@ -303,7 +303,7 @@ export default function MarketplaceListingPage() {
                   <button
                     onClick={() => purchaseLookup.refetch()}
                     disabled={purchaseLookup.isFetching}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-sc-text text-xs font-medium disabled:opacity-50 transition-colors"
                   >
                     {purchaseLookup.isFetching ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -322,13 +322,13 @@ export default function MarketplaceListingPage() {
         ) : suspended && !pending ? (
           <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-4 text-sm">
             <div className="font-semibold text-red-300">Purchases temporarily suspended</div>
-            <p className="text-zinc-300 mt-1">
+            <p className="text-sc-text mt-1">
               {listing.resaleSuspensionReason ?? 'Marketplace purchases are paused.'} You can still
               browse listings; selling, order history, and cancellation are unaffected.
             </p>
           </div>
         ) : !purchasable && !pending ? (
-          <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-zinc-400">
+          <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-4 text-sm text-sc-muted">
             {listing.status === 'PAUSED' ? (
               <>
                 <span className="text-amber-300 font-medium">This listing is paused.</span>{' '}
@@ -369,7 +369,7 @@ export default function MarketplaceListingPage() {
               </div>
             )}
             {pending && !purchasable ? (
-              <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-3 text-sm text-zinc-400">
+              <div className="rounded-lg border border-surface-border bg-surface-hover/50 p-3 text-sm text-sc-muted">
                 {lookupResolvedNull ? (
                   <>
                     This listing is{' '}
@@ -396,25 +396,25 @@ export default function MarketplaceListingPage() {
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   disabled={!!pending || qty <= 1}
                   aria-label="Decrease quantity"
-                  className="p-2 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white disabled:opacity-40"
+                  className="p-2 rounded-lg bg-surface-hover border border-surface-border text-sc-muted hover:text-sc-text disabled:opacity-40"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <span className="w-10 text-center text-white font-semibold" aria-live="polite">{qty}</span>
+                <span className="w-10 text-center text-sc-text font-semibold" aria-live="polite">{qty}</span>
                 <button
                   onClick={() => setQuantity((q) => Math.min(listing.remainingQuantity, q + 1))}
                   disabled={!!pending || qty >= listing.remainingQuantity}
                   aria-label="Increase quantity"
-                  className="p-2 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white disabled:opacity-40"
+                  className="p-2 rounded-lg bg-surface-hover border border-surface-border text-sc-muted hover:text-sc-text disabled:opacity-40"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
               <div className="flex-1">
-                <div className="text-sm text-zinc-400">
+                <div className="text-sm text-sc-muted">
                   Total: <span className="text-brand-300 font-bold text-lg">{formatCredits(total)}</span> credits
                 </div>
-                <div className="text-xs text-zinc-500">
+                <div className="text-xs text-sc-dim">
                   Balance: {formatCredits(balance)} credits
                   {!canAfford && <span className="text-red-400 ml-1">— insufficient funds</span>}
                 </div>
@@ -422,7 +422,7 @@ export default function MarketplaceListingPage() {
               <button
                 onClick={() => purchaseMutation.mutate()}
                 disabled={lookupChecking || suspended || !canAfford || purchaseMutation.isPending}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-400 text-sc-text font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {purchaseMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -448,7 +448,7 @@ export default function MarketplaceListingPage() {
                           : 'Buy now'}
               </button>
             </div>
-            <p className="text-[11px] text-zinc-500 mt-3">
+            <p className="text-[11px] text-sc-dim mt-3">
               Credits only · no fees · item is delivered to your inventory instantly. Purchases are final.
             </p>
             </>

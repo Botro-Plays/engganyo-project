@@ -107,8 +107,8 @@ export function SellPanel() {
       {/* Listing capacity */}
       {data && (
         <div className="rounded-xl border border-surface-border bg-surface-hover/50 px-4 py-3 flex items-center justify-between">
-          <span className="text-sm text-zinc-400">Active listings</span>
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm text-sc-muted">Active listings</span>
+          <span className="text-sm font-medium text-sc-text">
             {data.activeListingCount} / {data.maxActiveListings}
           </span>
         </div>
@@ -116,16 +116,16 @@ export function SellPanel() {
 
       {stacks.length === 0 ? (
         <div className="text-center py-16">
-          <Tag className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-500">Nothing to sell yet.</p>
-          <p className="text-sm text-zinc-600 mt-1">
+          <Tag className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+          <p className="text-sc-dim">Nothing to sell yet.</p>
+          <p className="text-sm text-sc-dim mt-1">
             Only unused Boost and Convenience items bought with credits can be listed.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {stacks.map((s) => {
-            const colorClass = CATEGORY_COLORS[s.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
+            const colorClass = CATEGORY_COLORS[s.category] ?? 'border-sc-line bg-sc-panel-2/50 text-sc-muted';
             const isSelected = selectedId === s.inventoryId;
             return (
               <button
@@ -137,14 +137,14 @@ export function SellPanel() {
                 } ${s.listable ? 'hover:border-opacity-60 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <h3 className="text-white font-semibold text-sm">{s.itemName}</h3>
-                  <span className="text-xs text-zinc-500">x{s.quantity}</span>
+                  <h3 className="text-sc-text font-semibold text-sm">{s.itemName}</h3>
+                  <span className="text-xs text-sc-dim">x{s.quantity}</span>
                 </div>
-                <p className="text-xs text-zinc-500 mb-2">
+                <p className="text-xs text-sc-dim mb-2">
                   {PROVENANCE_LABELS[s.provenance] ?? s.provenance} · store value {formatCredits(s.storeCreditCost)}
                 </p>
                 {!s.listable && (
-                  <p className="text-[11px] text-zinc-500 flex items-center gap-1 mt-1">
+                  <p className="text-[11px] text-sc-dim flex items-center gap-1 mt-1">
                     <Lock className="w-3 h-3" />
                     {s.alreadyListed ? 'Already has an active listing' : 'Bound — not sellable'}
                   </p>
@@ -158,10 +158,10 @@ export function SellPanel() {
       {/* Create listing form */}
       {selected && (
         <div className="rounded-xl border border-brand-500/20 bg-brand-500/5 p-4 space-y-4">
-          <h3 className="text-white font-semibold">List {selected.itemName}</h3>
+          <h3 className="text-sc-text font-semibold">List {selected.itemName}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="mkt-qty" className="block text-xs text-zinc-400 mb-1">
+              <label htmlFor="mkt-qty" className="block text-xs text-sc-muted mb-1">
                 Quantity (max {selected.quantity})
               </label>
               <input
@@ -172,11 +172,11 @@ export function SellPanel() {
                 max={selected.quantity}
                 value={quantity}
                 onChange={(e) => setQuantity(Math.max(1, Math.min(selected.quantity, Number(e.target.value) || 1)))}
-                className="w-full px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-white text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-sc-text text-sm"
               />
             </div>
             <div>
-              <label htmlFor="mkt-price" className="block text-xs text-zinc-400 mb-1">
+              <label htmlFor="mkt-price" className="block text-xs text-sc-muted mb-1">
                 Price per unit ({minPrice}–{formatCredits(maxPrice)} credits)
               </label>
               <input
@@ -188,12 +188,12 @@ export function SellPanel() {
                 placeholder="e.g. 100"
                 value={unitPrice}
                 onChange={(e) => setUnitPrice(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-white text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-sc-text text-sm"
               />
             </div>
           </div>
           {priceValid && qtyValid && (
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-sc-muted">
               Total if sold: <span className="text-brand-300 font-semibold">{formatCredits(priceNum * quantity)} credits</span>
               {' '}· expires in {ttlDays} days
             </p>
@@ -201,7 +201,7 @@ export function SellPanel() {
           <button
             onClick={() => createMutation.mutate()}
             disabled={!canSubmit}
-            className="px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-400 text-sc-text text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             Create listing

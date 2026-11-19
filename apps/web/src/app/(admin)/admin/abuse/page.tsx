@@ -79,58 +79,58 @@ function SocialGraphPanel({ userId, onClose }: { userId: string; onClose: () => 
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+        <Loader2 className="w-5 h-5 animate-spin text-sc-dim" />
       </div>
     );
   }
 
   if (!data) return null;
   const { user, trustScore, sameIpUsers, bidirectionalCreators, recentFlags } = data;
-  const trustColor = trustScore ? (trustScore.score >= 60 ? 'text-green-400' : trustScore.score >= 40 ? 'text-yellow-400' : 'text-red-400') : 'text-zinc-500';
+  const trustColor = trustScore ? (trustScore.score >= 60 ? 'text-green-400' : trustScore.score >= 40 ? 'text-yellow-400' : 'text-red-400') : 'text-sc-dim';
 
   return (
     <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
       {/* User header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-white">@{user.username}</h3>
-          <p className="text-xs text-zinc-500">{user.email} · Joined {new Date(user.createdAt).toLocaleDateString()}</p>
+          <h3 className="text-sm font-semibold text-sc-text">@{user.username}</h3>
+          <p className="text-xs text-sc-dim">{user.email} · Joined {new Date(user.createdAt).toLocaleDateString()}</p>
         </div>
-        <button onClick={onClose} className="text-zinc-500 hover:text-white"><XCircle className="w-4 h-4" /></button>
+        <button onClick={onClose} className="text-sc-dim hover:text-sc-text"><XCircle className="w-4 h-4" /></button>
       </div>
 
       {/* Trust Score */}
       {trustScore && (
         <div className="card-glass rounded-xl p-4 border border-surface-border">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-zinc-500">Trust Score</span>
+            <span className="text-xs text-sc-dim">Trust Score</span>
             <span className={`text-lg font-bold ${trustColor}`}>{trustScore.score.toFixed(0)}</span>
           </div>
           <div className="grid grid-cols-3 gap-2 text-xs">
-            <div><span className="text-zinc-600">Level</span><p className="text-zinc-300">{trustScore.level}</p></div>
-            <div><span className="text-zinc-600">Completion</span><p className="text-zinc-300">{(trustScore.completionRate * 100).toFixed(0)}%</p></div>
-            <div><span className="text-zinc-600">Socials</span><p className="text-zinc-300">{trustScore.verifiedSocials}</p></div>
-            <div><span className="text-zinc-600">Reports</span><p className="text-zinc-300">{trustScore.reportCount}</p></div>
-            <div><span className="text-zinc-600">Flags</span><p className="text-zinc-300">{trustScore.abuseFlagCount}</p></div>
-            <div><span className="text-zinc-600">Age</span><p className="text-zinc-300">{trustScore.accountAgeDays}d</p></div>
+            <div><span className="text-sc-dim">Level</span><p className="text-sc-text">{trustScore.level}</p></div>
+            <div><span className="text-sc-dim">Completion</span><p className="text-sc-text">{(trustScore.completionRate * 100).toFixed(0)}%</p></div>
+            <div><span className="text-sc-dim">Socials</span><p className="text-sc-text">{trustScore.verifiedSocials}</p></div>
+            <div><span className="text-sc-dim">Reports</span><p className="text-sc-text">{trustScore.reportCount}</p></div>
+            <div><span className="text-sc-dim">Flags</span><p className="text-sc-text">{trustScore.abuseFlagCount}</p></div>
+            <div><span className="text-sc-dim">Age</span><p className="text-sc-text">{trustScore.accountAgeDays}d</p></div>
           </div>
         </div>
       )}
 
       {/* Same IP users */}
       <div>
-        <h4 className="text-xs font-medium text-zinc-500 mb-2 flex items-center gap-1"><MapPin className="w-3 h-3" />Shared IP Users ({sameIpUsers.length})</h4>
+        <h4 className="text-xs font-medium text-sc-dim mb-2 flex items-center gap-1"><MapPin className="w-3 h-3" />Shared IP Users ({sameIpUsers.length})</h4>
         {sameIpUsers.length === 0 ? (
-          <p className="text-xs text-zinc-600">No shared IP users in the last 30 days.</p>
+          <p className="text-xs text-sc-dim">No shared IP users in the last 30 days.</p>
         ) : (
           <div className="space-y-1.5">
             {sameIpUsers.map((item) => (
               <div key={item.user.id} className="flex items-center justify-between text-xs bg-surface-hover rounded-lg px-3 py-2">
                 <div>
                   <Link href={`/admin/users?search=${item.user.username}`} className="text-brand-400 hover:underline font-medium">@{item.user.username}</Link>
-                  <p className="text-zinc-600">{item.user.email}</p>
+                  <p className="text-sc-dim">{item.user.email}</p>
                 </div>
-                <span className="text-zinc-600 font-mono">{item.ipAddress}</span>
+                <span className="text-sc-dim font-mono">{item.ipAddress}</span>
               </div>
             ))}
           </div>
@@ -139,15 +139,15 @@ function SocialGraphPanel({ userId, onClose }: { userId: string; onClose: () => 
 
       {/* Bidirectional farming */}
       <div>
-        <h4 className="text-xs font-medium text-zinc-500 mb-2 flex items-center gap-1"><ArrowRight className="w-3 h-3" />Bidirectional Creators ({bidirectionalCreators.length})</h4>
+        <h4 className="text-xs font-medium text-sc-dim mb-2 flex items-center gap-1"><ArrowRight className="w-3 h-3" />Bidirectional Creators ({bidirectionalCreators.length})</h4>
         {bidirectionalCreators.length === 0 ? (
-          <p className="text-xs text-zinc-600">No bidirectional farming links found.</p>
+          <p className="text-xs text-sc-dim">No bidirectional farming links found.</p>
         ) : (
           <div className="space-y-1.5">
             {bidirectionalCreators.map((u) => (
               <div key={u.id} className="flex items-center justify-between text-xs bg-surface-hover rounded-lg px-3 py-2">
                 <Link href={`/admin/users?search=${u.username}`} className="text-brand-400 hover:underline font-medium">@{u.username}</Link>
-                <span className="text-zinc-600">{u.email}</span>
+                <span className="text-sc-dim">{u.email}</span>
               </div>
             ))}
           </div>
@@ -156,9 +156,9 @@ function SocialGraphPanel({ userId, onClose }: { userId: string; onClose: () => 
 
       {/* Recent unresolved flags */}
       <div>
-        <h4 className="text-xs font-medium text-zinc-500 mb-2 flex items-center gap-1"><ShieldAlert className="w-3 h-3" />Recent Unresolved Flags ({recentFlags.length})</h4>
+        <h4 className="text-xs font-medium text-sc-dim mb-2 flex items-center gap-1"><ShieldAlert className="w-3 h-3" />Recent Unresolved Flags ({recentFlags.length})</h4>
         {recentFlags.length === 0 ? (
-          <p className="text-xs text-zinc-600">No unresolved flags.</p>
+          <p className="text-xs text-sc-dim">No unresolved flags.</p>
         ) : (
           <div className="space-y-1.5">
             {recentFlags.map((f) => {
@@ -167,7 +167,7 @@ function SocialGraphPanel({ userId, onClose }: { userId: string; onClose: () => 
               return (
                 <div key={f.id} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${cfg.bg}`}>
                   <Icon className={`w-3 h-3 ${cfg.color}`} />
-                  <span className="text-zinc-300">{FLAG_TYPE_LABELS[f.flagType] ?? f.flagType}</span>
+                  <span className="text-sc-text">{FLAG_TYPE_LABELS[f.flagType] ?? f.flagType}</span>
                 </div>
               );
             })}
@@ -235,8 +235,8 @@ export default function AdminAbusePage() {
           <ShieldAlert className="w-5 h-5 text-red-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-white">Abuse Monitoring</h1>
-          <p className="text-xs text-zinc-500">Review abuse flags, trust scores, and social graph connections</p>
+          <h1 className="text-xl font-semibold text-sc-text">Abuse Monitoring</h1>
+          <p className="text-xs text-sc-dim">Review abuse flags, trust scores, and social graph connections</p>
         </div>
       </div>
 
@@ -250,35 +250,35 @@ export default function AdminAbusePage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <Filter className="w-3.5 h-3.5 text-zinc-500" />
+        <Filter className="w-3.5 h-3.5 text-sc-dim" />
         <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
-          className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+          className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500">
           <option value="">All Types</option>
           {Object.entries(FLAG_TYPE_LABELS).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
         <select value={filterSeverity} onChange={(e) => { setFilterSeverity(e.target.value); setPage(1); }}
-          className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+          className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500">
           <option value="">All Severities</option>
           {['critical', 'high', 'medium', 'low'].map((s) => (
             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
           ))}
         </select>
         <select value={filterResolved} onChange={(e) => { setFilterResolved(e.target.value); setPage(1); }}
-          className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500">
+          className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500">
           <option value="">All Statuses</option>
           <option value="false">Unresolved</option>
           <option value="true">Resolved</option>
         </select>
         <div className="flex items-center gap-1.5 ml-auto">
-          <Search className="w-3 h-3 text-zinc-500" />
+          <Search className="w-3 h-3 text-sc-dim" />
           <input
             type="text"
             value={searchUser}
             onChange={(e) => { setSearchUser(e.target.value); setPage(1); }}
             placeholder="Filter by user ID..."
-            className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 w-40"
+            className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 w-40"
           />
         </div>
       </div>
@@ -286,10 +286,10 @@ export default function AdminAbusePage() {
       {/* Flags table */}
       <div className="card-glass rounded-xl border border-surface-border overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+          <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-sc-dim" /></div>
         ) : !sortedItems.length ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-            <p className="text-zinc-500 text-sm">No abuse flags found.</p>
+            <p className="text-sc-dim text-sm">No abuse flags found.</p>
           </div>
         ) : (
           <>
@@ -298,7 +298,7 @@ export default function AdminAbusePage() {
                 <thead>
                   <tr className="border-b border-surface-border">
                     {['User', 'Type', 'Severity', 'Description', 'Status', 'Date', 'Actions'].map((h) => (
-                      <th key={h} className="text-left text-xs text-zinc-500 font-medium px-4 py-3">{h}</th>
+                      <th key={h} className="text-left text-xs text-sc-dim font-medium px-4 py-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -312,9 +312,9 @@ export default function AdminAbusePage() {
                           <Link href={`/admin/users?search=${flag.user.username}`} className="text-brand-400 hover:underline font-medium text-xs">
                             @{flag.user.username}
                           </Link>
-                          <p className="text-xs text-zinc-600">{flag.user.email}</p>
+                          <p className="text-xs text-sc-dim">{flag.user.email}</p>
                         </td>
-                        <td className="px-4 py-3 text-xs text-zinc-300">
+                        <td className="px-4 py-3 text-xs text-sc-text">
                           {FLAG_TYPE_LABELS[flag.flagType] ?? flag.flagType}
                         </td>
                         <td className="px-4 py-3">
@@ -322,7 +322,7 @@ export default function AdminAbusePage() {
                             <Icon className="w-3 h-3" />{flag.severity}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-zinc-400 max-w-xs truncate" title={flag.description ?? ''}>
+                        <td className="px-4 py-3 text-xs text-sc-muted max-w-xs truncate" title={flag.description ?? ''}>
                           {flag.description ?? '—'}
                         </td>
                         <td className="px-4 py-3">
@@ -332,14 +332,14 @@ export default function AdminAbusePage() {
                             <span className="flex items-center gap-1 text-xs text-yellow-400"><Clock className="w-3 h-3" />Open</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-xs text-zinc-500">
+                        <td className="px-4 py-3 text-xs text-sc-dim">
                           {formatRelativeTime(flag.createdAt)}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => setGraphUserId(flag.user.id)}
-                              className="p-1.5 rounded-lg text-zinc-500 hover:text-brand-400 hover:bg-brand-500/10 transition-all"
+                              className="p-1.5 rounded-lg text-sc-dim hover:text-brand-400 hover:bg-brand-500/10 transition-all"
                               title="View social graph"
                             >
                               <Network className="w-3.5 h-3.5" />
@@ -364,12 +364,12 @@ export default function AdminAbusePage() {
             {flags && flags.meta.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-surface-border">
                 <button onClick={() => setPage((p) => p - 1)} disabled={!flags.meta.hasPrev}
-                  className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                   <ChevronLeft className="w-4 h-4" />Previous
                 </button>
-                <span className="text-xs text-zinc-500">Page {flags.meta.page} of {flags.meta.totalPages} · {flags.meta.total} total</span>
+                <span className="text-xs text-sc-dim">Page {flags.meta.page} of {flags.meta.totalPages} · {flags.meta.total} total</span>
                 <button onClick={() => setPage((p) => p + 1)} disabled={!flags.meta.hasNext}
-                  className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                   Next<ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -392,27 +392,27 @@ export default function AdminAbusePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-sm card-glass rounded-2xl p-6 border border-surface-border">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">Resolve Flag</h2>
-              <button onClick={() => setResolveFlag(null)} className="text-zinc-500 hover:text-white"><XCircle className="w-5 h-5" /></button>
+              <h2 className="text-base font-semibold text-sc-text">Resolve Flag</h2>
+              <button onClick={() => setResolveFlag(null)} className="text-sc-dim hover:text-sc-text"><XCircle className="w-5 h-5" /></button>
             </div>
-            <div className="space-y-1 mb-4 text-xs text-zinc-500">
-              <p>User: <span className="text-white">@{resolveFlag.user.username}</span></p>
-              <p>Type: <span className="text-white">{FLAG_TYPE_LABELS[resolveFlag.flagType] ?? resolveFlag.flagType}</span></p>
-              <p>Severity: <span className="text-white">{resolveFlag.severity}</span></p>
-              <p className="text-zinc-400 mt-1">{resolveFlag.description}</p>
+            <div className="space-y-1 mb-4 text-xs text-sc-dim">
+              <p>User: <span className="text-sc-text">@{resolveFlag.user.username}</span></p>
+              <p>Type: <span className="text-sc-text">{FLAG_TYPE_LABELS[resolveFlag.flagType] ?? resolveFlag.flagType}</span></p>
+              <p>Severity: <span className="text-sc-text">{resolveFlag.severity}</span></p>
+              <p className="text-sc-muted mt-1">{resolveFlag.description}</p>
             </div>
             <textarea
               value={resolution}
               onChange={(e) => setResolution(e.target.value)}
               placeholder="Resolution notes (required)..."
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none h-24"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none h-24"
             />
             <div className="flex gap-3 mt-4">
-              <button onClick={() => setResolveFlag(null)} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
+              <button onClick={() => setResolveFlag(null)} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors">Cancel</button>
               <button
                 onClick={() => resolveMutation.mutate({ id: resolveFlag.id, resolution })}
                 disabled={resolveMutation.isPending || !resolution.trim()}
-                className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+                className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all"
               >
                 {resolveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Confirm Resolve

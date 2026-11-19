@@ -48,8 +48,8 @@ export default function NotificationsSettingsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Notifications</h1>
-        <p className="text-zinc-400 text-sm mt-1">Manage your email and notification preferences.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Notifications</h1>
+        <p className="text-sc-muted text-sm mt-1">Manage your email and notification preferences.</p>
       </div>
 
       <div className="card-glass rounded-xl p-6 max-w-lg">
@@ -58,8 +58,8 @@ export default function NotificationsSettingsPage() {
             <Mail className="w-5 h-5 text-brand-400" />
           </div>
           <div>
-            <p className="font-semibold text-white text-sm">Weekly Digest</p>
-            <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+            <p className="font-semibold text-sc-text text-sm">Weekly Digest</p>
+            <p className="text-xs text-sc-dim mt-0.5 leading-relaxed">
               Receive a weekly summary of your activity: tasks completed, credits earned,
               current balance, and new campaigns.
             </p>
@@ -67,14 +67,14 @@ export default function NotificationsSettingsPage() {
         </div>
 
         {isLoading ? (
-          <div className="flex items-center gap-2 text-zinc-500 text-sm">
+          <div className="flex items-center gap-2 text-sc-dim text-sm">
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading preferences...
           </div>
         ) : (
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-sm text-zinc-400 block">
+              <span className="text-sm text-sc-muted block">
                 {enabled ? 'Enabled — sent every Monday' : 'Disabled'}
               </span>
               {status && (
@@ -90,7 +90,7 @@ export default function NotificationsSettingsPage() {
               }}
               disabled={mutation.isPending}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                enabled ? 'bg-brand-500' : 'bg-zinc-600'
+                enabled ? 'bg-brand-500' : 'bg-sc-soft'
               } ${mutation.isPending ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
             >
               <span

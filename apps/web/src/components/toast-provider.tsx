@@ -79,10 +79,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl border backdrop-blur-sm shadow-lg min-w-[280px] max-w-[400px] animate-in slide-in-from-top-full fade-in duration-300 ${BG[toast.type]}`}
           >
             <div className="mt-0.5 shrink-0">{ICONS[toast.type]}</div>
-            <p className="text-sm text-zinc-200 flex-1 leading-snug">{toast.message}</p>
+            <p className="text-sm text-sc-text flex-1 leading-snug">{toast.message}</p>
             <button
               onClick={() => removeToast(toast.id)}
-              className="shrink-0 text-zinc-500 hover:text-zinc-300 transition-colors mt-0.5"
+              className="shrink-0 text-sc-dim hover:text-sc-text transition-colors mt-0.5"
               aria-label="Dismiss"
             >
               <X className="w-3.5 h-3.5" />

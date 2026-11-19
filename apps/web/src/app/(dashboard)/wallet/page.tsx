@@ -117,7 +117,7 @@ const TX_CONFIG: Record<string, { label: string; color: string; bg: string }> = 
   SPEND_PREMIUM_FEATURE:    { label: 'Premium feature',    color: 'text-red-400',    bg: 'bg-red-500/10' },
   SPEND_ADMIN_DEDUCT:       { label: 'Admin deduction',    color: 'text-red-400',    bg: 'bg-red-500/10' },
   SPEND_TIP:                { label: 'Tip sent',           color: 'text-red-400',    bg: 'bg-red-500/10' },
-  PLATFORM_FEE_CAMPAIGN:    { label: 'Platform fee',       color: 'text-zinc-400',   bg: 'bg-zinc-500/10' },
+  PLATFORM_FEE_CAMPAIGN:    { label: 'Platform fee',       color: 'text-sc-muted',   bg: 'bg-sc-soft/10' },
   REFUND_CAMPAIGN_CANCEL:   { label: 'Campaign refund',    color: 'text-sky-400',    bg: 'bg-sky-500/10' },
   REFUND_COMPLETION_REJECT: { label: 'Completion refund',  color: 'text-sky-400',    bg: 'bg-sky-500/10' },
 };
@@ -127,8 +127,8 @@ const DEPOSIT_STATUS_CONFIG: Record<string, { label: string; color: string; bg: 
   PROCESSING: { label: 'Processing', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20',     icon: RefreshCw },
   COMPLETED:  { label: 'Completed',  color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20',   icon: CheckCircle2 },
   FAILED:     { label: 'Failed',     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20',       icon: XCircle },
-  CANCELLED:  { label: 'Cancelled',  color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: XCircle },
-  REFUNDED:   { label: 'Refunded',   color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: AlertCircle },
+  CANCELLED:  { label: 'Cancelled',  color: 'text-sc-muted',   bg: 'bg-sc-soft/10 border-sc-border/20',     icon: XCircle },
+  REFUNDED:   { label: 'Refunded',   color: 'text-sc-muted',   bg: 'bg-sc-soft/10 border-sc-border/20',     icon: AlertCircle },
 };
 
 const METHOD_META: Record<string, { label: string; color: string; bg: string; icon: React.ElementType; currency: string }> = {
@@ -159,7 +159,7 @@ function CopyButton({ text }: { text: string }) {
     });
   };
   return (
-    <button onClick={copy} className="ml-2 text-zinc-500 hover:text-white transition-colors shrink-0">
+    <button onClick={copy} className="ml-2 text-sc-dim hover:text-sc-text transition-colors shrink-0">
       {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
     </button>
   );
@@ -169,9 +169,9 @@ function CopyButton({ text }: { text: string }) {
 function DetailItem({ label, value, copyable }: { label: string; value: string; copyable?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 bg-black/10 rounded-lg px-3 py-2">
-      <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">{label}</span>
+      <span className="text-[10px] uppercase tracking-wider text-sc-dim shrink-0">{label}</span>
       <div className="flex items-center min-w-0">
-        <span className="text-xs text-zinc-300 font-mono truncate" title={value}>{value}</span>
+        <span className="text-xs text-sc-text font-mono truncate" title={value}>{value}</span>
         {copyable && <CopyButton text={value} />}
       </div>
     </div>
@@ -195,8 +195,8 @@ function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdA
     return () => clearInterval(id);
   }, [effectiveExpiredAt]);
 
-  if (effectiveExpiredAt === 0) return <span className="text-zinc-500">Expires soon</span>;
-  if (left <= 0) return <span className="text-zinc-500">Expired</span>;
+  if (effectiveExpiredAt === 0) return <span className="text-sc-dim">Expires soon</span>;
+  if (left <= 0) return <span className="text-sc-dim">Expired</span>;
 
   const totalSeconds = Math.floor(left / 1000);
   const m = Math.floor(totalSeconds / 60);
@@ -984,8 +984,8 @@ export default function WalletPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Wallet</h1>
-        <p className="text-zinc-400 text-sm mt-1">Manage your credits — deposit and track transactions.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Wallet</h1>
+        <p className="text-sc-muted text-sm mt-1">Manage your credits — deposit and track transactions.</p>
       </div>
 
       {/* ── Balance cards ── */}
@@ -993,26 +993,26 @@ export default function WalletPage() {
         {walletLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="card-glass rounded-xl p-5 animate-pulse">
-              <div className="h-3 w-24 bg-zinc-700 rounded mb-3" />
-              <div className="h-8 w-32 bg-zinc-700 rounded" />
+              <div className="h-3 w-24 bg-sc-panel-2 rounded mb-3" />
+              <div className="h-8 w-32 bg-sc-panel-2 rounded" />
             </div>
           ))
         ) : (
           <>
             <div className="card-glass rounded-xl p-5">
-              <p className="text-xs text-zinc-500 mb-1">Available Balance</p>
+              <p className="text-xs text-sc-dim mb-1">Available Balance</p>
               <p className="text-3xl font-bold text-brand-300">{wallet ? formatCredits(wallet.balance) : '—'}</p>
-              <p className="text-xs text-zinc-600 mt-0.5">credits</p>
+              <p className="text-xs text-sc-dim mt-0.5">credits</p>
             </div>
             <div className="card-glass rounded-xl p-5">
-              <p className="text-xs text-zinc-500 mb-1">Lifetime Earned</p>
+              <p className="text-xs text-sc-dim mb-1">Lifetime Earned</p>
               <p className="text-3xl font-bold text-green-400">{wallet ? formatCredits(wallet.lifetimeEarned) : '—'}</p>
-              <p className="text-xs text-zinc-600 mt-0.5">total credits earned</p>
+              <p className="text-xs text-sc-dim mt-0.5">total credits earned</p>
             </div>
             <div className="card-glass rounded-xl p-5">
-              <p className="text-xs text-zinc-500 mb-1">Lifetime Spent</p>
+              <p className="text-xs text-sc-dim mb-1">Lifetime Spent</p>
               <p className="text-3xl font-bold text-red-400">{wallet ? formatCredits(wallet.lifetimeSpent) : '—'}</p>
-              <p className="text-xs text-zinc-600 mt-0.5">total credits spent</p>
+              <p className="text-xs text-sc-dim mt-0.5">total credits spent</p>
             </div>
           </>
         )}
@@ -1037,7 +1037,7 @@ export default function WalletPage() {
         });
         if (!pending) return null;
 
-        const meta = METHOD_META[pending.method] ?? { label: pending.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard };
+        const meta = METHOD_META[pending.method] ?? { label: pending.method, color: 'text-sc-muted', bg: 'bg-sc-soft/10', icon: CreditCard };
         const isPaymongo = pending.method === 'PAYMONGO';
         const isPaypal = pending.method === 'PAYPAL';
         const isCrypto = pending.method === 'USDT_BEP20' || pending.method === 'USDT_BASE';
@@ -1051,8 +1051,8 @@ export default function WalletPage() {
                 <meta.icon className={`w-5 h-5 ${meta.color}`} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">{meta.label} payment in progress</p>
-                <p className="text-xs text-zinc-400">
+                <p className="text-sm font-semibold text-sc-text">{meta.label} payment in progress</p>
+                <p className="text-xs text-sc-muted">
                   {pending.currency} {pending.amountFiat.toFixed(2)} → {pending.creditsToAward.toLocaleString()} credits
                 </p>
                 {isPaymongo && (
@@ -1064,9 +1064,9 @@ export default function WalletPage() {
                   </div>
                 )}
                 {isCrypto && pending.gatewayData && (
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-sc-dim">
                     Send {pending.gatewayData.amount as number} USDT on {pending.gatewayData.network as string} to{' '}
-                    <code className="text-zinc-300 font-mono">{(pending.gatewayData.walletAddress as string)?.slice(0, 12)}…</code>
+                    <code className="text-sc-text font-mono">{(pending.gatewayData.walletAddress as string)?.slice(0, 12)}…</code>
                     {typeof pending.gatewayData.confirmations === 'number' && (
                       <span className="block mt-0.5 text-orange-400">
                         {pending.gatewayData.confirmations as number}/{(pending.gatewayData.minConfirmations as number) ?? 12} Confirmations
@@ -1079,7 +1079,7 @@ export default function WalletPage() {
                 {(checkoutUrl || approvalUrl) && (
                   <button
                     onClick={() => window.open((checkoutUrl || approvalUrl)!, '_blank', 'noopener,noreferrer')}
-                    className="flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3 py-2 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-medium bg-emerald-500 hover:bg-emerald-400 text-sc-text px-3 py-2 rounded-lg transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />Resume Payment
                   </button>
@@ -1092,14 +1092,14 @@ export default function WalletPage() {
                         document.getElementById('deposit-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                       }, 50);
                     }}
-                    className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-sc-text px-3 py-2 rounded-lg transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />View Details
                   </button>
                 )}
                 <button
                   onClick={() => setCancelConfirmId(pending.id)}
-                  className="flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-2"
+                  className="flex items-center gap-1 text-xs text-sc-dim hover:text-red-400 transition-colors px-2 py-2"
                   title="Cancel this pending deposit"
                 >
                   <XCircle className="w-3.5 h-3.5" />
@@ -1116,7 +1116,7 @@ export default function WalletPage() {
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${tab === id ? 'border-brand-500 text-brand-300' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+            className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${tab === id ? 'border-brand-500 text-brand-300' : 'border-transparent text-sc-dim hover:text-sc-text'}`}
           >
             {label}
           </button>
@@ -1127,22 +1127,22 @@ export default function WalletPage() {
       {tab === 'history' && (
         <div className="card-glass rounded-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
-            <h2 className="font-semibold text-white">All Transactions</h2>
-            {txData && <span className="text-xs text-zinc-500">{txData.meta.total} total</span>}
+            <h2 className="font-semibold text-sc-text">All Transactions</h2>
+            {txData && <span className="text-xs text-sc-dim">{txData.meta.total} total</span>}
           </div>
 
           {txLoading ? (
-            <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+            <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-sc-dim" /></div>
           ) : !txData?.items.length ? (
             <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-              <p className="text-zinc-500 text-sm">No transactions yet.</p>
-              <p className="text-zinc-600 text-xs mt-1">Complete tasks or create campaigns to see activity here.</p>
+              <p className="text-sc-dim text-sm">No transactions yet.</p>
+              <p className="text-sc-dim text-xs mt-1">Complete tasks or create campaigns to see activity here.</p>
             </div>
           ) : (
             <>
               <div className="divide-y divide-surface-border">
                 {txData.items.map((tx) => {
-                  const cfg = TX_CONFIG[tx.type] ?? { label: tx.type, color: 'text-zinc-400', bg: 'bg-zinc-500/10' };
+                  const cfg = TX_CONFIG[tx.type] ?? { label: tx.type, color: 'text-sc-muted', bg: 'bg-sc-soft/10' };
                   const credit = isCredit(tx.amount);
                   return (
                     <div key={tx.id} className="flex items-center gap-4 px-6 py-4 hover:bg-surface-hover transition-colors">
@@ -1150,14 +1150,14 @@ export default function WalletPage() {
                         {credit ? <ArrowDownLeft className={`w-4 h-4 ${cfg.color}`} /> : <ArrowUpRight className={`w-4 h-4 ${cfg.color}`} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{cfg.label}</p>
-                        {tx.description && <p className="text-xs text-zinc-500 truncate">{tx.description}</p>}
+                        <p className="text-sm font-medium text-sc-text">{cfg.label}</p>
+                        {tx.description && <p className="text-xs text-sc-dim truncate">{tx.description}</p>}
                       </div>
                       <div className="text-right shrink-0">
                         <p className={`text-sm font-semibold ${credit ? 'text-green-400' : 'text-red-400'}`}>
                           {credit ? '+' : ''}{formatCredits(tx.amount)}
                         </p>
-                        <p className="text-xs text-zinc-600">{formatRelativeTime(tx.createdAt)}</p>
+                        <p className="text-xs text-sc-dim">{formatRelativeTime(tx.createdAt)}</p>
                       </div>
                     </div>
                   );
@@ -1165,11 +1165,11 @@ export default function WalletPage() {
               </div>
               {txData.meta.totalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-surface-border">
-                  <button onClick={() => setTxPage((p) => p - 1)} disabled={!txData.meta.hasPrev} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  <button onClick={() => setTxPage((p) => p - 1)} disabled={!txData.meta.hasPrev} className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                     <ChevronLeft className="w-4 h-4" />Previous
                   </button>
-                  <span className="text-xs text-zinc-500">Page {txData.meta.page} of {txData.meta.totalPages}</span>
-                  <button onClick={() => setTxPage((p) => p + 1)} disabled={!txData.meta.hasNext} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  <span className="text-xs text-sc-dim">Page {txData.meta.page} of {txData.meta.totalPages}</span>
+                  <button onClick={() => setTxPage((p) => p + 1)} disabled={!txData.meta.hasNext} className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                     Next<ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -1189,21 +1189,21 @@ export default function WalletPage() {
             <div className="flex items-center gap-0 border-b border-surface-border px-6 py-3 overflow-x-auto">
                     {([1,2,3] as DepositStep[]).map((s, i) => (
                       <div key={s} className="flex items-center gap-0">
-                        {i > 0 && <div className={`h-px w-8 ${depositStep > i ? 'bg-brand-500' : 'bg-zinc-700'}`} />}
+                        {i > 0 && <div className={`h-px w-8 ${depositStep > i ? 'bg-brand-500' : 'bg-sc-panel-2'}`} />}
                         <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-all ${
                           depositStep === s ? 'bg-brand-500/20 text-brand-300' :
-                          depositStep > s ? 'text-zinc-500' : 'text-zinc-600'
+                          depositStep > s ? 'text-sc-dim' : 'text-sc-dim'
                         }`}>
                           <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
                             depositStep > s ? 'bg-brand-500/30 text-brand-300' :
-                            depositStep === s ? 'bg-brand-500 text-white' : 'bg-zinc-700 text-zinc-500'
+                            depositStep === s ? 'bg-brand-500 text-sc-text' : 'bg-sc-panel-2 text-sc-dim'
                           }`}>{depositStep > s ? '✓' : s}</span>
                           {s === 1 ? 'Choose Package' : s === 2 ? 'Payment Method' : 'Complete'}
                         </div>
                       </div>
                     ))}
                     {depositStep > 1 && !depositResult && (
-                      <button onClick={() => { setDepositStep((s) => (s - 1) as DepositStep); setDepositError(null); evmWallet.reset(); }} className="ml-auto flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors">
+                      <button onClick={() => { setDepositStep((s) => (s - 1) as DepositStep); setDepositError(null); evmWallet.reset(); }} className="ml-auto flex items-center gap-1 text-xs text-sc-dim hover:text-sc-text transition-colors">
                         <ArrowLeft className="w-3 h-3" />Back
                       </button>
                     )}
@@ -1214,24 +1214,24 @@ export default function WalletPage() {
                     {/* ───────── Step 1: Package selection ───────── */}
                     {depositStep === 1 && (
                       <div>
-                  <h2 className="font-semibold text-white mb-1">Choose a Credit Package</h2>
+                  <h2 className="font-semibold text-sc-text mb-1">Choose a Credit Package</h2>
                   {packages?.[0] && (
-                    <div className="flex items-center gap-2 text-xs text-zinc-500 mb-4">
+                    <div className="flex items-center gap-2 text-xs text-sc-dim mb-4">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />
-                      Live rate: <span className="text-white font-medium">$1 = ₱{packages[0].usdToPhp.toFixed(2)}</span>
-                      <span className="text-zinc-600">· updates hourly</span>
+                      Live rate: <span className="text-sc-text font-medium">$1 = ₱{packages[0].usdToPhp.toFixed(2)}</span>
+                      <span className="text-sc-dim">· updates hourly</span>
                     </div>
                   )}
 
                   {packagesLoading ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {[1,2,3,4,5,6].map((i) => <div key={i} className="h-32 bg-zinc-800 rounded-xl animate-pulse" />)}
+                      {[1,2,3,4,5,6].map((i) => <div key={i} className="h-32 bg-sc-panel-2 rounded-xl animate-pulse" />)}
                     </div>
                   ) : !packages?.length ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <AlertCircle className="w-8 h-8 text-zinc-600 mb-2" />
-                      <p className="text-zinc-500 text-sm">No credit packages available yet.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Please check back later.</p>
+                      <AlertCircle className="w-8 h-8 text-sc-dim mb-2" />
+                      <p className="text-sc-dim text-sm">No credit packages available yet.</p>
+                      <p className="text-sc-dim text-xs mt-1">Please check back later.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1242,15 +1242,15 @@ export default function WalletPage() {
                           className="relative flex flex-col items-start p-4 rounded-xl border border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left group"
                         >
                           {pkg.isPopular && (
-                            <span className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold bg-brand-500 text-white rounded-full">POPULAR</span>
+                            <span className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold bg-brand-500 text-sc-text rounded-full">POPULAR</span>
                           )}
                           {pkg.label && !pkg.isPopular && (
-                            <span className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold bg-emerald-500 text-white rounded-full">{pkg.label.toUpperCase()}</span>
+                            <span className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold bg-emerald-500 text-sc-text rounded-full">{pkg.label.toUpperCase()}</span>
                           )}
-                          <p className="text-2xl font-bold text-white mb-0.5">${pkg.usdAmount}</p>
-                          <p className="text-xs text-zinc-500 mb-2">₱{(pkg.phpAmount ?? pkg.phpEquivalent).toLocaleString()}</p>
+                          <p className="text-2xl font-bold text-sc-text mb-0.5">${pkg.usdAmount}</p>
+                          <p className="text-xs text-sc-dim mb-2">₱{(pkg.phpAmount ?? pkg.phpEquivalent).toLocaleString()}</p>
                           <p className="text-base font-semibold text-brand-300">{pkg.creditsTotal.toLocaleString()}</p>
-                          <p className="text-xs text-zinc-500">credits</p>
+                          <p className="text-xs text-sc-dim">credits</p>
                           {pkg.bonusCredits > 0 && (
                             <span className="mt-2 flex items-center gap-1 text-[11px] text-green-400 font-medium">
                               <Zap className="w-3 h-3" />+{pkg.bonusCredits.toLocaleString()} bonus
@@ -1268,21 +1268,21 @@ export default function WalletPage() {
                 <div>
                   <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-brand-500/10 border border-brand-500/20">
                     <div>
-                      <p className="text-xs text-zinc-400">Selected package</p>
-                      <p className="text-sm font-semibold text-white">${selectedPackage.usdAmount} → <span className="text-brand-300">{selectedPackage.creditsTotal.toLocaleString()} credits</span>
+                      <p className="text-xs text-sc-muted">Selected package</p>
+                      <p className="text-sm font-semibold text-sc-text">${selectedPackage.usdAmount} → <span className="text-brand-300">{selectedPackage.creditsTotal.toLocaleString()} credits</span>
                         {selectedPackage.bonusCredits > 0 && <span className="text-xs text-green-400 ml-1">(+{selectedPackage.bonusCredits.toLocaleString()} bonus)</span>}
                       </p>
                     </div>
                   </div>
 
-                  <h2 className="font-semibold text-white mb-4">Choose Payment Method</h2>
+                  <h2 className="font-semibold text-sc-text mb-4">Choose Payment Method</h2>
 
                   {optionsLoading ? (
-                    <div className="space-y-2">{[1,2,3,4].map((i) => <div key={i} className="h-16 bg-zinc-800 rounded-xl animate-pulse" />)}</div>
+                    <div className="space-y-2">{[1,2,3,4].map((i) => <div key={i} className="h-16 bg-sc-panel-2 rounded-xl animate-pulse" />)}</div>
                   ) : enabledMethods.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <AlertCircle className="w-8 h-8 text-zinc-600 mb-2" />
-                      <p className="text-zinc-500 text-sm">No payment methods available right now.</p>
+                      <AlertCircle className="w-8 h-8 text-sc-dim mb-2" />
+                      <p className="text-sc-dim text-sm">No payment methods available right now.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1311,19 +1311,19 @@ export default function WalletPage() {
                             className={`w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all ${
                               available
                                 ? 'border-surface-border bg-surface-hover hover:border-brand-500/50 hover:bg-brand-500/5 cursor-pointer'
-                                : 'border-zinc-800 bg-zinc-800/30 opacity-60 cursor-not-allowed'
+                                : 'border-sc-line bg-sc-panel-2/30 opacity-60 cursor-not-allowed'
                             }`}
                           >
                             <div className={`w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center shrink-0 ${!available ? 'opacity-50' : ''}`}>
                               <meta.icon className={`w-5 h-5 ${meta.color}`} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium ${available ? 'text-white' : 'text-zinc-500'}`}>{meta.label}</p>
-                              <p className="text-xs text-zinc-500">{key === 'USDT_BEP20' ? 'BNB Smart Chain' : key === 'USDT_BASE' ? 'Base Network' : key === 'PAYPAL' ? 'PayPal checkout' : 'GCash / Cards'}</p>
+                              <p className={`text-sm font-medium ${available ? 'text-sc-text' : 'text-sc-dim'}`}>{meta.label}</p>
+                              <p className="text-xs text-sc-dim">{key === 'USDT_BEP20' ? 'BNB Smart Chain' : key === 'USDT_BASE' ? 'Base Network' : key === 'PAYPAL' ? 'PayPal checkout' : 'GCash / Cards'}</p>
                             </div>
                             <div className="text-right shrink-0">
-                              <p className={`text-sm font-semibold ${available ? 'text-white' : 'text-zinc-600'}`}>{displayAmount}</p>
-                              <p className={`text-xs ${available ? 'text-zinc-500' : 'text-red-400'}`}>{available ? 'you pay' : minLabel}</p>
+                              <p className={`text-sm font-semibold ${available ? 'text-sc-text' : 'text-sc-dim'}`}>{displayAmount}</p>
+                              <p className={`text-xs ${available ? 'text-sc-dim' : 'text-red-400'}`}>{available ? 'you pay' : minLabel}</p>
                             </div>
                           </button>
                         );
@@ -1337,10 +1337,10 @@ export default function WalletPage() {
               {depositStep === 3 && selectedPackage && selectedMethod && (
                 <div>
                   {/* Package summary */}
-                  <div className="flex items-center justify-between mb-5 p-3 rounded-lg bg-zinc-800/60 border border-surface-border">
+                  <div className="flex items-center justify-between mb-5 p-3 rounded-lg bg-sc-panel-2/60 border border-surface-border">
                     <div>
-                      <p className="text-xs text-zinc-500">Package · {METHOD_META[selectedMethod]?.label}</p>
-                      <p className="text-sm font-semibold text-white">${selectedPackage.usdAmount} → <span className="text-brand-300">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
+                      <p className="text-xs text-sc-dim">Package · {METHOD_META[selectedMethod]?.label}</p>
+                      <p className="text-sm font-semibold text-sc-text">${selectedPackage.usdAmount} → <span className="text-brand-300">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
                     </div>
                     {/* New Deposit: only show when user can actually start a new one.
                         Hidden when deposit is PENDING/PROCESSING because backend blocks
@@ -1356,8 +1356,8 @@ export default function WalletPage() {
                       <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
                         <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
                         <div>
-                          <p className="text-sm font-semibold text-white">Deposit Submitted</p>
-                          <p className="text-xs text-zinc-400">
+                          <p className="text-sm font-semibold text-sc-text">Deposit Submitted</p>
+                          <p className="text-xs text-sc-muted">
                             {depositResult.deposit.status === 'PROCESSING' && (depositResult.deposit.method === 'USDT_BEP20' || depositResult.deposit.method === 'USDT_BASE')
                               ? 'Verifying on-chain. You will be notified when it completes.'
                               : 'Admin will review and credit your wallet.'}
@@ -1365,15 +1365,15 @@ export default function WalletPage() {
                         </div>
                       </div>
                       <div className="space-y-2 text-xs">
-                        <div className="flex items-center gap-2 text-zinc-500">
+                        <div className="flex items-center gap-2 text-sc-dim">
                           <span className="shrink-0">Deposit ID:</span>
-                          <code className="font-mono text-zinc-300 flex-1 truncate">{depositResult.deposit.id}</code>
+                          <code className="font-mono text-sc-text flex-1 truncate">{depositResult.deposit.id}</code>
                           <CopyButton text={depositResult.deposit.id} />
                         </div>
                         {depositResult.instructions.txHash && (
-                          <div className="flex items-center gap-2 text-zinc-500">
+                          <div className="flex items-center gap-2 text-sc-dim">
                             <span className="shrink-0">TX Hash:</span>
-                            <code className="font-mono text-zinc-300 flex-1 truncate">{depositResult.instructions.txHash}</code>
+                            <code className="font-mono text-sc-text flex-1 truncate">{depositResult.instructions.txHash}</code>
                             <CopyButton text={depositResult.instructions.txHash} />
                           </div>
                         )}
@@ -1387,7 +1387,7 @@ export default function WalletPage() {
                           <button
                             onClick={() => verifyDepositMutation.mutate({ depositId: depositResult.deposit.id })}
                             disabled={verifyDepositMutation.isPending}
-                            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-medium transition-all"
+                            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-sc-text text-xs font-medium transition-all"
                           >
                             {verifyDepositMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             Verify Now
@@ -1402,22 +1402,22 @@ export default function WalletPage() {
                               const cfg = depositResult.deposit.method === 'USDT_BEP20' ? depositOptions?.usdtBep20 : depositOptions?.usdtBase;
                               return cfg?.walletAddress ? (
                                 <div>
-                                  <label className="block text-xs text-zinc-500 mb-1.5">Send USDT to this address</label>
-                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-zinc-800/60 border border-surface-border">
-                                    <code className="font-mono text-xs text-white flex-1 truncate">{cfg.walletAddress}</code>
+                                  <label className="block text-xs text-sc-dim mb-1.5">Send USDT to this address</label>
+                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-sc-panel-2/60 border border-surface-border">
+                                    <code className="font-mono text-xs text-sc-text flex-1 truncate">{cfg.walletAddress}</code>
                                     <CopyButton text={cfg.walletAddress} />
                                   </div>
                                 </div>
                               ) : null;
                             })()}
                             <div>
-                              <label className="block text-xs text-zinc-500 mb-1.5">Transaction Hash</label>
+                              <label className="block text-xs text-sc-dim mb-1.5">Transaction Hash</label>
                               <input
                                 type="text"
                                 value={manualTxHash}
                                 onChange={(e) => setManualTxHash(e.target.value)}
                                 placeholder="0x..."
-                                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2.5 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2.5 text-sm text-sc-text font-mono placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500"
                               />
                             </div>
                             <button
@@ -1426,7 +1426,7 @@ export default function WalletPage() {
                                 submitTxHashMutation.mutate({ depositId: depositResult.deposit.id, txHash: manualTxHash.trim() });
                               }}
                               disabled={submitTxHashMutation.isPending || !manualTxHash.trim()}
-                              className="flex items-center justify-center gap-2 w-full px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                              className="flex items-center justify-center gap-2 w-full px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
                             >
                               {submitTxHashMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                               Submit TX Hash
@@ -1436,7 +1436,7 @@ export default function WalletPage() {
                         {fiatCheckoutUrl && (
                           <button
                             onClick={() => window.location.assign(fiatCheckoutUrl)}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-medium transition-all w-full justify-center"
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-sc-text text-xs font-medium transition-all w-full justify-center"
                           >
                             <ExternalLink className="w-4 h-4" />
                             {depositResult.deposit.method === 'PAYMONGO' ? 'Open PayMongo Checkout' : 'Open PayPal Checkout'}
@@ -1449,10 +1449,10 @@ export default function WalletPage() {
                     /* ── USDT deposit ── */
                     <div className="space-y-4">
                       {/* Auto / Manual toggle */}
-                      <div className="flex items-center gap-1 p-1 bg-zinc-800/60 rounded-lg border border-surface-border w-fit">
+                      <div className="flex items-center gap-1 p-1 bg-sc-panel-2/60 rounded-lg border border-surface-border w-fit">
                         {(['auto', 'manual'] as CryptoMode[]).map((m) => (
                           <button key={m} onClick={() => { setCryptoMode(m); evmWallet.reset(); setDepositError(null); }}
-                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${cryptoMode === m ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'}`}>
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${cryptoMode === m ? 'bg-brand-500 text-sc-text' : 'text-sc-muted hover:text-sc-text'}`}>
                             {m === 'auto' ? '⚡ Auto (Wallet)' : '✏️ Manual (TxHash)'}
                           </button>
                         ))}
@@ -1474,7 +1474,7 @@ export default function WalletPage() {
                                           : <>Deposit opened on {unresolvedSend.network} — the transfer wasn&apos;t sent. Retry uses this deposit.</>}
                                   </p>
                                   {unresolvedSend.hash && (
-                                    <p className="text-[11px] text-zinc-500 font-mono break-all pl-5">{unresolvedSend.hash}</p>
+                                    <p className="text-[11px] text-sc-dim font-mono break-all pl-5">{unresolvedSend.hash}</p>
                                   )}
                                   {unresolvedSend.phase === 'uncertain' && !unresolvedSend.hash && (
                                     <div className="flex gap-2 pl-5">
@@ -1482,7 +1482,7 @@ export default function WalletPage() {
                                         value={manualTxHash}
                                         onChange={(e) => setManualTxHash(e.target.value)}
                                         placeholder="Paste your transaction hash (0x…)"
-                                        className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-zinc-900/60 border border-surface-border text-xs text-white font-mono focus:outline-none focus:border-brand-400"
+                                        className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-sc-panel/60 border border-surface-border text-xs text-sc-text font-mono focus:outline-none focus:border-brand-400"
                                       />
                                       <button
                                         onClick={() => { if (manualTxHash.trim()) persistSend({ ...unresolvedSend, hash: manualTxHash.trim(), phase: 'sent' }); }}
@@ -1493,7 +1493,7 @@ export default function WalletPage() {
                                       </button>
                                     </div>
                                   )}
-                                  <p className="text-[11px] text-zinc-600 pl-5">Bound to this transfer: {unresolvedSend.amountUsd} USDT · {unresolvedSend.network} · wallet {unresolvedSend.wallet.slice(0,8)}…{unresolvedSend.wallet.slice(-6)}</p>
+                                  <p className="text-[11px] text-sc-dim pl-5">Bound to this transfer: {unresolvedSend.amountUsd} USDT · {unresolvedSend.network} · wallet {unresolvedSend.wallet.slice(0,8)}…{unresolvedSend.wallet.slice(-6)}</p>
                                   <div className="flex flex-wrap gap-2 pl-5">
                                     {(unresolvedSend.phase === 'retry' || unresolvedSend.phase === 'sent') && (
                                     <button
@@ -1516,7 +1516,7 @@ export default function WalletPage() {
                                     {unresolvedSend.phase === 'retry' && !unresolvedSend.hash && (
                                     <button
                                       onClick={() => void abandonIntent()}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-zinc-200 text-xs transition-all"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sc-line text-sc-muted hover:text-sc-text text-xs transition-all"
                                     >
                                       Abandon deposit
                                     </button>
@@ -1524,19 +1524,19 @@ export default function WalletPage() {
                                     {unresolvedSend.hash && (
                                     <button
                                       onClick={() => { setCryptoMode('manual'); setManualTxHash(unresolvedSend.hash!); setDepositError(null); }}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-600 text-zinc-400 hover:text-zinc-200 text-xs transition-all"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sc-line text-sc-muted hover:text-sc-text text-xs transition-all"
                                     >
                                       Use manual option
                                     </button>
                                     )}
                                   </div>
-                                  <p className="text-[10px] text-zinc-600 pl-5">Do not send again — this exact transfer is retained. Sending is disabled until it resolves.</p>
+                                  <p className="text-[10px] text-sc-dim pl-5">Do not send again — this exact transfer is retained. Sending is disabled until it resolves.</p>
                                 </div>
                               ) : evmWallet.state === 'idle' || evmWallet.state === 'error' ? (
                             <div className="space-y-3">
                               {evmWallet.providers.length > 0 ? (
                                 <>
-                                  <p className="text-xs text-zinc-400">Detected wallets — select one to connect:</p>
+                                  <p className="text-xs text-sc-muted">Detected wallets — select one to connect:</p>
                                   <div className="grid grid-cols-2 gap-2">
                                     {evmWallet.providers.map((p) => (
                                       <button
@@ -1550,7 +1550,7 @@ export default function WalletPage() {
                                           className="w-8 h-8 rounded-md shrink-0"
                                           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                         />
-                                        <span className="text-sm font-medium text-white">{p.info.name}</span>
+                                        <span className="text-sm font-medium text-sc-text">{p.info.name}</span>
                                       </button>
                                     ))}
                                   </div>
@@ -1558,7 +1558,7 @@ export default function WalletPage() {
                               ) : evmWallet.isAvailable ? (
                                 <button
                                   onClick={() => void evmWallet.connect().then((addr) => { if (addr && cryptoCfg) void evmWallet.fetchUsdtBalance(addr, cryptoCfg.contractAddress); })}
-                                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium transition-all"
+                                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-sc-text text-sm font-medium transition-all"
                                 >
                                   <LinkIcon className="w-4 h-4" />Connect Wallet
                                 </button>
@@ -1570,7 +1570,7 @@ export default function WalletPage() {
                               )}
                             </div>
                           ) : evmWallet.state === 'connecting' || evmWallet.state === 'switching_chain' ? (
-                            <div className="flex items-center gap-2 text-sm text-zinc-400">
+                            <div className="flex items-center gap-2 text-sm text-sc-muted">
                               <Loader2 className="w-4 h-4 animate-spin" />
                               {evmWallet.state === 'switching_chain' ? 'Switching network...' : 'Connecting wallet...'}
                             </div>
@@ -1579,15 +1579,15 @@ export default function WalletPage() {
                               <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-xs">
                                 <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
                                 <div>
-                                  <p className="text-zinc-300 font-mono">{evmWallet.address?.slice(0, 8)}…{evmWallet.address?.slice(-6)}</p>
-                                  {evmWallet.usdtBalance && <p className="text-zinc-500">Balance: {parseFloat(evmWallet.usdtBalance).toFixed(2)} USDT</p>}
+                                  <p className="text-sc-text font-mono">{evmWallet.address?.slice(0, 8)}…{evmWallet.address?.slice(-6)}</p>
+                                  {evmWallet.usdtBalance && <p className="text-sc-dim">Balance: {parseFloat(evmWallet.usdtBalance).toFixed(2)} USDT</p>}
                                 </div>
                               </div>
-                              <div className="p-3 rounded-lg bg-zinc-800/60 border border-surface-border text-xs text-zinc-400 space-y-1">
-                                <p>Network: <span className="text-white">{cryptoCfg?.network}</span></p>
-                                <p>Sending: <span className="text-white font-semibold">{selectedPackage.usdAmount} USDT</span></p>
-                                <p className="text-zinc-600">To: {cryptoCfg?.walletAddress?.slice(0,10)}…{cryptoCfg?.walletAddress?.slice(-8)}</p>
-                                <p className="text-zinc-600">A small amount of {cryptoCfg?.chainId === 56 ? 'BNB' : 'ETH'} is needed for gas.</p>
+                              <div className="p-3 rounded-lg bg-sc-panel-2/60 border border-surface-border text-xs text-sc-muted space-y-1">
+                                <p>Network: <span className="text-sc-text">{cryptoCfg?.network}</span></p>
+                                <p>Sending: <span className="text-sc-text font-semibold">{selectedPackage.usdAmount} USDT</span></p>
+                                <p className="text-sc-dim">To: {cryptoCfg?.walletAddress?.slice(0,10)}…{cryptoCfg?.walletAddress?.slice(-8)}</p>
+                                <p className="text-sc-dim">A small amount of {cryptoCfg?.chainId === 56 ? 'BNB' : 'ETH'} is needed for gas.</p>
                               </div>
 {!ownershipProof ? (
                                 <div className="space-y-1.5">
@@ -1600,7 +1600,7 @@ export default function WalletPage() {
                                       ? <><Loader2 className="w-4 h-4 animate-spin" />Check your wallet…</>
                                       : <><ShieldCheck className="w-4 h-4" />1. Verify wallet ownership</>}
                                   </button>
-                                  <p className="text-[11px] text-zinc-600">Free signature — proves this wallet is yours. Not a transaction; nothing moves on-chain.</p>
+                                  <p className="text-[11px] text-sc-dim">Free signature — proves this wallet is yours. Not a transaction; nothing moves on-chain.</p>
                                 </div>
                               ) : (
                                 <div className="space-y-2">
@@ -1610,7 +1610,7 @@ export default function WalletPage() {
                                   <button
                                     onClick={() => void handleEvmSend()}
                                     disabled={evmWallet.state === 'sending' || initiateMutation.isPending}
-                                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
                                   >
                                     {evmWallet.state === 'sending' || initiateMutation.isPending
                                       ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
@@ -1641,28 +1641,28 @@ export default function WalletPage() {
                         <div className="space-y-3">
                           {cryptoCfg?.walletAddress && (
                             <div>
-                              <p className="text-xs text-zinc-500 mb-1">Send exactly <span className="text-white font-medium">{selectedPackage.usdAmount} USDT</span> to:</p>
-                              <div className="flex items-center gap-2 p-3 bg-zinc-900 rounded-lg border border-zinc-700">
+                              <p className="text-xs text-sc-dim mb-1">Send exactly <span className="text-sc-text font-medium">{selectedPackage.usdAmount} USDT</span> to:</p>
+                              <div className="flex items-center gap-2 p-3 bg-sc-panel rounded-lg border border-sc-line">
                                 <code className="font-mono text-xs text-orange-300 break-all flex-1">{cryptoCfg.walletAddress}</code>
                                 <CopyButton text={cryptoCfg.walletAddress} />
                               </div>
-                              <p className="text-xs text-zinc-600 mt-1">Network: {cryptoCfg.network}</p>
+                              <p className="text-xs text-sc-dim mt-1">Network: {cryptoCfg.network}</p>
                             </div>
                           )}
                           <div>
-                            <label className="block text-xs text-zinc-500 mb-1.5">Transaction Hash (optional but speeds up review)</label>
+                            <label className="block text-xs text-sc-dim mb-1.5">Transaction Hash (optional but speeds up review)</label>
                             <input
                               type="text"
                               value={manualTxHash}
                               onChange={(e) => setManualTxHash(e.target.value)}
                               placeholder="0x..."
-                              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2.5 text-sm text-white font-mono placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2.5 text-sm text-sc-text font-mono placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500"
                             />
                           </div>
                           <button
                             onClick={handleManualSubmit}
                             disabled={initiateMutation.isPending}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
                           >
                             {initiateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             {manualTxHash ? 'Submit with TxHash' : 'I Sent the Payment'}
@@ -1681,13 +1681,13 @@ export default function WalletPage() {
                           ) : (
                             <Wallet className="w-4 h-4 text-blue-400 shrink-0" />
                           )}
-                          <p className="text-sm font-semibold text-white">{selectedMethod === 'PAYMONGO' ? 'PayMongo Checkout' : 'PayPal Checkout'}</p>
+                          <p className="text-sm font-semibold text-sc-text">{selectedMethod === 'PAYMONGO' ? 'PayMongo Checkout' : 'PayPal Checkout'}</p>
                         </div>
-                        <div className="text-xs text-zinc-400 space-y-1">
-                          <p>Package: <span className="text-white font-medium">{selectedPackage.usdAmount} USD</span></p>
+                        <div className="text-xs text-sc-muted space-y-1">
+                          <p>Package: <span className="text-sc-text font-medium">{selectedPackage.usdAmount} USD</span></p>
                           <p>You get: <span className="text-brand-300 font-medium">{selectedPackage.creditsTotal.toLocaleString()} credits</span></p>
                           {selectedMethod === 'PAYMONGO' && (
-                            <p>Amount: <span className="text-white">₱{(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()}</span></p>
+                            <p>Amount: <span className="text-sc-text">₱{(selectedPackage.phpAmount ?? selectedPackage.phpEquivalent).toLocaleString()}</span></p>
                           )}
                         </div>
                       </div>
@@ -1696,11 +1696,11 @@ export default function WalletPage() {
                         <div className="space-y-3">
                           <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-xs">
                             <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                            <p className="text-zinc-300">Checkout link ready. Continue in this tab to complete payment.</p>
+                            <p className="text-sc-text">Checkout link ready. Continue in this tab to complete payment.</p>
                           </div>
                           <button
                             onClick={() => window.location.assign(fiatCheckoutUrl)}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-all w-full justify-center"
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-sc-text text-sm font-medium transition-all w-full justify-center"
                           >
                             <ExternalLink className="w-4 h-4" /> Open Checkout Again
                           </button>
@@ -1709,7 +1709,7 @@ export default function WalletPage() {
                         <button
                           onClick={selectedMethod === 'PAYMONGO' ? handlePayMongoSubmit : handlePayPalSubmit}
                           disabled={initiateMutation.isPending || paymongoLinkMutation.isPending || paypalOrderMutation.isPending}
-                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all w-full justify-center"
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all w-full justify-center"
                         >
                           {(initiateMutation.isPending || paymongoLinkMutation.isPending || paypalOrderMutation.isPending) ? (
                             <><Loader2 className="w-4 h-4 animate-spin" />Creating checkout…</>
@@ -1751,7 +1751,7 @@ export default function WalletPage() {
                               onError: () => setDepositError('Could not cancel the deposit — please cancel it from Deposit History.'),
                             });
                           }}
-                          className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-all"
+                          className="px-4 py-2 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-xs font-medium transition-all"
                         >
                           Cancel
                         </button>
@@ -1771,26 +1771,26 @@ export default function WalletPage() {
       {/* ── Deposit history ── */}
           <div className="card-glass rounded-xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
-              <h2 className="font-semibold text-white">Deposit History</h2>
-              {depositHistory && <span className="text-xs text-zinc-500">{depositHistory.meta.total} total</span>}
+              <h2 className="font-semibold text-sc-text">Deposit History</h2>
+              {depositHistory && <span className="text-xs text-sc-dim">{depositHistory.meta.total} total</span>}
             </div>
 
             {depositsLoading ? (
-              <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+              <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-sc-dim" /></div>
             ) : !depositHistory?.items.length ? (
               <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                <p className="text-zinc-500 text-sm">No deposits yet.</p>
-                <p className="text-zinc-600 text-xs mt-1">Your deposit history will appear here.</p>
+                <p className="text-sc-dim text-sm">No deposits yet.</p>
+                <p className="text-sc-dim text-xs mt-1">Your deposit history will appear here.</p>
               </div>
             ) : (
               <>
                 <div className="divide-y divide-surface-border">
                   {depositHistory.items.map((dep) => {
-                    const meta = METHOD_META[dep.method] ?? { label: dep.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: CreditCard, currency: '?' };
+                    const meta = METHOD_META[dep.method] ?? { label: dep.method, color: 'text-sc-muted', bg: 'bg-sc-soft/10', icon: CreditCard, currency: '?' };
                     const underReview = dep.status === 'PROCESSING' && dep.gatewayData?.needsReview === true;
                     const statusCfg = underReview
                       ? { label: 'Under review', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', icon: ShieldCheck }
-                      : (DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock });
+                      : (DEPOSIT_STATUS_CONFIG[dep.status] ?? { label: dep.status, color: 'text-sc-muted', bg: 'bg-sc-soft/10 border-sc-border/20', icon: Clock });
                     const StatusIcon = statusCfg.icon;
                     const canCancel = dep.status === 'PENDING' || dep.status === 'PROCESSING';
                     const isCancelling = cancelDepositMutation.isPending && cancelDepositMutation.variables === dep.id;
@@ -1804,10 +1804,10 @@ export default function WalletPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
                               <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium text-white">{meta.label}</p>
+                                <p className="text-sm font-medium text-sc-text">{meta.label}</p>
                                 <button
                                   onClick={() => setExpandedDepositId(isExpanded ? null : dep.id)}
-                                  className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                                  className="text-sc-dim hover:text-sc-text transition-colors"
                                   title={isExpanded ? 'Collapse details' : 'Expand details'}
                                 >
                                   {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1825,19 +1825,19 @@ export default function WalletPage() {
                                 </button>
                               )}
                             </div>
-                            <p className="text-xs text-zinc-500 mt-0.5">
-                              <span className="font-medium text-white">{dep.currency} {dep.amountFiat.toFixed(2)}</span>
-                              {dep.exchangeRate && <span className="text-zinc-600"> (₱{dep.exchangeRate.toFixed(2)}/$)</span>}
+                            <p className="text-xs text-sc-dim mt-0.5">
+                              <span className="font-medium text-sc-text">{dep.currency} {dep.amountFiat.toFixed(2)}</span>
+                              {dep.exchangeRate && <span className="text-sc-dim"> (₱{dep.exchangeRate.toFixed(2)}/$)</span>}
                               {' '}→{' '}
                               <span className="text-brand-300 font-semibold">{dep.creditsToAward.toLocaleString()} credits</span>
                               {dep.bonusCredits > 0 && <span className="text-green-400"> (+{dep.bonusCredits.toLocaleString()} bonus)</span>}
                             </p>
                             <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                              <p className="text-xs text-zinc-600">Created {formatRelativeTime(dep.createdAt)}</p>
-                              {dep.completedAt && <p className="text-xs text-zinc-600">Completed {formatRelativeTime(dep.completedAt)}</p>}
+                              <p className="text-xs text-sc-dim">Created {formatRelativeTime(dep.createdAt)}</p>
+                              {dep.completedAt && <p className="text-xs text-sc-dim">Completed {formatRelativeTime(dep.completedAt)}</p>}
                             </div>
                             {dep.adminNotes && (
-                              <p className="text-xs text-zinc-500 mt-1 italic">{dep.adminNotes}</p>
+                              <p className="text-xs text-sc-dim mt-1 italic">{dep.adminNotes}</p>
                             )}
                             {dep.status === 'COMPLETED' && dep.creditsAwarded > 0 && (
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
@@ -1901,7 +1901,7 @@ export default function WalletPage() {
                             <button
                               onClick={() => setCancelConfirmId(dep.id)}
                               disabled={isCancelling}
-                              className="shrink-0 flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                              className="shrink-0 flex items-center gap-1 text-xs text-sc-dim hover:text-red-400 transition-colors disabled:opacity-50"
                             >
                               {isCancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
                               Cancel
@@ -1940,8 +1940,8 @@ export default function WalletPage() {
                             )}
                             {dep.gatewayData && Object.keys(dep.gatewayData).length > 0 && (
                               <div className="sm:col-span-2">
-                                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Gateway Data</p>
-                                <pre className="text-[11px] text-zinc-400 bg-black/20 rounded-lg p-2.5 overflow-x-auto font-mono">
+                                <p className="text-[10px] uppercase tracking-wider text-sc-dim mb-1">Gateway Data</p>
+                                <pre className="text-[11px] text-sc-muted bg-black/20 rounded-lg p-2.5 overflow-x-auto font-mono">
                                   {JSON.stringify(dep.gatewayData, null, 2)}
                                 </pre>
                               </div>
@@ -1954,11 +1954,11 @@ export default function WalletPage() {
                 </div>
                 {depositHistory.meta.totalPages > 1 && (
                   <div className="flex items-center justify-between px-6 py-4 border-t border-surface-border">
-                    <button onClick={() => setDepPage((p) => p - 1)} disabled={!depositHistory.meta.hasPrev} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                    <button onClick={() => setDepPage((p) => p - 1)} disabled={!depositHistory.meta.hasPrev} className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                       <ChevronLeft className="w-4 h-4" />Previous
                     </button>
-                    <span className="text-xs text-zinc-500">Page {depositHistory.meta.page} of {depositHistory.meta.totalPages}</span>
-                    <button onClick={() => setDepPage((p) => p + 1)} disabled={!depositHistory.meta.hasNext} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                    <span className="text-xs text-sc-dim">Page {depositHistory.meta.page} of {depositHistory.meta.totalPages}</span>
+                    <button onClick={() => setDepPage((p) => p + 1)} disabled={!depositHistory.meta.hasNext} className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                       Next<ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -1975,9 +1975,9 @@ export default function WalletPage() {
           <div className="w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              <h2 className="text-base font-semibold text-white">Cancel Deposit?</h2>
+              <h2 className="text-base font-semibold text-sc-text">Cancel Deposit?</h2>
             </div>
-            <p className="text-sm text-zinc-400 mb-6">
+            <p className="text-sm text-sc-muted mb-6">
               Are you sure you want to cancel this pending deposit? This action cannot be undone.
             </p>
             {cancelDepositMutation.isError && (
@@ -1989,14 +1989,14 @@ export default function WalletPage() {
               <button
                 onClick={() => setCancelConfirmId(null)}
                 disabled={cancelDepositMutation.isPending}
-                className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors disabled:opacity-50"
               >
                 Keep Deposit
               </button>
               <button
                 onClick={() => cancelDepositMutation.mutate(cancelConfirmId)}
                 disabled={cancelDepositMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all"
               >
                 {cancelDepositMutation.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

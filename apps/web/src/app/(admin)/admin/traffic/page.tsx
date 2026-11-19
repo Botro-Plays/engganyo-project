@@ -104,13 +104,13 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
   return (
     <div className="card-glass rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-zinc-500">{label}</p>
+        <p className="text-xs text-sc-dim">{label}</p>
         <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center`}>
-          <Icon className="w-4 h-4 text-white" />
+          <Icon className="w-4 h-4 text-sc-text" />
         </div>
       </div>
-      <p className="text-2xl font-bold text-white">{value.toLocaleString()}</p>
-      {sub && <p className="text-xs text-zinc-500 mt-0.5">{sub}</p>}
+      <p className="text-2xl font-bold text-sc-text">{value.toLocaleString()}</p>
+      {sub && <p className="text-xs text-sc-dim mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -194,8 +194,8 @@ export default function VisitorTrafficPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Visitor analytics</h1>
-          <p className="text-sm text-zinc-400">
+          <h1 className="text-xl font-bold text-sc-text">Visitor analytics</h1>
+          <p className="text-sm text-sc-muted">
             First-party beacon metrics — {activeLabel} · all times UTC
             {collectionStart && ` · collecting since ${collectionStart}`}
           </p>
@@ -207,7 +207,7 @@ export default function VisitorTrafficPage() {
                 key={opt.days}
                 onClick={() => { setCustom(null); setDays(opt.days); setPage(1); }}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  !custom && days === opt.days ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
+                  !custom && days === opt.days ? 'bg-brand-500 text-sc-text' : 'text-sc-muted hover:text-sc-text'
                 }`}
               >
                 {opt.label}
@@ -221,19 +221,19 @@ export default function VisitorTrafficPage() {
               value={custom?.from ?? ''}
               max={toISODate(new Date())}
               onChange={(e) => setCustom((c) => ({ from: e.target.value, to: c?.to ?? toISODate(new Date()) }))}
-              className="bg-surface-hover border border-surface-border rounded-md px-2 py-1.5 text-xs text-zinc-300"
+              className="bg-surface-hover border border-surface-border rounded-md px-2 py-1.5 text-xs text-sc-text"
             />
-            <span className="text-zinc-500 text-xs">→</span>
+            <span className="text-sc-dim text-xs">→</span>
             <input
               type="date"
               aria-label="To date"
               value={custom?.to ?? ''}
               max={toISODate(new Date())}
               onChange={(e) => setCustom((c) => ({ from: c?.from ?? toISODate(new Date(Date.now() - 30 * 864e5)), to: e.target.value }))}
-              className="bg-surface-hover border border-surface-border rounded-md px-2 py-1.5 text-xs text-zinc-300"
+              className="bg-surface-hover border border-surface-border rounded-md px-2 py-1.5 text-xs text-sc-text"
             />
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer select-none">
+          <label className="flex items-center gap-1.5 text-xs text-sc-muted cursor-pointer select-none">
             <input
               type="checkbox"
               checked={includeBots}
@@ -248,11 +248,11 @@ export default function VisitorTrafficPage() {
       {/* Metric definitions + caveats */}
       <div className="card-glass rounded-xl p-4 flex items-start gap-3">
         <Info className="w-4 h-4 text-brand-400 mt-0.5 shrink-0" />
-        <div className="text-xs text-zinc-400 space-y-1">
+        <div className="text-xs text-sc-muted space-y-1">
           <p>
-            <span className="text-zinc-300 font-medium">Page views</span> = tracked route loads ·{' '}
-            <span className="text-zinc-300 font-medium">Visits</span> = activity bursts per browser (30-min session window) ·{' '}
-            <span className="text-zinc-300 font-medium">Est. uniques</span> = distinct anonymous visitor ids (cookie-based estimate).
+            <span className="text-sc-text font-medium">Page views</span> = tracked route loads ·{' '}
+            <span className="text-sc-text font-medium">Visits</span> = activity bursts per browser (30-min session window) ·{' '}
+            <span className="text-sc-text font-medium">Est. uniques</span> = distinct anonymous visitor ids (cookie-based estimate).
           </p>
           <p>
             Beacon data covers JavaScript page loads only — it is not a count of all HTTP/API requests
@@ -291,11 +291,11 @@ export default function VisitorTrafficPage() {
 
       {/* Trend */}
       <div className="card-glass rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-white mb-1">Traffic trend</h2>
-        <p className="text-xs text-zinc-500 mb-4">Daily visits, page views, and estimated uniques · UTC</p>
+        <h2 className="text-sm font-semibold text-sc-text mb-1">Traffic trend</h2>
+        <p className="text-xs text-sc-dim mb-4">Daily visits, page views, and estimated uniques · UTC</p>
         {chartData.length === 0 ? (
-          <div className="h-[220px] flex flex-col items-center justify-center text-zinc-500 text-sm gap-1">
-            <Eye className="w-6 h-6 text-zinc-700" />
+          <div className="h-[220px] flex flex-col items-center justify-center text-sc-dim text-sm gap-1">
+            <Eye className="w-6 h-6 text-sc-dim" />
             <p>{collectionStart ? 'No traffic recorded in this range' : 'No traffic data yet — the beacon starts collecting on the next deploy'}</p>
           </div>
         ) : (
@@ -328,8 +328,8 @@ export default function VisitorTrafficPage() {
       <div className="card-glass rounded-xl p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">Breakdowns</h2>
-            <p className="text-xs text-zinc-500">
+            <h2 className="text-sm font-semibold text-sc-text">Breakdowns</h2>
+            <p className="text-xs text-sc-dim">
               {breakdown?.truncatedToRawWindow
                 ? 'Showing the last 90 days of raw events for this breakdown.'
                 : 'Human traffic by dimension · click a column to sort'}
@@ -341,7 +341,7 @@ export default function VisitorTrafficPage() {
                 key={d.key}
                 onClick={() => { setDimension(d.key); setPage(1); }}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
-                  dimension === d.key ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
+                  dimension === d.key ? 'bg-brand-500 text-sc-text' : 'text-sc-muted hover:text-sc-text'
                 }`}
               >
                 <d.icon className="w-3.5 h-3.5" />
@@ -358,7 +358,7 @@ export default function VisitorTrafficPage() {
             ))}
           </div>
         ) : !breakdown?.items.length ? (
-          <div className="py-12 text-center text-zinc-500 text-sm">
+          <div className="py-12 text-center text-sc-dim text-sm">
             No {DIMENSIONS.find((d) => d.key === dimension)?.label.toLowerCase()} data in this range
           </div>
         ) : (
@@ -371,10 +371,10 @@ export default function VisitorTrafficPage() {
                       <th key={col.key} className="text-left py-2 pr-4">
                         <button
                           onClick={() => toggleSort(col.key)}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-zinc-400 hover:text-white transition-colors"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-sc-muted hover:text-sc-text transition-colors"
                         >
                           {col.label}
-                          <ArrowUpDown className={`w-3 h-3 ${sort === col.key ? 'text-brand-400' : 'text-zinc-600'}`} />
+                          <ArrowUpDown className={`w-3 h-3 ${sort === col.key ? 'text-brand-400' : 'text-sc-dim'}`} />
                         </button>
                       </th>
                     ))}
@@ -386,18 +386,18 @@ export default function VisitorTrafficPage() {
                     return (
                       <tr key={item.value} className="border-b border-surface-border/50 last:border-0">
                         <td className="py-2.5 pr-4">
-                          <span className="text-zinc-200 inline-flex items-center gap-1.5 max-w-[280px] truncate">
-                            {DevIcon && <DevIcon className="w-3.5 h-3.5 text-zinc-500 shrink-0" />}
+                          <span className="text-sc-text inline-flex items-center gap-1.5 max-w-[280px] truncate">
+                            {DevIcon && <DevIcon className="w-3.5 h-3.5 text-sc-dim shrink-0" />}
                             {item.value}
                             {item.value === 'Unknown' || item.value === 'Direct / none' ? (
-                              <span className="text-[10px] px-1 py-0.5 rounded bg-zinc-500/15 text-zinc-500">unlabeled</span>
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-sc-soft/15 text-sc-dim">unlabeled</span>
                             ) : null}
                           </span>
                         </td>
-                        <td className="py-2.5 pr-4 text-zinc-300 tabular-nums">{item.visits.toLocaleString()}</td>
-                        <td className="py-2.5 pr-4 text-zinc-300 tabular-nums">{item.uniques.toLocaleString()}</td>
-                        <td className="py-2.5 pr-4 text-zinc-300 tabular-nums">{item.pageViews.toLocaleString()}</td>
-                        <td className="py-2.5 pr-4 text-zinc-300 tabular-nums">
+                        <td className="py-2.5 pr-4 text-sc-text tabular-nums">{item.visits.toLocaleString()}</td>
+                        <td className="py-2.5 pr-4 text-sc-text tabular-nums">{item.uniques.toLocaleString()}</td>
+                        <td className="py-2.5 pr-4 text-sc-text tabular-nums">{item.pageViews.toLocaleString()}</td>
+                        <td className="py-2.5 pr-4 text-sc-text tabular-nums">
                           {item.bounceRate != null ? `${item.bounceRate}%` : '—'}
                         </td>
                       </tr>
@@ -408,14 +408,14 @@ export default function VisitorTrafficPage() {
             </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-sc-dim">
                   Page {page} of {totalPages} · {breakdown.total.toLocaleString()} rows
                 </p>
                 <div className="flex gap-1">
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
-                    className="p-1.5 rounded-md bg-surface-hover text-zinc-300 disabled:opacity-40 hover:text-white"
+                    className="p-1.5 rounded-md bg-surface-hover text-sc-text disabled:opacity-40 hover:text-sc-text"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -423,7 +423,7 @@ export default function VisitorTrafficPage() {
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="p-1.5 rounded-md bg-surface-hover text-zinc-300 disabled:opacity-40 hover:text-white"
+                    className="p-1.5 rounded-md bg-surface-hover text-sc-text disabled:opacity-40 hover:text-sc-text"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -440,18 +440,18 @@ export default function VisitorTrafficPage() {
         <div className="card-glass rounded-xl p-6">
           <div className="flex items-center gap-2 mb-1">
             <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-white">Recent visitors — IP detail</h2>
+            <h2 className="text-sm font-semibold text-sc-text">Recent visitors — IP detail</h2>
           </div>
-          <p className="text-xs text-zinc-500 mb-4">
+          <p className="text-xs text-sc-dim mb-4">
             SUPER_ADMIN only · latest beacon events with IP and user agent · paginated, not exportable
           </p>
           {!recent?.items.length ? (
-            <p className="text-sm text-zinc-500 py-6 text-center">No beacon events recorded yet.</p>
+            <p className="text-sm text-sc-dim py-6 text-center">No beacon events recorded yet.</p>
           ) : (
             <div className="overflow-x-auto -mx-2 px-2">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-surface-border text-zinc-500">
+                  <tr className="border-b border-surface-border text-sc-dim">
                     <th className="text-left py-2 pr-3 font-medium">Time (UTC)</th>
                     <th className="text-left py-2 pr-3 font-medium">Route</th>
                     <th className="text-left py-2 pr-3 font-medium">Country</th>
@@ -464,14 +464,14 @@ export default function VisitorTrafficPage() {
                 <tbody>
                   {recent.items.map((e) => (
                     <tr key={e.id} className="border-b border-surface-border/50 last:border-0">
-                      <td className="py-2 pr-3 text-zinc-400 whitespace-nowrap">
+                      <td className="py-2 pr-3 text-sc-muted whitespace-nowrap">
                         {new Date(e.createdAt).toISOString().replace('T', ' ').slice(5, 19)}
                       </td>
-                      <td className="py-2 pr-3 text-zinc-200 font-mono">{e.path}</td>
-                      <td className="py-2 pr-3 text-zinc-300">{e.country ?? 'Unknown'}</td>
-                      <td className="py-2 pr-3 text-zinc-300">{e.deviceClass}</td>
-                      <td className="py-2 pr-3 text-zinc-300 font-mono">{e.ipAddress ?? '—'}</td>
-                      <td className="py-2 pr-3 text-zinc-400 max-w-[160px] truncate">{e.referrerDomain ?? 'direct'}</td>
+                      <td className="py-2 pr-3 text-sc-text font-mono">{e.path}</td>
+                      <td className="py-2 pr-3 text-sc-text">{e.country ?? 'Unknown'}</td>
+                      <td className="py-2 pr-3 text-sc-text">{e.deviceClass}</td>
+                      <td className="py-2 pr-3 text-sc-text font-mono">{e.ipAddress ?? '—'}</td>
+                      <td className="py-2 pr-3 text-sc-muted max-w-[160px] truncate">{e.referrerDomain ?? 'direct'}</td>
                       <td className="py-2">
                         {e.isBot && (
                           <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">

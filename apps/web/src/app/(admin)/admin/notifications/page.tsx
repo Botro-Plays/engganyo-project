@@ -45,7 +45,7 @@ function notificationIcon(type: string) {
   if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-4 h-4 text-green-400" />;
   if (type === 'ACCOUNT_WARNING') return <AlertTriangle className="w-4 h-4 text-amber-400" />;
   if (type === 'SECURITY_ALERT') return <AlertTriangle className="w-4 h-4 text-red-400" />;
-  return <Bell className="w-4 h-4 text-zinc-400" />;
+  return <Bell className="w-4 h-4 text-sc-muted" />;
 }
 
 const typeOptions = [
@@ -124,8 +124,8 @@ export default function AdminNotificationsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Notifications</h1>
-          <p className="text-zinc-400 text-sm mt-1">
+          <h1 className="text-xl font-bold text-sc-text">Notifications</h1>
+          <p className="text-sc-muted text-sm mt-1">
             {meta?.total ?? 0} total notification{meta?.total === 1 ? '' : 's'} across all users
           </p>
         </div>
@@ -147,7 +147,7 @@ export default function AdminNotificationsPage() {
           <select
             value={typeFilter}
             onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-            className="px-3 py-2 rounded-lg bg-surface border border-surface-border text-white text-sm focus:outline-none focus:border-brand-500 transition-colors"
+            className="px-3 py-2 rounded-lg bg-surface border border-surface-border text-sc-text text-sm focus:outline-none focus:border-brand-500 transition-colors"
           >
             {typeOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -156,14 +156,14 @@ export default function AdminNotificationsPage() {
         </div>
         <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-md">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sc-dim" />
             <input
               type="text"
               placeholder="Filter by user ID..."
               value={tempUserId}
               onChange={(e) => setTempUserId(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') applyUserFilter(); }}
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface border border-surface-border text-white text-sm placeholder-zinc-600 focus:outline-none focus:border-brand-500 transition-colors"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface border border-surface-border text-sc-text text-sm placeholder-sc-dim focus:outline-none focus:border-brand-500 transition-colors"
             />
           </div>
           <button
@@ -175,7 +175,7 @@ export default function AdminNotificationsPage() {
           {userIdFilter && (
             <button
               onClick={clearUserFilter}
-              className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              className="p-2 rounded-lg text-sc-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
             >
               <X className="w-4 h-4" />
             </button>
@@ -193,7 +193,7 @@ export default function AdminNotificationsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-surface-border text-xs text-zinc-500 uppercase tracking-wider">
+                <tr className="border-b border-surface-border text-xs text-sc-dim uppercase tracking-wider">
                   <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Title</th>
                   <th className="px-4 py-3 font-medium">User</th>
@@ -205,7 +205,7 @@ export default function AdminNotificationsPage() {
               <tbody className="divide-y divide-surface-border">
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">
+                    <td colSpan={6} className="px-4 py-12 text-center text-sc-dim">
                       No notifications found.
                     </td>
                   </tr>
@@ -215,30 +215,30 @@ export default function AdminNotificationsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         {notificationIcon(n.type)}
-                        <span className="text-xs text-zinc-400">{n.type}</span>
+                        <span className="text-xs text-sc-muted">{n.type}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm text-white font-medium max-w-xs truncate">{n.title}</p>
-                      <p className="text-xs text-zinc-500 max-w-xs truncate">{n.body}</p>
+                      <p className="text-sm text-sc-text font-medium max-w-xs truncate">{n.title}</p>
+                      <p className="text-xs text-sc-dim max-w-xs truncate">{n.body}</p>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <Link
                         href={`/admin/users?search=${n.user.id}`}
-                        className="flex items-center gap-2 text-sm text-zinc-300 hover:text-brand-300 transition-colors"
+                        className="flex items-center gap-2 text-sm text-sc-text hover:text-brand-300 transition-colors"
                       >
-                        <User className="w-3.5 h-3.5 text-zinc-500" />
+                        <User className="w-3.5 h-3.5 text-sc-dim" />
                         {n.user.displayName ?? n.user.username}
                       </Link>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {n.isRead ? (
-                        <span className="text-xs text-zinc-600">Read</span>
+                        <span className="text-xs text-sc-dim">Read</span>
                       ) : (
                         <span className="text-xs text-indigo-400 font-medium">Unread</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-zinc-500">
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-sc-dim">
                       {formatRelativeTime(n.createdAt)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
@@ -253,7 +253,7 @@ export default function AdminNotificationsPage() {
                           </button>
                           <button
                             onClick={() => setDeleteConfirm(null)}
-                            className="px-2 py-1 rounded text-xs text-zinc-500 hover:text-zinc-300 transition-all"
+                            className="px-2 py-1 rounded text-xs text-sc-dim hover:text-sc-text transition-all"
                           >
                             Cancel
                           </button>
@@ -261,7 +261,7 @@ export default function AdminNotificationsPage() {
                       ) : (
                         <button
                           onClick={() => setDeleteConfirm(n.id)}
-                          className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                          className="p-1.5 rounded-md text-sc-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
                           title="Delete notification"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -282,17 +282,17 @@ export default function AdminNotificationsPage() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="p-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="p-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm text-zinc-400">
+          <span className="text-sm text-sc-muted">
             Page {meta.page} of {meta.totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
             disabled={page >= meta.totalPages}
-            className="p-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="p-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             <ChevronRight className="w-4 h-4" />
           </button>

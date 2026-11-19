@@ -68,7 +68,7 @@ function notificationIcon(type: string) {
   if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-5 h-5 text-red-400" />;
   if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-5 h-5 text-indigo-400" />;
   if (type === 'WELCOME') return <Sparkles className="w-5 h-5 text-brand-400" />;
-  return <Bell className="w-5 h-5 text-zinc-400" />;
+  return <Bell className="w-5 h-5 text-sc-muted" />;
 }
 
 function getNotificationHref(n: AppNotification): string {
@@ -166,8 +166,8 @@ export default function NotificationsPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Notifications</h1>
-          <p className="text-zinc-400 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-sc-text">Notifications</h1>
+          <p className="text-sc-muted text-sm mt-1">
             {unread > 0 ? `${unread} unread notification${unread === 1 ? '' : 's'}` : 'All caught up'}
           </p>
         </div>
@@ -204,9 +204,9 @@ export default function NotificationsPage() {
           <div className="card-glass rounded-xl divide-y divide-surface-border overflow-hidden">
             {data?.items.length === 0 && (
               <div className="px-6 py-16 text-center">
-                <Bell className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-                <p className="text-zinc-400 font-medium">No notifications yet</p>
-                <p className="text-zinc-600 text-sm mt-1">
+                <Bell className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+                <p className="text-sc-muted font-medium">No notifications yet</p>
+                <p className="text-sc-dim text-sm mt-1">
                   You will see activity here when something happens.
                 </p>
               </div>
@@ -226,11 +226,11 @@ export default function NotificationsPage() {
                 >
                   <div className="mt-0.5 flex-shrink-0">{notificationIcon(n.type)}</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white leading-snug group-hover:text-brand-300 transition-colors">
+                    <p className="text-sm font-medium text-sc-text leading-snug group-hover:text-brand-300 transition-colors">
                       {n.title}
                     </p>
-                    <p className="text-sm text-zinc-400 leading-snug mt-0.5">{n.body}</p>
-                    <p className="text-xs text-zinc-600 mt-1.5">{formatRelativeTime(n.createdAt)}</p>
+                    <p className="text-sm text-sc-muted leading-snug mt-0.5">{n.body}</p>
+                    <p className="text-xs text-sc-dim mt-1.5">{formatRelativeTime(n.createdAt)}</p>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!n.isRead && (
@@ -240,7 +240,7 @@ export default function NotificationsPage() {
                           markReadMutation.mutate(n.id);
                         }}
                         disabled={markReadMutation.isPending}
-                        className="p-1.5 rounded-md text-zinc-500 hover:text-green-400 hover:bg-green-500/10 transition-all"
+                        className="p-1.5 rounded-md text-sc-dim hover:text-green-400 hover:bg-green-500/10 transition-all"
                         title="Mark as read"
                       >
                         <Check className="w-4 h-4" />
@@ -252,7 +252,7 @@ export default function NotificationsPage() {
                         deleteMutation.mutate(n.id);
                       }}
                       disabled={deleteMutation.isPending}
-                      className="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      className="p-1.5 rounded-md text-sc-dim hover:text-red-400 hover:bg-red-500/10 transition-all"
                       title="Delete"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -272,17 +272,17 @@ export default function NotificationsPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="p-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="p-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm text-zinc-400">
+              <span className="text-sm text-sc-muted">
                 Page {meta.page} of {meta.totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
                 disabled={page >= meta.totalPages}
-                className="p-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="p-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-all"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

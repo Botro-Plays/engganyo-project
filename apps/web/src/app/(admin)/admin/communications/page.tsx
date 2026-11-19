@@ -119,8 +119,8 @@ export default function CommunicationsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Communications</h1>
-        <p className="text-zinc-400 text-sm mt-1">Email templates, test sends, and delivery controls.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Communications</h1>
+        <p className="text-sc-muted text-sm mt-1">Email templates, test sends, and delivery controls.</p>
       </div>
 
       {/* Status banner */}
@@ -143,8 +143,8 @@ export default function CommunicationsPage() {
               <Users className="w-4 h-4 text-brand-400" />
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Active Users</p>
-              <p className="text-lg font-semibold text-white">
+              <p className="text-xs text-sc-dim">Active Users</p>
+              <p className="text-lg font-semibold text-sc-text">
                 {statsLoading ? '…' : stats?.totalUsers ?? 0}
               </p>
             </div>
@@ -156,8 +156,8 @@ export default function CommunicationsPage() {
               <CheckCircle2 className="w-4 h-4 text-green-400" />
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Digest Enabled</p>
-              <p className="text-lg font-semibold text-white">
+              <p className="text-xs text-sc-dim">Digest Enabled</p>
+              <p className="text-lg font-semibold text-sc-text">
                 {statsLoading ? '…' : stats?.weeklyDigestEnabled ?? 0}
               </p>
             </div>
@@ -169,8 +169,8 @@ export default function CommunicationsPage() {
               <XCircle className="w-4 h-4 text-red-400" />
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Digest Disabled</p>
-              <p className="text-lg font-semibold text-white">
+              <p className="text-xs text-sc-dim">Digest Disabled</p>
+              <p className="text-lg font-semibold text-sc-text">
                 {statsLoading ? '…' : stats?.weeklyDigestDisabled ?? 0}
               </p>
             </div>
@@ -187,15 +187,15 @@ export default function CommunicationsPage() {
             <Eye className="w-5 h-5 text-brand-400" />
           </div>
           <div>
-            <h2 className="font-semibold text-white text-base">Your Digest Preview</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <h2 className="font-semibold text-sc-text text-base">Your Digest Preview</h2>
+            <p className="text-xs text-sc-dim mt-0.5">
               This is what your weekly digest would look like with your real stats.
             </p>
           </div>
         </div>
 
         {previewLoading ? (
-          <div className="flex items-center gap-2 text-zinc-500 text-sm">
+          <div className="flex items-center gap-2 text-sc-dim text-sm">
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading preview…
           </div>
@@ -212,10 +212,10 @@ export default function CommunicationsPage() {
             <StatBox label="Weekly Rank" value={`#${preview.weeklyRank || '—'}`} color="text-emerald-400" />
             <StatBox label="All-Time Rank" value={`#${preview.allTimeRank || '—'}`} color="text-indigo-400" />
             <StatBox label="Total Done" value={preview.totalTasksCompleted} color="text-teal-400" />
-            <StatBox label="Period" value={`${preview.weekStart} – ${preview.weekEnd}`} color="text-zinc-300" />
+            <StatBox label="Period" value={`${preview.weekStart} – ${preview.weekEnd}`} color="text-sc-text" />
           </div>
         ) : (
-          <p className="text-sm text-zinc-500">No preview data available.</p>
+          <p className="text-sm text-sc-dim">No preview data available.</p>
         )}
       </div>
 
@@ -226,8 +226,8 @@ export default function CommunicationsPage() {
             <Mail className="w-5 h-5 text-brand-400" />
           </div>
           <div>
-            <h2 className="font-semibold text-white text-base">Weekly Digest Controls</h2>
-            <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed max-w-md">
+            <h2 className="font-semibold text-sc-text text-base">Weekly Digest Controls</h2>
+            <p className="text-xs text-sc-dim mt-0.5 leading-relaxed max-w-md">
               Automated email sent every Monday at 9:00 AM UTC to active users.
               Includes personalized task stats, credits earned, balance, leaderboard ranks, and new campaigns.
             </p>
@@ -266,12 +266,12 @@ export default function CommunicationsPage() {
       {/* Queue placeholder */}
       <div className="card-glass rounded-xl p-6 opacity-60">
         <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-zinc-500/10 flex items-center justify-center shrink-0">
-            <Activity className="w-5 h-5 text-zinc-400" />
+          <div className="w-10 h-10 rounded-xl bg-sc-soft/10 flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5 text-sc-muted" />
           </div>
           <div>
-            <h2 className="font-semibold text-white text-base">Email Queue Status</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Coming soon — monitor BullMQ email queue depth and retry counts.</p>
+            <h2 className="font-semibold text-sc-text text-base">Email Queue Status</h2>
+            <p className="text-xs text-sc-dim mt-0.5">Coming soon — monitor BullMQ email queue depth and retry counts.</p>
           </div>
         </div>
       </div>
@@ -292,7 +292,7 @@ export default function CommunicationsPage() {
 function StatBox({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
     <div className="bg-surface-hover rounded-lg p-3 border border-surface-border">
-      <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-[10px] text-sc-dim uppercase tracking-wider mb-1">{label}</p>
       <p className={`text-lg font-bold ${color}`}>{value}</p>
     </div>
   );
@@ -426,23 +426,23 @@ function AnnouncementComposer({
     if (p.type === 'date') {
       return (
         <div key={p.key}>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <Calendar className="w-3 h-3" /> {p.label}
           </label>
           <input
             type="date"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/50 [color-scheme:dark]"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500/50 [color-scheme:dark]"
           />
-          <p className="text-[10px] text-zinc-600 mt-1">Example: {p.example}</p>
+          <p className="text-[10px] text-sc-dim mt-1">Example: {p.example}</p>
         </div>
       );
     }
     if (p.type === 'textarea') {
       return (
         <div key={p.key}>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <FileText className="w-3 h-3" /> {p.label}
           </label>
           <textarea
@@ -450,14 +450,14 @@ function AnnouncementComposer({
             onChange={(e) => setValue(e.target.value)}
             rows={3}
             placeholder={p.example}
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 leading-relaxed"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50 leading-relaxed"
           />
         </div>
       );
     }
     return (
       <div key={p.key}>
-        <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+        <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
           <Type className="w-3 h-3" /> {p.label}
         </label>
         <input
@@ -465,7 +465,7 @@ function AnnouncementComposer({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={p.example}
-          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50"
         />
       </div>
     );
@@ -478,8 +478,8 @@ function AnnouncementComposer({
           <Megaphone className="w-5 h-5 text-amber-400" />
         </div>
         <div>
-          <h2 className="font-semibold text-white text-base">Send Announcement</h2>
-          <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed max-w-md">
+          <h2 className="font-semibold text-sc-text text-base">Send Announcement</h2>
+          <p className="text-xs text-sc-dim mt-0.5 leading-relaxed max-w-md">
             Compose a maintenance notice, feature launch, or custom broadcast to active users.
           </p>
         </div>
@@ -487,13 +487,13 @@ function AnnouncementComposer({
 
       {/* Template selector */}
       <div className="mb-4">
-        <label className="block text-xs text-zinc-500 mb-1.5">
-          Pre-made template <span className="text-zinc-600">(or leave as Custom)</span>
+        <label className="block text-xs text-sc-dim mb-1.5">
+          Pre-made template <span className="text-sc-dim">(or leave as Custom)</span>
         </label>
         <select
           value={selectedTemplate}
           onChange={(e) => applyTemplate(e.target.value)}
-          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500/50"
         >
           <option value="">Custom (manual compose)</option>
           {templatesQuery.data?.map((t) => (
@@ -504,31 +504,31 @@ function AnnouncementComposer({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <FileText className="w-3 h-3" /> Subject line
           </label>
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="e.g. Scheduled Maintenance Tonight"
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           />
         </div>
         <div>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <Type className="w-3 h-3" /> Email title
           </label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g. Scheduled Maintenance"
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           />
         </div>
       </div>
 
       <div className="mb-4">
-        <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+        <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
           <FileText className="w-3 h-3" /> Body (HTML supported)
         </label>
         <textarea
@@ -536,14 +536,14 @@ function AnnouncementComposer({
           onChange={(e) => setBody(e.target.value)}
           rows={5}
           placeholder="<p>Write your announcement here. <strong>Bold</strong> and <a href='...'>links</a> are supported.</p>"
-          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 font-mono leading-relaxed"
+          className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50 font-mono leading-relaxed"
         />
       </div>
 
       {/* Placeholder input fields */}
       {currentTemplate && currentTemplate.placeholders.length > 0 && (
         <div className="mb-4 p-4 rounded-lg bg-surface-hover/50 border border-surface-border/50">
-          <h3 className="text-xs font-medium text-zinc-400 mb-3 flex items-center gap-1.5">
+          <h3 className="text-xs font-medium text-sc-muted mb-3 flex items-center gap-1.5">
             <Type className="w-3 h-3" /> Template variables
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -554,7 +554,7 @@ function AnnouncementComposer({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <Palette className="w-3 h-3" /> Theme
           </label>
           <div className="flex gap-2">
@@ -564,7 +564,7 @@ function AnnouncementComposer({
                 type="button"
                 onClick={() => setTheme(t)}
                 className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all capitalize ${
-                  theme === t ? themeActive[t] : 'border-surface-border bg-surface-hover text-zinc-500'
+                  theme === t ? themeActive[t] : 'border-surface-border bg-surface-hover text-sc-dim'
                 }`}
               >
                 {t}
@@ -573,13 +573,13 @@ function AnnouncementComposer({
           </div>
         </div>
         <div>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <Users className="w-3 h-3" /> Recipients
           </label>
           <select
             value={recipientType}
             onChange={(e) => setRecipientType(e.target.value as 'ALL_ACTIVE' | 'DIGEST_ENABLED')}
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           >
             <option value="ALL_ACTIVE">All active users</option>
             <option value="DIGEST_ENABLED">Digest-enabled only</option>
@@ -589,19 +589,19 @@ function AnnouncementComposer({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <MousePointerClick className="w-3 h-3" /> CTA button label
           </label>
           <input
             value={ctaLabel}
             onChange={(e) => setCtaLabel(e.target.value)}
             placeholder="e.g. Go to Dashboard (optional)"
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           />
         </div>
         {ctaLabel && (
           <div>
-            <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+            <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
               <MousePointerClick className="w-3 h-3" /> CTA destination
             </label>
             <select
@@ -615,7 +615,7 @@ function AnnouncementComposer({
                   setCtaUrl(val);
                 }
               }}
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500/50"
             >
               <option value="">Select a page…</option>
               {KNOWN_ROUTES.map((r) => (
@@ -628,14 +628,14 @@ function AnnouncementComposer({
 
       {ctaRoute === 'custom' && (
         <div className="mb-4">
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500 mb-1.5">
+          <label className="flex items-center gap-1.5 text-xs text-sc-dim mb-1.5">
             <MousePointerClick className="w-3 h-3" /> Custom URL
           </label>
           <input
             value={ctaUrl}
             onChange={(e) => setCtaUrl(e.target.value)}
             placeholder="https://engganyo.com/..."
-            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+            className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500/50"
           />
         </div>
       )}
@@ -654,11 +654,11 @@ function AnnouncementComposer({
 
           {showPreview && (
             <div className="mt-3 p-4 rounded-lg bg-surface-hover border border-surface-border/50 space-y-2">
-              <p className="text-xs text-zinc-500 uppercase tracking-wider">Preview</p>
-              <p className="text-sm font-medium text-white">{previewSubject}</p>
-              <p className="text-sm font-semibold text-white">{previewTitle}</p>
+              <p className="text-xs text-sc-dim uppercase tracking-wider">Preview</p>
+              <p className="text-sm font-medium text-sc-text">{previewSubject}</p>
+              <p className="text-sm font-semibold text-sc-text">{previewTitle}</p>
               <div
-                className="text-sm text-zinc-400 leading-relaxed [&_a]:text-brand-400 [&_a]:underline [&_strong]:text-white"
+                className="text-sm text-sc-muted leading-relaxed [&_a]:text-brand-400 [&_a]:underline [&_strong]:text-sc-text"
                 dangerouslySetInnerHTML={{ __html: body.replace(/\{\{[^}]+\}\}/g, (m) => {
                   const key = m.replace(/[{}]/g, '').trim();
                   return templateValues[key] || m;
@@ -666,7 +666,7 @@ function AnnouncementComposer({
               />
               {ctaLabel && ctaUrl && (
                 <div className="pt-2">
-                  <span className="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white bg-brand-500/80">
+                  <span className="inline-block px-4 py-2 rounded-lg text-sm font-medium text-sc-text bg-brand-500/80">
                     {ctaLabel} →
                   </span>
                 </div>
@@ -716,7 +716,7 @@ function AnnouncementComposer({
         </button>
 
         {!canSend && (
-          <p className="text-xs text-zinc-600">Subject, title and body are required.</p>
+          <p className="text-xs text-sc-dim">Subject, title and body are required.</p>
         )}
         {canSend && hasUnfilledPlaceholders && (
           <p className="text-xs text-rose-500">⚠ Fill in all template variables before sending.</p>

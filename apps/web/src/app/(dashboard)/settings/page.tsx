@@ -44,8 +44,8 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-zinc-400 text-sm mt-1">Manage your account preferences.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Settings</h1>
+        <p className="text-sc-muted text-sm mt-1">Manage your account preferences.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {SETTING_TILES.map((tile) => {
@@ -56,9 +56,9 @@ export default function SettingsPage() {
                 <Icon className="w-5 h-5 text-brand-400" />
               </div>
               <div>
-                <p className="font-semibold text-white text-sm">{tile.label}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">{tile.description}</p>
-                {!tile.available && <p className="text-xs text-zinc-600 mt-1 italic">Coming soon</p>}
+                <p className="font-semibold text-sc-text text-sm">{tile.label}</p>
+                <p className="text-xs text-sc-dim mt-0.5">{tile.description}</p>
+                {!tile.available && <p className="text-xs text-sc-dim mt-1 italic">Coming soon</p>}
               </div>
             </div>
           );
@@ -83,8 +83,8 @@ export default function SettingsPage() {
               <Cookie className="w-5 h-5 text-brand-400" />
             </div>
             <div>
-              <p className="font-semibold text-white text-sm">Privacy & Cookies</p>
-              <p className="text-xs text-zinc-500 mt-0.5">Manage your cookie consent preferences.</p>
+              <p className="font-semibold text-sc-text text-sm">Privacy & Cookies</p>
+              <p className="text-xs text-sc-dim mt-0.5">Manage your cookie consent preferences.</p>
             </div>
           </div>
           <CookieConsentSettings />

@@ -124,8 +124,8 @@ export default function AdminOverviewPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Overview</h1>
-        <p className="text-zinc-400 text-sm mt-1">Platform health at a glance.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Overview</h1>
+        <p className="text-sc-muted text-sm mt-1">Platform health at a glance.</p>
       </div>
 
       {/* Platform stat cards */}
@@ -140,13 +140,13 @@ export default function AdminOverviewPage() {
           {statCards(stats).map((card) => (
             <Link key={card.label} href={card.href} className="card-glass rounded-xl p-5 hover:bg-surface-hover transition-colors group">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-zinc-500">{card.label}</p>
+                <p className="text-xs text-sc-dim">{card.label}</p>
                 <div className={`w-8 h-8 rounded-lg ${card.bg} flex items-center justify-center`}>
                   <card.icon className={`w-4 h-4 ${card.color}`} />
                 </div>
               </div>
               <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-              <p className="text-xs text-zinc-600 mt-1">{card.sub}</p>
+              <p className="text-xs text-sc-dim mt-1">{card.sub}</p>
             </Link>
           ))}
         </div>
@@ -160,8 +160,8 @@ export default function AdminOverviewPage() {
           { href: '/admin/finances', label: 'Review Deposits', desc: `${stats?.deposits?.pending ?? 0} pending — approve or fail user deposits` },
         ].map((a) => (
           <Link key={a.href} href={a.href} className="card-glass rounded-xl p-4 hover:bg-surface-hover transition-colors">
-            <p className="text-sm font-semibold text-white mb-0.5">{a.label}</p>
-            <p className="text-xs text-zinc-500">{a.desc}</p>
+            <p className="text-sm font-semibold text-sc-text mb-0.5">{a.label}</p>
+            <p className="text-xs text-sc-dim">{a.desc}</p>
           </Link>
         ))}
       </div>
@@ -171,13 +171,13 @@ export default function AdminOverviewPage() {
         <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-base font-semibold text-white">System</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">Database, server and storage vitals — refreshes every 60s</p>
+              <h2 className="text-base font-semibold text-sc-text">System</h2>
+              <p className="text-xs text-sc-dim mt-0.5">Database, server and storage vitals — refreshes every 60s</p>
             </div>
             <button
               onClick={() => void refetchSys()}
               disabled={sysFetching}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-white bg-surface-hover hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-sc-muted hover:text-sc-text bg-surface-hover hover:bg-sc-panel-2 transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${sysFetching ? 'animate-spin' : ''}`} />
               Refresh
@@ -197,25 +197,25 @@ export default function AdminOverviewPage() {
                 {/* Database size */}
                 <div className="card-glass rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-zinc-500">Database</p>
+                    <p className="text-xs text-sc-dim">Database</p>
                     <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
                       <Database className="w-4 h-4 text-violet-400" />
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-violet-400">{sysStats.database.size}</p>
-                  <p className="text-xs text-zinc-600 mt-1">{sysStats.database.activeConnections} active connections</p>
+                  <p className="text-xs text-sc-dim mt-1">{sysStats.database.activeConnections} active connections</p>
                 </div>
 
                 {/* Heap memory */}
                 <div className="card-glass rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-zinc-500">Heap Memory</p>
+                    <p className="text-xs text-sc-dim">Heap Memory</p>
                     <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
                       <Server className="w-4 h-4 text-cyan-400" />
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-cyan-400">{heapPct}%</p>
-                  <p className="text-xs text-zinc-600 mt-1">
+                  <p className="text-xs text-sc-dim mt-1">
                     {formatBytes(sysStats.server.heapUsedBytes)} / {formatBytes(sysStats.server.heapTotalBytes)}
                   </p>
                 </div>
@@ -223,25 +223,25 @@ export default function AdminOverviewPage() {
                 {/* Server uptime */}
                 <div className="card-glass rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-zinc-500">Uptime</p>
+                    <p className="text-xs text-sc-dim">Uptime</p>
                     <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                       <Wifi className="w-4 h-4 text-emerald-400" />
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-emerald-400">{formatUptime(sysStats.server.uptimeSeconds)}</p>
-                  <p className="text-xs text-zinc-600 mt-1">Node {sysStats.server.nodeVersion} · {sysStats.server.platform}</p>
+                  <p className="text-xs text-sc-dim mt-1">Node {sysStats.server.nodeVersion} · {sysStats.server.platform}</p>
                 </div>
 
                 {/* Upload storage */}
                 <div className="card-glass rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-zinc-500">Uploads</p>
+                    <p className="text-xs text-sc-dim">Uploads</p>
                     <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
                       <HardDrive className="w-4 h-4 text-orange-400" />
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-orange-400">{sysStats.uploads.size}</p>
-                  <p className="text-xs text-zinc-600 mt-1">{sysStats.uploads.fileCount.toLocaleString()} files</p>
+                  <p className="text-xs text-sc-dim mt-1">{sysStats.uploads.fileCount.toLocaleString()} files</p>
                 </div>
               </div>
 
@@ -249,26 +249,26 @@ export default function AdminOverviewPage() {
               <div className="mt-4 card-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-xs text-zinc-500">System Memory</p>
-                    <p className="text-xs text-zinc-400">{sysmemPct}% used</p>
+                    <p className="text-xs text-sc-dim">System Memory</p>
+                    <p className="text-xs text-sc-muted">{sysmemPct}% used</p>
                   </div>
-                  <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                  <div className="h-2 rounded-full bg-sc-panel-2 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${sysmemPct > 85 ? 'bg-red-500' : sysmemPct > 65 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
                       style={{ width: `${sysmemPct}%` }}
                     />
                   </div>
-                  <p className="text-xs text-zinc-600 mt-1">
+                  <p className="text-xs text-sc-dim mt-1">
                     {formatBytes(sysStats.server.systemMemTotalBytes - sysStats.server.systemMemFreeBytes)} used · {formatBytes(sysStats.server.systemMemTotalBytes)} total
                   </p>
                 </div>
                 <div className="sm:w-48 flex-shrink-0">
-                  <p className="text-xs text-zinc-500 mb-1.5">Load Average</p>
+                  <p className="text-xs text-sc-dim mb-1.5">Load Average</p>
                   <div className="flex items-end gap-2">
                     {(['1m', '5m', '15m'] as const).map((label, i) => (
                       <div key={label} className="flex-1 text-center">
-                        <p className="text-sm font-semibold text-white">{(sysStats.server.loadAvg[i] ?? 0).toFixed(2)}</p>
-                        <p className="text-xs text-zinc-600">{label}</p>
+                        <p className="text-sm font-semibold text-sc-text">{(sysStats.server.loadAvg[i] ?? 0).toFixed(2)}</p>
+                        <p className="text-xs text-sc-dim">{label}</p>
                       </div>
                     ))}
                   </div>
@@ -278,19 +278,19 @@ export default function AdminOverviewPage() {
               {/* Top tables */}
               <div className="mt-4 card-glass rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-surface-border">
-                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Top Tables by Size</p>
+                  <p className="text-xs font-semibold text-sc-muted uppercase tracking-wide">Top Tables by Size</p>
                 </div>
                 <div className="divide-y divide-surface-border">
                   {sysStats.database.tables.slice(0, 10).map((t) => {
                     const pct = sysStats.database.sizeBytes > 0 ? (t.sizeBytes / sysStats.database.sizeBytes) * 100 : 0;
                     return (
                       <div key={t.name} className="px-4 py-2.5 flex items-center gap-3">
-                        <p className="text-xs text-zinc-300 font-mono w-44 truncate flex-shrink-0">{t.name}</p>
-                        <div className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                        <p className="text-xs text-sc-text font-mono w-44 truncate flex-shrink-0">{t.name}</p>
+                        <div className="flex-1 h-1.5 rounded-full bg-sc-panel-2 overflow-hidden">
                           <div className="h-full rounded-full bg-violet-500/60" style={{ width: `${Math.max(pct, 0.5)}%` }} />
                         </div>
-                        <p className="text-xs text-zinc-500 w-16 text-right flex-shrink-0">{t.size}</p>
-                        <p className="text-xs text-zinc-600 w-20 text-right flex-shrink-0">{t.liveRows.toLocaleString()} rows</p>
+                        <p className="text-xs text-sc-dim w-16 text-right flex-shrink-0">{t.size}</p>
+                        <p className="text-xs text-sc-dim w-20 text-right flex-shrink-0">{t.liveRows.toLocaleString()} rows</p>
                       </div>
                     );
                   })}

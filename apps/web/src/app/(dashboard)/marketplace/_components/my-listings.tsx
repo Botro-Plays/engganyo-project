@@ -14,8 +14,8 @@ import type { MarketplaceListing } from './types';
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: 'bg-green-500/10 text-green-400 border-green-500/20',
   PAUSED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  SOLD_OUT: 'bg-zinc-700/50 text-zinc-400 border-zinc-600/30',
-  CANCELLED: 'bg-zinc-700/50 text-zinc-400 border-zinc-600/30',
+  SOLD_OUT: 'bg-sc-panel-2/50 text-sc-muted border-sc-line/30',
+  CANCELLED: 'bg-sc-panel-2/50 text-sc-muted border-sc-line/30',
   EXPIRED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   REMOVED: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
@@ -61,9 +61,9 @@ export function MyListings() {
   if (!listings || listings.length === 0) {
     return (
       <div className="text-center py-16">
-        <Tag className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-        <p className="text-zinc-500">You have no listings yet.</p>
-        <p className="text-sm text-zinc-600 mt-1">Sell items from the Sell tab to reach buyers.</p>
+        <Tag className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+        <p className="text-sc-dim">You have no listings yet.</p>
+        <p className="text-sm text-sc-dim mt-1">Sell items from the Sell tab to reach buyers.</p>
       </div>
     );
   }
@@ -82,7 +82,7 @@ export function MyListings() {
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-white font-semibold text-sm">{l.itemName}</h3>
+                <h3 className="text-sc-text font-semibold text-sm">{l.itemName}</h3>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLES[l.status] ?? ''}`}>
                   {l.status.replace('_', ' ')}
                 </span>
@@ -92,7 +92,7 @@ export function MyListings() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-500 mt-1">
+              <p className="text-xs text-sc-dim mt-1">
                 {formatCredits(l.unitPrice)}/unit · {l.remainingQuantity} of {l.originalQuantity} left
                 {sold > 0 && ` · ${sold} sold`}
                 {' · '}expires {new Date(l.expiresAt).toLocaleDateString()}

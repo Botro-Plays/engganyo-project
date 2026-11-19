@@ -30,7 +30,7 @@ export function UserLink({ user, cosmetics, showAvatar = true, size = 'sm', clas
     >
       {showAvatar && (
         <div
-          className={`${avatarSize} rounded-full bg-gradient-brand flex items-center justify-center text-white font-bold shrink-0 overflow-hidden ${frameClass}`}
+          className={`${avatarSize} rounded-full bg-gradient-brand flex items-center justify-center text-sc-text font-bold shrink-0 overflow-hidden ${frameClass}`}
           style={frameStyle}
         >
           {user.avatarUrl ? (
@@ -40,9 +40,9 @@ export function UserLink({ user, cosmetics, showAvatar = true, size = 'sm', clas
           )}
         </div>
       )}
-      <span className="text-sm font-medium text-white truncate">{name}</span>
+      <span className="text-sm font-medium text-sc-text truncate">{name}</span>
       {user.displayName && (
-        <span className="text-xs text-zinc-500 hidden sm:inline">@{user.username}</span>
+        <span className="text-xs text-sc-dim hidden sm:inline">@{user.username}</span>
       )}
     </Link>
   );

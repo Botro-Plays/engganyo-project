@@ -134,7 +134,7 @@ const PLATFORMS = [
   { value: 'YOUTUBE', label: 'YouTube', icon: Youtube, color: 'text-red-400' },
   { value: 'INSTAGRAM', label: 'Instagram', icon: Instagram, color: 'text-pink-400' },
   { value: 'TWITTER', label: 'Twitter / X', icon: Twitter, color: 'text-sky-400' },
-  { value: 'TIKTOK', label: 'TikTok', icon: Music, color: 'text-white' },
+  { value: 'TIKTOK', label: 'TikTok', icon: Music, color: 'text-sc-text' },
   { value: 'FACEBOOK', label: 'Facebook', icon: Globe, color: 'text-blue-400' },
   { value: 'TWITCH', label: 'Twitch', icon: Globe, color: 'text-purple-400' },
   { value: 'SPOTIFY', label: 'Spotify', icon: Music, color: 'text-green-400' },
@@ -142,7 +142,7 @@ const PLATFORMS = [
 
 // ─── Trust score card ─────────────────────────────────────────
 const TRUST_LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string; bar: string }> = {
-  NEW:      { label: 'New',      color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   bar: 'bg-zinc-500'   },
+  NEW:      { label: 'New',      color: 'text-sc-muted',   bg: 'bg-sc-soft/10',   bar: 'bg-sc-soft'   },
   LOW:      { label: 'Low',      color: 'text-red-400',    bg: 'bg-red-500/10',    bar: 'bg-red-500'    },
   MEDIUM:   { label: 'Medium',   color: 'text-yellow-400', bg: 'bg-yellow-500/10', bar: 'bg-yellow-500' },
   HIGH:     { label: 'High',     color: 'text-green-400',  bg: 'bg-green-500/10',  bar: 'bg-green-500'  },
@@ -198,8 +198,8 @@ function TrustScoreCard() {
     <div className="card-glass rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-zinc-400" />
-          <h2 className="text-sm font-semibold text-white">Trust Score</h2>
+          <Shield className="w-4 h-4 text-sc-muted" />
+          <h2 className="text-sm font-semibold text-sc-text">Trust Score</h2>
         </div>
         {data && (
           <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.color}`}>
@@ -209,24 +209,24 @@ function TrustScoreCard() {
       </div>
 
       {isLoading ? (
-        <div className="h-10 animate-pulse bg-zinc-800 rounded-lg" />
+        <div className="h-10 animate-pulse bg-sc-panel-2 rounded-lg" />
       ) : data ? (
         <>
           <div className="flex items-center gap-3 mb-3">
             <span className={`text-3xl font-bold ${cfg.color}`}>{Math.round(data.score)}</span>
-            <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-sc-panel-2 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${cfg.bar}`}
                 style={{ width: `${data.score}%` }}
               />
             </div>
-            <span className="text-xs text-zinc-600">/ 100</span>
+            <span className="text-xs text-sc-dim">/ 100</span>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-500">
-            <span>Completion rate: <span className="text-zinc-300">{Math.round(data.completionRate * 100)}%</span></span>
-            <span>Account age: <span className="text-zinc-300">{data.accountAgeDays}d</span></span>
-            <span>Linked socials: <span className="text-zinc-300">{data.verifiedSocials}</span></span>
-            <span>Reports received: <span className={data.reportCount > 0 ? 'text-red-400' : 'text-zinc-300'}>{data.reportCount}</span></span>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-sc-dim">
+            <span>Completion rate: <span className="text-sc-text">{Math.round(data.completionRate * 100)}%</span></span>
+            <span>Account age: <span className="text-sc-text">{data.accountAgeDays}d</span></span>
+            <span>Linked socials: <span className="text-sc-text">{data.verifiedSocials}</span></span>
+            <span>Reports received: <span className={data.reportCount > 0 ? 'text-red-400' : 'text-sc-text'}>{data.reportCount}</span></span>
           </div>
         </>
       ) : null}
@@ -248,43 +248,43 @@ function MyReferralsCard() {
     <div className="card-glass rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-4 h-4 text-brand-400" />
-        <h2 className="font-semibold text-white">My Referrals</h2>
+        <h2 className="font-semibold text-sc-text">My Referrals</h2>
       </div>
 
       {isLoading ? (
         <div className="space-y-3">
-          <div className="h-16 animate-pulse bg-zinc-800 rounded-lg" />
-          <div className="h-32 animate-pulse bg-zinc-800 rounded-lg" />
+          <div className="h-16 animate-pulse bg-sc-panel-2 rounded-lg" />
+          <div className="h-32 animate-pulse bg-sc-panel-2 rounded-lg" />
         </div>
       ) : data ? (
         <>
           {/* Stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+            <div className="bg-sc-panel-2/50 rounded-lg p-3 text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
-                <Users className="w-3.5 h-3.5 text-zinc-400" />
-                <span className="text-xs text-zinc-500">Invited</span>
+                <Users className="w-3.5 h-3.5 text-sc-muted" />
+                <span className="text-xs text-sc-dim">Invited</span>
               </div>
-              <span className="text-lg font-semibold text-white">{data.total}</span>
+              <span className="text-lg font-semibold text-sc-text">{data.total}</span>
             </div>
-            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+            <div className="bg-sc-panel-2/50 rounded-lg p-3 text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <UserCheck className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-xs text-zinc-500">Qualified</span>
+                <span className="text-xs text-sc-dim">Qualified</span>
               </div>
               <span className="text-lg font-semibold text-green-400">{data.qualified}</span>
             </div>
-            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+            <div className="bg-sc-panel-2/50 rounded-lg p-3 text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <Clock className="w-3.5 h-3.5 text-yellow-400" />
-                <span className="text-xs text-zinc-500">Pending</span>
+                <span className="text-xs text-sc-dim">Pending</span>
               </div>
               <span className="text-lg font-semibold text-yellow-400">{data.pending}</span>
             </div>
-            <div className="bg-zinc-800/50 rounded-lg p-3 text-center">
+            <div className="bg-sc-panel-2/50 rounded-lg p-3 text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
                 <Coins className="w-3.5 h-3.5 text-brand-400" />
-                <span className="text-xs text-zinc-500">Earned</span>
+                <span className="text-xs text-sc-dim">Earned</span>
               </div>
               <span className="text-lg font-semibold text-brand-400">{data.totalCreditsEarned}</span>
             </div>
@@ -292,7 +292,7 @@ function MyReferralsCard() {
 
           {/* Explanation */}
           <div className="rounded-lg bg-brand-500/5 border border-brand-500/10 p-3 mb-4">
-            <p className="text-xs text-zinc-400 leading-relaxed">
+            <p className="text-xs text-sc-muted leading-relaxed">
               <span className="text-brand-300 font-medium">How it works:</span>{' '}
               When someone signs up with your code and completes their first verified task, both you and they earn{' '}
               <span className="text-brand-300">50 credits</span> each. Bonuses are awarded automatically — no manual claiming needed.
@@ -302,22 +302,22 @@ function MyReferralsCard() {
           {/* Referral list */}
           {data.referrals.length > 0 ? (
             <div className="border-t border-surface-border pt-4">
-              <p className="text-xs font-medium text-zinc-500 mb-3">Invited users</p>
+              <p className="text-xs font-medium text-sc-dim mb-3">Invited users</p>
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {data.referrals.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between rounded-lg bg-zinc-800/30 px-3 py-2.5"
+                    className="flex items-center justify-between rounded-lg bg-sc-panel-2/30 px-3 py-2.5"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-medium text-zinc-300">
+                      <div className="w-7 h-7 rounded-full bg-sc-panel-2 flex items-center justify-center text-xs font-medium text-sc-text">
                         {(r.referee.displayName ?? r.referee.username).charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm text-white font-medium">
+                        <p className="text-sm text-sc-text font-medium">
                           @{r.referee.username}
                         </p>
-                        <p className="text-[10px] text-zinc-500">
+                        <p className="text-[10px] text-sc-dim">
                           Joined {new Date(r.referee.createdAt).toLocaleDateString()}
                         </p>
                       </div>
@@ -339,7 +339,7 @@ function MyReferralsCard() {
             </div>
           ) : (
             <div className="border-t border-surface-border pt-4 text-center">
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-sc-dim">
                 No referrals yet. Share your code to start earning!
               </p>
             </div>
@@ -570,7 +570,7 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     );
   }
@@ -580,13 +580,13 @@ export default function ProfilePage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Profile</h1>
-        <p className="text-zinc-400 text-sm mt-1">Manage your public creator profile.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Profile</h1>
+        <p className="text-sc-muted text-sm mt-1">Manage your public creator profile.</p>
       </div>
 
       {/* ── Avatar + header ── */}
       <div className={`rounded-xl p-6 flex items-start gap-4 flex-wrap transition-all ${cosmeticStyles.themeCardClass}`}>
-        <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-2xl font-bold shrink-0 ${cosmeticStyles.frameClass}`}
+        <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-sc-text text-2xl font-bold shrink-0 ${cosmeticStyles.frameClass}`}
           style={cosmeticStyles.frameStyle}
         >
           {avatarPreview || profile?.avatarUrl ? (
@@ -597,9 +597,9 @@ export default function ProfilePage() {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-lg font-bold text-white truncate">{displayName}</p>
-          <p className="text-zinc-400 text-sm truncate">@{profile?.username ?? user?.username}</p>
-          <p className="text-zinc-500 text-xs truncate">{profile?.email ?? user?.email}</p>
+          <p className="text-lg font-bold text-sc-text truncate">{displayName}</p>
+          <p className="text-sc-muted text-sm truncate">@{profile?.username ?? user?.username}</p>
+          <p className="text-sc-dim text-xs truncate">{profile?.email ?? user?.email}</p>
 
           {/* VIP Tier Badge */}
           {(profile?.vipTier ?? user?.vipTier) ? (
@@ -618,7 +618,7 @@ export default function ProfilePage() {
             </div>
           ) : (
             <div className="flex items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-700/50 text-zinc-400 border border-zinc-600/50">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-sc-panel-2/50 text-sc-muted border border-sc-line/50">
                 <Award className="w-3 h-3" />
                 No VIP Tier — earn VP to unlock
               </span>
@@ -628,16 +628,16 @@ export default function ProfilePage() {
           {/* VP Progress */}
           <div className="mt-2">
             <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-zinc-400">VIP Points</span>
-              <span className="text-zinc-300 font-medium">{profile?.vp ?? user?.vp ?? 0} VP</span>
+              <span className="text-sc-muted">VIP Points</span>
+              <span className="text-sc-text font-medium">{profile?.vp ?? user?.vp ?? 0} VP</span>
             </div>
-            <div className="h-1.5 rounded-full bg-zinc-700/50 overflow-hidden">
+            <div className="h-1.5 rounded-full bg-sc-panel-2/50 overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all"
                 style={{ width: `${Math.min(profile?.nextTierProgress ?? user?.nextTierProgress ?? 0, 100)}%` }}
               />
             </div>
-            <div className="text-[10px] text-zinc-500 mt-1">
+            <div className="text-[10px] text-sc-dim mt-1">
               {profile?.nextTierProgress ?? user?.nextTierProgress ?? 0}% to next tier
             </div>
           </div>
@@ -658,7 +658,7 @@ export default function ProfilePage() {
                         ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
                         : isFrame
                         ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                        : 'bg-zinc-700/50 text-zinc-300 border-zinc-600/50'
+                        : 'bg-sc-panel-2/50 text-sc-text border-sc-line/50'
                     }`}
                   >
                     <Sparkles className="w-3 h-3" />
@@ -671,7 +671,7 @@ export default function ProfilePage() {
 
           <Link
             href={`/users/${profile?.username ?? user?.username}`}
-            className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs hover:bg-zinc-700 hover:text-white transition-all"
+            className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-lg bg-sc-panel-2/50 border border-sc-line text-sc-text text-xs hover:bg-sc-panel-2 hover:text-sc-text transition-all"
           >
             <ExternalLink className="w-3 h-3" />
             View Public Profile
@@ -686,9 +686,9 @@ export default function ProfilePage() {
       <div className="card-glass rounded-xl p-6">
         <div className="flex items-center gap-2 mb-4">
           <Share2 className="w-4 h-4 text-brand-400" />
-          <h2 className="font-semibold text-white">Refer & Earn</h2>
+          <h2 className="font-semibold text-sc-text">Refer & Earn</h2>
         </div>
-        <p className="text-sm text-zinc-400 mb-4">
+        <p className="text-sm text-sc-muted mb-4">
           Invite friends and earn credits when they sign up and complete their first verified task. Both you and your friend get 50 credits each — awarded automatically.
         </p>
 
@@ -702,23 +702,23 @@ export default function ProfilePage() {
               {profile?.referralCode ?? user?.referralCode ?? '—'}
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
-            <span className="text-xs text-zinc-500">Tap to copy your referral code</span>
+            <span className="text-xs text-sc-dim">Tap to copy your referral code</span>
           </div>
           {/* Full referral link */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
             <button
               onClick={copyReferralLink}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-700/50 border border-zinc-600 text-zinc-300 text-xs font-mono hover:bg-zinc-700 hover:text-white transition-all max-w-full overflow-hidden"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sc-panel-2/50 border border-sc-line text-sc-text text-xs font-mono hover:bg-sc-panel-2 hover:text-sc-text transition-all max-w-full overflow-hidden"
             >
               <span className="truncate max-w-[220px] sm:max-w-[280px]">{getReferralUrl()}</span>
               {linkCopied ? <Check className="w-3.5 h-3.5 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
             </button>
-            <span className="text-xs text-zinc-500">Tap to copy full referral link</span>
+            <span className="text-xs text-sc-dim">Tap to copy full referral link</span>
           </div>
         </div>
 
         <div className="border-t border-surface-border pt-4">
-          <p className="text-xs text-zinc-500 mb-3">Share your link:</p>
+          <p className="text-xs text-sc-dim mb-3">Share your link:</p>
           <div className="flex flex-wrap items-center gap-2">
             <a
               href={`https://wa.me/?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
@@ -740,13 +740,13 @@ export default function ProfilePage() {
               href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-500/10 text-zinc-300 text-xs font-medium hover:bg-zinc-500/20 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sc-soft/10 text-sc-text text-xs font-medium hover:bg-sc-soft/20 transition-all"
             >
               <Twitter className="w-3.5 h-3.5" /> X / Twitter
             </a>
             <a
               href={`mailto:?subject=${encodeURIComponent('Join me on Engganyo')}&body=${encodeURIComponent(`${getShareText()} ${getReferralUrl()}`)}`}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-500/10 text-zinc-300 text-xs font-medium hover:bg-zinc-500/20 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sc-soft/10 text-sc-text text-xs font-medium hover:bg-sc-soft/20 transition-all"
             >
               <Mail className="w-3.5 h-3.5" /> Email
             </a>
@@ -767,7 +767,7 @@ export default function ProfilePage() {
 
       {/* ── Edit profile form ── */}
       <div className="card-glass rounded-xl p-6">
-        <h2 className="font-semibold text-white mb-5">Edit Profile</h2>
+        <h2 className="font-semibold text-sc-text mb-5">Edit Profile</h2>
 
         {profileError && (
           <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
@@ -786,29 +786,29 @@ export default function ProfilePage() {
         >
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Display name</label>
+              <label className="block text-xs font-medium text-sc-muted mb-1.5">Display name</label>
               <input
                 {...profileForm.register('displayName')}
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 placeholder="Your name"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Location</label>
+              <label className="block text-xs font-medium text-sc-muted mb-1.5">Location</label>
               <input
                 {...profileForm.register('location')}
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 placeholder="City, Country"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Bio</label>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">Bio</label>
             <textarea
               {...profileForm.register('bio')}
               rows={3}
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
               placeholder="Tell other creators about yourself..."
             />
             {profileForm.formState.errors.bio && (
@@ -818,10 +818,10 @@ export default function ProfilePage() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Website URL</label>
+              <label className="block text-xs font-medium text-sc-muted mb-1.5">Website URL</label>
               <input
                 {...profileForm.register('websiteUrl')}
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 placeholder="https://yoursite.com"
               />
               {profileForm.formState.errors.websiteUrl && (
@@ -829,9 +829,9 @@ export default function ProfilePage() {
               )}
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Avatar</label>
+              <label className="block text-xs font-medium text-sc-muted mb-1.5">Avatar</label>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-sc-text text-sm font-bold shrink-0 overflow-hidden">
                   {avatarPreview || profileForm.watch('avatarUrl') ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={avatarPreview || profileForm.watch('avatarUrl') || ''} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
@@ -852,7 +852,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={avatarUploadMutation.isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-zinc-300 text-xs hover:bg-surface-hover hover:text-white transition-all disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sc-text text-xs hover:bg-surface-hover hover:text-sc-text transition-all disabled:opacity-50"
                     >
                       {avatarUploadMutation.isPending ? (
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -865,7 +865,7 @@ export default function ProfilePage() {
                       <button
                         type="button"
                         onClick={handleRemoveAvatar}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-zinc-500 hover:text-red-400 text-xs transition-colors"
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sc-dim hover:text-red-400 text-xs transition-colors"
                         title="Remove avatar"
                       >
                         <X className="w-3 h-3" />
@@ -877,7 +877,7 @@ export default function ProfilePage() {
               {avatarUploadError && (
                 <p className="text-xs text-red-400 mt-1">{avatarUploadError}</p>
               )}
-              <p className="text-[10px] text-zinc-600 mt-1">PNG, JPG, JPEG, WebP. Max 5MB.</p>
+              <p className="text-[10px] text-sc-dim mt-1">PNG, JPG, JPEG, WebP. Max 5MB.</p>
             </div>
           </div>
 
@@ -886,9 +886,9 @@ export default function ProfilePage() {
               {...profileForm.register('allowMentions')}
               type="checkbox"
               id="allowMentions"
-              className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-brand-500 focus:ring-brand-500 focus:ring-offset-0"
+              className="w-4 h-4 rounded border-sc-line bg-sc-panel-2 text-brand-500 focus:ring-brand-500 focus:ring-offset-0"
             />
-            <label htmlFor="allowMentions" className="text-sm text-zinc-300 cursor-pointer">
+            <label htmlFor="allowMentions" className="text-sm text-sc-text cursor-pointer">
               Allow others to mention me in forum posts
             </label>
           </div>
@@ -897,7 +897,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={profileMutation.isPending}
-              className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-all"
+              className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text text-sm font-medium px-5 py-2 rounded-lg transition-all"
             >
               {profileMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Save changes
@@ -909,7 +909,7 @@ export default function ProfilePage() {
       {/* ── Social accounts ── */}
       <div className="card-glass rounded-xl p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="font-semibold text-white">Social Accounts</h2>
+          <h2 className="font-semibold text-sc-text">Social Accounts</h2>
           <button
             onClick={() => setShowSocialForm(!showSocialForm)}
             className="flex items-center gap-1.5 text-xs text-brand-400 hover:text-brand-300 transition-colors"
@@ -929,10 +929,10 @@ export default function ProfilePage() {
             )}
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Platform</label>
+                <label className="block text-xs text-sc-dim mb-1">Platform</label>
                 <select
                   {...socialForm.register('platform')}
-                  className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                   {PLATFORMS.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
@@ -940,18 +940,18 @@ export default function ProfilePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Username / Handle</label>
+                <label className="block text-xs text-sc-dim mb-1">Username / Handle</label>
                 <input
                   {...socialForm.register('platformUsername')}
-                  className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
                   placeholder="@handle"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Profile URL (optional)</label>
+                <label className="block text-xs text-sc-dim mb-1">Profile URL (optional)</label>
                 <input
                   {...socialForm.register('profileUrl')}
-                  className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full bg-surface border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
                   placeholder="https://..."
                 />
               </div>
@@ -960,14 +960,14 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => setShowSocialForm(false)}
-                className="text-xs text-zinc-500 hover:text-white px-3 py-1.5 rounded-lg transition-colors"
+                className="text-xs text-sc-dim hover:text-sc-text px-3 py-1.5 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={socialMutation.isPending}
-                className="flex items-center gap-1.5 text-xs bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition-all"
+                className="flex items-center gap-1.5 text-xs bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text px-3 py-1.5 rounded-lg transition-all"
               >
                 {socialMutation.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                 Save
@@ -986,10 +986,10 @@ export default function ProfilePage() {
                   key={acct.id}
                   className="flex items-center gap-3 px-4 py-3 rounded-lg bg-surface-hover border border-surface-border"
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${platformCfg?.color ?? 'text-zinc-400'}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${platformCfg?.color ?? 'text-sc-muted'}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white">{platformCfg?.label ?? acct.platform}</p>
-                    <p className="text-xs text-zinc-500 truncate">{acct.platformUsername}</p>
+                    <p className="text-sm font-medium text-sc-text">{platformCfg?.label ?? acct.platform}</p>
+                    <p className="text-xs text-sc-dim truncate">{acct.platformUsername}</p>
                   </div>
                   {acct.isVerified && (
                     <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
@@ -999,7 +999,7 @@ export default function ProfilePage() {
                   <button
                     onClick={() => removeSocialMutation.mutate(acct.platform)}
                     disabled={removeSocialMutation.isPending}
-                    className="text-zinc-600 hover:text-red-400 transition-colors ml-1"
+                    className="text-sc-dim hover:text-red-400 transition-colors ml-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1008,15 +1008,15 @@ export default function ProfilePage() {
             })}
           </div>
         ) : (
-          <p className="text-sm text-zinc-500">No social accounts linked yet.</p>
+          <p className="text-sm text-sc-dim">No social accounts linked yet.</p>
         )}
       </div>
 
       {/* ── Change password ── */}
       <div className="card-glass rounded-xl p-6">
         <div className="flex items-center gap-2 mb-5">
-          <Lock className="w-4 h-4 text-zinc-400" />
-          <h2 className="font-semibold text-white">Change Password</h2>
+          <Lock className="w-4 h-4 text-sc-muted" />
+          <h2 className="font-semibold text-sc-text">Change Password</h2>
         </div>
 
         {passwordError && (
@@ -1035,33 +1035,33 @@ export default function ProfilePage() {
           className="space-y-4"
         >
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Current password</label>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">Current password</label>
             <input
               {...passwordForm.register('currentPassword')}
               type="password"
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             />
             {passwordForm.formState.errors.currentPassword && (
               <p className="text-xs text-red-400 mt-1">{passwordForm.formState.errors.currentPassword.message}</p>
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">New password</label>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">New password</label>
             <input
               {...passwordForm.register('newPassword')}
               type="password"
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             />
             {passwordForm.formState.errors.newPassword && (
               <p className="text-xs text-red-400 mt-1">{passwordForm.formState.errors.newPassword.message}</p>
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Confirm new password</label>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">Confirm new password</label>
             <input
               {...passwordForm.register('confirmPassword')}
               type="password"
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             />
             {passwordForm.formState.errors.confirmPassword && (
               <p className="text-xs text-red-400 mt-1">{passwordForm.formState.errors.confirmPassword.message}</p>
@@ -1071,7 +1071,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={passwordMutation.isPending}
-              className="flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-all"
+              className="flex items-center gap-2 bg-sc-panel-2 hover:bg-sc-soft disabled:opacity-60 text-sc-text text-sm font-medium px-5 py-2 rounded-lg transition-all"
             >
               {passwordMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Update password

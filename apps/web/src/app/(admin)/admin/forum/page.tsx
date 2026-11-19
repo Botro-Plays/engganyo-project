@@ -96,8 +96,8 @@ export default function AdminForumPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Forum Management</h1>
-        <p className="text-zinc-400 text-sm mt-1">Moderate forum topics and content</p>
+        <h1 className="text-2xl font-bold text-sc-text">Forum Management</h1>
+        <p className="text-sc-muted text-sm mt-1">Moderate forum topics and content</p>
       </div>
 
       {actionError && (
@@ -110,8 +110,8 @@ export default function AdminForumPage() {
         </div>
       ) : !data?.items.length ? (
         <div className="card-glass rounded-2xl p-12 text-center">
-          <p className="text-white font-medium mb-1">No forum topics</p>
-          <p className="text-zinc-500 text-sm">Forum is empty</p>
+          <p className="text-sc-text font-medium mb-1">No forum topics</p>
+          <p className="text-sc-dim text-sm">Forum is empty</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -123,10 +123,10 @@ export default function AdminForumPage() {
                     {topic.isPinned && <Pin className="w-4 h-4 text-indigo-400" />}
                     {topic.status === 'LOCKED' && <Lock className="w-4 h-4 text-yellow-400" />}
                     {topic.status === 'HIDDEN' && <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-medium">HIDDEN</span>}
-                    <h3 className="text-white font-medium">{topic.title}</h3>
+                    <h3 className="text-sc-text font-medium">{topic.title}</h3>
                   </div>
-                  <p className="text-zinc-400 text-sm mb-2 line-clamp-2">{topic.content}</p>
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
+                  <p className="text-sc-muted text-sm mb-2 line-clamp-2">{topic.content}</p>
+                  <div className="flex items-center gap-3 text-xs text-sc-dim">
                     <span>by @{topic.author.username}</span>
                     <span>·</span>
                     <span>{formatRelativeTime(topic.createdAt)}</span>
@@ -142,7 +142,7 @@ export default function AdminForumPage() {
                 <div className="flex gap-2">
                   <Link
                     href={`/forum/${topic.id}`}
-                    className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                    className="px-3 py-1.5 bg-sc-panel-2 hover:bg-sc-soft text-sc-text rounded-lg text-sm transition-colors"
                     target="_blank"
                   >
                     View
@@ -160,7 +160,7 @@ export default function AdminForumPage() {
                     <button
                       onClick={() => lockMutation.mutate(topic.id)}
                       disabled={lockMutation.isPending}
-                      className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                      className="p-1.5 bg-sc-panel-2 hover:bg-sc-soft text-sc-text rounded-lg transition-colors disabled:opacity-50"
                       title="Lock"
                     >
                       <Lock className="w-4 h-4" />
@@ -169,7 +169,7 @@ export default function AdminForumPage() {
                   <button
                     onClick={() => pinMutation.mutate(topic.id)}
                     disabled={pinMutation.isPending}
-                    className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                    className="p-1.5 bg-sc-panel-2 hover:bg-sc-soft text-sc-text rounded-lg transition-colors disabled:opacity-50"
                     title={topic.isPinned ? 'Unpin' : 'Pin'}
                   >
                     <Pin className="w-4 h-4" />
@@ -187,7 +187,7 @@ export default function AdminForumPage() {
                     <button
                       onClick={() => hideMutation.mutate(topic.id)}
                       disabled={hideMutation.isPending}
-                      className="p-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                      className="p-1.5 bg-sc-panel-2 hover:bg-sc-soft text-sc-text rounded-lg transition-colors disabled:opacity-50"
                       title="Hide"
                     >
                       <Eye className="w-4 h-4" />
@@ -217,17 +217,17 @@ export default function AdminForumPage() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-zinc-400 text-sm">
+          <span className="text-sc-muted text-sm">
             Page {page} of {data.meta.totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(data.meta.totalPages, p + 1))}
             disabled={page === data.meta.totalPages}
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
           </button>

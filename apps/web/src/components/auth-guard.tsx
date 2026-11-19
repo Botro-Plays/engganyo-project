@@ -34,7 +34,7 @@ export function AuthGuard({ children, roles = [], redirectTo = '/login' }: AuthG
   if (!hasHydrated) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     );
   }
@@ -43,7 +43,7 @@ export function AuthGuard({ children, roles = [], redirectTo = '/login' }: AuthG
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     );
   }
@@ -51,7 +51,7 @@ export function AuthGuard({ children, roles = [], redirectTo = '/login' }: AuthG
   if (roles.length > 0 && !roles.includes(user.role)) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     );
   }

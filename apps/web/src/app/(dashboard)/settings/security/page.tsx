@@ -172,8 +172,8 @@ export default function SecuritySettingsPage() {
           <Shield className="w-5 h-5 text-brand-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white">Security</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">Manage two-factor authentication for your account.</p>
+          <h1 className="text-2xl font-bold text-sc-text">Security</h1>
+          <p className="text-sc-muted text-sm mt-0.5">Manage two-factor authentication for your account.</p>
         </div>
       </div>
 
@@ -191,7 +191,7 @@ export default function SecuritySettingsPage() {
           <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-red-400">Admin access requires 2FA</p>
-            <p className="text-xs text-zinc-400 mt-0.5">
+            <p className="text-xs text-sc-muted mt-0.5">
               Your admin account must have two-factor authentication enabled before you can access the admin panel.
               Set up TOTP or Email 2FA below.
             </p>
@@ -207,11 +207,11 @@ export default function SecuritySettingsPage() {
               <Smartphone className="w-4.5 h-4.5 text-brand-400" />
             </div>
             <div>
-              <p className="font-semibold text-white text-sm">Authenticator app (TOTP)</p>
-              <p className="text-xs text-zinc-500 mt-0.5">Google Authenticator, Authy, 1Password, etc.</p>
+              <p className="font-semibold text-sc-text text-sm">Authenticator app (TOTP)</p>
+              <p className="text-xs text-sc-dim mt-0.5">Google Authenticator, Authy, 1Password, etc.</p>
             </div>
           </div>
-          <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${status?.totpEnabled ? 'bg-green-500/15 text-green-400' : 'bg-zinc-700/40 text-zinc-500'}`}>
+          <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${status?.totpEnabled ? 'bg-green-500/15 text-green-400' : 'bg-sc-panel-2/40 text-sc-dim'}`}>
             {status?.totpEnabled ? 'Enabled' : 'Disabled'}
           </span>
         </div>
@@ -221,7 +221,7 @@ export default function SecuritySettingsPage() {
           <button
             onClick={() => setupTotpMutation.mutate()}
             disabled={setupTotpMutation.isPending}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium transition-all"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text text-sm font-medium transition-all"
           >
             {setupTotpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Set up authenticator app'}
           </button>
@@ -229,20 +229,20 @@ export default function SecuritySettingsPage() {
 
         {totpStep === 'qr' && setupData && (
           <div className="space-y-4">
-            <p className="text-sm text-zinc-400">Scan this QR code with your authenticator app, then enter the 6-digit code to confirm.</p>
+            <p className="text-sm text-sc-muted">Scan this QR code with your authenticator app, then enter the 6-digit code to confirm.</p>
             <div className="flex justify-center">
               <div className="p-3 bg-white rounded-xl inline-block">
                 <Image src={setupData.qrCodeUrl} alt="TOTP QR code" width={160} height={160} unoptimized />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <code className={`flex-1 text-xs font-mono bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-zinc-300 ${showSecret ? '' : 'blur-sm select-none'}`}>
+              <code className={`flex-1 text-xs font-mono bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sc-text ${showSecret ? '' : 'blur-sm select-none'}`}>
                 {setupData.secret}
               </code>
-              <button onClick={() => setShowSecret(!showSecret)} className="p-2 text-zinc-500 hover:text-zinc-300">
+              <button onClick={() => setShowSecret(!showSecret)} className="p-2 text-sc-dim hover:text-sc-text">
                 {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
-              <button onClick={copySecret} className="p-2 text-zinc-500 hover:text-zinc-300">
+              <button onClick={copySecret} className="p-2 text-sc-dim hover:text-sc-text">
                 <Copy className="w-4 h-4" />
               </button>
               {copied && <span className="text-xs text-green-400">Copied!</span>}
@@ -255,17 +255,17 @@ export default function SecuritySettingsPage() {
                 placeholder="000000"
                 value={totpCode}
                 onChange={(e) => setTotpCode(e.target.value)}
-                className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-center text-lg font-mono tracking-widest placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sc-text text-center text-lg font-mono tracking-widest placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
               <button
                 onClick={() => enableTotpMutation.mutate()}
                 disabled={enableTotpMutation.isPending || totpCode.length < 6}
-                className="px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium transition-all"
+                className="px-5 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text text-sm font-medium transition-all"
               >
                 {enableTotpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify & enable'}
               </button>
             </div>
-            <button onClick={() => setTotpStep('idle')} className="text-xs text-zinc-600 hover:text-zinc-400">Cancel</button>
+            <button onClick={() => setTotpStep('idle')} className="text-xs text-sc-dim hover:text-sc-muted">Cancel</button>
           </div>
         )}
 
@@ -274,21 +274,21 @@ export default function SecuritySettingsPage() {
             <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4" /> Authenticator app enabled!
             </div>
-            <p className="text-sm text-zinc-400">Save these backup codes somewhere safe. Each can only be used once.</p>
+            <p className="text-sm text-sc-muted">Save these backup codes somewhere safe. Each can only be used once.</p>
             <div className="grid grid-cols-2 gap-2">
               {backupCodes.map((c) => (
-                <code key={c} className="text-xs font-mono bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-zinc-300 text-center">{c}</code>
+                <code key={c} className="text-xs font-mono bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sc-text text-center">{c}</code>
               ))}
             </div>
             <button
               onClick={() => { void navigator.clipboard.writeText(backupCodes.join('\n')); setMsg('success', 'Backup codes copied!'); }}
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 text-xs text-sc-muted hover:text-sc-text transition-colors"
             >
               <Copy className="w-3.5 h-3.5" /> Copy all backup codes
             </button>
             <button
               onClick={() => setTotpStep('idle')}
-              className="w-full py-2 rounded-lg border border-surface-border text-zinc-300 text-sm hover:border-zinc-500 transition-all"
+              className="w-full py-2 rounded-lg border border-surface-border text-sc-text text-sm hover:border-sc-border transition-all"
             >
               Done
             </button>
@@ -307,7 +307,7 @@ export default function SecuritySettingsPage() {
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-zinc-500">Enter your current authenticator code to disable TOTP 2FA:</p>
+                <p className="text-xs text-sc-dim">Enter your current authenticator code to disable TOTP 2FA:</p>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -316,21 +316,21 @@ export default function SecuritySettingsPage() {
                     placeholder="000000"
                     value={disableTotpCode}
                     onChange={(e) => setDisableTotpCode(e.target.value)}
-                    className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-4 py-2 text-white text-center text-sm font-mono tracking-widest placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-4 py-2 text-sc-text text-center text-sm font-mono tracking-widest placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                   <button
                     onClick={() => disableTotpMutation.mutate()}
                     disabled={disableTotpMutation.isPending || disableTotpCode.length < 6}
-                    className="px-4 py-2 rounded-lg bg-red-500/80 hover:bg-red-500 disabled:opacity-60 text-white text-sm font-medium"
+                    className="px-4 py-2 rounded-lg bg-red-500/80 hover:bg-red-500 disabled:opacity-60 text-sc-text text-sm font-medium"
                   >
                     {disableTotpMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Disable'}
                   </button>
-                  <button onClick={() => setShowDisableTotp(false)} className="px-3 py-2 text-zinc-500 text-sm">Cancel</button>
+                  <button onClick={() => setShowDisableTotp(false)} className="px-3 py-2 text-sc-dim text-sm">Cancel</button>
                 </div>
               </div>
             )}
             {status.backupCodesRemaining > 0 && (
-              <p className="text-xs text-zinc-600">{status.backupCodesRemaining} backup code{status.backupCodesRemaining !== 1 ? 's' : ''} remaining</p>
+              <p className="text-xs text-sc-dim">{status.backupCodesRemaining} backup code{status.backupCodesRemaining !== 1 ? 's' : ''} remaining</p>
             )}
           </div>
         )}
@@ -344,11 +344,11 @@ export default function SecuritySettingsPage() {
               <Mail className="w-4.5 h-4.5 text-brand-400" />
             </div>
             <div>
-              <p className="font-semibold text-white text-sm">Email verification code</p>
-              <p className="text-xs text-zinc-500 mt-0.5">Receive a 6-digit code by email on each sign-in.</p>
+              <p className="font-semibold text-sc-text text-sm">Email verification code</p>
+              <p className="text-xs text-sc-dim mt-0.5">Receive a 6-digit code by email on each sign-in.</p>
             </div>
           </div>
-          <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${status?.emailEnabled ? 'bg-green-500/15 text-green-400' : 'bg-zinc-700/40 text-zinc-500'}`}>
+          <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${status?.emailEnabled ? 'bg-green-500/15 text-green-400' : 'bg-sc-panel-2/40 text-sc-dim'}`}>
             {status?.emailEnabled ? 'Enabled' : 'Disabled'}
           </span>
         </div>
@@ -365,7 +365,7 @@ export default function SecuritySettingsPage() {
           <button
             onClick={() => enableEmailMutation.mutate()}
             disabled={enableEmailMutation.isPending}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium transition-all"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text text-sm font-medium transition-all"
           >
             {enableEmailMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enable email 2FA'}
           </button>
@@ -380,8 +380,8 @@ export default function SecuritySettingsPage() {
               <Key className="w-4.5 h-4.5 text-brand-400" />
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-white text-sm">Backup codes</p>
-              <p className="text-xs text-zinc-500 mt-0.5">Use these if you lose access to your authenticator app.</p>
+              <p className="font-semibold text-sc-text text-sm">Backup codes</p>
+              <p className="text-xs text-sc-dim mt-0.5">Use these if you lose access to your authenticator app.</p>
               {status.backupCodesRemaining < 3 && (
                 <p className="text-xs text-amber-400 mt-1">⚠ Only {status.backupCodesRemaining} code{status.backupCodesRemaining !== 1 ? 's' : ''} remaining. Regenerate soon.</p>
               )}
@@ -399,11 +399,11 @@ export default function SecuritySettingsPage() {
                 <Lock className="w-4.5 h-4.5 text-red-400" />
               </div>
               <div>
-                <p className="font-semibold text-white text-sm">Admin Access PIN</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Extra password required when accessing the admin panel.</p>
+                <p className="font-semibold text-sc-text text-sm">Admin Access PIN</p>
+                <p className="text-xs text-sc-dim mt-0.5">Extra password required when accessing the admin panel.</p>
               </div>
             </div>
-            <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${pinStatus?.hasPin ? 'bg-green-500/15 text-green-400' : 'bg-zinc-700/40 text-zinc-500'}`}>
+            <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${pinStatus?.hasPin ? 'bg-green-500/15 text-green-400' : 'bg-sc-panel-2/40 text-sc-dim'}`}>
               {pinStatus?.hasPin ? 'Enabled' : 'Disabled'}
             </span>
           </div>
@@ -411,7 +411,7 @@ export default function SecuritySettingsPage() {
           {!pinStatus?.hasPin && !showPinForm && (
             <button
               onClick={() => setShowPinForm(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-sc-text text-sm font-medium transition-all"
             >
               Set admin PIN
             </button>
@@ -421,7 +421,7 @@ export default function SecuritySettingsPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowPinForm(true)}
-                className="flex-1 py-2.5 rounded-lg border border-surface-border text-zinc-300 text-sm hover:border-zinc-500 transition-all"
+                className="flex-1 py-2.5 rounded-lg border border-surface-border text-sc-text text-sm hover:border-sc-border transition-all"
               >
                 Change PIN
               </button>
@@ -453,7 +453,7 @@ export default function SecuritySettingsPage() {
                     placeholder="New PIN (4–20 digits)"
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sc-text text-sm font-mono tracking-widest text-center placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                   <input
                     type="password"
@@ -462,7 +462,7 @@ export default function SecuritySettingsPage() {
                     placeholder="Confirm PIN"
                     value={confirmPin}
                     onChange={(e) => setConfirmPin(e.target.value)}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sc-text text-sm font-mono tracking-widest text-center placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                   <input
                     type="text"
@@ -471,7 +471,7 @@ export default function SecuritySettingsPage() {
                     placeholder="Current 2FA code"
                     value={pinTwoFactorCode}
                     onChange={(e) => setPinTwoFactorCode(e.target.value)}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-white text-sm font-mono tracking-widest text-center placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sc-text text-sm font-mono tracking-widest text-center placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   <div className="flex gap-2">
                     <button
@@ -487,13 +487,13 @@ export default function SecuritySettingsPage() {
                         setPinMutation.mutate();
                       }}
                       disabled={setPinMutation.isPending}
-                      className="flex-1 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-medium transition-all"
+                      className="flex-1 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-60 text-sc-text text-sm font-medium transition-all"
                     >
                       {setPinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Save PIN'}
                     </button>
                     <button
                       onClick={() => { setShowPinForm(false); setPin(''); setConfirmPin(''); setPinTwoFactorCode(''); }}
-                      className="px-4 py-2.5 rounded-lg border border-surface-border text-zinc-300 text-sm hover:border-zinc-500 transition-all"
+                      className="px-4 py-2.5 rounded-lg border border-surface-border text-sc-text text-sm hover:border-sc-border transition-all"
                     >
                       Cancel
                     </button>

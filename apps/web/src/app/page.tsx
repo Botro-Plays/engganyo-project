@@ -92,7 +92,7 @@ export default async function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <main className="relative min-h-screen bg-sc text-white overflow-x-hidden">
+      <main className="relative min-h-screen bg-sc text-sc-text overflow-x-hidden">
         {/* Hero gradient */}
         <div className="absolute inset-0 bg-gradient-hero pointer-events-none" />
 
@@ -115,7 +115,7 @@ export default async function LandingPage() {
                 <span className="text-gradient">Earn credits.</span>
               </h1>
 
-              <p className="text-base sm:text-lg text-zinc-400 leading-relaxed mb-8 max-w-lg">
+              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-8 max-w-lg">
                 Complete social tasks for other creators, earn credits, then use them to grow your own audience.
                 Every interaction is verified by a human — no bots, no fake engagement.
               </p>
@@ -123,14 +123,14 @@ export default async function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
                 <Link
                   href="/register"
-                  className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-7 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-sm sm:text-base"
+                  className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-sc-text px-7 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-sm sm:text-base"
                 >
                   Start earning free
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   href="#how-it-works"
-                  className="inline-flex items-center justify-center gap-2 text-zinc-400 hover:text-white px-7 py-3.5 rounded-xl border border-surface-border hover:border-zinc-600 transition-all text-sm sm:text-base"
+                  className="inline-flex items-center justify-center gap-2 text-sc-muted hover:text-sc-text px-7 py-3.5 rounded-xl border border-surface-border hover:border-sc-line transition-all text-sm sm:text-base"
                 >
                   How it works
                 </Link>
@@ -138,17 +138,17 @@ export default async function LandingPage() {
 
               {/* Social proof */}
               {stats && (
-                <div className="flex flex-wrap gap-5 text-zinc-500 text-sm">
+                <div className="flex flex-wrap gap-5 text-sc-dim text-sm">
                   <span>
-                    <strong className="text-white tabular-nums">{stats.totalUsers.toLocaleString()}+</strong>{' '}
+                    <strong className="text-sc-text tabular-nums">{stats.totalUsers.toLocaleString()}+</strong>{' '}
                     creators joined
                   </span>
                   <span>
-                    <strong className="text-white tabular-nums">{stats.totalTaskCompletions.toLocaleString()}+</strong>{' '}
+                    <strong className="text-sc-text tabular-nums">{stats.totalTaskCompletions.toLocaleString()}+</strong>{' '}
                     tasks verified
                   </span>
                   <span>
-                    <strong className="text-white tabular-nums">{stats.totalCountries}+</strong>{' '}
+                    <strong className="text-sc-text tabular-nums">{stats.totalCountries}+</strong>{' '}
                     countries
                   </span>
                 </div>
@@ -170,9 +170,9 @@ export default async function LandingPage() {
                     <span className="text-sm font-bold text-green-400 shrink-0">+15 credits</span>
                   </div>
                   {/* Title */}
-                  <p className="text-sm font-semibold text-white mb-1">Follow @artbyjamie — TikTok art creator</p>
+                  <p className="text-sm font-semibold text-sc-text mb-1">Follow @artbyjamie — TikTok art creator</p>
                   {/* URL mock */}
-                  <p className="text-xs text-zinc-500 mb-3 flex items-center gap-1 truncate">
+                  <p className="text-xs text-sc-dim mb-3 flex items-center gap-1 truncate">
                     <ExternalLink className="w-3 h-3 shrink-0" />
                     tiktok.com/@artbyjamie
                   </p>
@@ -184,7 +184,7 @@ export default async function LandingPage() {
                     </p>
                   </div>
                   {/* Slots */}
-                  <div className="flex items-center justify-between text-xs text-zinc-500 mb-4">
+                  <div className="flex items-center justify-between text-xs text-sc-dim mb-4">
                     <span>8 slots left</span>
                     <span>Manual review</span>
                   </div>
@@ -207,7 +207,7 @@ export default async function LandingPage() {
                   ].map(({ step, label, icon: Icon, color }) => (
                     <div key={step} className="bg-surface-card border border-surface-border rounded-xl px-2 py-3">
                       <Icon className={`w-4 h-4 mx-auto mb-1.5 ${color}`} />
-                      <p className="text-[11px] text-zinc-400">{label}</p>
+                      <p className="text-[11px] text-sc-muted">{label}</p>
                     </div>
                   ))}
                 </div>
@@ -226,7 +226,7 @@ export default async function LandingPage() {
         <section className="relative z-10 py-14 sm:py-16 px-4 sm:px-6 max-w-5xl mx-auto">
           <div className="text-center mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold mb-2">Supported platforms</h2>
-            <p className="text-zinc-400 text-sm sm:text-base max-w-lg mx-auto">
+            <p className="text-sc-muted text-sm sm:text-base max-w-lg mx-auto">
               Real tasks across the platforms your audience already uses.
             </p>
           </div>
@@ -237,7 +237,7 @@ export default async function LandingPage() {
                 className="flex items-center gap-2.5 bg-surface-card border border-surface-border rounded-full px-4 py-2.5 sm:px-5 sm:py-3"
               >
                 <PlatformIcon platform={p.platform} className="w-5 h-5 shrink-0" />
-                <span className="text-sm sm:text-base font-medium text-zinc-200">{p.label}</span>
+                <span className="text-sm sm:text-base font-medium text-sc-text">{p.label}</span>
               </li>
             ))}
           </ul>
@@ -247,7 +247,7 @@ export default async function LandingPage() {
         <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6 max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold mb-3">Two ways to participate</h2>
-            <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto">
+            <p className="text-sc-muted text-base sm:text-lg max-w-2xl mx-auto">
               Earn credits by helping others, or spend them to grow your own audience. Most creators do both.
             </p>
           </div>
@@ -260,8 +260,8 @@ export default async function LandingPage() {
                   <CheckCircle2 className="w-4.5 h-4.5 text-brand-300" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-lg">Earn credits</h3>
-                  <p className="text-xs text-zinc-500">Complete tasks from other creators</p>
+                  <h3 className="font-bold text-sc-text text-lg">Earn credits</h3>
+                  <p className="text-xs text-sc-dim">Complete tasks from other creators</p>
                 </div>
               </div>
               <ol className="space-y-4">
@@ -271,8 +271,8 @@ export default async function LandingPage() {
                       {i + 1}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-white">{s.title}</p>
-                      <p className="text-xs text-zinc-500 leading-relaxed mt-0.5">{s.desc}</p>
+                      <p className="text-sm font-medium text-sc-text">{s.title}</p>
+                      <p className="text-xs text-sc-dim leading-relaxed mt-0.5">{s.desc}</p>
                     </div>
                   </li>
                 ))}
@@ -292,8 +292,8 @@ export default async function LandingPage() {
                   <Megaphone className="w-4.5 h-4.5 text-accent-400" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-lg">Grow your audience</h3>
-                  <p className="text-xs text-zinc-500">Create campaigns, real humans complete them</p>
+                  <h3 className="font-bold text-sc-text text-lg">Grow your audience</h3>
+                  <p className="text-xs text-sc-dim">Create campaigns, real humans complete them</p>
                 </div>
               </div>
               <ol className="space-y-4">
@@ -303,8 +303,8 @@ export default async function LandingPage() {
                       {i + 1}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-white">{s.title}</p>
-                      <p className="text-xs text-zinc-500 leading-relaxed mt-0.5">{s.desc}</p>
+                      <p className="text-sm font-medium text-sc-text">{s.title}</p>
+                      <p className="text-xs text-sc-dim leading-relaxed mt-0.5">{s.desc}</p>
                     </div>
                   </li>
                 ))}
@@ -323,7 +323,7 @@ export default async function LandingPage() {
         <section id="about" className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6 max-w-5xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold mb-3">Built for real engagement</h2>
-            <p className="text-zinc-400 text-base sm:text-lg max-w-xl mx-auto">
+            <p className="text-sc-muted text-base sm:text-lg max-w-xl mx-auto">
               Every task completion is reviewed by the creator before credits are released. No bots. No shortcuts.
             </p>
           </div>
@@ -332,8 +332,8 @@ export default async function LandingPage() {
             {trustPoints.map((t) => (
               <div key={t.title} className="bg-surface-card border border-surface-border rounded-2xl p-5 sm:p-6">
                 <t.Icon className="w-6 h-6 text-brand-400 mb-3" />
-                <h3 className="font-semibold text-white mb-1.5">{t.title}</h3>
-                <p className="text-zinc-400 text-sm leading-relaxed">{t.desc}</p>
+                <h3 className="font-semibold text-sc-text mb-1.5">{t.title}</h3>
+                <p className="text-sc-muted text-sm leading-relaxed">{t.desc}</p>
               </div>
             ))}
           </div>
@@ -348,19 +348,19 @@ export default async function LandingPage() {
             <h2 className="text-3xl sm:text-4xl font-bold mb-3 leading-tight">
               Start with 200 credits.<br />No card needed.
             </h2>
-            <p className="text-zinc-400 mb-8 text-sm sm:text-base max-w-md mx-auto">
+            <p className="text-sc-muted mb-8 text-sm sm:text-base max-w-md mx-auto">
               Create your account, pick a task from the marketplace, complete it, and earn your first credits today.
             </p>
             <Link
               href="/register"
-              className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-8 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-base"
+              className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-sc-text px-8 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-base"
             >
               Create free account
               <ArrowRight className="w-4 h-4" />
             </Link>
-            <p className="mt-4 text-xs text-zinc-600">
+            <p className="mt-4 text-xs text-sc-dim">
               Already have an account?{' '}
-              <Link href="/login" className="text-zinc-400 hover:text-white transition-colors">
+              <Link href="/login" className="text-sc-muted hover:text-sc-text transition-colors">
                 Sign in
               </Link>
             </p>
@@ -374,13 +374,13 @@ export default async function LandingPage() {
               <BrandLogo wordmark={false} className="w-6 h-6" />
               <span className="font-semibold text-sm">Engganyo</span>
             </div>
-            <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-zinc-500 text-sm">
-              <Link href="/about" className="hover:text-white transition-colors">About</Link>
-              <Link href="/faq" className="hover:text-white transition-colors">FAQ</Link>
-              <Link href="/contact" className="hover:text-white transition-colors">Contact</Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
+            <p className="text-sc-dim text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sc-dim text-sm">
+              <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
+              <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>
+              <Link href="/contact" className="hover:text-sc-text transition-colors">Contact</Link>
+              <Link href="/privacy" className="hover:text-sc-text transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-sc-text transition-colors">Terms of Service</Link>
             </div>
           </div>
         </footer>
