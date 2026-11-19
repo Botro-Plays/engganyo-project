@@ -2991,10 +2991,14 @@ sessions revoked.
   (landing + login at 390/1440px; fonts confirmed DotGothic16, no
   horizontal overflow; one mobile landing screenshot timed out —
   retake pending). Public asset URLs verified 200.
-- **In flight:** PR #92 `feat/pixel-surfaces-core` @ `1f3e6e9` —
-  class-only migration of ALL surfaces off `zinc-*`/neutral utilities
-  onto `sc-*` tokens (79 files; new `sc.line`/`sc.dim`); no behavior,
-  route, accounting, reward, or moderation changes.
+- **PR #92** merged **`ca25890`** — class-only migration of ALL
+  surfaces off `zinc-*`/neutral utilities onto `sc-*` tokens (79 files;
+  new `sc.line`/`sc.dim`); deploy run **44525019455** all jobs success;
+  `.deployed-sha` verified `ca25890`; containers healthy. Deployed CSS
+  confirmed serving `#0d0919`/`#4a3391`/`#7c4dff` + DotGothic16/VT323.
+- **PR #93** merged **`32197a1`** — Recharts inline colors + tooltip
+  radii remapped to sc neutrals (final hardcoded-color audit item);
+  deploy run **44527337115**.
 - **Pending:** rendered pass on authenticated surfaces (owner-assisted
   login), intermediate-width/overflow/dialog/keyboard/reduced-motion
   checks, page-by-page coverage checklist, remaining-gap report.
