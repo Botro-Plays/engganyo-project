@@ -60,6 +60,15 @@ test.describe('Mobile layout @390px', () => {
 
   test('mobile bottom nav is visible and More drawer opens', async ({ page }) => {
     await page.goto('/dashboard');
+    // Onboarding tour renders a full-screen overlay that blocks pointer
+    // events — dismiss it if the seeded user hasn't completed it.
+    const skipTour = page.locator('[data-tour-action="skip"]');
+    try {
+      await skipTour.waitFor({ state: 'visible', timeout: 4000 });
+      await skipTour.click();
+    } catch {
+      /* tour not shown for this user */
+    }
     const nav = page.locator('nav[aria-label="Mobile navigation"]');
     await expect(nav).toBeVisible();
     await page.getByRole('button', { name: /more navigation/i }).click();
@@ -76,9 +85,16 @@ test.describe('Mobile layout @390px', () => {
 
   test('login page fits 390px without overflow', async ({ page }) => {
     // Auth tokens live in localStorage — clearing cookies alone keeps the
-    // session and /login redirects to /dashboard.
+    // session and /login redirects to /dashboard. addInitScript runs before
+    // page scripts on every navigation (evaluate on about:blank throws).
     await page.context().clearCookies();
-    await page.evaluate(() => localStorage.clear());
+    await page.addInitScript(() => {
+      try {
+        localStorage.clear();
+      } catch {
+        /* storage unavailable */
+      }
+    });
     await page.goto('/login');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
