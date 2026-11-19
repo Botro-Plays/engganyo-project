@@ -2998,7 +2998,9 @@ sessions revoked.
   confirmed serving `#0d0919`/`#4a3391`/`#7c4dff` + DotGothic16/VT323.
 - **PR #93** merged **`32197a1`** — Recharts inline colors + tooltip
   radii remapped to sc neutrals (final hardcoded-color audit item);
-  deploy run **44527337115**.
+  deploy run **44527337115** all jobs success; `.deployed-sha` verified
+  `32197a1`; containers healthy. **Redesign rollout complete through
+  PR #93 — production SHA `32197a1`.**
 - **Pending:** rendered pass on authenticated surfaces (owner-assisted
   login), intermediate-width/overflow/dialog/keyboard/reduced-motion
   checks, page-by-page coverage checklist, remaining-gap report.
