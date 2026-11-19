@@ -30,14 +30,29 @@ test.describe('Mobile layout @390px', () => {
     test(`${pg.name} has no horizontal overflow`, async ({ page }) => {
       await page.goto(pg.path);
       await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
-      const overflow = await page.evaluate(() => ({
-        scrollW: document.documentElement.scrollWidth,
-        clientW: document.documentElement.clientWidth,
-        bodyScrollW: document.body.scrollWidth,
-      }));
+      const overflow = await page.evaluate(() => {
+        const de = document.documentElement;
+        const offenders = Array.from(document.querySelectorAll('*'))
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && (r.right > de.clientWidth + 1 || r.left < -1);
+          })
+          .slice(0, 8)
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            const cls = typeof el.className === 'string' ? el.className.slice(0, 120) : '';
+            return `${el.tagName.toLowerCase()}.${cls} [${Math.round(r.left)},${Math.round(r.right)}]`;
+          });
+        return {
+          scrollW: de.scrollWidth,
+          clientW: de.clientWidth,
+          bodyScrollW: document.body.scrollWidth,
+          offenders,
+        };
+      });
       expect(
         overflow.scrollW,
-        `${pg.name}: document scrollWidth ${overflow.scrollW} > clientWidth ${overflow.clientW}`,
+        `${pg.name}: scrollWidth ${overflow.scrollW} > clientWidth ${overflow.clientW}\nOffenders:\n${overflow.offenders.join('\n')}`,
       ).toBeLessThanOrEqual(overflow.clientW + 1);
       expect(overflow.bodyScrollW).toBeLessThanOrEqual(overflow.clientW + 1);
     });
@@ -60,7 +75,10 @@ test.describe('Mobile layout @390px', () => {
   });
 
   test('login page fits 390px without overflow', async ({ page }) => {
+    // Auth tokens live in localStorage — clearing cookies alone keeps the
+    // session and /login redirects to /dashboard.
     await page.context().clearCookies();
+    await page.evaluate(() => localStorage.clear());
     await page.goto('/login');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);

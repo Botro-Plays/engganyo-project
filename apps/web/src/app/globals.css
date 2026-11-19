@@ -144,7 +144,7 @@
 }
 
 @layer components {
-  /* Deep-purple backdrop with the subtle violet pixel grid */
+  /* Deep-navy backdrop with the subtle blue pixel grid */
   .bg-sc {
     background-color: var(--sc-bg);
     background-image:
