@@ -149,25 +149,25 @@ export default function InventoryPage() {
       <div className="flex items-center gap-3 mb-6">
         <Link
           href="/store"
-          className="p-2 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white transition-all"
+          className="p-2 rounded-lg bg-surface-hover border border-surface-border text-sc-muted hover:text-sc-text transition-all"
         >
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-white">My Inventory</h1>
-          <p className="text-sm text-zinc-400 mt-1">Items you have purchased.</p>
+          <h1 className="text-2xl font-bold text-sc-text">My Inventory</h1>
+          <p className="text-sm text-sc-muted mt-1">Items you have purchased.</p>
         </div>
       </div>
 
       {/* Inventory grid */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20 text-zinc-500">
+        <div className="flex items-center justify-center py-20 text-sc-dim">
           Loading...
         </div>
       ) : inventory.length === 0 ? (
         <div className="text-center py-20">
-          <Package className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-500">Your inventory is empty.</p>
+          <Package className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+          <p className="text-sc-dim">Your inventory is empty.</p>
           <Link href="/store" className="text-brand-400 hover:text-brand-300 text-sm mt-2 inline-block underline">
             Browse the Store
           </Link>
@@ -176,7 +176,7 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {inventory.map((entry) => {
             const Icon = CATEGORY_ICONS[entry.item.category] ?? Package;
-            const colorClass = CATEGORY_COLORS[entry.item.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
+            const colorClass = CATEGORY_COLORS[entry.item.category] ?? 'border-sc-line bg-sc-panel-2/50 text-sc-muted';
             const isCosmetic = !entry.item.isConsumable;
 
             // Derive the item's effect type (mirrors backend logic in useItem)
@@ -219,13 +219,13 @@ export default function InventoryPage() {
                       </span>
                     )}
                     {!isCosmetic && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/10">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-sc-muted border border-white/10">
                         x{entry.quantity}
                       </span>
                     )}
                     {!isCosmetic && entry.provenance && entry.provenance !== 'PURCHASE' && (
                       <span
-                        className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/5 text-zinc-500 border border-white/10"
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/5 text-sc-dim border border-white/10"
                         title={entry.provenance === 'MARKETPLACE' ? 'Bought on the marketplace — resellable' : 'Bound to your account'}
                       >
                         {PROVENANCE_LABELS[entry.provenance] ?? entry.provenance}
@@ -234,11 +234,11 @@ export default function InventoryPage() {
                   </div>
                 </div>
 
-                <h3 className="text-white font-semibold mb-1">{entry.item.name}</h3>
-                <p className="text-sm text-zinc-400 mb-3 flex-1">{entry.item.description}</p>
+                <h3 className="text-sc-text font-semibold mb-1">{entry.item.name}</h3>
+                <p className="text-sm text-sc-muted mb-3 flex-1">{entry.item.description}</p>
 
                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                  <div className="text-xs text-zinc-500">
+                  <div className="text-xs text-sc-dim">
                     Acquired {new Date(entry.acquiredAt).toLocaleDateString()}
                     {isCosmetic && (
                       <span className="ml-2 text-purple-400/70">Permanent</span>
@@ -255,7 +255,7 @@ export default function InventoryPage() {
                       className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
                         entry.equipped
                           ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30'
-                          : 'bg-brand-500 hover:bg-brand-400 text-white'
+                          : 'bg-brand-500 hover:bg-brand-400 text-sc-text'
                       }`}
                     >
                       {equippingId === entry.id ? (
@@ -280,7 +280,7 @@ export default function InventoryPage() {
                             setUsingId(entry.id);
                             useMutation_.mutate(entry.id);
                           }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-400 text-sc-text text-xs font-medium transition-colors disabled:opacity-50"
                         >
                           {usingId === entry.id ? (
                             <Loader2 className="w-3 h-3 animate-spin" />

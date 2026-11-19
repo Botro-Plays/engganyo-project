@@ -124,11 +124,11 @@ export default function StorePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-sc-text flex items-center gap-2">
             <ShoppingBag className="w-6 h-6 text-brand-400" />
             Store
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">Spend credits on boosts, cosmetics, and convenience items.</p>
+          <p className="text-sm text-sc-muted mt-1">Spend credits on boosts, cosmetics, and convenience items.</p>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -154,7 +154,7 @@ export default function StorePage() {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               activeCategory === cat
                 ? 'bg-brand-500/20 text-brand-300 border border-brand-500/30'
-                : 'bg-surface-hover text-zinc-400 border border-surface-border hover:text-white'
+                : 'bg-surface-hover text-sc-muted border border-surface-border hover:text-sc-text'
             }`}
           >
             {CATEGORY_LABELS[cat] ?? 'All'}
@@ -168,14 +168,14 @@ export default function StorePage() {
           <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
         </div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-20 text-zinc-500">
+        <div className="text-center py-20 text-sc-dim">
           No items available right now. Check back later!
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredItems.map((item) => {
             const Icon = CATEGORY_ICONS[item.category] ?? Package;
-            const colorClass = CATEGORY_COLORS[item.category] ?? 'border-zinc-700 bg-zinc-800/50 text-zinc-400';
+            const colorClass = CATEGORY_COLORS[item.category] ?? 'border-sc-line bg-sc-panel-2/50 text-sc-muted';
             const isPurchasing = purchasingId === item.id;
             const qty = Math.max(1, Math.min(99, quantities[item.id] ?? 1));
             const canAfford = (user?.creditBalance ?? 0) >= item.creditCost * qty;
@@ -213,8 +213,8 @@ export default function StorePage() {
                   </div>
                 </div>
 
-                <h3 className="text-white font-semibold mb-1">{item.name}</h3>
-                <p className="text-sm text-zinc-400 mb-4 flex-1">{item.description}</p>
+                <h3 className="text-sc-text font-semibold mb-1">{item.name}</h3>
+                <p className="text-sm text-sc-muted mb-4 flex-1">{item.description}</p>
 
                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5">
                   <div>
@@ -222,11 +222,11 @@ export default function StorePage() {
                       {formatCredits(item.creditCost * qty)} credits
                     </span>
                     {qty > 1 && (
-                      <span className="text-[10px] text-zinc-500 block">{formatCredits(item.creditCost)} × {qty}</span>
+                      <span className="text-[10px] text-sc-dim block">{formatCredits(item.creditCost)} × {qty}</span>
                     )}
                   </div>
                   {alreadyOwned ? (
-                    <span className="px-3 py-1.5 rounded-lg text-sm font-medium bg-zinc-700 text-zinc-400 cursor-not-allowed">
+                    <span className="px-3 py-1.5 rounded-lg text-sm font-medium bg-sc-panel-2 text-sc-muted cursor-not-allowed">
                       Owned
                     </span>
                   ) : (
@@ -236,15 +236,15 @@ export default function StorePage() {
                           <button
                             onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.max(1, (q[item.id] ?? 1) - 1) }))}
                             disabled={qty <= 1}
-                            className="px-2 py-1.5 text-zinc-400 hover:text-white disabled:text-zinc-600 transition-colors"
+                            className="px-2 py-1.5 text-sc-muted hover:text-sc-text disabled:text-sc-dim transition-colors"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="text-xs text-white font-medium w-6 text-center">{qty}</span>
+                          <span className="text-xs text-sc-text font-medium w-6 text-center">{qty}</span>
                           <button
                             onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.min(99, (q[item.id] ?? 1) + 1) }))}
                             disabled={qty >= 99}
-                            className="px-2 py-1.5 text-zinc-400 hover:text-white disabled:text-zinc-600 transition-colors"
+                            className="px-2 py-1.5 text-sc-muted hover:text-sc-text disabled:text-sc-dim transition-colors"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -261,8 +261,8 @@ export default function StorePage() {
                           vipLocked
                             ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30 cursor-not-allowed'
                             : canAfford
-                            ? 'bg-brand-500 hover:bg-brand-400 text-white disabled:opacity-50'
-                            : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                            ? 'bg-brand-500 hover:bg-brand-400 text-sc-text disabled:opacity-50'
+                            : 'bg-sc-panel-2 text-sc-dim cursor-not-allowed'
                         }`}
                       >
                         {isPurchasing ? (

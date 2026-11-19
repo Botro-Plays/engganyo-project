@@ -51,7 +51,7 @@ export default function QueuesPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     );
   }
@@ -59,8 +59,8 @@ export default function QueuesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Queue Monitor</h1>
-        <p className="text-zinc-400 text-sm mt-1">BullMQ queue status, job counts, and recent failures.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Queue Monitor</h1>
+        <p className="text-sc-muted text-sm mt-1">BullMQ queue status, job counts, and recent failures.</p>
       </div>
 
       {data?.map((queue) => {
@@ -79,8 +79,8 @@ export default function QueuesPage() {
                   {(queueIcons[queue.name] as React.ReactNode) ?? <PlayCircle className="w-5 h-5" />}
                 </div>
                 <div className="text-left">
-                  <h2 className="font-semibold text-white">{queueLabels[queue.name] ?? queue.name}</h2>
-                  <p className="text-xs text-zinc-500">{total} total jobs</p>
+                  <h2 className="font-semibold text-sc-text">{queueLabels[queue.name] ?? queue.name}</h2>
+                  <p className="text-xs text-sc-dim">{total} total jobs</p>
                 </div>
               </div>
 
@@ -93,7 +93,7 @@ export default function QueuesPage() {
                   <CountBadge icon={<XCircle className="w-3 h-3" />} count={queue.counts.failed} label="Failed" color="rose" />
                   <CountBadge icon={<PauseCircle className="w-3 h-3" />} count={queue.counts.delayed} label="Delayed" color="zinc" />
                 </div>
-                {isExpanded ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <ChevronDown className="w-5 h-5 text-zinc-400" />}
+                {isExpanded ? <ChevronUp className="w-5 h-5 text-sc-muted" /> : <ChevronDown className="w-5 h-5 text-sc-muted" />}
               </div>
             </button>
 
@@ -120,14 +120,14 @@ export default function QueuesPage() {
                       {queue.recentFailed.map((job: QueueJob) => (
                         <div key={String(job.id)} className="rounded-lg bg-rose-500/5 border border-rose-500/10 p-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-white">{job.name}</span>
-                            <span className="text-xs text-zinc-500">ID: {String(job.id)}</span>
+                            <span className="text-xs font-medium text-sc-text">{job.name}</span>
+                            <span className="text-xs text-sc-dim">ID: {String(job.id)}</span>
                           </div>
                           <p className="text-xs text-rose-400 line-clamp-2">{job.failedReason}</p>
                           <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xs text-zinc-500">Attempts: {job.attemptsMade ?? 0}</span>
+                            <span className="text-xs text-sc-dim">Attempts: {job.attemptsMade ?? 0}</span>
                             {job.timestamp && (
-                              <span className="text-xs text-zinc-500">
+                              <span className="text-xs text-sc-dim">
                                 {new Date(job.timestamp).toLocaleString()}
                               </span>
                             )}
@@ -149,11 +149,11 @@ export default function QueuesPage() {
                       {queue.recentCompleted.map((job: QueueJob) => (
                         <div key={String(job.id)} className="rounded-lg bg-green-500/5 border border-green-500/10 p-3 flex items-center justify-between">
                           <div>
-                            <span className="text-xs font-medium text-white">{job.name}</span>
-                            <p className="text-xs text-zinc-500 mt-0.5">ID: {String(job.id)}</p>
+                            <span className="text-xs font-medium text-sc-text">{job.name}</span>
+                            <p className="text-xs text-sc-dim mt-0.5">ID: {String(job.id)}</p>
                           </div>
                           {job.finishedOn && (
-                            <span className="text-xs text-zinc-500">
+                            <span className="text-xs text-sc-dim">
                               {new Date(job.finishedOn).toLocaleString()}
                             </span>
                           )}
@@ -164,7 +164,7 @@ export default function QueuesPage() {
                 )}
 
                 {queue.recentFailed.length === 0 && queue.recentCompleted.length === 0 && (
-                  <p className="text-sm text-zinc-500 py-4">No recent jobs in this queue.</p>
+                  <p className="text-sm text-sc-dim py-4">No recent jobs in this queue.</p>
                 )}
               </div>
             )}
@@ -191,7 +191,7 @@ function CountBadge({
     blue: 'bg-blue-500/10 text-blue-300 border-blue-500/20',
     green: 'bg-green-500/10 text-green-300 border-green-500/20',
     rose: 'bg-rose-500/10 text-rose-300 border-rose-500/20',
-    zinc: 'bg-zinc-500/10 text-zinc-300 border-zinc-500/20',
+    zinc: 'bg-sc-soft/10 text-sc-text border-sc-border/20',
   };
 
   return (

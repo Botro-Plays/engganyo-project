@@ -79,8 +79,8 @@ const STATUS_CFG: Record<string, { label: string; color: string; bg: string; ico
   PROCESSING: { label: 'Processing', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20',     icon: RefreshCw },
   COMPLETED:  { label: 'Completed',  color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20',   icon: CheckCircle2 },
   FAILED:     { label: 'Failed',     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20',       icon: XCircle },
-  CANCELLED:  { label: 'Cancelled',  color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: XCircle },
-  REFUNDED:   { label: 'Refunded',   color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20',     icon: AlertCircle },
+  CANCELLED:  { label: 'Cancelled',  color: 'text-sc-muted',   bg: 'bg-sc-soft/10 border-sc-border/20',     icon: XCircle },
+  REFUNDED:   { label: 'Refunded',   color: 'text-sc-muted',   bg: 'bg-sc-soft/10 border-sc-border/20',     icon: AlertCircle },
 };
 
 const PROVIDER_CARD_CFG: Record<string, { title: string; color: string; accent: string }> = {
@@ -97,15 +97,15 @@ function SettlementFigure({ label, figs, count, currencyHint, prominent }: {
   const partial = covered < count;
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-xs text-sc-dim">{label}</span>
       <span className="text-right">
         {figs.length === 0 ? (
-          <span className="text-xs text-zinc-600 italic">unavailable</span>
+          <span className="text-xs text-sc-dim italic">unavailable</span>
         ) : (
           figs.map((f) => (
-            <span key={f.currency} className={`block ${prominent ? 'text-base font-semibold text-white' : 'text-sm text-zinc-300'}`}>
+            <span key={f.currency} className={`block ${prominent ? 'text-base font-semibold text-sc-text' : 'text-sm text-sc-text'}`}>
               {f.currency === 'USD' ? '$' : f.currency === 'PHP' ? '₱' : `${f.currency} `}{f.total.toFixed(2)}
-              <span className="text-[10px] text-zinc-500 ml-1">{f.currency !== currencyHint ? f.currency : ''}{partial ? ` · ${f.count} of ${count} deposits` : f.count > 1 ? ` · ${f.count} deposits` : ''}</span>
+              <span className="text-[10px] text-sc-dim ml-1">{f.currency !== currencyHint ? f.currency : ''}{partial ? ` · ${f.count} of ${count} deposits` : f.count > 1 ? ` · ${f.count} deposits` : ''}</span>
             </span>
           ))
         )}
@@ -135,26 +135,26 @@ function ReviewModal({ deposit, onClose, onSave }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="w-full max-w-md card-glass rounded-2xl p-6 border border-surface-border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-white">Review Deposit</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+          <h2 className="text-base font-semibold text-sc-text">Review Deposit</h2>
+          <button onClick={onClose} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="space-y-1 mb-4 text-xs text-zinc-500">
-          <p>User: <span className="text-white">{deposit.user.username}</span></p>
-          <p>Amount: <span className="text-white">{deposit.currency} {deposit.amountFiat.toFixed(2)}</span></p>
+        <div className="space-y-1 mb-4 text-xs text-sc-dim">
+          <p>User: <span className="text-sc-text">{deposit.user.username}</span></p>
+          <p>Amount: <span className="text-sc-text">{deposit.currency} {deposit.amountFiat.toFixed(2)}</span></p>
           <p>Credits to award: <span className="text-brand-300 font-semibold">{deposit.creditsToAward.toLocaleString()}</span></p>
-          <p>Method: <span className="text-white">{METHOD_CFG[deposit.method]?.label ?? deposit.method}</span></p>
+          <p>Method: <span className="text-sc-text">{METHOD_CFG[deposit.method]?.label ?? deposit.method}</span></p>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-zinc-500 mb-1.5">Action</label>
+            <label className="block text-xs text-sc-dim mb-1.5">Action</label>
             <div className="grid grid-cols-3 gap-2">
               {(['COMPLETED', 'FAILED', 'REFUNDED'] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatus(s)}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${status === s ? STATUS_CFG[s].bg + ' ' + STATUS_CFG[s].color : 'border-surface-border text-zinc-500 hover:text-white hover:bg-surface-hover'}`}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${status === s ? STATUS_CFG[s].bg + ' ' + STATUS_CFG[s].color : 'border-surface-border text-sc-dim hover:text-sc-text hover:bg-surface-hover'}`}
                 >
                   {s}
                 </button>
@@ -163,32 +163,32 @@ function ReviewModal({ deposit, onClose, onSave }: {
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Payment Ref / TX Hash (optional)</label>
+            <label className="block text-xs text-sc-dim mb-1">Payment Ref / TX Hash (optional)</label>
             <input
               value={paymentRef}
               onChange={(e) => setPaymentRef(e.target.value)}
               placeholder="e.g. 0x1a2b3c..."
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">Admin Notes (optional)</label>
+            <label className="block text-xs text-sc-dim mb-1">Admin Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="e.g. Verified on BscScan"
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
             />
           </div>
         </div>
 
         <div className="flex gap-3 mt-5">
-          <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
+          <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors">Cancel</button>
           <button
             onClick={() => onSave({ status, adminNotes: notes || undefined, paymentRef: paymentRef || undefined })}
-            className={`flex-1 flex items-center justify-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all ${status === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700' : status === 'FAILED' ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-600 hover:bg-zinc-500'}`}
+            className={`flex-1 flex items-center justify-center gap-2 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all ${status === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700' : status === 'FAILED' ? 'bg-red-600 hover:bg-red-700' : 'bg-sc-soft hover:bg-sc-soft'}`}
           >
             <Save className="w-4 h-4" />
             Confirm {status}
@@ -291,7 +291,7 @@ export default function FinancesPage() {
   });
 
   const statCards = stats ? [
-    { label: 'Total Deposits', value: stats.counts.total, color: 'text-zinc-300', bg: 'bg-zinc-500/10' },
+    { label: 'Total Deposits', value: stats.counts.total, color: 'text-sc-text', bg: 'bg-sc-soft/10' },
     { label: 'Pending', value: stats.counts.pending, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
     { label: 'Processing', value: stats.counts.processing, color: 'text-blue-400', bg: 'bg-blue-500/10' },
     { label: 'Completed', value: stats.counts.completed, color: 'text-green-400', bg: 'bg-green-500/10' },
@@ -306,8 +306,8 @@ export default function FinancesPage() {
           <DollarSign className="w-5 h-5 text-green-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-white">Finances</h1>
-          <p className="text-xs text-zinc-500">User deposits, credit distribution, and payment method management</p>
+          <h1 className="text-xl font-semibold text-sc-text">Finances</h1>
+          <p className="text-xs text-sc-dim">User deposits, credit distribution, and payment method management</p>
         </div>
       </div>
 
@@ -328,7 +328,7 @@ export default function FinancesPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {statCards.map((s) => (
             <div key={s.label} className="card-glass rounded-xl p-5">
-              <p className="text-xs text-zinc-500 mb-1">{s.label}</p>
+              <p className="text-xs text-sc-dim mb-1">{s.label}</p>
               <p className={`text-2xl font-bold ${s.color}`}>{s.value.toLocaleString()}</p>
             </div>
           ))}
@@ -346,22 +346,22 @@ export default function FinancesPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className={`text-sm font-semibold ${cfg.color}`}>{cfg.title} settlement</h3>
                 {settlementSummary && (
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-sc-dim">
                     {rows.length === 0 ? 'no settled deposits' : `${totalDeposits} deposit${totalDeposits === 1 ? '' : 's'}`}
                   </span>
                 )}
               </div>
               {settlementLoading && !settlementSummary ? (
                 <div className="space-y-2 animate-pulse">
-                  {[1, 2, 3].map((i) => <div key={i} className="h-4 bg-zinc-700/40 rounded" />)}
+                  {[1, 2, 3].map((i) => <div key={i} className="h-4 bg-sc-panel-2/40 rounded" />)}
                 </div>
               ) : settlementError && !settlementSummary ? (
                 <div className="flex items-center justify-between gap-2 py-2">
-                  <p className="text-xs text-zinc-500">Couldn&rsquo;t load settlement totals</p>
+                  <p className="text-xs text-sc-dim">Couldn&rsquo;t load settlement totals</p>
                   <button onClick={() => void refetchSettlement()} className="text-xs text-amber-400 hover:text-amber-300 underline">Retry</button>
                 </div>
               ) : rows.length === 0 ? (
-                <p className="text-xs text-zinc-600">No settled {cfg.title} deposits yet.</p>
+                <p className="text-xs text-sc-dim">No settled {cfg.title} deposits yet.</p>
               ) : (
                 <div className="space-y-4">
                   {settlementRefetchError && settlementSummary && (
@@ -370,7 +370,7 @@ export default function FinancesPage() {
                   {rows.map((r) => (
                     <div key={`${r.method}-${r.currency}`} className="space-y-1.5">
                       {rows.length > 1 && (
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-600">charged in {r.currency}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-sc-dim">charged in {r.currency}</p>
                       )}
                       <SettlementFigure
                         label="Gross charged"
@@ -400,7 +400,7 @@ export default function FinancesPage() {
                             figs={r.converted}
                             count={r.count}
                           />
-                          <p className="text-[10px] text-zinc-600 mt-0.5">settled in the provider&apos;s payout currency — not counted in net</p>
+                          <p className="text-[10px] text-sc-dim mt-0.5">settled in the provider&apos;s payout currency — not counted in net</p>
                         </div>
                       )}
                       {(r.feePartial || r.netPartial || r.convertedPartial) && (
@@ -420,41 +420,41 @@ export default function FinancesPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
           <div className="flex items-center gap-2">
             <Package className="w-4 h-4 text-brand-400" />
-            <h2 className="font-semibold text-white">Credit Packages</h2>
-            {pkgs && <span className="text-xs text-zinc-500">{pkgs.length} packages</span>}
+            <h2 className="font-semibold text-sc-text">Credit Packages</h2>
+            {pkgs && <span className="text-xs text-sc-dim">{pkgs.length} packages</span>}
           </div>
           <div className="flex items-center gap-2">
             {!pkgs?.length && (
               <button onClick={() => seedPkgMutation.mutate()} disabled={seedPkgMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-all disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text transition-all disabled:opacity-50">
                 {seedPkgMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}Seed Defaults
               </button>
             )}
-            <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-all">
+            <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text transition-all">
               <Plus className="w-3 h-3" />New Package
             </button>
           </div>
         </div>
 
         {pkgsLoading ? (
-          <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-sc-dim" /></div>
         ) : !pkgs?.length ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <p className="text-zinc-500 text-sm">No packages yet.</p>
-            <p className="text-zinc-600 text-xs mt-1">Click &ldquo;Seed Defaults&rdquo; to add the standard $1–$100 packages.</p>
+            <p className="text-sc-dim text-sm">No packages yet.</p>
+            <p className="text-sc-dim text-xs mt-1">Click &ldquo;Seed Defaults&rdquo; to add the standard $1–$100 packages.</p>
           </div>
         ) : (
           <div className="divide-y divide-surface-border">
             {pkgs.map((p) => (
               <div key={p.id} className="flex items-center gap-4 px-6 py-3">
                 <div className="flex-1 flex items-center gap-3 min-w-0">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${p.isActive ? 'bg-green-400' : 'bg-zinc-600'}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${p.isActive ? 'bg-green-400' : 'bg-sc-soft'}`} />
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-white">${p.usdAmount}</span>
+                      <span className="text-sm font-semibold text-sc-text">${p.usdAmount}</span>
                       {p.label && <span className="px-1.5 py-0.5 text-[10px] font-bold bg-brand-500/20 text-brand-300 rounded">{p.label}</span>}
                       {p.isPopular && <span className="px-1.5 py-0.5 text-[10px] font-bold bg-yellow-500/20 text-yellow-300 rounded">POPULAR</span>}
-                      {!p.isActive && <span className="px-1.5 py-0.5 text-[10px] font-bold bg-zinc-700 text-zinc-500 rounded">INACTIVE</span>}
+                      {!p.isActive && <span className="px-1.5 py-0.5 text-[10px] font-bold bg-sc-panel-2 text-sc-dim rounded">INACTIVE</span>}
                     </div>
                     {p.bonusCredits > 0 && (
                       <span className="flex items-center gap-1 text-xs text-green-400"><Zap className="w-3 h-3" />+{p.bonusCredits.toLocaleString()} bonus credits</span>
@@ -462,11 +462,11 @@ export default function FinancesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-surface-hover transition-all">
+                  <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-surface-hover transition-all">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => { if (confirm('Delete this package?')) deletePkgMutation.mutate(p.id); }}
-                    className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                    className="p-1.5 rounded-lg text-sc-dim hover:text-red-400 hover:bg-red-500/10 transition-all">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -481,33 +481,33 @@ export default function FinancesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-sm card-glass rounded-2xl p-6 border border-surface-border">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">{editingPkg ? 'Edit Package' : 'New Package'}</h2>
-              <button onClick={() => setShowPkgForm(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <h2 className="text-base font-semibold text-sc-text">{editingPkg ? 'Edit Package' : 'New Package'}</h2>
+              <button onClick={() => setShowPkgForm(false)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">USD Amount</label>
+                  <label className="block text-xs text-sc-dim mb-1">USD Amount</label>
                   <input type="number" min="1" step="1" value={pkgForm.usdAmount} onChange={(e) => setPkgForm({ ...pkgForm, usdAmount: e.target.value })}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Bonus Credits</label>
+                  <label className="block text-xs text-sc-dim mb-1">Bonus Credits</label>
                   <input type="number" min="0" step="100" value={pkgForm.bonusCredits} onChange={(e) => setPkgForm({ ...pkgForm, bonusCredits: e.target.value })}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1">Badge Label (optional, e.g. &ldquo;Best Value&rdquo;)</label>
+                <label className="block text-xs text-sc-dim mb-1">Badge Label (optional, e.g. &ldquo;Best Value&rdquo;)</label>
                 <input type="text" value={pkgForm.label} onChange={(e) => setPkgForm({ ...pkgForm, label: e.target.value })}
-                  placeholder="e.g. Best Value" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  placeholder="e.g. Best Value" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
               <div>
-                <label className="block text-xs text-zinc-500 mb-1.5">Allowed methods <span className="text-zinc-600">(none checked = all)</span></label>
+                <label className="block text-xs text-sc-dim mb-1.5">Allowed methods <span className="text-sc-dim">(none checked = all)</span></label>
                 <div className="flex flex-wrap gap-2">
                   {(['PAYMONGO', 'PAYPAL', 'USDT_BEP20', 'USDT_BASE'] as const).map((m) => (
                     <label key={m} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-                      pkgForm.methods.includes(m) ? 'bg-brand-500/10 border-brand-500/40 text-brand-300' : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+                      pkgForm.methods.includes(m) ? 'bg-brand-500/10 border-brand-500/40 text-brand-300' : 'bg-surface-hover border-surface-border text-sc-muted hover:text-sc-text'
                     }`}>
                       <input type="checkbox" className="hidden" checked={pkgForm.methods.includes(m)}
                         onChange={() => setPkgForm({ ...pkgForm, methods: pkgForm.methods.includes(m) ? pkgForm.methods.filter((x) => x !== m) : [...pkgForm.methods, m] })} />
@@ -518,14 +518,14 @@ export default function FinancesPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-zinc-500 mb-1">Sort Order</label>
+                  <label className="block text-xs text-sc-dim mb-1">Sort Order</label>
                   <input type="number" min="0" value={pkgForm.sortOrder} onChange={(e) => setPkgForm({ ...pkgForm, sortOrder: e.target.value })}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 </div>
                 <div className="flex items-end pb-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={pkgForm.isPopular} onChange={(e) => setPkgForm({ ...pkgForm, isPopular: e.target.checked })} className="rounded" />
-                    <span className="text-xs text-zinc-400">Mark as Popular</span>
+                    <span className="text-xs text-sc-muted">Mark as Popular</span>
                   </label>
                 </div>
               </div>
@@ -552,21 +552,21 @@ export default function FinancesPage() {
                           ? 'border-red-500/30 text-red-400 hover:bg-red-500/10'
                           : canActivate
                             ? 'border-green-500/30 text-green-400 hover:bg-green-500/10'
-                            : 'border-zinc-700 text-zinc-600 cursor-not-allowed'
+                            : 'border-sc-line text-sc-dim cursor-not-allowed'
                       }`}>
                       {editingPkg.isActive ? 'Deactivate Package' : 'Activate Package'}
                     </button>
                     {disabledHint && (
-                      <p className="text-[10px] text-zinc-600 mt-1.5 text-center">{disabledHint}</p>
+                      <p className="text-[10px] text-sc-dim mt-1.5 text-center">{disabledHint}</p>
                     )}
                   </div>
                 );
               })()}
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowPkgForm(false)} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors">Cancel</button>
+              <button onClick={() => setShowPkgForm(false)} className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors">Cancel</button>
               <button onClick={handlePkgSave} disabled={createPkgMutation.isPending || updatePkgMutation.isPending || !pkgForm.usdAmount}
-                className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all">
+                className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all">
                 {(createPkgMutation.isPending || updatePkgMutation.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {editingPkg ? 'Update' : 'Create'}
               </button>
@@ -579,7 +579,7 @@ export default function FinancesPage() {
       {stats && (
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="card-glass rounded-xl p-5 border border-surface-border">
-            <p className="text-xs text-zinc-500 mb-3">Fiat Revenue (Completed)</p>
+            <p className="text-xs text-sc-dim mb-3">Fiat Revenue (Completed)</p>
             <div className="space-y-1">
               {/* Group revenue by currency */}
               {(() => {
@@ -595,28 +595,28 @@ export default function FinancesPage() {
                   return (
                     <p key={currency} className="text-2xl font-bold text-green-400">
                       {symbol}{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      <span className="text-xs font-normal text-zinc-500 ml-1">{currency}</span>
+                      <span className="text-xs font-normal text-sc-dim ml-1">{currency}</span>
                     </p>
                   );
                 });
               })()}
             </div>
-            <p className="text-xs text-zinc-600 mt-2">{stats.totals.creditsDistributed.toLocaleString()} credits distributed</p>
+            <p className="text-xs text-sc-dim mt-2">{stats.totals.creditsDistributed.toLocaleString()} credits distributed</p>
           </div>
           <div className="card-glass rounded-xl p-5 border border-surface-border">
-            <p className="text-xs text-zinc-500 mb-3">By Payment Method</p>
+            <p className="text-xs text-sc-dim mb-3">By Payment Method</p>
             {stats.byMethod.length === 0 ? (
-              <p className="text-xs text-zinc-600">No completed deposits yet.</p>
+              <p className="text-xs text-sc-dim">No completed deposits yet.</p>
             ) : (
               <div className="space-y-2">
                 {stats.byMethod.map((m) => {
-                  const cfg = METHOD_CFG[m.method] ?? { label: m.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: DollarSign };
+                  const cfg = METHOD_CFG[m.method] ?? { label: m.method, color: 'text-sc-muted', bg: 'bg-sc-soft/10', icon: DollarSign };
                   return (
                     <div key={`${m.method}-${m.currency}`} className="flex items-center justify-between text-xs">
                       <span className={`flex items-center gap-1.5 ${cfg.color}`}>
                         <cfg.icon className="w-3 h-3" />{cfg.label}
                       </span>
-                      <span className="text-zinc-400">{m.count} · {m.currency === 'USD' ? '$' : m.currency === 'PHP' ? '₱' : m.currency}{m.amountFiat.toFixed(2)}</span>
+                      <span className="text-sc-muted">{m.count} · {m.currency === 'USD' ? '$' : m.currency === 'PHP' ? '₱' : m.currency}{m.amountFiat.toFixed(2)}</span>
                     </div>
                   );
                 })}
@@ -631,13 +631,13 @@ export default function FinancesPage() {
 
 <div className="card-glass rounded-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-surface-border">
-          <h2 className="font-semibold text-white">All Deposits</h2>
+          <h2 className="font-semibold text-sc-text">All Deposits</h2>
           <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-zinc-500" />
+            <Filter className="w-3.5 h-3.5 text-sc-dim" />
             <select
               value={filterStatus}
               onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-              className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option value="">All Statuses</option>
               {['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REFUNDED'].map((s) => (
@@ -647,7 +647,7 @@ export default function FinancesPage() {
             <select
               value={filterMethod}
               onChange={(e) => { setFilterMethod(e.target.value); setPage(1); }}
-              className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-xs text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option value="">All Methods</option>
               {['PAYMONGO', 'PAYPAL', 'USDT_BEP20', 'USDT_BASE'].map((m) => (
@@ -658,10 +658,10 @@ export default function FinancesPage() {
         </div>
 
         {depositsLoading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-zinc-500" /></div>
+          <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-sc-dim" /></div>
         ) : !deposits?.items.length ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-            <p className="text-zinc-500 text-sm">No deposits found.</p>
+            <p className="text-sc-dim text-sm">No deposits found.</p>
           </div>
         ) : (
           <>
@@ -670,14 +670,14 @@ export default function FinancesPage() {
                 <thead>
                   <tr className="border-b border-surface-border">
                     {['User', 'Method', 'Amount / Rate', 'Credits', 'Status', 'Date', 'Action'].map((h) => (
-                      <th key={h} className="text-left text-xs text-zinc-500 font-medium px-4 py-3">{h}</th>
+                      <th key={h} className="text-left text-xs text-sc-dim font-medium px-4 py-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-border">
                   {deposits.items.map((dep) => {
-                    const mCfg = METHOD_CFG[dep.method] ?? { label: dep.method, color: 'text-zinc-400', bg: 'bg-zinc-500/10', icon: DollarSign };
-                    const sCfg = STATUS_CFG[dep.status] ?? { label: dep.status, color: 'text-zinc-400', bg: 'bg-zinc-500/10 border-zinc-500/20', icon: Clock };
+                    const mCfg = METHOD_CFG[dep.method] ?? { label: dep.method, color: 'text-sc-muted', bg: 'bg-sc-soft/10', icon: DollarSign };
+                    const sCfg = STATUS_CFG[dep.status] ?? { label: dep.status, color: 'text-sc-muted', bg: 'bg-sc-soft/10 border-sc-border/20', icon: Clock };
                     const StatusIcon = sCfg.icon;
                     const canReview = dep.status === 'PENDING' || dep.status === 'PROCESSING';
                     const isExpanded = expandedId === dep.id;
@@ -690,10 +690,10 @@ export default function FinancesPage() {
                         >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-zinc-500" /> : <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />}
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-sc-dim" /> : <ChevronDown className="w-3.5 h-3.5 text-sc-dim" />}
                               <div>
-                                <p className="text-white font-medium">{dep.user.username}</p>
-                                <p className="text-xs text-zinc-500">{dep.user.email}</p>
+                                <p className="text-sc-text font-medium">{dep.user.username}</p>
+                                <p className="text-xs text-sc-dim">{dep.user.email}</p>
                               </div>
                             </div>
                           </td>
@@ -703,35 +703,35 @@ export default function FinancesPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <p className="text-white font-medium">{dep.currency} {dep.amountFiat.toFixed(2)}</p>
+                            <p className="text-sc-text font-medium">{dep.currency} {dep.amountFiat.toFixed(2)}</p>
                             {dep.exchangeRate && (
-                              <p className="text-xs text-zinc-500">at ₱{dep.exchangeRate.toFixed(2)}/$1</p>
+                              <p className="text-xs text-sc-dim">at ₱{dep.exchangeRate.toFixed(2)}/$1</p>
                             )}
                             {(dep.method === 'PAYPAL' || dep.method === 'PAYMONGO') && dep.status === 'COMPLETED' && (
                               dep.providerFee != null || dep.providerNet != null ? (
-                                <p className="text-[11px] text-zinc-500 leading-snug mt-0.5">
+                                <p className="text-[11px] text-sc-dim leading-snug mt-0.5">
                                   {dep.providerFee != null && <>fee {dep.providerFeeCurrency} {dep.providerFee.toFixed(2)} · </>}
                                   {dep.providerNet != null && <>net {dep.providerNetCurrency} {dep.providerNet.toFixed(2)}</>}
                                   {dep.providerConverted != null && <> · recv {dep.providerConvertedCur} {dep.providerConverted.toFixed(2)}</>}
                                 </p>
                               ) : (
-                                <p className="text-[11px] text-zinc-600 mt-0.5">settlement: unavailable</p>
+                                <p className="text-[11px] text-sc-dim mt-0.5">settlement: unavailable</p>
                               )
                             )}
                           </td>
                           <td className="px-4 py-3">
                             <p className="text-brand-300 font-medium">{dep.creditsToAward.toLocaleString()}</p>
                             {dep.creditsAwarded > 0 && dep.creditsAwarded !== dep.creditsToAward && (
-                              <p className="text-xs text-zinc-500">awarded: {dep.creditsAwarded.toLocaleString()}</p>
+                              <p className="text-xs text-sc-dim">awarded: {dep.creditsAwarded.toLocaleString()}</p>
                             )}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${sCfg.bg} ${sCfg.color}`}>
                               <StatusIcon className="w-3 h-3" />{sCfg.label}
                             </span>
-                            {dep.adminNotes && <p className="text-xs text-zinc-600 mt-0.5 max-w-[120px] truncate">{dep.adminNotes}</p>}
+                            {dep.adminNotes && <p className="text-xs text-sc-dim mt-0.5 max-w-[120px] truncate">{dep.adminNotes}</p>}
                           </td>
-                          <td className="px-4 py-3 text-xs text-zinc-500">
+                          <td className="px-4 py-3 text-xs text-sc-dim">
                             {formatRelativeTime(dep.createdAt)}
                           </td>
                           <td className="px-4 py-3">
@@ -743,7 +743,7 @@ export default function FinancesPage() {
                                 Review
                               </button>
                             ) : (
-                              <span className="text-xs text-zinc-600">—</span>
+                              <span className="text-xs text-sc-dim">—</span>
                             )}
                           </td>
                         </tr>
@@ -752,77 +752,77 @@ export default function FinancesPage() {
                             <td colSpan={7} className="px-4 py-3 bg-surface-hover/50 border-b border-surface-border">
                               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
                                 <div>
-                                  <p className="text-zinc-500 mb-0.5">Deposit ID</p>
-                                  <p className="text-zinc-300 font-mono truncate" title={dep.id}>{dep.id}</p>
+                                  <p className="text-sc-dim mb-0.5">Deposit ID</p>
+                                  <p className="text-sc-text font-mono truncate" title={dep.id}>{dep.id}</p>
                                 </div>
                                 <div>
-                                  <p className="text-zinc-500 mb-0.5">User ID</p>
-                                  <p className="text-zinc-300 font-mono truncate" title={dep.user.id}>{dep.user.id}</p>
+                                  <p className="text-sc-dim mb-0.5">User ID</p>
+                                  <p className="text-sc-text font-mono truncate" title={dep.user.id}>{dep.user.id}</p>
                                 </div>
                                 {dep.userWalletAddress && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Wallet Address</p>
-                                    <p className="text-zinc-300 font-mono truncate" title={dep.userWalletAddress}>{dep.userWalletAddress}</p>
+                                    <p className="text-sc-dim mb-0.5">Wallet Address</p>
+                                    <p className="text-sc-text font-mono truncate" title={dep.userWalletAddress}>{dep.userWalletAddress}</p>
                                   </div>
                                 )}
                                 {dep.paymentRef && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Payment Ref</p>
-                                    <p className="text-zinc-300 font-mono truncate" title={dep.paymentRef}>{dep.paymentRef}</p>
+                                    <p className="text-sc-dim mb-0.5">Payment Ref</p>
+                                    <p className="text-sc-text font-mono truncate" title={dep.paymentRef}>{dep.paymentRef}</p>
                                   </div>
                                 )}
                                 {dep.package && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Package</p>
-                                    <p className="text-zinc-300">{dep.package.label ?? 'Standard'} (${dep.package.usdAmount})</p>
+                                    <p className="text-sc-dim mb-0.5">Package</p>
+                                    <p className="text-sc-text">{dep.package.label ?? 'Standard'} (${dep.package.usdAmount})</p>
                                   </div>
                                 )}
                                 <div>
-                                  <p className="text-zinc-500 mb-0.5">Credits to Award</p>
+                                  <p className="text-sc-dim mb-0.5">Credits to Award</p>
                                   <p className="text-brand-300">{dep.creditsToAward.toLocaleString()}</p>
                                 </div>
                                 <div>
-                                  <p className="text-zinc-500 mb-0.5">Credits Awarded</p>
-                                  <p className="text-zinc-300">{dep.creditsAwarded.toLocaleString()}</p>
+                                  <p className="text-sc-dim mb-0.5">Credits Awarded</p>
+                                  <p className="text-sc-text">{dep.creditsAwarded.toLocaleString()}</p>
                                 </div>
                                 {dep.bonusCredits > 0 && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Bonus Credits</p>
+                                    <p className="text-sc-dim mb-0.5">Bonus Credits</p>
                                     <p className="text-green-400">+{dep.bonusCredits.toLocaleString()}</p>
                                   </div>
                                 )}
                                 <div>
-                                  <p className="text-zinc-500 mb-0.5">Created</p>
-                                  <p className="text-zinc-300">{new Date(dep.createdAt).toLocaleString()}</p>
+                                  <p className="text-sc-dim mb-0.5">Created</p>
+                                  <p className="text-sc-text">{new Date(dep.createdAt).toLocaleString()}</p>
                                 </div>
                                 {dep.completedAt && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Completed</p>
-                                    <p className="text-zinc-300">{new Date(dep.completedAt).toLocaleString()}</p>
+                                    <p className="text-sc-dim mb-0.5">Completed</p>
+                                    <p className="text-sc-text">{new Date(dep.completedAt).toLocaleString()}</p>
                                   </div>
                                 )}
                                 {dep.updatedAt !== dep.createdAt && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Updated</p>
-                                    <p className="text-zinc-300">{new Date(dep.updatedAt).toLocaleString()}</p>
+                                    <p className="text-sc-dim mb-0.5">Updated</p>
+                                    <p className="text-sc-text">{new Date(dep.updatedAt).toLocaleString()}</p>
                                   </div>
                                 )}
                                 {dep.reviewedBy && (
                                   <div>
-                                    <p className="text-zinc-500 mb-0.5">Reviewed By</p>
-                                    <p className="text-zinc-300 font-mono truncate">{dep.reviewedBy}</p>
+                                    <p className="text-sc-dim mb-0.5">Reviewed By</p>
+                                    <p className="text-sc-text font-mono truncate">{dep.reviewedBy}</p>
                                   </div>
                                 )}
                                 {dep.gatewayData && (
                                   <div className="col-span-2 md:col-span-3 lg:col-span-4">
-                                    <p className="text-zinc-500 mb-0.5">Gateway Data</p>
-                                    <pre className="text-zinc-300 bg-black/20 rounded px-2 py-1 overflow-x-auto max-h-40 text-[10px] font-mono">{JSON.stringify(dep.gatewayData, null, 2)}</pre>
+                                    <p className="text-sc-dim mb-0.5">Gateway Data</p>
+                                    <pre className="text-sc-text bg-black/20 rounded px-2 py-1 overflow-x-auto max-h-40 text-[10px] font-mono">{JSON.stringify(dep.gatewayData, null, 2)}</pre>
                                   </div>
                                 )}
                                 {dep.adminNotes && (
                                   <div className="col-span-2 md:col-span-3 lg:col-span-4">
-                                    <p className="text-zinc-500 mb-0.5">Admin Notes</p>
-                                    <p className="text-zinc-300 bg-black/20 rounded px-2 py-1">{dep.adminNotes}</p>
+                                    <p className="text-sc-dim mb-0.5">Admin Notes</p>
+                                    <p className="text-sc-text bg-black/20 rounded px-2 py-1">{dep.adminNotes}</p>
                                   </div>
                                 )}
                               </div>
@@ -838,11 +838,11 @@ export default function FinancesPage() {
 
             {deposits.meta.totalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-surface-border">
-                <button onClick={() => setPage((p) => p - 1)} disabled={!deposits.meta.hasPrev} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                <button onClick={() => setPage((p) => p - 1)} disabled={!deposits.meta.hasPrev} className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                   <ChevronLeft className="w-4 h-4" />Previous
                 </button>
-                <span className="text-xs text-zinc-500">Page {deposits.meta.page} of {deposits.meta.totalPages} · {deposits.meta.total} total</span>
-                <button onClick={() => setPage((p) => p + 1)} disabled={!deposits.meta.hasNext} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                <span className="text-xs text-sc-dim">Page {deposits.meta.page} of {deposits.meta.totalPages} · {deposits.meta.total} total</span>
+                <button onClick={() => setPage((p) => p + 1)} disabled={!deposits.meta.hasNext} className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
                   Next<ChevronRight className="w-4 h-4" />
                 </button>
               </div>

@@ -37,12 +37,12 @@ const STATUS_COLORS: Record<string, string> = {
   ACTIVE: 'text-green-400 bg-green-500/10',
   SUSPENDED: 'text-yellow-400 bg-yellow-500/10',
   BANNED: 'text-red-400 bg-red-500/10',
-  PENDING_VERIFICATION: 'text-zinc-400 bg-zinc-500/10',
-  DEACTIVATED: 'text-zinc-500 bg-zinc-700/30',
+  PENDING_VERIFICATION: 'text-sc-muted bg-sc-soft/10',
+  DEACTIVATED: 'text-sc-dim bg-sc-panel-2/30',
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  USER: 'text-zinc-400 bg-zinc-500/10',
+  USER: 'text-sc-muted bg-sc-soft/10',
   CREATOR: 'text-blue-400 bg-blue-500/10',
   MODERATOR: 'text-purple-400 bg-purple-500/10',
   ADMIN: 'text-orange-400 bg-orange-500/10',
@@ -97,7 +97,7 @@ function UserDetailPanel({ userId }: { userId: string }) {
 
   if (isLoading) {
     return (
-      <div className="px-6 py-4 flex items-center gap-2 text-zinc-500 text-xs">
+      <div className="px-6 py-4 flex items-center gap-2 text-sc-dim text-xs">
         <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading details…
       </div>
     );
@@ -106,19 +106,19 @@ function UserDetailPanel({ userId }: { userId: string }) {
 
   const TRUST_COLORS: Record<string, string> = {
     VERIFIED: 'text-emerald-400', HIGH: 'text-green-400',
-    MEDIUM: 'text-yellow-400', LOW: 'text-orange-400', NEW: 'text-zinc-400',
+    MEDIUM: 'text-yellow-400', LOW: 'text-orange-400', NEW: 'text-sc-muted',
   };
 
   return (
-    <div className="px-6 py-4 bg-zinc-900/60 border-t border-surface-border space-y-4">
+    <div className="px-6 py-4 bg-sc-panel/60 border-t border-surface-border space-y-4">
       {/* UUID row */}
       <div>
-        <p className="text-xs text-zinc-500 mb-1 uppercase tracking-wide">User UUID</p>
+        <p className="text-xs text-sc-dim mb-1 uppercase tracking-wide">User UUID</p>
         <div className="flex items-center gap-2">
-          <code className="text-xs font-mono text-zinc-300 bg-zinc-800 px-2 py-1 rounded flex-1 truncate">{data.id}</code>
+          <code className="text-xs font-mono text-sc-text bg-sc-panel-2 px-2 py-1 rounded flex-1 truncate">{data.id}</code>
           <button
             onClick={copyUuid}
-            className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-white text-xs transition-colors flex-shrink-0"
+            className="flex items-center gap-1 px-2 py-1 rounded bg-sc-panel-2 hover:bg-sc-soft text-sc-muted hover:text-sc-text text-xs transition-colors flex-shrink-0"
           >
             {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
             {copied ? 'Copied' : 'Copy'}
@@ -128,57 +128,57 @@ function UserDetailPanel({ userId }: { userId: string }) {
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">XP</p>
-          <p className="text-sm font-semibold text-white">{data.xp.toLocaleString()}</p>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">XP</p>
+          <p className="text-sm font-semibold text-sc-text">{data.xp.toLocaleString()}</p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Trust Score</p>
-          <p className={`text-sm font-semibold ${TRUST_COLORS[data.trustScore?.level ?? 'NEW'] ?? 'text-zinc-400'}`}>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">Trust Score</p>
+          <p className={`text-sm font-semibold ${TRUST_COLORS[data.trustScore?.level ?? 'NEW'] ?? 'text-sc-muted'}`}>
             {data.trustScore?.score ?? 0}
-            <span className="text-xs font-normal ml-1 text-zinc-500">({data.trustScore?.level ?? 'NEW'})</span>
+            <span className="text-xs font-normal ml-1 text-sc-dim">({data.trustScore?.level ?? 'NEW'})</span>
           </p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Streak (Current / Best)</p>
-          <p className="text-sm font-semibold text-white">{data.currentStreak} <span className="text-zinc-500">/</span> {data.longestStreak} days</p>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">Streak (Current / Best)</p>
+          <p className="text-sm font-semibold text-sc-text">{data.currentStreak} <span className="text-sc-dim">/</span> {data.longestStreak} days</p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">2FA</p>
-          <p className={`text-sm font-semibold ${data.hasTwoFactor ? 'text-green-400' : 'text-zinc-500'}`}>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">2FA</p>
+          <p className={`text-sm font-semibold ${data.hasTwoFactor ? 'text-green-400' : 'text-sc-dim'}`}>
             {data.hasTwoFactor ? 'Enabled' : 'Disabled'}
           </p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Inventory Items</p>
-          <p className="text-sm font-semibold text-white">{data._count.inventory}</p>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">Inventory Items</p>
+          <p className="text-sm font-semibold text-sc-text">{data._count.inventory}</p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Reports Received</p>
-          <p className={`text-sm font-semibold ${data._count.reportsReceived > 0 ? 'text-red-400' : 'text-zinc-400'}`}>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">Reports Received</p>
+          <p className={`text-sm font-semibold ${data._count.reportsReceived > 0 ? 'text-red-400' : 'text-sc-muted'}`}>
             {data._count.reportsReceived}
           </p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Campaigns Created</p>
-          <p className="text-sm font-semibold text-white">{data._count.campaigns}</p>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">Campaigns Created</p>
+          <p className="text-sm font-semibold text-sc-text">{data._count.campaigns}</p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Task Completions</p>
-          <p className="text-sm font-semibold text-white">{data._count.completions}</p>
+        <div className="bg-sc-panel-2/60 rounded-lg p-3">
+          <p className="text-xs text-sc-dim mb-0.5">Task Completions</p>
+          <p className="text-sm font-semibold text-sc-text">{data._count.completions}</p>
         </div>
       </div>
 
       {/* Deposit stats */}
       {data._count.deposits > 0 && (
         <div>
-          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Deposits</p>
+          <p className="text-xs text-sc-dim uppercase tracking-wide mb-2">Deposits</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {Object.entries(data.depositStats).map(([status, s]) => (
-              <div key={status} className="bg-zinc-800/60 rounded-lg p-3">
-                <p className="text-xs text-zinc-500 mb-0.5">{status}</p>
-                <p className="text-sm font-semibold text-white">{s.count}</p>
-                <p className="text-xs text-zinc-600">${s.amountFiat.toFixed(2)}</p>
+              <div key={status} className="bg-sc-panel-2/60 rounded-lg p-3">
+                <p className="text-xs text-sc-dim mb-0.5">{status}</p>
+                <p className="text-sm font-semibold text-sc-text">{s.count}</p>
+                <p className="text-xs text-sc-dim">${s.amountFiat.toFixed(2)}</p>
               </div>
             ))}
           </div>
@@ -187,21 +187,21 @@ function UserDetailPanel({ userId }: { userId: string }) {
 
       {/* Referral info */}
       <div>
-        <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Referral</p>
+        <p className="text-xs text-sc-dim uppercase tracking-wide mb-2">Referral</p>
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="bg-zinc-800/60 rounded-lg px-3 py-2">
-            <span className="text-zinc-500">Code:</span>{' '}
-            <span className="text-white font-mono">{data.referralCode}</span>
+          <div className="bg-sc-panel-2/60 rounded-lg px-3 py-2">
+            <span className="text-sc-dim">Code:</span>{' '}
+            <span className="text-sc-text font-mono">{data.referralCode}</span>
           </div>
           {data.referredBy && (
-            <div className="bg-zinc-800/60 rounded-lg px-3 py-2">
-              <span className="text-zinc-500">Referred by:</span>{' '}
-              <span className="text-white">@{data.referredBy.username}</span>
+            <div className="bg-sc-panel-2/60 rounded-lg px-3 py-2">
+              <span className="text-sc-dim">Referred by:</span>{' '}
+              <span className="text-sc-text">@{data.referredBy.username}</span>
             </div>
           )}
-          <div className="bg-zinc-800/60 rounded-lg px-3 py-2">
-            <span className="text-zinc-500">Users invited:</span>{' '}
-            <span className="text-white font-semibold">{data._count.referralsGiven}</span>
+          <div className="bg-sc-panel-2/60 rounded-lg px-3 py-2">
+            <span className="text-sc-dim">Users invited:</span>{' '}
+            <span className="text-sc-text font-semibold">{data._count.referralsGiven}</span>
           </div>
         </div>
       </div>
@@ -209,13 +209,13 @@ function UserDetailPanel({ userId }: { userId: string }) {
       {/* IP records */}
       {data.ipRecords.length > 0 && (
         <div>
-          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">Recent IP Addresses</p>
+          <p className="text-xs text-sc-dim uppercase tracking-wide mb-2">Recent IP Addresses</p>
           <div className="space-y-1">
             {data.ipRecords.map((ip, i) => (
               <div key={i} className="flex items-center gap-3 text-xs">
-                <code className="font-mono text-zinc-300 bg-zinc-800 px-1.5 py-0.5 rounded">{ip.ipAddress ?? '—'}</code>
-                <span className="text-zinc-400">{[ip.country, ip.region].filter(Boolean).join(' · ') || '—'}</span>
-                <span className="text-zinc-600 ml-auto">{formatDate(ip.createdAt)}</span>
+                <code className="font-mono text-sc-text bg-sc-panel-2 px-1.5 py-0.5 rounded">{ip.ipAddress ?? '—'}</code>
+                <span className="text-sc-muted">{[ip.country, ip.region].filter(Boolean).join(' · ') || '—'}</span>
+                <span className="text-sc-dim ml-auto">{formatDate(ip.createdAt)}</span>
               </div>
             ))}
           </div>
@@ -225,15 +225,15 @@ function UserDetailPanel({ userId }: { userId: string }) {
       {/* Active abuse flags */}
       {data.abuseFlags.length > 0 && (
         <div>
-          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-2">
+          <p className="text-xs text-sc-dim uppercase tracking-wide mb-2">
             Active Abuse Flags <span className="text-red-400">({data.abuseFlags.length})</span>
           </p>
           <div className="space-y-1">
             {data.abuseFlags.map((f, i) => (
               <div key={i} className="flex items-center gap-3 text-xs">
                 <span className="text-red-400 font-medium">{f.flagType}</span>
-                <span className="text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">{f.severity}</span>
-                <span className="text-zinc-600 ml-auto">{formatDate(f.createdAt)}</span>
+                <span className="text-sc-dim bg-sc-panel-2 px-1.5 py-0.5 rounded">{f.severity}</span>
+                <span className="text-sc-dim ml-auto">{formatDate(f.createdAt)}</span>
               </div>
             ))}
           </div>
@@ -363,26 +363,26 @@ export default function AdminUsersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Users</h1>
-          <p className="text-zinc-400 text-sm mt-1">Manage accounts, status, and credits.</p>
+          <h1 className="text-2xl font-bold text-sc-text">Users</h1>
+          <p className="text-sc-muted text-sm mt-1">Manage accounts, status, and credits.</p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex gap-3 mb-4">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sc-dim" />
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search username, email..."
-            className="w-full pl-9 pr-3 py-2 bg-surface-hover border border-surface-border rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full pl-9 pr-3 py-2 bg-surface-hover border border-surface-border rounded-lg text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
         <select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          className="bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+          className="bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none"
         >
           <option value="">All statuses</option>
           {['ACTIVE', 'SUSPENDED', 'BANNED', 'PENDING_VERIFICATION'].map((s) => (
@@ -395,7 +395,7 @@ export default function AdminUsersPage() {
       <div className="card-glass rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[640px]">
           <thead>
-            <tr className="border-b border-surface-border text-xs text-zinc-500 uppercase tracking-wide">
+            <tr className="border-b border-surface-border text-xs text-sc-dim uppercase tracking-wide">
               <th className="text-left px-4 py-3">User</th>
               <th className="text-left px-4 py-3">Role</th>
               <th className="text-left px-4 py-3">Status</th>
@@ -412,7 +412,7 @@ export default function AdminUsersPage() {
             {isLoading
               ? Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b border-surface-border">
-                  <td colSpan={10} className="px-4 py-3"><div className="h-4 bg-zinc-800 rounded animate-pulse" /></td>
+                  <td colSpan={10} className="px-4 py-3"><div className="h-4 bg-sc-panel-2 rounded animate-pulse" /></td>
                 </tr>
               ))
               : (data?.items ?? []).map((u) => (
@@ -420,36 +420,36 @@ export default function AdminUsersPage() {
                 <tr className={`border-b border-surface-border hover:bg-surface-hover transition-colors cursor-pointer ${expandedUserId === u.id ? 'bg-surface-hover' : ''}`} onClick={() => toggleExpand(u.id)}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 flex-shrink-0 transition-transform ${expandedUserId === u.id ? 'rotate-0' : '-rotate-90'}`} />
+                      <ChevronDown className={`w-3.5 h-3.5 text-sc-dim flex-shrink-0 transition-transform ${expandedUserId === u.id ? 'rotate-0' : '-rotate-90'}`} />
                       <div onClick={(e) => e.stopPropagation()}>
                         <UserLink user={u} />
-                        <p className="text-xs text-zinc-500 mt-0.5">{u.email}</p>
+                        <p className="text-xs text-sc-dim mt-0.5">{u.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'text-zinc-400 bg-zinc-500/10'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'text-sc-muted bg-sc-soft/10'}`}>
                       {u.role}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] ?? 'text-zinc-400'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[u.status] ?? 'text-sc-muted'}`}>
                       {u.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-300">{u.level}</td>
-                  <td className="px-4 py-3 text-zinc-300">{formatCredits(u.creditBalance)}</td>
-                  <td className="px-4 py-3 text-zinc-300">{u._count.completions}</td>
+                  <td className="px-4 py-3 text-sc-text">{u.level}</td>
+                  <td className="px-4 py-3 text-sc-text">{formatCredits(u.creditBalance)}</td>
+                  <td className="px-4 py-3 text-sc-text">{u._count.completions}</td>
                   <td className="px-4 py-3">
-                    <span className={u._count.abuseFlags > 0 ? 'text-red-400' : 'text-zinc-600'}>
+                    <span className={u._count.abuseFlags > 0 ? 'text-red-400' : 'text-sc-dim'}>
                       {u._count.abuseFlags}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-zinc-500 text-xs">
+                  <td className="px-4 py-3 text-sc-dim text-xs">
                     {u.ipRecords?.[0]?.country ?? '—'}
-                    {u.ipRecords?.[0]?.region && <span className="text-zinc-600"> · {u.ipRecords[0].region}</span>}
+                    {u.ipRecords?.[0]?.region && <span className="text-sc-dim"> · {u.ipRecords[0].region}</span>}
                   </td>
-                  <td className="px-4 py-3 text-zinc-500">{formatDate(u.createdAt)}</td>
+                  <td className="px-4 py-3 text-sc-dim">{formatDate(u.createdAt)}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     {(() => {
                       const isPrivileged = u.role === 'ADMIN' || u.role === 'SUPER_ADMIN';
@@ -523,7 +523,7 @@ export default function AdminUsersPage() {
                           {isSuperAdmin && (
                             <button
                               onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }}
-                              className="px-2 py-1 text-xs rounded bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors"
+                              className="px-2 py-1 text-xs rounded bg-sc-soft/10 text-sc-muted hover:bg-sc-soft/20 transition-colors"
                               title="Edit — update the user's basic info such as email, username, and display name."
                             >
                               Edit
@@ -547,7 +547,7 @@ export default function AdminUsersPage() {
                               <Trash2 className="w-3 h-3" />
                             </button>
                           )}
-                          {!canAct && <span className="text-xs text-zinc-600 italic">Protected</span>}
+                          {!canAct && <span className="text-xs text-sc-dim italic">Protected</span>}
                         </div>
                       );
                     })()}
@@ -568,7 +568,7 @@ export default function AdminUsersPage() {
 
       {/* Pagination */}
       {(data?.meta.totalPages ?? 0) > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+        <div className="flex items-center justify-between mt-4 text-sm text-sc-dim">
           <span>{data?.meta.total} users</span>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40">
@@ -589,29 +589,29 @@ export default function AdminUsersPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-purple-400" />
-                <h2 className="text-base font-semibold text-white">Change Role</h2>
+                <h2 className="text-base font-semibold text-sc-text">Change Role</h2>
               </div>
-              <button onClick={() => setRoleUser(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setRoleUser(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">
-              User: <span className="text-zinc-300">@{roleUser.username}</span> · Current role: <span className={`${ROLE_COLORS[roleUser.role]} px-1.5 rounded`}>{roleUser.role}</span>
+            <p className="text-xs text-sc-dim mb-4">
+              User: <span className="text-sc-text">@{roleUser.username}</span> · Current role: <span className={`${ROLE_COLORS[roleUser.role]} px-1.5 rounded`}>{roleUser.role}</span>
             </p>
             {roleSuccess ? (
               <div className="py-4 text-center">
                 <p className="text-green-400 font-medium mb-3">Role updated!</p>
-                <button onClick={() => setRoleUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+                <button onClick={() => setRoleUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted text-sm">Close</button>
               </div>
             ) : (
               <>
                 {roleError && <p className="text-xs text-red-400 mb-3">{roleError}</p>}
                 <form onSubmit={roleForm.handleSubmit((d) => roleMutation.mutate(d))} className="space-y-3">
-                  <select {...roleForm.register('role')} className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                  <select {...roleForm.register('role')} className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500">
                     {ASSIGNABLE_ROLES.map((r) => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-zinc-600">Note: SUPER_ADMIN can only be granted via the server seed script.</p>
-                  <button type="submit" disabled={roleMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-60">
+                  <p className="text-xs text-sc-dim">Note: SUPER_ADMIN can only be granted via the server seed script.</p>
+                  <button type="submit" disabled={roleMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-sc-text text-sm font-medium disabled:opacity-60">
                     {roleMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
                   </button>
                 </form>
@@ -626,17 +626,17 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">Adjust Credits</h2>
-              <button onClick={() => setSelectedUser(null)} className="text-zinc-500 hover:text-white">
+              <h2 className="text-base font-semibold text-sc-text">Adjust Credits</h2>
+              <button onClick={() => setSelectedUser(null)} className="text-sc-dim hover:text-sc-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{selectedUser.username}</span> · Balance: <span className="text-brand-300">{formatCredits(selectedUser.creditBalance)} {creditLabel(selectedUser.creditBalance)}</span></p>
+            <p className="text-xs text-sc-dim mb-4">User: <span className="text-sc-text">@{selectedUser.username}</span> · Balance: <span className="text-brand-300">{formatCredits(selectedUser.creditBalance)} {creditLabel(selectedUser.creditBalance)}</span></p>
 
             {creditSuccess ? (
               <div className="py-4 text-center">
                 <p className="text-green-400 font-medium mb-3">Done!</p>
-                <button onClick={() => setSelectedUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+                <button onClick={() => setSelectedUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted text-sm">Close</button>
               </div>
             ) : (
               <>
@@ -645,14 +645,14 @@ export default function AdminUsersPage() {
                   <div className="flex gap-2">
                     {(['grant', 'deduct'] as const).map((a) => (
                       <button key={a} type="button" onClick={() => creditForm.setValue('action', a)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${creditForm.watch('action') === a ? (a === 'grant' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-surface-hover text-zinc-500'}`}>
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${creditForm.watch('action') === a ? (a === 'grant' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-surface-hover text-sc-dim'}`}>
                         {a}
                       </button>
                     ))}
                   </div>
-                  <input {...creditForm.register('amount')} type="number" placeholder="Amount" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500" />
-                  <input {...creditForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500" />
-                  <button type="submit" disabled={creditMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-60">
+                  <input {...creditForm.register('amount')} type="number" placeholder="Amount" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <input {...creditForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-red-500" />
+                  <button type="submit" disabled={creditMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sc-text text-sm font-medium disabled:opacity-60">
                     {creditMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
                   </button>
                 </form>
@@ -667,39 +667,39 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">Edit User Details</h2>
-              <button onClick={() => setEditUser(null)} className="text-zinc-500 hover:text-white">
+              <h2 className="text-base font-semibold text-sc-text">Edit User Details</h2>
+              <button onClick={() => setEditUser(null)} className="text-sc-dim hover:text-sc-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{editUser.username}</span></p>
+            <p className="text-xs text-sc-dim mb-4">User: <span className="text-sc-text">@{editUser.username}</span></p>
 
             {editSuccess ? (
               <div className="py-4 text-center">
                 <p className="text-green-400 font-medium mb-3">Updated!</p>
-                <button onClick={() => setEditUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+                <button onClick={() => setEditUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted text-sm">Close</button>
               </div>
             ) : (
               <>
                 {editError && <p className="text-xs text-red-400 mb-3">{editError}</p>}
                 <form onSubmit={userDetailsForm.handleSubmit((d) => userDetailsMutation.mutate(d))} className="space-y-3">
                   <div>
-                    <label className="text-xs text-zinc-500 mb-1 block">Email</label>
-                    <input {...userDetailsForm.register('email')} type="email" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <label className="text-xs text-sc-dim mb-1 block">Email</label>
+                    <input {...userDetailsForm.register('email')} type="email" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-500 mb-1 block">Username</label>
-                    <input {...userDetailsForm.register('username')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <label className="text-xs text-sc-dim mb-1 block">Username</label>
+                    <input {...userDetailsForm.register('username')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-500 mb-1 block">Display Name</label>
-                    <input {...userDetailsForm.register('displayName')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <label className="text-xs text-sc-dim mb-1 block">Display Name</label>
+                    <input {...userDetailsForm.register('displayName')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-500 mb-1 block">New Password</label>
-                    <input {...userDetailsForm.register('password')} type="password" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <label className="text-xs text-sc-dim mb-1 block">New Password</label>
+                    <input {...userDetailsForm.register('password')} type="password" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
                   </div>
-                  <button type="submit" disabled={userDetailsMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-60">
+                  <button type="submit" disabled={userDetailsMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-sc-text text-sm font-medium disabled:opacity-60">
                     {userDetailsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                   </button>
                 </form>
@@ -714,15 +714,15 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">Adjust Trust Score</h2>
-              <button onClick={() => setTrustUser(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <h2 className="text-base font-semibold text-sc-text">Adjust Trust Score</h2>
+              <button onClick={() => setTrustUser(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">User: <span className="text-zinc-300">@{trustUser.username}</span></p>
+            <p className="text-xs text-sc-dim mb-4">User: <span className="text-sc-text">@{trustUser.username}</span></p>
 
             {trustSuccess ? (
               <div className="py-4 text-center">
                 <p className="text-green-400 font-medium mb-3">Trust score adjusted!</p>
-                <button onClick={() => setTrustUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm">Close</button>
+                <button onClick={() => setTrustUser(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted text-sm">Close</button>
               </div>
             ) : (
               <>
@@ -731,14 +731,14 @@ export default function AdminUsersPage() {
                   <div className="flex gap-2">
                     {(['add', 'subtract'] as const).map((a) => (
                       <button key={a} type="button" onClick={() => trustForm.setValue('action', a)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${trustForm.watch('action') === a ? (a === 'add' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-surface-hover text-zinc-500'}`}>
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${trustForm.watch('action') === a ? (a === 'add' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-surface-hover text-sc-dim'}`}>
                         {a}
                       </button>
                     ))}
                   </div>
-                  <input {...trustForm.register('amount')} type="number" min={1} max={50} placeholder="Amount (1-50)" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                  <input {...trustForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                  <button type="submit" disabled={trustMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium disabled:opacity-60">
+                  <input {...trustForm.register('amount')} type="number" min={1} max={50} placeholder="Amount (1-50)" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <input {...trustForm.register('reason')} placeholder="Reason" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  <button type="submit" disabled={trustMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-sc-text text-sm font-medium disabled:opacity-60">
                     {trustMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
                   </button>
                 </form>
@@ -755,13 +755,13 @@ export default function AdminUsersPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <ShieldOff className="w-5 h-5 text-amber-400" />
-                <h2 className="text-base font-semibold text-white">Disable 2FA</h2>
+                <h2 className="text-base font-semibold text-sc-text">Disable 2FA</h2>
               </div>
-              <button onClick={() => setDisable2faUser(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setDisable2faUser(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
-            <p className="text-xs text-zinc-400 mb-4">
+            <p className="text-xs text-sc-muted mb-4">
               This will disable all two-factor authentication for{' '}
-              <span className="text-white font-medium">@{disable2faUser.username}</span>.
+              <span className="text-sc-text font-medium">@{disable2faUser.username}</span>.
               The user will be able to log in with their password only.
             </p>
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
@@ -769,11 +769,11 @@ export default function AdminUsersPage() {
             </div>
             {disable2faError && <p className="text-xs text-red-400 mb-3">{disable2faError}</p>}
             <div className="flex gap-2">
-              <button onClick={() => setDisable2faUser(null)} className="flex-1 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm font-medium hover:bg-surface-hover/80 transition-colors">Cancel</button>
+              <button onClick={() => setDisable2faUser(null)} className="flex-1 py-2 rounded-lg bg-surface-hover text-sc-muted text-sm font-medium hover:bg-surface-hover/80 transition-colors">Cancel</button>
               <button
                 onClick={() => disable2faMutation.mutate(disable2faUser.id)}
                 disabled={disable2faMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium disabled:opacity-60 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-sc-text text-sm font-medium disabled:opacity-60 transition-colors"
               >
                 {disable2faMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Disable 2FA'}
               </button>
@@ -789,20 +789,20 @@ export default function AdminUsersPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
-                <h2 className="text-base font-semibold text-white">Delete User</h2>
+                <h2 className="text-base font-semibold text-sc-text">Delete User</h2>
               </div>
-              <button onClick={() => setDeleteUser(null)} className="text-zinc-500 hover:text-white">
+              <button onClick={() => setDeleteUser(null)} className="text-sc-dim hover:text-sc-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4">
-              User: <span className="text-zinc-300">@{deleteUser.username}</span> · 
+            <p className="text-xs text-sc-dim mb-4">
+              User: <span className="text-sc-text">@{deleteUser.username}</span> · 
               Role: <span className={`${ROLE_COLORS[deleteUser.role]} px-1.5 rounded`}>{deleteUser.role}</span>
             </p>
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4">
               <p className="text-xs text-red-400 font-medium mb-1">Warning: This action cannot be undone</p>
-              <p className="text-xs text-zinc-400">This will permanently delete the user and all related data including:</p>
-              <ul className="text-xs text-zinc-500 mt-1 list-disc list-inside">
+              <p className="text-xs text-sc-muted">This will permanently delete the user and all related data including:</p>
+              <ul className="text-xs text-sc-dim mt-1 list-disc list-inside">
                 <li>Profile and account data</li>
                 <li>Campaigns and task completions</li>
                 <li>Wallet and transactions</li>
@@ -813,8 +813,8 @@ export default function AdminUsersPage() {
             </div>
             {deleteError && <p className="text-xs text-red-400 mb-3">{deleteError}</p>}
             <div className="flex gap-2">
-              <button onClick={() => setDeleteUser(null)} className="flex-1 py-2 rounded-lg bg-surface-hover text-zinc-400 text-sm font-medium hover:bg-surface-hover/80 transition-colors">Cancel</button>
-              <button onClick={() => deleteMutation.mutate(deleteUser.id)} disabled={deleteMutation.isPending} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-60 transition-colors">
+              <button onClick={() => setDeleteUser(null)} className="flex-1 py-2 rounded-lg bg-surface-hover text-sc-muted text-sm font-medium hover:bg-surface-hover/80 transition-colors">Cancel</button>
+              <button onClick={() => deleteMutation.mutate(deleteUser.id)} disabled={deleteMutation.isPending} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sc-text text-sm font-medium disabled:opacity-60 transition-colors">
                 {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete User'}
               </button>
             </div>

@@ -42,8 +42,8 @@ function VerifyEmailPageInner() {
       <div className="w-full max-w-md">
         <div className="card-glass rounded-2xl p-8 text-center">
           <Loader2 className="w-10 h-10 text-brand-400 animate-spin mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-white mb-2">Verifying your email…</h1>
-          <p className="text-zinc-400 text-sm">Please wait a moment.</p>
+          <h1 className="text-xl font-bold text-sc-text mb-2">Verifying your email…</h1>
+          <p className="text-sc-muted text-sm">Please wait a moment.</p>
         </div>
       </div>
     );
@@ -59,14 +59,14 @@ function VerifyEmailPageInner() {
             </div>
           </div>
 
-          <h1 className="text-2xl font-bold text-white mb-3">Email verified!</h1>
-          <p className="text-zinc-400 text-sm leading-relaxed mb-8">
+          <h1 className="text-2xl font-bold text-sc-text mb-3">Email verified!</h1>
+          <p className="text-sc-muted text-sm leading-relaxed mb-8">
             Your account is now active. You can sign in and start using Engganyo.
           </p>
 
           <Link
             href="/login"
-            className="inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-2.5 px-6 rounded-lg transition-all text-sm"
+            className="inline-flex items-center justify-center gap-2 w-full bg-brand-500 hover:bg-brand-600 text-sc-text font-medium py-2.5 px-6 rounded-lg transition-all text-sm"
           >
             Sign in to your account
           </Link>
@@ -84,22 +84,22 @@ function VerifyEmailPageInner() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-white mb-3">Verification failed</h1>
-        <p className="text-zinc-400 text-sm leading-relaxed mb-2">
+        <h1 className="text-2xl font-bold text-sc-text mb-3">Verification failed</h1>
+        <p className="text-sc-muted text-sm leading-relaxed mb-2">
           {errorMsg || 'This link is invalid or has expired.'}
         </p>
-        <p className="text-zinc-500 text-xs mb-8">
+        <p className="text-sc-dim text-xs mb-8">
           Verification links expire after 24 hours.
         </p>
 
         <div className="space-y-3">
           <Link
             href="/login"
-            className="inline-flex items-center justify-center w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-2.5 px-6 rounded-lg transition-all text-sm"
+            className="inline-flex items-center justify-center w-full bg-brand-500 hover:bg-brand-600 text-sc-text font-medium py-2.5 px-6 rounded-lg transition-all text-sm"
           >
             Back to sign in
           </Link>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-sc-dim">
             Need a new link?{' '}
             <Link href="/check-email" className="text-brand-400 hover:text-brand-300 transition-colors">
               Resend verification email

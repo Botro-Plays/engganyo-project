@@ -218,24 +218,24 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
         role="dialog"
         aria-modal="true"
         aria-label="Spin the wheel"
-        className="relative bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-md p-6"
+        className="relative bg-sc-panel border border-sc-line rounded-2xl shadow-2xl w-full max-w-md p-6"
       >
         {/* Screen-reader result announcements */}
         <div aria-live="polite" className="sr-only">{announcement}</div>
 
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+          className="absolute top-3 right-3 p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-sc-panel-2 transition-colors"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
         </button>
 
         <div className="text-center mb-5">
-          <h2 className="text-lg font-bold text-white flex items-center justify-center gap-2">
+          <h2 className="text-lg font-bold text-sc-text flex items-center justify-center gap-2">
             <RotateCcw className="w-5 h-5 text-purple-400" /> Spin the Wheel
           </h2>
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-sc-dim mt-1">
             {wheelStatus?.freeSpinAvailable
               ? 'Free spin available today — prizes up to 100 credits'
               : wheelStatus
@@ -247,7 +247,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
         {/* Wheel — decorative; prize list is the accessible equivalent */}
         <div className="flex justify-center mb-5" aria-hidden="true">
           <div className="relative w-[280px] h-[280px]">
-            <div className="absolute inset-0 rounded-full border-4 border-zinc-800 shadow-[0_0_30px_rgba(168,85,247,0.15)]" />
+            <div className="absolute inset-0 rounded-full border-4 border-sc-line shadow-[0_0_30px_rgba(168,85,247,0.15)]" />
 
             {/* Fixed pointer */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
@@ -282,7 +282,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                 />
               ))}
 
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-zinc-900 border-2 border-zinc-600 flex items-center justify-center z-10 shadow-lg">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-sc-panel border-2 border-sc-line flex items-center justify-center z-10 shadow-lg">
                 <Coins className="w-5 h-5 text-yellow-400" />
               </div>
 
@@ -297,10 +297,10 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                       width: 76,
                     }}
                   >
-                    <span className="text-[11px] font-extrabold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] tracking-wide">
+                    <span className="text-[11px] font-extrabold text-sc-text drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] tracking-wide">
                       {seg.short}
                     </span>
-                    <span className="text-[8px] font-semibold text-white/80 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                    <span className="text-[8px] font-semibold text-sc-text/80 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
                       {seg.label}
                     </span>
                   </div>
@@ -311,7 +311,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
         </div>
 
         {/* Accessible prize list */}
-        <p className="text-center text-[11px] text-zinc-500 mb-4">
+        <p className="text-center text-[11px] text-sc-dim mb-4">
           Prizes: 5–100 credits · 1h XP boost · Mystery Gift Box · Streak Freeze
         </p>
 
@@ -328,7 +328,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
             </button>
             {error && <p className="text-xs text-red-400 mt-3" role="alert">{error}</p>}
             {!canSpin && !error && wheelStatus && (
-              <p className="text-xs text-zinc-500 mt-3">No spins remaining today. Come back tomorrow!</p>
+              <p className="text-xs text-sc-dim mt-3">No spins remaining today. Come back tomorrow!</p>
             )}
           </div>
         )}
@@ -340,7 +340,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               <p className="text-sm font-semibold text-amber-300 flex items-center justify-center gap-1.5">
                 <AlertTriangle className="w-4 h-4" /> Spin result unconfirmed
               </p>
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-sc-muted mt-1">
                 The connection dropped before we heard back. If the spin went through, it is already
                 settled — check your status below. We will not guess a prize.
               </p>
@@ -356,7 +356,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               </button>
               <button
                 onClick={onClose}
-                className="py-2 px-4 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-medium transition-colors"
+                className="py-2 px-4 rounded-lg bg-sc-panel-2 text-sc-text hover:bg-sc-panel-2 text-sm font-medium transition-colors"
               >
                 Close
               </button>
@@ -375,7 +375,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                   <p className="text-base font-bold text-green-400">You won!</p>
                   <Sparkles className="w-5 h-5 text-yellow-400" />
                 </div>
-                <p className="text-lg font-bold text-white mb-2">{result.prize}</p>
+                <p className="text-lg font-bold text-sc-text mb-2">{result.prize}</p>
                 {result.credits ? (
                   <p className="text-sm text-green-300">+{result.credits} credits</p>
                 ) : null}
@@ -388,7 +388,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                 {result.itemName && (
                   <p className="text-sm text-violet-300">{result.itemName} added to your inventory — open it there to reveal the prize!</p>
                 )}
-                <p className="text-[10px] text-zinc-500 mt-2">
+                <p className="text-[10px] text-sc-dim mt-2">
                   {result.isFree ? 'Free spin' : `${result.cost} credits`}
                   {balance !== undefined && result.credits ? ` · Balance: ${balance.toLocaleString()} credits` : ''}
                 </p>
@@ -404,7 +404,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               </button>
               <button
                 onClick={onClose}
-                className="py-2.5 px-6 rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-medium transition-colors"
+                className="py-2.5 px-6 rounded-xl bg-sc-panel-2 text-sc-text hover:bg-sc-panel-2 text-sm font-medium transition-colors"
               >
                 Awesome!
               </button>

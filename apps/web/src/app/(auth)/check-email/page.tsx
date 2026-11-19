@@ -78,7 +78,7 @@ function CheckEmailPageInner() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-white mb-3">Check your inbox</h1>
+        <h1 className="text-2xl font-bold text-sc-text mb-3">Check your inbox</h1>
 
         <form
           noValidate
@@ -89,20 +89,20 @@ function CheckEmailPageInner() {
         >
         {email ? (
           <>
-            <p className="text-zinc-400 text-sm leading-relaxed mb-2">
+            <p className="text-sc-muted text-sm leading-relaxed mb-2">
               We sent a verification link to:
             </p>
-            <p className="text-white font-medium text-sm mb-6 px-4 py-2 bg-surface-hover rounded-lg border border-surface-border inline-block">
+            <p className="text-sc-text font-medium text-sm mb-6 px-4 py-2 bg-surface-hover rounded-lg border border-surface-border inline-block">
               {email}
             </p>
           </>
         ) : (
           <>
-            <p className="text-zinc-400 text-sm leading-relaxed mb-4">
+            <p className="text-sc-muted text-sm leading-relaxed mb-4">
               Enter your email address to request a new verification link.
             </p>
             <div className="text-left mb-4">
-              <label htmlFor="check-email-input" className="block text-xs text-zinc-500 mb-1.5">
+              <label htmlFor="check-email-input" className="block text-xs text-sc-dim mb-1.5">
                 Email address
               </label>
               <input
@@ -117,7 +117,7 @@ function CheckEmailPageInner() {
                 disabled={resendStatus === 'loading'}
                 aria-invalid={typedEmailError ? true : undefined}
                 aria-describedby={typedEmailError ? 'check-email-error' : undefined}
-                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-50"
+                className="w-full bg-surface-hover border border-surface-border rounded-lg px-4 py-2.5 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:border-brand-500 transition-colors disabled:opacity-50"
               />
               {typedEmailError && (
                 <p id="check-email-error" className="mt-1.5 text-xs text-red-400">{typedEmailError}</p>
@@ -126,9 +126,9 @@ function CheckEmailPageInner() {
           </>
         )}
 
-        <p className="text-zinc-500 text-sm leading-relaxed mb-6">
+        <p className="text-sc-dim text-sm leading-relaxed mb-6">
           Click the link in the email to activate your account. The link expires in{' '}
-          <span className="text-zinc-300">24 hours</span>.
+          <span className="text-sc-text">24 hours</span>.
         </p>
 
         {/* Resend feedback */}
@@ -149,7 +149,7 @@ function CheckEmailPageInner() {
         <button
           type="submit"
           disabled={cooldown > 0 || resendStatus === 'loading'}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-surface-border text-sm text-zinc-300 hover:text-white hover:border-zinc-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all mb-6"
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-surface-border text-sm text-sc-text hover:text-sc-text hover:border-sc-border disabled:opacity-40 disabled:cursor-not-allowed transition-all mb-6"
         >
           <RefreshCw className={`w-4 h-4 ${resendStatus === 'loading' ? 'animate-spin' : ''}`} />
           {resendStatus === 'loading'
@@ -161,10 +161,10 @@ function CheckEmailPageInner() {
         </form>
 
         <div className="space-y-2">
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-sc-dim">
             Didn&apos;t receive it? Check your spam folder.
           </p>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-sc-dim">
             Already verified?{' '}
             <Link href="/login" className="text-brand-400 hover:text-brand-300 transition-colors">
               Sign in

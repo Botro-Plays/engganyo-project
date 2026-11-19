@@ -335,7 +335,7 @@ export default function ChatPage() {
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-zinc-400">Please sign in to access chat.</p>
+        <p className="text-sc-muted">Please sign in to access chat.</p>
       </div>
     );
   }
@@ -349,7 +349,7 @@ export default function ChatPage() {
         } md:flex w-full md:w-64 border-r border-white/5 flex-col bg-surface`}
       >
         <div className="p-4 border-b border-white/5 flex items-center justify-between">
-          <h2 className="font-bold text-white flex items-center gap-2">
+          <h2 className="font-bold text-sc-text flex items-center gap-2">
             <Hash className="w-4 h-4 text-brand-400" />
             Channels
           </h2>
@@ -361,10 +361,10 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {channelsLoading ? (
             <div className="flex justify-center p-4">
-              <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+              <Loader2 className="w-5 h-5 animate-spin text-sc-dim" />
             </div>
           ) : !channels?.length ? (
-            <p className="text-zinc-500 text-sm p-4 text-center">No channels available.</p>
+            <p className="text-sc-dim text-sm p-4 text-center">No channels available.</p>
           ) : (
             channels.map((ch) => (
               <button
@@ -373,15 +373,15 @@ export default function ChatPage() {
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
                   activeChannelId === ch.id
                     ? 'bg-brand-500/20 text-brand-300'
-                    : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                    : 'text-sc-muted hover:bg-white/5 hover:text-sc-text'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   {ch.type === 'VIP' && <Crown className="w-3.5 h-3.5 text-amber-400" />}
-                  {ch.type === 'PRIVATE' && <Lock className="w-3.5 h-3.5 text-zinc-500" />}
+                  {ch.type === 'PRIVATE' && <Lock className="w-3.5 h-3.5 text-sc-dim" />}
                   <span className="truncate font-medium">{ch.name}</span>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-500">
+                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-sc-dim">
                   <Users className="w-3 h-3" />
                   {ch.memberCount}
                   {!ch.isMember && <span className="text-brand-400">· Join</span>}
@@ -397,8 +397,8 @@ export default function ChatPage() {
         {!activeChannel ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <Hash className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-              <p className="text-zinc-400 text-sm">Select a channel to start chatting.</p>
+              <Hash className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+              <p className="text-sc-muted text-sm">Select a channel to start chatting.</p>
             </div>
           </div>
         ) : (
@@ -407,16 +407,16 @@ export default function ChatPage() {
             <div className="px-4 py-3 border-b border-white/5 flex items-center gap-3">
               <button
                 onClick={() => setMobileShowList(true)}
-                className="md:hidden text-zinc-400 hover:text-white"
+                className="md:hidden text-sc-muted hover:text-sc-text"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div>
                 <div className="flex items-center gap-2">
                   {activeChannel.type === 'VIP' && <Crown className="w-4 h-4 text-amber-400" />}
-                  <h3 className="font-semibold text-white">{activeChannel.name}</h3>
+                  <h3 className="font-semibold text-sc-text">{activeChannel.name}</h3>
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-sc-dim">
                   {activeChannel.memberCount} members · {activeChannel.description ?? 'General discussion'}
                 </p>
               </div>
@@ -426,10 +426,10 @@ export default function ChatPage() {
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
               {messagesLoading && messages.length === 0 ? (
                 <div className="flex justify-center">
-                  <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+                  <Loader2 className="w-5 h-5 animate-spin text-sc-dim" />
                 </div>
               ) : messages.length === 0 ? (
-                <p className="text-center text-zinc-600 text-sm">No messages yet. Be the first to say hello!</p>
+                <p className="text-center text-sc-dim text-sm">No messages yet. Be the first to say hello!</p>
               ) : (
                 messages.map((msg) => {
                   const frame = resolveCosmeticStyles(cosmeticsMap[msg.user?.id]);
@@ -437,7 +437,7 @@ export default function ChatPage() {
                   <div key={msg.id} className="flex gap-3 group">
                     {/* Avatar */}
                     <div
-                      className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold ${frame.frameClass}`}
+                      className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-sc-text text-xs font-bold ${frame.frameClass}`}
                       style={frame.frameStyle}
                     >
                       {msg.user.displayName?.[0] ?? msg.user.username[0] ?? '?'}
@@ -446,7 +446,7 @@ export default function ChatPage() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-zinc-200">
+                        <span className="text-sm font-medium text-sc-text">
                           {msg.user.displayName ?? msg.user.username}
                         </span>
                         {msg.user.vipTier && (
@@ -460,12 +460,12 @@ export default function ChatPage() {
                             {msg.user.vipTier.badge}
                           </span>
                         )}
-                        <span className="text-[10px] text-zinc-600">
+                        <span className="text-[10px] text-sc-dim">
                           {formatRelativeTime(msg.createdAt)}
                         </span>
                       </div>
 
-                      <p className={`text-sm mt-0.5 ${msg.isDeleted ? 'text-zinc-600 italic' : 'text-zinc-300'}`}>
+                      <p className={`text-sm mt-0.5 ${msg.isDeleted ? 'text-sc-dim italic' : 'text-sc-text'}`}>
                         {msg.content}
                       </p>
 
@@ -482,7 +482,7 @@ export default function ChatPage() {
                           {canTip && (
                             <button
                               onClick={() => setTipModal({ messageId: msg.id, toUserId: msg.userId })}
-                              className="text-[10px] text-zinc-600 hover:text-brand-400 flex items-center gap-0.5"
+                              className="text-[10px] text-sc-dim hover:text-brand-400 flex items-center gap-0.5"
                             >
                               <Gift className="w-3 h-3" />
                               Tip
@@ -490,7 +490,7 @@ export default function ChatPage() {
                           )}
                           <button
                             onClick={() => setReportModal({ messageId: msg.id, userId: msg.userId, username: msg.user.username })}
-                            className="text-[10px] text-zinc-600 hover:text-red-400 flex items-center gap-0.5"
+                            className="text-[10px] text-sc-dim hover:text-red-400 flex items-center gap-0.5"
                           >
                             <Flag className="w-3 h-3" />
                             Report
@@ -505,11 +505,11 @@ export default function ChatPage() {
 
               {/* Typing indicator */}
               {typingUsers.size > 0 && (
-                <div className="flex items-center gap-2 text-xs text-zinc-500 px-12">
+                <div className="flex items-center gap-2 text-xs text-sc-dim px-12">
                   <div className="flex gap-0.5">
-                    <span className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1 h-1 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="w-1 h-1 bg-sc-soft rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1 h-1 bg-sc-soft rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1 h-1 bg-sc-soft rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
                   Someone is typing...
                 </div>
@@ -593,7 +593,7 @@ export default function ChatPage() {
                         }
                       }}
                       placeholder="Type a message... Use @username to mention"
-                      className="w-full bg-surface-hover border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-brand-500/50"
+                      className="w-full bg-surface-hover border border-white/10 rounded-lg px-4 py-2.5 text-sm text-sc-text placeholder:text-sc-dim focus:outline-none focus:border-brand-500/50"
                       maxLength={2000}
                     />
                     {/* Mention dropdown */}
@@ -604,14 +604,14 @@ export default function ChatPage() {
                             key={u.id}
                             onClick={() => insertMention(u.username)}
                             className={`w-full text-left px-3 py-2 flex items-center gap-2 text-sm transition-colors ${
-                              i === mentionIndex ? 'bg-brand-500/20 text-brand-300' : 'text-zinc-300 hover:bg-white/5'
+                              i === mentionIndex ? 'bg-brand-500/20 text-brand-300' : 'text-sc-text hover:bg-white/5'
                             }`}
                           >
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-sc-text text-[10px] font-bold">
                               {u.displayName?.[0] ?? u.username[0]}
                             </div>
                             <span className="font-medium">{u.displayName ?? u.username}</span>
-                            <span className="text-zinc-500 text-xs">@{u.username}</span>
+                            <span className="text-sc-dim text-xs">@{u.username}</span>
                           </button>
                         ))}
                       </div>
@@ -620,7 +620,7 @@ export default function ChatPage() {
                   <button
                     onClick={handleSend}
                     disabled={sendMessageMutation.isPending || !input.trim()}
-                    className="px-4 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:opacity-40 disabled:hover:bg-brand-500 text-white rounded-lg transition-colors"
+                    className="px-4 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:opacity-40 disabled:hover:bg-brand-500 text-sc-text rounded-lg transition-colors"
                   >
                     {sendMessageMutation.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -639,26 +639,26 @@ export default function ChatPage() {
       {tipModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-bold text-white mb-1">Send Tip</h3>
-            <p className="text-sm text-zinc-400 mb-4">Show appreciation with credits.</p>
+            <h3 className="text-lg font-bold text-sc-text mb-1">Send Tip</h3>
+            <p className="text-sm text-sc-muted mb-4">Show appreciation with credits.</p>
 
             <div className="mb-4">
-              <label className="text-xs text-zinc-500 mb-1 block">Amount (credits)</label>
+              <label className="text-xs text-sc-dim mb-1 block">Amount (credits)</label>
               <input
                 type="number"
                 value={tipAmount}
                 onChange={(e) => setTipAmount(Math.max(10, Math.min(10000, parseInt(e.target.value) || 10)))}
-                className="w-full bg-surface-hover border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500/50"
+                className="w-full bg-surface-hover border border-white/10 rounded-lg px-4 py-2.5 text-sm text-sc-text focus:outline-none focus:border-brand-500/50"
                 min={10}
                 max={10000}
               />
-              <p className="text-[10px] text-zinc-600 mt-1">Min: 10 · Max: 10,000 · Balance: {user?.creditBalance ?? 0}</p>
+              <p className="text-[10px] text-sc-dim mt-1">Min: 10 · Max: 10,000 · Balance: {user?.creditBalance ?? 0}</p>
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={() => setTipModal(null)}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium text-sc-muted hover:text-sc-text hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
@@ -671,7 +671,7 @@ export default function ChatPage() {
                   })
                 }
                 disabled={tipMutation.isPending || (user?.creditBalance ?? 0) < tipAmount}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-brand-500 hover:bg-brand-400 disabled:opacity-40 text-white transition-colors"
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-brand-500 hover:bg-brand-400 disabled:opacity-40 text-sc-text transition-colors"
               >
                 {tipMutation.isPending ? 'Sending...' : `Tip ${tipAmount}`}
               </button>
@@ -685,19 +685,19 @@ export default function ChatPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-surface border border-white/10 rounded-2xl p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-lg font-bold text-white">Report Message</h3>
-              <button onClick={() => setReportModal(null)} className="text-zinc-500 hover:text-white">
+              <h3 className="text-lg font-bold text-sc-text">Report Message</h3>
+              <button onClick={() => setReportModal(null)} className="text-sc-dim hover:text-sc-text">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-sm text-zinc-400 mb-4">Report @{reportModal.username} for moderation review.</p>
+            <p className="text-sm text-sc-muted mb-4">Report @{reportModal.username} for moderation review.</p>
 
             <div className="mb-3">
-              <label className="text-xs text-zinc-500 mb-1 block">Reason</label>
+              <label className="text-xs text-sc-dim mb-1 block">Reason</label>
               <select
                 value={reportReason}
                 onChange={(e) => setReportReason(e.target.value)}
-                className="w-full bg-surface-hover border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500/50"
+                className="w-full bg-surface-hover border border-white/10 rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:border-brand-500/50"
               >
                 <option value="HARASSMENT">Harassment</option>
                 <option value="INAPPROPRIATE_CONTENT">Inappropriate Content</option>
@@ -708,12 +708,12 @@ export default function ChatPage() {
             </div>
 
             <div className="mb-4">
-              <label className="text-xs text-zinc-500 mb-1 block">Description</label>
+              <label className="text-xs text-sc-dim mb-1 block">Description</label>
               <textarea
                 value={reportDescription}
                 onChange={(e) => setReportDescription(e.target.value)}
                 placeholder="Describe the issue..."
-                className="w-full bg-surface-hover border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-brand-500/50 resize-none"
+                className="w-full bg-surface-hover border border-white/10 rounded-lg px-3 py-2 text-sm text-sc-text placeholder:text-sc-dim focus:outline-none focus:border-brand-500/50 resize-none"
                 rows={3}
                 maxLength={1000}
               />
@@ -722,7 +722,7 @@ export default function ChatPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => setReportModal(null)}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium text-sc-muted hover:text-sc-text hover:bg-white/5 transition-colors"
               >
                 Cancel
               </button>
@@ -735,7 +735,7 @@ export default function ChatPage() {
                   })
                 }
                 disabled={reportMutation.isPending || reportDescription.length < 10}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-400 disabled:opacity-40 text-white transition-colors"
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-400 disabled:opacity-40 text-sc-text transition-colors"
               >
                 {reportMutation.isPending ? 'Submitting...' : 'Submit Report'}
               </button>

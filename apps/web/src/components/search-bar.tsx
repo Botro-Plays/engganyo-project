@@ -104,30 +104,30 @@ export function SearchBar() {
       {!open ? (
         <button
           onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-all text-sm"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sc-dim hover:text-sc-text hover:border-sc-line transition-all text-sm"
         >
           <Search className="w-4 h-4" />
           <span className="hidden lg:inline text-xs">Search...</span>
-          <kbd className="hidden lg:inline text-[10px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700">
+          <kbd className="hidden lg:inline text-[10px] px-1 py-0.5 rounded bg-sc-panel-2 text-sc-dim border border-sc-line">
             Ctrl K
           </kbd>
         </button>
       ) : (
         <form onSubmit={handleSubmit} className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sc-dim" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search users, campaigns, forum..."
-            className="w-48 sm:w-64 lg:w-80 pl-9 pr-8 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-48 sm:w-64 lg:w-80 pl-9 pr-8 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-text"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -140,17 +140,17 @@ export function SearchBar() {
         <div className="fixed inset-x-4 top-[4.5rem] sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 lg:w-96 card-glass rounded-xl border border-surface-border shadow-xl overflow-hidden z-50">
           {isFetching ? (
             <div className="p-6 text-center">
-              <Loader2 className="w-5 h-5 animate-spin text-zinc-500 mx-auto" />
+              <Loader2 className="w-5 h-5 animate-spin text-sc-dim mx-auto" />
             </div>
           ) : !hasResults ? (
-            <div className="p-4 text-center text-sm text-zinc-500">
+            <div className="p-4 text-center text-sm text-sc-dim">
               No results for &ldquo;{query}&rdquo;
             </div>
           ) : (
             <div className="max-h-[60vh] overflow-y-auto py-2">
               {data.users.length > 0 && (
                 <div className="px-3 py-1">
-                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                  <p className="text-[10px] font-semibold text-sc-dim uppercase tracking-wide mb-1 flex items-center gap-1">
                     <User className="w-3 h-3" /> Users
                   </p>
                   {data.users.map((u) => (
@@ -161,7 +161,7 @@ export function SearchBar() {
                       className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
                     >
                       <UserLink user={u} cosmetics={cosmeticsMap[u.id]} size="sm" />
-                      <span className="text-xs text-zinc-500 ml-auto">Lvl {u.level}</span>
+                      <span className="text-xs text-sc-dim ml-auto">Lvl {u.level}</span>
                     </Link>
                   ))}
                 </div>
@@ -169,7 +169,7 @@ export function SearchBar() {
 
               {data.campaigns.length > 0 && (
                 <div className="px-3 py-1 border-t border-surface-border">
-                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                  <p className="text-[10px] font-semibold text-sc-dim uppercase tracking-wide mb-1 flex items-center gap-1">
                     <Megaphone className="w-3 h-3" /> Campaigns
                   </p>
                   {data.campaigns.map((c) => (
@@ -179,8 +179,8 @@ export function SearchBar() {
                       onClick={() => setOpen(false)}
                       className="block px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
                     >
-                      <p className="text-sm text-white truncate">{c.title}</p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-sm text-sc-text truncate">{c.title}</p>
+                      <p className="text-xs text-sc-dim">
                         by {c.user.displayName ?? c.user.username} · {c.isPlatformTask ? 'Platform' : 'Community'}
                       </p>
                     </Link>
@@ -190,7 +190,7 @@ export function SearchBar() {
 
               {data.topics.length > 0 && (
                 <div className="px-3 py-1 border-t border-surface-border">
-                  <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                  <p className="text-[10px] font-semibold text-sc-dim uppercase tracking-wide mb-1 flex items-center gap-1">
                     <MessageSquare className="w-3 h-3" /> Forum
                   </p>
                   {data.topics.map((t) => (
@@ -200,8 +200,8 @@ export function SearchBar() {
                       onClick={() => setOpen(false)}
                       className="block px-2 py-1.5 rounded-lg hover:bg-surface-hover transition-colors"
                     >
-                      <p className="text-sm text-white truncate">{t.title}</p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-sm text-sc-text truncate">{t.title}</p>
+                      <p className="text-xs text-sc-dim">
                         by {t.author.displayName ?? t.author.username} · {t.replyCount} replies
                       </p>
                     </Link>

@@ -63,6 +63,8 @@ const config: Config = {
           panel: '#171028',
           panel2: '#221839',
           border: '#4a3391',
+          line: '#3a2a6e',
+          dim: '#8d7fb8',
           hard: '#2c1166',
           text: '#f3eeff',
           muted: '#b9addb',

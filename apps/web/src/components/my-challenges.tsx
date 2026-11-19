@@ -55,8 +55,8 @@ interface Submission {
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   OPEN:      { label: 'Open',       color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
   CLAIMED:   { label: 'Claimed',    color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
-  COMPLETED: { label: 'Settled',    color: 'text-zinc-400',   bg: 'bg-zinc-500/10 border-zinc-500/20' },
-  EXPIRED:   { label: 'Expired',    color: 'text-zinc-500',   bg: 'bg-zinc-600/10 border-zinc-600/20' },
+  COMPLETED: { label: 'Settled',    color: 'text-sc-muted',   bg: 'bg-sc-soft/10 border-sc-border/20' },
+  EXPIRED:   { label: 'Expired',    color: 'text-sc-dim',   bg: 'bg-sc-soft/10 border-sc-line/20' },
   CANCELLED: { label: 'Cancelled',  color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20' },
 };
 
@@ -128,8 +128,8 @@ export function MyChallenges() {
     <div className="mt-10">
       <div className="flex items-center gap-2 mb-4">
         <Swords className="w-4 h-4 text-brand-400" />
-        <h2 className="text-sm font-semibold text-white">My 1v1 challenges</h2>
-        <span className="text-xs text-zinc-600">{items.length}</span>
+        <h2 className="text-sm font-semibold text-sc-text">My 1v1 challenges</h2>
+        <span className="text-xs text-sc-dim">{items.length}</span>
       </div>
 
       {isLoading ? (
@@ -140,8 +140,8 @@ export function MyChallenges() {
         </div>
       ) : !items.length ? (
         <div className="card-glass rounded-xl p-8 text-center">
-          <p className="text-zinc-500 text-sm">No challenges yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">Create a 1v1 challenge to duel another player for credits.</p>
+          <p className="text-sc-dim text-sm">No challenges yet.</p>
+          <p className="text-sc-dim text-xs mt-1">Create a 1v1 challenge to duel another player for credits.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -159,17 +159,17 @@ export function MyChallenges() {
                         {cfg.label}
                       </span>
                       {ch.visibility === 'PRIVATE' && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-400 border border-zinc-600">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-sc-panel-2 text-sc-muted border border-sc-line">
                           Private
                         </span>
                       )}
-                      <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-0.5 rounded-full">
+                      <span className="text-xs text-sc-dim bg-sc-panel-2 px-2 py-0.5 rounded-full">
                         {ch.taskType.replace(/_/g, ' ')}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-white truncate">{ch.title}</p>
+                    <p className="text-sm font-semibold text-sc-text truncate">{ch.title}</p>
                     {claim?.user && (
-                      <p className="text-xs text-zinc-500 mt-0.5">
+                      <p className="text-xs text-sc-dim mt-0.5">
                         Claimed by <UserLink user={claim.user} showAvatar={false} />
                         {claim.submittedAt && <> · proof submitted {formatDate(claim.submittedAt)}</>}
                       </p>
@@ -179,10 +179,10 @@ export function MyChallenges() {
                     )}
                   </div>
 
-                  <div className="text-right shrink-0 text-xs text-zinc-500 space-y-0.5">
+                  <div className="text-right shrink-0 text-xs text-sc-dim space-y-0.5">
                     <p className="text-brand-300 font-medium">{formatCredits(ch.rewardCredits)} {creditLabel(ch.rewardCredits)} reward</p>
                     <p>Reserved: {formatCredits(ch.reservedCredits)}</p>
-                    {ch.feeAmount > 0 && <p className="text-zinc-600">Fee: {formatCredits(ch.feeAmount)}</p>}
+                    {ch.feeAmount > 0 && <p className="text-sc-dim">Fee: {formatCredits(ch.feeAmount)}</p>}
                     <p>Expires {formatDate(ch.expiresAt)}</p>
                   </div>
                 </div>
@@ -199,7 +199,7 @@ export function MyChallenges() {
                   {ch.status === 'OPEN' && ch.visibility === 'PRIVATE' && (
                     <button
                       onClick={() => copyShare(ch)}
-                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-11 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white transition-colors"
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-11 rounded-lg bg-surface-hover border border-surface-border text-sc-muted hover:text-sc-text transition-colors"
                     >
                       {copiedId === ch.id ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                       {copiedId === ch.id ? 'Copied' : 'Copy share link'}
@@ -231,10 +231,10 @@ export function MyChallenges() {
           <div className="w-full max-w-2xl card-glass rounded-2xl p-6 max-h-[85vh] flex flex-col">
             <div className="flex items-start justify-between mb-4 shrink-0">
               <div>
-                <h2 className="text-base font-semibold text-white">Review Challenge Proof</h2>
-                <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-md">{reviewing.title}</p>
+                <h2 className="text-base font-semibold text-sc-text">Review Challenge Proof</h2>
+                <p className="text-xs text-sc-dim mt-0.5 truncate max-w-md">{reviewing.title}</p>
               </div>
-              <button onClick={() => setReviewing(null)} className="text-zinc-500 hover:text-white">
+              <button onClick={() => setReviewing(null)} className="text-sc-dim hover:text-sc-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -255,8 +255,8 @@ export function MyChallenges() {
                 <div className="card-glass rounded-xl p-4 animate-pulse h-20" />
               ) : !submissions?.items.length ? (
                 <div className="py-12 text-center">
-                  <CheckCircle2 className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                  <p className="text-zinc-500 text-sm">No pending submissions.</p>
+                  <CheckCircle2 className="w-8 h-8 text-sc-dim mx-auto mb-2" />
+                  <p className="text-sc-dim text-sm">No pending submissions.</p>
                 </div>
               ) : (
                 submissions.items.map((s) => (
@@ -271,7 +271,7 @@ export function MyChallenges() {
                             <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">Escalated</span>
                           )}
                         </div>
-                        <p className="text-xs text-zinc-500 mt-0.5">
+                        <p className="text-xs text-sc-dim mt-0.5">
                           Submitted {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '—'}
                           {s.reviewDeadline && !s.escalated && (
                             <> · deadline {new Date(s.reviewDeadline).toLocaleString()}</>
@@ -319,7 +319,7 @@ export function MyChallenges() {
                           value={rejReasons[s.id] ?? ''}
                           onChange={(e) => setRejReasons((r) => ({ ...r, [s.id]: e.target.value }))}
                           placeholder="Reason (optional)..."
-                          className="w-full bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-[10px] text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-[10px] text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-red-500"
                         />
                       </div>
                     </div>
@@ -339,10 +339,10 @@ export function MyChallenges() {
         >
           <div className="relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
-              <p className="text-sm font-medium text-white">Proof by @{proofView.username}</p>
+              <p className="text-sm font-medium text-sc-text">Proof by @{proofView.username}</p>
               <button
                 onClick={() => { URL.revokeObjectURL(proofView.url); setProofView(null); }}
-                className="text-zinc-500 hover:text-white ml-4"
+                className="text-sc-dim hover:text-sc-text ml-4"
               >
                 <X className="w-5 h-5" />
               </button>

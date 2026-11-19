@@ -96,8 +96,8 @@ export default function AdminCampaignsPage() {
   const [proofLoading, setProofLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const inputCls = 'w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500';
-  const labelCls = 'block text-xs text-zinc-400 mb-1';
+  const inputCls = 'w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500';
+  const labelCls = 'block text-xs text-sc-muted mb-1';
   const errorCls = 'text-xs text-red-400 mt-0.5';
 
   // ─── Real-time: refresh on backend events ─────────────────
@@ -289,12 +289,12 @@ export default function AdminCampaignsPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Campaigns</h1>
-          <p className="text-zinc-400 text-sm mt-1">Review user campaigns or manage platform tasks.</p>
+          <h1 className="text-2xl font-bold text-sc-text">Campaigns</h1>
+          <p className="text-sc-muted text-sm mt-1">Review user campaigns or manage platform tasks.</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" /> Create Platform Task
         </button>
@@ -304,7 +304,7 @@ export default function AdminCampaignsPage() {
       <div className="flex gap-1 mb-6 bg-surface-hover rounded-lg p-1 w-fit">
         {(['platform', 'user', 'submissions'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t ? 'bg-surface-card text-white shadow' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${tab === t ? 'bg-surface-card text-sc-text shadow' : 'text-sc-dim hover:text-sc-text'}`}>
             {t === 'platform' ? 'Platform Tasks' : t === 'user' ? 'User Campaigns' : 'Proof Review'}
           </button>
         ))}
@@ -323,8 +323,8 @@ export default function AdminCampaignsPage() {
             </div>
           ) : !ptData?.items.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-white font-medium mb-1">No platform tasks yet.</p>
-              <p className="text-zinc-500 text-sm">Click &quot;Create Platform Task&quot; to add one.</p>
+              <p className="text-sc-text font-medium mb-1">No platform tasks yet.</p>
+              <p className="text-sc-dim text-sm">Click &quot;Create Platform Task&quot; to add one.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -333,12 +333,12 @@ export default function AdminCampaignsPage() {
                 return (
                   <div key={t.id} className="card-glass rounded-xl p-5 flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-white truncate">{t.title}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
+                      <p className="font-semibold text-sc-text truncate">{t.title}</p>
+                      <p className="text-xs text-sc-dim mt-0.5">
                         {t.taskType.replace(/_/g, ' ')} · {formatCredits(t.creditPerTask)} {creditLabel(t.creditPerTask)} · {available} / {t.totalSlots} slots available
                       </p>
                       <a href={t.targetUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-400 mt-1 transition-colors">
+                        className="inline-flex items-center gap-1 text-xs text-sc-dim hover:text-brand-400 mt-1 transition-colors">
                         {t.targetUrl.slice(0, 55)}{t.targetUrl.length > 55 ? '…' : ''}
                         <ExternalLink className="w-3 h-3 shrink-0" />
                       </a>
@@ -360,7 +360,7 @@ export default function AdminCampaignsPage() {
             </div>
           )}
           {(ptData?.meta.totalPages ?? 0) > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+            <div className="flex items-center justify-between mt-4 text-sm text-sc-dim">
               <span>{ptData?.meta.total} tasks</span>
               <div className="flex items-center gap-2">
                 <button onClick={() => setPtPage((p) => p - 1)} disabled={ptPage <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
@@ -381,8 +381,8 @@ export default function AdminCampaignsPage() {
             </div>
           ) : !ucData?.items.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
-              <p className="text-white font-medium mb-1">No user campaigns yet.</p>
-              <p className="text-zinc-500 text-sm">Active user campaigns will appear here.</p>
+              <p className="text-sc-text font-medium mb-1">No user campaigns yet.</p>
+              <p className="text-sc-dim text-sm">Active user campaigns will appear here.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -391,15 +391,15 @@ export default function AdminCampaignsPage() {
                 return (
                   <div key={c.id} className="card-glass rounded-xl p-5 flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-white truncate">{c.title}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
+                      <p className="font-semibold text-sc-text truncate">{c.title}</p>
+                      <p className="text-xs text-sc-dim mt-0.5">
                         {c.taskType.replace(/_/g, ' ')} · {formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)} · {available} / {c.totalSlots} slots available · by @{c.user.username}
                       </p>
-                      <p className="text-xs text-zinc-400 mt-0.5">
+                      <p className="text-xs text-sc-muted mt-0.5">
                         Status: {c.status} · Total budget: {formatCredits(c.totalCost)} {creditLabel(c.totalCost)}
                       </p>
                       <a href={c.targetUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-400 mt-1 transition-colors">
+                        className="inline-flex items-center gap-1 text-xs text-sc-dim hover:text-brand-400 mt-1 transition-colors">
                         {c.targetUrl.slice(0, 55)}{c.targetUrl.length > 55 ? '…' : ''}
                         <ExternalLink className="w-3 h-3 shrink-0" />
                       </a>
@@ -415,7 +415,7 @@ export default function AdminCampaignsPage() {
             </div>
           )}
           {(ucData?.meta.totalPages ?? 0) > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+            <div className="flex items-center justify-between mt-4 text-sm text-sc-dim">
               <span>{ucData?.meta.total} campaigns</span>
               <div className="flex items-center gap-2">
                 <button onClick={() => setUcPage((p) => p - 1)} disabled={ucPage <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
@@ -435,8 +435,8 @@ export default function AdminCampaignsPage() {
           ) : !subData?.items.length ? (
             <div className="card-glass rounded-2xl p-12 text-center">
               <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
-              <p className="text-white font-medium mb-1">All caught up!</p>
-              <p className="text-zinc-500 text-sm">No proof submissions awaiting review.</p>
+              <p className="text-sc-text font-medium mb-1">All caught up!</p>
+              <p className="text-sc-dim text-sm">No proof submissions awaiting review.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -444,12 +444,12 @@ export default function AdminCampaignsPage() {
                 <div key={s.id} className="card-glass rounded-xl p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-white truncate">{s.campaign.title}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
+                      <p className="font-semibold text-sc-text truncate">{s.campaign.title}</p>
+                      <p className="text-xs text-sc-dim mt-0.5">
                         by @{s.user.username} · {s.campaign.taskType.replace(/_/g, ' ')} · {formatCredits(s.campaign.creditPerTask)} {creditLabel(s.campaign.creditPerTask)}
                       </p>
                       <div className="flex items-center gap-2 mt-1.5">
-                        <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+                        <span className="flex items-center gap-1 text-[11px] text-sc-muted">
                           <Clock className="w-3 h-3" />
                           {formatRelativeTime(s.submittedAt)}
                         </span>
@@ -464,13 +464,13 @@ export default function AdminCampaignsPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => openProofModal(s)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-zinc-400 hover:text-white text-xs transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text text-xs transition-colors"
                       >
                         <Eye className="w-3.5 h-3.5" /> View Proof
                       </button>
                       <button
                         onClick={() => toggleExpand(s.id)}
-                        className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-surface-hover transition-colors"
+                        className="p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-surface-hover transition-colors"
                         title="Toggle details"
                       >
                         {expandedIds.has(s.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -479,17 +479,17 @@ export default function AdminCampaignsPage() {
                   </div>
 
                   {expandedIds.has(s.id) && (
-                    <div className="mt-4 pt-4 border-t border-surface-border space-y-2 text-xs text-zinc-400">
+                    <div className="mt-4 pt-4 border-t border-surface-border space-y-2 text-xs text-sc-muted">
                       <div className="grid grid-cols-2 gap-2">
-                        <div><span className="text-zinc-500">Campaign:</span> <span className="text-zinc-300">{s.campaign.title}</span></div>
-                        <div><span className="text-zinc-500">Creator:</span> <span className="text-zinc-300">@{s.campaign.user.username}</span></div>
-                        <div><span className="text-zinc-500">Target:</span> <a href={s.campaign.targetUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">{s.campaign.targetUrl.slice(0, 50)}{s.campaign.targetUrl.length > 50 ? '…' : ''}</a></div>
-                        <div><span className="text-zinc-500">Task Type:</span> <span className="text-zinc-300">{s.campaign.taskType.replace(/_/g, ' ')}</span></div>
-                        <div><span className="text-zinc-500">Slots:</span> <span className="text-zinc-300">{s.campaign.completedSlots}/{s.campaign.totalSlots} done · {s.campaign.pendingSlots} pending</span></div>
-                        <div><span className="text-zinc-500">Submitted:</span> <span className="text-zinc-300">{formatDate(s.submittedAt)}</span></div>
+                        <div><span className="text-sc-dim">Campaign:</span> <span className="text-sc-text">{s.campaign.title}</span></div>
+                        <div><span className="text-sc-dim">Creator:</span> <span className="text-sc-text">@{s.campaign.user.username}</span></div>
+                        <div><span className="text-sc-dim">Target:</span> <a href={s.campaign.targetUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">{s.campaign.targetUrl.slice(0, 50)}{s.campaign.targetUrl.length > 50 ? '…' : ''}</a></div>
+                        <div><span className="text-sc-dim">Task Type:</span> <span className="text-sc-text">{s.campaign.taskType.replace(/_/g, ' ')}</span></div>
+                        <div><span className="text-sc-dim">Slots:</span> <span className="text-sc-text">{s.campaign.completedSlots}/{s.campaign.totalSlots} done · {s.campaign.pendingSlots} pending</span></div>
+                        <div><span className="text-sc-dim">Submitted:</span> <span className="text-sc-text">{formatDate(s.submittedAt)}</span></div>
                       </div>
                       {s.campaign.proofInstructions && (
-                        <div className="mt-1"><span className="text-zinc-500">Instructions:</span> <span className="text-zinc-300">{s.campaign.proofInstructions}</span></div>
+                        <div className="mt-1"><span className="text-sc-dim">Instructions:</span> <span className="text-sc-text">{s.campaign.proofInstructions}</span></div>
                       )}
                     </div>
                   )}
@@ -499,7 +499,7 @@ export default function AdminCampaignsPage() {
                       value={rejReasons[s.id] ?? ''}
                       onChange={(e) => setRejReasons((r) => ({ ...r, [s.id]: e.target.value }))}
                       placeholder="Rejection reason (optional)..."
-                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-red-500"
                     />
                     <button
                       onClick={() => reviewSubmissionMutation.mutate({ id: s.id, action: 'approve' })}
@@ -519,7 +519,7 @@ export default function AdminCampaignsPage() {
             </div>
           )}
           {(subData?.meta.totalPages ?? 0) > 1 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+            <div className="flex items-center justify-between mt-4 text-sm text-sc-dim">
               <span>{subData?.meta.total} pending</span>
               <div className="flex items-center gap-2">
                 <button onClick={() => setSubPage((p) => p - 1)} disabled={subPage <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
@@ -536,8 +536,8 @@ export default function AdminCampaignsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-white">Create Platform Task</h2>
-              <button onClick={() => { setShowCreate(false); reset(); setActionError(null); }} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <h2 className="text-lg font-semibold text-sc-text">Create Platform Task</h2>
+              <button onClick={() => { setShowCreate(false); reset(); setActionError(null); }} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
               <div>
@@ -580,17 +580,17 @@ export default function AdminCampaignsPage() {
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input {...register('requiresProof')} type="checkbox" className="rounded" />
-                  <span className="text-sm text-zinc-300">Requires screenshot proof</span>
+                  <span className="text-sm text-sc-text">Requires screenshot proof</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input {...register('autoVerify')} type="checkbox" className="rounded" />
-                  <span className="text-sm text-zinc-300">Auto-verify <span className="text-zinc-500">(uncheck = admin manually reviews proof before credits are paid)</span></span>
+                  <span className="text-sm text-sc-text">Auto-verify <span className="text-sc-dim">(uncheck = admin manually reviews proof before credits are paid)</span></span>
                 </label>
               </div>
               {createMutation.isError && <p className="text-xs text-red-400">{getApiErrorMessage(createMutation.error)}</p>}
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => { setShowCreate(false); reset(); }} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-300 hover:text-white text-sm transition-colors">Cancel</button>
-                <button type="submit" disabled={createMutation.isPending} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                <button type="button" onClick={() => { setShowCreate(false); reset(); }} className="px-4 py-2 rounded-lg bg-surface-hover text-sc-text hover:text-sc-text text-sm transition-colors">Cancel</button>
+                <button type="submit" disabled={createMutation.isPending} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-sm font-medium transition-colors disabled:opacity-50">
                   {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Create & Publish
                 </button>
               </div>
@@ -604,11 +604,11 @@ export default function AdminCampaignsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-white">Edit Platform Task</h2>
-              <button onClick={() => setEditing(null)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5" /></button>
+              <h2 className="text-lg font-semibold text-sc-text">Edit Platform Task</h2>
+              <button onClick={() => setEditing(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
-            <p className="text-xs text-zinc-500 mb-4 px-3 py-2 rounded-lg bg-surface-hover border border-surface-border">
-              Task Type: <span className="text-zinc-300 font-medium">{editing.taskType.replace(/_/g, ' ')}</span> — task type cannot be changed after creation.
+            <p className="text-xs text-sc-dim mb-4 px-3 py-2 rounded-lg bg-surface-hover border border-surface-border">
+              Task Type: <span className="text-sc-text font-medium">{editing.taskType.replace(/_/g, ' ')}</span> — task type cannot be changed after creation.
             </p>
             <form onSubmit={handleEdit((d) => editMutation.mutate({ id: editing.id, data: d }))} className="space-y-4">
               <div>
@@ -644,17 +644,17 @@ export default function AdminCampaignsPage() {
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input {...regEdit('requiresProof')} type="checkbox" className="rounded" />
-                  <span className="text-sm text-zinc-300">Requires screenshot proof</span>
+                  <span className="text-sm text-sc-text">Requires screenshot proof</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input {...regEdit('autoVerify')} type="checkbox" className="rounded" />
-                  <span className="text-sm text-zinc-300">Auto-verify <span className="text-zinc-500">(uncheck = admin manually reviews proof before credits are paid)</span></span>
+                  <span className="text-sm text-sc-text">Auto-verify <span className="text-sc-dim">(uncheck = admin manually reviews proof before credits are paid)</span></span>
                 </label>
               </div>
               {editMutation.isError && <p className="text-xs text-red-400">{getApiErrorMessage(editMutation.error)}</p>}
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-zinc-300 hover:text-white text-sm transition-colors">Cancel</button>
-                <button type="submit" disabled={editMutation.isPending} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg bg-surface-hover text-sc-text hover:text-sc-text text-sm transition-colors">Cancel</button>
+                <button type="submit" disabled={editMutation.isPending} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-sm font-medium transition-colors disabled:opacity-50">
                   {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Save Changes
                 </button>
               </div>
@@ -669,20 +669,20 @@ export default function AdminCampaignsPage() {
           <div className="relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white truncate">{viewingProof.campaign.title}</p>
-                <p className="text-xs text-zinc-500">by @{viewingProof.user.username} · {formatDate(viewingProof.submittedAt)}</p>
+                <p className="text-sm font-medium text-sc-text truncate">{viewingProof.campaign.title}</p>
+                <p className="text-xs text-sc-dim">by @{viewingProof.user.username} · {formatDate(viewingProof.submittedAt)}</p>
               </div>
-              <button onClick={closeProofModal} className="text-zinc-500 hover:text-white ml-4"><X className="w-5 h-5" /></button>
+              <button onClick={closeProofModal} className="text-sc-dim hover:text-sc-text ml-4"><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 flex items-center justify-center p-4 overflow-auto min-h-[200px]">
               {proofLoading ? (
-                <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
+                <Loader2 className="w-8 h-8 animate-spin text-sc-dim" />
               ) : proofImageUrl ? (
                 <img src={proofImageUrl} alt="Proof" className="max-w-full max-h-[70vh] rounded-lg object-contain" />
               ) : (
                 <div className="text-center">
-                  <p className="text-zinc-400 text-sm">Failed to load proof image.</p>
-                  <p className="text-zinc-600 text-xs mt-1">{viewingProof.proofUrl}</p>
+                  <p className="text-sc-muted text-sm">Failed to load proof image.</p>
+                  <p className="text-sc-dim text-xs mt-1">{viewingProof.proofUrl}</p>
                 </div>
               )}
             </div>

@@ -66,11 +66,11 @@ export default function MarketplacePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-sc-text flex items-center gap-2">
             <ArrowLeftRight className="w-6 h-6 text-brand-400" />
             Marketplace
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="text-sm text-sc-muted mt-1">
             Buy and sell unused store items for credits.{' '}
             {config ? `Listings expire after ${config.listingTtlDays} days.` : 'Listings expire after 7 days.'}
           </p>
@@ -88,7 +88,7 @@ export default function MarketplacePage() {
       {config?.resaleSuspended && (
         <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
           <p className="text-sm font-semibold text-red-300">Purchases temporarily suspended</p>
-          <p className="text-xs text-zinc-300 mt-1">
+          <p className="text-xs text-sc-text mt-1">
             {config.resaleSuspensionReason ?? 'Marketplace purchases are paused.'} Browsing, selling,
             order history, and cancellations are unaffected.
           </p>
@@ -103,7 +103,7 @@ export default function MarketplacePage() {
               ? 'Internal test — settings awaiting owner confirmation'
               : 'Internal test — marketplace rules'}
           </p>
-          <ul className="text-xs text-zinc-300/80 space-y-0.5 list-disc list-inside">
+          <ul className="text-xs text-sc-text/80 space-y-0.5 list-disc list-inside">
             {config.notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
@@ -124,7 +124,7 @@ export default function MarketplacePage() {
             className={`px-4 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
               tab === t.id
                 ? 'bg-brand-500/20 text-brand-300'
-                : 'text-zinc-400 hover:text-white'
+                : 'text-sc-muted hover:text-sc-text'
             }`}
           >
             {t.label}
@@ -142,7 +142,7 @@ export default function MarketplacePage() {
                   key={c}
                   onClick={() => { setCategory(c); setPage(1); }}
                   className={`px-3 py-1 rounded text-xs font-medium transition-all ${
-                    category === c ? 'bg-brand-500/20 text-brand-300' : 'text-zinc-400 hover:text-white'
+                    category === c ? 'bg-brand-500/20 text-brand-300' : 'text-sc-muted hover:text-sc-text'
                   }`}
                 >
                   {CATEGORY_LABELS[c]}
@@ -152,7 +152,7 @@ export default function MarketplacePage() {
             <select
               value={sort}
               onChange={(e) => { setSort(e.target.value as typeof sort); setPage(1); }}
-              className="px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sm text-zinc-300"
+              className="px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sm text-sc-text"
               aria-label="Sort listings"
             >
               <option value="newest">Newest</option>
@@ -160,7 +160,7 @@ export default function MarketplacePage() {
               <option value="price_desc">Price: high to low</option>
             </select>
             {data && (
-              <span className="text-xs text-zinc-500 ml-auto">{data.total} listing{data.total === 1 ? '' : 's'}</span>
+              <span className="text-xs text-sc-dim ml-auto">{data.total} listing{data.total === 1 ? '' : 's'}</span>
             )}
           </div>
 
@@ -170,9 +170,9 @@ export default function MarketplacePage() {
             </div>
           ) : listings.length === 0 ? (
             <div className="text-center py-20">
-              <Package className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-              <p className="text-zinc-500">No active listings right now.</p>
-              <p className="text-sm text-zinc-600 mt-1">Check back later or sell your own items.</p>
+              <Package className="w-12 h-12 text-sc-dim mx-auto mb-3" />
+              <p className="text-sc-dim">No active listings right now.</p>
+              <p className="text-sm text-sc-dim mt-1">Check back later or sell your own items.</p>
             </div>
           ) : (
             <>
@@ -186,7 +186,7 @@ export default function MarketplacePage() {
                   <button
                     onClick={() => setPage((p) => p + 1)}
                     disabled={isFetching}
-                    className="px-4 py-2 rounded-lg bg-surface-hover border border-surface-border text-sm text-zinc-300 hover:text-white disabled:opacity-50"
+                    className="px-4 py-2 rounded-lg bg-surface-hover border border-surface-border text-sm text-sc-text hover:text-sc-text disabled:opacity-50"
                   >
                     {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Load more'}
                   </button>

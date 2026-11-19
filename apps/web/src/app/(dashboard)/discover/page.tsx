@@ -49,7 +49,7 @@ interface LeaderboardEntry {
 
 const PLATFORM_STYLES: Record<string, { color: string; bg: string; label: string }> = {
   YOUTUBE:    { color: 'text-red-400',     bg: 'bg-red-500/10',     label: 'YouTube' },
-  TIKTOK:     { color: 'text-white',       bg: 'bg-white/10',       label: 'TikTok' },
+  TIKTOK:     { color: 'text-sc-text',       bg: 'bg-white/10',       label: 'TikTok' },
   INSTAGRAM:  { color: 'text-pink-400',    bg: 'bg-pink-500/10',    label: 'Instagram' },
   TWITTER:    { color: 'text-sky-400',     bg: 'bg-sky-500/10',     label: 'Twitter' },
   FACEBOOK:   { color: 'text-blue-400',    bg: 'bg-blue-500/10',    label: 'Facebook' },
@@ -76,11 +76,11 @@ const TASK_ACTION: Record<string, string> = {
 function SectionHeader({ icon: Icon, title, href, linkLabel }: { icon: React.ElementType; title: string; href?: string; linkLabel?: string }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h2 className="text-base font-semibold text-white flex items-center gap-2">
+      <h2 className="text-base font-semibold text-sc-text flex items-center gap-2">
         <Icon className="w-4 h-4 text-brand-400" />{title}
       </h2>
       {href && (
-        <Link href={href} className="flex items-center gap-1 text-xs text-zinc-400 hover:text-brand-400 transition-colors">
+        <Link href={href} className="flex items-center gap-1 text-xs text-sc-muted hover:text-brand-400 transition-colors">
           {linkLabel ?? 'See all'} <ArrowRight className="w-3 h-3" />
         </Link>
       )}
@@ -135,10 +135,10 @@ export default function DiscoverPage() {
     <div className="space-y-10">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-sc-text flex items-center gap-2">
           <Compass className="w-6 h-6 text-brand-400" /> Discover
         </h1>
-        <p className="text-zinc-400 text-sm mt-1">Explore creators, community discussions, and featured campaigns.</p>
+        <p className="text-sc-muted text-sm mt-1">Explore creators, community discussions, and featured campaigns.</p>
       </div>
 
       {/* ── Top Creators ── */}
@@ -162,7 +162,7 @@ export default function DiscoverPage() {
               >
                 <div className="relative">
                   <div
-                    className={`w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-white font-bold text-sm overflow-hidden ${frame.frameClass}`}
+                    className={`w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-accent-500 flex items-center justify-center text-sc-text font-bold text-sm overflow-hidden ${frame.frameClass}`}
                     style={frame.frameStyle}
                   >
                     {u.avatarUrl
@@ -176,8 +176,8 @@ export default function DiscoverPage() {
                   )}
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-white truncate max-w-full">{u.displayName ?? u.username}</p>
-                  <div className="flex items-center justify-center gap-1 text-[10px] text-zinc-500 mt-0.5">
+                  <p className="text-xs font-medium text-sc-text truncate max-w-full">{u.displayName ?? u.username}</p>
+                  <div className="flex items-center justify-center gap-1 text-[10px] text-sc-dim mt-0.5">
                     <Zap className="w-2.5 h-2.5 text-brand-400" />
                     <span>Lv {u.level}</span>
                     <Star className="w-2.5 h-2.5 text-yellow-400 ml-1" />
@@ -202,8 +202,8 @@ export default function DiscoverPage() {
           </div>
         ) : (forumData?.items ?? []).length === 0 ? (
           <div className="card-glass rounded-xl p-8 text-center">
-            <MessageSquare className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-            <p className="text-zinc-500 text-sm">No discussions yet. <Link href="/forum/new" className="text-brand-400 hover:underline">Start one!</Link></p>
+            <MessageSquare className="w-8 h-8 text-sc-dim mx-auto mb-2" />
+            <p className="text-sc-dim text-sm">No discussions yet. <Link href="/forum/new" className="text-brand-400 hover:underline">Start one!</Link></p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -214,14 +214,14 @@ export default function DiscoverPage() {
                 className="card-glass rounded-xl px-4 py-3 flex items-center gap-3 hover:border-brand-500/20 border border-surface-border transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{t.title}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    <span className="text-zinc-400">@{t.author.username}</span>
+                  <p className="text-sm font-medium text-sc-text truncate">{t.title}</p>
+                  <p className="text-xs text-sc-dim mt-0.5">
+                    <span className="text-sc-muted">@{t.author.username}</span>
                     {' · '}{formatRelativeTime(t.createdAt)}
-                    {' · '}<span className="text-zinc-500">{t.category}</span>
+                    {' · '}<span className="text-sc-dim">{t.category}</span>
                   </p>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
+                <div className="flex items-center gap-1 text-xs text-sc-dim shrink-0">
                   <MessageSquare className="w-3 h-3" />
                   {t._count.replies}
                 </div>
@@ -242,8 +242,8 @@ export default function DiscoverPage() {
           </div>
         ) : (campaigns?.items ?? []).length === 0 ? (
           <div className="card-glass rounded-xl p-8 text-center">
-            <Users className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-            <p className="text-zinc-500 text-sm">No active campaigns right now.</p>
+            <Users className="w-8 h-8 text-sc-dim mx-auto mb-2" />
+            <p className="text-sc-dim text-sm">No active campaigns right now.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -251,7 +251,7 @@ export default function DiscoverPage() {
               .sort((a, b) => Number(b.isPlatformTask) - Number(a.isPlatformTask))
               .map((c) => {
                 const plt = c.taskType.split('_')[0] ?? 'UNKNOWN';
-                const style = PLATFORM_STYLES[plt] ?? { color: 'text-zinc-400', bg: 'bg-zinc-500/10', label: plt };
+                const style = PLATFORM_STYLES[plt] ?? { color: 'text-sc-muted', bg: 'bg-sc-soft/10', label: plt };
                 const available = c.totalSlots - c.completedSlots - c.pendingSlots;
                 return (
                   <div key={c.id} className={`card-glass rounded-xl p-4 flex flex-col gap-3 border hover:border-brand-500/30 transition-colors ${c.isPlatformTask ? 'border-yellow-500/30' : 'border-surface-border'}`}>
@@ -266,15 +266,15 @@ export default function DiscoverPage() {
                           </span>
                         )}
                       </div>
-                    <a href={c.targetUrl} target="_blank" rel="noopener noreferrer" className="text-zinc-600 hover:text-zinc-400 transition-colors">
+                    <a href={c.targetUrl} target="_blank" rel="noopener noreferrer" className="text-sc-dim hover:text-sc-muted transition-colors">
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white text-sm line-clamp-2">{c.title}</h3>
-                    {c.description && <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{c.description}</p>}
+                    <h3 className="font-semibold text-sc-text text-sm line-clamp-2">{c.title}</h3>
+                    {c.description && <p className="text-xs text-sc-dim mt-1 line-clamp-1">{c.description}</p>}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
+                  <div className="flex items-center gap-3 text-xs text-sc-dim">
                     <span className="flex items-center gap-1 text-yellow-400 font-semibold">
                       <Coins className="w-3.5 h-3.5" />{formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)}
                     </span>
@@ -282,10 +282,10 @@ export default function DiscoverPage() {
                       <Users className="w-3.5 h-3.5" />{available.toLocaleString()} left
                     </span>
                   </div>
-                  <p className="text-xs text-zinc-600">by <Link href={`/users/${c.user.username}`} className="text-zinc-400 hover:text-brand-400">@{c.user.username}</Link></p>
+                  <p className="text-xs text-sc-dim">by <Link href={`/users/${c.user.username}`} className="text-sc-muted hover:text-brand-400">@{c.user.username}</Link></p>
                   <Link
                     href="/tasks"
-                    className="mt-auto w-full text-center py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition-colors"
+                    className="mt-auto w-full text-center py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-xs font-medium transition-colors"
                   >
                     Go to Tasks
                   </Link>

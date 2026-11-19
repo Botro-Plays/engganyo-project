@@ -269,7 +269,7 @@ export default function ForumTopicPage() {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="card-glass rounded-xl p-12 text-center">
-          <p className="text-zinc-400">Topic not found</p>
+          <p className="text-sc-muted">Topic not found</p>
         </div>
       </div>
     );
@@ -287,7 +287,7 @@ export default function ForumTopicPage() {
     <div className="max-w-4xl mx-auto">
       <Link
         href="/forum"
-        className="inline-flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors"
+        className="inline-flex items-center gap-2 text-sc-muted hover:text-sc-text mb-6 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Forum
@@ -306,13 +306,13 @@ export default function ForumTopicPage() {
                 <input
                   value={editTopicTitle}
                   onChange={(e) => setEditTopicTitle(e.target.value)}
-                  className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-1 text-white focus:outline-none focus:border-indigo-500 text-xl font-bold"
+                  className="flex-1 bg-sc-panel-2/50 border border-sc-line rounded-lg px-3 py-1 text-sc-text focus:outline-none focus:border-indigo-500 text-xl font-bold"
                 />
               ) : (
-                <h1 className="text-2xl font-bold text-white">{data.title}</h1>
+                <h1 className="text-2xl font-bold text-sc-text">{data.title}</h1>
               )}
             </div>
-            <div className="flex items-center gap-3 text-sm text-zinc-400 mb-3">
+            <div className="flex items-center gap-3 text-sm text-sc-muted mb-3">
               <UserLink user={data.author} showAvatar={false} />
               <span>·</span>
               <span>{formatRelativeTime(data.createdAt)}</span>
@@ -330,13 +330,13 @@ export default function ForumTopicPage() {
                   <button
                     onClick={() => updateTopicMutation.mutate({ title: editTopicTitle, content: editTopicContent })}
                     disabled={updateTopicMutation.isPending}
-                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm transition-colors"
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-sc-text rounded text-sm transition-colors"
                   >
                     Save
                   </button>
                   <button
                     onClick={() => setEditingTopic(false)}
-                    className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm transition-colors"
+                    className="px-3 py-1 bg-sc-panel-2 hover:bg-sc-soft text-sc-text rounded text-sm transition-colors"
                   >
                     Cancel
                   </button>
@@ -345,7 +345,7 @@ export default function ForumTopicPage() {
                 <>
                   <button
                     onClick={() => { setEditingTopic(true); setEditTopicTitle(data.title); setEditTopicContent(data.content); }}
-                    className="p-1.5 text-zinc-400 hover:text-white rounded transition-colors"
+                    className="p-1.5 text-sc-muted hover:text-sc-text rounded transition-colors"
                     title="Edit topic"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -353,7 +353,7 @@ export default function ForumTopicPage() {
                   <button
                     onClick={() => { if (confirm('Delete this topic?')) deleteTopicMutation.mutate(); }}
                     disabled={deleteTopicMutation.isPending}
-                    className="p-1.5 text-zinc-400 hover:text-red-400 rounded transition-colors"
+                    className="p-1.5 text-sc-muted hover:text-red-400 rounded transition-colors"
                     title="Delete topic"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -365,7 +365,7 @@ export default function ForumTopicPage() {
           {!isTopicOwner && currentUser && (
             <button
               onClick={() => setReportTarget({ topicId: data.id, label: `Topic: ${data.title}` })}
-              className="p-1.5 text-zinc-500 hover:text-red-400 rounded transition-colors flex-shrink-0"
+              className="p-1.5 text-sc-dim hover:text-red-400 rounded transition-colors flex-shrink-0"
               title="Report topic"
             >
               <Flag className="w-4 h-4" />
@@ -378,7 +378,7 @@ export default function ForumTopicPage() {
             value={editTopicContent}
             onChange={(e) => setEditTopicContent(e.target.value)}
             rows={6}
-            className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 resize-none mb-3"
+            className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text focus:outline-none focus:border-indigo-500 resize-none mb-3"
           />
         ) : (
           <div className="mb-4">{renderContentWithMentions(data.content)}</div>
@@ -390,7 +390,7 @@ export default function ForumTopicPage() {
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium mb-3 ${
               data.campaign.status === 'ACTIVE' || data.campaign.status === 'PENDING_REVIEW'
                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                : 'bg-sc-soft/20 text-sc-muted border border-sc-border/30'
             }`}
           >
             <Megaphone className="w-3 h-3" />
@@ -398,7 +398,7 @@ export default function ForumTopicPage() {
           </Link>
         )}
 
-        <div className="flex items-center gap-2 pt-3 border-t border-zinc-700/50 flex-wrap">
+        <div className="flex items-center gap-2 pt-3 border-t border-sc-line/50 flex-wrap">
           {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => (
             <button
               key={type}
@@ -406,8 +406,8 @@ export default function ForumTopicPage() {
               disabled={topicReactionMutation.isPending}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm transition-colors ${
                 myTopicReaction?.type === type
-                  ? 'bg-indigo-500/30 border border-indigo-500/50 text-white'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                  ? 'bg-indigo-500/30 border border-indigo-500/50 text-sc-text'
+                  : 'bg-sc-panel-2 hover:bg-sc-panel-2 text-sc-text'
               }`}
             >
               <span>{REACTION_EMOJI[type]}</span>
@@ -429,8 +429,8 @@ export default function ForumTopicPage() {
       <div className="space-y-4 mt-6">
         {!data.replies.length && (
           <div className="card-glass rounded-xl p-8 text-center">
-            <MessageSquare className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-            <p className="text-zinc-400">No replies yet. Be the first to respond!</p>
+            <MessageSquare className="w-12 h-12 text-sc-dim mx-auto mb-4" />
+            <p className="text-sc-muted">No replies yet. Be the first to respond!</p>
           </div>
         )}
         {data.replies.map((reply) => (
@@ -486,18 +486,18 @@ export default function ForumTopicPage() {
         {isLocked ? (
           <div className="card-glass rounded-xl p-4 text-center shadow-lg">
             <Lock className="w-5 h-5 text-yellow-400 mx-auto mb-2" />
-            <p className="text-zinc-400 text-sm">This topic is locked and no longer accepts replies</p>
+            <p className="text-sc-muted text-sm">This topic is locked and no longer accepts replies</p>
           </div>
         ) : (
           <>
             {replyingTo && (
-              <div className="mb-2 border-l-4 border-indigo-500/60 bg-zinc-800/90 rounded-r-lg px-3 py-2 flex items-start justify-between gap-3 backdrop-blur-sm">
+              <div className="mb-2 border-l-4 border-indigo-500/60 bg-sc-panel-2/90 rounded-r-lg px-3 py-2 flex items-start justify-between gap-3 backdrop-blur-sm">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-indigo-400 mb-0.5">
                     <CornerDownRight className="w-3 h-3 inline mr-1" />
                     Replying to <UserLink user={replyingTo.author} showAvatar={false} />
                   </p>
-                  <p className="text-xs text-zinc-400 line-clamp-1">
+                  <p className="text-xs text-sc-muted line-clamp-1">
                     {replyingTo.content
                       .replace(/@\[([^\]]+)\]\(user:[^)]+\)/g, '@$1')
                       .replace(/!\[([^\]]+)\]\(campaign:[^)]+\)/g, '[$1]')
@@ -506,7 +506,7 @@ export default function ForumTopicPage() {
                 </div>
                 <button
                   onClick={() => setReplyingTo(null)}
-                  className="flex-shrink-0 text-zinc-500 hover:text-white transition-colors"
+                  className="flex-shrink-0 text-sc-dim hover:text-sc-text transition-colors"
                 >
                   ✕
                 </button>
@@ -531,7 +531,7 @@ export default function ForumTopicPage() {
                 <button
                   type="submit"
                   disabled={replyMutation.isPending || !replyContent.trim()}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text rounded-lg transition-colors"
                 >
                   <Send className="w-4 h-4" />
                   {replyMutation.isPending ? 'Sending...' : 'Reply'}
@@ -589,11 +589,11 @@ function ReplyCard({
       .replace(/!\[([^\]]+)\]\(campaign:[^)]+\)/g, '[$1]');
 
   return (
-    <div className={`card-glass rounded-xl p-4 ${isChild ? 'bg-zinc-900/30' : ''}`}>
+    <div className={`card-glass rounded-xl p-4 ${isChild ? 'bg-sc-panel/30' : ''}`}>
       {parentReply && (
-        <div className="mb-3 border-l-2 border-zinc-600/50 bg-zinc-900/50 rounded-r-lg px-2.5 py-1.5">
-          <p className="text-xs text-zinc-500 mb-0.5">↩ <UserLink user={parentReply.author} showAvatar={false} /></p>
-          <p className="text-xs text-zinc-500 line-clamp-1">{stripMentions(parentReply.content).substring(0, 120)}</p>
+        <div className="mb-3 border-l-2 border-sc-line/50 bg-sc-panel/50 rounded-r-lg px-2.5 py-1.5">
+          <p className="text-xs text-sc-dim mb-0.5">↩ <UserLink user={parentReply.author} showAvatar={false} /></p>
+          <p className="text-xs text-sc-dim line-clamp-1">{stripMentions(parentReply.content).substring(0, 120)}</p>
         </div>
       )}
       <div className="flex items-start gap-3">
@@ -604,15 +604,15 @@ function ReplyCard({
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 flex-wrap">
               <UserLink user={reply.author} showAvatar={false} />
-              <span className="text-zinc-500 text-xs">{formatRelativeTime(reply.createdAt)}</span>
-              {reply.isEdited && <span className="text-zinc-500 text-xs">(edited)</span>}
+              <span className="text-sc-dim text-xs">{formatRelativeTime(reply.createdAt)}</span>
+              {reply.isEdited && <span className="text-sc-dim text-xs">(edited)</span>}
               {reply.campaign && (
                 <Link
                   href="/tasks"
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
                     reply.campaign.status === 'ACTIVE' || reply.campaign.status === 'PENDING_REVIEW'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                      : 'bg-zinc-500/20 text-zinc-400 border border-zinc-500/30'
+                      : 'bg-sc-soft/20 text-sc-muted border border-sc-border/30'
                   }`}
                 >
                   <Megaphone className="w-3 h-3" />
@@ -624,14 +624,14 @@ function ReplyCard({
               <div className="flex gap-1 flex-shrink-0">
                 <button
                   onClick={() => onEditReply(reply)}
-                  className="p-1 text-zinc-500 hover:text-white rounded transition-colors"
+                  className="p-1 text-sc-dim hover:text-sc-text rounded transition-colors"
                   title="Edit reply"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => { if (confirm('Delete this reply?')) onDeleteReply(reply.id); }}
-                  className="p-1 text-zinc-500 hover:text-red-400 rounded transition-colors"
+                  className="p-1 text-sc-dim hover:text-red-400 rounded transition-colors"
                   title="Delete reply"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -641,7 +641,7 @@ function ReplyCard({
             {!isOwner && currentUserId && !isEditing && (
               <button
                 onClick={() => onReport(reply.id, `Reply by ${reply.author.username}`)}
-                className="p-1 text-zinc-500 hover:text-red-400 rounded transition-colors flex-shrink-0"
+                className="p-1 text-sc-dim hover:text-red-400 rounded transition-colors flex-shrink-0"
                 title="Report reply"
               >
                 <Flag className="w-3.5 h-3.5" />
@@ -654,49 +654,49 @@ function ReplyCard({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-2 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none"
+                className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-2 text-sc-text placeholder-sc-dim focus:outline-none focus:border-indigo-500 resize-none"
                 rows={3}
               />
               <div className="flex gap-2 mt-2">
                 <button
                   type="submit"
                   disabled={updatePending}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm transition-colors"
+                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-sc-text rounded text-sm transition-colors"
                 >
                   Save
                 </button>
                 <button
                   type="button"
                   onClick={() => { setEditingReplyId(null); setEditContent(''); }}
-                  className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm transition-colors"
+                  className="px-3 py-1 bg-sc-panel-2 hover:bg-sc-soft text-sc-text rounded text-sm transition-colors"
                 >
                   Cancel
                 </button>
               </div>
             </form>
           ) : (
-            <div className="text-zinc-300 leading-relaxed text-sm">
+            <div className="text-sc-text leading-relaxed text-sm">
               {renderContentWithMentions(reply.content)}
             </div>
           )}
 
-          <div className="flex items-center gap-1 mt-2 pt-2 border-t border-zinc-700/30 flex-wrap">
+          <div className="flex items-center gap-1 mt-2 pt-2 border-t border-sc-line/30 flex-wrap">
             {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => onReact(reply.id, type)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs bg-sc-panel-2 hover:bg-sc-panel-2 text-sc-muted hover:text-sc-text transition-colors"
               >
                 {REACTION_EMOJI[type]}
               </button>
             ))}
             {reply._count.reactions > 0 && (
-              <span className="text-xs text-zinc-500 ml-1">{reply._count.reactions} reaction{reply._count.reactions !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-sc-dim ml-1">{reply._count.reactions} reaction{reply._count.reactions !== 1 ? 's' : ''}</span>
             )}
             {!isTopicLocked && !isEditing && (
               <button
                 onClick={() => onReply({ id: reply.id, content: reply.content, author: reply.author })}
-                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-xs text-zinc-400 hover:text-indigo-400 transition-colors"
+                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-xs text-sc-muted hover:text-indigo-400 transition-colors"
               >
                 <CornerDownRight className="w-3 h-3" />
                 Reply

@@ -94,7 +94,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 
 const PLATFORM_COLORS: Record<string, string> = {
   YOUTUBE:  'text-red-400 bg-red-500/10',
-  TIKTOK:   'text-white bg-white/10',
+  TIKTOK:   'text-sc-text bg-white/10',
   INSTAGRAM:'text-pink-400 bg-pink-500/10',
   TWITTER:  'text-sky-400 bg-sky-500/10',
   FACEBOOK: 'text-blue-400 bg-blue-500/10',
@@ -204,8 +204,8 @@ const MY_TASK_STATUS: Record<string, { label: string; color: string; icon: Lucid
   SUBMITTED:   { label: 'Submitted',   color: 'text-sky-400',    icon: Send },
   VERIFIED:    { label: 'Verified',    color: 'text-green-400',  icon: CheckCircle2 },
   REJECTED:    { label: 'Rejected',    color: 'text-red-400',    icon: XCircle },
-  EXPIRED:     { label: 'Expired',     color: 'text-zinc-500',   icon: Clock },
-  CANCELLED:   { label: 'Cancelled',   color: 'text-zinc-500',   icon: X },
+  EXPIRED:     { label: 'Expired',     color: 'text-sc-text',   icon: Clock },
+  CANCELLED:   { label: 'Cancelled',   color: 'text-sc-text',   icon: X },
 };
 
 // ASSIGNED/IN_PROGRESS past expiresAt is treated as expired for display,
@@ -752,8 +752,8 @@ function TasksPageInner() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Tasks</h1>
-        <p className="text-zinc-400 text-sm mt-1">Complete engagement tasks to earn credits.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Tasks</h1>
+        <p className="text-sc-muted text-sm mt-1">Complete engagement tasks to earn credits.</p>
       </div>
 
       {/* ── P2P journeys: Find tasks / My tasks / My campaigns ── */}
@@ -768,7 +768,7 @@ function TasksPageInner() {
                 router.replace(t === 'mine' ? '/tasks?tab=mine' : t === 'challenges' ? '/tasks?tab=challenges' : '/tasks', { scroll: false })
               }
               className={`px-4 py-2.5 min-h-11 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
-                tab === t ? 'bg-brand-500 text-white' : 'text-zinc-400 hover:text-white'
+                tab === t ? 'bg-brand-500 text-sc-text' : 'text-sc-muted hover:text-sc-text'
               }`}
             >
               {t === 'browse' ? 'Find tasks' : t === 'challenges' ? '1v1 Challenges' : 'My tasks'}
@@ -776,7 +776,7 @@ function TasksPageInner() {
           ))}
           <Link
             href="/campaigns"
-            className="px-4 py-2.5 min-h-11 rounded-md text-sm font-medium text-zinc-400 hover:text-white transition-all whitespace-nowrap flex items-center gap-1.5"
+            className="px-4 py-2.5 min-h-11 rounded-md text-sm font-medium text-sc-muted hover:text-sc-text transition-all whitespace-nowrap flex items-center gap-1.5"
           >
             My campaigns
             <ChevronRight className="w-3.5 h-3.5" />
@@ -784,8 +784,8 @@ function TasksPageInner() {
         </div>
         {limitsData && typeof limitsData.dailyLimit === 'number' && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-zinc-500">Daily limit:</span>
-            <span className={`font-medium ${limitsData.remaining === 0 ? 'text-red-400' : 'text-zinc-300'}`}>
+            <span className="text-sc-text">Daily limit:</span>
+            <span className={`font-medium ${limitsData.remaining === 0 ? 'text-red-400' : 'text-sc-text'}`}>
               {limitsData.tasksCompletedToday ?? 0}/{limitsData.dailyLimit} done
             </span>
             {typeof limitsData.remaining === 'number' && limitsData.remaining > 0 && (
@@ -823,8 +823,8 @@ function TasksPageInner() {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">Task accepted — you can start now</p>
-                  <p className="text-xs text-zinc-400 truncate mt-0.5">
+                  <p className="text-sm font-semibold text-sc-text">Task accepted — you can start now</p>
+                  <p className="text-xs text-sc-muted truncate mt-0.5">
                     {acceptedOffer.title} · +{formatCredits(acceptedOffer.creditPerTask)} {creditLabel(acceptedOffer.creditPerTask)} on approval
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -832,7 +832,7 @@ function TasksPageInner() {
                       href={acceptedOffer.targetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-xs font-semibold transition-colors"
                     >
                       Open {PLATFORM_LABEL[getPlatform(acceptedOffer.taskType)] ?? 'task'}
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -847,7 +847,7 @@ function TasksPageInner() {
                     )}
                     <Link
                       href="/tasks?tab=mine"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-zinc-400 hover:text-white text-xs font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-sc-muted hover:text-sc-text text-xs font-medium transition-colors"
                     >
                       Track in My tasks
                     </Link>
@@ -862,7 +862,7 @@ function TasksPageInner() {
                 <button
                   onClick={() => { setJustAccepted(null); setPopupBlocked(false); }}
                   aria-label="Dismiss"
-                  className="text-zinc-500 hover:text-white transition-colors p-1"
+                  className="text-sc-text hover:text-sc-text transition-colors p-1"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -877,7 +877,7 @@ function TasksPageInner() {
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-11 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${
                   platformFilter === 'ALL'
                     ? 'bg-brand-500/15 border-brand-500/40 text-brand-300'
-                    : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+                    : 'bg-surface-hover border-surface-border text-sc-muted hover:text-sc-text'
                 }`}
               >
                 All platforms
@@ -890,7 +890,7 @@ function TasksPageInner() {
                   className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-11 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${
                     platformFilter === p
                       ? 'bg-brand-500/15 border-brand-500/40 text-brand-300'
-                      : 'bg-surface-hover border-surface-border text-zinc-400 hover:text-white'
+                      : 'bg-surface-hover border-surface-border text-sc-muted hover:text-sc-text'
                   }`}
                 >
                   <PlatformIcon platform={p} className="w-3.5 h-3.5" />
@@ -907,21 +907,21 @@ function TasksPageInner() {
             </div>
           ) : !browseItems.length ? (
             <div className="card-glass rounded-2xl p-16 text-center">
-              <p className="text-zinc-500 text-sm">No tasks available right now.</p>
-              <p className="text-zinc-600 text-xs mt-1">Check back later or create a campaign to get engagement.</p>
+              <p className="text-sc-text text-sm">No tasks available right now.</p>
+              <p className="text-sc-dim text-xs mt-1">Check back later or create a campaign to get engagement.</p>
             </div>
           ) : (
             <>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-tour="task-browse-grid">
                 {browseItems.map((task) => {
                   const platform = getPlatform(task.taskType);
-                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
+                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-sc-muted bg-sc-text/10';
                   const available = task.totalSlots - task.completedSlots - task.pendingSlots;
                   const isOwner = user?.id === task.user.id;
                   return (
                     <div key={task.id} className="card-glass rounded-xl p-5 flex flex-col">
                       {/* Reading order: required action → reward → proof → action button */}
-                      <p className="text-sm font-semibold text-white mb-1 line-clamp-2">{task.title}</p>
+                      <p className="text-sm font-semibold text-sc-text mb-1 line-clamp-2">{task.title}</p>
                       <p className="text-lg font-bold text-green-400 leading-tight mb-2">
                         +{formatCredits(task.creditPerTask)}
                         <span className="text-[11px] font-medium text-green-400/70 ml-1">{creditLabel(task.creditPerTask)}</span>
@@ -955,13 +955,13 @@ function TasksPageInner() {
                       ) : (
                         <div className="mb-3" />
                       )}
-                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 mt-auto">
+                      <div className="flex items-center justify-between text-xs text-sc-text mb-3 mt-auto">
                         <span>{available} slots left</span>
                         <UserLink user={task.user} showAvatar={false} />
                       </div>
                       <div className="flex gap-1.5">
                         {isOwner && !task.isPlatformTask ? (
-                          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-zinc-500/10 border border-zinc-500/20 text-zinc-400 text-xs font-medium">
+                          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-sc-text/10 border border-sc-border/20 text-sc-muted text-xs font-medium">
                             Owner View Only
                           </div>
                         ) : (() => {
@@ -1019,7 +1019,7 @@ function TasksPageInner() {
                         {!isOwner && (
                           <button
                             onClick={() => setReporting({ userId: task.user.id, label: task.title })}
-                            className="px-3 py-2 rounded-lg border border-surface-border text-zinc-500 hover:text-white hover:border-zinc-400 text-xs transition-colors"
+                            className="px-3 py-2 rounded-lg border border-surface-border text-sc-text hover:text-sc-text hover:border-sc-border text-xs transition-colors"
                           >
                             <Flag className="w-3 h-3" />
                           </button>
@@ -1035,12 +1035,12 @@ function TasksPageInner() {
                   <button
                     onClick={() => fetchNextPage()}
                     disabled={isFetchingNextPage}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 min-h-11 rounded-lg bg-surface-hover border border-surface-border text-sm font-medium text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 min-h-11 rounded-lg bg-surface-hover border border-surface-border text-sm font-medium text-sc-text hover:text-sc-text hover:border-sc-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isFetchingNextPage && <Loader2 className="w-4 h-4 animate-spin" />}
                     Show more tasks
                   </button>
-                  <p className="text-xs text-zinc-600 mt-2">Showing {browseItems.length} task{browseItems.length === 1 ? '' : 's'}</p>
+                  <p className="text-xs text-sc-dim mt-2">Showing {browseItems.length} task{browseItems.length === 1 ? '' : 's'}</p>
                 </div>
               )}
             </>
@@ -1057,20 +1057,20 @@ function TasksPageInner() {
           >
             <div>
               <p className="text-sm font-semibold text-brand-200">Looking for mutual P2P rooms?</p>
-              <p className="mt-0.5 text-xs text-zinc-400">
+              <p className="mt-0.5 text-xs text-sc-muted">
                 Rooms are different from challenges — both players stake equal credits, do each other&apos;s tasks,
                 and peer-review proof. No credit rewards; finish in time to earn a P2P point.
               </p>
             </div>
-            <span className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white">Open rooms →</span>
+            <span className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-sc-text">Open rooms →</span>
           </Link>
           <div className="flex items-center justify-between mb-4 gap-3">
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-sc-text">
               Player-vs-player duels — one slot, one winner, creator-reviewed proof.
             </p>
             <button
               onClick={() => setShowChallengeForm(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-xs font-semibold transition-colors shrink-0"
             >
               <Plus className="w-3.5 h-3.5" /> Create challenge
             </button>
@@ -1081,8 +1081,8 @@ function TasksPageInner() {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">Challenge claimed — slot is yours</p>
-                  <p className="text-xs text-zinc-400 truncate mt-0.5">
+                  <p className="text-sm font-semibold text-sc-text">Challenge claimed — slot is yours</p>
+                  <p className="text-xs text-sc-muted truncate mt-0.5">
                     {justClaimed.card.title} · +{formatCredits(justClaimed.card.rewardCredits)} {creditLabel(justClaimed.card.rewardCredits)} on approval
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -1090,7 +1090,7 @@ function TasksPageInner() {
                       href={justClaimed.card.targetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-xs font-semibold transition-colors"
                     >
                       Open task
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -1133,7 +1133,7 @@ function TasksPageInner() {
                     </button>
                     <Link
                       href="/tasks?tab=mine"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-zinc-400 hover:text-white text-xs font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-sc-muted hover:text-sc-text text-xs font-medium transition-colors"
                     >
                       Track in My tasks
                     </Link>
@@ -1142,7 +1142,7 @@ function TasksPageInner() {
                 <button
                   onClick={() => setJustClaimed(null)}
                   aria-label="Dismiss"
-                  className="text-zinc-500 hover:text-white transition-colors p-1"
+                  className="text-sc-text hover:text-sc-text transition-colors p-1"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1158,9 +1158,9 @@ function TasksPageInner() {
             </div>
           ) : !challengeData?.items.length ? (
             <div className="card-glass rounded-2xl p-16 text-center">
-              <Swords className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-              <p className="text-zinc-500 text-sm">No open challenges right now.</p>
-              <p className="text-zinc-600 text-xs mt-1">Create one and challenge another player — or check back later.</p>
+              <Swords className="w-8 h-8 text-sc-dim mx-auto mb-3" />
+              <p className="text-sc-text text-sm">No open challenges right now.</p>
+              <p className="text-sc-dim text-xs mt-1">Create one and challenge another player — or check back later.</p>
               <button
                 onClick={() => setShowChallengeForm(true)}
                 className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
@@ -1173,7 +1173,7 @@ function TasksPageInner() {
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {challengeData.items.map((ch) => {
                   const platform = getPlatform(ch.taskType);
-                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
+                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-sc-muted bg-sc-text/10';
                   const hoursLeft = Math.max(0, Math.round((new Date(ch.expiresAt).getTime() - Date.now()) / 3600000));
                   const isOwn = user?.id === ch.creator.id;
                   const deadline = hoursLeft < 1 ? '<1h left' : hoursLeft < 24 ? `${hoursLeft}h left` : `${Math.round(hoursLeft / 24)}d left`;
@@ -1184,13 +1184,13 @@ function TasksPageInner() {
                           1v1 Challenge
                         </span>
                         {ch.visibility === 'PRIVATE' && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-zinc-500/10 border border-zinc-500/20 text-zinc-400">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-sc-text/10 border border-sc-border/20 text-sc-muted">
                             Private
                           </span>
                         )}
                       </div>
-                      <p className="text-sm font-semibold text-white mb-1 line-clamp-2">{ch.title}</p>
-                      <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{ch.actionText}</p>
+                      <p className="text-sm font-semibold text-sc-text mb-1 line-clamp-2">{ch.title}</p>
+                      <p className="text-xs text-sc-muted line-clamp-2 mb-2">{ch.actionText}</p>
                       <p className="text-lg font-bold text-green-400 leading-tight mb-2">
                         +{formatCredits(ch.rewardCredits)}
                         <span className="text-[11px] font-medium text-green-400/70 ml-1">{creditLabel(ch.rewardCredits)}</span>
@@ -1214,7 +1214,7 @@ function TasksPageInner() {
                           </span>
                         </p>
                       )}
-                      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 mt-auto">
+                      <div className="flex items-center justify-between text-xs text-sc-text mb-3 mt-auto">
                         <span className="text-brand-300 font-medium">1 slot</span>
                         <UserLink user={ch.creator} showAvatar={false} />
                       </div>
@@ -1245,17 +1245,17 @@ function TasksPageInner() {
                   <button
                     onClick={() => setChallengePage((p) => p - 1)}
                     disabled={challengeData.meta.page <= 1}
-                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous
                   </button>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-sc-text">
                     Page {challengeData.meta.page} of {challengeData.meta.totalPages}
                   </span>
                   <button
                     onClick={() => setChallengePage((p) => p + 1)}
                     disabled={challengeData.meta.page >= challengeData.meta.totalPages}
-                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     Next <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1294,8 +1294,8 @@ function TasksPageInner() {
                 onClick={() => setMyFilter(f)}
                 className={`px-3 py-2 min-h-11 rounded-md text-xs font-medium transition-all ${
                   myFilter === f
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-surface-hover text-zinc-400 hover:text-white border border-surface-border'
+                    ? 'bg-brand-500 text-sc-text'
+                    : 'bg-surface-hover text-sc-muted hover:text-sc-text border border-surface-border'
                 }`}
               >
                 {f === 'all' ? 'All' : f === 'pending' ? 'Pending' : 'Done'}
@@ -1311,8 +1311,8 @@ function TasksPageInner() {
             </div>
           ) : !myData?.items.length ? (
             <div className="card-glass rounded-2xl p-16 text-center">
-              <p className="text-zinc-500 text-sm">No tasks yet.</p>
-              <p className="text-zinc-600 text-xs mt-1">Browse tasks and accept some to start earning.</p>
+              <p className="text-sc-text text-sm">No tasks yet.</p>
+              <p className="text-sc-dim text-xs mt-1">Browse tasks and accept some to start earning.</p>
             </div>
           ) : (
             <>
@@ -1330,9 +1330,9 @@ function TasksPageInner() {
                   const offer = offerOf(task);
                   if (!offer) return null;
                   const effStatus = myEffectiveStatus(task);
-                  const st = MY_TASK_STATUS[effStatus] ?? { label: effStatus, color: 'text-zinc-400', icon: CircleDot, spin: false };
+                  const st = MY_TASK_STATUS[effStatus] ?? { label: effStatus, color: 'text-sc-muted', icon: CircleDot, spin: false };
                   const platform = getPlatform(offer.taskType);
-                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-zinc-400 bg-zinc-500/10';
+                  const platformColor = PLATFORM_COLORS[platform] ?? 'text-sc-muted bg-sc-text/10';
                   const canSubmit = effStatus === 'ASSIGNED' || effStatus === 'IN_PROGRESS';
                   return (
                     <div key={task.id} className="card-glass rounded-xl px-5 py-4 flex items-start sm:items-center gap-3 sm:gap-4">
@@ -1341,7 +1341,7 @@ function TasksPageInner() {
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-white truncate">{offer.title}</p>
+                          <p className="text-sm font-medium text-sc-text truncate">{offer.title}</p>
                           <span className="text-xs font-semibold text-green-400 shrink-0">+{formatCredits(offer.creditPerTask)}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -1349,13 +1349,13 @@ function TasksPageInner() {
                             <st.icon className={`w-3 h-3 ${st.spin ? 'animate-spin' : ''}`} />
                             {st.label}
                           </span>
-                          <span className="text-xs text-zinc-500">{formatRelativeTime(task.assignedAt)}</span>
-                          <span className="text-[10px] text-zinc-600">by <Link href={`/users/${offer.user.username}`} className="text-zinc-500 hover:text-brand-300 transition-colors">@{offer.user.username}</Link></span>
+                          <span className="text-xs text-sc-text">{formatRelativeTime(task.assignedAt)}</span>
+                          <span className="text-[10px] text-sc-dim">by <Link href={`/users/${offer.user.username}`} className="text-sc-text hover:text-brand-300 transition-colors">@{offer.user.username}</Link></span>
                           <a
                             href={offer.targetUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[10px] text-zinc-500 hover:text-brand-400 flex items-center gap-0.5 transition-colors"
+                            className="text-[10px] text-sc-text hover:text-brand-400 flex items-center gap-0.5 transition-colors"
                           >
                             <ExternalLink className="w-3 h-3" /> Link
                           </a>
@@ -1407,12 +1407,12 @@ function TasksPageInner() {
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
                         ) : effStatus === 'EXPIRED' ? (
-                          <span className="text-xs text-zinc-500">Expired</span>
+                          <span className="text-xs text-sc-text">Expired</span>
                         ) : canSubmit ? (
                           DISABLED_TASK_TYPES.has(offer.taskType) ? (
                             <div
                               title="This task type is disabled for platform-policy compliance and cannot earn rewards"
-                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-500/10 border border-zinc-500/20 text-zinc-500 cursor-not-allowed"
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sc-text/10 border border-sc-border/20 text-sc-text cursor-not-allowed"
                             >
                               Disabled
                             </div>
@@ -1443,17 +1443,17 @@ function TasksPageInner() {
                   <button
                     onClick={() => setMyPage((p) => p - 1)}
                     disabled={myData.meta.page <= 1}
-                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30"
+                    className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30"
                   >
                     <ChevronLeft className="w-4 h-4" /> Previous
                   </button>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-sc-text">
                     Page {myData.meta.page} of {myData.meta.totalPages}
                   </span>
                   <button
                     onClick={() => setMyPage((p) => p + 1)}
                     disabled={myData.meta.page >= myData.meta.totalPages}
-                    className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white disabled:opacity-30"
+                    className="flex items-center gap-1.5 text-sm text-sc-muted hover:text-sc-text disabled:opacity-30"
                   >
                     Next <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1478,33 +1478,33 @@ function TasksPageInner() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 pb-20 sm:p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md card-glass rounded-t-2xl sm:rounded-2xl p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-base font-semibold text-sc-text">
                 {submitOffer.taskType === 'YOUTUBE_SUBSCRIBE' ? 'Subscribe & Verify' :
                  submitOffer.taskType === 'YOUTUBE_LIKE' ? 'Like & Verify' :
                  'Submit Proof'}
               </h2>
-              <button onClick={() => setSubmitting(null)} className="text-zinc-500 hover:text-white transition-colors">
+              <button onClick={() => setSubmitting(null)} className="text-sc-text hover:text-sc-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="mb-4 p-3 rounded-lg bg-surface-hover border border-surface-border">
-              <p className="text-sm text-white font-medium">{submitOffer.title}</p>
+              <p className="text-sm text-sc-text font-medium">{submitOffer.title}</p>
               <a
                 href={submitOffer.targetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-400 transition-colors mt-1"
+                className="inline-flex items-center gap-1 text-xs text-sc-text hover:text-brand-400 transition-colors mt-1"
               >
                 Open link <ExternalLink className="w-3 h-3" />
               </a>
               {submitOffer.proofInstructions && (
-                <p className="text-xs text-zinc-400 mt-2 border-t border-surface-border pt-2">
+                <p className="text-xs text-sc-muted mt-2 border-t border-surface-border pt-2">
                   {submitOffer.proofInstructions}
                 </p>
               )}
               {submitOffer.requiresProof && !offerRequiresLinkedAccount(submitOffer.taskType, submitOffer.autoVerify) && (
-                <p className="text-xs text-zinc-500 mt-2 border-t border-surface-border pt-2">
+                <p className="text-xs text-sc-text mt-2 border-t border-surface-border pt-2">
                   Manual review — your screenshot must show the completed action and your account identity (username or profile) so the creator can verify it.
                 </p>
               )}
@@ -1527,7 +1527,7 @@ function TasksPageInner() {
             {submitOffer.taskType === 'YOUTUBE_SUBSCRIBE' ? (
               // YouTube Subscribe: Show check button instead of proof upload
               <div className="space-y-4">
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-sc-muted">
                   1. Open the link above and subscribe to the channel<br />
                   2. Click the button below to verify your subscription
                 </p>
@@ -1541,7 +1541,7 @@ function TasksPageInner() {
                     </div>
                     <button
                       onClick={() => setSubmitting(null)}
-                      className="w-full py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium transition-colors"
+                      className="w-full py-2.5 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-sm font-medium transition-colors"
                     >
                       Close
                     </button>
@@ -1556,7 +1556,7 @@ function TasksPageInner() {
                     <button
                       onClick={() => recheckMutation.mutate(submitOffer.id)}
                       disabled={recheckMutation.isPending}
-                      className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
                     </button>
@@ -1565,7 +1565,7 @@ function TasksPageInner() {
                   <button
                     onClick={() => recheckMutation.mutate(submitOffer.id)}
                     disabled={recheckMutation.isPending}
-                    className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {recheckMutation.isPending ? 'Checking...' : 'Check Subscription'}
                   </button>
@@ -1574,7 +1574,7 @@ function TasksPageInner() {
             ) : submitOffer.taskType === 'YOUTUBE_LIKE' ? (
               // YouTube Like: Show check button instead of proof upload
               <div className="space-y-4">
-                <p className="text-sm text-zinc-400">
+                <p className="text-sm text-sc-muted">
                   1. Open the link above and like the video<br />
                   2. Click the button below to verify your like
                 </p>
@@ -1588,7 +1588,7 @@ function TasksPageInner() {
                     </div>
                     <button
                       onClick={() => setSubmitting(null)}
-                      className="w-full py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium transition-colors"
+                      className="w-full py-2.5 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-sm font-medium transition-colors"
                     >
                       Close
                     </button>
@@ -1603,7 +1603,7 @@ function TasksPageInner() {
                     <button
                       onClick={() => recheckMutation.mutate(submitOffer.id)}
                       disabled={recheckMutation.isPending}
-                      className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {recheckMutation.isPending ? 'Checking...' : 'Check Like'}
                     </button>
@@ -1612,7 +1612,7 @@ function TasksPageInner() {
                   <button
                     onClick={() => recheckMutation.mutate(submitOffer.id)}
                     disabled={recheckMutation.isPending}
-                    className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {recheckMutation.isPending ? 'Checking...' : 'Check Like'}
                   </button>
@@ -1628,7 +1628,7 @@ function TasksPageInner() {
               >
                 {submitOffer.requiresProof && (
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                    <label className="block text-xs font-medium text-sc-muted mb-1.5">
                       Proof screenshot <span className="text-red-400">*</span>
                     </label>
                     
@@ -1646,10 +1646,10 @@ function TasksPageInner() {
                           className="cursor-pointer flex flex-col items-center gap-2"
                         >
                           <div className="w-10 h-10 rounded-lg bg-surface-hover border border-surface-border flex items-center justify-center">
-                            <Upload className="w-5 h-5 text-zinc-500" />
+                            <Upload className="w-5 h-5 text-sc-text" />
                           </div>
-                          <p className="text-sm text-zinc-400">Click to upload screenshot</p>
-                          <p className="text-xs text-zinc-600">PNG, JPG, JPEG, WebP (max 5MB)</p>
+                          <p className="text-sm text-sc-muted">Click to upload screenshot</p>
+                          <p className="text-xs text-sc-dim">PNG, JPG, JPEG, WebP (max 5MB)</p>
                         </label>
                       </div>
                     ) : (
@@ -1665,7 +1665,7 @@ function TasksPageInner() {
                               setUploadedProofHash(null);
                               setUploadError(null);
                             }}
-                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-colors"
+                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-sc-text transition-colors"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -1677,13 +1677,13 @@ function TasksPageInner() {
                           <button
                             type="button"
                             onClick={handleUploadFile}
-                            className="w-full py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+                            className="w-full py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-colors"
                           >
                             Upload Screenshot
                           </button>
                         )}
                         {uploadMutation.isPending && (
-                          <div className="flex items-center justify-center gap-2 py-2 text-sm text-zinc-400">
+                          <div className="flex items-center justify-center gap-2 py-2 text-sm text-sc-muted">
                             <Loader2 className="w-4 h-4 animate-spin" />
                             Uploading...
                           </div>
@@ -1699,18 +1699,18 @@ function TasksPageInner() {
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Notes (optional)</label>
+                  <label className="block text-xs font-medium text-sc-muted mb-1.5">Notes (optional)</label>
                   <textarea
                     {...proofForm.register('notes')}
                     rows={2}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                     placeholder="Any additional info..."
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={submitMutation.isPending || (submitOffer.requiresProof && !uploadedProofUrl)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all"
                 >
                   {submitMutation.isPending ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />

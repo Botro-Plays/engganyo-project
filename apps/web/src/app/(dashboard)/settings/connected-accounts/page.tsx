@@ -68,9 +68,9 @@ const PLATFORMS = [
     id: 'TIKTOK',
     label: 'TikTok',
     icon: Link2,
-    color: 'text-zinc-400',
-    bg: 'bg-zinc-500/10',
-    border: 'border-zinc-500/20',
+    color: 'text-sc-muted',
+    bg: 'bg-sc-soft/10',
+    border: 'border-sc-border/20',
     description: 'TikTok tasks use screenshot proof (TikTok API is highly restricted).',
     inputPlaceholder: '@username or https://tiktok.com/@username',
     supported: false,
@@ -238,8 +238,8 @@ function ConnectedAccountsPageInner() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Connected Accounts</h1>
-        <p className="text-zinc-400 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-sc-text">Connected Accounts</h1>
+        <p className="text-sc-muted text-sm mt-1">
           Link your social accounts to enable API-verified task completions — no screenshots needed.
         </p>
       </div>
@@ -254,12 +254,12 @@ function ConnectedAccountsPageInner() {
             ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
             : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
           <span>{notice.msg}</span>
-          <button onClick={() => setNotice(null)} className="ml-auto text-zinc-500 hover:text-white">✕</button>
+          <button onClick={() => setNotice(null)} className="ml-auto text-sc-dim hover:text-sc-text">✕</button>
         </div>
       )}
 
-      <div className="mb-4 p-4 rounded-xl bg-brand-500/5 border border-brand-500/20 text-sm text-zinc-400">
-        <strong className="text-white">Why connect?</strong> When you link a supported account,
+      <div className="mb-4 p-4 rounded-xl bg-brand-500/5 border border-brand-500/20 text-sm text-sc-muted">
+        <strong className="text-sc-text">Why connect?</strong> When you link a supported account,
         task completions are verified instantly via the platform&apos;s official API — no screenshot required.
         Credits are paid immediately on verified success. If an account isn&apos;t linked, the campaign&apos;s
         default verification mode (auto or manual review) applies instead.
@@ -288,30 +288,30 @@ function ConnectedAccountsPageInner() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-white text-sm">{p.label}</p>
+                      <p className="font-semibold text-sc-text text-sm">{p.label}</p>
                       {linked && (
                         <span className="flex items-center gap-1 text-xs text-green-400">
                           <CheckCircle2 className="w-3 h-3" /> Connected
                         </span>
                       )}
                       {!p.supported && !linked && (
-                        <span className="text-xs text-zinc-600 bg-surface-hover px-2 py-0.5 rounded-full">
+                        <span className="text-xs text-sc-dim bg-surface-hover px-2 py-0.5 rounded-full">
                           Manual link
                         </span>
                       )}
                     </div>
                     {linked ? (
                       <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs text-zinc-400">{linked.platformUsername ?? linked.profileUrl}</p>
+                        <p className="text-xs text-sc-muted">{linked.platformUsername ?? linked.profileUrl}</p>
                         {linked.profileUrl && (
                           <a href={linked.profileUrl} target="_blank" rel="noopener noreferrer"
-                            className="text-zinc-600 hover:text-brand-400 transition-colors">
+                            className="text-sc-dim hover:text-brand-400 transition-colors">
                             <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
                       </div>
                     ) : (
-                      <p className="text-xs text-zinc-500 mt-0.5">{p.description}</p>
+                      <p className="text-xs text-sc-dim mt-0.5">{p.description}</p>
                     )}
                   </div>
 
@@ -353,7 +353,7 @@ function ConnectedAccountsPageInner() {
                       value={manualInputs[p.id] ?? ''}
                       onChange={(e) => setManualInputs((m) => ({ ...m, [p.id]: e.target.value }))}
                       placeholder={(p as { inputPlaceholder: string }).inputPlaceholder}
-                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                     <button
                       onClick={() => {

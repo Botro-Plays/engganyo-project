@@ -43,7 +43,7 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
   },
   TIKTOK: {
     label: 'TikTok',
-    color: 'text-white',
+    color: 'text-sc-text',
     bg: 'bg-white/10',
   },
   INSTAGRAM: {
@@ -324,7 +324,7 @@ export default function ServerConfigPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <AlertCircle className="w-10 h-10 text-red-500/60 mb-3" />
-        <p className="text-zinc-400 text-sm">This page is restricted to Super Admins only.</p>
+        <p className="text-sc-muted text-sm">This page is restricted to Super Admins only.</p>
       </div>
     );
   }
@@ -347,11 +347,11 @@ export default function ServerConfigPage() {
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-xl font-bold text-sc-text flex items-center gap-2">
           <Settings2 className="w-5 h-5 text-amber-400" />
           Server Config
         </h1>
-        <p className="text-zinc-400 text-sm mt-1">
+        <p className="text-sc-muted text-sm mt-1">
           Manage platform settings, OAuth credentials, data exports, and system operations.
         </p>
       </div>
@@ -367,7 +367,7 @@ export default function ServerConfigPage() {
                 ? t.id === 'danger'
                   ? 'border-red-500 text-red-400'
                   : 'border-amber-500 text-amber-300'
-                : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                : 'border-transparent text-sc-dim hover:text-sc-text'
             }`}
           >
             <t.icon className="w-3.5 h-3.5" />
@@ -380,7 +380,7 @@ export default function ServerConfigPage() {
       {tab === 'email' && <SmtpSettingsForm />}
       {tab === 'integrations' && (
         <div>
-          <p className="text-zinc-400 text-sm mb-5">
+          <p className="text-sc-muted text-sm mb-5">
             Enable or disable social platforms for tasks. OAuth platforms also show credential fields.
             Disabling a platform will pause all active campaigns that use it.
           </p>
@@ -405,28 +405,28 @@ export default function ServerConfigPage() {
                           <KeyRound className={`w-4 h-4 ${meta.color}`} />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-white">{meta.label}</p>
+                          <p className="text-sm font-semibold text-sc-text">{meta.label}</p>
                           {cfg.isOAuth && (
                             <div className="flex items-center gap-2 mt-0.5">
                               {cfg.clientId
                                 ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 className="w-3 h-3" /> Client ID set</span>
-                                : <span className="text-xs text-zinc-600">No client ID</span>}
+                                : <span className="text-xs text-sc-dim">No client ID</span>}
                               {cfg.clientSecretSet
                                 ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 className="w-3 h-3" /> Secret set</span>
-                                : <span className="text-xs text-zinc-600">No secret</span>}
+                                : <span className="text-xs text-sc-dim">No secret</span>}
                             </div>
                           )}
                           {!cfg.isOAuth && (
-                            <p className="text-xs text-zinc-600 mt-0.5">Manual link only — no OAuth credentials required</p>
+                            <p className="text-xs text-sc-dim mt-0.5">Manual link only — no OAuth credentials required</p>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500">{edit.enabled ? 'Enabled' : 'Disabled'}</span>
+                        <span className="text-xs text-sc-dim">{edit.enabled ? 'Enabled' : 'Disabled'}</span>
                         <button
                           type="button"
                           onClick={() => setOauthEdits((e) => ({ ...e, [cfg.platform]: { ...(e[cfg.platform] ?? { clientId: cfg.clientId ?? '', clientSecret: '' }), enabled: !edit.enabled } }))}
-                          className={`relative w-9 h-[18px] rounded-full transition-colors ${edit.enabled ? 'bg-green-500' : 'bg-zinc-600'}`}
+                          className={`relative w-9 h-[18px] rounded-full transition-colors ${edit.enabled ? 'bg-green-500' : 'bg-sc-soft'}`}
                         >
                           <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${edit.enabled ? 'translate-x-[18px]' : 'translate-x-0'}`} />
                         </button>
@@ -436,16 +436,16 @@ export default function ServerConfigPage() {
                       <>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                           <div>
-                            <label className="block text-xs text-zinc-500 mb-1">Client ID</label>
+                            <label className="block text-xs text-sc-dim mb-1">Client ID</label>
                             <input
                               value={edit.clientId}
                               onChange={(e) => setOauthEdits((p) => ({ ...p, [cfg.platform]: { ...(p[cfg.platform] ?? { clientSecret: '', enabled: cfg.enabled }), clientId: e.target.value } }))}
                               placeholder="Paste Client ID"
-                              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-zinc-500 mb-1">
+                            <label className="block text-xs text-sc-dim mb-1">
                               Client Secret {cfg.clientSecretSet && <span className="text-green-400">(set — leave blank to keep)</span>}
                             </label>
                             <div className="relative">
@@ -454,16 +454,16 @@ export default function ServerConfigPage() {
                                 value={edit.clientSecret}
                                 onChange={(e) => setOauthEdits((p) => ({ ...p, [cfg.platform]: { ...(p[cfg.platform] ?? { clientId: cfg.clientId ?? '', enabled: cfg.enabled }), clientSecret: e.target.value } }))}
                                 placeholder={cfg.clientSecretSet ? '••••••••••••' : 'Paste Client Secret'}
-                                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 pr-9 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 pr-9 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                               />
-                              <button type="button" onClick={() => setShowSecret((s) => ({ ...s, [cfg.platform]: !s[cfg.platform] }))} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                              <button type="button" onClick={() => setShowSecret((s) => ({ ...s, [cfg.platform]: !s[cfg.platform] }))} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-muted">
                                 {showSecret[cfg.platform] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                               </button>
                             </div>
                           </div>
                         </div>
                         {meta.hint && meta.docsUrl && (
-                          <p className="text-xs text-zinc-600 mb-3">
+                          <p className="text-xs text-sc-dim mb-3">
                             {meta.hint}{' '}
                             <a href={meta.docsUrl} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">Open console ↗</a>
                           </p>
@@ -484,13 +484,13 @@ export default function ServerConfigPage() {
                           oauthSaveMutation.mutate({ platform: cfg.platform, dto });
                         }}
                         disabled={isPending || (!isDirty && !edit.clientSecret)}
-                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-medium transition-all"
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-xs font-medium transition-all"
                       >
                         {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                         Save
                       </button>
                     </div>
-                    {cfg.updatedAt && <p className="text-xs text-zinc-700 mt-2 text-right">Last updated {new Date(cfg.updatedAt).toLocaleString()}</p>}
+                    {cfg.updatedAt && <p className="text-xs text-sc-dim mt-2 text-right">Last updated {new Date(cfg.updatedAt).toLocaleString()}</p>}
                   </div>
                 );
               })}
@@ -502,7 +502,7 @@ export default function ServerConfigPage() {
       {/* ── Tab: Finances ── */}
       {tab === 'finances' && (
         <div>
-          <p className="text-zinc-400 text-sm mb-5">
+          <p className="text-sc-muted text-sm mb-5">
             Configure payment methods, API credentials, webhook secrets, and credit pricing. Credentials are stored encrypted in the database.
           </p>
           {configLoading ? (
@@ -514,7 +514,7 @@ export default function ServerConfigPage() {
                 const sectionMeta = FINANCE_SECTION_META[section];
                 return (
                   <div key={section} className="card-glass rounded-xl p-5 border border-surface-border">
-                    <h3 className="text-sm font-semibold text-white mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-sc-text mb-4 flex items-center justify-between">
                       <span className="flex items-center gap-2">
                         <sectionMeta.icon className={`w-4 h-4 ${sectionMeta.color}`} />
                         {section}
@@ -529,15 +529,15 @@ export default function ServerConfigPage() {
                         return (
                           <div key={key} className="flex items-start justify-between gap-4">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm text-white font-medium">{meta.label}</p>
-                              {meta.hint && <p className="text-xs text-zinc-500 mt-0.5">{meta.hint}</p>}
+                              <p className="text-sm text-sc-text font-medium">{meta.label}</p>
+                              {meta.hint && <p className="text-xs text-sc-dim mt-0.5">{meta.hint}</p>}
                             </div>
                             <div className="shrink-0">
                               {meta.type === 'boolean' ? (
                                 <button
                                   type="button"
                                   onClick={() => setFinanceEdits((e) => ({ ...e, [key]: !currentVal }))}
-                                  className={`relative w-10 h-5 rounded-full transition-colors ${currentVal ? 'bg-green-500' : 'bg-zinc-600'}`}
+                                  className={`relative w-10 h-5 rounded-full transition-colors ${currentVal ? 'bg-green-500' : 'bg-sc-soft'}`}
                                 >
                                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${currentVal ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
@@ -547,7 +547,7 @@ export default function ServerConfigPage() {
                                   min={0}
                                   value={String(currentVal ?? '')}
                                   onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: Number(e.target.value) }))}
-                                  className="w-28 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  className="w-28 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-sc-text text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
                                 />
                               ) : meta.type === 'password' ? (
                                 <div className="relative w-64">
@@ -556,9 +556,9 @@ export default function ServerConfigPage() {
                                     value={String(currentVal ?? '')}
                                     onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: e.target.value }))}
                                     placeholder="Enter secret"
-                                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 pr-8 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 pr-8 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                                   />
-                                  <button type="button" onClick={() => setShowFinanceSecret((s) => ({ ...s, [key]: !s[key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                                  <button type="button" onClick={() => setShowFinanceSecret((s) => ({ ...s, [key]: !s[key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-muted">
                                     {showFinanceSecret[key] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                   </button>
                                 </div>
@@ -566,7 +566,7 @@ export default function ServerConfigPage() {
                                 <select
                                   value={String(currentVal ?? meta.options?.[0])}
                                   onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: e.target.value }))}
-                                  className="w-32 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  className="w-32 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500"
                                 >
                                   {meta.options?.map((opt) => (
                                     <option key={opt} value={opt}>{opt}</option>
@@ -578,7 +578,7 @@ export default function ServerConfigPage() {
                                   value={String(currentVal ?? '')}
                                   onChange={(e) => setFinanceEdits((ed) => ({ ...ed, [key]: e.target.value }))}
                                   placeholder="Enter value"
-                                  className="w-64 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                  className="w-64 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                                 />
                               )}
                             </div>
@@ -601,7 +601,7 @@ export default function ServerConfigPage() {
                 <button
                   onClick={() => financeSaveMutation.mutate(financeEdits)}
                   disabled={financeSaveMutation.isPending || Object.keys(financeEdits).length === 0}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
                 >
                   {financeSaveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Save {Object.keys(financeEdits).length > 0 ? `(${Object.keys(financeEdits).length} changed)` : 'Changes'}
@@ -632,12 +632,12 @@ export default function ServerConfigPage() {
                 const keys = Object.entries(CONFIG_META).filter(([, m]) => m.section === section);
                 return (
                   <div key={section} className="card-glass rounded-xl p-5 border border-surface-border">
-                    <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-sc-text mb-4 flex items-center gap-2">
                       {section === 'reCAPTCHA' && <ShieldOff className="w-4 h-4 text-sky-400" />}
                       {section === 'Platform' && <ToggleLeft className="w-4 h-4 text-amber-400" />}
                       {section === 'Referral' && <Users className="w-4 h-4 text-green-400" />}
                       {section === 'AI Chat' && <MessageSquare className="w-4 h-4 text-brand-400" />}
-                      {section === 'General' && <Settings2 className="w-4 h-4 text-zinc-400" />}
+                      {section === 'General' && <Settings2 className="w-4 h-4 text-sc-muted" />}
                       {section}
                     </h3>
                     <div className="space-y-4">
@@ -647,15 +647,15 @@ export default function ServerConfigPage() {
                         return (
                           <div key={key} className="flex items-start justify-between gap-4">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm text-white font-medium">{meta.label}</p>
-                              <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
+                              <p className="text-sm text-sc-text font-medium">{meta.label}</p>
+                              <p className="text-xs text-sc-dim mt-0.5">{description}</p>
                             </div>
                             <div className="shrink-0">
                               {meta.type === 'boolean' ? (
                                 <button
                                   type="button"
                                   onClick={() => setConfigEdits((e) => ({ ...e, [key]: !currentVal }))}
-                                  className={`relative w-10 h-5 rounded-full transition-colors ${currentVal ? 'bg-green-500' : 'bg-zinc-600'}`}
+                                  className={`relative w-10 h-5 rounded-full transition-colors ${currentVal ? 'bg-green-500' : 'bg-sc-soft'}`}
                                 >
                                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${currentVal ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
@@ -665,7 +665,7 @@ export default function ServerConfigPage() {
                                   min={0}
                                   value={String(currentVal ?? '')}
                                   onChange={(e) => setConfigEdits((ed) => ({ ...ed, [key]: Number(e.target.value) }))}
-                                  className="w-24 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  className="w-24 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-sc-text text-right focus:outline-none focus:ring-1 focus:ring-brand-500"
                                 />
                               ) : meta.type === 'password' ? (
                                 <div className="relative w-64">
@@ -674,9 +674,9 @@ export default function ServerConfigPage() {
                                     value={String(currentVal ?? '')}
                                     onChange={(e) => setConfigEdits((ed) => ({ ...ed, [key]: e.target.value }))}
                                     placeholder="Enter secret key"
-                                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 pr-8 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 pr-8 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                                   />
-                                  <button type="button" onClick={() => setShowConfigSecret((s) => ({ ...s, [key]: !s[key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                                  <button type="button" onClick={() => setShowConfigSecret((s) => ({ ...s, [key]: !s[key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-sc-dim hover:text-sc-muted">
                                     {showConfigSecret[key] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                   </button>
                                 </div>
@@ -684,7 +684,7 @@ export default function ServerConfigPage() {
                                 <select
                                   value={String(currentVal ?? meta.options?.[0])}
                                   onChange={(e) => setConfigEdits((ed) => ({ ...ed, [key]: e.target.value }))}
-                                  className="w-32 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  className="w-32 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-sm text-sc-text focus:outline-none focus:ring-1 focus:ring-brand-500"
                                 >
                                   {meta.options?.map((opt) => (
                                     <option key={opt} value={opt}>{opt}</option>
@@ -696,7 +696,7 @@ export default function ServerConfigPage() {
                                   value={String(currentVal ?? '')}
                                   onChange={(e) => setConfigEdits((ed) => ({ ...ed, [key]: e.target.value }))}
                                   placeholder="Enter value"
-                                  className="w-64 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
+                                  className="w-64 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-brand-500 font-mono"
                                 />
                               )}
                             </div>
@@ -721,7 +721,7 @@ export default function ServerConfigPage() {
                 <button
                   onClick={() => configSaveMutation.mutate(configEdits)}
                   disabled={configSaveMutation.isPending || Object.keys(configEdits).length === 0}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium transition-all"
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-sc-text text-sm font-medium transition-all"
                 >
                   {configSaveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Save {Object.keys(configEdits).length > 0 ? `(${Object.keys(configEdits).length} changed)` : 'Changes'}
@@ -732,7 +732,7 @@ export default function ServerConfigPage() {
               <div className="px-4 py-3 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-sky-300/80">
-                  <span className="font-semibold text-sky-300">reCAPTCHA note:</span> Saving keys here stores them in the database. To activate enforcement on login/register endpoints, the auth service must also be configured to read from platform config. Keys set here take precedence over <code className="bg-zinc-800 px-1 rounded">.env</code> values.
+                  <span className="font-semibold text-sky-300">reCAPTCHA note:</span> Saving keys here stores them in the database. To activate enforcement on login/register endpoints, the auth service must also be configured to read from platform config. Keys set here take precedence over <code className="bg-sc-panel-2 px-1 rounded">.env</code> values.
                 </p>
               </div>
             </div>
@@ -743,7 +743,7 @@ export default function ServerConfigPage() {
       {/* ── Tab: Data Export ── */}
       {tab === 'export' && (
         <div>
-          <p className="text-zinc-400 text-sm mb-5">
+          <p className="text-sc-muted text-sm mb-5">
             Download any database table as a CSV file. All exports include only non-sensitive fields.
           </p>
           {exportError && (
@@ -760,14 +760,14 @@ export default function ServerConfigPage() {
                     <t.icon className="w-4 h-4 text-brand-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white">{t.label}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{t.description}</p>
+                    <p className="text-sm font-semibold text-sc-text">{t.label}</p>
+                    <p className="text-xs text-sc-dim mt-0.5">{t.description}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => void handleExport(t.key, `${t.key}.csv`)}
                   disabled={exportLoading === t.key}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-xs font-medium transition-all"
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sc-panel-2 hover:bg-sc-soft disabled:opacity-50 text-sc-text text-xs font-medium transition-all"
                 >
                   {exportLoading === t.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   CSV
@@ -776,9 +776,9 @@ export default function ServerConfigPage() {
             ))}
           </div>
 
-          <div className="mt-4 px-4 py-3 rounded-lg bg-zinc-800/50 border border-surface-border">
-            <p className="text-xs text-zinc-500">
-              <span className="text-zinc-400 font-medium">Note:</span> Exports are generated on-demand and may take a few seconds for large datasets. Password hashes, refresh tokens, and OAuth secrets are never included.
+          <div className="mt-4 px-4 py-3 rounded-lg bg-sc-panel-2/50 border border-surface-border">
+            <p className="text-xs text-sc-dim">
+              <span className="text-sc-muted font-medium">Note:</span> Exports are generated on-demand and may take a few seconds for large datasets. Password hashes, refresh tokens, and OAuth secrets are never included.
             </p>
           </div>
         </div>
@@ -802,8 +802,8 @@ export default function ServerConfigPage() {
                   <ScrollText className="w-4 h-4 text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Clear Audit Logs</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Permanently delete all audit log entries. A single record of this action will be kept.</p>
+                  <p className="text-sm font-semibold text-sc-text">Clear Audit Logs</p>
+                  <p className="text-xs text-sc-dim mt-0.5">Permanently delete all audit log entries. A single record of this action will be kept.</p>
                 </div>
               </div>
               <button
@@ -834,12 +834,12 @@ export default function ServerConfigPage() {
                   <RotateCcw className="w-4 h-4 text-red-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">Reset Database</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-sm font-semibold text-sc-text">Reset Database</p>
+                  <p className="text-xs text-sc-dim mt-0.5">
                     Delete <span className="text-red-400 font-medium">all data</span> — users, campaigns, tasks, transactions, reports, analytics —
                     except SUPER_ADMIN accounts. SUPER_ADMIN wallets will be reset to the configured welcome credits.
                   </p>
-                  <ul className="mt-2 space-y-0.5 text-xs text-zinc-600">
+                  <ul className="mt-2 space-y-0.5 text-xs text-sc-dim">
                     <li>• All regular users and their data are permanently deleted</li>
                     <li>• All campaigns, completions, and transactions are purged</li>
                     <li>• Analytics snapshots and audit logs are cleared</li>
@@ -876,9 +876,9 @@ export default function ServerConfigPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <RotateCcw className="w-5 h-5 text-red-400" />
-                <h2 className="text-base font-semibold text-white">Confirm Database Reset</h2>
+                <h2 className="text-base font-semibold text-sc-text">Confirm Database Reset</h2>
               </div>
-              <button onClick={() => { setShowResetModal(false); setResetConfirm(''); }} className="text-zinc-500 hover:text-white">
+              <button onClick={() => { setShowResetModal(false); setResetConfirm(''); }} className="text-sc-dim hover:text-sc-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -890,28 +890,28 @@ export default function ServerConfigPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+              <label className="block text-xs font-medium text-sc-muted mb-1.5">
                 Type <span className="text-red-400 font-mono font-bold">RESET</span> to confirm
               </label>
               <input
                 value={resetConfirm}
                 onChange={(e) => setResetConfirm(e.target.value)}
                 placeholder="RESET"
-                className="w-full bg-surface-hover border border-red-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+                className="w-full bg-surface-hover border border-red-500/30 rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
               />
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowResetModal(false); setResetConfirm(''); }}
-                className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors"
+                className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => resetMutation.mutate()}
                 disabled={resetConfirm !== 'RESET' || resetMutation.isPending}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all"
               >
                 {resetMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                 Reset Database

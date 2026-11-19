@@ -31,13 +31,13 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
   return (
     <div className="card-glass rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs text-zinc-500">{label}</p>
+        <p className="text-xs text-sc-dim">{label}</p>
         <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center`}>
-          <Icon className="w-4 h-4 text-white" />
+          <Icon className="w-4 h-4 text-sc-text" />
         </div>
       </div>
-      <p className="text-2xl font-bold text-white">{value.toLocaleString()}</p>
-      {sub && <p className="text-xs text-zinc-500 mt-0.5">{sub}</p>}
+      <p className="text-2xl font-bold text-sc-text">{value.toLocaleString()}</p>
+      {sub && <p className="text-xs text-sc-dim mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -65,8 +65,8 @@ export default function AdminAnalyticsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">Platform Analytics</h1>
-          <p className="text-sm text-zinc-400">Overview of platform activity and growth</p>
+          <h1 className="text-xl font-bold text-sc-text">Platform Analytics</h1>
+          <p className="text-sm text-sc-muted">Overview of platform activity and growth</p>
         </div>
         <div className="flex gap-1 bg-surface-hover rounded-lg p-1">
           {RANGE_OPTIONS.map((opt) => (
@@ -75,8 +75,8 @@ export default function AdminAnalyticsPage() {
               onClick={() => setDays(opt.value)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 days === opt.value
-                  ? 'bg-brand-500 text-white'
-                  : 'text-zinc-400 hover:text-white'
+                  ? 'bg-brand-500 text-sc-text'
+                  : 'text-sc-muted hover:text-sc-text'
               }`}
             >
               {opt.label}
@@ -107,9 +107,9 @@ export default function AdminAnalyticsPage() {
 
       {/* User growth chart */}
       <div className="card-glass rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-white mb-4">User Growth &amp; Daily Active Users</h2>
+        <h2 className="text-sm font-semibold text-sc-text mb-4">User Growth &amp; Daily Active Users</h2>
         {chartData.length === 0 ? (
-          <div className="h-[220px] flex items-center justify-center text-zinc-500 text-sm">
+          <div className="h-[220px] flex items-center justify-center text-sc-dim text-sm">
             No activity data for the selected period
           </div>
         ) : (
@@ -140,9 +140,9 @@ export default function AdminAnalyticsPage() {
       {/* Task volume + Credits */}
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="card-glass rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-white mb-4">Task Volume</h2>
+          <h2 className="text-sm font-semibold text-sc-text mb-4">Task Volume</h2>
           {chartData.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-zinc-500 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-sc-dim text-sm">
               No activity data for the selected period
             </div>
           ) : (
@@ -159,11 +159,11 @@ export default function AdminAnalyticsPage() {
         </div>
 
         <div className="card-glass rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-sc-text mb-4 flex items-center gap-2">
             <Coins className="w-4 h-4 text-yellow-400" /> Credits Issued Daily
           </h2>
           {chartData.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-zinc-500 text-sm">
+            <div className="h-[200px] flex items-center justify-center text-sc-dim text-sm">
               No activity data for the selected period
             </div>
           ) : (

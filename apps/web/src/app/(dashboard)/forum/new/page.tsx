@@ -80,14 +80,14 @@ export default function NewTopicPage() {
     <div className="max-w-3xl mx-auto">
       <Link
         href="/forum"
-        className="inline-flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors"
+        className="inline-flex items-center gap-2 text-sc-muted hover:text-sc-text mb-6 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Forum
       </Link>
 
       <div className="card-glass rounded-xl p-6">
-        <h1 className="text-2xl font-bold text-white mb-6">Create New Topic</h1>
+        <h1 className="text-2xl font-bold text-sc-text mb-6">Create New Topic</h1>
 
         {error && (
           <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
@@ -97,23 +97,23 @@ export default function NewTopicPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">Title</label>
+            <label className="block text-sm font-medium text-sc-text mb-2">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="What's your topic about?"
-              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text placeholder-sc-dim focus:outline-none focus:border-indigo-500"
               maxLength={200}
               required
             />
-            <p className={`text-xs mt-1 ${title.length < 5 ? 'text-red-400' : 'text-zinc-500'}`}>
+            <p className={`text-xs mt-1 ${title.length < 5 ? 'text-red-400' : 'text-sc-dim'}`}>
               {title.length}/200 characters (minimum 5)
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">Content</label>
+            <label className="block text-sm font-medium text-sc-text mb-2">Content</label>
             <MentionTextarea
               value={content}
               onChange={setContent}
@@ -123,7 +123,7 @@ export default function NewTopicPage() {
               rows={10}
               className="focus:outline-none focus:border-indigo-500"
             />
-            <p className={`text-xs mt-1 ${content.length < 10 ? 'text-red-400' : 'text-zinc-500'}`}>
+            <p className={`text-xs mt-1 ${content.length < 10 ? 'text-red-400' : 'text-sc-dim'}`}>
               {content.length}/10000 characters (minimum 10)
             </p>
           </div>
@@ -132,7 +132,7 @@ export default function NewTopicPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || title.trim().length < 5 || content.trim().length < 10}
-              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text rounded-lg transition-colors"
             >
               <Send className="w-4 h-4" />
               {createMutation.isPending ? 'Creating...' : 'Create Topic'}

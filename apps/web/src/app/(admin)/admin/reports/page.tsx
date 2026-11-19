@@ -66,8 +66,8 @@ export default function AdminReportsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Reports Queue</h1>
-        <p className="text-zinc-400 text-sm mt-1">Resolve or dismiss user reports.</p>
+        <h1 className="text-2xl font-bold text-sc-text">Reports Queue</h1>
+        <p className="text-sc-muted text-sm mt-1">Resolve or dismiss user reports.</p>
       </div>
 
       {/* Status filter tabs */}
@@ -75,13 +75,13 @@ export default function AdminReportsPage() {
         {[
           { key: 'OPEN', label: 'Pending', color: 'text-amber-400 border-amber-500' },
           { key: 'RESOLVED', label: 'Resolved', color: 'text-green-400 border-green-500' },
-          { key: 'DISMISSED', label: 'Dismissed', color: 'text-zinc-400 border-zinc-500' },
+          { key: 'DISMISSED', label: 'Dismissed', color: 'text-sc-muted border-sc-border' },
         ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => { setStatusFilter(tab.key); setPage(1); }}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-all ${
-              statusFilter === tab.key ? `${tab.color}` : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              statusFilter === tab.key ? `${tab.color}` : 'border-transparent text-sc-dim hover:text-sc-text'
             }`}
           >
             {tab.label}
@@ -100,8 +100,8 @@ export default function AdminReportsPage() {
       ) : !data?.items.length ? (
         <div className="card-glass rounded-2xl p-12 text-center">
           <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
-          <p className="text-white font-medium mb-1">All clear!</p>
-          <p className="text-zinc-500 text-sm">No {statusFilter.toLowerCase()} reports.</p>
+          <p className="text-sc-text font-medium mb-1">All clear!</p>
+          <p className="text-sc-dim text-sm">No {statusFilter.toLowerCase()} reports.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -113,26 +113,26 @@ export default function AdminReportsPage() {
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-medium">
                       {REASON_LABELS[r.reason] ?? r.reason}
                     </span>
-                    <span className="text-xs text-zinc-600">{formatRelativeTime(r.createdAt)}</span>
+                    <span className="text-xs text-sc-dim">{formatRelativeTime(r.createdAt)}</span>
                   </div>
-                  <p className="text-xs text-zinc-500 flex items-center gap-1 flex-wrap">
+                  <p className="text-xs text-sc-dim flex items-center gap-1 flex-wrap">
                     By <UserLink user={r.submittedBy} showAvatar={false} />
                     {r.targetUser && <> · Target: <UserLink user={r.targetUser} showAvatar={false} /></>}
-                    {r.campaign && <> · Campaign: <span className="text-zinc-300">{r.campaign.title}</span></>}
-                    {r.topic && <> · Topic: <span className="text-zinc-300">{r.topic.title}</span></>}
+                    {r.campaign && <> · Campaign: <span className="text-sc-text">{r.campaign.title}</span></>}
+                    {r.topic && <> · Topic: <span className="text-sc-text">{r.topic.title}</span></>}
                     {r.reply && <> · Reply</>}
                     {r.message && (
                       <>
                         {' · '}
                         <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">Chat</span>
-                        <span className="text-zinc-400 ml-1 truncate max-w-[200px] inline-block align-bottom">{r.message.content}</span>
+                        <span className="text-sc-muted ml-1 truncate max-w-[200px] inline-block align-bottom">{r.message.content}</span>
                       </>
                     )}
                   </p>
                 </div>
               </div>
 
-              <p className="text-sm text-zinc-400 mb-3 leading-relaxed">{r.description}</p>
+              <p className="text-sm text-sc-muted mb-3 leading-relaxed">{r.description}</p>
 
               <div className="flex gap-2 items-center flex-wrap">
                 {r.status === 'OPEN' ? (
@@ -141,7 +141,7 @@ export default function AdminReportsPage() {
                       value={notes[r.id] ?? ''}
                       onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
                       placeholder="Admin notes (optional)..."
-                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+                      className="flex-1 bg-surface-hover border border-surface-border rounded-lg px-3 py-1.5 text-xs text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-red-500"
                     />
                     {r.targetUser && (
                       <div className="relative">
@@ -165,7 +165,7 @@ export default function AdminReportsPage() {
                                 resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'WARN' });
                               }}
                               disabled={resolveMutation.isPending}
-                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-amber-500/20 disabled:opacity-50"
+                              className="w-full text-left px-3 py-1.5 text-xs text-sc-text hover:bg-amber-500/20 disabled:opacity-50"
                             >
                               Warn
                             </button>
@@ -181,7 +181,7 @@ export default function AdminReportsPage() {
                                   });
                                 }}
                                 disabled={resolveMutation.isPending}
-                                className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-white hover:bg-orange-500/20 disabled:opacity-50"
+                                className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-sc-text hover:bg-orange-500/20 disabled:opacity-50"
                               >
                                 Deduct Trust
                                 <ChevronRight className="w-3 h-3" />
@@ -197,7 +197,7 @@ export default function AdminReportsPage() {
                                         resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'DEDUCT_TRUST', deductionAmount: v });
                                       }}
                                       disabled={resolveMutation.isPending}
-                                      className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-orange-500/20 disabled:opacity-50"
+                                      className="w-full text-left px-3 py-1.5 text-xs text-sc-text hover:bg-orange-500/20 disabled:opacity-50"
                                     >
                                       {v} pts
                                     </button>
@@ -211,7 +211,7 @@ export default function AdminReportsPage() {
                                 resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'SUSPEND' });
                               }}
                               disabled={resolveMutation.isPending}
-                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-yellow-500/20 disabled:opacity-50"
+                              className="w-full text-left px-3 py-1.5 text-xs text-sc-text hover:bg-yellow-500/20 disabled:opacity-50"
                             >
                               Suspend
                             </button>
@@ -221,7 +221,7 @@ export default function AdminReportsPage() {
                                 resolveMutation.mutate({ id: r.id, status: 'RESOLVED', action: 'BAN' });
                               }}
                               disabled={resolveMutation.isPending}
-                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-red-500/20 disabled:opacity-50"
+                              className="w-full text-left px-3 py-1.5 text-xs text-sc-text hover:bg-red-500/20 disabled:opacity-50"
                             >
                               Ban
                             </button>
@@ -232,7 +232,7 @@ export default function AdminReportsPage() {
                                 resolveMutation.mutate({ id: r.id, status: 'RESOLVED' });
                               }}
                               disabled={resolveMutation.isPending}
-                              className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-green-500/20 disabled:opacity-50"
+                              className="w-full text-left px-3 py-1.5 text-xs text-sc-text hover:bg-green-500/20 disabled:opacity-50"
                             >
                               Resolve only
                             </button>
@@ -252,14 +252,14 @@ export default function AdminReportsPage() {
                     <button
                       onClick={() => resolveMutation.mutate({ id: r.id, status: 'DISMISSED' })}
                       disabled={resolveMutation.isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 text-xs font-medium disabled:opacity-50 transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sc-soft/10 text-sc-muted hover:bg-sc-soft/20 text-xs font-medium disabled:opacity-50 transition-all"
                     >
                       <XCircle className="w-3.5 h-3.5" /> Dismiss
                     </button>
                   </>
                 ) : (
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                    r.status === 'RESOLVED' ? 'bg-green-500/10 text-green-400' : 'bg-zinc-500/10 text-zinc-400'
+                    r.status === 'RESOLVED' ? 'bg-green-500/10 text-green-400' : 'bg-sc-soft/10 text-sc-muted'
                   }`}>
                     {r.status}
                   </span>
@@ -271,7 +271,7 @@ export default function AdminReportsPage() {
       )}
 
       {(data?.meta.totalPages ?? 0) > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm text-zinc-500">
+        <div className="flex items-center justify-between mt-4 text-sm text-sc-dim">
           <span>{data?.meta.total} open reports</span>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1} className="p-1 rounded hover:bg-surface-hover disabled:opacity-40">

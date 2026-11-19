@@ -66,12 +66,12 @@ function SearchContent() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-sc-text flex items-center gap-2">
           <Search className="w-6 h-6" />
           Search
         </h1>
         {q && (
-          <p className="text-zinc-400 text-sm mt-1">
+          <p className="text-sc-muted text-sm mt-1">
             Results for &ldquo;{q}&rdquo; — {total} found
           </p>
         )}
@@ -79,17 +79,17 @@ function SearchContent() {
 
       {!q || q.trim().length < 2 ? (
         <div className="card-glass rounded-2xl p-12 text-center">
-          <Search className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-          <p className="text-white font-medium mb-1">Start typing to search</p>
-          <p className="text-zinc-500 text-sm">Search users, campaigns, and forum topics.</p>
+          <Search className="w-12 h-12 text-sc-dim mx-auto mb-4" />
+          <p className="text-sc-text font-medium mb-1">Start typing to search</p>
+          <p className="text-sc-dim text-sm">Search users, campaigns, and forum topics.</p>
         </div>
       ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+          <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
         </div>
       ) : total === 0 ? (
         <div className="card-glass rounded-2xl p-12 text-center">
-          <p className="text-zinc-500 text-sm">No results found for &ldquo;{q}&rdquo;</p>
+          <p className="text-sc-dim text-sm">No results found for &ldquo;{q}&rdquo;</p>
         </div>
       ) : (
         <>
@@ -107,7 +107,7 @@ function SearchContent() {
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  tab === t.key ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-white'
+                  tab === t.key ? 'bg-sc-panel-2 text-sc-text' : 'text-sc-dim hover:text-sc-text'
                 }`}
               >
                 {t.label}
@@ -120,7 +120,7 @@ function SearchContent() {
               <div key={u.id} className="card-glass rounded-xl p-4">
                 <div className="flex items-center gap-3">
                   <UserLink user={u} cosmetics={cosmeticsMap[u.id]} />
-                  <span className="text-xs text-zinc-500 ml-auto">Lvl {u.level} · {u.xp.toLocaleString()} XP</span>
+                  <span className="text-xs text-sc-dim ml-auto">Lvl {u.level} · {u.xp.toLocaleString()} XP</span>
                 </div>
               </div>
             ))}
@@ -133,18 +133,18 @@ function SearchContent() {
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Megaphone className="w-4 h-4 text-brand-400" />
-                  <span className="text-sm font-medium text-white">{c.title}</span>
+                  <span className="text-sm font-medium text-sc-text">{c.title}</span>
                   {c.isPlatformTask ? (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-300 border border-brand-500/20">
                       Platform
                     </span>
                   ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-400 border border-zinc-600">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sc-panel-2 text-sc-muted border border-sc-line">
                       Community
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-sc-dim">
                   by {c.user.displayName ?? c.user.username} · {c.completedSlots}/{c.totalSlots} done · {c.creditPerTask} {creditLabel(c.creditPerTask)}/task
                 </p>
               </Link>
@@ -158,14 +158,14 @@ function SearchContent() {
               >
                 <div className="flex items-center gap-2 mb-1">
                   <MessageSquare className="w-4 h-4 text-indigo-400" />
-                  <span className="text-sm font-medium text-white">{t.title}</span>
+                  <span className="text-sm font-medium text-sc-text">{t.title}</span>
                   {t.isPinned && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
                       Pinned
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-sc-dim">
                   by {t.author.displayName ?? t.author.username} · {t.replyCount} replies
                 </p>
               </Link>
@@ -181,7 +181,7 @@ export default function SearchPage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-sc-dim" />
       </div>
     }>
       <SearchContent />

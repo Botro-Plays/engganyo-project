@@ -43,10 +43,10 @@ export function CookieConsentBanner() {
           <div className="flex items-start gap-3">
             <Cookie className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" />
             <div>
-              <p className="text-sm font-medium text-white">
+              <p className="text-sm font-medium text-sc-text">
                 We use cookies
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-400 max-w-xl">
+              <p className="mt-1 text-xs leading-relaxed text-sc-muted max-w-xl">
                 This site uses cookies to keep you signed in, analyze traffic, and improve your experience.{' '}
                 <Link
                   href="/privacy"
@@ -62,14 +62,14 @@ export function CookieConsentBanner() {
             <button
               type="button"
               onClick={() => handleChoice('essential')}
-              className="rounded-md border border-[#1e2740] bg-transparent px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:bg-[#1a2035] hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#161b2e]"
+              className="rounded-md border border-[#1e2740] bg-transparent px-4 py-2 text-xs font-medium text-sc-text transition-colors hover:bg-[#1a2035] hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#161b2e]"
             >
               Essential Only
             </button>
             <button
               type="button"
               onClick={() => handleChoice('all')}
-              className="rounded-md bg-brand-500 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#161b2e]"
+              className="rounded-md bg-brand-500 px-4 py-2 text-xs font-medium text-sc-text transition-colors hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#161b2e]"
             >
               Accept All
             </button>
@@ -104,10 +104,10 @@ export function CookieConsentSettings() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium text-white">Cookie Preferences</h3>
-          <p className="mt-1 text-xs text-zinc-400">
+          <h3 className="text-sm font-medium text-sc-text">Cookie Preferences</h3>
+          <p className="mt-1 text-xs text-sc-muted">
             Your current choice:{' '}
-            <span className="font-medium text-zinc-300">
+            <span className="font-medium text-sc-text">
               {choice === 'all' && 'Accept All'}
               {choice === 'essential' && 'Essential Only'}
               {choice === null && 'Not set'}
@@ -117,12 +117,12 @@ export function CookieConsentSettings() {
         <button
           type="button"
           onClick={handleReset}
-          className="rounded-md border border-[#1e2740] bg-transparent px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-[#1a2035] hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0f1117]"
+          className="rounded-md border border-[#1e2740] bg-transparent px-3 py-1.5 text-xs font-medium text-sc-text transition-colors hover:bg-[#1a2035] hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0f1117]"
         >
           Reset Choice
         </button>
       </div>
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-sc-dim">
         Resetting will show the banner again on your next visit.
       </p>
     </div>

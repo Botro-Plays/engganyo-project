@@ -212,13 +212,13 @@ export function MentionTextarea({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={rows}
-        className={`w-full bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 resize-none ${className}`}
+        className={`w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text placeholder-sc-dim focus:outline-none focus:border-indigo-500 resize-none ${className}`}
       />
       
       {showSuggestions && currentCount > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute z-10 w-full mt-1 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          className="absolute z-10 w-full mt-1 bg-sc-panel-2 border border-sc-line rounded-lg shadow-lg max-h-60 overflow-y-auto"
         >
           {mentionType === 'campaign' ? (
             filteredCampaigns.map((campaign, index) => (
@@ -226,18 +226,18 @@ export function MentionTextarea({
                 key={campaign.id}
                 type="button"
                 onClick={() => selectCampaign(campaign)}
-                className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-zinc-700 transition-colors ${
-                  index === selectedIndex ? 'bg-zinc-700' : ''
+                className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-sc-panel-2 transition-colors ${
+                  index === selectedIndex ? 'bg-sc-panel-2' : ''
                 }`}
               >
                 <Megaphone className={`w-4 h-4 ${
                   campaign.status === 'ACTIVE' || campaign.status === 'PENDING_REVIEW'
                     ? 'text-green-400'
-                    : 'text-zinc-400'
+                    : 'text-sc-muted'
                 }`} />
                 <div className="flex-1">
-                  <div className="text-white text-sm">{campaign.title}</div>
-                  <div className="text-zinc-500 text-xs">{campaign.status}</div>
+                  <div className="text-sc-text text-sm">{campaign.title}</div>
+                  <div className="text-sc-dim text-xs">{campaign.status}</div>
                 </div>
               </button>
             ))
@@ -247,15 +247,15 @@ export function MentionTextarea({
                 key={user.id}
                 type="button"
                 onClick={() => selectUser(user)}
-                className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-zinc-700 transition-colors ${
-                  index === selectedIndex ? 'bg-zinc-700' : ''
+                className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-sc-panel-2 transition-colors ${
+                  index === selectedIndex ? 'bg-sc-panel-2' : ''
                 }`}
               >
                 <User className="w-4 h-4 text-indigo-400" />
                 <div className="flex-1">
-                  <div className="text-white text-sm">@{user.username}</div>
+                  <div className="text-sc-text text-sm">@{user.username}</div>
                   {user.displayName && (
-                    <div className="text-zinc-500 text-xs">{user.displayName}</div>
+                    <div className="text-sc-dim text-xs">{user.displayName}</div>
                   )}
                 </div>
               </button>

@@ -74,8 +74,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   PAUSED:         { label: 'Paused',          color: 'text-yellow-400', bg: 'bg-yellow-500/10', icon: Pause },
   COMPLETED:      { label: 'Completed',       color: 'text-sky-400',    bg: 'bg-sky-500/10',    icon: CheckCircle2 },
   CANCELLED:      { label: 'Cancelled',       color: 'text-red-400',    bg: 'bg-red-500/10',    icon: Ban },
-  PENDING_REVIEW: { label: 'Under review',    color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   icon: Clock },
-  DRAFT:          { label: 'Draft',           color: 'text-zinc-400',   bg: 'bg-zinc-500/10',   icon: AlertCircle },
+  PENDING_REVIEW: { label: 'Under review',    color: 'text-sc-muted',   bg: 'bg-sc-soft/10',   icon: Clock },
+  DRAFT:          { label: 'Draft',           color: 'text-sc-muted',   bg: 'bg-sc-soft/10',   icon: AlertCircle },
   REJECTED:       { label: 'Rejected',        color: 'text-red-400',    bg: 'bg-red-500/10',    icon: X },
 };
 
@@ -347,8 +347,8 @@ export default function CampaignsPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Campaigns</h1>
-          <p className="text-zinc-400 text-sm mt-1">Promote your content by creating engagement campaigns.</p>
+          <h1 className="text-2xl font-bold text-sc-text">Campaigns</h1>
+          <p className="text-sc-muted text-sm mt-1">Promote your content by creating engagement campaigns.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -360,7 +360,7 @@ export default function CampaignsPage() {
           </button>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all"
           >
             <Plus className="w-4 h-4" />
             New campaign
@@ -377,8 +377,8 @@ export default function CampaignsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-lg card-glass rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-white">Create Campaign</h2>
-              <button onClick={() => { setShowCreate(false); setShowCountryPicker(false); setCountrySearch(''); }} className="text-zinc-500 hover:text-white transition-colors">
+              <h2 className="text-lg font-semibold text-sc-text">Create Campaign</h2>
+              <button onClick={() => { setShowCreate(false); setShowCountryPicker(false); setCountrySearch(''); }} className="text-sc-dim hover:text-sc-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -391,10 +391,10 @@ export default function CampaignsPage() {
 
             <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Campaign title</label>
+                <label className="block text-xs font-medium text-sc-muted mb-1.5">Campaign title</label>
                 <input
                   {...form.register('title')}
-                  className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
                   placeholder="Subscribe to my YouTube channel"
                 />
                 {form.formState.errors.title && (
@@ -404,7 +404,7 @@ export default function CampaignsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Task type</label>
+                  <label className="block text-xs font-medium text-sc-muted mb-1.5">Task type</label>
                   <PlatformSelect
                     id="taskType"
                     options={TASK_TYPES.map((t) => ({
@@ -419,13 +419,13 @@ export default function CampaignsPage() {
                   {form.formState.errors.taskType && (
                     <p className="text-xs text-red-400 mt-1">{form.formState.errors.taskType.message}</p>
                   )}
-                  <p className="text-[10px] text-zinc-600 mt-1">YouTube engagement tasks are disabled for platform-policy compliance.</p>
+                  <p className="text-[10px] text-sc-dim mt-1">YouTube engagement tasks are disabled for platform-policy compliance.</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Target URL</label>
+                  <label className="block text-xs font-medium text-sc-muted mb-1.5">Target URL</label>
                   <input
                     {...form.register('targetUrl')}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
                     placeholder="https://youtube.com/@you"
                   />
                   {form.formState.errors.targetUrl && (
@@ -436,24 +436,24 @@ export default function CampaignsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Total slots</label>
+                  <label className="block text-xs font-medium text-sc-muted mb-1.5">Total slots</label>
                   <input
                     {...form.register('totalSlots')}
                     type="number"
                     min={1}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   {form.formState.errors.totalSlots && (
                     <p className="text-xs text-red-400 mt-1">{form.formState.errors.totalSlots.message}</p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">Credits per task</label>
+                  <label className="block text-xs font-medium text-sc-muted mb-1.5">Credits per task</label>
                   <input
                     {...form.register('creditPerTask')}
                     type="number"
                     min={10}
-                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500"
                   />
                   {form.formState.errors.creditPerTask && (
                     <p className="text-xs text-red-400 mt-1">{form.formState.errors.creditPerTask.message}</p>
@@ -464,11 +464,11 @@ export default function CampaignsPage() {
               {/* Cost breakdown */}
               <div className="px-4 py-3 rounded-lg bg-surface-hover border border-surface-border space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500">Campaign budget (pool)</span>
-                  <span className="text-sm font-medium text-zinc-300">{formatCredits(totalCost)} {creditLabel(totalCost)}</span>
+                  <span className="text-xs text-sc-dim">Campaign budget (pool)</span>
+                  <span className="text-sm font-medium text-sc-text">{formatCredits(totalCost)} {creditLabel(totalCost)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-sc-dim">
                     Platform fee ({Math.round(feeRate * 100)}%)
                     {publicConfig?.feePromoEnabled && new Date(publicConfig.feePromoUntil) > new Date() && (
                       <span className="ml-1 text-[10px] text-green-400">PROMO</span>
@@ -477,10 +477,10 @@ export default function CampaignsPage() {
                       <span className="ml-1 text-[10px] text-purple-400">VIP -{authUser.vipTier.perks.feeDiscountPercent}%</span>
                     )}
                   </span>
-                  <span className="text-sm font-medium text-zinc-300">{formatCredits(feeAmount)} {creditLabel(feeAmount)}</span>
+                  <span className="text-sm font-medium text-sc-text">{formatCredits(feeAmount)} {creditLabel(feeAmount)}</span>
                 </div>
                 <div className="border-t border-surface-border pt-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-white">Total to deduct</span>
+                  <span className="text-xs font-medium text-sc-text">Total to deduct</span>
                   <span className="text-sm font-bold text-brand-300">{formatCredits(totalDebit)} {creditLabel(totalDebit)}</span>
                 </div>
                 {totalCost > 0 && totalCost < minBudget && (
@@ -495,11 +495,11 @@ export default function CampaignsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">Proof instructions (optional)</label>
+                <label className="block text-xs font-medium text-sc-muted mb-1.5">Proof instructions (optional)</label>
                 <textarea
                   {...form.register('proofInstructions')}
                   rows={2}
-                  className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                  className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                   placeholder="e.g. Take a screenshot showing you subscribed."
                 />
               </div>
@@ -507,18 +507,18 @@ export default function CampaignsPage() {
               {/* ── Geo filter ── */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-zinc-400">Target countries</label>
-                  <span className="text-xs text-zinc-600">Leave empty for worldwide</span>
+                  <label className="text-xs font-medium text-sc-muted">Target countries</label>
+                  <span className="text-xs text-sc-dim">Leave empty for worldwide</span>
                 </div>
                 {selectedCountries.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {selectedCountries.map((code) => (
                       <span key={code} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-300 border border-brand-500/20">
-                        {COUNTRIES[code] ?? code} <span className="text-zinc-500">{code}</span>
+                        {COUNTRIES[code] ?? code} <span className="text-sc-dim">{code}</span>
                         <button
                           type="button"
                           onClick={() => setSelectedCountries((prev) => prev.filter((c) => c !== code))}
-                          className="text-zinc-500 hover:text-white ml-0.5"
+                          className="text-sc-dim hover:text-sc-text ml-0.5"
                         >
                           <X className="w-2.5 h-2.5" />
                         </button>
@@ -529,7 +529,7 @@ export default function CampaignsPage() {
                 <button
                   type="button"
                   onClick={() => setShowCountryPicker((v) => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-sm text-zinc-400 hover:text-white transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-surface-hover border border-surface-border text-sm text-sc-muted hover:text-sc-text transition-colors"
                 >
                   <span>{selectedCountries.length > 0 ? `${selectedCountries.length} countr${selectedCountries.length === 1 ? 'y' : 'ies'} selected` : 'All countries (worldwide)'}</span>
                   <Globe className="w-3.5 h-3.5" />
@@ -541,7 +541,7 @@ export default function CampaignsPage() {
                       value={countrySearch}
                       onChange={(e) => setCountrySearch(e.target.value)}
                       placeholder="Search countries..."
-                      className="w-full px-3 py-2 text-sm text-white bg-transparent border-b border-surface-border placeholder-zinc-600 focus:outline-none"
+                      className="w-full px-3 py-2 text-sm text-sc-text bg-transparent border-b border-surface-border placeholder-sc-dim focus:outline-none"
                     />
                     <div className="max-h-44 overflow-y-auto">
                       {Object.entries(COUNTRIES)
@@ -550,7 +550,7 @@ export default function CampaignsPage() {
                           code.toLowerCase().includes(countrySearch.toLowerCase())
                         )
                         .map(([code, name]) => (
-                          <label key={code} className="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-700/50 cursor-pointer">
+                          <label key={code} className="flex items-center gap-2 px-3 py-1.5 hover:bg-sc-panel-2/50 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={selectedCountries.includes(code)}
@@ -561,8 +561,8 @@ export default function CampaignsPage() {
                               }
                               className="accent-brand-500 shrink-0"
                             />
-                            <span className="text-xs text-zinc-300 flex-1">{name}</span>
-                            <span className="text-xs text-zinc-600">{code}</span>
+                            <span className="text-xs text-sc-text flex-1">{name}</span>
+                            <span className="text-xs text-sc-dim">{code}</span>
                           </label>
                         ))}
                     </div>
@@ -574,12 +574,12 @@ export default function CampaignsPage() {
               <div className="p-4 rounded-xl bg-surface-hover border border-surface-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-white flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-sc-text flex items-center gap-1.5">
                       {watchedAutoVerify
                         ? <><Zap className="w-3.5 h-3.5 text-green-400" /> Auto-verify submissions</>
                         : <><Eye className="w-3.5 h-3.5 text-amber-400" /> Manual review required</>}
                     </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-sc-dim mt-0.5">
                       {watchedAutoVerify
                         ? 'Credits paid instantly when the platform API confirms the action.'
                         : 'You review each screenshot and approve/reject before credits are paid. You have 48 h; after that it escalates to admin.'}
@@ -589,7 +589,7 @@ export default function CampaignsPage() {
                     type="button"
                     onClick={() => form.setValue('autoVerify', !watchedAutoVerify)}
                     className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
-                      watchedAutoVerify ? 'bg-green-500' : 'bg-zinc-600'
+                      watchedAutoVerify ? 'bg-green-500' : 'bg-sc-soft'
                     }`}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -598,7 +598,7 @@ export default function CampaignsPage() {
                   </button>
                 </div>
                 {watchedTaskType && (
-                  <p className="text-xs text-zinc-600 mt-2">
+                  <p className="text-xs text-sc-dim mt-2">
                     {getAutoVerifyDefault(watchedTaskType)
                       ? '✓ This platform supports OAuth API verification — auto-verify is recommended.'
                       : '⚠ This platform has no API verification — manual review is recommended.'}
@@ -618,14 +618,14 @@ export default function CampaignsPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-zinc-400 hover:text-white text-sm transition-colors"
+                  className="flex-1 px-4 py-2 rounded-lg border border-surface-border text-sc-muted hover:text-sc-text text-sm transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createMutation.isPending || (totalCost > 0 && totalCost < minBudget)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-sc-text text-sm font-medium px-4 py-2 rounded-lg transition-all"
                 >
                   {createMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Create & pay {formatCredits(totalDebit)} {creditLabel(totalDebit)}
@@ -661,21 +661,21 @@ export default function CampaignsPage() {
 
         return (
           <>
-            <div className="flex gap-1 mb-4 border-b border-zinc-800 overflow-x-auto pb-0.5">
+            <div className="flex gap-1 mb-4 border-b border-sc-line overflow-x-auto pb-0.5">
               {tabs.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setActiveTab(key)}
                   className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
                     activeTab === key
-                      ? 'border-brand-500 text-white'
-                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                      ? 'border-brand-500 text-sc-text'
+                      : 'border-transparent text-sc-dim hover:text-sc-text'
                   }`}
                 >
                   {label}
                   {counts[key] > 0 && (
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                      activeTab === key ? 'bg-brand-500/20 text-brand-300' : 'bg-zinc-800 text-zinc-600'
+                      activeTab === key ? 'bg-brand-500/20 text-brand-300' : 'bg-sc-panel-2 text-sc-dim'
                     }`}>
                       {counts[key]}
                     </span>
@@ -693,11 +693,11 @@ export default function CampaignsPage() {
               </div>
             ) : !filteredItems.length ? (
               <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
-                <p className="text-zinc-500 text-sm">
+                <p className="text-sc-dim text-sm">
                   {allItems.length === 0 ? 'No campaigns yet.' : `No ${activeTab === 'all' ? '' : activeTab + ' '}campaigns.`}
                 </p>
                 {allItems.length === 0 && (
-                  <p className="text-zinc-600 text-xs mt-1">Create one to start getting real engagement.</p>
+                  <p className="text-sc-dim text-xs mt-1">Create one to start getting real engagement.</p>
                 )}
               </div>
             ) : (
@@ -716,7 +716,7 @@ export default function CampaignsPage() {
                         <StatusIcon className="w-3 h-3" />
                         {cfg.label}
                       </span>
-                      <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-0.5 rounded-full">
+                      <span className="text-xs text-sc-dim bg-sc-panel-2 px-2 py-0.5 rounded-full">
                         {TASK_TYPES.find((t) => t.value === c.taskType)?.label ?? c.taskType}
                       </span>
                       {c.isPlatformTask ? (
@@ -724,7 +724,7 @@ export default function CampaignsPage() {
                           Platform
                         </span>
                       ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-700 text-zinc-400 border border-zinc-600">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-sc-panel-2 text-sc-muted border border-sc-line">
                           Community
                         </span>
                       )}
@@ -734,12 +734,12 @@ export default function CampaignsPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm font-semibold text-white truncate">{c.title}</p>
+                    <p className="text-sm font-semibold text-sc-text truncate">{c.title}</p>
                     <a
                       href={c.targetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-brand-400 transition-colors mt-0.5"
+                      className="inline-flex items-center gap-1 text-xs text-sc-dim hover:text-brand-400 transition-colors mt-0.5"
                     >
                       {c.targetUrl.length > 50 ? c.targetUrl.slice(0, 50) + '…' : c.targetUrl}
                       <ExternalLink className="w-3 h-3" />
@@ -747,18 +747,18 @@ export default function CampaignsPage() {
                   </div>
 
                   {/* Stats */}
-                  <div className="text-right shrink-0 text-xs text-zinc-500 space-y-0.5">
-                    <p><span className="text-white font-medium">{c.completedSlots}</span>/{c.totalSlots} done</p>
+                  <div className="text-right shrink-0 text-xs text-sc-dim space-y-0.5">
+                    <p><span className="text-sc-text font-medium">{c.completedSlots}</span>/{c.totalSlots} done</p>
                     <p>{available} available</p>
                     <p className="text-brand-300 font-medium">{formatCredits(c.creditPerTask)} {creditLabel(c.creditPerTask)}/task</p>
                     {c.feeAmount > 0 && (
-                      <p className="text-zinc-600">Fee: {formatCredits(c.feeAmount)} {creditLabel(c.feeAmount)}</p>
+                      <p className="text-sc-dim">Fee: {formatCredits(c.feeAmount)} {creditLabel(c.feeAmount)}</p>
                     )}
                   </div>
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-3 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="mt-3 h-1.5 bg-sc-panel-2 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-brand-500 to-accent-500 rounded-full transition-all"
                     style={{ width: `${progress}%` }}
@@ -791,7 +791,7 @@ export default function CampaignsPage() {
                           })
                         }
                         disabled={statusMutation.isPending}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sc-muted hover:text-sc-text transition-colors disabled:opacity-50"
                       >
                         {c.status === 'ACTIVE' ? (
                           <><Pause className="w-3 h-3" /> Pause</>
@@ -827,10 +827,10 @@ export default function CampaignsPage() {
           <div className="w-full max-w-2xl card-glass rounded-2xl p-6 max-h-[85vh] flex flex-col">
             <div className="flex items-start justify-between mb-4 shrink-0">
               <div>
-                <h2 className="text-base font-semibold text-white">Review Submissions</h2>
-                <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-md">{reviewingCampaign.title}</p>
+                <h2 className="text-base font-semibold text-sc-text">Review Submissions</h2>
+                <p className="text-xs text-sc-dim mt-0.5 truncate max-w-md">{reviewingCampaign.title}</p>
               </div>
-              <button onClick={() => setReviewingCampaign(null)} className="text-zinc-500 hover:text-white">
+              <button onClick={() => setReviewingCampaign(null)} className="text-sc-dim hover:text-sc-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -852,8 +852,8 @@ export default function CampaignsPage() {
                 ))
               ) : !submissions?.items.length ? (
                 <div className="py-12 text-center">
-                  <CheckCircle2 className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                  <p className="text-zinc-500 text-sm">No pending submissions.</p>
+                  <CheckCircle2 className="w-8 h-8 text-sc-dim mx-auto mb-2" />
+                  <p className="text-sc-dim text-sm">No pending submissions.</p>
                 </div>
               ) : (
                 submissions.items.map((s) => (
@@ -870,7 +870,7 @@ export default function CampaignsPage() {
                             <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">Escalated</span>
                           )}
                         </div>
-                        <p className="text-xs text-zinc-500 mt-0.5">
+                        <p className="text-xs text-sc-dim mt-0.5">
                           Submitted {new Date(s.submittedAt).toLocaleString()}
                           {s.reviewDeadline && !s.escalated && (
                             <> · deadline {new Date(s.reviewDeadline).toLocaleString()}</>
@@ -919,11 +919,11 @@ export default function CampaignsPage() {
                           value={rejReasons[s.id] ?? ''}
                           onChange={(e) => setRejReasons((r) => ({ ...r, [s.id]: e.target.value }))}
                           placeholder="Reason (optional)..."
-                          className="w-full bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-[10px] text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-red-500"
+                          className="w-full bg-surface-hover border border-surface-border rounded-lg px-2 py-1 text-[10px] text-sc-text placeholder-sc-dim focus:outline-none focus:ring-1 focus:ring-red-500"
                         />
                         <button
                           onClick={() => toggleExpand(s.id)}
-                          className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-surface-hover transition-colors"
+                          className="p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-surface-hover transition-colors"
                           title="Toggle details"
                         >
                           {expandedIds.has(s.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -932,12 +932,12 @@ export default function CampaignsPage() {
                     </div>
 
                     {expandedIds.has(s.id) && (
-                      <div className="mt-3 pt-3 border-t border-surface-border space-y-2 text-xs text-zinc-400">
+                      <div className="mt-3 pt-3 border-t border-surface-border space-y-2 text-xs text-sc-muted">
                         <div className="grid grid-cols-2 gap-2">
-                          <div><span className="text-zinc-500">Assigned:</span> <span className="text-zinc-300">{formatDate(s.assignedAt)}</span></div>
-                          <div><span className="text-zinc-500">Reputation:</span> <span className="text-zinc-300">{s.user.reputationScore} pts · Lv.{s.user.level}</span></div>
-                          <div><span className="text-zinc-500">Completion time:</span> <span className="text-zinc-300">{s.completionSeconds ? `${Math.floor(s.completionSeconds / 60)}m ${s.completionSeconds % 60}s` : 'N/A'}</span></div>
-                          <div><span className="text-zinc-500">IP:</span> <span className="text-zinc-300 font-mono">{s.ipAddress ?? 'N/A'}</span></div>
+                          <div><span className="text-sc-dim">Assigned:</span> <span className="text-sc-text">{formatDate(s.assignedAt)}</span></div>
+                          <div><span className="text-sc-dim">Reputation:</span> <span className="text-sc-text">{s.user.reputationScore} pts · Lv.{s.user.level}</span></div>
+                          <div><span className="text-sc-dim">Completion time:</span> <span className="text-sc-text">{s.completionSeconds ? `${Math.floor(s.completionSeconds / 60)}m ${s.completionSeconds % 60}s` : 'N/A'}</span></div>
+                          <div><span className="text-sc-dim">IP:</span> <span className="text-sc-text font-mono">{s.ipAddress ?? 'N/A'}</span></div>
                         </div>
                       </div>
                     )}
@@ -955,25 +955,25 @@ export default function CampaignsPage() {
           <div className="relative bg-surface-card border border-surface-border rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white truncate">Proof by @{viewingProof.user.username}</p>
-                <p className="text-xs text-zinc-500">{formatDate(viewingProof.submittedAt)}</p>
+                <p className="text-sm font-medium text-sc-text truncate">Proof by @{viewingProof.user.username}</p>
+                <p className="text-xs text-sc-dim">{formatDate(viewingProof.submittedAt)}</p>
               </div>
               <button
                 onClick={() => { if (proofImageUrl) URL.revokeObjectURL(proofImageUrl); setProofImageUrl(null); setViewingProof(null); }}
-                className="text-zinc-500 hover:text-white ml-4"
+                className="text-sc-dim hover:text-sc-text ml-4"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 flex items-center justify-center p-4 overflow-auto min-h-[200px]">
               {proofLoading ? (
-                <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
+                <Loader2 className="w-8 h-8 animate-spin text-sc-dim" />
               ) : proofImageUrl ? (
                 <img src={proofImageUrl} alt="Proof" className="max-w-full max-h-[70vh] rounded-lg object-contain" />
               ) : (
                 <div className="text-center">
-                  <p className="text-zinc-400 text-sm">Failed to load proof image.</p>
-                  <p className="text-zinc-600 text-xs mt-1">{viewingProof.proofUrl}</p>
+                  <p className="text-sc-muted text-sm">Failed to load proof image.</p>
+                  <p className="text-sc-dim text-xs mt-1">{viewingProof.proofUrl}</p>
                 </div>
               )}
             </div>

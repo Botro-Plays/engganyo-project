@@ -36,7 +36,7 @@ export function LandingNavbar() {
           </Link>
           <Link
             href="/register"
-            className="text-sm bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 sm:px-4 rounded-lg transition-colors font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm"
+            className="text-sm bg-brand-500 hover:bg-brand-600 text-sc-text px-3 py-2 sm:px-4 rounded-lg transition-colors font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm"
           >
             <span className="hidden sm:inline">Get started free</span>
             <span className="sm:hidden">Sign up</span>
@@ -87,7 +87,7 @@ export function LandingNavbar() {
             <Link
               href="/register"
               onClick={() => setOpen(false)}
-              className="block text-center text-sm bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-lg transition-colors font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm"
+              className="block text-center text-sm bg-brand-500 hover:bg-brand-600 text-sc-text px-4 py-2.5 rounded-lg transition-colors font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm"
             >
               Get started free
             </Link>

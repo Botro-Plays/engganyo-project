@@ -74,45 +74,45 @@ function AchievementForm({
     <div className="bg-surface-hover border border-brand-500/30 rounded-xl p-4 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-zinc-400">Name</label>
-          <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Name</label>
+          <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Slug</label>
-          <input value={form.slug ?? ''} onChange={(e) => set('slug', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Slug</label>
+          <input value={form.slug ?? ''} onChange={(e) => set('slug', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div className="col-span-2">
-          <label className="text-xs text-zinc-400">Description</label>
-          <input value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Description</label>
+          <input value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Category</label>
-          <select value={form.category ?? 'ENGAGEMENT'} onChange={(e) => set('category', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+          <label className="text-xs text-sc-muted">Category</label>
+          <select value={form.category ?? 'ENGAGEMENT'} onChange={(e) => set('category', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500">
             {ACHIEVEMENT_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Requirement</label>
-          <input type="number" value={form.requirement ?? 1} onChange={(e) => set('requirement', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Requirement</label>
+          <input type="number" value={form.requirement ?? 1} onChange={(e) => set('requirement', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Credit Reward</label>
-          <input type="number" value={form.creditReward ?? 0} onChange={(e) => set('creditReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Credit Reward</label>
+          <input type="number" value={form.creditReward ?? 0} onChange={(e) => set('creditReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">XP Reward</label>
-          <input type="number" value={form.xpReward ?? 0} onChange={(e) => set('xpReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">XP Reward</label>
+          <input type="number" value={form.xpReward ?? 0} onChange={(e) => set('xpReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-sc-text cursor-pointer">
           <input type="checkbox" checked={form.isActive ?? true} onChange={(e) => set('isActive', e.target.checked)} className="rounded" />
           Active
         </label>
       </div>
       <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg border border-surface-border text-xs text-zinc-400 hover:bg-surface-hover">Cancel</button>
-        <button onClick={() => onSave(form)} className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium flex items-center gap-1">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg border border-surface-border text-xs text-sc-muted hover:bg-surface-hover">Cancel</button>
+        <button onClick={() => onSave(form)} className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-xs font-medium flex items-center gap-1">
           <Check className="w-3 h-3" /> Save
         </button>
       </div>
@@ -130,41 +130,41 @@ function MissionForm({
     <div className="bg-surface-hover border border-brand-500/30 rounded-xl p-4 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-zinc-400">Name</label>
-          <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Name</label>
+          <input value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Type</label>
-          <select value={form.type ?? 'COMPLETE_N_TASKS'} onChange={(e) => set('type', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+          <label className="text-xs text-sc-muted">Type</label>
+          <select value={form.type ?? 'COMPLETE_N_TASKS'} onChange={(e) => set('type', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500">
             {MISSION_TYPES.map((t) => <option key={t} value={t}>{MISSION_LABELS[t]}</option>)}
           </select>
         </div>
         <div className="col-span-2">
-          <label className="text-xs text-zinc-400">Description</label>
-          <input value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Description</label>
+          <input value={form.description ?? ''} onChange={(e) => set('description', e.target.value)} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Requirement</label>
-          <input type="number" value={form.requirement ?? 1} onChange={(e) => set('requirement', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Requirement</label>
+          <input type="number" value={form.requirement ?? 1} onChange={(e) => set('requirement', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">Credit Reward</label>
-          <input type="number" value={form.creditReward ?? 0} onChange={(e) => set('creditReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">Credit Reward</label>
+          <input type="number" value={form.creditReward ?? 0} onChange={(e) => set('creditReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
-          <label className="text-xs text-zinc-400">XP Reward</label>
-          <input type="number" value={form.xpReward ?? 0} onChange={(e) => set('xpReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <label className="text-xs text-sc-muted">XP Reward</label>
+          <input type="number" value={form.xpReward ?? 0} onChange={(e) => set('xpReward', Number(e.target.value))} className="mt-1 w-full px-3 py-1.5 bg-surface border border-surface-border rounded-lg text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-sc-text cursor-pointer">
           <input type="checkbox" checked={form.isActive ?? true} onChange={(e) => set('isActive', e.target.checked)} className="rounded" />
           Active
         </label>
       </div>
       <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg border border-surface-border text-xs text-zinc-400 hover:bg-surface-hover">Cancel</button>
-        <button onClick={() => onSave(form)} className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium flex items-center gap-1">
+        <button onClick={onCancel} className="px-3 py-1.5 rounded-lg border border-surface-border text-xs text-sc-muted hover:bg-surface-hover">Cancel</button>
+        <button onClick={() => onSave(form)} className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-xs font-medium flex items-center gap-1">
           <Check className="w-3 h-3" /> Save
         </button>
       </div>
@@ -238,14 +238,14 @@ export default function AdminGamificationPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-sc-text flex items-center gap-2">
             <Trophy className="w-6 h-6 text-yellow-400" /> Gamification
           </h1>
-          <p className="text-zinc-400 text-sm mt-1">Manage achievements and daily missions.</p>
+          <p className="text-sc-muted text-sm mt-1">Manage achievements and daily missions.</p>
         </div>
         <button
           onClick={() => { setCreating(true); setEditing(null); }}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-sc-text text-sm font-medium rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" /> New {tab === 'achievements' ? 'Achievement' : 'Mission'}
         </button>
@@ -258,7 +258,7 @@ export default function AdminGamificationPage() {
             key={t}
             onClick={() => { setTab(t); setCreating(false); setEditing(null); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-              tab === t ? 'bg-brand-600 text-white' : 'text-zinc-400 hover:text-white'
+              tab === t ? 'bg-brand-600 text-sc-text' : 'text-sc-muted hover:text-sc-text'
             }`}
           >
             {t}
@@ -305,15 +305,15 @@ export default function AdminGamificationPage() {
                 />
               ) : (
                 <div className="card-glass rounded-xl px-4 py-3 flex items-center gap-3 border border-surface-border">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${a.isActive ? 'bg-green-500' : 'bg-zinc-600'}`} />
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${a.isActive ? 'bg-green-500' : 'bg-sc-soft'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-white">{a.name}</p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-300">{CATEGORY_LABELS[a.category] ?? a.category}</span>
+                      <p className="text-sm font-medium text-sc-text">{a.name}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sc-panel-2 text-sc-text">{CATEGORY_LABELS[a.category] ?? a.category}</span>
                     </div>
-                    <p className="text-xs text-zinc-500 mt-0.5 truncate">{a.description}</p>
+                    <p className="text-xs text-sc-dim mt-0.5 truncate">{a.description}</p>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-zinc-500 shrink-0">
+                  <div className="flex items-center gap-4 text-xs text-sc-dim shrink-0">
                     <span className="flex items-center gap-1 text-yellow-400">💰 {a.creditReward}</span>
                     <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-brand-400" />{a.xpReward} XP</span>
                     <span>×{a.requirement}</span>
@@ -326,10 +326,10 @@ export default function AdminGamificationPage() {
                     >
                       {a.isActive
                         ? <ToggleRight className="w-4 h-4 text-green-400" />
-                        : <ToggleLeft className="w-4 h-4 text-zinc-500" />}
+                        : <ToggleLeft className="w-4 h-4 text-sc-dim" />}
                     </button>
                     <button onClick={() => { setEditing(a.id); setCreating(false); }} className="p-1.5 rounded-lg hover:bg-surface-border transition-colors">
-                      <Pencil className="w-3.5 h-3.5 text-zinc-400" />
+                      <Pencil className="w-3.5 h-3.5 text-sc-muted" />
                     </button>
                     <button onClick={() => setConfirmDelete(a.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
                       <Trash2 className="w-3.5 h-3.5 text-red-400" />
@@ -337,9 +337,9 @@ export default function AdminGamificationPage() {
                   </div>
                   {confirmDelete === a.id && (
                     <div className="absolute z-10 bg-surface border border-red-500/30 rounded-xl p-3 shadow-xl flex items-center gap-3 text-sm">
-                      <span className="text-white">Delete <strong>{a.name}</strong>?</span>
-                      <button onClick={() => deleteAchievement.mutate(a.id)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">Delete</button>
-                      <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 border border-surface-border text-zinc-400 rounded text-xs"><X className="w-3 h-3" /></button>
+                      <span className="text-sc-text">Delete <strong>{a.name}</strong>?</span>
+                      <button onClick={() => deleteAchievement.mutate(a.id)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-sc-text rounded text-xs">Delete</button>
+                      <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 border border-surface-border text-sc-muted rounded text-xs"><X className="w-3 h-3" /></button>
                     </div>
                   )}
                 </div>
@@ -359,15 +359,15 @@ export default function AdminGamificationPage() {
                 />
               ) : (
                 <div className="card-glass rounded-xl px-4 py-3 flex items-center gap-3 border border-surface-border">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${m.isActive ? 'bg-green-500' : 'bg-zinc-600'}`} />
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${m.isActive ? 'bg-green-500' : 'bg-sc-soft'}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-white">{m.name}</p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-300">{MISSION_LABELS[m.type] ?? m.type}</span>
+                      <p className="text-sm font-medium text-sc-text">{m.name}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sc-panel-2 text-sc-text">{MISSION_LABELS[m.type] ?? m.type}</span>
                     </div>
-                    <p className="text-xs text-zinc-500 mt-0.5 truncate">{m.description}</p>
+                    <p className="text-xs text-sc-dim mt-0.5 truncate">{m.description}</p>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-zinc-500 shrink-0">
+                  <div className="flex items-center gap-4 text-xs text-sc-dim shrink-0">
                     <span className="flex items-center gap-1 text-yellow-400">💰 {m.creditReward}</span>
                     <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-brand-400" />{m.xpReward} XP</span>
                     <span>×{m.requirement}</span>
@@ -380,10 +380,10 @@ export default function AdminGamificationPage() {
                     >
                       {m.isActive
                         ? <ToggleRight className="w-4 h-4 text-green-400" />
-                        : <ToggleLeft className="w-4 h-4 text-zinc-500" />}
+                        : <ToggleLeft className="w-4 h-4 text-sc-dim" />}
                     </button>
                     <button onClick={() => { setEditing(m.id); setCreating(false); }} className="p-1.5 rounded-lg hover:bg-surface-border transition-colors">
-                      <Pencil className="w-3.5 h-3.5 text-zinc-400" />
+                      <Pencil className="w-3.5 h-3.5 text-sc-muted" />
                     </button>
                     <button onClick={() => setConfirmDelete(m.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
                       <Trash2 className="w-3.5 h-3.5 text-red-400" />
@@ -391,9 +391,9 @@ export default function AdminGamificationPage() {
                   </div>
                   {confirmDelete === m.id && (
                     <div className="absolute z-10 bg-surface border border-red-500/30 rounded-xl p-3 shadow-xl flex items-center gap-3 text-sm">
-                      <span className="text-white">Delete <strong>{m.name}</strong>?</span>
-                      <button onClick={() => deleteMission.mutate(m.id)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">Delete</button>
-                      <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 border border-surface-border text-zinc-400 rounded text-xs"><X className="w-3 h-3" /></button>
+                      <span className="text-sc-text">Delete <strong>{m.name}</strong>?</span>
+                      <button onClick={() => deleteMission.mutate(m.id)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-sc-text rounded text-xs">Delete</button>
+                      <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 border border-surface-border text-sc-muted rounded text-xs"><X className="w-3 h-3" /></button>
                     </div>
                   )}
                 </div>
@@ -405,14 +405,14 @@ export default function AdminGamificationPage() {
 
       {/* Empty state */}
       {!isLoading && tab === 'achievements' && (achievements ?? []).length === 0 && !creating && (
-        <div className="text-center py-16 text-zinc-500">
-          <Trophy className="w-10 h-10 mx-auto mb-3 text-zinc-700" />
+        <div className="text-center py-16 text-sc-dim">
+          <Trophy className="w-10 h-10 mx-auto mb-3 text-sc-dim" />
           <p>No achievements yet. Create one above.</p>
         </div>
       )}
       {!isLoading && tab === 'missions' && (missions ?? []).length === 0 && !creating && (
-        <div className="text-center py-16 text-zinc-500">
-          <Star className="w-10 h-10 mx-auto mb-3 text-zinc-700" />
+        <div className="text-center py-16 text-sc-dim">
+          <Star className="w-10 h-10 mx-auto mb-3 text-sc-dim" />
           <p>No missions yet. Create one above.</p>
         </div>
       )}

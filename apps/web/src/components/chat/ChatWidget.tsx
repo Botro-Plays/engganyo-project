@@ -185,7 +185,7 @@ export function ChatWidget() {
           if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
         }}
         style={dragStyle}
-        className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-white p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105 touch-none select-none"
+        className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-sc-text p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105 touch-none select-none"
         aria-label="Open chat"
       >
         <MessageSquare className="w-6 h-6" />
@@ -213,13 +213,13 @@ export function ChatWidget() {
         className="flex items-center justify-between p-4 border-b border-surface-border bg-surface-hover cursor-grab active:cursor-grabbing select-none"
       >
         <div className="flex items-center gap-3">
-          <GripVertical className="w-4 h-4 text-zinc-600" />
+          <GripVertical className="w-4 h-4 text-sc-dim" />
           <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center">
             <MessageSquare className="w-4 h-4 text-brand-400" />
           </div>
           <div>
-            <h3 className="font-semibold text-white text-sm">Engganyo Support</h3>
-            <p className="text-xs text-zinc-500">
+            <h3 className="font-semibold text-sc-text text-sm">Engganyo Support</h3>
+            <p className="text-xs text-sc-dim">
               {isAuthenticated ? 'Online' : 'Guest'}
             </p>
           </div>
@@ -229,7 +229,7 @@ export function ChatWidget() {
             onClick={startNewConversation}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
-            className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-surface-border text-sc-muted hover:text-sc-text transition-colors"
             aria-label="New conversation"
             title="New conversation"
           >
@@ -239,7 +239,7 @@ export function ChatWidget() {
             onClick={() => setIsMinimized(!isMinimized)}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
-            className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-surface-border text-sc-muted hover:text-sc-text transition-colors"
             aria-label={isMinimized ? 'Maximize' : 'Minimize'}
           >
             {isMinimized ? (
@@ -252,7 +252,7 @@ export function ChatWidget() {
             onClick={() => setIsOpen(false)}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
-            className="p-1.5 rounded-lg hover:bg-surface-border text-zinc-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg hover:bg-surface-border text-sc-muted hover:text-sc-text transition-colors"
             aria-label="Close chat"
           >
             <X className="w-4 h-4" />
@@ -269,8 +269,8 @@ export function ChatWidget() {
                 <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center mx-auto mb-3">
                   <MessageSquare className="w-6 h-6 text-brand-400" />
                 </div>
-                <p className="text-zinc-400 text-sm mb-1">Hi there! 👋</p>
-                <p className="text-zinc-500 text-xs mb-4">
+                <p className="text-sc-muted text-sm mb-1">Hi there! 👋</p>
+                <p className="text-sc-dim text-xs mb-4">
                   How can I help you with Engganyo today?
                 </p>
                 <div className="flex flex-wrap gap-2 justify-center">
@@ -278,7 +278,7 @@ export function ChatWidget() {
                     <button
                       key={action}
                       onClick={() => handleQuickAction(action)}
-                      className="px-3 py-1.5 text-xs bg-surface-hover border border-surface-border rounded-lg text-zinc-400 hover:text-white hover:border-brand-500/50 transition-colors"
+                      className="px-3 py-1.5 text-xs bg-surface-hover border border-surface-border rounded-lg text-sc-muted hover:text-sc-text hover:border-brand-500/50 transition-colors"
                     >
                       {action}
                     </button>
@@ -295,8 +295,8 @@ export function ChatWidget() {
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
                     msg.role === 'user'
-                      ? 'bg-brand-500 text-white'
-                      : 'bg-surface-hover text-zinc-300'
+                      ? 'bg-brand-500 text-sc-text'
+                      : 'bg-surface-hover text-sc-text'
                   }`}
                 >
                   {msg.isHuman && (
@@ -311,11 +311,11 @@ export function ChatWidget() {
 
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-surface-hover rounded-2xl px-4 py-2.5 text-sm text-zinc-500">
+                <div className="bg-surface-hover rounded-2xl px-4 py-2.5 text-sm text-sc-dim">
                   <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce delay-100" />
-                    <div className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce delay-200" />
+                    <div className="w-2 h-2 bg-sc-soft rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-sc-soft rounded-full animate-bounce delay-100" />
+                    <div className="w-2 h-2 bg-sc-soft rounded-full animate-bounce delay-200" />
                   </div>
                 </div>
               </div>
@@ -333,13 +333,13 @@ export function ChatWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
-                className="flex-1 bg-surface-hover border border-surface-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-brand-500/50 transition-colors"
+                className="flex-1 bg-surface-hover border border-surface-border rounded-xl px-4 py-2.5 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:border-brand-500/50 transition-colors"
                 disabled={isLoading}
               />
               <button
                 onClick={sendMessage}
                 disabled={!input.trim() || isLoading}
-                className="p-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border disabled:text-zinc-500 text-white rounded-xl transition-colors"
+                className="p-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-border disabled:text-sc-dim text-sc-text rounded-xl transition-colors"
                 aria-label="Send message"
               >
                 <Send className="w-4 h-4" />
