@@ -16,13 +16,13 @@ function baseLayout(content: string, previewText: string): string {
   <title>Engganyo</title>
   <style>${BASE_STYLES}</style>
 </head>
-<body style="margin:0;padding:0;background-color:#0d0919;font-family:Arial,Helvetica,sans-serif;">
+<body style="margin:0;padding:0;background-color:#050918;font-family:Arial,Helvetica,sans-serif;">
 
   <!-- Preview text (hidden) -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${previewText}&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;&nbsp;&#847;</div>
 
   <!-- Email wrapper -->
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#0d0919;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#050918;">
     <tr>
       <td align="center" style="padding:40px 16px;">
 
@@ -33,7 +33,7 @@ function baseLayout(content: string, previewText: string): string {
           <tr>
             <td align="center" style="padding-bottom:32px;">
               <a href="https://engganyo.com" target="_blank" style="display:inline-block;text-decoration:none;">
-                <img src="https://engganyo.com/brand/web-logo-transparent.png"
+                <img src="https://engganyo.com/brand/logo-badge-256.png"
                      alt="Engganyo"
                      width="40"
                      height="40"
@@ -44,7 +44,7 @@ function baseLayout(content: string, previewText: string): string {
 
           <!-- Card body -->
           <tr>
-            <td style="background:#171028;border-radius:16px;border:1px solid #4a3391;overflow:hidden;">
+            <td style="background:#121C38;border-radius:16px;border:1px solid #2E4A8C;overflow:hidden;">
               ${content}
             </td>
           </tr>
@@ -52,11 +52,11 @@ function baseLayout(content: string, previewText: string): string {
           <!-- Footer -->
           <tr>
             <td align="center" style="padding-top:28px;">
-              <p style="margin:0 0 6px;font-size:12px;color:#9d8cc9;line-height:1.5;">
+              <p style="margin:0 0 6px;font-size:12px;color:#6E7CA3;line-height:1.5;">
                 You received this email because you have an account at
-                <a href="https://engganyo.com" style="color:#7c4dff;text-decoration:none;">engganyo.com</a>
+                <a href="https://engganyo.com" style="color:#1F62F0;text-decoration:none;">engganyo.com</a>
               </p>
-              <p style="margin:0;font-size:12px;color:#9d8cc9;">
+              <p style="margin:0;font-size:12px;color:#6E7CA3;">
                 &copy; ${new Date().getFullYear()} Engganyo. All rights reserved.
               </p>
             </td>
@@ -76,7 +76,7 @@ export function verificationEmailTemplate(verifyUrl: string): string {
     <!-- Top accent bar -->
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
       <tr>
-        <td style="background:linear-gradient(90deg,#7c4dff,#ff7eb6);height:4px;"></td>
+        <td style="background:linear-gradient(90deg,#1F62F0,#E8A800);height:4px;"></td>
       </tr>
     </table>
 
@@ -86,7 +86,7 @@ export function verificationEmailTemplate(verifyUrl: string): string {
         <td style="padding:40px 40px 0;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:linear-gradient(135deg,#7c4dff,#6a3ce0);border-radius:14px;padding:14px;">
+              <td style="background:linear-gradient(135deg,#1F62F0,#1A54D6);border-radius:14px;padding:14px;">
                 <div style="font-size:22px;line-height:1;">&#9993;</div>
               </td>
             </tr>
@@ -94,7 +94,7 @@ export function verificationEmailTemplate(verifyUrl: string): string {
           <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
             Verify your email address
           </h1>
-          <p style="margin:0;font-size:15px;color:#b9addb;line-height:1.6;">
+          <p style="margin:0;font-size:15px;color:#A9B6D8;line-height:1.6;">
             Welcome to Engganyo! You&rsquo;re one step away from growing your audience.
             Click the button below to verify your email and activate your account.
           </p>
@@ -105,7 +105,7 @@ export function verificationEmailTemplate(verifyUrl: string): string {
           <!-- CTA Button -->
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="border-radius:10px;background:linear-gradient(135deg,#7c4dff,#6a3ce0);">
+              <td style="border-radius:10px;background:linear-gradient(135deg,#1F62F0,#1A54D6);">
                 <a href="${verifyUrl}"
                    target="_blank"
                    style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;letter-spacing:0.2px;">
@@ -121,12 +121,12 @@ export function verificationEmailTemplate(verifyUrl: string): string {
           <!-- Divider -->
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
-              <td style="border-top:1px solid #4a3391;padding-top:24px;">
-                <p style="margin:0 0 8px;font-size:12px;color:#9d8cc9;">
+              <td style="border-top:1px solid #2E4A8C;padding-top:24px;">
+                <p style="margin:0 0 8px;font-size:12px;color:#6E7CA3;">
                   Button not working? Copy and paste this link into your browser:
                 </p>
                 <p style="margin:0;font-size:12px;word-break:break-all;">
-                  <a href="${verifyUrl}" style="color:#7c4dff;text-decoration:none;">${verifyUrl}</a>
+                  <a href="${verifyUrl}" style="color:#1F62F0;text-decoration:none;">${verifyUrl}</a>
                 </p>
               </td>
             </tr>
@@ -135,11 +135,11 @@ export function verificationEmailTemplate(verifyUrl: string): string {
       </tr>
       <tr>
         <td style="padding:0 40px 32px;">
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0d0919;border-radius:10px;border:1px solid #4a3391;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#050918;border-radius:10px;border:1px solid #2E4A8C;">
             <tr>
               <td style="padding:16px 20px;">
-                <p style="margin:0;font-size:12px;color:#9d8cc9;line-height:1.6;">
-                  &#9888;&#65039; This link expires in <strong style="color:#b9addb;">24 hours</strong>.
+                <p style="margin:0;font-size:12px;color:#6E7CA3;line-height:1.6;">
+                  &#9888;&#65039; This link expires in <strong style="color:#A9B6D8;">24 hours</strong>.
                   If you didn't create an Engganyo account, you can safely ignore this email.
                 </p>
               </td>
@@ -176,7 +176,7 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
           <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
             Reset your password
           </h1>
-          <p style="margin:0;font-size:15px;color:#b9addb;line-height:1.6;">
+          <p style="margin:0;font-size:15px;color:#A9B6D8;line-height:1.6;">
             We received a request to reset the password for your Engganyo account.
             Click the button below to choose a new password.
           </p>
@@ -202,12 +202,12 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
         <td style="padding:0 40px 24px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
-              <td style="border-top:1px solid #4a3391;padding-top:24px;">
-                <p style="margin:0 0 8px;font-size:12px;color:#9d8cc9;">
+              <td style="border-top:1px solid #2E4A8C;padding-top:24px;">
+                <p style="margin:0 0 8px;font-size:12px;color:#6E7CA3;">
                   Button not working? Copy and paste this link into your browser:
                 </p>
                 <p style="margin:0;font-size:12px;word-break:break-all;">
-                  <a href="${resetUrl}" style="color:#7c4dff;text-decoration:none;">${resetUrl}</a>
+                  <a href="${resetUrl}" style="color:#1F62F0;text-decoration:none;">${resetUrl}</a>
                 </p>
               </td>
             </tr>
@@ -216,11 +216,11 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
       </tr>
       <tr>
         <td style="padding:0 40px 32px;">
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0d0919;border-radius:10px;border:1px solid #4a3391;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#050918;border-radius:10px;border:1px solid #2E4A8C;">
             <tr>
               <td style="padding:16px 20px;">
-                <p style="margin:0;font-size:12px;color:#9d8cc9;line-height:1.6;">
-                  &#9888;&#65039; This link expires in <strong style="color:#b9addb;">1 hour</strong>.
+                <p style="margin:0;font-size:12px;color:#6E7CA3;line-height:1.6;">
+                  &#9888;&#65039; This link expires in <strong style="color:#A9B6D8;">1 hour</strong>.
                   If you didn't request a password reset, you can safely ignore this email —
                   your password will not be changed.
                 </p>
@@ -263,17 +263,17 @@ export function weeklyDigestEmailTemplate(data: {
   const extraStatsRow1 = (tasksInProgress > 0 || tasksPending > 0 || xpEarned > 0)
     ? `<tr>
       <td width="50%" style="padding-right:8px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
           <tr><td style="padding:20px;">
-            <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">XP Earned</p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">XP Earned</p>
             <p style="margin:0;font-size:28px;font-weight:700;color:#8b5cf6;">${xpEarned}</p>
           </td></tr>
         </table>
       </td>
       <td width="50%" style="padding-left:8px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
           <tr><td style="padding:20px;">
-            <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">In Progress</p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">In Progress</p>
             <p style="margin:0;font-size:28px;font-weight:700;color:#06b6d4;">${tasksInProgress}</p>
           </td></tr>
         </table>
@@ -285,17 +285,17 @@ export function weeklyDigestEmailTemplate(data: {
   const extraStatsRow2 = (totalTasksCompleted > 0 || weeklyRank > 0 || allTimeRank > 0 || streak > 0)
     ? `<tr>
       <td width="50%" style="padding-right:8px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
           <tr><td style="padding:20px;">
-            <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">Total Completed</p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">Total Completed</p>
             <p style="margin:0;font-size:28px;font-weight:700;color:#ec4899;">${totalTasksCompleted}</p>
           </td></tr>
         </table>
       </td>
       <td width="50%" style="padding-left:8px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
           <tr><td style="padding:20px;">
-            <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">Current Streak</p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">Current Streak</p>
             <p style="margin:0;font-size:28px;font-weight:700;color:#f97316;">${streak}d</p>
           </td></tr>
         </table>
@@ -307,19 +307,19 @@ export function weeklyDigestEmailTemplate(data: {
   const rankSection = (weeklyRank > 0 || allTimeRank > 0)
     ? `<tr>
       <td style="padding:0 40px 24px;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
           <tr>
             <td style="padding:16px 20px;">
-              <p style="margin:0 0 8px;font-size:13px;color:#b9addb;line-height:1.5;">Leaderboard Rankings</p>
+              <p style="margin:0 0 8px;font-size:13px;color:#A9B6D8;line-height:1.5;">Leaderboard Rankings</p>
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td width="50%" style="padding-right:8px;">
-                    <p style="margin:0 0 2px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">Weekly</p>
+                    <p style="margin:0 0 2px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">Weekly</p>
                     <p style="margin:0;font-size:20px;font-weight:700;color:#10b981;">#${weeklyRank}</p>
                   </td>
                   <td width="50%" style="padding-left:8px;">
-                    <p style="margin:0 0 2px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">All-Time</p>
-                    <p style="margin:0;font-size:20px;font-weight:700;color:#7c4dff;">#${allTimeRank}</p>
+                    <p style="margin:0 0 2px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">All-Time</p>
+                    <p style="margin:0;font-size:20px;font-weight:700;color:#1F62F0;">#${allTimeRank}</p>
                   </td>
                 </tr>
               </table>
@@ -334,7 +334,7 @@ export function weeklyDigestEmailTemplate(data: {
     <!-- Top accent bar -->
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
       <tr>
-        <td style="background:linear-gradient(90deg,#7c4dff,#10b981);height:4px;"></td>
+        <td style="background:linear-gradient(90deg,#1F62F0,#10b981);height:4px;"></td>
       </tr>
     </table>
 
@@ -344,7 +344,7 @@ export function weeklyDigestEmailTemplate(data: {
         <td style="padding:40px 40px 0;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:linear-gradient(135deg,#7c4dff,#10b981);border-radius:14px;padding:14px;">
+              <td style="background:linear-gradient(135deg,#1F62F0,#10b981);border-radius:14px;padding:14px;">
                 <div style="font-size:22px;line-height:1;">&#128197;</div>
               </td>
             </tr>
@@ -352,7 +352,7 @@ export function weeklyDigestEmailTemplate(data: {
           <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
             Your Weekly Digest
           </h1>
-          <p style="margin:0;font-size:15px;color:#b9addb;line-height:1.6;">
+          <p style="margin:0;font-size:15px;color:#A9B6D8;line-height:1.6;">
             Hi ${username}, here&rsquo;s what happened on Engganyo this week (${weekStart} &ndash; ${weekEnd}).
           </p>
         </td>
@@ -363,18 +363,18 @@ export function weeklyDigestEmailTemplate(data: {
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
               <td width="50%" style="padding-right:8px;">
-                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
                   <tr><td style="padding:20px;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">Tasks Completed</p>
+                    <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">Tasks Completed</p>
                     <p style="margin:0;font-size:28px;font-weight:700;color:#10b981;">${tasksCompleted}</p>
                   </td></tr>
                 </table>
               </td>
               <td width="50%" style="padding-left:8px;">
-                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
                   <tr><td style="padding:20px;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">Credits Earned</p>
-                    <p style="margin:0;font-size:28px;font-weight:700;color:#7c4dff;">${creditsEarned}</p>
+                    <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">Credits Earned</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#1F62F0;">${creditsEarned}</p>
                   </td></tr>
                 </table>
               </td>
@@ -382,17 +382,17 @@ export function weeklyDigestEmailTemplate(data: {
             <tr><td colspan="2" style="height:16px;"></td></tr>
             <tr>
               <td width="50%" style="padding-right:8px;">
-                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
                   <tr><td style="padding:20px;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">Current Balance</p>
-                    <p style="margin:0;font-size:28px;font-weight:700;color:#ff7eb6;">${currentBalance}</p>
+                    <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">Current Balance</p>
+                    <p style="margin:0;font-size:28px;font-weight:700;color:#E8A800;">${currentBalance}</p>
                   </td></tr>
                 </table>
               </td>
               <td width="50%" style="padding-left:8px;">
-                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #4a3391;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0a0f1e;border-radius:10px;border:1px solid #2E4A8C;">
                   <tr><td style="padding:20px;">
-                    <p style="margin:0 0 4px;font-size:12px;color:#9d8cc9;text-transform:uppercase;letter-spacing:0.05em;">New Campaigns</p>
+                    <p style="margin:0 0 4px;font-size:12px;color:#6E7CA3;text-transform:uppercase;letter-spacing:0.05em;">New Campaigns</p>
                     <p style="margin:0;font-size:28px;font-weight:700;color:#f59e0b;">${newCampaigns}</p>
                   </td></tr>
                 </table>
@@ -407,10 +407,10 @@ export function weeklyDigestEmailTemplate(data: {
       ${rankSection}
       <tr>
         <td style="padding:0 40px 32px;">
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#0d0919;border-radius:10px;border:1px solid #4a3391;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background:#050918;border-radius:10px;border:1px solid #2E4A8C;">
             <tr>
               <td align="center" style="padding:20px;">
-                <a href="https://engganyo.com/dashboard" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;background:linear-gradient(135deg,#7c4dff,#6a3ce0);">
+                <a href="https://engganyo.com/dashboard" target="_blank" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;background:linear-gradient(135deg,#1F62F0,#1A54D6);">
                   Go to Dashboard
                 </a>
               </td>
@@ -429,7 +429,7 @@ export function twoFactorEmailTemplate(code: string): string {
     <!-- Top accent bar -->
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
       <tr>
-        <td style="background:linear-gradient(90deg,#7c4dff,#ff7eb6);height:4px;"></td>
+        <td style="background:linear-gradient(90deg,#1F62F0,#E8A800);height:4px;"></td>
       </tr>
     </table>
 
@@ -439,7 +439,7 @@ export function twoFactorEmailTemplate(code: string): string {
         <td style="padding:40px 40px 0;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:linear-gradient(135deg,#7c4dff,#6a3ce0);border-radius:14px;padding:14px;">
+              <td style="background:linear-gradient(135deg,#1F62F0,#1A54D6);border-radius:14px;padding:14px;">
                 <div style="font-size:22px;line-height:1;">&#128272;</div>
               </td>
             </tr>
@@ -447,7 +447,7 @@ export function twoFactorEmailTemplate(code: string): string {
           <h1 style="margin:20px 0 8px;font-size:24px;font-weight:700;color:#ffffff;line-height:1.3;">
             Your sign-in code
           </h1>
-          <p style="margin:0;font-size:15px;color:#b9addb;line-height:1.6;">
+          <p style="margin:0;font-size:15px;color:#A9B6D8;line-height:1.6;">
             Use the code below to complete your sign-in to Engganyo.
             This code expires in <strong style="color:#c4cad6;">10 minutes</strong>.
           </p>
@@ -456,10 +456,10 @@ export function twoFactorEmailTemplate(code: string): string {
       <tr>
         <td style="padding:32px 40px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"
-                 style="background:#0a0f1e;border-radius:12px;border:1px solid #4a3391;">
+                 style="background:#0a0f1e;border-radius:12px;border:1px solid #2E4A8C;">
             <tr>
               <td align="center" style="padding:32px 20px;">
-                <p style="margin:0 0 8px;font-size:13px;color:#9d8cc9;letter-spacing:0.05em;text-transform:uppercase;">Verification code</p>
+                <p style="margin:0 0 8px;font-size:13px;color:#6E7CA3;letter-spacing:0.05em;text-transform:uppercase;">Verification code</p>
                 <p style="margin:0;font-size:42px;font-weight:700;color:#ffffff;letter-spacing:10px;font-family:monospace;">${code}</p>
               </td>
             </tr>
@@ -469,10 +469,10 @@ export function twoFactorEmailTemplate(code: string): string {
       <tr>
         <td style="padding:0 40px 40px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"
-                 style="background:#0f1826;border-radius:10px;border:1px solid #4a3391;">
+                 style="background:#0f1826;border-radius:10px;border:1px solid #2E4A8C;">
             <tr>
               <td style="padding:16px 20px;">
-                <p style="margin:0;font-size:12px;color:#9d8cc9;line-height:1.6;">
+                <p style="margin:0;font-size:12px;color:#6E7CA3;line-height:1.6;">
                   &#128274; If you didn&rsquo;t try to sign in to Engganyo, please ignore this email —
                   your account remains secure.
                 </p>
@@ -497,7 +497,7 @@ export function announcementEmailTemplate(data: {
   const { title, bodyHtml, theme, ctaLabel, ctaUrl } = data;
 
   const themeColors: Record<string, { gradient: string; solid: string; light: string }> = {
-    blue:   { gradient: 'linear-gradient(135deg,#7c4dff,#6a3ce0)', solid: '#7c4dff', light: '#7c4dff/10' },
+    blue:   { gradient: 'linear-gradient(135deg,#1F62F0,#1A54D6)', solid: '#1F62F0', light: '#1F62F0/10' },
     amber:  { gradient: 'linear-gradient(135deg,#f59e0b,#d97706)', solid: '#f59e0b', light: '#f59e0b/10' },
     rose:   { gradient: 'linear-gradient(135deg,#f43f5e,#e11d48)', solid: '#f43f5e', light: '#f43f5e/10' },
   };
@@ -539,7 +539,7 @@ export function announcementEmailTemplate(data: {
       </tr>
       <tr>
         <td style="padding:0 40px 32px;">
-          <div style="font-size:15px;color:#b9addb;line-height:1.7;">
+          <div style="font-size:15px;color:#A9B6D8;line-height:1.7;">
             ${bodyHtml}
           </div>
         </td>
@@ -548,10 +548,10 @@ export function announcementEmailTemplate(data: {
       <tr>
         <td style="padding:0 40px 40px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"
-                 style="background:#0f1826;border-radius:10px;border:1px solid #4a3391;">
+                 style="background:#0f1826;border-radius:10px;border:1px solid #2E4A8C;">
             <tr>
               <td style="padding:16px 20px;">
-                <p style="margin:0;font-size:12px;color:#9d8cc9;line-height:1.6;">
+                <p style="margin:0;font-size:12px;color:#6E7CA3;line-height:1.6;">
                   This is a system-generated email from Engganyo. Do not reply to this address. For assistance, visit our Help Center or contact support through the platform.
                 </p>
               </td>

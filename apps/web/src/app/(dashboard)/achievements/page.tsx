@@ -41,7 +41,7 @@ interface GamStats {
 
 const CATEGORY_COLORS: Record<string, string> = {
   ENGAGEMENT: 'text-brand-400 bg-brand-500/10',
-  CREATOR:    'text-purple-400 bg-purple-500/10',
+  CREATOR:    'text-brand-400 bg-brand-500/10',
   FINANCIAL:  'text-green-400 bg-green-500/10',
   MILESTONE:  'text-yellow-400 bg-yellow-500/10',
   DEDICATION: 'text-orange-400 bg-orange-500/10',

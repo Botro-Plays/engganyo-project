@@ -23,54 +23,54 @@
   :root {
     /* SeeCareer-inspired deep-purple palette (HSL channels for shadcn-style vars) */
     --radius: 0px;
-    --background: 255 47% 7%;        /* #0d0919 */
-    --foreground: 255 100% 97%;      /* #f3eeff */
-    --card: 257 43% 11%;             /* #171028 */
-    --card-foreground: 255 100% 97%;
-    --popover: 258 41% 16%;          /* #221839 */
-    --popover-foreground: 255 100% 97%;
-    --primary: 256 100% 65%;         /* #7c4dff */
+    --background: 227 65% 6%;        /* #050918 */
+    --foreground: 222 100% 97%;      /* #F2F5FF */
+    --card: 224 51% 15%;             /* #121C38 */
+    --card-foreground: 222 100% 97%;
+    --popover: 227 50% 21%;          /* #1B2650 */
+    --popover-foreground: 222 100% 97%;
+    --primary: 221 88% 53%;         /* #1F62F0 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 258 41% 16%;        /* #221839 */
-    --secondary-foreground: 255 100% 97%;
-    --muted: 258 41% 16%;
-    --muted-foreground: 255 39% 77%; /* #b9addb */
-    --accent: 255 100% 77%;          /* #a68aff */
-    --accent-foreground: 255 20% 20%;
+    --secondary: 227 50% 21%;        /* #1B2650 */
+    --secondary-foreground: 222 100% 97%;
+    --muted: 227 50% 21%;
+    --muted-foreground: 223 38% 75%; /* #A9B6D8 */
+    --accent: 222 100% 78%;          /* #8FB0FF */
+    --accent-foreground: 222 60% 8%;
     --destructive: 348 100% 73%;     /* #ff6b81 */
-    --destructive-foreground: 255 20% 20%;
+    --destructive-foreground: 222 60% 8%;
     --success: 152 76% 64%;          /* #4ade80 */
     --warning: 43 96% 60%;           /* #fbbf24 */
-    --border: 255 48% 38%;           /* #4a3391 */
-    --input: 255 48% 38%;
-    --ring: 326 100% 74%;            /* #ff7eb6 focus accent */
+    --border: 222 51% 36%;           /* #2E4A8C */
+    --input: 222 51% 36%;
+    --ring: 43 100% 45%;            /* #E8A800 focus accent */
 
     /* Named palette mirrors (raw hex for arbitrary-value utilities) */
-    --sc-bg: #0d0919;
-    --sc-grid: rgba(139, 92, 246, 0.1);
-    --sc-panel: #171028;
-    --sc-panel-2: #221839;
-    --sc-panel-solid: #171028;
-    --sc-border: #4a3391;
-    --sc-edge: #4a3391;
-    --sc-hard: #2c1166;
-    --sc-shade: rgba(0, 0, 0, 0.35);
-    --sc-light: rgba(255, 255, 255, 0.18);
-    --sc-soft: #2a1d4d;
+    --sc-bg: #050918;
+    --sc-grid: rgba(96, 140, 255, 0.1);
+    --sc-panel: #121C38;
+    --sc-panel-2: #1B2650;
+    --sc-panel-solid: #121C38;
+    --sc-border: #2E4A8C;
+    --sc-edge: #2E4A8C;
+    --sc-hard: #0A0E1F;
+    --sc-shade: rgba(0, 0, 0, 0.4);
+    --sc-light: rgba(255, 255, 255, 0.16);
+    --sc-soft: #243257;
     --sc-shadow: 4px 4px 0 0 var(--sc-hard);
-    --sc-text: #f3eeff;
-    --sc-muted: #b9addb;
-    --sc-primary: #a68aff;
-    --sc-on-primary: #160b33;
-    --sc-cta: #7c4dff;
+    --sc-text: #F2F5FF;
+    --sc-muted: #A9B6D8;
+    --sc-primary: #8FB0FF;
+    --sc-on-primary: #0A1128;
+    --sc-cta: #1F62F0;
     --sc-on-cta: #ffffff;
-    --sc-accent-2: #ff7eb6;
-    --sc-cyan: #3de0ff;
-    --sc-saved: #ffd23f;
-    --sc-ok: #4ade80;
-    --sc-warn: #fbbf24;
-    --sc-danger: #ff6b81;
-    --sc-focus: #ff7eb6;
+    --sc-accent-2: #E8A800;
+    --sc-cyan: #3DE0FF;
+    --sc-saved: #E8A800;
+    --sc-ok: #4ADE80;
+    --sc-warn: #FBBF24;
+    --sc-danger: #FF6B81;
+    --sc-focus: #E8A800;
   }
 }
 
@@ -116,13 +116,13 @@
   }
 
   ::selection {
-    background: #7c4dff;
+    background: #1F62F0;
     color: #ffffff;
   }
 
   /* Visible keyboard focus everywhere */
   :focus-visible {
-    outline: 2px solid #ff7eb6;
+    outline: 2px solid #E8A800;
     outline-offset: 2px;
   }
 
@@ -171,7 +171,7 @@
     transition: transform 0.05s ease, box-shadow 0.05s ease, background-color 0.15s ease;
   }
   .btn-cta:hover {
-    background-color: #8f63ff;
+    background-color: #3D74F5;
   }
   .btn-cta:active {
     transform: translate(2px, 2px);
@@ -196,7 +196,7 @@
 
 @layer utilities {
   .text-gradient {
-    background: linear-gradient(135deg, #a68aff 0%, #7c4dff 55%, #ff7eb6 100%);
+    background: linear-gradient(135deg, #8FB0FF 0%, #1F62F0 55%, #E8A800 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -241,7 +241,7 @@
 
 /* Onboarding tour: highlight ring on the real UI element for the current step */
 .tour-highlight-ring {
-  outline: 2px solid #a68aff;
+  outline: 2px solid #8FB0FF;
   outline-offset: 3px;
   transition: outline-color 0.15s ease;
 }

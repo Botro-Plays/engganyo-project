@@ -21,13 +21,13 @@ interface PlatformSelectProps {
 const PLATFORM_COLOR: Record<string, string> = {
   YOUTUBE: 'text-red-400',
   TIKTOK: 'text-sc-text',
-  INSTAGRAM: 'text-pink-400',
+  INSTAGRAM: 'text-accent-400',
   TWITTER: 'text-sky-400',
   FACEBOOK: 'text-blue-400',
-  TWITCH: 'text-purple-400',
+  TWITCH: 'text-brand-400',
   SPOTIFY: 'text-green-400',
   TELEGRAM: 'text-sky-300',
-  DISCORD: 'text-indigo-400',
+  DISCORD: 'text-brand-400',
   TRUSTPILOT: 'text-green-300',
   GOOGLE: 'text-blue-300',
 };
@@ -71,7 +71,7 @@ export function PlatformSelect({ options, value, onChange, placeholder = 'Select
       {open && (
         <ul
           role="listbox"
-          className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-surface-border bg-[#171028] py-1 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none text-sm"
+          className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-surface-border bg-[#121C38] py-1 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none text-sm"
         >
           {options.map((opt) => {
             const isActive = opt.value === value;

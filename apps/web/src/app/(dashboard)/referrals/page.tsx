@@ -76,7 +76,7 @@ export default function ReferralsPage() {
         </div>
         <div className="card-glass rounded-xl p-5">
           <div className="flex items-center gap-2 mb-2">
-            <CreditCard className="w-4 h-4 text-purple-400" />
+            <CreditCard className="w-4 h-4 text-brand-400" />
             <span className="text-xs text-sc-dim">Credits Earned</span>
           </div>
           <p className="text-2xl font-bold text-sc-text">{data?.totalCreditsEarned ?? 0}</p>

@@ -96,12 +96,12 @@ export default function AdminAnalyticsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Users" value={totals?.users ?? 0} sub={`+${totals?.newUsers ?? 0} new`} icon={Users} color="bg-blue-500" />
           <StatCard label="DAU" value={totals?.dau ?? 0} sub="Today" icon={TrendingUp} color="bg-green-500" />
-          <StatCard label="MAU" value={totals?.mau ?? 0} sub={`Last ${days} days`} icon={Users} color="bg-purple-500" />
+          <StatCard label="MAU" value={totals?.mau ?? 0} sub={`Last ${days} days`} icon={Users} color="bg-brand-500" />
           <StatCard label="Active Campaigns" value={totals?.activeCampaigns ?? 0} sub={`of ${totals?.campaigns ?? 0} total`} icon={Megaphone} color="bg-orange-500" />
           <StatCard label="Tasks Verified" value={totals?.tasksVerified ?? 0} icon={CheckSquare} color="bg-emerald-500" />
           <StatCard label="Tasks Pending" value={totals?.tasksSubmitted ?? 0} sub="Awaiting review" icon={CheckSquare} color="bg-yellow-500" />
           <StatCard label="Open Reports" value={totals?.openReports ?? 0} icon={Users} color="bg-red-500" />
-          <StatCard label="Total Campaigns" value={totals?.campaigns ?? 0} icon={Megaphone} color="bg-indigo-500" />
+          <StatCard label="Total Campaigns" value={totals?.campaigns ?? 0} icon={Megaphone} color="bg-brand-500" />
         </div>
       )}
 
@@ -117,20 +117,20 @@ export default function AdminAnalyticsPage() {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#1F62F0" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#1F62F0" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradDau" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
-              <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#27407A" />
+              <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="New Users" stroke="#6366f1" fill="url(#gradUsers)" strokeWidth={2} />
+              <Area type="monotone" dataKey="New Users" stroke="#1F62F0" fill="url(#gradUsers)" strokeWidth={2} />
               <Area type="monotone" dataKey="DAU" stroke="#22c55e" fill="url(#gradDau)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
@@ -148,10 +148,10 @@ export default function AdminAnalyticsPage() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
-                <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#27407A" />
+                <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
                 <Bar dataKey="Tasks Verified" fill="#22c55e" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -175,10 +175,10 @@ export default function AdminAnalyticsPage() {
                     <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
-                <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#27407A" />
+                <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
                 <Area type="monotone" dataKey="Credits Issued" stroke="#eab308" fill="url(#gradCredits)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>

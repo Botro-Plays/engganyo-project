@@ -294,7 +294,7 @@ function DashboardPageInner() {
       label: 'Level',
       value: stats?.gamification.level ?? (user?.level ?? '—'),
       sub: gamStats ? `${gamStats.xpToNext} XP to next` : `${(stats?.gamification.xp ?? user?.xp ?? 0).toLocaleString()} XP`,
-      icon: Trophy, color: 'text-purple-400',
+      icon: Trophy, color: 'text-brand-400',
       progress: levelInfo?.progress ?? 0,
     },
     {
@@ -302,7 +302,7 @@ function DashboardPageInner() {
       value: (stats?.gamification.vp ?? user?.vp ?? 0).toLocaleString(),
       sub: stats?.gamification.vipTier?.displayName ?? 'No tier yet',
       icon: Award,
-      color: stats?.gamification.vipTier?.perks.color ?? '#888888',
+      color: stats?.gamification.vipTier?.perks.color ?? '#6E7CA3',
       progress: gamStats?.nextTierProgress ?? 0,
     },
     {
@@ -369,7 +369,7 @@ function DashboardPageInner() {
             <p className={`text-xl font-bold tabular-nums ${s.color}`}>{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}</p>
             {s.progress !== undefined && (
               <div className="mt-1.5 h-0.5 bg-sc-panel-2 rounded-full overflow-hidden">
-                <div className="h-full bg-purple-400 rounded-full transition-all" style={{ width: `${s.progress}%` }} />
+                <div className="h-full bg-brand-400 rounded-full transition-all" style={{ width: `${s.progress}%` }} />
               </div>
             )}
             <p className="text-[11px] text-sc-dim mt-0.5 truncate">{s.sub}</p>
@@ -396,8 +396,8 @@ function DashboardPageInner() {
         <div className="card-glass rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                <RotateCcw className="w-4 h-4 text-purple-400" />
+              <div className="w-9 h-9 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+                <RotateCcw className="w-4 h-4 text-brand-400" />
               </div>
               <div>
                 <h2 className="font-semibold text-sc-text text-sm">Spin the Wheel</h2>
@@ -411,7 +411,7 @@ function DashboardPageInner() {
             <button
               onClick={() => setWheelOpen(true)}
               disabled={!wheelStatus.freeSpinAvailable && wheelStatus.paidSpinsRemaining === 0}
-              className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <RotateCcw className="w-3.5 h-3.5" /> Spin
             </button>
@@ -465,14 +465,14 @@ function DashboardPageInner() {
               <AreaChart data={activityData}>
                 <defs>
                   <linearGradient id="gradActivity" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#1F62F0" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#1F62F0" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#8d7fb8', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
-                <Area type="monotone" dataKey="Tasks" stroke="#6366f1" fill="url(#gradActivity)" strokeWidth={2} />
+                <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#6E7CA3', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
+                <Area type="monotone" dataKey="Tasks" stroke="#1F62F0" fill="url(#gradActivity)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

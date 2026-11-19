@@ -103,7 +103,7 @@ export default function NewTopicPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="What's your topic about?"
-              className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text placeholder-sc-dim focus:outline-none focus:border-indigo-500"
+              className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text placeholder-sc-dim focus:outline-none focus:border-brand-500"
               maxLength={200}
               required
             />
@@ -121,7 +121,7 @@ export default function NewTopicPage() {
               onUserSearch={handleUserSearch}
               placeholder="Share your thoughts, questions, or ideas... Type ! for campaigns, @ for users"
               rows={10}
-              className="focus:outline-none focus:border-indigo-500"
+              className="focus:outline-none focus:border-brand-500"
             />
             <p className={`text-xs mt-1 ${content.length < 10 ? 'text-red-400' : 'text-sc-dim'}`}>
               {content.length}/10000 characters (minimum 10)
@@ -132,7 +132,7 @@ export default function NewTopicPage() {
             <button
               type="submit"
               disabled={createMutation.isPending || title.trim().length < 5 || content.trim().length < 10}
-              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text rounded-lg transition-colors"
             >
               <Send className="w-4 h-4" />
               {createMutation.isPending ? 'Creating...' : 'Create Topic'}

@@ -82,7 +82,7 @@ export default function ForumPage() {
         </div>
         <Link
           href="/forum/new"
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-sc-text rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-sc-text rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" />
           New Topic
@@ -93,7 +93,7 @@ export default function ForumPage() {
         <button
           onClick={() => setStatusFilter('')}
           className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-            !statusFilter ? 'bg-indigo-600 text-sc-text' : 'bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2'
+            !statusFilter ? 'bg-brand-600 text-sc-text' : 'bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2'
           }`}
         >
           All
@@ -101,7 +101,7 @@ export default function ForumPage() {
         <button
           onClick={() => setStatusFilter('OPEN')}
           className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-            statusFilter === 'OPEN' ? 'bg-indigo-600 text-sc-text' : 'bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2'
+            statusFilter === 'OPEN' ? 'bg-brand-600 text-sc-text' : 'bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2'
           }`}
         >
           Open
@@ -109,7 +109,7 @@ export default function ForumPage() {
         <button
           onClick={() => setStatusFilter('PINNED')}
           className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-            statusFilter === 'PINNED' ? 'bg-indigo-600 text-sc-text' : 'bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2'
+            statusFilter === 'PINNED' ? 'bg-brand-600 text-sc-text' : 'bg-sc-panel-2 text-sc-muted hover:bg-sc-panel-2'
           }`}
         >
           Pinned
@@ -134,7 +134,7 @@ export default function ForumPage() {
           <p className="text-sc-dim text-sm mb-4">Be the first to start a discussion!</p>
           <Link
             href="/forum/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-sc-text rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-sc-text rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             Create Topic
@@ -154,7 +154,7 @@ export default function ForumPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    {topic.isPinned && <Pin className="w-4 h-4 text-indigo-400" />}
+                    {topic.isPinned && <Pin className="w-4 h-4 text-brand-400" />}
                     {topic.status === 'LOCKED' && <Lock className="w-4 h-4 text-yellow-400" />}
                     <h3 className="text-sc-text font-medium truncate">{topic.title}</h3>
                   </div>

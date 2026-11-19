@@ -40,7 +40,7 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 const CATEGORY_COLORS: Record<string, string> = {
   BOOST: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
-  COSMETIC: 'border-purple-500/30 bg-purple-500/10 text-purple-400',
+  COSMETIC: 'border-brand-500/30 bg-brand-500/10 text-brand-400',
   CONVENIENCE: 'border-sky-500/30 bg-sky-500/10 text-sky-400',
   CREDIT_PACK: 'border-green-500/30 bg-green-500/10 text-green-400',
   GUILD_PERK: 'border-rose-500/30 bg-rose-500/10 text-rose-400',
@@ -204,7 +204,7 @@ export default function InventoryPage() {
               <div
                 key={entry.id}
                 className={`rounded-xl border p-4 flex flex-col transition-all ${colorClass} ${
-                  isCosmetic && entry.equipped ? 'ring-1 ring-purple-400/40' : ''
+                  isCosmetic && entry.equipped ? 'ring-1 ring-brand-400/40' : ''
                 }`}
               >
                 <div className="flex items-start justify-between mb-3">
@@ -213,7 +213,7 @@ export default function InventoryPage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     {isCosmetic && entry.equipped && (
-                      <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-300 border border-brand-500/30">
                         <ShieldCheck className="w-3 h-3" />
                         Equipped
                       </span>
@@ -241,7 +241,7 @@ export default function InventoryPage() {
                   <div className="text-xs text-sc-dim">
                     Acquired {new Date(entry.acquiredAt).toLocaleDateString()}
                     {isCosmetic && (
-                      <span className="ml-2 text-purple-400/70">Permanent</span>
+                      <span className="ml-2 text-brand-400/70">Permanent</span>
                     )}
                   </div>
 
@@ -254,7 +254,7 @@ export default function InventoryPage() {
                       }}
                       className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
                         entry.equipped
-                          ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30'
+                          ? 'bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 border border-brand-500/30'
                           : 'bg-brand-500 hover:bg-brand-400 text-sc-text'
                       }`}
                     >

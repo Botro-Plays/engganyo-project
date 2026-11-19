@@ -233,7 +233,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
 
         <div className="text-center mb-5">
           <h2 className="text-lg font-bold text-sc-text flex items-center justify-center gap-2">
-            <RotateCcw className="w-5 h-5 text-purple-400" /> Spin the Wheel
+            <RotateCcw className="w-5 h-5 text-brand-400" /> Spin the Wheel
           </h2>
           <p className="text-xs text-sc-dim mt-1">
             {wheelStatus?.freeSpinAvailable
@@ -322,7 +322,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               ref={spinButtonRef}
               onClick={handleSpin}
               disabled={!canSpin || isSpinning}
-              className="flex items-center justify-center gap-2 mx-auto py-2.5 px-8 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/30 text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed min-w-[160px]"
+              className="flex items-center justify-center gap-2 mx-auto py-2.5 px-8 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 hover:border-brand-500/30 text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed min-w-[160px]"
             >
               {isSpinning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RotateCcw className="w-4 h-4" /> {spinCost === 0 ? 'Spin — Free' : `Spin — ${spinCost} credits`}</>}
             </button>
@@ -349,7 +349,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               <button
                 onClick={handleRecover}
                 disabled={recovering}
-                className="flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 hover:bg-purple-500/25 text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 py-2 px-4 rounded-lg bg-brand-500/15 border border-brand-500/30 text-brand-300 hover:bg-brand-500/25 text-sm font-medium transition-colors disabled:opacity-50"
               >
                 {recovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 Check my status
@@ -380,13 +380,13 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                   <p className="text-sm text-green-300">+{result.credits} credits</p>
                 ) : null}
                 {result.durationHours && (
-                  <p className="text-sm text-purple-300">{result.durationHours}h 2× XP boost is now active</p>
+                  <p className="text-sm text-brand-300">{result.durationHours}h 2× XP boost is now active</p>
                 )}
                 {result.charges && (
                   <p className="text-sm text-sky-300">Streak freeze charge added — protects your streak!</p>
                 )}
                 {result.itemName && (
-                  <p className="text-sm text-violet-300">{result.itemName} added to your inventory — open it there to reveal the prize!</p>
+                  <p className="text-sm text-brand-300">{result.itemName} added to your inventory — open it there to reveal the prize!</p>
                 )}
                 <p className="text-[10px] text-sc-dim mt-2">
                   {result.isFree ? 'Free spin' : `${result.cost} credits`}
@@ -398,7 +398,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                   setShowResult(false);
                   setResult(null);
                 }}
-                className="py-2.5 px-6 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 hover:bg-purple-500/20 text-sm font-medium transition-colors mr-2"
+                className="py-2.5 px-6 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 text-sm font-medium transition-colors mr-2"
               >
                 Spin Again
               </button>

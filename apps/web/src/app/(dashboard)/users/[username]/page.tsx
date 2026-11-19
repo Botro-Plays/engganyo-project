@@ -79,13 +79,13 @@ const REPORT_REASONS: { value: string; label: string }[] = [
 const PLATFORM_COLORS: Record<string, string> = {
   YOUTUBE:   'text-red-400',
   TIKTOK:    'text-sc-text',
-  INSTAGRAM: 'text-pink-400',
+  INSTAGRAM: 'text-accent-400',
   TWITTER:   'text-sky-400',
   FACEBOOK:  'text-blue-400',
-  TWITCH:    'text-purple-400',
+  TWITCH:    'text-brand-400',
   SPOTIFY:   'text-green-400',
   TELEGRAM:  'text-sky-300',
-  DISCORD:   'text-indigo-400',
+  DISCORD:   'text-brand-400',
 };
 
 // Build external platform URL from stored profileUrl or construct from username
@@ -161,7 +161,7 @@ export default function UserProfilePage() {
         <div className="card-glass rounded-xl p-12 text-center">
           <User className="w-12 h-12 text-sc-dim mx-auto mb-4" />
           <p className="text-sc-muted">User not found or profile is private.</p>
-          <Link href="/forum" className="inline-flex items-center gap-2 mt-4 text-indigo-400 hover:text-indigo-300 text-sm">
+          <Link href="/forum" className="inline-flex items-center gap-2 mt-4 text-brand-400 hover:text-brand-300 text-sm">
             <ArrowLeft className="w-4 h-4" /> Back
           </Link>
         </div>
@@ -185,7 +185,7 @@ export default function UserProfilePage() {
       {/* ── Profile card ── */}
       <div className={`rounded-xl p-6 mb-4 transition-all ${cosmeticStyles.themeCardClass}`}>
         <div className="flex items-start gap-4">
-          <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sc-text font-bold text-2xl shrink-0 overflow-hidden ${cosmeticStyles.frameClass}`}
+          <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sc-text font-bold text-2xl shrink-0 overflow-hidden ${cosmeticStyles.frameClass}`}
             style={cosmeticStyles.frameStyle}
           >
             {data.avatarUrl
@@ -196,7 +196,7 @@ export default function UserProfilePage() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold text-sc-text">{data.displayName ?? data.username}</h1>
               {data.role !== 'USER' && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30">
                   {data.role.replace('_', ' ')}
                 </span>
               )}
@@ -221,7 +221,7 @@ export default function UserProfilePage() {
                     key={c.id}
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
                       cosmeticType === 'profile_theme'
-                        ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
+                        ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
                         : cosmeticType === 'avatar_frame'
                         ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                         : 'bg-sc-panel-2/50 text-sc-text border-sc-line/50'
@@ -240,7 +240,7 @@ export default function UserProfilePage() {
                 <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{data.profile.location}</span>
               )}
               {data.profile?.websiteUrl && (
-                <a href={data.profile.websiteUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300">
+                <a href={data.profile.websiteUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-400 hover:text-brand-300">
                   <Globe className="w-3 h-3" /> Website <ExternalLink className="w-2.5 h-2.5" />
                 </a>
               )}
@@ -268,7 +268,7 @@ export default function UserProfilePage() {
             { icon: Shield,      label: 'Trust',       value: data.trustScore ? `${Math.round(data.trustScore.score)}` : '—' },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center">
-              <Icon className="w-4 h-4 text-indigo-400 mx-auto mb-1" />
+              <Icon className="w-4 h-4 text-brand-400 mx-auto mb-1" />
               <p className="text-sm font-semibold text-sc-text">{value}</p>
               <p className="text-xs text-sc-dim">{label}</p>
             </div>

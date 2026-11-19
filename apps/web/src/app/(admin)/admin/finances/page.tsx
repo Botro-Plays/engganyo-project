@@ -118,7 +118,7 @@ const METHOD_CFG: Record<string, { label: string; color: string; bg: string; ico
   PAYMONGO:   { label: 'PayMongo',     color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: CreditCard },
   PAYPAL:     { label: 'PayPal',       color: 'text-blue-400',    bg: 'bg-blue-500/10',    icon: Wallet },
   USDT_BEP20: { label: 'USDT BEP20',  color: 'text-orange-400',  bg: 'bg-orange-500/10',  icon: Bitcoin },
-  USDT_BASE:  { label: 'USDT Base',   color: 'text-purple-400',  bg: 'bg-purple-500/10',  icon: Bitcoin },
+  USDT_BASE:  { label: 'USDT Base',   color: 'text-brand-400',  bg: 'bg-brand-500/10',  icon: Bitcoin },
 };
 
 // ─── Review Modal ─────────────────────────────────────────

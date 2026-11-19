@@ -212,7 +212,7 @@ export function MentionTextarea({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={rows}
-        className={`w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text placeholder-sc-dim focus:outline-none focus:border-indigo-500 resize-none ${className}`}
+        className={`w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text placeholder-sc-dim focus:outline-none focus:border-brand-500 resize-none ${className}`}
       />
       
       {showSuggestions && currentCount > 0 && (
@@ -251,7 +251,7 @@ export function MentionTextarea({
                   index === selectedIndex ? 'bg-sc-panel-2' : ''
                 }`}
               >
-                <User className="w-4 h-4 text-indigo-400" />
+                <User className="w-4 h-4 text-brand-400" />
                 <div className="flex-1">
                   <div className="text-sc-text text-sm">@{user.username}</div>
                   {user.displayName && (

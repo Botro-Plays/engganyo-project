@@ -124,7 +124,7 @@ export default function AdminReportsPage() {
                     {r.message && (
                       <>
                         {' · '}
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-medium">Chat</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 font-medium">Chat</span>
                         <span className="text-sc-muted ml-1 truncate max-w-[200px] inline-block align-bottom">{r.message.content}</span>
                       </>
                     )}

@@ -50,13 +50,13 @@ interface LeaderboardEntry {
 const PLATFORM_STYLES: Record<string, { color: string; bg: string; label: string }> = {
   YOUTUBE:    { color: 'text-red-400',     bg: 'bg-red-500/10',     label: 'YouTube' },
   TIKTOK:     { color: 'text-sc-text',       bg: 'bg-white/10',       label: 'TikTok' },
-  INSTAGRAM:  { color: 'text-pink-400',    bg: 'bg-pink-500/10',    label: 'Instagram' },
+  INSTAGRAM:  { color: 'text-accent-400',    bg: 'bg-accent-500/10',    label: 'Instagram' },
   TWITTER:    { color: 'text-sky-400',     bg: 'bg-sky-500/10',     label: 'Twitter' },
   FACEBOOK:   { color: 'text-blue-400',    bg: 'bg-blue-500/10',    label: 'Facebook' },
-  TWITCH:     { color: 'text-purple-400',  bg: 'bg-purple-500/10',  label: 'Twitch' },
+  TWITCH:     { color: 'text-brand-400',  bg: 'bg-brand-500/10',  label: 'Twitch' },
   SPOTIFY:    { color: 'text-green-400',   bg: 'bg-green-500/10',   label: 'Spotify' },
   TELEGRAM:   { color: 'text-sky-300',     bg: 'bg-sky-400/10',     label: 'Telegram' },
-  DISCORD:    { color: 'text-indigo-400',  bg: 'bg-indigo-500/10',  label: 'Discord' },
+  DISCORD:    { color: 'text-brand-400',  bg: 'bg-brand-500/10',  label: 'Discord' },
   TRUSTPILOT: { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'TrustPilot' },
   GOOGLE:     { color: 'text-orange-400',  bg: 'bg-orange-500/10',  label: 'Google' },
 };

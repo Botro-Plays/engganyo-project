@@ -157,10 +157,10 @@ function SearchContent() {
                 className="card-glass rounded-xl p-4 block hover:bg-surface-hover transition-colors"
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <MessageSquare className="w-4 h-4 text-indigo-400" />
+                  <MessageSquare className="w-4 h-4 text-brand-400" />
                   <span className="text-sm font-medium text-sc-text">{t.title}</span>
                   {t.isPinned && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-300 border border-brand-500/20">
                       Pinned
                     </span>
                   )}

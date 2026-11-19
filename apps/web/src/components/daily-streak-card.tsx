@@ -175,7 +175,7 @@ export function DailyStreakCard({
             +{formatCredits(rewardResult.creditReward)} {creditLabel(rewardResult.creditReward)} · +{rewardResult.xpReward} XP · Day {rewardResult.newStreak}
           </p>
           {rewardResult.bonusLootBox && (
-            <p className="text-xs text-violet-300 mt-0.5 flex items-center gap-1">
+            <p className="text-xs text-brand-300 mt-0.5 flex items-center gap-1">
               <Package className="w-3 h-3" /> Milestone Mystery Gift Box added to inventory
             </p>
           )}

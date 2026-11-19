@@ -300,13 +300,13 @@ export default function ForumTopicPage() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              {data.isPinned && <Pin className="w-4 h-4 text-indigo-400" />}
+              {data.isPinned && <Pin className="w-4 h-4 text-brand-400" />}
               {isLocked && <Lock className="w-4 h-4 text-yellow-400" />}
               {editingTopic ? (
                 <input
                   value={editTopicTitle}
                   onChange={(e) => setEditTopicTitle(e.target.value)}
-                  className="flex-1 bg-sc-panel-2/50 border border-sc-line rounded-lg px-3 py-1 text-sc-text focus:outline-none focus:border-indigo-500 text-xl font-bold"
+                  className="flex-1 bg-sc-panel-2/50 border border-sc-line rounded-lg px-3 py-1 text-sc-text focus:outline-none focus:border-brand-500 text-xl font-bold"
                 />
               ) : (
                 <h1 className="text-2xl font-bold text-sc-text">{data.title}</h1>
@@ -330,7 +330,7 @@ export default function ForumTopicPage() {
                   <button
                     onClick={() => updateTopicMutation.mutate({ title: editTopicTitle, content: editTopicContent })}
                     disabled={updateTopicMutation.isPending}
-                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-sc-text rounded text-sm transition-colors"
+                    className="px-3 py-1 bg-brand-600 hover:bg-brand-700 text-sc-text rounded text-sm transition-colors"
                   >
                     Save
                   </button>
@@ -378,7 +378,7 @@ export default function ForumTopicPage() {
             value={editTopicContent}
             onChange={(e) => setEditTopicContent(e.target.value)}
             rows={6}
-            className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text focus:outline-none focus:border-indigo-500 resize-none mb-3"
+            className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-3 text-sc-text focus:outline-none focus:border-brand-500 resize-none mb-3"
           />
         ) : (
           <div className="mb-4">{renderContentWithMentions(data.content)}</div>
@@ -406,7 +406,7 @@ export default function ForumTopicPage() {
               disabled={topicReactionMutation.isPending}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm transition-colors ${
                 myTopicReaction?.type === type
-                  ? 'bg-indigo-500/30 border border-indigo-500/50 text-sc-text'
+                  ? 'bg-brand-500/30 border border-brand-500/50 text-sc-text'
                   : 'bg-sc-panel-2 hover:bg-sc-panel-2 text-sc-text'
               }`}
             >
@@ -417,7 +417,7 @@ export default function ForumTopicPage() {
           {!isLocked && (
             <button
               onClick={() => { setReplyingTo(null); setTimeout(() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50); }}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 transition-colors"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm bg-brand-600/20 hover:bg-brand-600/30 text-brand-400 border border-brand-500/30 transition-colors"
             >
               <CornerDownRight className="w-3.5 h-3.5" />
               Reply
@@ -453,7 +453,7 @@ export default function ForumTopicPage() {
               updatePending={updateReplyMutation.isPending}
             />
             {(reply.childReplies ?? []).length > 0 && (
-              <div className="ml-8 mt-2 space-y-2 border-l-2 border-indigo-500/20 pl-4">
+              <div className="ml-8 mt-2 space-y-2 border-l-2 border-brand-500/20 pl-4">
                 {(reply.childReplies ?? []).map((child) => (
                   <ReplyCard
                     key={child.id}
@@ -491,9 +491,9 @@ export default function ForumTopicPage() {
         ) : (
           <>
             {replyingTo && (
-              <div className="mb-2 border-l-4 border-indigo-500/60 bg-sc-panel-2/90 rounded-r-lg px-3 py-2 flex items-start justify-between gap-3 backdrop-blur-sm">
+              <div className="mb-2 border-l-4 border-brand-500/60 bg-sc-panel-2/90 rounded-r-lg px-3 py-2 flex items-start justify-between gap-3 backdrop-blur-sm">
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-indigo-400 mb-0.5">
+                  <p className="text-xs font-medium text-brand-400 mb-0.5">
                     <CornerDownRight className="w-3 h-3 inline mr-1" />
                     Replying to <UserLink user={replyingTo.author} showAvatar={false} />
                   </p>
@@ -520,7 +520,7 @@ export default function ForumTopicPage() {
                 onUserSearch={handleUserSearch}
                 placeholder="Write a reply... Type ! for campaigns, @ for users"
                 rows={3}
-                className="focus:outline-none focus:border-indigo-500"
+                className="focus:outline-none focus:border-brand-500"
               />
               {replyError && (
                 <p className={`text-sm mt-2 ${replyError.includes('disabled mentions') || replyError.includes('has disabled') ? 'text-amber-400' : 'text-red-400'}`}>
@@ -531,7 +531,7 @@ export default function ForumTopicPage() {
                 <button
                   type="submit"
                   disabled={replyMutation.isPending || !replyContent.trim()}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-sc-panel-2 disabled:cursor-not-allowed text-sc-text rounded-lg transition-colors"
                 >
                   <Send className="w-4 h-4" />
                   {replyMutation.isPending ? 'Sending...' : 'Reply'}
@@ -654,14 +654,14 @@ function ReplyCard({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-2 text-sc-text placeholder-sc-dim focus:outline-none focus:border-indigo-500 resize-none"
+                className="w-full bg-sc-panel-2/50 border border-sc-line rounded-lg p-2 text-sc-text placeholder-sc-dim focus:outline-none focus:border-brand-500 resize-none"
                 rows={3}
               />
               <div className="flex gap-2 mt-2">
                 <button
                   type="submit"
                   disabled={updatePending}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-sc-text rounded text-sm transition-colors"
+                  className="px-3 py-1 bg-brand-600 hover:bg-brand-700 text-sc-text rounded text-sm transition-colors"
                 >
                   Save
                 </button>
@@ -696,7 +696,7 @@ function ReplyCard({
             {!isTopicLocked && !isEditing && (
               <button
                 onClick={() => onReply({ id: reply.id, content: reply.content, author: reply.author })}
-                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-xs text-sc-muted hover:text-indigo-400 transition-colors"
+                className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded text-xs text-sc-muted hover:text-brand-400 transition-colors"
               >
                 <CornerDownRight className="w-3 h-3" />
                 Reply

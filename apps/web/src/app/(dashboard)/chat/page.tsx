@@ -437,7 +437,7 @@ export default function ChatPage() {
                   <div key={msg.id} className="flex gap-3 group">
                     {/* Avatar */}
                     <div
-                      className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-sc-text text-xs font-bold ${frame.frameClass}`}
+                      className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-500 flex items-center justify-center text-sc-text text-xs font-bold ${frame.frameClass}`}
                       style={frame.frameStyle}
                     >
                       {msg.user.displayName?.[0] ?? msg.user.username[0] ?? '?'}
@@ -607,7 +607,7 @@ export default function ChatPage() {
                               i === mentionIndex ? 'bg-brand-500/20 text-brand-300' : 'text-sc-text hover:bg-white/5'
                             }`}
                           >
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-purple-500 flex items-center justify-center text-sc-text text-[10px] font-bold">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-brand-500 flex items-center justify-center text-sc-text text-[10px] font-bold">
                               {u.displayName?.[0] ?? u.username[0]}
                             </div>
                             <span className="font-medium">{u.displayName ?? u.username}</span>

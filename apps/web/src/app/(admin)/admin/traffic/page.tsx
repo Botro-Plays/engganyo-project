@@ -276,9 +276,9 @@ export default function VisitorTrafficPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Page views" value={totals?.pageViews ?? 0} icon={MousePointerClick} color="bg-indigo-500" />
+          <StatCard label="Page views" value={totals?.pageViews ?? 0} icon={MousePointerClick} color="bg-brand-500" />
           <StatCard label="Visits" value={totals?.visits ?? 0} icon={Users} color="bg-blue-500" />
-          <StatCard label="Est. unique visitors" value={totals?.estimatedUniqueVisitors ?? 0} sub="cookie-based estimate" icon={Eye} color="bg-purple-500" />
+          <StatCard label="Est. unique visitors" value={totals?.estimatedUniqueVisitors ?? 0} sub="cookie-based estimate" icon={Eye} color="bg-brand-500" />
           <StatCard
             label="Bounce rate"
             value={totals?.bounceRate != null ? `${totals.bounceRate}%` : '—'}
@@ -303,20 +303,20 @@ export default function VisitorTrafficPage() {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="gradVisits" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#1F62F0" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#1F62F0" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradPv" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
-              <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
-              <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-              <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#27407A" />
+              <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
+              <YAxis tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="Visits" stroke="#6366f1" fill="url(#gradVisits)" strokeWidth={2} />
+              <Area type="monotone" dataKey="Visits" stroke="#1F62F0" fill="url(#gradVisits)" strokeWidth={2} />
               <Area type="monotone" dataKey="Page views" stroke="#22c55e" fill="url(#gradPv)" strokeWidth={2} />
               <Area type="monotone" dataKey="Est. uniques" stroke="#a855f7" fill="none" strokeWidth={2} strokeDasharray="4 3" />
             </AreaChart>

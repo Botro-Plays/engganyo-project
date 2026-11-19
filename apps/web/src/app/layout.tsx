@@ -6,7 +6,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Engganyo — Collaborative Creator Growth',
+    default: 'Engganyo — Small Taps. Big Crowds.',
     template: '%s | Engganyo',
   },
   description:
@@ -27,20 +27,20 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://engganyo.com',
     siteName: 'Engganyo',
-    title: 'Engganyo — Collaborative Creator Growth',
+    title: 'Engganyo — Small Taps. Big Crowds.',
     description: 'Grow your social presence through real human engagement.',
     images: [
       {
         url: 'https://engganyo.com/brand/social-1200x630.png',
         width: 1200,
         height: 630,
-        alt: 'Engganyo - Collaborative Creator Growth',
+        alt: 'Engganyo - Small Taps. Big Crowds.',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Engganyo — Collaborative Creator Growth',
+    title: 'Engganyo — Small Taps. Big Crowds.',
     description: 'Grow your social presence through real human engagement.',
     images: ['https://engganyo.com/brand/social-1200x630.png'],
   },
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0d0919',
+  themeColor: '#050918',
 };
 
 export default function RootLayout({

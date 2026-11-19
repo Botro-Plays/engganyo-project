@@ -95,13 +95,13 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 const PLATFORM_COLORS: Record<string, string> = {
   YOUTUBE:  'text-red-400 bg-red-500/10',
   TIKTOK:   'text-sc-text bg-white/10',
-  INSTAGRAM:'text-pink-400 bg-pink-500/10',
+  INSTAGRAM:'text-accent-400 bg-accent-500/10',
   TWITTER:  'text-sky-400 bg-sky-500/10',
   FACEBOOK: 'text-blue-400 bg-blue-500/10',
-  TWITCH:   'text-purple-400 bg-purple-500/10',
+  TWITCH:   'text-brand-400 bg-brand-500/10',
   SPOTIFY:  'text-green-400 bg-green-500/10',
   TELEGRAM:    'text-sky-300 bg-sky-400/10',
-  DISCORD:     'text-indigo-400 bg-indigo-500/10',
+  DISCORD:     'text-brand-400 bg-brand-500/10',
   TRUSTPILOT:  'text-emerald-400 bg-emerald-500/10',
   GOOGLE:      'text-orange-400 bg-orange-500/10',
 };
@@ -792,7 +792,7 @@ function TasksPageInner() {
               <span className="text-green-400">({limitsData.remaining} left)</span>
             )}
             {limitsData.bonus > 0 && limitsData.vipTier && (
-              <span className="text-purple-400 flex items-center gap-0.5" style={{ color: limitsData.vipTier.color }}>
+              <span className="text-brand-400 flex items-center gap-0.5" style={{ color: limitsData.vipTier.color }}>
                 +{limitsData.bonus} {limitsData.vipTier.displayName}
               </span>
             )}

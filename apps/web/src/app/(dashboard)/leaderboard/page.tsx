@@ -421,7 +421,7 @@ export default function LeaderboardPage() {
                       <p className="text-xs text-sc-dim">Lvl {entry.level}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-purple-300 flex items-center gap-1">
+                      <p className="text-sm font-semibold text-brand-300 flex items-center gap-1">
                         {formatCredits(entry.vp)} VP
                       </p>
                       {entry.vipTier && (

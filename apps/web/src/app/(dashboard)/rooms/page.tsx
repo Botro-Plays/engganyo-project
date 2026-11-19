@@ -18,9 +18,9 @@ import { getApiErrorMessage } from '@/lib/api';
 const STATUS_STYLE: Record<string, string> = {
   OPEN: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   NEGOTIATING: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  AGREED: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+  AGREED: 'bg-brand-500/15 text-brand-400 border-brand-500/30',
   IN_PROGRESS: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  SUBMITTED: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  SUBMITTED: 'bg-brand-500/15 text-brand-400 border-brand-500/30',
   DISPUTED: 'bg-red-500/15 text-red-400 border-red-500/30',
   COMPLETED: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   CLOSED: 'bg-sc-text/15 text-sc-muted border-sc-border/30',
