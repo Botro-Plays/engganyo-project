@@ -164,7 +164,7 @@ export default async function LandingPage() {
                 <div className="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-2xl">
                   {/* Header row */}
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium bg-pink-500/15 text-pink-300 border border-pink-500/20">
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium bg-accent-500/15 text-accent-300 border border-accent-500/20">
                       TikTok · Follow
                     </span>
                     <span className="text-sm font-bold text-green-400 shrink-0">+15 credits</span>
@@ -202,7 +202,7 @@ export default async function LandingPage() {
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                   {[
                     { step: '1', label: 'Accept', icon: CheckCircle2, color: 'text-brand-300' },
-                    { step: '2', label: 'Open & do', icon: ExternalLink, color: 'text-pink-300' },
+                    { step: '2', label: 'Open & do', icon: ExternalLink, color: 'text-accent-300' },
                     { step: '3', label: 'Submit proof', icon: Upload, color: 'text-amber-300' },
                   ].map(({ step, label, icon: Icon, color }) => (
                     <div key={step} className="bg-surface-card border border-surface-border rounded-xl px-2 py-3">

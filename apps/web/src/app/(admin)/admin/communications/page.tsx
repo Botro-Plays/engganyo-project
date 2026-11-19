@@ -203,14 +203,14 @@ export default function CommunicationsPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatBox label="Tasks Done" value={preview.tasksCompleted} color="text-green-400" />
             <StatBox label="Credits" value={preview.creditsEarned} color="text-blue-400" />
-            <StatBox label="Balance" value={preview.currentBalance} color="text-pink-400" />
+            <StatBox label="Balance" value={preview.currentBalance} color="text-accent-400" />
             <StatBox label="New Campaigns" value={preview.newCampaigns} color="text-amber-400" />
-            <StatBox label="XP Earned" value={preview.xpEarned} color="text-violet-400" />
+            <StatBox label="XP Earned" value={preview.xpEarned} color="text-brand-400" />
             <StatBox label="In Progress" value={preview.tasksInProgress} color="text-cyan-400" />
             <StatBox label="Pending Review" value={preview.tasksPending} color="text-orange-400" />
             <StatBox label="Streak" value={`${preview.streak}d`} color="text-rose-400" />
             <StatBox label="Weekly Rank" value={`#${preview.weeklyRank || '—'}`} color="text-emerald-400" />
-            <StatBox label="All-Time Rank" value={`#${preview.allTimeRank || '—'}`} color="text-indigo-400" />
+            <StatBox label="All-Time Rank" value={`#${preview.allTimeRank || '—'}`} color="text-brand-400" />
             <StatBox label="Total Done" value={preview.totalTasksCompleted} color="text-teal-400" />
             <StatBox label="Period" value={`${preview.weekStart} – ${preview.weekEnd}`} color="text-sc-text" />
           </div>

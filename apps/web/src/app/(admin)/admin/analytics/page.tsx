@@ -96,12 +96,12 @@ export default function AdminAnalyticsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Users" value={totals?.users ?? 0} sub={`+${totals?.newUsers ?? 0} new`} icon={Users} color="bg-blue-500" />
           <StatCard label="DAU" value={totals?.dau ?? 0} sub="Today" icon={TrendingUp} color="bg-green-500" />
-          <StatCard label="MAU" value={totals?.mau ?? 0} sub={`Last ${days} days`} icon={Users} color="bg-purple-500" />
+          <StatCard label="MAU" value={totals?.mau ?? 0} sub={`Last ${days} days`} icon={Users} color="bg-brand-500" />
           <StatCard label="Active Campaigns" value={totals?.activeCampaigns ?? 0} sub={`of ${totals?.campaigns ?? 0} total`} icon={Megaphone} color="bg-orange-500" />
           <StatCard label="Tasks Verified" value={totals?.tasksVerified ?? 0} icon={CheckSquare} color="bg-emerald-500" />
           <StatCard label="Tasks Pending" value={totals?.tasksSubmitted ?? 0} sub="Awaiting review" icon={CheckSquare} color="bg-yellow-500" />
           <StatCard label="Open Reports" value={totals?.openReports ?? 0} icon={Users} color="bg-red-500" />
-          <StatCard label="Total Campaigns" value={totals?.campaigns ?? 0} icon={Megaphone} color="bg-indigo-500" />
+          <StatCard label="Total Campaigns" value={totals?.campaigns ?? 0} icon={Megaphone} color="bg-brand-500" />
         </div>
       )}
 

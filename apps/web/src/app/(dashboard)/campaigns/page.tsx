@@ -474,7 +474,7 @@ export default function CampaignsPage() {
                       <span className="ml-1 text-[10px] text-green-400">PROMO</span>
                     )}
                     {authUser?.vipTier && authUser.vipTier.perks.feeDiscountPercent > 0 && (
-                      <span className="ml-1 text-[10px] text-purple-400">VIP -{authUser.vipTier.perks.feeDiscountPercent}%</span>
+                      <span className="ml-1 text-[10px] text-brand-400">VIP -{authUser.vipTier.perks.feeDiscountPercent}%</span>
                     )}
                   </span>
                   <span className="text-sm font-medium text-sc-text">{formatCredits(feeAmount)} {creditLabel(feeAmount)}</span>
@@ -487,7 +487,7 @@ export default function CampaignsPage() {
                   <p className="text-xs text-red-400">Minimum budget is {minBudget} credits.</p>
                 )}
                 {authUser?.vipTier && (
-                  <div className="flex items-center gap-1.5 text-xs text-purple-400 bg-purple-500/5 border border-purple-500/10 rounded-md px-2 py-1">
+                  <div className="flex items-center gap-1.5 text-xs text-brand-400 bg-brand-500/5 border border-brand-500/10 rounded-md px-2 py-1">
                     <span style={{ color: authUser.vipTier.perks.color }}>{authUser.vipTier.displayName}</span>
                     <span>— Fee discount: {authUser.vipTier.perks.feeDiscountPercent}% · Task limit bonus: +{authUser.vipTier.perks.taskLimitBonus}</span>
                   </div>

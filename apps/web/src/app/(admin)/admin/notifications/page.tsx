@@ -41,7 +41,7 @@ interface NotificationsResponse {
 }
 
 function notificationIcon(type: string) {
-  if (type === 'FORUM_MENTION') return <AtSign className="w-4 h-4 text-indigo-400" />;
+  if (type === 'FORUM_MENTION') return <AtSign className="w-4 h-4 text-brand-400" />;
   if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-4 h-4 text-green-400" />;
   if (type === 'ACCOUNT_WARNING') return <AlertTriangle className="w-4 h-4 text-amber-400" />;
   if (type === 'SECURITY_ALERT') return <AlertTriangle className="w-4 h-4 text-red-400" />;
@@ -235,7 +235,7 @@ export default function AdminNotificationsPage() {
                       {n.isRead ? (
                         <span className="text-xs text-sc-dim">Read</span>
                       ) : (
-                        <span className="text-xs text-indigo-400 font-medium">Unread</span>
+                        <span className="text-xs text-brand-400 font-medium">Unread</span>
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-sc-dim">

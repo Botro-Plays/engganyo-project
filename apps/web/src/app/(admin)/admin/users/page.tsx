@@ -44,7 +44,7 @@ const STATUS_COLORS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   USER: 'text-sc-muted bg-sc-soft/10',
   CREATOR: 'text-blue-400 bg-blue-500/10',
-  MODERATOR: 'text-purple-400 bg-purple-500/10',
+  MODERATOR: 'text-brand-400 bg-brand-500/10',
   ADMIN: 'text-orange-400 bg-orange-500/10',
   SUPER_ADMIN: 'text-red-400 bg-red-500/20 font-semibold',
 };
@@ -514,7 +514,7 @@ export default function AdminUsersPage() {
                           {isSuperAdmin && !isSelf && u.role !== 'SUPER_ADMIN' && (
                             <button
                               onClick={() => { setRoleUser(u); setRoleSuccess(false); setRoleError(null); roleForm.reset({ role: u.role as typeof ASSIGNABLE_ROLES[number] }); }}
-                              className="px-2 py-1 text-xs rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                              className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors"
                               title="Change Role — assign a different platform role (USER, CREATOR, MODERATOR, ADMIN)."
                             >
                               <ShieldCheck className="w-3 h-3" />
@@ -588,7 +588,7 @@ export default function AdminUsersPage() {
           <div className="w-full max-w-sm card-glass rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-purple-400" />
+                <ShieldCheck className="w-5 h-5 text-brand-400" />
                 <h2 className="text-base font-semibold text-sc-text">Change Role</h2>
               </div>
               <button onClick={() => setRoleUser(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
@@ -605,13 +605,13 @@ export default function AdminUsersPage() {
               <>
                 {roleError && <p className="text-xs text-red-400 mb-3">{roleError}</p>}
                 <form onSubmit={roleForm.handleSubmit((d) => roleMutation.mutate(d))} className="space-y-3">
-                  <select {...roleForm.register('role')} className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500">
+                  <select {...roleForm.register('role')} className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500">
                     {ASSIGNABLE_ROLES.map((r) => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
                   <p className="text-xs text-sc-dim">Note: SUPER_ADMIN can only be granted via the server seed script.</p>
-                  <button type="submit" disabled={roleMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-sc-text text-sm font-medium disabled:opacity-60">
+                  <button type="submit" disabled={roleMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-sm font-medium disabled:opacity-60">
                     {roleMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
                   </button>
                 </form>
@@ -685,21 +685,21 @@ export default function AdminUsersPage() {
                 <form onSubmit={userDetailsForm.handleSubmit((d) => userDetailsMutation.mutate(d))} className="space-y-3">
                   <div>
                     <label className="text-xs text-sc-dim mb-1 block">Email</label>
-                    <input {...userDetailsForm.register('email')} type="email" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <input {...userDetailsForm.register('email')} type="email" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
                   </div>
                   <div>
                     <label className="text-xs text-sc-dim mb-1 block">Username</label>
-                    <input {...userDetailsForm.register('username')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <input {...userDetailsForm.register('username')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
                   </div>
                   <div>
                     <label className="text-xs text-sc-dim mb-1 block">Display Name</label>
-                    <input {...userDetailsForm.register('displayName')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <input {...userDetailsForm.register('displayName')} placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
                   </div>
                   <div>
                     <label className="text-xs text-sc-dim mb-1 block">New Password</label>
-                    <input {...userDetailsForm.register('password')} type="password" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                    <input {...userDetailsForm.register('password')} type="password" placeholder="Leave empty to keep current" className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500" />
                   </div>
-                  <button type="submit" disabled={userDetailsMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-sc-text text-sm font-medium disabled:opacity-60">
+                  <button type="submit" disabled={userDetailsMutation.isPending} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-sc-text text-sm font-medium disabled:opacity-60">
                     {userDetailsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
                   </button>
                 </form>

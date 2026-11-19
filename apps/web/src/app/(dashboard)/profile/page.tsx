@@ -132,11 +132,11 @@ type SocialFormData = z.infer<typeof socialSchema>;
 // ─── Platform config ──────────────────────────────────────────
 const PLATFORMS = [
   { value: 'YOUTUBE', label: 'YouTube', icon: Youtube, color: 'text-red-400' },
-  { value: 'INSTAGRAM', label: 'Instagram', icon: Instagram, color: 'text-pink-400' },
+  { value: 'INSTAGRAM', label: 'Instagram', icon: Instagram, color: 'text-accent-400' },
   { value: 'TWITTER', label: 'Twitter / X', icon: Twitter, color: 'text-sky-400' },
   { value: 'TIKTOK', label: 'TikTok', icon: Music, color: 'text-sc-text' },
   { value: 'FACEBOOK', label: 'Facebook', icon: Globe, color: 'text-blue-400' },
-  { value: 'TWITCH', label: 'Twitch', icon: Globe, color: 'text-purple-400' },
+  { value: 'TWITCH', label: 'Twitch', icon: Globe, color: 'text-brand-400' },
   { value: 'SPOTIFY', label: 'Spotify', icon: Music, color: 'text-green-400' },
 ];
 
@@ -655,7 +655,7 @@ export default function ProfilePage() {
                     key={c.id}
                     className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${
                       isTheme
-                        ? 'bg-violet-500/10 text-violet-300 border-violet-500/30'
+                        ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
                         : isFrame
                         ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                         : 'bg-sc-panel-2/50 text-sc-text border-sc-line/50'

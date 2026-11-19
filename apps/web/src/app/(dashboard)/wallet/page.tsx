@@ -104,7 +104,7 @@ const TX_CONFIG: Record<string, { label: string; color: string; bg: string }> = 
   EARN_DAILY_REWARD:        { label: 'Daily reward',       color: 'text-green-400',  bg: 'bg-green-500/10' },
   EARN_WHEEL_SPIN:          { label: 'Daily spin',         color: 'text-green-400',  bg: 'bg-green-500/10' },
   EARN_ACHIEVEMENT:         { label: 'Achievement',        color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-  EARN_LOOT_BOX:            { label: 'Loot box reward',    color: 'text-violet-400', bg: 'bg-violet-500/10' },
+  EARN_LOOT_BOX:            { label: 'Loot box reward',    color: 'text-brand-400', bg: 'bg-brand-500/10' },
   EARN_MISSION_COMPLETE:    { label: 'Mission complete',   color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
   EARN_ADMIN_GRANT:         { label: 'Admin grant',        color: 'text-brand-400',  bg: 'bg-brand-500/10' },
   EARN_TIP:                 { label: 'Tip received',       color: 'text-green-400',  bg: 'bg-green-500/10' },
@@ -135,7 +135,7 @@ const METHOD_META: Record<string, { label: string; color: string; bg: string; ic
   PAYMONGO:   { label: 'PayMongo',    color: 'text-emerald-400', bg: 'bg-emerald-500/10', icon: CreditCard, currency: 'PHP' },
   PAYPAL:     { label: 'PayPal',      color: 'text-blue-400',    bg: 'bg-blue-500/10',    icon: Wallet,     currency: 'USD' },
   USDT_BEP20: { label: 'USDT (BEP20)', color: 'text-orange-400', bg: 'bg-orange-500/10', icon: Bitcoin,    currency: 'USD' },
-  USDT_BASE:  { label: 'USDT (Base)', color: 'text-purple-400',  bg: 'bg-purple-500/10', icon: Bitcoin,    currency: 'USD' },
+  USDT_BASE:  { label: 'USDT (Base)', color: 'text-brand-400',  bg: 'bg-brand-500/10', icon: Bitcoin,    currency: 'USD' },
 };
 
 type Tab = 'history' | 'deposit';
@@ -1843,7 +1843,7 @@ export default function WalletPage() {
                               <p className="text-xs text-green-400 mt-1 font-medium">✓ {dep.creditsAwarded.toLocaleString()} credits added to wallet</p>
                             )}
                             {dep.status === 'COMPLETED' && (dep.vpAwarded ?? 0) > 0 && (
-                              <p className="text-xs text-purple-400 mt-0.5 font-medium">+{dep.vpAwarded} VIP Points</p>
+                              <p className="text-xs text-brand-400 mt-0.5 font-medium">+{dep.vpAwarded} VIP Points</p>
                             )}
                             {(dep.method === 'USDT_BEP20' || dep.method === 'USDT_BASE') && dep.status === 'PROCESSING' && typeof dep.gatewayData?.confirmations === 'number' && (
                               <p className="text-xs text-orange-400 mt-0.5 font-medium">

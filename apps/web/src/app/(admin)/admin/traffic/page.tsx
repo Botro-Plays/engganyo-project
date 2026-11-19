@@ -276,9 +276,9 @@ export default function VisitorTrafficPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Page views" value={totals?.pageViews ?? 0} icon={MousePointerClick} color="bg-indigo-500" />
+          <StatCard label="Page views" value={totals?.pageViews ?? 0} icon={MousePointerClick} color="bg-brand-500" />
           <StatCard label="Visits" value={totals?.visits ?? 0} icon={Users} color="bg-blue-500" />
-          <StatCard label="Est. unique visitors" value={totals?.estimatedUniqueVisitors ?? 0} sub="cookie-based estimate" icon={Eye} color="bg-purple-500" />
+          <StatCard label="Est. unique visitors" value={totals?.estimatedUniqueVisitors ?? 0} sub="cookie-based estimate" icon={Eye} color="bg-brand-500" />
           <StatCard
             label="Bounce rate"
             value={totals?.bounceRate != null ? `${totals.bounceRate}%` : '—'}

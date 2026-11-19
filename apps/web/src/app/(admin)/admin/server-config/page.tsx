@@ -48,8 +48,8 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
   },
   INSTAGRAM: {
     label: 'Instagram',
-    color: 'text-pink-400',
-    bg: 'bg-pink-500/10',
+    color: 'text-accent-400',
+    bg: 'bg-accent-500/10',
   },
   FACEBOOK: {
     label: 'Facebook',
@@ -63,8 +63,8 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
   },
   TWITCH: {
     label: 'Twitch',
-    color: 'text-purple-400',
-    bg: 'bg-purple-500/10',
+    color: 'text-brand-400',
+    bg: 'bg-brand-500/10',
     docsUrl: 'https://dev.twitch.tv/console/apps',
     hint: 'Register an app. Scopes: user:read:follows user:read:email. Redirect URI: {API_BASE}/social-auth/twitch/callback',
   },
@@ -82,8 +82,8 @@ const PLATFORM_META: Record<string, { label: string; color: string; bg: string; 
   },
   DISCORD: {
     label: 'Discord',
-    color: 'text-indigo-400',
-    bg: 'bg-indigo-500/10',
+    color: 'text-brand-400',
+    bg: 'bg-brand-500/10',
   },
   TRUSTPILOT: {
     label: 'Trustpilot Reviews',

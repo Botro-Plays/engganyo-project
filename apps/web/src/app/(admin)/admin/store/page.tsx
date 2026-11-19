@@ -74,7 +74,7 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 const CATEGORY_COLORS: Record<string, string> = {
   BOOST: 'text-amber-400',
-  COSMETIC: 'text-purple-400',
+  COSMETIC: 'text-brand-400',
   CONVENIENCE: 'text-sky-400',
   CREDIT_PACK: 'text-green-400',
   GUILD_PERK: 'text-rose-400',

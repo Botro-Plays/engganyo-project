@@ -54,7 +54,7 @@ interface NotificationsResponse {
 }
 
 function notificationIcon(type: string) {
-  if (type === 'FORUM_MENTION') return <AtSign className="w-5 h-5 text-indigo-400" />;
+  if (type === 'FORUM_MENTION') return <AtSign className="w-5 h-5 text-brand-400" />;
   if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-5 h-5 text-green-400" />;
   if (type === 'ACCOUNT_WARNING') return <AlertTriangle className="w-5 h-5 text-amber-400" />;
   if (type === 'SECURITY_ALERT') return <AlertTriangle className="w-5 h-5 text-red-400" />;
@@ -66,7 +66,7 @@ function notificationIcon(type: string) {
   if (type === 'STREAK_BROKEN') return <Flame className="w-5 h-5 text-orange-400" />;
   if (type === 'CAMPAIGN_ACTIVE' || type === 'CAMPAIGN_COMPLETED') return <Megaphone className="w-5 h-5 text-blue-400" />;
   if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-5 h-5 text-red-400" />;
-  if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-5 h-5 text-indigo-400" />;
+  if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-5 h-5 text-brand-400" />;
   if (type === 'WELCOME') return <Sparkles className="w-5 h-5 text-brand-400" />;
   return <Bell className="w-5 h-5 text-sc-muted" />;
 }
@@ -221,7 +221,7 @@ export default function NotificationsPage() {
                     router.push(href);
                   }}
                   className={`flex items-start gap-4 px-5 py-4 transition-colors group cursor-pointer ${
-                    !n.isRead ? 'bg-indigo-500/[0.03]' : ''
+                    !n.isRead ? 'bg-brand-500/[0.03]' : ''
                   }`}
                 >
                   <div className="mt-0.5 flex-shrink-0">{notificationIcon(n.type)}</div>
@@ -259,7 +259,7 @@ export default function NotificationsPage() {
                     </button>
                   </div>
                   {!n.isRead && (
-                    <div className="w-2 h-2 rounded-full bg-indigo-400 mt-2 flex-shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-brand-400 mt-2 flex-shrink-0" />
                   )}
                 </div>
               );

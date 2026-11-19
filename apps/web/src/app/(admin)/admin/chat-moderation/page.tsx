@@ -106,7 +106,7 @@ export default function ChatModerationPage() {
   const statCards = [
     { label: 'Total Messages', value: stats?.totalMessages ?? 0, icon: MessageSquare, color: 'text-blue-400' },
     { label: 'Messages Today', value: stats?.messagesToday ?? 0, icon: BarChart3, color: 'text-green-400' },
-    { label: 'Active Members', value: stats?.activeMembers ?? 0, icon: Users, color: 'text-purple-400' },
+    { label: 'Active Members', value: stats?.activeMembers ?? 0, icon: Users, color: 'text-brand-400' },
     { label: 'Reported', value: stats?.reportedMessages ?? 0, icon: AlertTriangle, color: 'text-amber-400' },
     { label: 'Deleted', value: stats?.deletedMessages ?? 0, icon: Trash2, color: 'text-red-400' },
     { label: 'Channels', value: stats?.totalChannels ?? 0, icon: Hash, color: 'text-cyan-400' },

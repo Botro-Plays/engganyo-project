@@ -198,11 +198,11 @@ export default function AdminOverviewPage() {
                 <div className="card-glass rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-sc-dim">Database</p>
-                    <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                      <Database className="w-4 h-4 text-violet-400" />
+                    <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                      <Database className="w-4 h-4 text-brand-400" />
                     </div>
                   </div>
-                  <p className="text-2xl font-bold text-violet-400">{sysStats.database.size}</p>
+                  <p className="text-2xl font-bold text-brand-400">{sysStats.database.size}</p>
                   <p className="text-xs text-sc-dim mt-1">{sysStats.database.activeConnections} active connections</p>
                 </div>
 
@@ -287,7 +287,7 @@ export default function AdminOverviewPage() {
                       <div key={t.name} className="px-4 py-2.5 flex items-center gap-3">
                         <p className="text-xs text-sc-text font-mono w-44 truncate flex-shrink-0">{t.name}</p>
                         <div className="flex-1 h-1.5 rounded-full bg-sc-panel-2 overflow-hidden">
-                          <div className="h-full rounded-full bg-violet-500/60" style={{ width: `${Math.max(pct, 0.5)}%` }} />
+                          <div className="h-full rounded-full bg-brand-500/60" style={{ width: `${Math.max(pct, 0.5)}%` }} />
                         </div>
                         <p className="text-xs text-sc-dim w-16 text-right flex-shrink-0">{t.size}</p>
                         <p className="text-xs text-sc-dim w-20 text-right flex-shrink-0">{t.liveRows.toLocaleString()} rows</p>

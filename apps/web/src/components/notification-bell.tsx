@@ -36,7 +36,7 @@ interface NotificationsResponse {
 }
 
 function notificationIcon(type: string) {
-  if (type === 'FORUM_MENTION') return <AtSign className="w-4 h-4 text-indigo-400" />;
+  if (type === 'FORUM_MENTION') return <AtSign className="w-4 h-4 text-brand-400" />;
   if (type === 'REPORT_RESOLVED') return <MessageSquare className="w-4 h-4 text-green-400" />;
   if (type === 'ACCOUNT_WARNING') return <Bell className="w-4 h-4 text-amber-400" />;
   if (type === 'SECURITY_ALERT') return <Bell className="w-4 h-4 text-red-400" />;
@@ -48,7 +48,7 @@ function notificationIcon(type: string) {
   if (type === 'STREAK_BROKEN') return <Flame className="w-4 h-4 text-orange-400" />;
   if (type === 'CAMPAIGN_ACTIVE' || type === 'CAMPAIGN_COMPLETED') return <Megaphone className="w-4 h-4 text-blue-400" />;
   if (type === 'CAMPAIGN_REJECTED') return <XCircle className="w-4 h-4 text-red-400" />;
-  if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-4 h-4 text-indigo-400" />;
+  if (type === 'TASK_ASSIGNED') return <ClipboardList className="w-4 h-4 text-brand-400" />;
   if (type === 'WELCOME') return <Sparkles className="w-4 h-4 text-brand-400" />;
   return <Bell className="w-4 h-4 text-sc-muted" />;
 }
@@ -166,7 +166,7 @@ export function NotificationBell() {
       >
         <Bell className="w-4 h-4" />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-500 text-sc-text text-[10px] font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-500 text-sc-text text-[10px] font-bold rounded-full flex items-center justify-center">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
@@ -181,7 +181,7 @@ export function NotificationBell() {
                 <button
                   onClick={() => markAllMutation.mutate()}
                   disabled={markAllMutation.isPending}
-                  className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
                 >
                   Mark all read
                 </button>
@@ -211,7 +211,7 @@ export function NotificationBell() {
                     if (!n.isRead) markReadMutation.mutate(n.id);
                     router.push(href);
                   }}
-                  className={`flex items-start gap-3 px-4 py-3 border-b border-sc-line hover:bg-sc-panel-2/60 transition-colors ${!n.isRead ? 'bg-indigo-500/5' : ''}`}
+                  className={`flex items-start gap-3 px-4 py-3 border-b border-sc-line hover:bg-sc-panel-2/60 transition-colors ${!n.isRead ? 'bg-brand-500/5' : ''}`}
                 >
                   <div className="mt-0.5 flex-shrink-0">{notificationIcon(n.type)}</div>
                   <div className="min-w-0 flex-1">
@@ -219,14 +219,14 @@ export function NotificationBell() {
                     <p className="text-xs text-sc-muted leading-snug mt-0.5 line-clamp-2">{n.body}</p>
                     <p className="text-[11px] text-sc-dim mt-1">{formatRelativeTime(n.createdAt)}</p>
                   </div>
-                  {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />}
+                  {!n.isRead && <div className="w-1.5 h-1.5 rounded-full bg-brand-400 mt-1.5 flex-shrink-0" />}
                 </Link>
               );
             })}
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
-              className="flex items-center justify-center px-4 py-2.5 border-t border-sc-line text-xs text-indigo-400 hover:text-indigo-300 hover:bg-sc-panel-2/40 transition-colors"
+              className="flex items-center justify-center px-4 py-2.5 border-t border-sc-line text-xs text-brand-400 hover:text-brand-300 hover:bg-sc-panel-2/40 transition-colors"
             >
               View all notifications
             </Link>
