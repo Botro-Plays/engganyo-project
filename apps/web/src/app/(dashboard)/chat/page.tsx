@@ -341,7 +341,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] -mx-4 -my-6">
+    <div className="flex h-[calc(100dvh-4rem-58px)] md:h-[calc(100vh-4rem)] -mx-4 -my-6">
       {/* ── Channel List (Sidebar) ── */}
       <div
         className={`${
