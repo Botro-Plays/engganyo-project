@@ -17,6 +17,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useToast } from '@/components/toast-provider';
+import { BrandLogo } from '@/components/brand-logo';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Overview', exact: true },
@@ -119,7 +120,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // If user lacks 2FA, show nothing while redirecting
   if (user && !canAccessAdmin(user)) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
+      <div className="min-h-screen bg-sc flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
       </div>
     );
@@ -128,15 +129,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AuthGuard roles={['ADMIN', 'MODERATOR', 'SUPER_ADMIN']}>
       <AuthenticatedProviders>
-        <div className="min-h-screen bg-surface flex">
+        <div className="min-h-screen bg-sc flex">
       {/* Sidebar */}
       <aside className="w-60 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
         <div className="p-5 border-b border-surface-border">
-          <Link href="/admin" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">
-              <ShieldAlert className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-base tracking-tight text-white">Admin</span>
+          <Link href="/admin" className="flex items-center gap-2" aria-label="Engganyo admin">
+            <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
+            <span className="px-1.5 py-0.5 bg-red-500/15 text-red-300 border border-red-500/30 text-[10px] font-bold uppercase tracking-wider">Admin</span>
           </Link>
         </div>
 
@@ -215,8 +214,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <Menu className="w-5 h-5" />
             </button>
-            <Link href="/admin" className="flex items-center">
-              <img src="/logo-horizontal.svg" alt="Engganyo" className="h-6" />
+            <Link href="/admin" className="flex items-center" aria-label="Engganyo admin">
+              <BrandLogo className="h-6 w-6" wordmarkClassName="text-sm" />
             </Link>
           </div>
           <div className="flex items-center gap-2 text-xs text-zinc-500">
@@ -245,7 +244,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             className="fixed inset-0 bg-black/60 z-40 md:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-60 bg-surface border-r border-surface-border z-50 flex flex-col md:hidden">
+          <div className="fixed inset-y-0 left-0 w-60 bg-sc-panel border-r border-sc-border z-50 flex flex-col md:hidden">
             <div className="p-5 border-b border-surface-border flex items-center justify-between">
               <Link href="/admin" className="flex items-center gap-2" onClick={() => setMobileOpen(false)}>
                 <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center">

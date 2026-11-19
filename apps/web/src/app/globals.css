@@ -2,50 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Self-hosted pixel fonts (SIL OFL 1.1 — see public/fonts/*-OFL.txt) ── */
+@font-face {
+  font-family: 'DotGothic16';
+  src: url('/fonts/DotGothic16-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'VT323';
+  src: url('/fonts/VT323-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
-    --radius: 0.625rem;
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 262 83% 58%;
+    /* SeeCareer-inspired deep-purple palette (HSL channels for shadcn-style vars) */
+    --radius: 0px;
+    --background: 255 47% 7%;        /* #0d0919 */
+    --foreground: 255 100% 97%;      /* #f3eeff */
+    --card: 257 43% 11%;             /* #171028 */
+    --card-foreground: 255 100% 97%;
+    --popover: 258 41% 16%;          /* #221839 */
+    --popover-foreground: 255 100% 97%;
+    --primary: 256 100% 65%;         /* #7c4dff */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 4.8% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4.8% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 291 64% 60%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 226 30% 17%;
-    --input: 226 30% 17%;
-    --ring: 262 83% 58%;
-  }
+    --secondary: 258 41% 16%;        /* #221839 */
+    --secondary-foreground: 255 100% 97%;
+    --muted: 258 41% 16%;
+    --muted-foreground: 255 39% 77%; /* #b9addb */
+    --accent: 255 100% 77%;          /* #a68aff */
+    --accent-foreground: 255 20% 20%;
+    --destructive: 348 100% 73%;     /* #ff6b81 */
+    --destructive-foreground: 255 20% 20%;
+    --success: 152 76% 64%;          /* #4ade80 */
+    --warning: 43 96% 60%;           /* #fbbf24 */
+    --border: 255 48% 38%;           /* #4a3391 */
+    --input: 255 48% 38%;
+    --ring: 326 100% 74%;            /* #ff7eb6 focus accent */
 
-  .light {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 262 83% 50%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 291 64% 50%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 262 83% 50%;
+    /* Named palette mirrors (raw hex for arbitrary-value utilities) */
+    --sc-bg: #0d0919;
+    --sc-grid: rgba(139, 92, 246, 0.1);
+    --sc-panel: #171028;
+    --sc-panel-2: #221839;
+    --sc-panel-solid: #171028;
+    --sc-border: #4a3391;
+    --sc-edge: #4a3391;
+    --sc-hard: #2c1166;
+    --sc-shade: rgba(0, 0, 0, 0.35);
+    --sc-light: rgba(255, 255, 255, 0.18);
+    --sc-soft: #2a1d4d;
+    --sc-shadow: 4px 4px 0 0 var(--sc-hard);
+    --sc-text: #f3eeff;
+    --sc-muted: #b9addb;
+    --sc-primary: #a68aff;
+    --sc-on-primary: #160b33;
+    --sc-cta: #7c4dff;
+    --sc-on-cta: #ffffff;
+    --sc-accent-2: #ff7eb6;
+    --sc-cyan: #3de0ff;
+    --sc-saved: #ffd23f;
+    --sc-ok: #4ade80;
+    --sc-warn: #fbbf24;
+    --sc-danger: #ff6b81;
+    --sc-focus: #ff7eb6;
   }
 }
 
@@ -54,20 +79,124 @@
     @apply border-[hsl(var(--border))];
   }
 
-  body {
-    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
+    font-family: 'DotGothic16', 'VT323', ui-monospace, monospace;
+    /* Pixel fonts read best slightly larger with a touch of tracking */
+    font-size: 16px;
+    letter-spacing: 0.01em;
+  }
+
+  /* Numeric / code emphasis uses the taller VT323 pixel face */
+  .font-mono,
+  code,
+  kbd,
+  pre,
+  samp,
+  .tabular-nums {
+    font-family: 'VT323', ui-monospace, monospace;
+  }
+
+  ::selection {
+    background: #7c4dff;
+    color: #ffffff;
+  }
+
+  /* Visible keyboard focus everywhere */
+  :focus-visible {
+    outline: 2px solid #ff7eb6;
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  /* Deep-purple backdrop with the subtle violet pixel grid */
+  .bg-sc {
+    background-color: var(--sc-bg);
+    background-image:
+      linear-gradient(var(--sc-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--sc-grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Square pixel panel — thin border + hard offset shadow */
+  .panel {
+    background-color: var(--sc-panel);
+    border: 1px solid var(--sc-border);
+  }
+
+  .panel-2 {
+    background-color: var(--sc-panel-2);
+    border: 1px solid var(--sc-border);
+  }
+
+  .shadow-pixel {
+    box-shadow: var(--sc-shadow);
+  }
+
+  .shadow-pixel-sm {
+    box-shadow: 3px 3px 0 0 var(--sc-hard);
+  }
+
+  /* Primary CTA — SeeCareer violet with hard shadow press effect */
+  .btn-cta {
+    background-color: var(--sc-cta);
+    color: var(--sc-on-cta);
+    border: 1px solid var(--sc-edge);
+    box-shadow: 3px 3px 0 0 var(--sc-hard);
+    transition: transform 0.05s ease, box-shadow 0.05s ease, background-color 0.15s ease;
+  }
+  .btn-cta:hover {
+    background-color: #8f63ff;
+  }
+  .btn-cta:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--sc-hard);
+  }
+
+  .btn-ghost {
+    background-color: var(--sc-panel-2);
+    color: var(--sc-text);
+    border: 1px solid var(--sc-border);
+    box-shadow: 3px 3px 0 0 var(--sc-hard);
+    transition: transform 0.05s ease, box-shadow 0.05s ease, background-color 0.15s ease;
+  }
+  .btn-ghost:hover {
+    background-color: var(--sc-soft);
+  }
+  .btn-ghost:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--sc-hard);
   }
 }
 
 @layer utilities {
   .text-gradient {
-    background: linear-gradient(135deg, #7c3aed 0%, #d946ef 100%);
+    background: linear-gradient(135deg, #a68aff 0%, #7c4dff 55%, #ff7eb6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -75,6 +204,7 @@
 
   .card-glass {
     @apply bg-surface-card border border-surface-border backdrop-blur-sm;
+    box-shadow: 3px 3px 0 0 var(--sc-hard);
   }
 
   .scrollbar-thin {
@@ -111,8 +241,7 @@
 
 /* Onboarding tour: highlight ring on the real UI element for the current step */
 .tour-highlight-ring {
-  outline: 2px solid theme("colors.brand.500");
+  outline: 2px solid #a68aff;
   outline-offset: 3px;
-  border-radius: 8px;
   transition: outline-color 0.15s ease;
 }

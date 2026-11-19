@@ -1,21 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Providers } from './providers';
 import { CookieConsentBanner } from '@/components/cookie-consent';
 import { VisitorBeacon } from '@/components/visitor-beacon';
 import './globals.css';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: {
@@ -28,9 +15,12 @@ export const metadata: Metadata = {
   authors: [{ name: 'Engganyo' }],
   creator: 'Engganyo',
   icons: {
-    icon: '/favicon.svg',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
+    ],
     shortcut: '/favicon.svg',
-    apple: '/favicon.svg',
+    apple: '/brand/apple-touch-icon.png',
   },
   openGraph: {
     type: 'website',
@@ -41,9 +31,9 @@ export const metadata: Metadata = {
     description: 'Grow your social presence through real human engagement.',
     images: [
       {
-        url: 'https://engganyo.com/logo-square-no-curve-1024.png',
-        width: 1024,
-        height: 1024,
+        url: 'https://engganyo.com/brand/social-1200x630.png',
+        width: 1200,
+        height: 630,
         alt: 'Engganyo - Collaborative Creator Growth',
       },
     ],
@@ -52,7 +42,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Engganyo — Collaborative Creator Growth',
     description: 'Grow your social presence through real human engagement.',
-    images: ['https://engganyo.com/logo-square-no-curve-1024.png'],
+    images: ['https://engganyo.com/brand/social-1200x630.png'],
   },
   robots: {
     index: true,
@@ -66,10 +56,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0f1117' },
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-  ],
+  themeColor: '#0d0919',
 };
 
 export default function RootLayout({
@@ -79,7 +66,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <Providers>
           {children}
           <VisitorBeacon />

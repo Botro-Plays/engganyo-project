@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 
 export function LandingNavbar() {
   const [open, setOpen] = useState(false);
@@ -15,7 +16,7 @@ export function LandingNavbar() {
           href="/"
           className="flex items-center shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm"
         >
-          <img src="/logo-horizontal.svg" alt="Engganyo" className="h-8 sm:h-9" />
+          <BrandLogo className="h-8 w-8 sm:h-9 sm:w-9" wordmarkClassName="text-xl sm:text-2xl" />
         </Link>
 
         {/* Desktop nav links */}
