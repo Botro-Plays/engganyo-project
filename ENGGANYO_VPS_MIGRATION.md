@@ -2962,3 +2962,39 @@ sessions revoked.
 - All package prices treated as historical, unapproved placeholders.
 - Documentation only — no banner placeholders, ad navigation, booking
   UI, payment config, or advertising code added; no deployment.
+
+## 2026-11-19 — SeeCareer-inspired pixel redesign: PR #91 deployed
+
+- **Owner directive:** complete visual/layout overhaul adopting Jomar's
+  SeeCareer design language (deep-purple bg, subtle violet grid, square
+  panels, thin borders, hard offset shadows, pixel controls) + official
+  logo assets from the supplied Google Drive folder (supersedes the
+  earlier preserve-logo instruction). DotGothic16 primary pixel font,
+  VT323 fallback, self-hosted under SIL OFL 1.1.
+- **PR #91** `feat/pixel-design-system` @ `194136c` — CI Web+API+E2E all
+  green → squash-merged **`0f74bf2`** → deploy run **44516684608** all
+  jobs success; `.deployed-sha` verified `0f74bf2`; all containers
+  healthy.
+- **Design tokens** (verified reference values): bg `#0d0919`, panels
+  `#171028`/`#221839`, border `#4a3391`, text `#f3eeff`/`#b9addb`,
+  accent `#a68aff`, CTA `#7c4dff`; radius 0, `shadow-pixel*` hard
+  offsets, `.bg-sc` violet grid, `btn-cta`/`btn-ghost`, pink
+  focus-visible ring, reduced-motion handling.
+- **Branding:** official Drive assets live under `/brand/` (transparent
+  SVG+PNG logo, circle icon, gradient/favicon, apple-touch-icon,
+  1200×630 social). New `BrandLogo` component (glyph + pixel wordmark)
+  replaces all legacy logo refs in dashboard/admin/auth shells, landing
+  navbar, static pages, JSON-LD. Favicon + OG/Twitter metadata updated;
+  old logo files removed. Email templates use the official transparent
+  PNG + remapped palette.
+- **Early rendered evidence:** `evidence/pixel-redesign-2026-11-19/`
+  (landing + login at 390/1440px; fonts confirmed DotGothic16, no
+  horizontal overflow; one mobile landing screenshot timed out —
+  retake pending). Public asset URLs verified 200.
+- **In flight:** PR #92 `feat/pixel-surfaces-core` @ `1f3e6e9` —
+  class-only migration of ALL surfaces off `zinc-*`/neutral utilities
+  onto `sc-*` tokens (79 files; new `sc.line`/`sc.dim`); no behavior,
+  route, accounting, reward, or moderation changes.
+- **Pending:** rendered pass on authenticated surfaces (owner-assisted
+  login), intermediate-width/overflow/dialog/keyboard/reduced-motion
+  checks, page-by-page coverage checklist, remaining-gap report.
