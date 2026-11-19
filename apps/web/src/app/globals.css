@@ -131,6 +131,16 @@
   select {
     font-family: inherit;
   }
+
+  /* Prevent iOS auto-zoom on focus: inputs under 16px trigger it.
+     !important needed to beat utility classes like text-sm. */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer components {
