@@ -33,6 +33,7 @@ import { formatCredits } from '@/lib/utils';
 import { AuthGuard } from '@/components/auth-guard';
 import { AuthenticatedProviders } from '@/app/providers';
 import { NotificationBell } from '@/components/notification-bell';
+import { BrandLogo } from '@/components/brand-logo';
 import { SearchBar } from '@/components/search-bar';
 import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import { OnboardingTour, TourReplayButton, tourNavAttr } from '@/components/onboarding-tour';
@@ -160,10 +161,10 @@ function SidebarAnchor({ item, active }: { item: NavEntry; active: boolean }) {
       href={item.href}
       data-tour={tourNavAttr(item.href)}
       aria-current={active ? 'page' : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+      className={`flex items-center gap-3 px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
         active
-          ? 'bg-brand-500/15 text-brand-300 border border-brand-500/20 font-medium'
-          : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+          ? 'bg-brand-500/15 text-brand-200 border border-brand-500/40 font-medium shadow-pixel-sm'
+          : 'text-sc-muted hover:text-sc-text hover:bg-sc-panel-2'
       }`}
     >
       <item.icon className="w-4 h-4 shrink-0" />
@@ -178,8 +179,8 @@ function BottomNavAnchor({ item, active }: { item: NavEntry; active: boolean }) 
       href={item.href}
       data-tour={tourNavAttr(item.href)}
       aria-current={active ? 'page' : undefined}
-      className={`flex flex-col items-center gap-0.5 flex-1 py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
-        active ? 'text-brand-300' : 'text-zinc-500'
+      className={`flex flex-col items-center gap-0.5 flex-1 py-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+        active ? 'text-brand-300' : 'text-sc-muted'
       }`}
     >
       <item.icon className="w-5 h-5" />
@@ -195,7 +196,7 @@ function SidebarNavWithQuery() {
     <>
       {navGroups.map((group) => (
         <div key={group.label}>
-          <p className="px-3 pb-1 pt-3 text-[10px] uppercase tracking-widest font-semibold text-zinc-600 select-none">
+          <p className="px-3 pb-1 pt-3 text-[10px] uppercase tracking-widest font-semibold text-sc-muted/60 select-none">
             {group.label}
           </p>
           <div className="space-y-0.5">
@@ -239,7 +240,7 @@ function BottomNavWithQuery({
         aria-label="More navigation options"
         aria-expanded={moreActive}
         aria-controls="more-nav-drawer"
-        className={`flex flex-col items-center gap-0.5 flex-1 py-2 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${moreActive ? 'text-brand-300' : 'text-zinc-500'}`}
+        className={`flex flex-col items-center gap-0.5 flex-1 py-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${moreActive ? 'text-brand-300' : 'text-sc-muted'}`}
       >
         {moreActive ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
         <span className="text-[10px] font-medium leading-tight">More</span>
@@ -264,8 +265,8 @@ function MoreDrawerWithQuery({ onClose, adminHref }: { onClose: () => void; admi
             href={item.href}
             onClick={onClose}
             aria-current={active ? 'page' : undefined}
-            className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
-              active ? 'bg-brand-500/15 text-brand-300' : 'text-zinc-400 hover:text-white hover:bg-surface-hover'
+            className={`flex flex-col items-center gap-1 py-3 px-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+              active ? 'bg-brand-500/15 text-brand-200 border border-brand-500/40' : 'text-sc-muted hover:text-sc-text hover:bg-sc-panel-2'
             }`}
           >
             <item.icon className="w-5 h-5" />
@@ -357,13 +358,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <AuthGuard>
       <AuthenticatedProviders>
-        <div className="min-h-screen bg-surface flex" data-tour-scope>
+        <div className="min-h-screen bg-sc flex" data-tour-scope>
           {/* ── Desktop sidebar ───────────────────────────────── */}
-          <aside className="w-60 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
+          <aside className="w-60 flex-shrink-0 border-r border-sc-border bg-sc-panel/60 flex flex-col hidden md:flex">
             {/* Logo */}
-            <div className="px-5 py-5 border-b border-surface-border">
-              <Link href="/dashboard" className="flex items-center">
-                <img src="/logo-horizontal.svg" alt="Engganyo" className="h-8" />
+            <div className="px-5 py-5 border-b border-sc-border">
+              <Link href="/dashboard" className="flex items-center" aria-label="Engganyo dashboard">
+                <BrandLogo className="h-8 w-8" wordmarkClassName="text-xl" />
               </Link>
             </div>
 
@@ -371,7 +372,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {user && (
               <Link
                 href="/wallet?tab=deposit"
-                className="mx-4 mt-4 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 hover:bg-brand-500/15 hover:border-brand-500/40 transition-all group"
+                className="mx-4 mt-4 px-4 py-2.5 panel-2 hover:bg-sc-soft transition-all group shadow-pixel-sm"
                 title="Open wallet to top up"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -394,11 +395,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </nav>
 
             {/* Bottom utility links */}
-            <div className="px-3 pb-4 pt-3 space-y-0.5 border-t border-surface-border">
+            <div className="px-3 pb-4 pt-3 space-y-0.5 border-t border-sc-border">
               {adminHref && (
                 <Link
                   href={adminHref}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+                  className="flex items-center gap-3 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
                 >
                   <ShieldAlert className="w-4 h-4" />
                   Admin Panel
@@ -407,14 +408,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 href="/settings"
                 data-tour="nav-settings"
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-surface-hover transition-all"
+                className="flex items-center gap-3 px-3 py-2 text-sm text-sc-muted hover:text-sc-text hover:bg-sc-panel-2 transition-all"
               >
                 <Settings className="w-4 h-4" />
                 Settings
               </Link>
               <button
                 onClick={logout}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-sc-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
               >
                 <LogOut className="w-4 h-4" />
                 Sign out
@@ -425,10 +426,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* ── Main content area ─────────────────────────────── */}
           <div className="flex-1 flex flex-col min-w-0">
             {/* Top bar */}
-            <header className="h-16 border-b border-surface-border flex items-center justify-between px-4 sm:px-6 shrink-0">
+            <header className="h-16 border-b border-sc-border flex items-center justify-between px-4 sm:px-6 shrink-0 bg-sc-bg/80 backdrop-blur-sm">
               <div className="flex items-center gap-3 md:hidden">
-                <Link href="/dashboard" className="flex items-center">
-                  <img src="/logo-horizontal.svg" alt="Engganyo" className="h-7" />
+                <Link href="/dashboard" className="flex items-center" aria-label="Engganyo dashboard">
+                  <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
                 </Link>
               </div>
               <div className="flex items-center gap-3 ml-auto">
@@ -515,7 +516,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ── Mobile bottom navigation ───────────────────────── */}
         {/* Fixed 5-item bar; More opens a bottom-sheet grid */}
         <nav
-          className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-surface/95 border-t border-surface-border backdrop-blur-sm"
+          className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-sc-bg/95 border-t border-sc-border backdrop-blur-sm"
           data-tour-scope
           aria-label="Mobile navigation"
         >
@@ -546,7 +547,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               role="dialog"
               aria-modal="true"
               aria-label="More navigation"
-              className="fixed bottom-[57px] left-0 right-0 z-50 md:hidden bg-surface border-t border-surface-border shadow-2xl rounded-t-2xl animate-fade-in max-h-[calc(100dvh-130px)] overflow-y-auto"
+              className="fixed bottom-[57px] left-0 right-0 z-50 md:hidden bg-sc-panel border-t border-sc-border shadow-2xl animate-fade-in max-h-[calc(100dvh-130px)] overflow-y-auto"
             >
               <div className="flex items-center justify-between px-4 pt-3 pb-1">
                 <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">More</p>

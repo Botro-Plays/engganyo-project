@@ -10,60 +10,87 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Brand palette — violet accent drawn from the Engganyo logo.
-        // Mapped to the logo's violet so landing + shell read as one product.
+        // SeeCareer-inspired deep-purple palette.
+        // brand.500 = primary CTA violet; brand.400 = light accent.
         brand: {
-          50: '#f4f0ff',
-          100: '#ebe3ff',
-          200: '#d7c7ff',
-          300: '#b999ff',
-          400: '#9663fa',
-          500: '#7c3aed',   // primary — violet from the logo
-          600: '#6d28d9',
-          700: '#5b21b6',
-          800: '#4c1d95',
-          900: '#3b1674',
-          950: '#25104d',
+          50: '#f5f1ff',
+          100: '#ece4ff',
+          200: '#d9c9ff',
+          300: '#c2a8ff',
+          400: '#a68aff',   // accent — light violet
+          500: '#7c4dff',   // primary — CTA violet
+          600: '#6a3ce0',
+          700: '#552fc0',
+          800: '#3f1d80',
+          900: '#2c1166',   // hard-shadow violet
+          950: '#1a0b3d',
         },
         accent: {
-          50: '#fdf4ff',
-          100: '#fae8ff',
-          200: '#f5d0fe',
-          300: '#f0abfc',
-          400: '#e879f9',
-          500: '#d946ef',
-          600: '#c026d3',
-          700: '#a21caf',
-          800: '#86198f',
-          900: '#701a75',
+          50: '#fff0f7',
+          100: '#ffd9ec',
+          200: '#ffb3d9',
+          300: '#ff8ec5',
+          400: '#ff7eb6',   // pink accent / focus
+          500: '#f75d9e',
+          600: '#e03d85',
+          700: '#ba2f6c',
+          800: '#932556',
+          900: '#701d42',
         },
         surface: {
-          DEFAULT: '#0f1117',
-          // Public landing — warm off-white (deep ink stays the signed-in side)
-          warm: '#faf9f7',
-          'warm-50': '#f8f7f5',
-          'warm-100': '#f1f0ed',
-          'warm-200': '#e4e2dd',
-          'warm-border': '#dedcd6',
-          'warm-ink': '#1c1b1a',
-          'warm-muted': '#57554f',
-          // Signed-in surfaces — deep ink (unchanged family)
-          50: '#f8f9fc',
-          100: '#f1f3f7',
-          200: '#e2e6ef',
-          card: '#161b2e',
-          border: '#1e2740',
-          hover: '#1a2035',
+          DEFAULT: '#0d0919',
+          // Legacy warm keys remapped to the deep-purple system so old
+          // landing markup adopts the new palette without per-page edits.
+          warm: '#0d0919',
+          'warm-50': '#171028',
+          'warm-100': '#221839',
+          'warm-200': '#2a1d4d',
+          'warm-border': '#4a3391',
+          'warm-ink': '#f3eeff',
+          'warm-muted': '#b9addb',
+          // Signed-in surfaces — SeeCareer panels
+          50: '#f3eeff',
+          100: '#e6ddff',
+          200: '#4a3391',
+          card: '#171028',
+          'card-2': '#221839',
+          border: '#4a3391',
+          hover: '#2a1d4d',
+          soft: '#2a1d4d',
+        },
+        sc: {
+          bg: '#0d0919',
+          panel: '#171028',
+          panel2: '#221839',
+          border: '#4a3391',
+          hard: '#2c1166',
+          text: '#f3eeff',
+          muted: '#b9addb',
+          primary: '#a68aff',
+          cta: '#7c4dff',
+          ok: '#4ade80',
+          warn: '#fbbf24',
+          danger: '#ff6b81',
+          saved: '#ffd23f',
+          cyan: '#3de0ff',
         },
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        sans: ["'DotGothic16'", "'VT323'", 'ui-monospace', 'monospace'],
+        mono: ["'VT323'", 'ui-monospace', 'monospace'],
+        pixel: ["'DotGothic16'", "'VT323'", 'ui-monospace', 'monospace'],
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        // Square pixel panels — SeeCareer uses radius 0 with 2px borders
+        none: '0px',
+        sm: '0px',
+        DEFAULT: '0px',
+        md: '0px',
+        lg: '0px',
+        xl: '0px',
+        '2xl': '0px',
+        '3xl': '0px',
+        full: '9999px',
       },
       keyframes: {
         'accordion-down': {
@@ -95,10 +122,15 @@ const config: Config = {
         shimmer: 'shimmer 1.5s infinite',
       },
       backgroundImage: {
-        'gradient-brand': 'linear-gradient(135deg, #7c3aed 0%, #d946ef 100%)',
-        'gradient-card': 'linear-gradient(145deg, #161b2e 0%, #1a2035 100%)',
+        'gradient-brand': 'linear-gradient(135deg, #7c4dff 0%, #a68aff 55%, #ff7eb6 100%)',
+        'gradient-card': 'linear-gradient(145deg, #171028 0%, #221839 100%)',
         'gradient-hero':
-          'radial-gradient(ellipse 80% 80% at 50% -20%,rgba(124,58,237,0.16),rgba(255,255,255,0))',
+          'radial-gradient(ellipse 80% 80% at 50% -20%,rgba(124,77,255,0.22),rgba(13,9,25,0))',
+        'bg-grid':
+          'linear-gradient(rgba(139,92,246,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.1) 1px, transparent 1px)',
+      },
+      backgroundSize: {
+        'grid': '28px 28px',
       },
     },
   },

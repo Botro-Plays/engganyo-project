@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { LandingNavbar } from '@/components/landing-navbar';
 import { PlatformIcon } from '@/components/platform-icon';
+import { BrandLogo } from '@/components/brand-logo';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -21,7 +22,7 @@ const jsonLd = {
       '@type': 'Organization',
       name: 'Engganyo',
       url: 'https://engganyo.com',
-      logo: 'https://engganyo.com/logo-square.svg',
+      logo: 'https://engganyo.com/brand/web-logo-circle.png',
       description: 'Engganyo is a creator growth platform designed to help content creators increase their audience engagement through authentic, community-driven interactions.',
     },
     {
@@ -91,7 +92,7 @@ export default async function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <main className="relative min-h-screen bg-surface text-white overflow-x-hidden">
+      <main className="relative min-h-screen bg-sc text-white overflow-x-hidden">
         {/* Hero gradient */}
         <div className="absolute inset-0 bg-gradient-hero pointer-events-none" />
 
@@ -370,7 +371,7 @@ export default async function LandingPage() {
         <footer className="relative z-10 border-t border-surface-border py-10 sm:py-12 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <img src="/logo-square.svg" alt="Engganyo" className="w-6 h-6" />
+              <BrandLogo wordmark={false} className="w-6 h-6" />
               <span className="font-semibold text-sm">Engganyo</span>
             </div>
             <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>

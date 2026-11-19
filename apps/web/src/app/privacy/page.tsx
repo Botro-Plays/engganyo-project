@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand-logo';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -10,11 +11,11 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-sc">
       {/* Header with logo - visible on mobile */}
       <header className="md:hidden border-b border-surface-border p-4">
         <Link href="/" className="inline-flex items-center">
-          <img src="/logo-horizontal.svg" alt="Engganyo" className="h-7" />
+          <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
         </Link>
       </header>
 
