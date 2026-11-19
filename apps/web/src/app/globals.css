@@ -204,6 +204,7 @@
 
   .card-glass {
     @apply bg-surface-card border border-surface-border backdrop-blur-sm;
+    box-shadow: 3px 3px 0 0 var(--sc-hard);
   }
 
   .scrollbar-thin {
