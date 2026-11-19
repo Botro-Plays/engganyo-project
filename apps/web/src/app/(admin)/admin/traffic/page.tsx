@@ -318,7 +318,7 @@ export default function VisitorTrafficPage() {
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Area type="monotone" dataKey="Visits" stroke="#1F62F0" fill="url(#gradVisits)" strokeWidth={2} />
               <Area type="monotone" dataKey="Page views" stroke="#22c55e" fill="url(#gradPv)" strokeWidth={2} />
-              <Area type="monotone" dataKey="Est. uniques" stroke="#a855f7" fill="none" strokeWidth={2} strokeDasharray="4 3" />
+              <Area type="monotone" dataKey="Est. uniques" stroke="#E8A800" fill="none" strokeWidth={2} strokeDasharray="4 3" />
             </AreaChart>
           </ResponsiveContainer>
         )}

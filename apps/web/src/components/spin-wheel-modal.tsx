@@ -49,8 +49,8 @@ const SEGMENTS: Segment[] = [
   { id: 'credits_10', label: '10 Credits', short: '10', color: '#eab308', icon: <Coins className="w-3 h-3" /> },
   { id: 'credits_25', label: '25 Credits', short: '25', color: '#10b981', icon: <Coins className="w-3 h-3" /> },
   { id: 'credits_100', label: '100 Credits', short: '100', color: '#fbbf24', icon: <Coins className="w-3 h-3" /> },
-  { id: 'xp_boost_1h', label: 'XP Boost 1h', short: 'XP+', color: '#a855f7', icon: <Zap className="w-3 h-3" /> },
-  { id: 'loot_box', label: 'Mystery Box', short: 'BOX', color: '#8b5cf6', icon: <Package className="w-3 h-3" /> },
+  { id: 'xp_boost_1h', label: 'XP Boost 1h', short: 'XP+', color: '#E8A800', icon: <Zap className="w-3 h-3" /> },
+  { id: 'loot_box', label: 'Mystery Box', short: 'BOX', color: '#1F62F0', icon: <Package className="w-3 h-3" /> },
   { id: 'streak_freeze', label: 'Streak Freeze', short: 'FRZ', color: '#0ea5e9', icon: <Snowflake className="w-3 h-3" /> },
   { id: 'credits_5', label: '5 Credits', short: '5', color: '#f59e0b', icon: <Coins className="w-3 h-3" /> },
 ];
@@ -78,7 +78,7 @@ function ResultParticles() {
     id: i,
     angle: i * 30,
     delay: i * 50,
-    color: ['#f97316', '#eab308', '#10b981', '#a855f7', '#fbbf24'][i % 5],
+    color: ['#f97316', '#eab308', '#10b981', '#E8A800', '#fbbf24'][i % 5],
   }));
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
@@ -247,7 +247,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
         {/* Wheel — decorative; prize list is the accessible equivalent */}
         <div className="flex justify-center mb-5" aria-hidden="true">
           <div className="relative w-[280px] h-[280px]">
-            <div className="absolute inset-0 rounded-full border-4 border-sc-line shadow-[0_0_30px_rgba(168,85,247,0.15)]" />
+            <div className="absolute inset-0 rounded-full border-4 border-sc-line shadow-[0_0_30px_rgba(232,168,0,0.18)]" />
 
             {/* Fixed pointer */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
@@ -267,8 +267,8 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                   #eab308 45deg 90deg,
                   #10b981 90deg 135deg,
                   #fbbf24 135deg 180deg,
-                  #a855f7 180deg 225deg,
-                  #8b5cf6 225deg 270deg,
+                  #E8A800 180deg 225deg,
+                  #1F62F0 225deg 270deg,
                   #0ea5e9 270deg 315deg,
                   #f59e0b 315deg 360deg
                 )`,
