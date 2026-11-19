@@ -10,70 +10,72 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // SeeCareer-inspired deep-purple palette.
-        // brand.500 = primary CTA violet; brand.400 = light accent.
+        // Navy/blue/gold palette coordinated with the official badge logo
+        // (#050918 / #121C38 / #2E4A8C / #1F62F0 / #E8A800).
+        // brand.500 = primary action blue; brand.300/400 = light accent blues.
         brand: {
-          50: '#f5f1ff',
-          100: '#ece4ff',
-          200: '#d9c9ff',
-          300: '#c2a8ff',
-          400: '#a68aff',   // accent — light violet
-          500: '#7c4dff',   // primary — CTA violet
-          600: '#6a3ce0',
-          700: '#552fc0',
-          800: '#3f1d80',
-          900: '#2c1166',   // hard-shadow violet
-          950: '#1a0b3d',
+          50: '#f0f5ff',
+          100: '#dce7ff',
+          200: '#b9ceff',
+          300: '#8fb0ff',   // light accent — icons/links on navy
+          400: '#6e96ff',
+          500: '#1f62f0',   // primary — brand blue actions
+          600: '#1a54d6',
+          700: '#1744ae',
+          800: '#123a8c',
+          900: '#0e2c6e',
+          950: '#0a1e4d',
         },
         accent: {
-          50: '#fff0f7',
-          100: '#ffd9ec',
-          200: '#ffb3d9',
-          300: '#ff8ec5',
-          400: '#ff7eb6',   // pink accent / focus
-          500: '#f75d9e',
-          600: '#e03d85',
-          700: '#ba2f6c',
-          800: '#932556',
-          900: '#701d42',
+          // Gold highlight ramp (logo gold #E8A800)
+          50: '#fdf6e3',
+          100: '#f9e7b8',
+          200: '#f3d182',
+          300: '#eec64e',
+          400: '#f0b429',
+          500: '#e8a800',   // gold highlight
+          600: '#c98a00',
+          700: '#a06e00',
+          800: '#7d5600',
+          900: '#664700',
         },
         surface: {
-          DEFAULT: '#0d0919',
-          // Legacy warm keys remapped to the deep-purple system so old
+          DEFAULT: '#050918',
+          // Legacy warm keys remapped to the navy system so old
           // landing markup adopts the new palette without per-page edits.
-          warm: '#0d0919',
-          'warm-50': '#171028',
-          'warm-100': '#221839',
-          'warm-200': '#2a1d4d',
-          'warm-border': '#4a3391',
-          'warm-ink': '#f3eeff',
-          'warm-muted': '#b9addb',
-          // Signed-in surfaces — SeeCareer panels
-          50: '#f3eeff',
-          100: '#e6ddff',
-          200: '#4a3391',
-          card: '#171028',
-          'card-2': '#221839',
-          border: '#4a3391',
-          hover: '#2a1d4d',
-          soft: '#2a1d4d',
+          warm: '#050918',
+          'warm-50': '#121c38',
+          'warm-100': '#1b2650',
+          'warm-200': '#243257',
+          'warm-border': '#2e4a8c',
+          'warm-ink': '#f2f5ff',
+          'warm-muted': '#a9b6d8',
+          // Signed-in surfaces — navy panels
+          50: '#f2f5ff',
+          100: '#dde6fb',
+          200: '#2e4a8c',
+          card: '#121c38',
+          'card-2': '#1b2650',
+          border: '#2e4a8c',
+          hover: '#243257',
+          soft: '#243257',
         },
         sc: {
-          bg: '#0d0919',
-          panel: '#171028',
-          panel2: '#221839',
-          border: '#4a3391',
-          line: '#3a2a6e',
-          dim: '#8d7fb8',
-          hard: '#2c1166',
-          text: '#f3eeff',
-          muted: '#b9addb',
-          primary: '#a68aff',
-          cta: '#7c4dff',
+          bg: '#050918',
+          panel: '#121c38',
+          panel2: '#1b2650',
+          border: '#2e4a8c',
+          line: '#27407a',
+          dim: '#6e7ca3',
+          hard: '#0a0e1f',
+          text: '#f2f5ff',
+          muted: '#a9b6d8',
+          primary: '#8fb0ff',
+          cta: '#1f62f0',
           ok: '#4ade80',
           warn: '#fbbf24',
           danger: '#ff6b81',
-          saved: '#ffd23f',
+          saved: '#e8a800',
           cyan: '#3de0ff',
         },
       },
@@ -124,12 +126,12 @@ const config: Config = {
         shimmer: 'shimmer 1.5s infinite',
       },
       backgroundImage: {
-        'gradient-brand': 'linear-gradient(135deg, #7c4dff 0%, #a68aff 55%, #ff7eb6 100%)',
-        'gradient-card': 'linear-gradient(145deg, #171028 0%, #221839 100%)',
+        'gradient-brand': 'linear-gradient(135deg, #1f62f0 0%, #8fb0ff 55%, #e8a800 100%)',
+        'gradient-card': 'linear-gradient(145deg, #121c38 0%, #1b2650 100%)',
         'gradient-hero':
-          'radial-gradient(ellipse 80% 80% at 50% -20%,rgba(124,77,255,0.22),rgba(13,9,25,0))',
+          'radial-gradient(ellipse 80% 80% at 50% -20%,rgba(31,98,240,0.22),rgba(5,9,24,0))',
         'bg-grid':
-          'linear-gradient(rgba(139,92,246,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.1) 1px, transparent 1px)',
+          'linear-gradient(rgba(96,140,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(96,140,255,0.1) 1px, transparent 1px)',
       },
       backgroundSize: {
         'grid': '28px 28px',

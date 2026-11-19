@@ -29,7 +29,7 @@ const jsonLd = {
       '@type': 'WebSite',
       url: 'https://engganyo.com',
       name: 'Engganyo',
-      description: 'Find a task. Earn credits. Grow your social presence through real human engagement.',
+      description: 'Small Taps. Big Crowds. Grow your social presence through real human engagement.',
       potentialAction: {
         '@type': 'SearchAction',
         target: 'https://engganyo.com/search?q={search_term_string}',
@@ -39,8 +39,8 @@ const jsonLd = {
     {
       '@type': 'WebPage',
       url: 'https://engganyo.com',
-      name: 'Engganyo — Find a task. Earn credits.',
-      description: 'Find a task. Earn credits. Grow your social presence through real human engagement.',
+      name: 'Engganyo — Small Taps. Big Crowds.',
+      description: 'Small Taps. Big Crowds. Grow your social presence through real human engagement.',
     },
   ],
 };
@@ -110,9 +110,9 @@ export default async function LandingPage() {
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-5">
-                Find a task.
+                Small Taps.
                 <br />
-                <span className="text-gradient">Earn credits.</span>
+                <span className="text-gradient">Big Crowds.</span>
               </h1>
 
               <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-8 max-w-lg">

@@ -302,7 +302,7 @@ function DashboardPageInner() {
       value: (stats?.gamification.vp ?? user?.vp ?? 0).toLocaleString(),
       sub: stats?.gamification.vipTier?.displayName ?? 'No tier yet',
       icon: Award,
-      color: stats?.gamification.vipTier?.perks.color ?? '#888888',
+      color: stats?.gamification.vipTier?.perks.color ?? '#6E7CA3',
       progress: gamStats?.nextTierProgress ?? 0,
     },
     {
@@ -465,14 +465,14 @@ function DashboardPageInner() {
               <AreaChart data={activityData}>
                 <defs>
                   <linearGradient id="gradActivity" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#1F62F0" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#1F62F0" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#8d7fb8', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
-                <Area type="monotone" dataKey="Tasks" stroke="#6366f1" fill="url(#gradActivity)" strokeWidth={2} />
+                <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#6E7CA3', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
+                <Area type="monotone" dataKey="Tasks" stroke="#1F62F0" fill="url(#gradActivity)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

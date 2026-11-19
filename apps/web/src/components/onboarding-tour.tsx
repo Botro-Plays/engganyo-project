@@ -498,7 +498,7 @@ function focusPageHeading(): () => void {
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), Math.max(min, max));
 
 const focusRing =
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#171028]';
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#121C38]';
 
 // ─── Component ────────────────────────────────────────────────
 export function OnboardingTour() {
@@ -698,7 +698,7 @@ export function OnboardingTour() {
     ? createPortal(
         <div
           role="status"
-          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-brand-500/40 bg-[#171028] px-4 py-2 text-sm text-sc-text shadow-2xl"
+          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-brand-500/40 bg-[#121C38] px-4 py-2 text-sm text-sc-text shadow-2xl"
         >
           You&apos;re all set. Replay the tour any time from the help button.
         </div>,
@@ -777,7 +777,7 @@ export function OnboardingTour() {
                 ? 'tour-step tour-desc tour-hint'
                 : 'tour-step tour-desc'
             }
-            className="fixed z-[71] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-500/40 bg-[#171028] p-4 shadow-2xl"
+            className="fixed z-[71] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-brand-500/40 bg-[#121C38] p-4 shadow-2xl"
             style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: pos ? 'visible' : 'hidden' }}
           >
             <p id="tour-step" className="mb-1 text-xs font-medium text-brand-300">

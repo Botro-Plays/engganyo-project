@@ -16,7 +16,7 @@ interface CampaignAnalyticsData {
   dailyCompletions: { day: string; count: number }[];
 }
 
-const FUNNEL_COLORS = ['#6366f1', '#f59e0b', '#22c55e', '#ef4444'];
+const FUNNEL_COLORS = ['#1F62F0', '#f59e0b', '#22c55e', '#ef4444'];
 
 export default function CampaignAnalyticsPage() {
   const { id } = useParams<{ id: string }>();
@@ -98,10 +98,10 @@ export default function CampaignAnalyticsPage() {
         <h2 className="text-sm font-semibold text-sc-text mb-4">Task Funnel</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={funnelData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" horizontal={false} />
-            <XAxis type="number" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-            <YAxis dataKey="name" type="category" tick={{ fill: '#b9addb', fontSize: 12 }} tickLine={false} axisLine={false} width={70} />
-            <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#27407A" horizontal={false} />
+            <XAxis type="number" tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+            <YAxis dataKey="name" type="category" tick={{ fill: '#A9B6D8', fontSize: 12 }} tickLine={false} axisLine={false} width={70} />
+            <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]}>
               {funnelData.map((_, i) => (
                 <Cell key={i} fill={FUNNEL_COLORS[i]} />
@@ -123,10 +123,10 @@ export default function CampaignAnalyticsPage() {
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
-              <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#27407A" />
+              <XAxis dataKey="date" tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: '#6E7CA3', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#121C38', border: '1px solid #27407A', borderRadius: 0, fontSize: 12 }} />
               <Area type="monotone" dataKey="Verified" stroke="#22c55e" fill="url(#gradVerified)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>

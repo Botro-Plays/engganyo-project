@@ -71,7 +71,7 @@ export function PlatformSelect({ options, value, onChange, placeholder = 'Select
       {open && (
         <ul
           role="listbox"
-          className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-surface-border bg-[#171028] py-1 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none text-sm"
+          className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-surface-border bg-[#121C38] py-1 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none text-sm"
         >
           {options.map((opt) => {
             const isActive = opt.value === value;
