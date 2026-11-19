@@ -185,7 +185,7 @@ export function ChatWidget() {
           if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
         }}
         style={dragStyle}
-        className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-sc-text p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105 touch-none select-none"
+        className="fixed bottom-20 sm:bottom-6 left-6 sm:right-6 sm:left-auto z-50 bg-brand-500 hover:bg-brand-600 text-sc-text p-4 rounded-full shadow-lg shadow-brand-500/30 transition-all hover:scale-105 touch-none select-none"
         aria-label="Open chat"
       >
         <MessageSquare className="w-6 h-6" />
@@ -206,7 +206,7 @@ export function ChatWidget() {
         e.preventDefault();
         if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY);
       }}
-      className="fixed bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl touch-none select-none"
+      className="fixed bottom-20 sm:bottom-6 left-6 sm:right-6 sm:left-auto z-50 w-[calc(100%-3rem)] sm:w-96 max-h-[80vh] flex flex-col bg-surface border border-surface-border rounded-2xl shadow-2xl touch-none select-none"
     >
       {/* Header — shows grip indicator but whole widget is draggable */}
       <div
