@@ -14,6 +14,7 @@ import {
 import { LandingNavbar } from '@/components/landing-navbar';
 import { PlatformIcon } from '@/components/platform-icon';
 import { BrandLogo } from '@/components/brand-logo';
+import { TelegramIcon } from '@/components/telegram-icon';
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -339,6 +340,29 @@ export default async function LandingPage() {
           </div>
         </section>
 
+        {/* ── Community ────────────────────────────────────────── */}
+        <section className="relative z-10 pb-16 sm:pb-20 px-4 sm:px-6 max-w-5xl mx-auto">
+          <div className="bg-surface-card border border-surface-border rounded-3xl px-6 py-10 sm:px-10 sm:py-12 text-center">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent-500/40 bg-accent-500/10">
+              <TelegramIcon className="h-7 w-7 text-accent-300" />
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3">Join the Engganyo community</h2>
+            <p className="text-sc-muted text-sm sm:text-base max-w-md mx-auto mb-7">
+              Chat with creators and earners, get product updates, and share wins in our official Telegram group.
+            </p>
+            <a
+              href="https://t.me/Engganyo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 min-h-11 px-6 py-3 rounded-xl bg-accent-500 hover:bg-accent-400 text-[#050918] font-semibold text-sm sm:text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300 focus-visible:ring-offset-2 focus-visible:ring-offset-sc-bg"
+            >
+              <TelegramIcon className="h-4 w-4" />
+              Join us on Telegram
+              <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+            </a>
+          </div>
+        </section>
+
         {/* ── CTA ──────────────────────────────────────────────── */}
         <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4 sm:px-6">
           <div className="max-w-2xl mx-auto text-center bg-surface-card border border-surface-border rounded-3xl px-6 py-12 sm:px-10 sm:py-14">
@@ -375,7 +399,16 @@ export default async function LandingPage() {
               <span className="font-semibold text-sm">Engganyo</span>
             </div>
             <p className="text-sc-dim text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sc-dim text-sm">
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 sm:gap-6 text-sc-dim text-sm">
+              <a
+                href="https://t.me/Engganyo"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 py-2 hover:text-accent-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300 rounded"
+              >
+                <TelegramIcon className="h-4 w-4" />
+                Telegram
+              </a>
               <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
               <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>
               <Link href="/contact" className="hover:text-sc-text transition-colors">Contact</Link>
