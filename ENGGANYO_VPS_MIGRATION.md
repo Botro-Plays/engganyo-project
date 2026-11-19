@@ -3004,3 +3004,40 @@ sessions revoked.
 - **Pending:** rendered pass on authenticated surfaces (owner-assisted
   login), intermediate-width/overflow/dialog/keyboard/reduced-motion
   checks, page-by-page coverage checklist, remaining-gap report.
+
+## 2026-11-19 — Navy/gold rebrand + mobile hardening (Jomar corrections)
+
+- **Owner directive:** supersede purple palette with navy/blue/gold
+  aligned to the preferred official logo (Drive file
+  `1mZpXohCt5gQ_DmZVE-1tKwgLO_wBI7GM`); tagline exactly
+  "Small Taps. Big Crowds."; audit/fix mobile layouts at
+  320/360/390/768/1440; complete authenticated acceptance pass.
+- **PR #94** `feat/navy-gold-rebrand` — CI green on `f3d97d8`
+  (API+Web+E2E) → squash-merged **`0abc6ca`** → deploy run
+  **44547057775** success; `.deployed-sha` verified; containers
+  healthy; tagline + `/brand/logo-badge*.{svg,png}` live (200).
+- **Palette:** bg `#050918`, panels `#121C38`/`#1B2650`, support
+  `#2E4A8C`, action `#1F62F0`, gold `#E8A800`; pixel fonts, grid,
+  square panels, offset shadows retained; semantic status colors kept.
+- **Tagline:** "Small Taps. Big Crowds." in root metadata, OG/Twitter,
+  JSON-LD, landing hero ("Small Taps." / "Big Crowds." gradient).
+- **Logo:** supplied badge artwork used directly (SVG + 256/512 PNG);
+  favicon + email raster badge updated. Purple utility purge across 41
+  files; residual rgba audit caught spin-wheel + traffic-chart accents
+  → remapped to gold/brand blue.
+- **PR #95** `feat/mobile-fixes` — CI green on `79a5fa8` (incl. new
+  `e2e/mobile-layout.spec.ts`: 12 authenticated surfaces + landing/
+  login zero-overflow @390px, bottom-nav, More drawer) → squash-merged
+  **`9fff177`** → deploy run **44564128538** success; `.deployed-sha`
+  verified `9fff177`; containers healthy; Telegram community section +
+  footer link (`https://t.me/Engganyo`) verified live on `/`.
+- **Mobile defects fixed (evidence/navy-gold-mobile-2026-11-19/):**
+  iOS input auto-zoom (16px floor); notification dropdown viewport cap;
+  26 modal panels given max-h+scroll; admin nav lists scrollable; chat
+  composer cleared of bottom nav (dvh); chat-widget FAB raised;
+  dashboard header +9px overflow on every page (logout moved into More
+  drawer, gap tighten, wordmark hidden <380px); spin-wheel/traffic
+  purple accents remapped.
+- **Pending:** owner-assisted rendered pass at 320/360/390/768/1440 on
+  authenticated surfaces; before/after screenshots; Jomar visual
+  acceptance.
