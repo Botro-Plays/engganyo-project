@@ -37,7 +37,7 @@ export function CookieConsentBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-[#1e2740] bg-[#161b2e] shadow-2xl">
+    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-[#4a3391] bg-[#171028] shadow-2xl">
       <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:pr-20 lg:px-8 lg:pr-24">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -62,14 +62,14 @@ export function CookieConsentBanner() {
             <button
               type="button"
               onClick={() => handleChoice('essential')}
-              className="rounded-md border border-[#1e2740] bg-transparent px-4 py-2 text-xs font-medium text-sc-text transition-colors hover:bg-[#1a2035] hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#161b2e]"
+              className="rounded-md border border-[#4a3391] bg-transparent px-4 py-2 text-xs font-medium text-sc-text transition-colors hover:bg-[#221839] hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#171028]"
             >
               Essential Only
             </button>
             <button
               type="button"
               onClick={() => handleChoice('all')}
-              className="rounded-md bg-brand-500 px-4 py-2 text-xs font-medium text-sc-text transition-colors hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#161b2e]"
+              className="rounded-md bg-brand-500 px-4 py-2 text-xs font-medium text-sc-text transition-colors hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#171028]"
             >
               Accept All
             </button>
@@ -117,7 +117,7 @@ export function CookieConsentSettings() {
         <button
           type="button"
           onClick={handleReset}
-          className="rounded-md border border-[#1e2740] bg-transparent px-3 py-1.5 text-xs font-medium text-sc-text transition-colors hover:bg-[#1a2035] hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0f1117]"
+          className="rounded-md border border-[#4a3391] bg-transparent px-3 py-1.5 text-xs font-medium text-sc-text transition-colors hover:bg-[#221839] hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0d0919]"
         >
           Reset Choice
         </button>

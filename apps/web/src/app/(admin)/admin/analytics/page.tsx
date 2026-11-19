@@ -125,10 +125,10 @@ export default function AdminAnalyticsPage() {
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-              <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
+              <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Area type="monotone" dataKey="New Users" stroke="#6366f1" fill="url(#gradUsers)" strokeWidth={2} />
               <Area type="monotone" dataKey="DAU" stroke="#22c55e" fill="url(#gradDau)" strokeWidth={2} />
@@ -148,10 +148,10 @@ export default function AdminAnalyticsPage() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
+                <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
                 <Bar dataKey="Tasks Verified" fill="#22c55e" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -175,10 +175,10 @@ export default function AdminAnalyticsPage() {
                     <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                <XAxis dataKey="date" tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: '#71717a', fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#3a2a6e" />
+                <XAxis dataKey="date" tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#8d7fb8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: '#171028', border: '1px solid #3a2a6e', borderRadius: 0, fontSize: 12 }} />
                 <Area type="monotone" dataKey="Credits Issued" stroke="#eab308" fill="url(#gradCredits)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
