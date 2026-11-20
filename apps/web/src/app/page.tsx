@@ -139,9 +139,11 @@ export default async function LandingPage() {
                   href="https://t.me/Engganyo"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 text-accent-300 hover:text-accent-200 px-7 py-3.5 rounded-xl border border-accent-500/40 hover:border-accent-400/60 hover:bg-accent-500/10 transition-all text-sm sm:text-base min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300"
+                  className="tg-hero-cta inline-flex items-center justify-center gap-2 text-accent-300 hover:text-accent-200 px-7 py-3.5 rounded-xl border border-accent-500/40 hover:border-accent-400/60 hover:bg-accent-500/10 transition-all text-sm sm:text-base min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300"
                 >
-                  <TelegramIcon className="w-4 h-4" />
+                  <span className="tg-hero-icon">
+                    <TelegramIcon className="w-4 h-4" />
+                  </span>
                   Join us on Telegram
                 </a>
               </div>

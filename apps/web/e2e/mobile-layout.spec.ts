@@ -101,3 +101,42 @@ test.describe('Mobile layout @390px', () => {
     await expect(page.getByLabel(/email or username/i)).toBeVisible();
   });
 });
+
+test.describe('Landing hero Telegram CTA', () => {
+  for (const vp of [
+    { width: 320, height: 640 },
+    { width: 360, height: 740 },
+    { width: 390, height: 844 },
+    { width: 768, height: 900 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`visible above the fold at ${vp.width}px`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto('/');
+      const link = page
+        .locator('a[href="https://t.me/Engganyo"]', { hasText: 'Join us on Telegram' })
+        .first();
+      await expect(link).toBeVisible();
+      // Above the fold: fully inside the initial viewport height.
+      const box = await link.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(vp.height);
+      // New-tab + noopener contract.
+      await expect(link).toHaveAttribute('target', '_blank');
+      await expect(link).toHaveAttribute('rel', /noopener/);
+      // Attention-effect hooks present (animations themselves are
+      // CSS-side; reduced-motion is covered by the global rule).
+      await expect(link).toHaveClass(/tg-hero-cta/);
+    });
+  }
+
+  test('hero CTA is keyboard focusable with visible focus', async ({ page }) => {
+    await page.goto('/');
+    const link = page
+      .locator('a[href="https://t.me/Engganyo"]', { hasText: 'Join us on Telegram' })
+      .first();
+    await link.focus();
+    await expect(link).toBeFocused();
+  });
+});
