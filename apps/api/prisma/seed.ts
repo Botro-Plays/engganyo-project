@@ -285,6 +285,9 @@ async function main(): Promise<void> {
             displayName: p.displayName,
             role: UserRole.USER,
             status: UserStatus.ACTIVE,
+            // These accounts exist to drive room/chat e2e specs — automatic
+            // tours would overlay the cookie-consent banner and hang them.
+            autoToursEnabled: false,
             referralCode: `E2E${p.username.slice(-1).toUpperCase()}0001`,
             creditBalance: 500,
             profile: { create: { isPublic: true } },

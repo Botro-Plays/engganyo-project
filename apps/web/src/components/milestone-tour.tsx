@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Compass, X } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
+import { useConsentResolved } from '@/hooks/use-cookie-consent-resolved';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { useTourStore } from '@/store/tour.store';
 import type { ApiResponse } from '@/types';
@@ -66,6 +67,7 @@ export function MilestoneTour() {
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
   const router = useRouter();
+  const consentOk = useConsentResolved();
   // Automatic tours wait for the server-authoritative state + preference
   // before showing anything; a failed lookup shows nothing and retries.
   const hydrated = useTourStore((s) => s.hydrated);
@@ -225,7 +227,9 @@ export function MilestoneTour() {
     return () => clearInterval(id);
   }, [tour, phase, pathname, record]);
 
-  if (!user || !tour) return null;
+  // Consent gate: the tour overlays sit above the cookie banner — never
+  // render them while consent is unresolved or "Accept All" is unclickable.
+  if (!user || !tour || !consentOk) return null;
 
   // ── Announcement card ─────────────────────────────────────
   if (phase === 'announce') {
