@@ -3236,3 +3236,46 @@ sessions revoked.
   Permissions-Policy; homepage title/description copy awaits owner
   wording; content routes (/how-it-works, /pricing, /safety, /blog,
   /alternatives) await approved copy — none published empty.
+
+## 2026-11-20 — follow-up batch on `499b031` (tour persistence, hero effect, robots, reset docs)
+
+- Baseline re-verified: `.deployed-sha` = `499b031e1aea6ead2f3e19ad6eaa7e79acd7dfdc`,
+  all containers healthy.
+- **PR #108** `feat/telegram-hero-effect` — merged `7191fab`, deploy
+  `44701246957` SUCCESS. Stronger blue/gold outline: one-shot entrance
+  flash + overshoot, recurring ~3.5s glow + paper-plane movement +
+  shimmer sweep; reduced-motion gets a static emphasized outline.
+  Live-verified: `tg-hero-*` classes in HTML, all keyframes in the
+  served CSS bundle. Desktop/mobile video recordings pending via
+  `record-hero` workflow (PR #112).
+- **PR #109** `feat/server-tour-state` — OPEN, head `0d91e7b`, CI
+  re-running after E2E fix. Server-authoritative tour state:
+  `tour_completions` gains `IN_PROGRESS` + `step_index`,
+  `users.auto_tours_enabled` (default true); new endpoints
+  `GET tours/state`, `PATCH tours/preferences`, `POST :key/progress`,
+  `DELETE :key/state`; beginner tour (key `beginner`, version 2)
+  shares the model; localStorage is cache+migration only; Settings
+  Feature Tours card gets auto-tours toggle + beginner/milestone
+  replay; `optionalAuth` flag isolates tour calls from the global
+  401→refresh→logout path.
+- **PR #110** `fix/robots-app-routes` — merged `6777565`, deploy
+  `44702537713` SUCCESS (with #111). `/dashboard`+`/admin` removed
+  from robots Disallow so crawlers can observe their `noindex`;
+  verified raw HTML is an auth-gated shell with zero user data;
+  `/api/` stays disallowed.
+- **PR #111** `docs/reset-plan-defaults` — merged `7aeb438`, same
+  deploy. `DANGER_ZONE_RESET_PLAN.md`: restore-rehearsal acceptance
+  criteria, D1–D8 recommended-defaults table with real-payment/
+  retention impact, legacy reset confirmed env-gated (#106).
+- **PR #112** `chore/record-hero-workflow` — open; workflow_dispatch
+  job to record hero videos on production for design review.
+- **E2E failure analysis (#109 first run, cancelled at 30min):**
+  seeded JWT lives 15m; suite runs ~30min on 1 worker → late-run
+  `prepare()` fetches used expired tokens → silent reset failure →
+  mass tour-test timeouts. Fixed: prepare() retries until res.ok;
+  tour-resilience rewritten to real-auth + targeted mocks;
+  E2E timeout 30→45min.
+- **Still open:** owner-assisted authenticated acceptance at
+  320/360/390/768/1440 (now incl. hero effect + server-persisted
+  tours); gamification cap/catalog decisions; manual-platform
+  verification; Cloudflare items; reset execution (gated).
