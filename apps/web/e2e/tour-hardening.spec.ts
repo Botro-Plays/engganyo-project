@@ -371,7 +371,12 @@ test.describe('tour state hardening', () => {
   test('429 responses keep ops pending with bounded backoff, never dropped', async ({ page }) => {
     await settleOnDashboard(page);
     let progressCalls = 0;
-    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
+    // Fresh user (no beginner row): auto-start runs startTour → progress(0).
+    // An IN_PROGRESS resume would display 'active' without re-sending
+    // progress — the server already knows the step — so no op would exist.
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(apiOk({ autoTours: true, beginner: null, beginnerTerminal: null, completions: [] })),
+    );
     await page.route('**/api/gamification/tours/beginner/progress', (r) => {
       progressCalls += 1;
       return r.fulfill({ status: 429, headers: { ...CORS_HEADERS, 'retry-after': '1' }, contentType: 'application/json', body: JSON.stringify({ message: 'slow down' }) });

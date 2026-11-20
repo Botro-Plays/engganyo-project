@@ -582,12 +582,24 @@ export const useTourStore = create<TourState>()((set, get) => {
   const flushQueue = (userId: string, depth = 0): Promise<void> => {
     if (get().userId !== userId) return Promise.resolve();
     if (!flushPromise) {
-      flushPromise = (async () => {
-        if (!acquireDrainLock(userId)) {
-          flushPromise = null;
-          return; // another tab holds the drain — it owns the shared queue
-        }
+      const drain = (async () => {
+        // The drain lock is released in finally; flushPromise itself is
+        // cleared by the .finally() microtask attached below — NOT here.
+        // A synchronously-completing drain (empty queue, or lock
+        // contention) resolves before the `flushPromise = drain`
+        // assignment lands, so clearing inside the body would be
+        // overwritten and wedge every later flushQueue into returning a
+        // stale resolved promise — writes would never drain again.
+        let locked = false;
         try {
+          locked = acquireDrainLock(userId);
+          if (!locked) {
+            // Another tab holds the drain, or a stale lock is still
+            // cooling down — ops stay queued and a later flush retries.
+            // scheduleFlush keeps this bounded (>=400ms between attempts).
+            if (readPendingOps(userId).length > 0) scheduleFlush(userId);
+            return;
+          }
           const ops = readPendingOps(userId);
           // Ids of ops this drain finished with (sent or permanently
           // dropped). Write-back MERGES against fresh storage so ops
@@ -704,10 +716,17 @@ export const useTourStore = create<TourState>()((set, get) => {
             scheduleFlush(userId);
           }
         } finally {
-          flushPromise = null;
-          releaseDrainLock(userId);
+          if (locked) releaseDrainLock(userId);
         }
       })();
+      flushPromise = drain;
+      // Clear in a microtask so it lands AFTER the assignment above —
+      // covers both async and synchronously-resolved drains, and handles
+      // rejection without producing an unhandled rejection.
+      const clearFlush = () => {
+        if (flushPromise === drain) flushPromise = null;
+      };
+      void drain.then(clearFlush, clearFlush);
     }
     return flushPromise.then(() => {
       if (depth < 2 && get().userId === userId && readPendingOps(userId).length > 0) {
