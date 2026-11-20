@@ -252,13 +252,21 @@ test.describe('tour state hardening', () => {
     await expect(replayBtn).toBeVisible({ timeout: 20_000 });
     await replayBtn.click();
 
-    // While DELETE is gated, no progress write may be sent.
-    await page.waitForTimeout(1200);
-    const queuedNow = await page.evaluate(() => {
-      const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
-      return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
-    });
-    expect(order, `order=${JSON.stringify(order)} queued=${JSON.stringify(queuedNow)}`).toEqual(['delete-start']);
+    // While DELETE is gated, no progress write may be sent. Poll for the
+    // gated request instead of a fixed sleep — CI runners can be slow.
+    const deleteStarted = await expect
+      .poll(() => order.length, { timeout: 10_000 })
+      .toBe(1)
+      .then(() => true)
+      .catch(() => false);
+    if (!deleteStarted) {
+      const queuedNow = await page.evaluate(() => {
+        const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
+        return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
+      });
+      throw new Error(`replay DELETE never fired; order=${JSON.stringify(order)} queued=${JSON.stringify(queuedNow)}`);
+    }
+    expect(order).toEqual(['delete-start']);
 
     releaseDelete!();
     await page.waitForTimeout(2500);
