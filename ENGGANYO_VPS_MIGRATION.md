@@ -3041,3 +3041,55 @@ sessions revoked.
 - **Pending:** owner-assisted rendered pass at 320/360/390/768/1440 on
   authenticated surfaces; before/after screenshots; Jomar visual
   acceptance.
+
+## 2026-11-20 — Telegram hero link + social identity uniqueness
+
+- **PR #96** `feat/telegram-hero-link` — "Join us on Telegram" hero CTA
+  (TelegramIcon SVG, `https://t.me/Engganyo`, new tab,
+  `rel="noopener noreferrer"`, gold-outline focus, min-h touch target)
+  above the fold; registration CTA kept primary; community + footer
+  links retained. CI green on `ccbeecb` → squash-merged **`532c5c0`** →
+  deploy run **44663373827** success; live HTML verified (4× label,
+  6× t.me/Engganyo on `/`). Multi-width rendered check folded into the
+  open authenticated/public acceptance pass.
+- **PR #97** `feat/social-identity-uniqueness` — exclusive VERIFIED
+  social identities + 24h unlink reservation. Read-only prod duplicate
+  report first: **0 duplicate** `(platform, platform_user_id)` rows;
+  sole social row = 1 unverified manual Facebook declaration → no
+  migration blockers.
+  - Migration `20261119000000_social_identity_uniqueness`: partial
+    unique index `social_accounts(platform, platform_user_id)
+    WHERE is_verified` (not expressible in Prisma schema — documented
+    in migration header) + `social_identity_reservations` table
+    (platform+identity_key unique, no user FK → deletion cannot
+    bypass).
+  - `SocialIdentityService`: claim/consume/release inside caller txs;
+    UTC server timestamps; conflict → `SOCIAL_IDENTITY_RESERVED` +
+    `availableAt` (previous owner never exposed).
+  - OAuth callback: claim→upsert→consume atomic; verified identity
+    *switch* releases old id under same cooldown; P2002 →
+    `identity_taken`. Both unlink paths + admin deleteUser release
+    verified identities transactionally; tokens die with the row.
+  - Unverified declarations unchanged: synthetic `manual_*` ids,
+    `is_verified=false`, never reserve/block; verified
+    `platform_user_id` no longer rewritten by `PUT /users/me/social`.
+  - Bug found by new spec: `extractUsernameFromUrl` captured the
+    hostname (`x.com`) for URL inputs — fixed to parse path segment.
+  - `docs/SOCIAL_IDENTITY_UNIQUENESS.md`: scope, per-platform
+    normalization, proposed verification flows for manual platforms
+    (X/IG/FB/TikTok OAuth, Telegram bot proof, Discord OAuth);
+    exclusive claims stay DISABLED for them until a proof method is
+    approved. Disputed ownership = operator-mediated, no silent
+    transfers.
+  - Tests: `social-identity.integration.spec.ts` real-PostgreSQL —
+    exclusivity, concurrent race (exactly one wins), unverified
+    non-reservation, normalization, both unlink paths, cooldown
+    conflict/owner-reconnect, exact 24h boundary, failed-attempt
+    immutability, fresh cooldown, switch release+rollback, deletion
+    survival, verified-id preservation. CI green on `6e8ce0c`
+    (API+Web+E2E) → squash-merged **`7d77940`** → deploy
+    **44665912457** (verify below).
+- **Pending:** rendered multi-width pass incl. hero Telegram CTA at
+  320/360/390/768/1440; authenticated acceptance pass; manual-platform
+  verification proposals need owner decision before enabling
+  exclusive claims there.
