@@ -3095,3 +3095,57 @@ sessions revoked.
   320/360/390/768/1440; authenticated acceptance pass; manual-platform
   verification proposals need owner decision before enabling
   exclusive claims there.
+
+## 2026-11-20 — Source-review fixes + Jomar follow-up PRs
+
+- **PR #98** `fix/social-identity-locking` — source-review concurrency
+  fixes for social identity: `UsersService.upsertSocialLink` now runs
+  inside a transaction that SELECT ... FOR UPDATE locks the
+  (userId, platform) slot row and re-reads `is_verified` under the lock —
+  a stale unverified profile edit can no longer overwrite a
+  verified `platformUserId`. `SocialAuthService.linkVerifiedAccount` is
+  the single verified-link write path: slot lock → upsert (partial
+  unique index serializes cross-user claims) → reservation claim →
+  release-old-on-switch → consume; token encryption moved inside it.
+  `disconnect` and admin `deleteUser` lock slot rows before releasing
+  identities. Deterministic real-PostgreSQL tests exercise actual
+  service paths: profile-edit vs OAuth race, post-verify edit
+  preservation, unlink vs cross-user claim, simultaneous identity
+  switches, reconnect vs unlink — asserting ownership, reservation
+  rows/timestamps, and credentials. CI green on `ce1c46a`
+  (API+Web+E2E) → squash-merged **`909a747`**.
+- **PR #99** `feat/telegram-hero-attention` — subtle entrance +
+  periodic highlight on the hero Telegram CTA; reduced-motion safe,
+  no layout shift, focus/touch preserved. Merged **`0369e43`**,
+  deploy run `44675734747` **success**.
+- **PR #100** `docs/gamification-audit` — `docs/GAMIFICATION_AUDIT_AND_PROPOSAL.md`:
+  XP formula, mission handlers, achievements, rewards, trust limits,
+  activity supply audited; explicit level-cap + progression-table
+  proposal (no cap today); beginner→cap catalog requirements (stable
+  IDs, functioning handlers only, versioned repeatable seeds with
+  dry-run diff, economy/supply summary before payouts). Merged
+  **`ae35bdc`**. Audit/proposal only — no progression economics changed.
+- **PR #101** `feat/milestone-tours` — milestone onboarding tours:
+  `tour_completions` table (per-user/per-tour/per-version, cross-device),
+  `/gamification/tours` API (pending level-gated via configurable
+  `milestone_tour_interval` default 5, catalog, complete/dismiss,
+  replay), 5-tour catalog (Inventory/Marketplace/Rooms/Wallet/
+  Achievements at levels 5/10/15/20/25), `MilestoneTour` host deferring
+  during dialogs/room workspaces/beginner tour, one-at-a-time so
+  multi-level jumps never stack, Settings replay card, `data-tour`
+  anchors on the five surfaces. Tours grant nothing. In CI.
+- **PR #102** `docs/danger-zone-reset-plan` — `docs/DANGER_ZONE_RESET_PLAN.md`:
+  audit + plan ONLY, no execution. All 70 models + Redis/uploads/jobs/
+  webhooks inventoried; preserve/clear/reseed/archive/owner-scoped
+  manifest; immutable-ID owner preservation; targeted-cleanup vs
+  fresh-DB comparison; real-money retention; plan-bound mechanism
+  (dry-run, backup+rehearsal, maintenance mode, scoped cleanup,
+  reconciliation, audit, rollback); CI schema-coverage check. Existing
+  unsafe reset documented as unavailable for launch. 8 owner decisions
+  open. Merged **`2ce4239`**.
+- **Deploy note:** main deploy runs use concurrency cancellation —
+  `909a747` deploy cancelled in favor of newest head; `2ce4239` deploy
+  covers 98+99+100+102.
+- **Pending:** PR #101 merge on E2E green; rendered multi-width pass
+  incl. Telegram hero effect + milestone tours (owner-assisted login);
+  gamification cap/catalog + reset-plan decisions await owner review.
