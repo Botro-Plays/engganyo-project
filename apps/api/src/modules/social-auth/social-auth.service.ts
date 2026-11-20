@@ -288,14 +288,10 @@ export class SocialAuthService {
       // Fetch platform profile
       const profile = await this.fetchPlatformProfile(platform, tokens.access_token);
 
-      // Encrypt tokens before storage
-      const encryptedAccessToken = this.crypto.encrypt(tokens.access_token);
-      const encryptedRefreshToken = tokens.refresh_token ? this.crypto.encrypt(tokens.refresh_token) : null;
-
       try {
         await this.linkVerifiedAccount(payload.userId, platform, profile, {
-          accessToken: encryptedAccessToken,
-          refreshToken: encryptedRefreshToken,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token ?? null,
           expiresIn: tokens.expires_in,
         });
       } catch (err) {
@@ -351,6 +347,10 @@ export class SocialAuthService {
     const tokenExpiresAt = tokens.expiresIn
       ? new Date(Date.now() + tokens.expiresIn * 1000)
       : null;
+    const encryptedAccessToken = this.crypto.encrypt(tokens.accessToken);
+    const encryptedRefreshToken = tokens.refreshToken
+      ? this.crypto.encrypt(tokens.refreshToken)
+      : null;
 
     await this.prisma.$transaction(async (tx) => {
       // 1. Lock the (user, platform) slot row when it exists.
@@ -374,8 +374,8 @@ export class SocialAuthService {
           platformUsername: profile.username,
           profileUrl: profile.profileUrl,
           avatarUrl: profile.avatarUrl,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           tokenExpiresAt,
           isVerified: true,
           lastSyncedAt: new Date(),
@@ -385,8 +385,8 @@ export class SocialAuthService {
           platformUsername: profile.username,
           profileUrl: profile.profileUrl,
           avatarUrl: profile.avatarUrl,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           tokenExpiresAt,
           isVerified: true,
           lastSyncedAt: new Date(),
