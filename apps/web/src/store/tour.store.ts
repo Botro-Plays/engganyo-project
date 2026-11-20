@@ -1172,6 +1172,18 @@ if (typeof window !== 'undefined') {
   };
   window.addEventListener('focus', onFocusOrVisible);
   document.addEventListener('visibilitychange', onFocusOrVisible);
+  // bfcache restore fires pageshow, not necessarily visibilitychange.
+  window.addEventListener('pageshow', onFocusOrVisible);
+
+  // Release the drain lock on unload — a reload/navigation landing
+  // mid-drain would otherwise orphan it for up to DRAIN_LOCK_STALE_MS,
+  // stalling the next page's queued writes (a just-clicked Skip could
+  // let the dismissed tour reappear until the lock expired). A crashed
+  // tab still orphans the lock; the stale timeout remains the backstop.
+  window.addEventListener('pagehide', () => {
+    const s = useTourStore.getState();
+    if (s.userId) releaseDrainLock(s.userId);
+  });
 
   // Central identity fence: any auth-user change (login, logout,
   // account switch) resets or hydrates the tour session even when no
