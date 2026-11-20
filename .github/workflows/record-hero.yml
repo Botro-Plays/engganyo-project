@@ -1,0 +1,58 @@
+name: Record hero effect
+
+# One-off manual workflow: records short desktop + mobile videos of the
+# landing-page Telegram hero effect on production for design review.
+# Public page only — no auth, no mutations.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: mcr.microsoft.com/playwright:v1.60.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        working-directory: apps/web
+        run: npm ci
+      - name: Record hero videos
+        working-directory: apps/web
+        env:
+          TARGET_URL: https://engganyo.com/
+        run: |
+          cat > /tmp/record-hero.js <<'EOF'
+          const { chromium } = require('playwright');
+          (async () => {
+            const url = process.env.TARGET_URL;
+            const sizes = [
+              { name: 'desktop-1440', width: 1440, height: 900 },
+              { name: 'mobile-390', width: 390, height: 844 },
+            ];
+            for (const s of sizes) {
+              const browser = await chromium.launch();
+              const ctx = await browser.newContext({
+                viewport: { width: s.width, height: s.height },
+                recordVideo: { dir: `/tmp/videos/${s.name}`, size: { width: s.width, height: s.height } },
+              });
+              const page = await ctx.newPage();
+              await page.goto(url, { waitUntil: 'networkidle' });
+              // Capture entrance (~1.4s) + two full 3.5s glow cycles.
+              await page.waitForTimeout(9500);
+              await ctx.close();
+              await browser.close();
+            }
+          })().catch((e) => { console.error(e); process.exit(1); });
+          EOF
+          mkdir -p /tmp/videos
+          node /tmp/record-hero.js
+          ls -la /tmp/videos/*/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hero-effect-recordings
+          path: /tmp/videos/
+          retention-days: 14
