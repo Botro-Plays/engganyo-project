@@ -1,10 +1,12 @@
 import {
   Injectable, Logger, BadRequestException, NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { SocialPlatform, TaskType } from '@prisma/client';
+import { Prisma, SocialPlatform, TaskType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { SocialIdentityService } from '../../database/social-identity.service';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 
 // ─── State JWT payload ────────────────────────────────────────────────────────
@@ -88,6 +90,7 @@ export class SocialAuthService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly crypto: CryptoUtil,
+    private readonly socialIdentity: SocialIdentityService,
   ) {}
 
   // ─── Check if user has a linked account for a platform ────────────────────
@@ -175,7 +178,8 @@ export class SocialAuthService {
 
   private extractUsernameFromUrl(url: string): string | null {
     // e.g. https://twitter.com/username  https://tiktok.com/@username  https://instagram.com/username
-    const match = url.match(/\/(?:@)?(\w[\w.-]{1,30})(?:\/|$|\?)/i);
+    // Skip scheme+host so the hostname itself is never captured as the username.
+    const match = url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]+\/(?:@)?([\w.-]+)(?:[/?#]|$)/i);
     return match ? match[1] : null;
   }
 
@@ -288,38 +292,83 @@ export class SocialAuthService {
       const encryptedAccessToken = this.crypto.encrypt(tokens.access_token);
       const encryptedRefreshToken = tokens.refresh_token ? this.crypto.encrypt(tokens.refresh_token) : null;
 
-      // Upsert social account
-      await this.prisma.socialAccount.upsert({
-        where: { userId_platform: { userId: payload.userId, platform } },
-        create: {
-          userId: payload.userId,
-          platform,
-          platformUserId: profile.platformUserId,
-          platformUsername: profile.username,
-          profileUrl: profile.profileUrl,
-          avatarUrl: profile.avatarUrl,
-          accessToken: encryptedAccessToken,
-          refreshToken: encryptedRefreshToken,
-          tokenExpiresAt: tokens.expires_in
-            ? new Date(Date.now() + tokens.expires_in * 1000)
-            : null,
-          isVerified: true,
-          lastSyncedAt: new Date(),
-        },
-        update: {
-          platformUserId: profile.platformUserId,
-          platformUsername: profile.username,
-          profileUrl: profile.profileUrl,
-          avatarUrl: profile.avatarUrl,
-          accessToken: encryptedAccessToken,
-          refreshToken: encryptedRefreshToken,
-          tokenExpiresAt: tokens.expires_in
-            ? new Date(Date.now() + tokens.expires_in * 1000)
-            : null,
-          isVerified: true,
-          lastSyncedAt: new Date(),
-        },
-      });
+      // Upsert social account — verified identities are exclusive:
+      // reservation check, row write, and reservation consumption commit
+      // atomically; the partial unique index is the DB backstop for
+      // concurrent claims.
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // Re-linking a DIFFERENT verified identity releases the old one
+          // under the same 24h cooldown — otherwise switching accounts
+          // would bypass the reservation. Rolled back with the tx if the
+          // new claim fails, so failed attempts never reserve.
+          const existing = await tx.socialAccount.findUnique({
+            where: { userId_platform: { userId: payload.userId, platform } },
+            select: { isVerified: true, platformUserId: true },
+          });
+          if (
+            existing?.isVerified &&
+            existing.platformUserId !== profile.platformUserId
+          ) {
+            await this.socialIdentity.releaseVerifiedIdentity(tx, {
+              platform,
+              identityKey: existing.platformUserId,
+              releasedByUserId: payload.userId,
+            });
+          }
+
+          await this.socialIdentity.claimVerifiedIdentity(tx, {
+            platform,
+            identityKey: profile.platformUserId,
+            userId: payload.userId,
+          });
+          await tx.socialAccount.upsert({
+            where: { userId_platform: { userId: payload.userId, platform } },
+            create: {
+              userId: payload.userId,
+              platform,
+              platformUserId: profile.platformUserId,
+              platformUsername: profile.username,
+              profileUrl: profile.profileUrl,
+              avatarUrl: profile.avatarUrl,
+              accessToken: encryptedAccessToken,
+              refreshToken: encryptedRefreshToken,
+              tokenExpiresAt: tokens.expires_in
+                ? new Date(Date.now() + tokens.expires_in * 1000)
+                : null,
+              isVerified: true,
+              lastSyncedAt: new Date(),
+            },
+            update: {
+              platformUserId: profile.platformUserId,
+              platformUsername: profile.username,
+              profileUrl: profile.profileUrl,
+              avatarUrl: profile.avatarUrl,
+              accessToken: encryptedAccessToken,
+              refreshToken: encryptedRefreshToken,
+              tokenExpiresAt: tokens.expires_in
+                ? new Date(Date.now() + tokens.expires_in * 1000)
+                : null,
+              isVerified: true,
+              lastSyncedAt: new Date(),
+            },
+          });
+          await this.socialIdentity.consumeReservation(tx, {
+            platform,
+            identityKey: profile.platformUserId,
+          });
+        });
+      } catch (err) {
+        if (err instanceof ConflictException) {
+          const res = err.getResponse() as { availableAt?: string };
+          const until = res.availableAt ? `&until=${encodeURIComponent(res.availableAt)}` : '';
+          return `${frontendUrl}/settings/connected-accounts?error=identity_reserved${until}`;
+        }
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          return `${frontendUrl}/settings/connected-accounts?error=identity_taken`;
+        }
+        throw err;
+      }
 
       this.logger.log(`Social account linked: userId=${payload.userId} platform=${platform} user=${profile.username}`);
       return `${frontendUrl}/settings/connected-accounts?connected=${platform.toLowerCase()}`;
@@ -353,16 +402,36 @@ export class SocialAuthService {
   // ─── Disconnect account ─────────────────────────────────────────────────────
 
   async disconnect(userId: string, platform: SocialPlatform) {
-    const account = await this.prisma.socialAccount.findUnique({
-      where: { userId_platform: { userId, platform } },
-    });
-    if (!account) throw new NotFoundException('Social account not connected');
+    const result = await this.prisma.$transaction(async (tx) => {
+      const account = await tx.socialAccount.findUnique({
+        where: { userId_platform: { userId, platform } },
+      });
+      if (!account) throw new NotFoundException('Social account not connected');
 
-    await this.prisma.socialAccount.delete({
-      where: { userId_platform: { userId, platform } },
+      // Verified identities get a 24h reservation so the same social
+      // account cannot be claimed by a different Engganyo user right
+      // away. Unverified declarations reserve nothing.
+      let reservedUntil: Date | null = null;
+      if (account.isVerified) {
+        reservedUntil = await this.socialIdentity.releaseVerifiedIdentity(tx, {
+          platform,
+          identityKey: account.platformUserId,
+          releasedByUserId: userId,
+        });
+      }
+
+      await tx.socialAccount.delete({
+        where: { userId_platform: { userId, platform } },
+      });
+
+      return { reservedUntil };
     });
 
-    return { disconnected: true, platform };
+    return {
+      disconnected: true,
+      platform,
+      ...(result.reservedUntil && { reservedUntil: result.reservedUntil.toISOString() }),
+    };
   }
 
   // ─── Platform action verification ──────────────────────────────────────────

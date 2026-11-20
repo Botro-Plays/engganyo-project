@@ -14,6 +14,7 @@ import { PayMongoService } from '../paymongo/paymongo.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { RedisService } from '../../database/redis.service';
+import { SocialIdentityService } from '../../database/social-identity.service';
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -68,6 +69,9 @@ describe('AdminService', () => {
     },
     userProfile: {
       updateMany: jest.fn(),
+    },
+    socialAccount: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     $transaction: jest.fn((callback: (tx: Record<string, unknown>) => Promise<unknown>) => callback(mockPrisma)),
     $executeRawUnsafe: jest.fn(),
@@ -153,6 +157,15 @@ describe('AdminService', () => {
         { provide: PayMongoService, useValue: mockPayMongoService },
         { provide: PayPalService, useValue: {} },
         { provide: GamificationService, useValue: mockGamificationService },
+        {
+          provide: SocialIdentityService,
+          useValue: {
+            releaseVerifiedIdentity: jest.fn().mockResolvedValue(new Date()),
+            claimVerifiedIdentity: jest.fn(),
+            consumeReservation: jest.fn(),
+            getReservation: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

@@ -161,10 +161,18 @@ function ConnectedAccountsPageInner() {
       setNotice({ type: 'success', msg: `${connected.toUpperCase()} account connected successfully!` });
       void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
     } else if (error) {
+      const until = searchParams.get('until');
+      const availableAt = until ? new Date(until) : null;
+      const waitMsg =
+        availableAt && !Number.isNaN(availableAt.getTime())
+          ? ` It will be available to link again at ${availableAt.toLocaleString()}.`
+          : '';
       const messages: Record<string, string> = {
         invalid_state: 'OAuth session expired. Please try again.',
         platform_mismatch: 'Platform mismatch in OAuth flow. Please try again.',
         oauth_failed: 'Connection failed. Check that OAuth credentials are configured.',
+        identity_taken: 'This social account is already linked to another Engganyo account.',
+        identity_reserved: `This social account was recently disconnected and is reserved for 24 hours.${waitMsg}`,
       };
       setNotice({ type: 'error', msg: messages[error] ?? `OAuth error: ${error}` });
     }
@@ -209,9 +217,17 @@ function ConnectedAccountsPageInner() {
       setPendingDisconnect(platform);
       return apiClient.delete(`social-auth/${platform.toLowerCase()}`);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       void queryClient.invalidateQueries({ queryKey: ['social-accounts', user?.id] });
-      setNotice({ type: 'success', msg: 'Account disconnected.' });
+      const reservedUntil = (res.data?.data as { reservedUntil?: string } | undefined)?.reservedUntil;
+      const when = reservedUntil ? new Date(reservedUntil) : null;
+      setNotice({
+        type: 'success',
+        msg:
+          when && !Number.isNaN(when.getTime())
+            ? `Account disconnected. This identity is reserved for 24 hours — available to link again at ${when.toLocaleString()}.`
+            : 'Account disconnected.',
+      });
       setPendingDisconnect(null);
     },
     onError: (err) => {

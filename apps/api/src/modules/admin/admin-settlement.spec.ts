@@ -8,7 +8,7 @@ describe('settlement summary + backfill', () => {
   let svc: AdminService;
   beforeEach(() => {
     jest.clearAllMocks();
-    svc = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, paymongo as never, paypal as never);
+    svc = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, paymongo as never, paypal as never, {} as never);
   });
   const dep = (over: Record<string, unknown> = {}) => ({
     method: DepositMethod.PAYPAL, currency: 'USD', amountFiat: 1,
@@ -145,7 +145,7 @@ describe('crypto approval gate — evidence before credit', () => {
   let svc: AdminService;
   beforeEach(() => {
     jest.clearAllMocks();
-    svc = new AdminService(prisma as never, {} as never, walletSvc as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, paymongo as never, paypal as never);
+    svc = new AdminService(prisma as never, {} as never, walletSvc as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, paymongo as never, paypal as never, {} as never);
   });
   const atkDeposit = (over: Record<string, unknown> = {}) => ({
     id: 'dep-atk', userId: 'attacker', method: DepositMethod.USDT_BEP20, status: DepositStatus.PROCESSING,

@@ -60,13 +60,13 @@ export class UsersController {
   }
 
   @Delete('me/social/:platform')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove a linked social account' })
-  async removeSocial(
+  removeSocial(
     @CurrentUser() user: JwtPayload,
     @Param('platform') platform: SocialPlatform,
   ) {
-    await this.usersService.removeSocialLink(user.sub, platform);
+    return this.usersService.removeSocialLink(user.sub, platform);
   }
 
   @Get('check-username/:username')
