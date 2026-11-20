@@ -132,7 +132,7 @@ export default function AchievementsPage() {
 
       {/* ── Achievements grid ── */}
       {achLoading ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div data-tour="achievements-grid" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from({ length: 9 }).map((_, i) => (
             <div key={i} className="card-glass rounded-xl p-4 animate-pulse h-24" />
           ))}

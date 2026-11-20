@@ -173,7 +173,7 @@ export default function InventoryPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div data-tour="inventory-list" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {inventory.map((entry) => {
             const Icon = CATEGORY_ICONS[entry.item.category] ?? Package;
             const colorClass = CATEGORY_COLORS[entry.item.category] ?? 'border-sc-line bg-sc-panel-2/50 text-sc-muted';

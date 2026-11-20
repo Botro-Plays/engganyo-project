@@ -357,7 +357,7 @@ export default function RoomsPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div data-tour="rooms-list" className="grid gap-3 sm:grid-cols-2">
                 {browseQuery.data!.rooms.map((room) => (
                   <RoomCard key={room.id} room={room} onJoin={setJoinTarget} activeRoomId={activeRoomId} />
                 ))}

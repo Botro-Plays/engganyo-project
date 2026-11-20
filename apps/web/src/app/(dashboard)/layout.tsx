@@ -37,6 +37,7 @@ import { BrandLogo } from '@/components/brand-logo';
 import { SearchBar } from '@/components/search-bar';
 import { ActiveEffectsBanner } from '@/components/active-effects-banner';
 import { OnboardingTour, TourReplayButton, tourNavAttr } from '@/components/onboarding-tour';
+import { MilestoneTour } from '@/components/milestone-tour';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useSocketEvent } from '@/hooks/use-socket';
@@ -574,6 +575,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         <OnboardingTour />
+        <MilestoneTour />
       </AuthenticatedProviders>
     </AuthGuard>
   );

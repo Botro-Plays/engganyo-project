@@ -989,7 +989,7 @@ export default function WalletPage() {
       </div>
 
       {/* ── Balance cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div data-tour="wallet-summary" className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {walletLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="card-glass rounded-xl p-5 animate-pulse">
