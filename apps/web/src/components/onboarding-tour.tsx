@@ -513,6 +513,9 @@ export function OnboardingTour() {
   const nextStep = useTourStore((s) => s.nextStep);
   const prevStep = useTourStore((s) => s.prevStep);
   const skipTour = useTourStore((s) => s.skipTour);
+  const hydrated = useTourStore((s) => s.hydrated);
+  const autoTours = useTourStore((s) => s.autoTours);
+  const pausedStep = useTourStore((s) => s.pausedStep);
 
   const [mounted, setMounted] = useState(false);
   const [ui, setUi] = useState<TargetState | null>(null);
@@ -539,12 +542,16 @@ export function OnboardingTour() {
     if (userId) syncWithUser(userId);
   }, [userId, syncWithUser]);
 
-  // Auto-start for a first-time user once on the dashboard and cookie consent is resolved.
-  const synced = !!userId && tourUserId === userId;
+  // Auto-start only after the SERVER state has loaded (a failed lookup
+  // shows nothing and retries later — we never assume the user is new),
+  // only while automatic tours are enabled, and never over a paused
+  // in-progress tour. Completed/skipped/dismissed state is server-side,
+  // so a new browser or cleared storage cannot restart the tour.
+  const synced = !!userId && tourUserId === userId && hydrated;
   useEffect(() => {
-    if (!synced || status !== 'idle' || pathname !== TOUR_STEPS[0].requiredRoute) return;
+    if (!synced || !autoTours || status !== 'idle' || pausedStep !== null || pathname !== TOUR_STEPS[0].requiredRoute) return;
     return startWhenConsentResolved(startTour);
-  }, [synced, status, pathname, startTour]);
+  }, [synced, autoTours, status, pausedStep, pathname, startTour]);
 
   // Navigate steps: advance exactly once after the intended click reaches the expected route.
   useEffect(() => {

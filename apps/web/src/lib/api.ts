@@ -4,6 +4,11 @@ declare module 'axios' {
   interface AxiosRequestConfig {
     /** Opt out of the network/5xx retry interceptor for non-idempotent calls. */
     skipRetry?: boolean;
+    /** Optional/background call (tours, prefs): still attempts the shared
+     *  token refresh and retries once, but a FAILED refresh must not clear
+     *  auth state or redirect — the caller handles the error silently.
+     *  Genuine session expiry is still enforced by the next normal request. */
+    optionalAuth?: boolean;
   }
 }
 import { useAuthStore } from '@/store/auth.store';
@@ -180,6 +185,12 @@ apiClient.interceptors.response.use(
 
         return apiClient(originalRequest);
       } catch {
+        // Refresh failed. Optional/background calls never tear down the
+        // session — a flaky tour/prefs request must not log out a valid
+        // user. The next ordinary request enforces genuine expiry.
+        if (originalRequest.optionalAuth) {
+          return Promise.reject(error);
+        }
         // Refresh failed — clear tokens and redirect to login
         localStorage.removeItem('access_token');
         // Also clear zustand store so UI doesn't show stale authenticated state

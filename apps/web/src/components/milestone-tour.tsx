@@ -37,6 +37,8 @@ interface DueTour {
   title: string;
   teaser: string;
   steps: TourStep[];
+  /** Set when resuming an IN_PROGRESS tour — start at this step. */
+  resumeStep?: number;
 }
 
 type Phase = 'announce' | 'step';
@@ -64,6 +66,12 @@ export function MilestoneTour() {
   const user = useAuthStore((s) => s.user);
   const pathname = usePathname();
   const router = useRouter();
+  // Automatic tours wait for the server-authoritative state + preference
+  // before showing anything; a failed lookup shows nothing and retries.
+  const hydrated = useTourStore((s) => s.hydrated);
+  const autoTours = useTourStore((s) => s.autoTours);
+  const replayRequest = useTourStore((s) => s.replayRequest);
+  const clearReplayRequest = useTourStore((s) => s.clearReplayRequest);
 
   const [tour, setTour] = useState<DueTour | null>(null);
   const [phase, setPhase] = useState<Phase>('announce');
@@ -76,31 +84,67 @@ export function MilestoneTour() {
     tourRef.current = tour;
   }, [tour]);
 
-  const fetchPending = useCallback(async () => {
-    if (!user || fetchingRef.current || dismissedRef.current || tourRef.current) return;
-    fetchingRef.current = true;
-    try {
-      const res = await apiClient.get<ApiResponse<{ tours: DueTour[] }>>('gamification/tours/pending');
-      const due = res.data?.data?.tours?.[0];
-      if (due && !isDeferred(pathname)) {
-        dismissedRef.current = false;
-        setTour(due);
-        setPhase('announce');
-        setStepIndex(0);
+  /** Fetches due tours and shows the first eligible one. `manual` bypasses
+   *  the automatic-tours preference — used for Settings replay requests. */
+  const showDue = useCallback(
+    async (opts?: { manual?: boolean; onlyKey?: string }) => {
+      if (!user || fetchingRef.current || dismissedRef.current || tourRef.current) return;
+      fetchingRef.current = true;
+      try {
+        const res = await apiClient.get<ApiResponse<{ tours: DueTour[] }>>('gamification/tours/pending', {
+          optionalAuth: true,
+        });
+        const tours = res.data?.data?.tours ?? [];
+        const due = opts?.onlyKey ? tours.find((t) => t.key === opts.onlyKey) : tours[0];
+        // Manual replay bypasses the auto-tours preference but NEVER the
+        // deferral rules — payments, proof submission, rooms, and dialogs
+        // are never interrupted, automatic or manual.
+        if (due && !isDeferred(pathname)) {
+          dismissedRef.current = false;
+          setTour(due);
+          // Resume an interrupted tour directly at its saved step.
+          if (due.resumeStep !== undefined && due.resumeStep > 0 && due.resumeStep < due.steps.length) {
+            setPhase('step');
+            setStepIndex(due.resumeStep);
+          } else {
+            setPhase('announce');
+            setStepIndex(0);
+          }
+        }
+      } catch {
+        /* offline / optional call failed — silent, never blocks UX */
+      } finally {
+        fetchingRef.current = false;
       }
-    } catch {
-      /* offline / unauthenticated — silent */
-    } finally {
-      fetchingRef.current = false;
-    }
-  }, [user, pathname]);
+    },
+    [user, pathname],
+  );
+
+  const fetchPending = useCallback(() => {
+    if (!hydrated || !autoTours) return;
+    void showDue();
+  }, [hydrated, autoTours, showDue]);
+
+  // Manual replay from Settings — works even when automatic tours are
+  // disabled because replay is an explicit user action.
+  useEffect(() => {
+    if (!replayRequest || !user) return;
+    clearReplayRequest();
+    // An explicit replay request overrides this session's dismiss latch.
+    dismissedRef.current = false;
+    void showDue({ manual: true, onlyKey: replayRequest.key });
+  }, [replayRequest, user, clearReplayRequest, showDue]);
 
   const record = useCallback(
     async (action: 'complete' | 'dismiss') => {
       const current = tourRef.current;
       if (!current) return;
       try {
-        await apiClient.post(`gamification/tours/${current.key}/${action}`, { version: current.version });
+        await apiClient.post(
+          `gamification/tours/${current.key}/${action}`,
+          { version: current.version },
+          { optionalAuth: true },
+        );
       } catch {
         /* best-effort — tour may reshhow next session, never blocks UX */
       }
@@ -132,6 +176,22 @@ export function MilestoneTour() {
   });
 
   const step: TourStep | null = tour && phase === 'step' ? tour.steps[stepIndex] ?? null : null;
+
+  // Persist in-progress step position so an interrupted tour resumes
+  // where the user left off (server keeps terminal states immutable).
+  useEffect(() => {
+    if (!tour || phase !== 'step') return;
+    const t = setTimeout(() => {
+      void apiClient
+        .post(
+          `gamification/tours/${tour.key}/progress`,
+          { version: tour.version, step: stepIndex },
+          { optionalAuth: true },
+        )
+        .catch(() => undefined);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [tour, phase, stepIndex]);
 
   // Spotlight positioning — poll for the target like the beginner tour.
   useEffect(() => {

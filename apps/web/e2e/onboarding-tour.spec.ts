@@ -26,12 +26,30 @@ async function readTourState(page: Page) {
 async function prepare(page: Page, opts: { consent?: boolean } = {}) {
   const consent = opts.consent ?? true;
   await page.goto('/settings');
-  await page.evaluate((withConsent) => {
+  await page.evaluate(async (withConsent) => {
     Object.keys(localStorage)
       .filter((k) => k.startsWith('engganyo-tour-v1-'))
       .forEach((k) => localStorage.removeItem(k));
     if (withConsent) localStorage.setItem('cookie-consent', 'all');
     else localStorage.removeItem('cookie-consent');
+
+    // Tour state is server-authoritative now — clearing localStorage is
+    // not enough. Reset the beginner tour row + auto-tours preference
+    // over the API so every test starts from a clean server state.
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    const apiBase =
+      (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+        .map((e) => e.name)
+        .find((n) => n.includes('/api/'))
+        ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers }).catch(() => {});
+    await fetch(`${apiBase}/gamification/tours/preferences`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ autoTours: true }),
+    }).catch(() => {});
   }, consent);
 }
 
