@@ -87,6 +87,7 @@ async function mockApis(page: import('@playwright/test').Page) {
   await page.route('**/api/store/active-effects', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
   await page.route('**/api/users/cosmetics**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
   await page.route('**/api/auth/public-config', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
+  await page.route('**/api/gamification/tours/**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ interval: 5, version: 1, tours: [] }) }));
   await page.route('**/api/wallet/deposit/options', (r) => r.fulfill({
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse({

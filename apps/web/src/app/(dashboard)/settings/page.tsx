@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Link2, Bell, Shield, User, Users, Cookie } from 'lucide-react';
 import { CookieConsentSettings } from '@/components/cookie-consent';
+import { FeatureToursCard } from '@/components/feature-tours-card';
 
 const SETTING_TILES = [
   {
@@ -89,6 +90,10 @@ export default function SettingsPage() {
           </div>
           <CookieConsentSettings />
         </div>
+      </div>
+
+      <div className="mt-4">
+        <FeatureToursCard />
       </div>
     </div>
   );

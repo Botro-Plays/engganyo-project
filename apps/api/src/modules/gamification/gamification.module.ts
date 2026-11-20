@@ -8,11 +8,13 @@ import { ReferralsModule } from '../referrals/referrals.module';
 import { GamificationController } from './gamification.controller';
 import { GamificationService } from './gamification.service';
 import { ActivityRewardService } from './activity-reward.service';
+import { ToursController } from './tours.controller';
+import { ToursService } from './tours.service';
 
 @Module({
   imports: [forwardRef(() => WalletModule), NotificationsModule, EventsModule, forwardRef(() => StoreModule), forwardRef(() => ReferralsModule)],
-  controllers: [GamificationController],
-  providers: [GamificationService, ActivityRewardService],
-  exports: [GamificationService, ActivityRewardService],
+  controllers: [GamificationController, ToursController],
+  providers: [GamificationService, ActivityRewardService, ToursService],
+  exports: [GamificationService, ActivityRewardService, ToursService],
 })
 export class GamificationModule {}

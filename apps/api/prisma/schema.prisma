@@ -431,6 +431,7 @@ model User {
   roomRatingsReceived    RoomRating[]            @relation("RatingReceiver")
   friendshipsRequested   Friendship[]            @relation("FriendshipRequester")
   friendshipsReceived    Friendship[]            @relation("FriendshipAddressee")
+  tourCompletions        TourCompletion[]
 
   @@index([email])
   @@index([username])
@@ -594,6 +595,29 @@ model SocialAccount {
   @@index([userId])
   @@index([platform, platformUserId])
   @@map("social_accounts")
+}
+
+// Per-user, per-tour, per-version completion state for milestone
+// onboarding tours. Server-persisted so progress follows the account
+// across devices; version bumps replay tours for everyone.
+model TourCompletion {
+  id        String                @id @default(cuid())
+  userId    String                @map("user_id")
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourKey   String                @map("tour_key")
+  version   Int
+  status    TourCompletionStatus  @default(COMPLETED)
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+
+  @@unique([userId, tourKey, version])
+  @@index([userId])
+  @@map("tour_completions")
+}
+
+enum TourCompletionStatus {
+  COMPLETED
+  DISMISSED
 }
 
 // 24-hour reservation on a released VERIFIED social identity.
