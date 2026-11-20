@@ -66,41 +66,21 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
       },
     });
 
-  /** Mirrors the OAuth callback transaction: claim -> upsert -> consume. */
-  const simulateOAuthLink = (userId: string, platform: SocialPlatform, pid: string, username?: string) =>
-    prisma.$transaction(async (tx) => {
-      const existing = await tx.socialAccount.findUnique({
-        where: { userId_platform: { userId, platform } },
-        select: { isVerified: true, platformUserId: true },
-      });
-      if (existing?.isVerified && existing.platformUserId !== pid) {
-        await identity.releaseVerifiedIdentity(tx, {
-          platform,
-          identityKey: existing.platformUserId,
-          releasedByUserId: userId,
-        });
-      }
-      await identity.claimVerifiedIdentity(tx, { platform, identityKey: pid, userId });
-      const row = await tx.socialAccount.upsert({
-        where: { userId_platform: { userId, platform } },
-        create: {
-          userId,
-          platform,
-          platformUserId: pid,
-          platformUsername: username ?? `u_${labelSafe(pid)}`,
-          isVerified: true,
-          accessToken: 'enc-at',
-        },
-        update: {
-          platformUserId: pid,
-          platformUsername: username ?? `u_${labelSafe(pid)}`,
-          isVerified: true,
-          accessToken: 'enc-at',
-        },
-      });
-      await identity.consumeReservation(tx, { platform, identityKey: pid });
-      return row;
-    });
+  /**
+   * Exercises the REAL service write path — SocialAuthService
+   * .linkVerifiedAccount — the same transaction the OAuth callback uses,
+   * minus JWT/state/token-exchange (profile + tokens supplied directly).
+   */
+  const oauthLink = (userId: string, platform: SocialPlatform, pid: string, username?: string) =>
+    socialAuth.linkVerifiedAccount(
+      userId,
+      platform,
+      {
+        platformUserId: pid,
+        username: username ?? `u_${labelSafe(pid)}`,
+      },
+      { accessToken: 'at', refreshToken: 'rt', expiresIn: 3600 },
+    );
 
   const reservation = (platform: SocialPlatform, pid: string) =>
     prisma.socialIdentityReservation.findUnique({
@@ -112,7 +92,14 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await prisma.$connect();
     const prismaSvc = prisma as never;
     identity = new SocialIdentityService(prismaSvc);
-    socialAuth = new SocialAuthService(prismaSvc, {} as never, {} as never, {} as never, identity);
+    // Crypto is mocked to identity — token encryption is not under test.
+    socialAuth = new SocialAuthService(
+      prismaSvc,
+      {} as never,
+      {} as never,
+      { encrypt: (s: string) => `enc:${s}` } as never,
+      identity,
+    );
     users = new UsersService(prismaSvc, { del: jest.fn() } as never, identity);
   });
 
@@ -137,7 +124,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     // B proves ownership of the same platform id — the partial unique
     // index must reject the write even though B's own (user,platform)
     // slot is free.
-    await expect(simulateOAuthLink(b.id, SocialPlatform.YOUTUBE, pid)).rejects.toBeInstanceOf(
+    await expect(oauthLink(b.id, SocialPlatform.YOUTUBE, pid)).rejects.toBeInstanceOf(
       Prisma.PrismaClientKnownRequestError,
     );
     const bRows = await prisma.socialAccount.findMany({ where: { userId: b.id } });
@@ -149,8 +136,8 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     const b = await mkUser();
     const pid = platformUserId('race1');
     const results = await Promise.allSettled([
-      simulateOAuthLink(a.id, SocialPlatform.YOUTUBE, pid),
-      simulateOAuthLink(b.id, SocialPlatform.YOUTUBE, pid),
+      oauthLink(a.id, SocialPlatform.YOUTUBE, pid),
+      oauthLink(b.id, SocialPlatform.YOUTUBE, pid),
     ]);
     const ok = results.filter((r) => r.status === 'fulfilled');
     const failed = results.filter((r) => r.status === 'rejected');
@@ -159,7 +146,12 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     const holder = await prisma.socialAccount.findFirst({
       where: { platform: SocialPlatform.YOUTUBE, platformUserId: pid, isVerified: true },
     });
-    expect(holder?.userId).toBe(ok[0].status === 'fulfilled' ? (ok[0].value as { userId: string }).userId : '');
+    expect([a.id, b.id]).toContain(holder?.userId);
+    // Exactly one user holds it — the loser has no row at all.
+    const counts = await prisma.socialAccount.count({
+      where: { platform: SocialPlatform.YOUTUBE, platformUserId: pid },
+    });
+    expect(counts).toBe(1);
   });
 
   it('unverified declarations of the same handle never conflict or reserve', async () => {
@@ -246,7 +238,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
     await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
 
-    await expect(simulateOAuthLink(b.id, SocialPlatform.YOUTUBE, pid)).rejects.toMatchObject({
+    await expect(oauthLink(b.id, SocialPlatform.YOUTUBE, pid)).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'SOCIAL_IDENTITY_RESERVED' }),
     });
     const r = await reservation(SocialPlatform.YOUTUBE, pid);
@@ -273,7 +265,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
     expect(await reservation(SocialPlatform.YOUTUBE, pid)).not.toBeNull();
 
-    await simulateOAuthLink(a.id, SocialPlatform.YOUTUBE, pid);
+    await oauthLink(a.id, SocialPlatform.YOUTUBE, pid);
     expect(await reservation(SocialPlatform.YOUTUBE, pid)).toBeNull();
     const row = await prisma.socialAccount.findUnique({
       where: { userId_platform: { userId: a.id, platform: SocialPlatform.YOUTUBE } },
@@ -294,7 +286,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
       where: { platform_identityKey: { platform: SocialPlatform.YOUTUBE, identityKey: pid } },
       data: { reservedUntil: new Date(Date.now() - 1) },
     });
-    await simulateOAuthLink(b.id, SocialPlatform.YOUTUBE, pid);
+    await oauthLink(b.id, SocialPlatform.YOUTUBE, pid);
     const row = await prisma.socialAccount.findFirst({
       where: { platform: SocialPlatform.YOUTUBE, platformUserId: pid, isVerified: true },
     });
@@ -330,7 +322,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     const pid = platformUserId('fresh1');
     await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
     const first = await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
-    await simulateOAuthLink(a.id, SocialPlatform.YOUTUBE, pid);
+    await oauthLink(a.id, SocialPlatform.YOUTUBE, pid);
     const second = await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
 
     const t1 = new Date(first.reservedUntil!).getTime();
@@ -346,17 +338,17 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     const newPid = platformUserId('sw_new');
     await mkVerified(a.id, SocialPlatform.YOUTUBE, oldPid);
 
-    await simulateOAuthLink(a.id, SocialPlatform.YOUTUBE, newPid);
+    await oauthLink(a.id, SocialPlatform.YOUTUBE, newPid);
     const r = await reservation(SocialPlatform.YOUTUBE, oldPid);
     expect(r?.releasedByUserId).toBe(a.id);
     expect(r!.reservedUntil.getTime()).toBeGreaterThan(Date.now());
 
     // B cannot take the old identity during cooldown…
-    await expect(simulateOAuthLink(b.id, SocialPlatform.YOUTUBE, oldPid)).rejects.toBeInstanceOf(
+    await expect(oauthLink(b.id, SocialPlatform.YOUTUBE, oldPid)).rejects.toBeInstanceOf(
       ConflictException,
     );
     // …but can take a free one.
-    await simulateOAuthLink(b.id, SocialPlatform.YOUTUBE, platformUserId('sw_free'));
+    await oauthLink(b.id, SocialPlatform.YOUTUBE, platformUserId('sw_free'));
   });
 
   it('failed identity switch does not reserve the old identity', async () => {
@@ -369,7 +361,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
 
     // Switch to an identity owned by C — whole tx must roll back,
     // leaving oldPid unreserved and still linked to A.
-    await expect(simulateOAuthLink(a.id, SocialPlatform.YOUTUBE, takenPid)).rejects.toBeInstanceOf(
+    await expect(oauthLink(a.id, SocialPlatform.YOUTUBE, takenPid)).rejects.toBeInstanceOf(
       Prisma.PrismaClientKnownRequestError,
     );
     expect(await reservation(SocialPlatform.YOUTUBE, oldPid)).toBeNull();
@@ -404,5 +396,159 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     expect(res.removed).toBe(true);
     expect(res.reservedUntil).toBeTruthy();
     expect(await reservation(SocialPlatform.YOUTUBE, pid)).not.toBeNull();
+  });
+
+  // ─── Concurrency: real service paths, deterministic outcomes ──
+
+  it('profile edit racing OAuth verify never leaves an unproven identity verified', async () => {
+    const u = await mkUser();
+    const stableId = platformUserId('race_verify');
+
+    // Concurrent: profile PUT (unverified declaration path) vs OAuth link.
+    const [editRes, linkRes] = await Promise.allSettled([
+      users.upsertSocialLink(u.id, {
+        platform: SocialPlatform.YOUTUBE,
+        platformUsername: 'manual_handle_race',
+        profileUrl: 'https://youtube.com/@manual_handle_race',
+      }),
+      oauthLink(u.id, SocialPlatform.YOUTUBE, stableId, 'verified_name'),
+    ]);
+    // Both may succeed (serialized) — what must NEVER happen is a
+    // verified row whose platformUserId is the unproven handle.
+    expect(editRes.status).toBe('fulfilled');
+    expect(linkRes.status).toBe('fulfilled');
+
+    const rows = await prisma.socialAccount.findMany({
+      where: { userId: u.id, platform: SocialPlatform.YOUTUBE },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].isVerified).toBe(true);
+    expect(rows[0].platformUserId).toBe(stableId);
+    expect(rows[0].accessToken).toBe('enc:at');
+  });
+
+  it('profile edit AFTER OAuth verify preserves the stable identity', async () => {
+    const u = await mkUser();
+    const stableId = platformUserId('post_verify');
+    await oauthLink(u.id, SocialPlatform.YOUTUBE, stableId, 'verified_name');
+
+    await users.upsertSocialLink(u.id, {
+      platform: SocialPlatform.YOUTUBE,
+      platformUsername: 'sneaky_rename',
+      profileUrl: 'https://youtube.com/@sneaky_rename',
+    });
+
+    const row = await prisma.socialAccount.findUnique({
+      where: { userId_platform: { userId: u.id, platform: SocialPlatform.YOUTUBE } },
+    });
+    expect(row?.isVerified).toBe(true);
+    expect(row?.platformUserId).toBe(stableId);
+    expect(row?.accessToken).toBe('enc:at');
+  });
+
+  it('unlink racing another user\'s claim: claim always rejected, reservation + credentials intact', async () => {
+    const a = await mkUser();
+    const b = await mkUser();
+    const pid = platformUserId('race_unlink');
+    await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
+
+    const [discRes, linkRes] = await Promise.allSettled([
+      socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE),
+      oauthLink(b.id, SocialPlatform.YOUTUBE, pid),
+    ]);
+    expect(discRes.status).toBe('fulfilled');
+    // B's upsert unblocks only after A's delete commits, then the
+    // post-upsert reservation check must reject — cooldown cannot be
+    // consumed by a racing claim.
+    expect(linkRes.status).toBe('rejected');
+
+    const r = await reservation(SocialPlatform.YOUTUBE, pid);
+    expect(r).not.toBeNull();
+    expect(r!.releasedByUserId).toBe(a.id);
+    expect(await prisma.socialAccount.count({ where: { userId: b.id } })).toBe(0);
+    expect(
+      await prisma.socialAccount.count({
+        where: { userId: a.id, platform: SocialPlatform.YOUTUBE },
+      }),
+    ).toBe(0);
+  });
+
+  it('simultaneous identity switches: old id stays reserved, loser keeps its identity', async () => {
+    const a = await mkUser();
+    const c = await mkUser();
+    const xPid = platformUserId('swX');
+    const wPid = platformUserId('swW');
+    const yPid = platformUserId('swY');
+    await mkVerified(a.id, SocialPlatform.YOUTUBE, xPid);
+    await mkVerified(c.id, SocialPlatform.YOUTUBE, wPid);
+
+    // A vacates X -> Y while C tries to take X.
+    const [aRes, cRes] = await Promise.allSettled([
+      oauthLink(a.id, SocialPlatform.YOUTUBE, yPid),
+      oauthLink(c.id, SocialPlatform.YOUTUBE, xPid),
+    ]);
+    expect(aRes.status).toBe('fulfilled');
+    // C's claim of X hits A's fresh reservation (releasedBy=A) -> reject.
+    expect(cRes.status).toBe('rejected');
+
+    const aRow = await prisma.socialAccount.findUnique({
+      where: { userId_platform: { userId: a.id, platform: SocialPlatform.YOUTUBE } },
+    });
+    const cRow = await prisma.socialAccount.findUnique({
+      where: { userId_platform: { userId: c.id, platform: SocialPlatform.YOUTUBE } },
+    });
+    expect(aRow?.platformUserId).toBe(yPid);
+    expect(aRow?.isVerified).toBe(true);
+    expect(cRow?.platformUserId).toBe(wPid);
+    expect(cRow?.isVerified).toBe(true);
+
+    const rx = await reservation(SocialPlatform.YOUTUBE, xPid);
+    expect(rx?.releasedByUserId).toBe(a.id);
+    // C's failed switch must not have reserved W.
+    expect(await reservation(SocialPlatform.YOUTUBE, wPid)).toBeNull();
+  });
+
+  it('reconnect racing unlink (same user): final state is always consistent', async () => {
+    const a = await mkUser();
+    const pid = platformUserId('race_recon');
+    await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
+
+    const [dRes, lRes] = await Promise.allSettled([
+      socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE),
+      oauthLink(a.id, SocialPlatform.YOUTUBE, pid),
+    ]);
+    // Same slot lock serializes both — neither may fail or deadlock.
+    expect(dRes.status).toBe('fulfilled');
+    expect(lRes.status).toBe('fulfilled');
+
+    const row = await prisma.socialAccount.findUnique({
+      where: { userId_platform: { userId: a.id, platform: SocialPlatform.YOUTUBE } },
+    });
+    const r = await reservation(SocialPlatform.YOUTUBE, pid);
+
+    if (row) {
+      // Linked => owner reconnected; the claim consumed the reservation.
+      expect(row.isVerified).toBe(true);
+      expect(row.platformUserId).toBe(pid);
+      expect(r).toBeNull();
+    } else {
+      // Unlinked => verified unlink reserved the identity.
+      expect(r).not.toBeNull();
+      expect(r!.releasedByUserId).toBe(a.id);
+    }
+  });
+
+  it('reconnect then unlink sequentially: fresh cooldown each time', async () => {
+    const a = await mkUser();
+    const pid = platformUserId('seq_recon');
+    await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
+    await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
+    await oauthLink(a.id, SocialPlatform.YOUTUBE, pid);
+    expect(await reservation(SocialPlatform.YOUTUBE, pid)).toBeNull();
+    const res = await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
+    expect(res.reservedUntil).toBeTruthy();
+    const r = await reservation(SocialPlatform.YOUTUBE, pid);
+    expect(r).not.toBeNull();
+    expect(r!.reservedUntil.getTime()).toBeGreaterThan(Date.now());
   });
 });

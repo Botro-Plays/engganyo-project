@@ -292,33 +292,47 @@ export class UsersService {
   // ─── Upsert social link ────────────────────────────────────
 
   async upsertSocialLink(userId: string, dto: UpsertSocialDto) {
-    const existing = await this.prisma.socialAccount.findUnique({
-      where: { userId_platform: { userId, platform: dto.platform } },
-    });
+    // Serialized transaction: the (user, platform) slot row is locked
+    // FOR UPDATE and verification state is re-read under the lock, so a
+    // profile edit can never overwrite platformUserId on a row that an
+    // OAuth callback verified concurrently.
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Ensure the slot row exists (no-op update on existing rows), then
+      // lock it. Concurrent creators serialize on the unique key.
+      await tx.socialAccount.upsert({
+        where: { userId_platform: { userId, platform: dto.platform } },
+        create: {
+          userId,
+          platform: dto.platform,
+          platformUserId: dto.platformUsername,
+          platformUsername: dto.platformUsername,
+          ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
+        },
+        update: {},
+      });
 
-    const result = existing
-      ? await this.prisma.socialAccount.update({
-          where: { id: existing.id },
-          select: SOCIAL_SELECT,
-          data: {
-            platformUsername: dto.platformUsername,
-            ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
-            // Never rewrite the stable platform id on a verified (OAuth)
-            // row — it is the exclusive-ownership key. Unverified
-            // declarations keep the legacy username-as-id behavior.
-            ...(existing.isVerified ? {} : { platformUserId: dto.platformUsername }),
-          },
-        })
-      : await this.prisma.socialAccount.create({
-          select: SOCIAL_SELECT,
-          data: {
-            userId,
-            platform: dto.platform,
-            platformUserId: dto.platformUsername,
-            platformUsername: dto.platformUsername,
-            ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
-          },
-        });
+      const locked = await tx.$queryRaw<
+        Array<{ id: string; is_verified: boolean }>
+      >`
+        SELECT id, is_verified
+        FROM social_accounts
+        WHERE user_id = ${userId} AND platform = ${dto.platform}::"SocialPlatform"
+        FOR UPDATE`;
+      const row = locked[0];
+
+      return tx.socialAccount.update({
+        where: { id: row.id },
+        select: SOCIAL_SELECT,
+        data: {
+          platformUsername: dto.platformUsername,
+          ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
+          // Never rewrite the stable platform id on a verified (OAuth)
+          // row — it is the exclusive-ownership key. Unverified
+          // declarations keep the legacy username-as-id behavior.
+          ...(row.is_verified ? {} : { platformUserId: dto.platformUsername }),
+        },
+      });
+    });
 
     await this.redisService.del(`user:profile:${userId}`);
     return result;
@@ -328,16 +342,23 @@ export class UsersService {
 
   async removeSocialLink(userId: string, platform: SocialPlatform) {
     const reservedUntil = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.socialAccount.findUnique({
-        where: { userId_platform: { userId, platform } },
-      });
+      // Lock the (user, platform) slot row — serializes against a
+      // concurrent OAuth link/reconnect on the same slot.
+      const locked = await tx.$queryRaw<
+        Array<{ id: string; platform_user_id: string; is_verified: boolean }>
+      >`
+        SELECT id, platform_user_id, is_verified
+        FROM social_accounts
+        WHERE user_id = ${userId} AND platform = ${platform}::"SocialPlatform"
+        FOR UPDATE`;
+      const existing = locked[0];
       if (!existing) throw new NotFoundException('Social account not linked');
 
       let until: Date | null = null;
-      if (existing.isVerified) {
+      if (existing.is_verified) {
         until = await this.socialIdentity.releaseVerifiedIdentity(tx, {
           platform,
-          identityKey: existing.platformUserId,
+          identityKey: existing.platform_user_id,
           releasedByUserId: userId,
         });
       }
