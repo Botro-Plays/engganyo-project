@@ -3088,7 +3088,9 @@ sessions revoked.
     immutability, fresh cooldown, switch release+rollback, deletion
     survival, verified-id preservation. CI green on `6e8ce0c`
     (API+Web+E2E) → squash-merged **`7d77940`** → deploy
-    **44665912457** (verify below).
+    **44665912457** success; `.deployed-sha` verified `7d77940`;
+    migration applied (partial index + reservations table present);
+    all containers healthy.
 - **Pending:** rendered multi-width pass incl. hero Telegram CTA at
   320/360/390/768/1440; authenticated acceptance pass; manual-platform
   verification proposals need owner decision before enabling
