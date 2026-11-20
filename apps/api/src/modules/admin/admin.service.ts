@@ -8,6 +8,7 @@ import type { UpdatePlatformTaskDto } from './dto/update-platform-task.dto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
+import { SocialIdentityService } from '../../database/social-identity.service';
 import { WalletService } from '../wallet/wallet.service';
 import { AuthService } from '../auth/auth.service';
 import { EventsService } from '../events/events.service';
@@ -49,6 +50,7 @@ export class AdminService {
     private readonly payMongoService: PayMongoService,
     @Inject(forwardRef(() => PayPalService))
     private readonly payPalService: PayPalService,
+    private readonly socialIdentity: SocialIdentityService,
   ) {}
 
   // ─── Users ────────────────────────────────────────────────
@@ -1414,6 +1416,21 @@ export class AdminService {
       await tx.$executeRawUnsafe(`DELETE FROM "ip_records" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "device_fingerprints" WHERE "user_id" = $1`, userId);
       await tx.$executeRawUnsafe(`DELETE FROM "audit_logs" WHERE "user_id" = $1`, userId);
+
+      // Step 9b: Reserve the deleted user's VERIFIED social identities for
+      // 24h — account deletion must not release an exclusive identity
+      // early. Unverified declarations reserve nothing.
+      const verifiedIdentities = await tx.socialAccount.findMany({
+        where: { userId, isVerified: true },
+        select: { platform: true, platformUserId: true },
+      });
+      for (const identity of verifiedIdentities) {
+        await this.socialIdentity.releaseVerifiedIdentity(tx, {
+          platform: identity.platform,
+          identityKey: identity.platformUserId,
+          releasedByUserId: userId,
+        });
+      }
 
       // Step 10: Delete the user — DB cascade handles:
       // user_profiles, user_sessions, email_verifications, password_resets,

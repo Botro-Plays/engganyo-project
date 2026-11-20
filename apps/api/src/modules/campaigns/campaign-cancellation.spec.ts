@@ -324,9 +324,7 @@ describe('AdminService — cancellation funding & atomicity', () => {
       mockService() as never,
       mockService() as never,
       mockService() as never,
-      mockService() as never,
-
-    );
+      mockService() as never, mockService() as never);
     prisma.campaign = { findUnique: jest.fn().mockResolvedValue(campaignRow()) } as never;
   });
 

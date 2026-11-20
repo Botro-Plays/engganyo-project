@@ -596,6 +596,24 @@ model SocialAccount {
   @@map("social_accounts")
 }
 
+// 24-hour reservation on a released VERIFIED social identity.
+// Keyed by platform + stable platform user id (never the mutable handle).
+// Survives user deletion on purpose — releasedByUserId is a plain string
+// with no FK so account deletion cannot bypass an active reservation.
+model SocialIdentityReservation {
+  id               String         @id @default(cuid())
+  platform         SocialPlatform
+  identityKey      String         @map("identity_key")
+  releasedByUserId String         @map("released_by_user_id")
+  reservedUntil    DateTime       @map("reserved_until")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  @@unique([platform, identityKey])
+  @@index([reservedUntil])
+  @@map("social_identity_reservations")
+}
+
 // =============================================================
 // CREDIT ECONOMY
 // =============================================================

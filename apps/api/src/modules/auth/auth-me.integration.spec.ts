@@ -107,7 +107,7 @@ run('Profile endpoints — cached balance freshness (real PG + Redis)', () => {
     await redis.onModuleInit();
 
     auth = buildAuth(redis);
-    users = new UsersService(prisma as never, redis as never);
+    users = new UsersService(prisma as never, redis as never, {} as never);
     wallet = buildWallet();
   });
 
@@ -180,7 +180,7 @@ run('Profile endpoints — cached balance freshness (real PG + Redis)', () => {
       invalidateUserCaches: jest.fn().mockRejectedValue(new Error('redis down')),
     };
     const offlineAuth = buildAuth(brokenRedis as never);
-    const offlineUsers = new UsersService(prisma as never, brokenRedis as never);
+    const offlineUsers = new UsersService(prisma as never, brokenRedis as never, {} as never);
     const user = await makeUser(40);
 
     // Settlement never depends on Redis — it must commit normally.

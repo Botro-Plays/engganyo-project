@@ -10,6 +10,7 @@ import { SocialPlatform, StoreCategory } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
 import { RedisService } from '../../database/redis.service';
+import { SocialIdentityService } from '../../database/social-identity.service';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdatePasswordDto } from './dto/update-password.dto';
 import type { UpsertSocialDto } from './dto/upsert-social.dto';
@@ -67,6 +68,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    private readonly socialIdentity: SocialIdentityService,
   ) {}
 
   // ─── Get full profile (private, own user) ──────────────────
@@ -301,7 +303,10 @@ export class UsersService {
           data: {
             platformUsername: dto.platformUsername,
             ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
-            platformUserId: dto.platformUsername,
+            // Never rewrite the stable platform id on a verified (OAuth)
+            // row — it is the exclusive-ownership key. Unverified
+            // declarations keep the legacy username-as-id behavior.
+            ...(existing.isVerified ? {} : { platformUserId: dto.platformUsername }),
           },
         })
       : await this.prisma.socialAccount.create({
@@ -322,12 +327,29 @@ export class UsersService {
   // ─── Remove social link ────────────────────────────────────
 
   async removeSocialLink(userId: string, platform: SocialPlatform) {
-    const existing = await this.prisma.socialAccount.findUnique({
-      where: { userId_platform: { userId, platform } },
+    const reservedUntil = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.socialAccount.findUnique({
+        where: { userId_platform: { userId, platform } },
+      });
+      if (!existing) throw new NotFoundException('Social account not linked');
+
+      let until: Date | null = null;
+      if (existing.isVerified) {
+        until = await this.socialIdentity.releaseVerifiedIdentity(tx, {
+          platform,
+          identityKey: existing.platformUserId,
+          releasedByUserId: userId,
+        });
+      }
+      await tx.socialAccount.delete({ where: { id: existing.id } });
+      return until;
     });
-    if (!existing) throw new NotFoundException('Social account not linked');
-    await this.prisma.socialAccount.delete({ where: { id: existing.id } });
     await this.redisService.del(`user:profile:${userId}`);
+    return {
+      removed: true,
+      platform,
+      ...(reservedUntil && { reservedUntil: reservedUntil.toISOString() }),
+    };
   }
 
   // ─── Change password ───────────────────────────────────────

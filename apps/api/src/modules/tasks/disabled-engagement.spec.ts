@@ -221,9 +221,7 @@ describe('AdminService — disabled YouTube engagement', () => {
       mockService() as never, // weeklyDigest
       mockService() as never, // referrals
       mockService() as never, // payMongo,
-      mockService() as never,
-
-    );
+      mockService() as never, mockService() as never);
   });
 
   it.each(YOUTUBE_TYPES)('createPlatformTask rejects %s', async (taskType) => {

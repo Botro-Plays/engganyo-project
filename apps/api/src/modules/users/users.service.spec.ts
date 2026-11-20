@@ -8,7 +8,7 @@ describe('UsersService — getEquippedCosmeticsForUsers (batched lookup)', () =>
 
   beforeEach(() => {
     prisma = { userInventory: { findMany: jest.fn() } };
-    service = new UsersService(prisma as never, {} as never);
+    service = new UsersService(prisma as never, {} as never, {} as never);
   });
 
   it('returns {} and runs no query for an empty id list', async () => {
