@@ -6,6 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { randomUUID } from 'node:crypto';
 import { SocialPlatform, StoreCategory } from '@prisma/client';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -297,19 +298,19 @@ export class UsersService {
     // profile edit can never overwrite platformUserId on a row that an
     // OAuth callback verified concurrently.
     const result = await this.prisma.$transaction(async (tx) => {
-      // Ensure the slot row exists (no-op update on existing rows), then
-      // lock it. Concurrent creators serialize on the unique key.
-      await tx.socialAccount.upsert({
-        where: { userId_platform: { userId, platform: dto.platform } },
-        create: {
-          userId,
-          platform: dto.platform,
-          platformUserId: dto.platformUsername,
-          platformUsername: dto.platformUsername,
-          ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
-        },
-        update: {},
-      });
+      // Ensure the slot row exists atomically — INSERT ... ON CONFLICT
+      // DO NOTHING cannot hit the (user_id, platform) unique key the way
+      // Prisma's non-atomic upsert can when an OAuth link inserts the row
+      // concurrently (that race surfaced as a spurious P2002 abort).
+      const now = new Date();
+      await tx.$executeRaw`
+        INSERT INTO social_accounts
+          (id, user_id, platform, platform_user_id, platform_username, profile_url, created_at, updated_at)
+        VALUES
+          (${randomUUID()}, ${userId}, ${dto.platform}::"SocialPlatform",
+           ${dto.platformUsername}, ${dto.platformUsername},
+           ${dto.profileUrl ?? null}, ${now}, ${now})
+        ON CONFLICT (user_id, platform) DO NOTHING`;
 
       const locked = await tx.$queryRaw<
         Array<{ id: string; is_verified: boolean }>
