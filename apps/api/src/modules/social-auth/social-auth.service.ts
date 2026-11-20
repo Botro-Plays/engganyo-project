@@ -288,75 +288,11 @@ export class SocialAuthService {
       // Fetch platform profile
       const profile = await this.fetchPlatformProfile(platform, tokens.access_token);
 
-      // Encrypt tokens before storage
-      const encryptedAccessToken = this.crypto.encrypt(tokens.access_token);
-      const encryptedRefreshToken = tokens.refresh_token ? this.crypto.encrypt(tokens.refresh_token) : null;
-
-      // Upsert social account — verified identities are exclusive:
-      // reservation check, row write, and reservation consumption commit
-      // atomically; the partial unique index is the DB backstop for
-      // concurrent claims.
       try {
-        await this.prisma.$transaction(async (tx) => {
-          // Re-linking a DIFFERENT verified identity releases the old one
-          // under the same 24h cooldown — otherwise switching accounts
-          // would bypass the reservation. Rolled back with the tx if the
-          // new claim fails, so failed attempts never reserve.
-          const existing = await tx.socialAccount.findUnique({
-            where: { userId_platform: { userId: payload.userId, platform } },
-            select: { isVerified: true, platformUserId: true },
-          });
-          if (
-            existing?.isVerified &&
-            existing.platformUserId !== profile.platformUserId
-          ) {
-            await this.socialIdentity.releaseVerifiedIdentity(tx, {
-              platform,
-              identityKey: existing.platformUserId,
-              releasedByUserId: payload.userId,
-            });
-          }
-
-          await this.socialIdentity.claimVerifiedIdentity(tx, {
-            platform,
-            identityKey: profile.platformUserId,
-            userId: payload.userId,
-          });
-          await tx.socialAccount.upsert({
-            where: { userId_platform: { userId: payload.userId, platform } },
-            create: {
-              userId: payload.userId,
-              platform,
-              platformUserId: profile.platformUserId,
-              platformUsername: profile.username,
-              profileUrl: profile.profileUrl,
-              avatarUrl: profile.avatarUrl,
-              accessToken: encryptedAccessToken,
-              refreshToken: encryptedRefreshToken,
-              tokenExpiresAt: tokens.expires_in
-                ? new Date(Date.now() + tokens.expires_in * 1000)
-                : null,
-              isVerified: true,
-              lastSyncedAt: new Date(),
-            },
-            update: {
-              platformUserId: profile.platformUserId,
-              platformUsername: profile.username,
-              profileUrl: profile.profileUrl,
-              avatarUrl: profile.avatarUrl,
-              accessToken: encryptedAccessToken,
-              refreshToken: encryptedRefreshToken,
-              tokenExpiresAt: tokens.expires_in
-                ? new Date(Date.now() + tokens.expires_in * 1000)
-                : null,
-              isVerified: true,
-              lastSyncedAt: new Date(),
-            },
-          });
-          await this.socialIdentity.consumeReservation(tx, {
-            platform,
-            identityKey: profile.platformUserId,
-          });
+        await this.linkVerifiedAccount(payload.userId, platform, profile, {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token ?? null,
+          expiresIn: tokens.expires_in,
         });
       } catch (err) {
         if (err instanceof ConflictException) {
@@ -376,6 +312,112 @@ export class SocialAuthService {
       this.logger.error(`OAuth callback failed for ${platform}: ${(err as Error).message}`);
       return `${frontendUrl}/settings/connected-accounts?error=oauth_failed`;
     }
+  }
+
+  /**
+   * Transactional verified-identity link — the single write path used by
+   * the OAuth callback (and directly exercisable in tests).
+   *
+   * Lock ordering (consistent across all social-identity writers):
+   *   1. SELECT ... FOR UPDATE on the (userId, platform) slot row —
+   *      serializes against profile edits and same-user unlink/reconnect.
+   *   2. socialAccount.upsert — the partial unique index on
+   *      (platform, platform_user_id) WHERE is_verified serializes
+   *      against concurrent claims/unlinks of the same stable identity;
+   *      this tx waits for them to commit.
+   *   3. claimVerifiedIdentity — runs AFTER the upsert so the reservation
+   *      read sees the settled post-conflict state. Without this order a
+   *      claim could pass the check, then consume a reservation created
+   *      by an unlink that committed while the upsert was blocked,
+   *      bypassing the 24h handoff.
+   *   4. releaseVerifiedIdentity for the previous verified id when the
+   *      user switches identities (rolled back if the claim fails, so
+   *      failed attempts never reserve).
+   *   5. consumeReservation for the newly held identity.
+   *
+   * Throws ConflictException (SOCIAL_IDENTITY_RESERVED + availableAt) or
+   * Prisma P2002 (identity already verified by another user).
+   */
+  async linkVerifiedAccount(
+    userId: string,
+    platform: SocialPlatform,
+    profile: { platformUserId: string; username: string; profileUrl?: string; avatarUrl?: string },
+    tokens: { accessToken: string; refreshToken: string | null; expiresIn?: number },
+  ): Promise<void> {
+    const tokenExpiresAt = tokens.expiresIn
+      ? new Date(Date.now() + tokens.expiresIn * 1000)
+      : null;
+    const encryptedAccessToken = this.crypto.encrypt(tokens.accessToken);
+    const encryptedRefreshToken = tokens.refreshToken
+      ? this.crypto.encrypt(tokens.refreshToken)
+      : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Lock the (user, platform) slot row when it exists.
+      const slot = await tx.$queryRaw<
+        Array<{ id: string; is_verified: boolean; platform_user_id: string }>
+      >`
+        SELECT id, is_verified, platform_user_id
+        FROM social_accounts
+        WHERE user_id = ${userId} AND platform = ${platform}::"SocialPlatform"
+        FOR UPDATE`;
+      const existing = slot[0];
+
+      // 2. Upsert — serializes on both the slot unique key and the
+      //    verified-identity partial unique index.
+      await tx.socialAccount.upsert({
+        where: { userId_platform: { userId, platform } },
+        create: {
+          userId,
+          platform,
+          platformUserId: profile.platformUserId,
+          platformUsername: profile.username,
+          profileUrl: profile.profileUrl,
+          avatarUrl: profile.avatarUrl,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          tokenExpiresAt,
+          isVerified: true,
+          lastSyncedAt: new Date(),
+        },
+        update: {
+          platformUserId: profile.platformUserId,
+          platformUsername: profile.username,
+          profileUrl: profile.profileUrl,
+          avatarUrl: profile.avatarUrl,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          tokenExpiresAt,
+          isVerified: true,
+          lastSyncedAt: new Date(),
+        },
+      });
+
+      // 3. Reservation claim — post-upsert, settled state.
+      await this.socialIdentity.claimVerifiedIdentity(tx, {
+        platform,
+        identityKey: profile.platformUserId,
+        userId,
+      });
+
+      // 4. Verified identity switch releases the old id under cooldown.
+      if (
+        existing?.is_verified &&
+        existing.platform_user_id !== profile.platformUserId
+      ) {
+        await this.socialIdentity.releaseVerifiedIdentity(tx, {
+          platform,
+          identityKey: existing.platform_user_id,
+          releasedByUserId: userId,
+        });
+      }
+
+      // 5. Claim consumes any reservation for the newly held identity.
+      await this.socialIdentity.consumeReservation(tx, {
+        platform,
+        identityKey: profile.platformUserId,
+      });
+    });
   }
 
   // ─── List connected accounts ────────────────────────────────────────────────
@@ -403,26 +445,31 @@ export class SocialAuthService {
 
   async disconnect(userId: string, platform: SocialPlatform) {
     const result = await this.prisma.$transaction(async (tx) => {
-      const account = await tx.socialAccount.findUnique({
-        where: { userId_platform: { userId, platform } },
-      });
+      // Lock the (user, platform) slot row — serializes against a
+      // concurrent link/reconnect on the same slot.
+      const rows = await tx.$queryRaw<
+        Array<{ id: string; platform_user_id: string; is_verified: boolean }>
+      >`
+        SELECT id, platform_user_id, is_verified
+        FROM social_accounts
+        WHERE user_id = ${userId} AND platform = ${platform}::"SocialPlatform"
+        FOR UPDATE`;
+      const account = rows[0];
       if (!account) throw new NotFoundException('Social account not connected');
 
       // Verified identities get a 24h reservation so the same social
       // account cannot be claimed by a different Engganyo user right
       // away. Unverified declarations reserve nothing.
       let reservedUntil: Date | null = null;
-      if (account.isVerified) {
+      if (account.is_verified) {
         reservedUntil = await this.socialIdentity.releaseVerifiedIdentity(tx, {
           platform,
-          identityKey: account.platformUserId,
+          identityKey: account.platform_user_id,
           releasedByUserId: userId,
         });
       }
 
-      await tx.socialAccount.delete({
-        where: { userId_platform: { userId, platform } },
-      });
+      await tx.socialAccount.delete({ where: { id: account.id } });
 
       return { reservedUntil };
     });

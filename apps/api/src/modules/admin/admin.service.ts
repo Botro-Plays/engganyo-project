@@ -1420,6 +1420,12 @@ export class AdminService {
       // Step 9b: Reserve the deleted user's VERIFIED social identities for
       // 24h — account deletion must not release an exclusive identity
       // early. Unverified declarations reserve nothing.
+      // Lock all of the user's social slot rows first so a concurrent
+      // link/unlink on any of them serializes with this transaction;
+      // identity-level conflicts additionally serialize on the verified
+      // unique index, and claims re-check reservations after unblocking.
+      await tx.$queryRaw`
+        SELECT id FROM social_accounts WHERE user_id = ${userId} FOR UPDATE`;
       const verifiedIdentities = await tx.socialAccount.findMany({
         where: { userId, isVerified: true },
         select: { platform: true, platformUserId: true },

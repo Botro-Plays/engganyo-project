@@ -75,6 +75,7 @@ describe('AdminService', () => {
     },
     $transaction: jest.fn((callback: (tx: Record<string, unknown>) => Promise<unknown>) => callback(mockPrisma)),
     $executeRawUnsafe: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([]),
   };
 
   const mockWalletService = {
