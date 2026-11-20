@@ -154,12 +154,14 @@ test.describe('tour state hardening', () => {
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 
     let patchCalls: boolean[] = [];
-    let failNext = true;
+    // apiClient auto-retries 5xx (initial + 3 backoff retries ≈ 7s), so a
+    // single mocked failure self-heals — the preference must keep failing
+    // until the test releases it, otherwise the error/Retry UI never shows.
+    let failPrefs = true;
     await page.route('**/api/gamification/tours/preferences', (r) => {
       const body = r.request().postDataJSON() as { autoTours?: boolean };
       patchCalls.push(body.autoTours === true);
-      if (failNext) {
-        failNext = false;
+      if (failPrefs) {
         return r.fulfill(fulfill(500, { message: 'boom' }));
       }
       return r.fulfill(apiOk({ autoTours: body.autoTours }));
@@ -184,12 +186,14 @@ test.describe('tour state hardening', () => {
     const toggle = page.getByRole('switch', { name: /automatic tours/i });
     await expect(toggle).toBeVisible({ timeout: 20_000 });
 
-    // First toggle fails → error + Retry appear, switch reverts to on.
+    // First toggle fails (after the client's own 5xx retries exhaust) →
+    // error + Retry appear, switch reverts to on.
     await toggle.click();
-    await expect(page.getByText(/Couldn.t save the tour preference/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Couldn.t save the tour preference/i)).toBeVisible({ timeout: 20_000 });
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
 
     // Retry succeeds → preference saved, error clears.
+    failPrefs = false;
     await page.getByRole('button', { name: 'Retry' }).first().click();
     await page.waitForTimeout(1500);
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -250,7 +254,11 @@ test.describe('tour state hardening', () => {
 
     // While DELETE is gated, no progress write may be sent.
     await page.waitForTimeout(1200);
-    expect(order).toEqual(['delete-start']);
+    const queuedNow = await page.evaluate(() => {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
+      return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
+    });
+    expect(order, `order=${JSON.stringify(order)} queued=${JSON.stringify(queuedNow)}`).toEqual(['delete-start']);
 
     releaseDelete!();
     await page.waitForTimeout(2500);
