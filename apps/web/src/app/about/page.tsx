@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { BrandLogo } from '@/components/brand-logo';
 
 export const metadata: Metadata = {
-  title: 'About Engganyo',
+  title: 'About',
   description: 'Learn about Engganyo - the platform that connects brands with social media users for authentic engagement campaigns.',
   alternates: { canonical: 'https://engganyo.com/about' },
   robots: { index: true, follow: true },

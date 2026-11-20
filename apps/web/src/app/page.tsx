@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import Script from 'next/script';
+import type { Metadata } from 'next';
 import {
   ArrowRight,
   CheckCircle2,
@@ -16,34 +16,66 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { BrandLogo } from '@/components/brand-logo';
 import { TelegramIcon } from '@/components/telegram-icon';
 
+// Server-rendered JSON-LD — a plain <script type="application/ld+json">
+// lands in the raw HTML for non-JS crawlers (next/script injects only
+// into the RSC payload). sameAs lists only verified official profiles;
+// no SearchAction (the /search target is an authenticated app route).
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
     {
       '@type': 'Organization',
+      '@id': 'https://engganyo.com/#organization',
       name: 'Engganyo',
-      url: 'https://engganyo.com',
-      logo: 'https://engganyo.com/brand/web-logo-circle.png',
-      description: 'Engganyo is a creator growth platform designed to help content creators increase their audience engagement through authentic, community-driven interactions.',
+      url: 'https://engganyo.com/',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://engganyo.com/brand/web-logo-circle.png',
+      },
+      description:
+        'Engganyo is a creator growth platform where creators complete social tasks for each other, earn credits, and grow their audience through community-driven engagement.',
+      sameAs: ['https://t.me/Engganyo'],
     },
     {
       '@type': 'WebSite',
-      url: 'https://engganyo.com',
+      '@id': 'https://engganyo.com/#website',
+      url: 'https://engganyo.com/',
       name: 'Engganyo',
       description: 'Small Taps. Big Crowds. Grow your social presence through real human engagement.',
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: 'https://engganyo.com/search?q={search_term_string}',
-        'query-input': 'required name=search_term_string',
+      inLanguage: 'en',
+      publisher: { '@id': 'https://engganyo.com/#organization' },
+    },
+    {
+      '@type': 'WebApplication',
+      '@id': 'https://engganyo.com/#app',
+      name: 'Engganyo',
+      url: 'https://engganyo.com/',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Any (web browser)',
+      description:
+        'Task marketplace where creators earn credits by completing social tasks and spend credits on campaigns to grow their own audience.',
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+        description: 'Free to join',
       },
+      publisher: { '@id': 'https://engganyo.com/#organization' },
     },
     {
       '@type': 'WebPage',
-      url: 'https://engganyo.com',
+      '@id': 'https://engganyo.com/#webpage',
+      url: 'https://engganyo.com/',
       name: 'Engganyo — Small Taps. Big Crowds.',
-      description: 'Small Taps. Big Crowds. Grow your social presence through real human engagement.',
+      isPartOf: { '@id': 'https://engganyo.com/#website' },
+      about: { '@id': 'https://engganyo.com/#app' },
+      inLanguage: 'en',
     },
   ],
+};
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://engganyo.com' },
 };
 
 interface PublicStats {
@@ -88,7 +120,7 @@ export default async function LandingPage() {
   const stats = await getPublicStats();
   return (
     <>
-      <Script
+      <script
         id="json-ld"
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

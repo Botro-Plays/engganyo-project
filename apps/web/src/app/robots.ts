@@ -16,6 +16,5 @@ export default function robots(): MetadataRoute.Robots {
       },
     ],
     sitemap: 'https://engganyo.com/sitemap.xml',
-    host: 'https://engganyo.com',
   };
 }
