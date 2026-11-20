@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { restoreTourDefaults } from './tour-server-reset';
 
 /**
  * Optional-tour failure isolation — regression coverage for the
@@ -157,4 +158,8 @@ test.describe('optional tour failure isolation', () => {
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
   });
+});
+
+test.afterAll(async ({ browser }) => {
+  await restoreTourDefaults(browser);
 });

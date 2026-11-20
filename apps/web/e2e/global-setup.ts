@@ -31,6 +31,33 @@ async function globalSetup(config: FullConfig) {
   }
 
   await context.storageState({ path: path.join(authDir, 'user.json') });
+
+  // Tour state is server-authoritative: default the seeded user to
+  // automatic-tours OFF and clear any beginner row so non-tour specs
+  // never see tour overlays. Tour specs re-enable via their prepare()
+  // helpers and reset again in afterAll. 404s are fine — branches
+  // without the tours endpoints simply skip this.
+  await page.evaluate(async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+      const apiBase =
+        (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+          .map((e) => e.name)
+          .find((n) => n.includes('/api/'))
+          ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
+      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      await fetch(`${apiBase}/gamification/tours/preferences`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ autoTours: false }),
+      }).catch(() => {});
+      await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers }).catch(() => {});
+    } catch {
+      /* best effort */
+    }
+  });
+
   await browser.close();
 }
 

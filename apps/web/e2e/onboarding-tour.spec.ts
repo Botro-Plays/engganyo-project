@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { resetServerTourState, restoreTourDefaults } from './tour-server-reset';
 
 test.use({ storageState: 'e2e/.auth/user.json' });
 test.describe.configure({ timeout: 60_000 });
@@ -26,39 +27,23 @@ async function readTourState(page: Page) {
 async function prepare(page: Page, opts: { consent?: boolean } = {}) {
   const consent = opts.consent ?? true;
   await page.goto('/settings');
-  await page.evaluate(async (withConsent) => {
+  await page.evaluate((withConsent) => {
     Object.keys(localStorage)
       .filter((k) => k.startsWith('engganyo-tour-v1-'))
       .forEach((k) => localStorage.removeItem(k));
     if (withConsent) localStorage.setItem('cookie-consent', 'all');
     else localStorage.removeItem('cookie-consent');
-
-    // Tour state is server-authoritative now — clearing localStorage is
-    // not enough. Reset the beginner tour row + auto-tours preference
-    // over the API so every test starts from a clean server state.
-    // The access token expires after 15m and the app refreshes it in the
-    // background — retry until both calls actually succeed (fetch does
-    // not throw on 401, so res.ok must be checked explicitly).
-    const apiBase =
-      (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
-        .map((e) => e.name)
-        .find((n) => n.includes('/api/'))
-        ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
-    for (let attempt = 0; attempt < 20; attempt++) {
-      const token = localStorage.getItem('access_token');
-      if (!token) break;
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const del = await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers });
-      const patch = await fetch(`${apiBase}/gamification/tours/preferences`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ autoTours: true }),
-      });
-      if (del.ok && patch.ok) break;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
   }, consent);
+
+  // Tour state is server-authoritative — clearing localStorage is not
+  // enough. Reset the beginner row + auto-tours preference so every
+  // test starts from a clean server state.
+  await resetServerTourState(page, true);
 }
+
+test.afterAll(async ({ browser }) => {
+  await restoreTourDefaults(browser);
+});
 
 async function currentUserId(page: Page) {
   return page.evaluate(() => {
