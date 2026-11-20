@@ -213,4 +213,67 @@ run('tour server state — real PostgreSQL', () => {
     expect(await row(u.id, 'feature-inventory', MILESTONE_TOURS_VERSION)).not.toBeNull();
     expect(await row(u.id, 'feature-wallet', MILESTONE_TOURS_VERSION)).not.toBeNull();
   });
+  // ─── Content-version bumps ─────────────────────────────────
+  // Terminal history at ANY version must suppress automatic re-offers;
+  // only manual replay (resetForReplay, which clears all versions) may
+  // bring the guidance back.
+
+  it('getState reports beginnerTerminal for an old-version terminal row', async () => {
+    const u = await mkUser();
+    await prisma.tourCompletion.create({
+      data: { userId: u.id, tourKey: BEGINNER_TOUR_KEY, version: BEGINNER_TOUR_VERSION - 1, status: 'COMPLETED', stepIndex: 9 },
+    });
+    const s = await tours.getState(u.id);
+    expect(s.beginner).toBeNull(); // no current-version row
+    expect(s.beginnerTerminal).toEqual({ status: 'COMPLETED', version: BEGINNER_TOUR_VERSION - 1 });
+  });
+
+  it('getState prefers a current-version IN_PROGRESS row over older terminal history', async () => {
+    const u = await mkUser();
+    await prisma.tourCompletion.create({
+      data: { userId: u.id, tourKey: BEGINNER_TOUR_KEY, version: BEGINNER_TOUR_VERSION - 1, status: 'DISMISSED', stepIndex: 3 },
+    });
+    await tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 2);
+    const s = await tours.getState(u.id);
+    expect(s.beginner).toEqual({ status: 'IN_PROGRESS', step: 2 });
+    expect(s.beginnerTerminal).toEqual({ status: 'DISMISSED', version: BEGINNER_TOUR_VERSION - 1 });
+  });
+
+  it('pending never re-offers a milestone tour terminated at an older version', async () => {
+    const u = await mkUser(25);
+    await prisma.tourCompletion.create({
+      data: { userId: u.id, tourKey: 'feature-inventory', version: MILESTONE_TOURS_VERSION - 1, status: 'COMPLETED', stepIndex: 0 },
+    });
+    await prisma.tourCompletion.create({
+      data: { userId: u.id, tourKey: 'feature-marketplace', version: MILESTONE_TOURS_VERSION - 1, status: 'DISMISSED', stepIndex: 0 },
+    });
+    const pending = await tours.getPendingTours(u.id);
+    const keys = pending.tours.map((t) => t.key);
+    expect(keys).not.toContain('feature-inventory');
+    expect(keys).not.toContain('feature-marketplace');
+    // Untouched tours at the current version are still due.
+    expect(keys).toContain('feature-rooms');
+  });
+
+  it('pending treats an old-version IN_PROGRESS row as a fresh due tour', async () => {
+    const u = await mkUser(25);
+    await prisma.tourCompletion.create({
+      data: { userId: u.id, tourKey: 'feature-wallet', version: MILESTONE_TOURS_VERSION - 1, status: 'IN_PROGRESS', stepIndex: 1 },
+    });
+    const pending = await tours.getPendingTours(u.id);
+    const wallet = pending.tours.find((t) => t.key === 'feature-wallet');
+    expect(wallet).toBeDefined();
+    expect(wallet?.resumeStep).toBeUndefined(); // stale step index is not resumed into new content
+  });
+
+  it('catalog keeps seen history and replay data across a version bump', async () => {
+    const u = await mkUser(25);
+    await prisma.tourCompletion.create({
+      data: { userId: u.id, tourKey: 'feature-achievements', version: MILESTONE_TOURS_VERSION - 1, status: 'COMPLETED', stepIndex: 1 },
+    });
+    const cat = await tours.getCatalog(u.id);
+    const ach = cat.tours.find((t) => t.key === 'feature-achievements');
+    expect(ach?.seen).toBe(true);
+    expect(ach?.status).toBe('COMPLETED'); // latest known status — Replay stays visible
+  });
 });

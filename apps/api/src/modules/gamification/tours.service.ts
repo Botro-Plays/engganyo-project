@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, TourCompletionStatus } from '@prisma/client';
+import { TourCompletionStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
 /**
@@ -213,20 +213,33 @@ export class ToursService {
       this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
       this.prisma.tourCompletion.findMany({
         where: { userId },
-        select: { tourKey: true, version: true, status: true, stepIndex: true },
+        select: { tourKey: true, version: true, status: true, stepIndex: true, updatedAt: true },
       }),
     ]);
     if (!user) throw new NotFoundException('User not found');
-    const beginner =
-      rows.find((r) => r.tourKey === BEGINNER_TOUR_KEY && r.version === BEGINNER_TOUR_VERSION) ?? null;
+    const beginnerRows = rows.filter((r) => r.tourKey === BEGINNER_TOUR_KEY);
+    const beginner = beginnerRows.find((r) => r.version === BEGINNER_TOUR_VERSION) ?? null;
+    // Terminal history at ANY version suppresses auto-start when content
+    // is versioned up — a user who completed/dismissed an older beginner
+    // tour is never restarted automatically (manual replay still works).
+    const beginnerTerminal =
+      beginnerRows
+        .filter((r) => r.status !== 'IN_PROGRESS')
+        .sort((a, b) => b.version - a.version)[0] ?? null;
     return {
       autoTours: user.autoToursEnabled,
       beginner: beginner ? { status: beginner.status, step: beginner.stepIndex } : null,
+      beginnerTerminal: beginnerTerminal
+        ? { status: beginnerTerminal.status as 'COMPLETED' | 'DISMISSED', version: beginnerTerminal.version }
+        : null,
       completions: rows.map((r) => ({
         tourKey: r.tourKey,
         version: r.version,
         status: r.status,
         step: r.stepIndex,
+        // Server timestamp lets clients veto stale replay resets that
+        // would erase newer terminal state written on another device.
+        updatedAt: r.updatedAt.toISOString(),
       })),
     };
   }
@@ -250,29 +263,36 @@ export class ToursService {
     const eligible = MILESTONE_TOURS.filter((t) => user.level >= t.milestone * interval);
     if (eligible.length === 0) return { interval, version: MILESTONE_TOURS_VERSION, tours: [] };
 
+    // Rows across ALL versions: a terminal state at any version means the
+    // user has already seen this guidance — a content-version bump must
+    // not automatically re-offer it. Only the current version's
+    // IN_PROGRESS row resumes at its saved step.
     const rows = await this.prisma.tourCompletion.findMany({
-      where: {
-        userId,
-        version: MILESTONE_TOURS_VERSION,
-        tourKey: { in: eligible.map((t) => t.key) },
-      },
-      select: { tourKey: true, status: true, stepIndex: true },
+      where: { userId, tourKey: { in: eligible.map((t) => t.key) } },
+      select: { tourKey: true, version: true, status: true, stepIndex: true },
     });
-    const stateByKey = new Map(rows.map((r) => [r.tourKey, r]));
+    const rowsByKey = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const list = rowsByKey.get(r.tourKey) ?? [];
+      list.push(r);
+      rowsByKey.set(r.tourKey, list);
+    }
 
     return {
       interval,
       version: MILESTONE_TOURS_VERSION,
       tours: eligible
         .filter((t) => {
-          const s = stateByKey.get(t.key);
-          // Due = never started, or interrupted (IN_PROGRESS resumes at
-          // its saved step). COMPLETED/DISMISSED are terminal per version.
-          return !s || s.status === 'IN_PROGRESS';
+          const keyRows = rowsByKey.get(t.key) ?? [];
+          // Seen at any version (COMPLETED/DISMISSED) → never auto-reshow.
+          if (keyRows.some((r) => r.status !== 'IN_PROGRESS')) return false;
+          const current = keyRows.find((r) => r.version === MILESTONE_TOURS_VERSION);
+          // Due = never started at this version, or interrupted (resumes).
+          return !current || current.status === 'IN_PROGRESS';
         })
         .map((t) => {
-          const s = stateByKey.get(t.key);
-          return this.serialize(t, interval, s?.status === 'IN_PROGRESS' ? s.stepIndex : undefined);
+          const current = (rowsByKey.get(t.key) ?? []).find((r) => r.version === MILESTONE_TOURS_VERSION);
+          return this.serialize(t, interval, current?.status === 'IN_PROGRESS' ? current.stepIndex : undefined);
         }),
     };
   }
@@ -290,19 +310,36 @@ export class ToursService {
       this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
     ]);
     if (!user) throw new NotFoundException('User not found');
-    const state = new Map(completions.map((c) => [`${c.tourKey}:${c.version}`, c]));
-    const beginner = state.get(`${BEGINNER_TOUR_KEY}:${BEGINNER_TOUR_VERSION}`) ?? null;
+    const beginnerRows = completions.filter((c) => c.tourKey === BEGINNER_TOUR_KEY);
+    const beginnerCurrent = beginnerRows.find((c) => c.version === BEGINNER_TOUR_VERSION) ?? null;
+    const beginnerSeen =
+      beginnerRows
+        .filter((c) => c.status !== 'IN_PROGRESS')
+        .sort((a, b) => b.version - a.version)[0] ?? null;
     return {
       interval,
       version: MILESTONE_TOURS_VERSION,
       autoTours: user.autoToursEnabled,
-      beginner: beginner ? { status: beginner.status, step: beginner.stepIndex } : null,
+      beginner: beginnerCurrent
+        ? { status: beginnerCurrent.status, step: beginnerCurrent.stepIndex }
+        : beginnerSeen
+          ? { status: beginnerSeen.status, step: beginnerSeen.stepIndex }
+          : null,
+      beginnerSeenVersion: beginnerSeen?.version ?? null,
       tours: MILESTONE_TOURS.map((t) => {
-        const c = state.get(`${t.key}:${MILESTONE_TOURS_VERSION}`);
+        const keyRows = completions
+          .filter((c) => c.tourKey === t.key)
+          .sort((a, b) => b.version - a.version);
+        const current = keyRows.find((c) => c.version === MILESTONE_TOURS_VERSION) ?? null;
+        // Prefer the current-version row; fall back to the latest row at
+        // any version so "seen" history (and the Replay action) survives
+        // a content-version bump.
+        const shown = current ?? keyRows[0] ?? null;
         return {
           ...this.serialize(t, interval),
-          status: c?.status ?? null,
-          step: c?.stepIndex ?? 0,
+          status: shown?.status ?? null,
+          step: shown?.stepIndex ?? 0,
+          seen: keyRows.some((c) => c.status !== 'IN_PROGRESS'),
         };
       }),
     };
