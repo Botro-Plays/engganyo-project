@@ -178,7 +178,8 @@ export class SocialAuthService {
 
   private extractUsernameFromUrl(url: string): string | null {
     // e.g. https://twitter.com/username  https://tiktok.com/@username  https://instagram.com/username
-    const match = url.match(/\/(?:@)?(\w[\w.-]{1,30})(?:\/|$|\?)/i);
+    // Skip scheme+host so the hostname itself is never captured as the username.
+    const match = url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]+\/(?:@)?([\w.-]+)(?:[/?#]|$)/i);
     return match ? match[1] : null;
   }
 
