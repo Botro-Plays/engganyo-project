@@ -3191,3 +3191,48 @@ sessions revoked.
   progression-economy change; Danger Zone reset has 8 open owner
   decisions before implementation; exclusive claims on manual platforms
   still disabled pending verification-method approval.
+
+## 2026-11-20 (SEO batch) — indexing fixes deployed: production `e3f53ab`
+
+- **claude-seo skills adopted** at upstream commit `468ed5b` (hub +
+  seo-technical, seo-page, seo-content, seo-schema, seo-sitemap,
+  seo-images subset); installed under `~/.codex/skills/seo*`.
+- **Jomar handoff docs** fetched from Drive folder
+  `1bG3x5WxpoGwoB5UjUsC5IzHBwMU8colY` (FOR-DEVELOPER.md,
+  FOR-OWNER-PLAYBOOK.md, audit PDF, schema-generated.json) and reconciled
+  claim-by-claim against source + live production.
+- **PR #104** `docs/seo-baseline` — merged `b7bd0e6`:
+  `docs/SEO_BASELINE_AND_ACTION_PLAN.md` with verified findings,
+  route indexing matrix, batches, owner decisions.
+- **PR #105** `feat/seo-indexing` — merged `9a8a713`:
+  root canonical/robots removed (metadataBase only); (auth)/(dashboard)/
+  (admin) route groups emit `noindex,nofollow`; `/challenge/[id]` +
+  `/payment/return` noindexed via server wrappers; privacy/terms
+  `follow:true`; sitemap real lastmod, no changefreq/priority; robots
+  `Host:` removed; homepage JSON-LD now real SSR `<script
+  type="application/ld+json">` (Organization/WebSite/WebApplication/
+  WebPage graph, SearchAction removed, sameAs = t.me/Engganyo only).
+- **PR #106** `fix/reset-env-gate` — merged `e3f53ab`:
+  `POST /admin/system/reset` now requires `DANGER_RESET_ENABLED=true`
+  (unset in prod → Forbidden). Unsafe reset is now *effectively*
+  disabled server-side, not merely documented.
+- **Deploy run `44690300754` SUCCESS** for `e3f53ab`.
+- **Live verification (curl, 2026-11-20):**
+  - `/` canonical `https://engganyo.com`; `/about` `/faq` `/contact`
+    `/privacy` `/terms` self-canonicals + `index, follow`.
+  - `/login` `/register` `/dashboard` `/marketplace` →
+    `noindex, nofollow`, no canonical.
+  - Homepage raw HTML contains real `<script id="json-ld"
+    type="application/ld+json">`; `SearchAction` absent; types:
+    Organization, WebSite, WebApplication, WebPage, ImageObject, Offer.
+  - `sitemap.xml` = 6 public URLs only.
+- **PR #107** `fix/robots-login-noindex` open — removes
+  `/login`+`/register` Disallow so crawlers can see the noindex
+  (blocked pages' noindex is never observed). CI pending.
+- **Still external/owner (documented in baseline):**
+  `www.engganyo.com` still serves 200 duplicate (needs Cloudflare
+  301→apex); `PerplexityBot` still 403 (Cloudflare bot policy);
+  optional public-HTML cache rule, email-obfuscation toggle, CSP/
+  Permissions-Policy; homepage title/description copy awaits owner
+  wording; content routes (/how-it-works, /pricing, /safety, /blog,
+  /alternatives) await approved copy — none published empty.
