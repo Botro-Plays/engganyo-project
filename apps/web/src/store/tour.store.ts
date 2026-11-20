@@ -678,6 +678,21 @@ export const useTourStore = create<TourState>()((set, get) => {
           }
           writePendingOps(userId, remaining);
           syncUnsyncedFlag(userId);
+          // Ops reached the server — re-hydrate so the display converges
+          // (e.g. a dismiss that drained after hydrate must hide the
+          // tour; a progress write must move the resume step). If a
+          // hydrate is already in flight its snapshot may predate these
+          // writes, so chain one more fetch behind it.
+          if (doneIds.size > 0 && get().userId === userId) {
+            const inflight = hydrateInflight;
+            if (inflight?.userId === userId) {
+              void inflight.promise.finally(() => {
+                if (get().userId === userId) void hydrate(userId);
+              });
+            } else {
+              void hydrate(userId);
+            }
+          }
           if (!blockedByFailure) {
             flushFailCount = 0;
             nextFlushAllowedAt = 0;
@@ -745,11 +760,16 @@ export const useTourStore = create<TourState>()((set, get) => {
 
         // One-time migration: local-only beginner state is pushed to the
         // server ONLY when the server has no row AND no terminal history —
-        // a newer server state always wins and is never overwritten.
+        // a newer server state always wins and is never overwritten. Until
+        // the server acknowledges the write, the mapped local state still
+        // drives display (otherwise cached progress would look "new" and
+        // the tour could restart at step 0).
+        let effective = effectiveBeginner(beginner, beginnerTerminal);
         if (!beginner && !beginnerTerminal) {
           const local = readUserTour(userId);
           const mapped = local ? localToServer(local) : null;
           if (mapped) {
+            effective = mapped;
             const epoch = sessionEpoch;
             if (local!.status === 'completed')
               enqueueOp(userId, { op: 'complete', key: BEGINNER_TOUR_KEY, version: BEGINNER_TOUR_VERSION, epoch, ts: Date.now() });
@@ -760,7 +780,6 @@ export const useTourStore = create<TourState>()((set, get) => {
           }
         }
 
-        const effective = effectiveBeginner(beginner, beginnerTerminal);
         const derived = deriveBeginner(effective, autoTours);
         // If the user already acted this session (start/step/skip/replay),
         // their live state wins over the just-fetched snapshot — the
