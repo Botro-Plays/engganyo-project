@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'Learn how Engganyo collects, uses, and protects your personal information on our creator growth platform.',
   alternates: { canonical: 'https://engganyo.com/privacy' },
-  robots: { index: true, follow: false },
+  robots: { index: true, follow: true },
 };
 
 export default function PrivacyPage() {

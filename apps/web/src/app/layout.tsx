@@ -5,6 +5,7 @@ import { VisitorBeacon } from '@/components/visitor-beacon';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://engganyo.com'),
   title: {
     default: 'Engganyo — Small Taps. Big Crowds.',
     template: '%s | Engganyo',
@@ -43,13 +44,6 @@ export const metadata: Metadata = {
     title: 'Engganyo — Small Taps. Big Crowds.',
     description: 'Grow your social presence through real human engagement.',
     images: ['https://engganyo.com/brand/social-1200x630.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-  alternates: {
-    canonical: 'https://engganyo.com',
   },
 };
 
