@@ -158,7 +158,7 @@ export default async function LandingPage() {
                   href="/register"
                   className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-sc-text px-7 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-sm sm:text-base"
                 >
-                  Start earning free
+                  Start Engaging
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
@@ -326,7 +326,7 @@ export default async function LandingPage() {
                 href="/register"
                 className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-brand-300 hover:text-brand-200 transition-colors"
               >
-                Start earning <ChevronRight className="w-4 h-4" />
+                Start Engaging <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
 
