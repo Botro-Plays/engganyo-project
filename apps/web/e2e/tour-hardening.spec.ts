@@ -40,16 +40,33 @@ async function settleOnDashboard(page: Page) {
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 }
 
-/** Rewrite the persisted auth user id (keeps the real token) to simulate
- *  an account switch, then reload so stores rehydrate. */
+/** Simulate an account switch. The persisted auth blob carries no user —
+ *  AuthInitializer re-fetches GET /auth/me with the real JWT on every
+ *  load and setUser()s whatever it returns, so the switch must mock that
+ *  endpoint; rewriting the persisted id alone is overwritten immediately. */
 async function switchAuthUser(page: Page, fakeId: string) {
-  await page.evaluate((id) => {
-    const raw = localStorage.getItem('engganyo-auth');
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (parsed.state?.user) parsed.state.user.id = id;
-    localStorage.setItem('engganyo-auth', JSON.stringify(parsed));
-  }, fakeId);
+  await page.route('**/api/auth/me', (r) =>
+    r.fulfill(
+      apiOk({
+        id: fakeId,
+        email: `${fakeId}@test.local`,
+        username: fakeId,
+        displayName: 'Account B',
+        avatarUrl: null,
+        role: 'USER',
+        status: 'ACTIVE',
+        creditBalance: 0,
+        xp: 0,
+        level: 1,
+        vp: 0,
+        vipTier: null,
+        currentStreak: 0,
+        reputationScore: 0,
+        referralCode: null,
+        twoFactorEnabled: false,
+      }),
+    ),
+  );
   await page.reload();
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 }
