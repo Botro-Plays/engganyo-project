@@ -256,40 +256,108 @@
   transition: outline-color 0.15s ease;
 }
 
-/* Landing hero Telegram CTA — subtle entrance + brief periodic highlight.
-   Transform/opacity/box-shadow only: no layout shift, no flashing.
-   Disabled entirely under prefers-reduced-motion (also covered by the
-   global reduce rule above). */
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes tg-hero-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+/* Landing hero Telegram CTA — noticeable but tasteful navy/blue/gold
+   attention effect. Transform/opacity/box-shadow/border-color only:
+   no layout shift, no rapid flashing, registration CTA stays primary.
+   Reduced-motion users get a static emphasized outline instead. */
+@media (prefers-reduced-motion: reduce) {
+  /* Static emphasis: permanent blue+gold outline so the link still
+     reads as the community call-out without any animation. */
+  .tg-hero-cta {
+    border-color: rgba(232, 168, 0, 0.75);
+    box-shadow:
+      0 0 0 1px rgba(31, 98, 240, 0.45),
+      0 0 18px 2px rgba(232, 168, 0, 0.28);
   }
-  /* ~0.9s gold highlight every 7s — brief enough not to compete with
-     the registration CTA. */
-  @keyframes tg-hero-glow {
-    0%, 80%, 100% {
-      box-shadow: 0 0 0 0 rgba(232, 168, 0, 0);
+  .tg-hero-icon {
+    display: inline-flex;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrance: slight overshoot so the button "lands" with emphasis. */
+  @keyframes tg-hero-in {
+    0% { opacity: 0; transform: translateY(14px) scale(0.96); }
+    55% { opacity: 1; transform: translateY(-3px) scale(1.02); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  /* One-shot entrance flash — blue core + gold rim, ~1.3s then gone. */
+  @keyframes tg-hero-flash {
+    0% {
+      box-shadow: 0 0 0 0 rgba(232, 168, 0, 0), 0 0 0 0 rgba(31, 98, 240, 0);
       border-color: rgba(232, 168, 0, 0.4);
     }
-    85%, 92% {
-      box-shadow: 0 0 20px 3px rgba(232, 168, 0, 0.35);
-      border-color: rgba(232, 168, 0, 0.8);
+    35% {
+      box-shadow:
+        0 0 0 1px rgba(31, 98, 240, 0.7),
+        0 0 22px 4px rgba(31, 98, 240, 0.4),
+        0 0 26px 5px rgba(232, 168, 0, 0.45);
+      border-color: rgba(232, 168, 0, 0.95);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(232, 168, 0, 0), 0 0 0 0 rgba(31, 98, 240, 0);
+      border-color: rgba(232, 168, 0, 0.4);
     }
   }
-  /* Paper-plane drift synced with the glow — small amplitude. */
+  /* Recurring pulse every ~3.5s: brief blue+gold outline emphasis. */
+  @keyframes tg-hero-glow {
+    0%, 74%, 100% {
+      box-shadow:
+        0 0 0 0 rgba(232, 168, 0, 0),
+        0 0 0 0 rgba(31, 98, 240, 0);
+      border-color: rgba(232, 168, 0, 0.4);
+    }
+    80%, 88% {
+      box-shadow:
+        0 0 0 1px rgba(31, 98, 240, 0.55),
+        0 0 16px 2px rgba(31, 98, 240, 0.35),
+        0 0 20px 3px rgba(232, 168, 0, 0.4);
+      border-color: rgba(232, 168, 0, 0.9);
+    }
+  }
+  /* Paper-plane "send": quick up-right drift + tilt, then settle —
+     visible movement once per glow cycle, synced to the outline. */
   @keyframes tg-hero-plane {
-    0%, 80%, 100% { transform: translate(0, 0) rotate(0deg); }
-    85% { transform: translate(2px, -2px) rotate(-7deg); }
-    92% { transform: translate(-1px, 1px) rotate(4deg); }
+    0%, 74%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    79% { transform: translate(3px, -4px) rotate(-12deg); opacity: 1; }
+    86% { transform: translate(-1px, 1px) rotate(6deg); opacity: 0.85; }
+    92% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  }
+  /* Shimmer sweep across the label area once per cycle. */
+  @keyframes tg-hero-shimmer {
+    0%, 78%, 100% { opacity: 0; transform: translateX(-120%); }
+    84% { opacity: 0.5; }
+    90% { opacity: 0; transform: translateX(120%); }
   }
   .tg-hero-cta {
     animation:
-      tg-hero-in 0.6s ease-out both,
-      tg-hero-glow 7s ease-in-out infinite;
+      tg-hero-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.15) both,
+      tg-hero-flash 1.4s ease-out 0.55s both,
+      tg-hero-glow 3.5s ease-in-out 1.6s infinite;
   }
   .tg-hero-icon {
-    animation: tg-hero-plane 7s ease-in-out infinite;
+    animation: tg-hero-plane 3.5s ease-in-out 1.6s infinite;
     display: inline-flex;
+  }
+  .tg-hero-shine {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .tg-hero-shine::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 40%;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent
+    );
+    animation: tg-hero-shimmer 3.5s ease-in-out 1.6s infinite;
   }
 }
