@@ -3169,3 +3169,25 @@ sessions revoked.
 - **Pending:** #103 merge → deploy `70cfe20`+race-fix; rendered pass for
   Telegram hero effect + milestone tours (owner-assisted login);
   gamification cap/catalog + reset-plan owner decisions.
+
+## 2026-11-20 (final) — all follow-up PRs deployed: production `3b99a3a`
+
+- **PR #103** merged `3b99a3a`; deploy run **`44683924556` SUCCESS**.
+  `.deployed-sha` verified `3b99a3a`; all containers healthy;
+  `tour_completions` table present (milestone-tours migration applied).
+- **Live on production now:** social-identity slot+identity locking with
+  deterministic real-PG race tests (#98), atomic slot-ensure P2002 fix
+  (#103), Telegram hero attention effect (#99), gamification audit +
+  progression proposal doc (#100), milestone onboarding tours (#101),
+  Danger Zone reset plan doc (#102, audit only — unsafe reset still
+  gated pending owner decisions).
+- **CI coverage:** API lint/test/build + Web lint/build + Playwright E2E
+  green on every merged head; deploy-time CI on `70cfe20` caught the
+  slot-create race that PR #103 fixed.
+- **Remaining gaps (owner-assisted):** rendered multi-width pass at
+  320/360/390/768/1440 incl. Telegram hero animation (reduced-motion
+  check) and milestone-tour announce/step behavior on a leveled account;
+  gamification level-cap + seed catalog need owner approval before any
+  progression-economy change; Danger Zone reset has 8 open owner
+  decisions before implementation; exclusive claims on manual platforms
+  still disabled pending verification-method approval.
