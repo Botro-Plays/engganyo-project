@@ -278,6 +278,23 @@ A CI test enumerates every Prisma model and asserts each appears in the reset
 manifest with a classification. Any new migration adding a model **fails CI**
 until the manifest classifies it — preventing silent escape.
 
+### Restore-rehearsal acceptance criteria
+Before any reset plan can be confirmed, the rehearsal on a scratch database
+must demonstrate **all** of the following, with evidence attached to the plan:
+
+1. `pg_dump` taken in maintenance mode completes and verifies
+   (`pg_restore --list` parses; checksum recorded).
+2. Restore into a scratch DB succeeds; row counts per preserved table match
+   the manifest's expected counts exactly.
+3. Post-restore reconciliation queries pass: owner balances equal opening
+   ledger entries, zero orphaned foreign keys, `social_identity_reservations`
+   intact, reward outbox drainable, webhook queue empty.
+4. The reseed step is idempotent — running it twice produces identical state.
+5. Timed end-to-end: dump → restore → verify completes within the agreed
+   maintenance window, with the measured duration recorded.
+6. Rollback path exercised at least once: restore the dump over the scratch
+   DB a second time and re-verify.
+
 ---
 
 ## 7. Open decisions (require owner sign-off before implementation)
@@ -295,15 +312,30 @@ until the manifest classifies it — preventing silent escape.
 - **D8 — Who may execute:** propose SUPER_ADMIN + second-admin approval
   (four-eyes) for production.
 
+### Recommended defaults (for owner review — nothing executes without sign-off)
+
+| Decision | Recommended default | Real-payment / retention impact |
+|---|---|---|
+| D1 approach | **Targeted cleanup** if any real payment, payout, or financial record exists; fresh launch DB only pre-revenue | Fresh DB destroys payment/ledger evidence — unacceptable once real money moved |
+| D2 owner progression | Reset XP/level/VP/VIP to launch state | None — progression is not a financial record |
+| D3 owner inventory | Clear + grant launch starter pack via the normal grant path | None if grants go through the audited ledger path |
+| D4 owner social links | Preserve verified identities; reservations preserved | Preserves the 24h-cooldown audit trail |
+| D5 unclaimed rewards | Honor already-earned entitlements where feasible; archive-and-clear the rest with a recorded reason | Unclaimed balances are user-facing value — prefer honor over silent clear |
+| D6 in-flight payments | Void pending intents; completed payments are preserved records, never cleared | Completed payments MUST be retained — they are financial records |
+| D7 archive retention | Retain archived tables ≥ 90 days in a separate schema/backup before any purge | Retention window is a legal/compliance call — owner decides |
+| D8 execution | SUPER_ADMIN + second-admin approval (four-eyes) | Prevents single-actor production wipes |
+
 ---
 
 ## 8. Current-state safety
 
-- `POST /admin/system/reset` still exists and still accepts `RESET`.
-  **Recommendation:** gate it behind an env flag
-  (`DANGER_RESET_ENABLED=false` in production) in the implementation PR —
-  until then it remains a loaded gun; it is documented here as **unavailable
-  for launch use** per the task directive.
+- `POST /admin/system/reset` is now **effectively disabled**: it requires
+  `DANGER_RESET_ENABLED=true` (unset in production → `ForbiddenException`),
+  shipped in PR #106. The env flag stays off; re-enabling it is a deliberate
+  ops action, not a code path.
+- The replacement `launch-reset` mechanism (§6) remains **design-only** —
+  no implementation exists yet, and execution stays separately gated on the
+  D1–D8 decisions above plus restore-rehearsal evidence.
 - No cleanup, reset, or production data modification was performed in this
   audit.
 
