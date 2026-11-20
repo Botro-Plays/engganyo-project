@@ -46,6 +46,15 @@ export interface MilestoneTour {
 export const MILESTONE_TOURS_VERSION = 1;
 export const MILESTONE_TOUR_INTERVAL_DEFAULT = 5;
 
+/**
+ * The beginner tour shares the same per-user, per-tour, per-version
+ * state model under the reserved key `beginner`. Its version mirrors
+ * the client TOUR_STEPS content version (apps/web tour.store).
+ */
+export const BEGINNER_TOUR_KEY = 'beginner';
+export const BEGINNER_TOUR_VERSION = 2;
+const BEGINNER_TOUR_MAX_STEP = 50;
+
 export const MILESTONE_TOURS: MilestoneTour[] = [
   {
     key: 'feature-inventory',
@@ -150,6 +159,8 @@ export interface DueTour {
   title: string;
   teaser: string;
   steps: MilestoneTourStep[];
+  /** Set when resuming an IN_PROGRESS tour — client starts at this step. */
+  resumeStep?: number;
 }
 
 @Injectable()
@@ -168,7 +179,7 @@ export class ToursService {
       : MILESTONE_TOUR_INTERVAL_DEFAULT;
   }
 
-  private serialize(tour: MilestoneTour, interval: number): DueTour {
+  private serialize(tour: MilestoneTour, interval: number, resumeStep?: number): DueTour {
     return {
       key: tour.key,
       version: MILESTONE_TOURS_VERSION,
@@ -177,7 +188,54 @@ export class ToursService {
       title: tour.title,
       teaser: tour.teaser,
       steps: tour.steps,
+      ...(resumeStep !== undefined ? { resumeStep } : {}),
     };
+  }
+
+  /** Resolves a tour key to its authoritative version + step bound.
+   *  `beginner` is reserved for the onboarding tour; everything else
+   *  must be a catalog milestone tour. */
+  private resolveKey(key: string): { tourKey: string; version: number; maxStep: number } | null {
+    if (key === BEGINNER_TOUR_KEY) {
+      return { tourKey: BEGINNER_TOUR_KEY, version: BEGINNER_TOUR_VERSION, maxStep: BEGINNER_TOUR_MAX_STEP };
+    }
+    const tour = MILESTONE_TOURS.find((t) => t.key === key);
+    if (!tour) return null;
+    return { tourKey: tour.key, version: MILESTONE_TOURS_VERSION, maxStep: tour.steps.length };
+  }
+
+  /** Full server-authoritative tour state for the signed-in user:
+   *  the automatic-tours preference, beginner-tour state, and every
+   *  recorded (tour, version) row. Clients treat localStorage only as
+   *  a cache and migrate local-only beginner state up once. */
+  async getState(userId: string) {
+    const [user, rows] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
+      this.prisma.tourCompletion.findMany({
+        where: { userId },
+        select: { tourKey: true, version: true, status: true, stepIndex: true },
+      }),
+    ]);
+    if (!user) throw new NotFoundException('User not found');
+    const beginner =
+      rows.find((r) => r.tourKey === BEGINNER_TOUR_KEY && r.version === BEGINNER_TOUR_VERSION) ?? null;
+    return {
+      autoTours: user.autoToursEnabled,
+      beginner: beginner ? { status: beginner.status, step: beginner.stepIndex } : null,
+      completions: rows.map((r) => ({
+        tourKey: r.tourKey,
+        version: r.version,
+        status: r.status,
+        step: r.stepIndex,
+      })),
+    };
+  }
+
+  /** Automatic-tours preference — applies to BOTH beginner and
+   *  milestone tours, persists per account, never rewrites history. */
+  async setAutoTours(userId: string, enabled: boolean) {
+    await this.prisma.user.update({ where: { id: userId }, data: { autoToursEnabled: enabled } });
+    return { autoTours: enabled };
   }
 
   /** Tours the user is eligible for but has not completed/dismissed at
@@ -192,57 +250,113 @@ export class ToursService {
     const eligible = MILESTONE_TOURS.filter((t) => user.level >= t.milestone * interval);
     if (eligible.length === 0) return { interval, version: MILESTONE_TOURS_VERSION, tours: [] };
 
-    const done = await this.prisma.tourCompletion.findMany({
+    const rows = await this.prisma.tourCompletion.findMany({
       where: {
         userId,
         version: MILESTONE_TOURS_VERSION,
         tourKey: { in: eligible.map((t) => t.key) },
       },
-      select: { tourKey: true },
+      select: { tourKey: true, status: true, stepIndex: true },
     });
-    const seen = new Set(done.map((d) => d.tourKey));
+    const stateByKey = new Map(rows.map((r) => [r.tourKey, r]));
 
     return {
       interval,
       version: MILESTONE_TOURS_VERSION,
-      tours: eligible.filter((t) => !seen.has(t.key)).map((t) => this.serialize(t, interval)),
+      tours: eligible
+        .filter((t) => {
+          const s = stateByKey.get(t.key);
+          // Due = never started, or interrupted (IN_PROGRESS resumes at
+          // its saved step). COMPLETED/DISMISSED are terminal per version.
+          return !s || s.status === 'IN_PROGRESS';
+        })
+        .map((t) => {
+          const s = stateByKey.get(t.key);
+          return this.serialize(t, interval, s?.status === 'IN_PROGRESS' ? s.stepIndex : undefined);
+        }),
     };
   }
 
-  /** Full catalog + per-user state — powers the replay UI. */
+  /** Full catalog + per-user state — powers the replay/settings UI.
+   *  Includes the automatic-tours preference and beginner-tour state so
+   *  one call hydrates the whole tours settings surface. */
   async getCatalog(userId: string) {
-    const [interval, completions] = await Promise.all([
+    const [interval, completions, user] = await Promise.all([
       this.getInterval(),
       this.prisma.tourCompletion.findMany({
         where: { userId },
-        select: { tourKey: true, version: true, status: true },
+        select: { tourKey: true, version: true, status: true, stepIndex: true },
       }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
     ]);
-    const state = new Map(completions.map((c) => [`${c.tourKey}:${c.version}`, c.status]));
+    if (!user) throw new NotFoundException('User not found');
+    const state = new Map(completions.map((c) => [`${c.tourKey}:${c.version}`, c]));
+    const beginner = state.get(`${BEGINNER_TOUR_KEY}:${BEGINNER_TOUR_VERSION}`) ?? null;
     return {
       interval,
       version: MILESTONE_TOURS_VERSION,
-      tours: MILESTONE_TOURS.map((t) => ({
-        ...this.serialize(t, interval),
-        status: state.get(`${t.key}:${MILESTONE_TOURS_VERSION}`) ?? null,
-      })),
+      autoTours: user.autoToursEnabled,
+      beginner: beginner ? { status: beginner.status, step: beginner.stepIndex } : null,
+      tours: MILESTONE_TOURS.map((t) => {
+        const c = state.get(`${t.key}:${MILESTONE_TOURS_VERSION}`);
+        return {
+          ...this.serialize(t, interval),
+          status: c?.status ?? null,
+          step: c?.stepIndex ?? 0,
+        };
+      }),
     };
   }
 
-  private async record(userId: string, tourKey: string, version: number, status: TourCompletionStatus) {
-    const tour = MILESTONE_TOURS.find((t) => t.key === tourKey);
-    if (!tour) throw new NotFoundException('Unknown tour');
-    if (version !== MILESTONE_TOURS_VERSION) {
+  /** Persists in-progress step position. Never resurrects a terminal
+   *  (COMPLETED/DISMISSED) row — first terminal write wins. */
+  async recordProgress(userId: string, tourKey: string, version: number, step: number) {
+    const resolved = this.resolveKey(tourKey);
+    if (!resolved) throw new NotFoundException('Unknown tour');
+    if (version !== resolved.version) {
       throw new BadRequestException('Stale tour version — refresh and try again');
     }
+    const stepIndex = Math.max(0, Math.min(Math.floor(step), resolved.maxStep));
+    const where = {
+      userId_tourKey_version: { userId, tourKey: resolved.tourKey, version: resolved.version },
+    };
+    // Create IN_PROGRESS when absent; existing rows are left untouched
+    // here so terminal states cannot be reopened by a stray progress call.
     await this.prisma.tourCompletion.upsert({
-      where: { userId_tourKey_version: { userId, tourKey, version } },
-      create: { userId, tourKey, version, status },
-      // COMPLETED and DISMISSED are both terminal for the version;
-      // first write wins so a late duplicate cannot flip the outcome.
+      where,
+      create: { userId, tourKey: resolved.tourKey, version: resolved.version, status: 'IN_PROGRESS', stepIndex },
       update: {},
     });
-    return { recorded: true, tourKey, version, status };
+    // Refresh the step only while the row is still in progress.
+    await this.prisma.tourCompletion.updateMany({
+      where: { userId, tourKey: resolved.tourKey, version: resolved.version, status: 'IN_PROGRESS' },
+      data: { stepIndex },
+    });
+    return { recorded: true, tourKey: resolved.tourKey, version: resolved.version, step: stepIndex };
+  }
+
+  private async record(userId: string, tourKey: string, version: number, status: TourCompletionStatus) {
+    const resolved = this.resolveKey(tourKey);
+    if (!resolved) throw new NotFoundException('Unknown tour');
+    if (version !== resolved.version) {
+      throw new BadRequestException('Stale tour version — refresh and try again');
+    }
+    const key = resolved.tourKey;
+    // IN_PROGRESS → terminal is the normal finish path. A missing row
+    // is created terminal; an existing terminal row is never flipped
+    // (first write wins, so a late duplicate cannot change the outcome).
+    const moved = await this.prisma.tourCompletion.updateMany({
+      where: { userId, tourKey: key, version: resolved.version, status: 'IN_PROGRESS' },
+      data: { status },
+    });
+    if (moved.count === 0) {
+      await this.prisma.tourCompletion.upsert({
+        where: { userId_tourKey_version: { userId, tourKey: key, version: resolved.version } },
+        create: { userId, tourKey: key, version: resolved.version, status },
+        update: {},
+      });
+    }
+    return { recorded: true, tourKey: key, version: resolved.version, status };
   }
 
   complete(userId: string, tourKey: string, version: number) {
@@ -253,14 +367,15 @@ export class ToursService {
     return this.record(userId, tourKey, version, TourCompletionStatus.DISMISSED);
   }
 
-  /** Replay support: clears completion rows for a tour key so it becomes
-   *  due again. Never touches other tours or the beginner tour. */
+  /** Replay support: clears state rows for a tour key (any version) so
+   *  it becomes due again. Works for `beginner` and milestone keys;
+   *  never touches the automatic-tours preference or other tours. */
   async resetForReplay(userId: string, tourKey: string) {
-    const tour = MILESTONE_TOURS.find((t) => t.key === tourKey);
-    if (!tour) throw new NotFoundException('Unknown tour');
+    const resolved = this.resolveKey(tourKey);
+    if (!resolved) throw new NotFoundException('Unknown tour');
     const res = await this.prisma.tourCompletion.deleteMany({
-      where: { userId, tourKey },
+      where: { userId, tourKey: resolved.tourKey },
     });
-    return { reset: true, tourKey, cleared: res.count };
+    return { reset: true, tourKey: resolved.tourKey, cleared: res.count };
   }
 }

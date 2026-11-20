@@ -122,7 +122,9 @@ jobs:
   e2e:
     name: E2E — Playwright tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Single-worker suite keeps growing (onboarding walks, resilience,
+    # recovery specs) — 30min was being hit and cancelling healthy runs.
+    timeout-minutes: 45
     needs: [ci-api, ci-web]
     # Official Playwright image pinned to the exact @playwright/test
     # version in package-lock.json (1.60.0). Browsers + OS deps are
@@ -165,7 +167,7 @@ jobs:
       REDIS_PASSWORD: ""
       JWT_ACCESS_SECRET: e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
       JWT_REFRESH_SECRET: e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_ACCESS_EXPIRES_IN: 2h
       JWT_REFRESH_EXPIRES_IN: 7d
       COOKIE_SECRET: e2e-cookie-secret-32chars-xxxxxxx
       ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
@@ -240,7 +242,7 @@ jobs:
           export REDIS_PASSWORD=""
           export JWT_ACCESS_SECRET=e2e-test-access-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
           export JWT_REFRESH_SECRET=e2e-test-refresh-secret-min-64-chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          export JWT_ACCESS_EXPIRES_IN=15m
+          export JWT_ACCESS_EXPIRES_IN=2h
           export JWT_REFRESH_EXPIRES_IN=7d
           export COOKIE_SECRET=e2e-cookie-secret-32chars-xxxxxxx
           export ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000

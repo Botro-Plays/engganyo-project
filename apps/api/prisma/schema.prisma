@@ -366,6 +366,10 @@ model User {
   // Email preferences
   weeklyDigestEnabled Boolean @default(true) @map("weekly_digest_enabled")
 
+  // Onboarding/feature tour preferences — server-authoritative so they
+  // follow the account across devices and browsers.
+  autoToursEnabled Boolean @default(true) @map("auto_tours_enabled")
+
   // Admin Access PIN (hashed with argon2; optional extra gate for /admin routes)
   adminPinHash String? @map("admin_pin_hash")
 
@@ -607,6 +611,9 @@ model TourCompletion {
   tourKey   String                @map("tour_key")
   version   Int
   status    TourCompletionStatus  @default(COMPLETED)
+  // In-progress step index — lets an interrupted tour resume where the
+  // user left off instead of restarting. Terminal statuses ignore it.
+  stepIndex Int                   @default(0) @map("step_index")
   createdAt DateTime              @default(now()) @map("created_at")
   updatedAt DateTime              @updatedAt @map("updated_at")
 
@@ -618,6 +625,7 @@ model TourCompletion {
 enum TourCompletionStatus {
   COMPLETED
   DISMISSED
+  IN_PROGRESS
 }
 
 // 24-hour reservation on a released VERIFIED social identity.

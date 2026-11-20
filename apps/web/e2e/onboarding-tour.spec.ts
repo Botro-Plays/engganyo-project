@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { resetServerTourState, restoreTourDefaults } from './tour-server-reset';
 
 test.use({ storageState: 'e2e/.auth/user.json' });
 test.describe.configure({ timeout: 60_000 });
@@ -33,7 +34,16 @@ async function prepare(page: Page, opts: { consent?: boolean } = {}) {
     if (withConsent) localStorage.setItem('cookie-consent', 'all');
     else localStorage.removeItem('cookie-consent');
   }, consent);
+
+  // Tour state is server-authoritative — clearing localStorage is not
+  // enough. Reset the beginner row + auto-tours preference so every
+  // test starts from a clean server state.
+  await resetServerTourState(page, true);
 }
+
+test.afterAll(async ({ browser }) => {
+  await restoreTourDefaults(browser);
+});
 
 async function currentUserId(page: Page) {
   return page.evaluate(() => {
