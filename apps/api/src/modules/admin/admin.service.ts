@@ -1831,6 +1831,12 @@ export class AdminService {
   }
 
   async resetDatabase(adminId: string, confirmToken: string) {
+    // The legacy wipe is unavailable for launch use until the reviewed
+    // replacement in docs/DANGER_ZONE_RESET_PLAN.md ships. It can only be
+    // re-enabled deliberately via DANGER_RESET_ENABLED=true.
+    if (process.env.DANGER_RESET_ENABLED !== 'true') {
+      throw new ForbiddenException('Database reset is disabled');
+    }
     if (confirmToken !== 'RESET') {
       throw new BadRequestException('Confirmation token must be exactly "RESET"');
     }
