@@ -418,6 +418,28 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(3000);
     const callsAfterSwitch = dismissCalls;
     await page.waitForTimeout(4000);
+    if (dismissCalls !== callsAfterSwitch) {
+      const diag = await page.evaluate(() => {
+        const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+          state?: { user?: { id?: string } };
+        };
+        const keys = Object.keys(localStorage);
+        return {
+          authId: auth.state?.user?.id ?? null,
+          queues: keys
+            .filter((k) => k.startsWith('engganyo-tour-writes-'))
+            .map((k) => ({
+              k,
+              ops: (JSON.parse(localStorage.getItem(k) ?? '[]') as { op?: string }[]).map((o) => o.op),
+            })),
+          tourCache: keys.filter((k) => k.startsWith('engganyo-tour-v1-')),
+        };
+      });
+      console.log(
+        `DIAG cross-account drain: calls ${callsAfterSwitch} -> ${dismissCalls}`,
+        JSON.stringify(diag),
+      );
+    }
     expect(dismissCalls).toBe(callsAfterSwitch);
 
     // The original user's queue is retained, untouched.
