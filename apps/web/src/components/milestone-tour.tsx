@@ -157,6 +157,21 @@ export function MilestoneTour() {
     void showDue({ manual: true, onlyKey: replayRequest.key });
   }, [replayRequest, user, clearReplayRequest, showDue]);
 
+  // Disabling automatic tours suppresses an outstanding AUTOMATIC
+  // announcement/step — the user just opted out of interruptions.
+  // Manual replays (origin 'manual') are explicit actions and stay.
+  // Nothing is recorded server-side: the tour stays eligible and may
+  // re-announce on a later session once auto tours are re-enabled.
+  useEffect(() => {
+    if (autoTours) return;
+    if (originRef.current === 'auto' && tourRef.current) {
+      setTour(null);
+      setPhase('announce');
+      setStepIndex(0);
+      dismissedRef.current = true;
+    }
+  }, [autoTours]);
+
   const record = useCallback(
     async (action: 'complete' | 'dismiss') => {
       const current = tourRef.current;

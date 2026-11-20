@@ -302,4 +302,151 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(2500);
     await expect(milestoneCard(page)).toHaveCount(0);
   });
+
+  test('a failed replay DELETE blocks its progress writes until it succeeds', async ({ page }) => {
+    await page.goto('/settings');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+
+    const order: string[] = [];
+    let deleteCalls = 0;
+    await page.route('**/api/gamification/tours/catalog', (r) =>
+      r.fulfill(
+        apiOk({
+          interval: 5, version: 1, autoTours: true,
+          beginner: { status: 'COMPLETED', step: 10 }, beginnerSeenVersion: 2, tours: [],
+        }),
+      ),
+    );
+    // Conflict-check state: no terminal rows → reset is allowed through.
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(apiOk({ autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [] })),
+    );
+    await page.route('**/api/gamification/tours/beginner/state', async (r) => {
+      if (r.request().method() === 'DELETE') {
+        deleteCalls += 1;
+        order.push(`delete-${deleteCalls}`);
+        // First attempt fails — the replay's progress MUST NOT overtake it.
+        if (deleteCalls === 1) return r.fulfill(fulfill(500, { message: 'boom' }));
+        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 1 }));
+      }
+      return r.fallback();
+    });
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      order.push('progress');
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
+
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    const replayBtn = page.getByRole('button', { name: /^Replay$/ }).first();
+    await expect(replayBtn).toBeVisible({ timeout: 20_000 });
+    await replayBtn.click();
+
+    // First DELETE fails → backoff (~2s) → retry succeeds → THEN progress.
+    await page.waitForTimeout(6000);
+    expect(deleteCalls).toBe(2);
+    expect(order.filter((o) => o === 'progress')).toHaveLength(1);
+    expect(order.lastIndexOf('delete-2')).toBeLessThan(order.indexOf('progress'));
+    // And progress never appeared before the successful delete.
+    expect(order.indexOf('progress')).toBeGreaterThan(order.indexOf('delete-1'));
+  });
+
+  test('429 responses keep ops pending with bounded backoff, never dropped', async ({ page }) => {
+    await settleOnDashboard(page);
+    let progressCalls = 0;
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      progressCalls += 1;
+      return r.fulfill({ status: 429, headers: { ...CORS_HEADERS, 'retry-after': '1' }, contentType: 'application/json', body: JSON.stringify({ message: 'slow down' }) });
+    });
+    await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
+
+    await page.reload();
+    await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
+    // startTour enqueues progress(0); drain hits 429 → op retained.
+    await page.waitForTimeout(4000);
+    const queued = await page.evaluate(() => {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
+      return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
+    });
+    expect(queued.some((o) => o.op === 'progress')).toBe(true);
+    // Bounded: a handful of retries, not a tight loop.
+    expect(progressCalls).toBeLessThanOrEqual(4);
+  });
+
+  test('queued writes never drain under a different account', async ({ page }) => {
+    await settleOnDashboard(page);
+    let dismissCalls = 0;
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
+    await page.route('**/api/gamification/tours/beginner/dismiss', (r) => {
+      dismissCalls += 1;
+      return r.fulfill(fulfill(500, { message: 'boom' })); // always fail → stays queued
+    });
+    await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
+
+    await page.reload();
+    await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
+    await tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first().click();
+    await page.waitForTimeout(1500);
+    expect(dismissCalls).toBeGreaterThanOrEqual(1);
+
+    // Switch to a different account — its hydrate must NOT drain the
+    // previous user's queue (different per-user storage key + fence).
+    await switchAuthUser(page, 'account-b-test-id');
+    await page.waitForTimeout(3000);
+    const callsAfterSwitch = dismissCalls;
+    await page.waitForTimeout(4000);
+    expect(dismissCalls).toBe(callsAfterSwitch);
+
+    // The original user's queue is retained, untouched.
+    const retained = await page.evaluate(() => {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
+      return keys.map((k) => ({ key: k, n: (JSON.parse(localStorage.getItem(k) ?? '[]') as unknown[]).length }));
+    });
+    expect(retained.some((r) => r.n > 0)).toBe(true);
+  });
+
+  test('a queued replay reset is vetoed when the server holds newer terminal state', async ({ page }) => {
+    await page.goto('/settings');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+
+    let deleteCalls = 0;
+    let progressCalls = 0;
+    const freshTerminal = {
+      autoTours: true,
+      beginner: { status: 'COMPLETED', step: 10 },
+      beginnerTerminal: null,
+      // Another device completed the tour AFTER this reset was requested.
+      completions: [{ tourKey: 'beginner', version: 2, status: 'COMPLETED', step: 10, updatedAt: new Date(Date.now() + 60_000).toISOString() }],
+    };
+    await page.route('**/api/gamification/tours/catalog', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerSeenVersion: 2, tours: [] })),
+    );
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(freshTerminal)));
+    await page.route('**/api/gamification/tours/beginner/state', (r) => {
+      if (r.request().method() === 'DELETE') {
+        deleteCalls += 1;
+        return r.fulfill(apiOk({ reset: true }));
+      }
+      return r.fallback();
+    });
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      progressCalls += 1;
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
+
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    const replayBtn = page.getByRole('button', { name: /^Replay$/ }).first();
+    await expect(replayBtn).toBeVisible({ timeout: 20_000 });
+    await replayBtn.click();
+    await page.waitForTimeout(4000);
+
+    // The stale reset must NOT erase the newer server-side completion —
+    // DELETE is never sent and the replay group is vetoed.
+    expect(deleteCalls).toBe(0);
+    expect(progressCalls).toBe(0);
+  });
 });

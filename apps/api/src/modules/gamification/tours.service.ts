@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, TourCompletionStatus } from '@prisma/client';
+import { TourCompletionStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
 /**
@@ -213,7 +213,7 @@ export class ToursService {
       this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
       this.prisma.tourCompletion.findMany({
         where: { userId },
-        select: { tourKey: true, version: true, status: true, stepIndex: true },
+        select: { tourKey: true, version: true, status: true, stepIndex: true, updatedAt: true },
       }),
     ]);
     if (!user) throw new NotFoundException('User not found');
@@ -237,6 +237,9 @@ export class ToursService {
         version: r.version,
         status: r.status,
         step: r.stepIndex,
+        // Server timestamp lets clients veto stale replay resets that
+        // would erase newer terminal state written on another device.
+        updatedAt: r.updatedAt.toISOString(),
       })),
     };
   }

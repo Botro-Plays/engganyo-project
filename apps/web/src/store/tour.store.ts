@@ -192,9 +192,13 @@ function writeUserTour(state: PersistedTourState): void {
 // progress) and failures are retained for the owning user only.
 
 type PendingOp =
-  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number }
-  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number }
-  | { op: 'reset'; key: string; epoch: number; ts: number };
+  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; id?: string; notBefore?: number }
+  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; id?: string; notBefore?: number }
+  | { op: 'reset'; key: string; epoch: number; ts: number; id?: string; notBefore?: number };
+
+let opSeq = 0;
+const newOpId = () =>
+  `${Date.now().toString(36)}-${(opSeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 function readPendingOps(userId: string): PendingOp[] {
   try {
@@ -216,8 +220,11 @@ function readPendingOps(userId: string): PendingOp[] {
 
 function writePendingOps(userId: string, ops: PendingOp[]): void {
   try {
-    if (ops.length === 0) localStorage.removeItem(pendingKey(userId));
-    else localStorage.setItem(pendingKey(userId), JSON.stringify(ops.slice(-MAX_PENDING_OPS)));
+    // Stable operation ids are assigned once at write time so queued ops
+    // keep identity across tabs, reloads, and drain retries.
+    const withIds = ops.map((o) => (typeof o.id === 'string' ? o : { ...o, id: newOpId() }));
+    if (withIds.length === 0) localStorage.removeItem(pendingKey(userId));
+    else localStorage.setItem(pendingKey(userId), JSON.stringify(withIds.slice(-MAX_PENDING_OPS)));
   } catch {
     /* storage unavailable — writes degrade to best-effort */
   }
@@ -240,7 +247,7 @@ interface ServerTourState {
   autoTours?: boolean;
   beginner?: ServerBeginner | null;
   beginnerTerminal?: ServerBeginnerTerminal | null;
-  completions?: { tourKey: string; version: number; status: string; step: number }[];
+  completions?: { tourKey: string; version: number; status: string; step: number; updatedAt?: string }[];
 }
 
 interface DerivedBeginner {
@@ -360,6 +367,57 @@ let flushPromise: Promise<void> | null = null;
 let lastStateSyncAt = 0;
 let prefTail: Promise<void> | null = null;
 let prefDesired: { userId: string; value: boolean } | null = null;
+// Bounded backoff state for the automatic flush schedule — explicit
+// triggers (hydrate, focus refresh, Retry) bypass it.
+let nextFlushAllowedAt = 0;
+let flushFailCount = 0;
+// Replay resets vetoed by newer server-side terminal state, keyed by
+// tour key → veto timestamp. resetKey reads this to surface the conflict
+// instead of silently reporting success.
+const recentVetoes = new Map<string, number>();
+// Per-op drain outcomes (keyed by stable op id) so callers like
+// resetKey can distinguish "sent" from "dropped"/"still blocked" —
+// an empty queue alone cannot prove a reset reached the server.
+const opOutcomes = new Map<string, 'ok' | 'drop' | 'blocked'>();
+const recordOutcome = (id: string | undefined, outcome: 'ok' | 'drop' | 'blocked') => {
+  if (!id) return;
+  if (opOutcomes.size > 200) opOutcomes.clear();
+  opOutcomes.set(id, outcome);
+};
+
+// Cross-tab drain coordination: the pending queue lives in shared
+// localStorage, so only one tab may drain it at a time. The lock is
+// short-lived and stolen when stale (a crashed tab cannot wedge it).
+const TAB_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+const DRAIN_LOCK_STALE_MS = 15_000;
+const drainLockKey = (userId: string) => `engganyo-tour-drain-${userId}`;
+
+function acquireDrainLock(userId: string): boolean {
+  try {
+    const raw = localStorage.getItem(drainLockKey(userId));
+    if (raw) {
+      const l = JSON.parse(raw) as { tab?: string; ts?: number };
+      if (l.tab !== TAB_ID && typeof l.ts === 'number' && Date.now() - l.ts < DRAIN_LOCK_STALE_MS) {
+        return false;
+      }
+    }
+    localStorage.setItem(drainLockKey(userId), JSON.stringify({ tab: TAB_ID, ts: Date.now() }));
+    return true;
+  } catch {
+    return true; // storage unavailable — degrade to single-tab assumption
+  }
+}
+
+function releaseDrainLock(userId: string): void {
+  try {
+    const raw = localStorage.getItem(drainLockKey(userId));
+    if (raw && (JSON.parse(raw) as { tab?: string }).tab === TAB_ID) {
+      localStorage.removeItem(drainLockKey(userId));
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 const opPath = (op: PendingOp): { path: string; body?: unknown; method: 'post' | 'delete' } => {
   if (op.op === 'reset') return { path: `${op.key}/state`, method: 'delete' };
@@ -369,11 +427,38 @@ const opPath = (op: PendingOp): { path: string; body?: unknown; method: 'post' |
   return { path: `${op.key}/${op.op}`, body: { version: op.version }, method: 'post' };
 };
 
-/** Permanent rejections (unknown key, stale version) are dropped; network
- *  and 5xx failures stay queued for a later flush. */
-function isPermanentWriteError(err: unknown): boolean {
-  const status = (err as { response?: { status?: number } })?.response?.status;
-  return status === 400 || status === 404 || status === 422;
+/** Failure classification for queued tour writes:
+ *  - 'drop': permanent — unknown key, stale version, validation (400/404/
+ *    409/422) or permission (403). Retrying can never succeed.
+ *  - 'pause': 401 — the session is not (yet) authenticated for THIS
+ *    account. The op stays queued and is never retried under another
+ *    account's credentials; normal auth restore (refresh/hydrate) resumes it.
+ *  - 'retry': transient — network error, timeout, or 5xx. Bounded
+ *    exponential backoff applies.
+ *  - 'retry-after': 429 — honors Retry-After (capped at 60s). */
+type WriteFailure = 'drop' | 'pause' | 'retry' | 'retry-after';
+interface ClassifiedFailure {
+  kind: Exclude<WriteFailure, 'drop'> | 'drop';
+  retryAfterMs?: number;
+}
+
+function classifyWriteError(err: unknown): ClassifiedFailure {
+  const e = err as { response?: { status?: number; headers?: Record<string, string | undefined> } };
+  const status = e?.response?.status;
+  if (status === 400 || status === 404 || status === 409 || status === 422 || status === 403) {
+    return { kind: 'drop' };
+  }
+  if (status === 401) return { kind: 'pause' };
+  if (status === 429) {
+    const ra = e?.response?.headers?.['retry-after'];
+    const secs = ra !== undefined ? Number(ra) : NaN;
+    return {
+      kind: 'retry-after',
+      retryAfterMs: Number.isFinite(secs) ? Math.min(Math.max(secs, 1) * 1000, 60_000) : 5_000,
+    };
+  }
+  // No response (network/timeout) or 5xx — transient.
+  return { kind: 'retry' };
 }
 
 export const useTourStore = create<TourState>()((set, get) => {
@@ -445,61 +530,177 @@ export const useTourStore = create<TourState>()((set, get) => {
     scheduleFlush(userId);
   };
 
-  const sendOp = async (userId: string, op: PendingOp): Promise<'ok' | 'retry' | 'drop'> => {
-    if (get().userId !== userId) return 'retry';
+  /** Latest terminal-row updatedAt (ms) per tour key from fresh server
+   *  state — used to veto stale replay resets. Also returns the
+   *  client↔server clock skew estimated from the response Date header
+   *  so the veto compares server timestamps against server time (op.ts
+   *  is a client timestamp). Returns null when the state cannot be
+   *  fetched (the reset then waits rather than risking erasing newer
+   *  state blindly). */
+  const fetchTerminalUpdatedAt = async (
+    userId: string,
+  ): Promise<{ map: Map<string, number>; skewMs: number } | null> => {
+    try {
+      const res = await apiClient.get<{ data?: ServerTourState }>('gamification/tours/state', {
+        optionalAuth: true,
+      });
+      if (get().userId !== userId) return null;
+      const rows = res.data?.data?.completions ?? [];
+      const map = new Map<string, number>();
+      for (const r of rows) {
+        if (r.status === 'IN_PROGRESS' || !r.updatedAt) continue;
+        const t = Date.parse(r.updatedAt);
+        if (Number.isFinite(t)) map.set(r.tourKey, Math.max(map.get(r.tourKey) ?? 0, t));
+      }
+      const dateHeader = res.headers?.date ?? res.headers?.Date;
+      const serverMs = dateHeader ? Date.parse(String(dateHeader)) : NaN;
+      const skewMs = Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
+      return { map, skewMs };
+    } catch {
+      return null;
+    }
+  };
+
+  const sendOp = async (userId: string, op: PendingOp): Promise<'ok' | ClassifiedFailure> => {
+    if (get().userId !== userId) return { kind: 'pause' };
     const { path, body, method } = opPath(op);
     try {
       if (method === 'delete') await apiClient.delete(`gamification/tours/${path}`, { optionalAuth: true });
       else await apiClient.post(`gamification/tours/${path}`, body, { optionalAuth: true });
       return 'ok';
     } catch (err) {
-      if (isPermanentWriteError(err)) return 'drop';
-      // optionalAuth failures (401+failed refresh) and network errors stay queued.
-      return 'retry';
+      return classifyWriteError(err);
     }
   };
 
-  /** Drain the durable queue for `userId` — sequential FIFO so resets
-   *  always land before the replay's progress. Failed ops rotate to the
-   *  back so one bad write cannot starve the rest; the pass ends when a
-   *  full round makes no progress. Concurrent callers share one drain;
-   *  a bounded follow-up pass picks up ops enqueued mid-drain. */
+  /** Drain the durable queue for `userId` — STRICT FIFO: a blocked
+   *  predecessor stops the drain so dependent writes (e.g. a replay's
+   *  progress behind its reset) can never execute ahead of it. Failed
+   *  ops are never reordered; 'drop' removes permanently-dead ops and
+   *  the drain continues. A localStorage drain lock keeps two tabs from
+   *  sending the shared queue concurrently; ops carry stable ids. */
   const flushQueue = (userId: string, depth = 0): Promise<void> => {
     if (get().userId !== userId) return Promise.resolve();
     if (!flushPromise) {
       flushPromise = (async () => {
+        if (!acquireDrainLock(userId)) {
+          flushPromise = null;
+          return; // another tab holds the drain — it owns the shared queue
+        }
         try {
-          for (let pass = 0; pass < 3; pass++) {
-            const ops = readPendingOps(userId);
-            if (ops.length === 0) break;
-            let progressed = false;
-            const remaining: PendingOp[] = [];
-            for (let i = 0; i < ops.length; i++) {
-              const op = ops[i];
-              if (get().userId !== userId) {
-                // Account switched mid-drain — keep everything not yet sent.
-                writePendingOps(userId, [...remaining, ...ops.slice(i)]);
-                syncUnsyncedFlag(userId);
-                return;
-              }
-              const result = await sendOp(userId, op);
-              if (result === 'ok' || result === 'drop') {
-                progressed = true;
-              } else {
-                remaining.push(op);
-              }
+          const ops = readPendingOps(userId);
+          // Ids of ops this drain finished with (sent or permanently
+          // dropped). Write-back MERGES against fresh storage so ops
+          // enqueued by another tab mid-drain are never clobbered.
+          const doneIds = new Set<string>();
+          // vetoedResetEpoch[key]: a reset was dropped because the server
+          // holds NEWER terminal state (written on another device after
+          // the reset was requested). Ops from that replay group — same
+          // or older epoch — are dropped with it; a later, newer replay
+          // (higher epoch) is still allowed through.
+          const vetoed = new Map<string, number>();
+          // { map, skewMs } — skew corrects client op.ts into server
+          // time so the "newer than request" veto isn't fooled by clock
+          // drift. VETO_SKEW_TOLERANCE_MS leans toward NOT vetoing for
+          // near-simultaneous writes (a completion racing the replay
+          // click is ambiguous; the explicit replay wins).
+          const VETO_SKEW_TOLERANCE_MS = 5_000;
+          let terminalInfo: { map: Map<string, number>; skewMs: number } | null | undefined;
+          let blockedByFailure = false;
+          let blockedOp: PendingOp | null = null;
+          for (let i = 0; i < ops.length; i++) {
+            const op = ops[i];
+            if (get().userId !== userId) {
+              // Account switched mid-drain — keep everything not yet sent.
+              break;
             }
-            writePendingOps(userId, remaining);
-            syncUnsyncedFlag(userId);
-            if (!progressed || remaining.length === 0) break;
+            if (op.notBefore && op.notBefore > Date.now()) {
+              // 429 backoff — stop here, preserving order for dependents.
+              blockedByFailure = true;
+              blockedOp = op;
+              break;
+            }
+            const veto = vetoed.get(op.key);
+            if (veto !== undefined && op.epoch <= veto) {
+              recordOutcome(op.id, 'drop');
+              if (op.id) doneIds.add(op.id);
+              continue;
+            }
+            let result: 'ok' | ClassifiedFailure;
+            if (op.op === 'reset') {
+              if (terminalInfo === undefined) terminalInfo = await fetchTerminalUpdatedAt(userId);
+              if (terminalInfo === null) {
+                // Cannot verify server state — do NOT risk erasing newer
+                // terminal state; treat as a transient block.
+                result = { kind: 'retry' };
+              } else {
+                const t = terminalInfo.map.get(op.key);
+                // Server updatedAt vs request time, both in server clock.
+                if (t !== undefined && t > op.ts + terminalInfo.skewMs + VETO_SKEW_TOLERANCE_MS) {
+                  vetoed.set(op.key, op.epoch);
+                  recentVetoes.set(op.key, Date.now());
+                  result = { kind: 'drop' };
+                } else {
+                  result = await sendOp(userId, op);
+                }
+              }
+            } else {
+              result = await sendOp(userId, op);
+            }
+            if (result === 'ok') {
+              recordOutcome(op.id, 'ok');
+              if (op.id) doneIds.add(op.id);
+              continue;
+            }
+            if (result.kind === 'drop') {
+              recordOutcome(op.id, 'drop');
+              if (op.id) doneIds.add(op.id);
+              continue;
+            }
+            // pause / retry / retry-after — STOP the drain. Dependents
+            // behind this op must wait for it.
+            recordOutcome(op.id, 'blocked');
+            if (result.kind === 'retry-after') {
+              op.notBefore = Date.now() + (result.retryAfterMs ?? 5_000);
+            }
+            blockedByFailure = true;
+            blockedOp = op;
+            break;
+          }
+          // Merge write-back: drop only the ops this drain finished;
+          // preserve ops enqueued concurrently (other tabs) and update
+          // the blocked head's notBefore in place.
+          const stored = readPendingOps(userId);
+          const remaining = stored.filter((o) => !o.id || !doneIds.has(o.id));
+          if (blockedOp?.id) {
+            const idx = remaining.findIndex((o) => o.id === blockedOp!.id);
+            if (idx >= 0) remaining[idx] = { ...remaining[idx], notBefore: blockedOp.notBefore };
+          }
+          writePendingOps(userId, remaining);
+          syncUnsyncedFlag(userId);
+          if (!blockedByFailure) {
+            flushFailCount = 0;
+            nextFlushAllowedAt = 0;
+          } else if (remaining.length > 0) {
+            // Bounded backoff for the NEXT automatic flush — explicit
+            // triggers (hydrate, focus, Retry) still flush immediately.
+            flushFailCount = Math.min(flushFailCount + 1, 6);
+            nextFlushAllowedAt = Date.now() + Math.min(1000 * 2 ** flushFailCount, 30_000);
+            scheduleFlush(userId);
           }
         } finally {
           flushPromise = null;
+          releaseDrainLock(userId);
         }
       })();
     }
     return flushPromise.then(() => {
       if (depth < 2 && get().userId === userId && readPendingOps(userId).length > 0) {
+        // Ops may have been enqueued mid-drain — one bounded follow-up,
+        // unless backoff says the head op must wait.
+        const head = readPendingOps(userId)[0];
+        if (head?.notBefore && head.notBefore > Date.now()) return undefined;
+        if (nextFlushAllowedAt > Date.now() && depth === 0) return undefined;
         return flushQueue(userId, depth + 1);
       }
       return undefined;
@@ -508,10 +709,11 @@ export const useTourStore = create<TourState>()((set, get) => {
 
   const scheduleFlush = (userId: string) => {
     if (flushTimer) clearTimeout(flushTimer);
+    const delay = Math.max(400, nextFlushAllowedAt - Date.now());
     flushTimer = setTimeout(() => {
       flushTimer = null;
       void flushQueue(userId);
-    }, 400);
+    }, delay);
   };
 
   /** Re-derive beginner display state from the mirrored server row —
@@ -669,16 +871,35 @@ export const useTourStore = create<TourState>()((set, get) => {
     if (!userId || get().replayBusy) return false;
     sessionEpoch += 1;
     cancelPendingProgress();
+    const startedAt = Date.now();
+    const resetId = newOpId();
     set({ replayBusy: true, replayError: false });
     try {
-      enqueueOp(userId, { op: 'reset', key, epoch: sessionEpoch, ts: Date.now() });
+      enqueueOp(userId, { op: 'reset', key, epoch: sessionEpoch, ts: Date.now(), id: resetId });
       afterReset?.();
       await flushQueue(userId);
+      // A transiently-blocked reset gets one bounded window for the
+      // scheduled backoff retry before we declare failure.
+      let outcome = opOutcomes.get(resetId);
+      if (outcome !== 'ok' && outcome !== 'drop' && get().userId === userId) {
+        const wait = Math.min(Math.max(0, nextFlushAllowedAt - Date.now()) + 500, 4_000);
+        if (wait > 0) {
+          await new Promise((r) => setTimeout(r, wait));
+          await flushQueue(userId);
+          outcome = opOutcomes.get(resetId);
+        }
+      }
+      opOutcomes.delete(resetId);
       if (get().userId !== userId) return false;
-      const stuck = readPendingOps(userId).some((o) => o.key === key);
-      set({ replayBusy: false, replayError: stuck });
+      // 'ok' = the DELETE reached the server. 'drop' = permanently
+      // rejected or vetoed by newer server state — both are failures the
+      // user must see, never a silent success.
+      const vetoed = (recentVetoes.get(key) ?? 0) >= startedAt;
+      if (vetoed) recentVetoes.delete(key);
+      const ok = outcome === 'ok' && !vetoed;
+      set({ replayBusy: false, replayError: !ok });
       syncUnsyncedFlag(userId);
-      return !stuck;
+      return ok;
     } catch {
       if (get().userId === userId) set({ replayBusy: false, replayError: true });
       return false;
