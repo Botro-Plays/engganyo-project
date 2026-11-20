@@ -36,20 +36,27 @@ async function prepare(page: Page, opts: { consent?: boolean } = {}) {
     // Tour state is server-authoritative now — clearing localStorage is
     // not enough. Reset the beginner tour row + auto-tours preference
     // over the API so every test starts from a clean server state.
-    const token = localStorage.getItem('access_token');
-    if (!token) return;
+    // The access token expires after 15m and the app refreshes it in the
+    // background — retry until both calls actually succeed (fetch does
+    // not throw on 401, so res.ok must be checked explicitly).
     const apiBase =
       (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
         .map((e) => e.name)
         .find((n) => n.includes('/api/'))
         ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers }).catch(() => {});
-    await fetch(`${apiBase}/gamification/tours/preferences`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ autoTours: true }),
-    }).catch(() => {});
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const token = localStorage.getItem('access_token');
+      if (!token) break;
+      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const del = await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers });
+      const patch = await fetch(`${apiBase}/gamification/tours/preferences`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ autoTours: true }),
+      });
+      if (del.ok && patch.ok) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
   }, consent);
 }
 
