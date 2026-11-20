@@ -542,7 +542,8 @@ export function OnboardingTour() {
 
   // Per-user state: load whatever this browser stored for the signed-in user.
   useEffect(() => {
-    if (userId) syncWithUser(userId);
+    // null on logout — resets the tour session and fences delayed writes.
+    syncWithUser(userId);
   }, [userId, syncWithUser]);
 
   // Auto-start only after the SERVER state has loaded (a failed lookup
@@ -851,8 +852,11 @@ export function TourReplayButton() {
     if (!userId) return;
     const tour = useTourStore.getState();
     tour.syncWithUser(userId);
-    tour.resetTour();
-    router.push(TOUR_STEPS[0].requiredRoute);
+    // Only navigate once the server reset persisted — a failed reset
+    // surfaces via the store's replayError (Settings shows Retry sync).
+    void tour.resetTour().then((ok) => {
+      if (ok) router.push(TOUR_STEPS[0].requiredRoute);
+    });
   };
 
   return (

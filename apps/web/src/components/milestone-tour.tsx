@@ -74,11 +74,15 @@ export function MilestoneTour() {
   const autoTours = useTourStore((s) => s.autoTours);
   const replayRequest = useTourStore((s) => s.replayRequest);
   const clearReplayRequest = useTourStore((s) => s.clearReplayRequest);
+  const syncWithUser = useTourStore((s) => s.syncWithUser);
 
   const [tour, setTour] = useState<DueTour | null>(null);
   const [phase, setPhase] = useState<Phase>('announce');
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  // 'auto' tours are suppressed when the preference flips off; 'manual'
+  // replays are explicit user actions and always stay visible.
+  const originRef = useRef<'auto' | 'manual'>('auto');
   const fetchingRef = useRef(false);
   const dismissedRef = useRef(false);
   const tourRef = useRef<DueTour | null>(null);
@@ -86,22 +90,38 @@ export function MilestoneTour() {
     tourRef.current = tour;
   }, [tour]);
 
+  // Keep the tour store bound to the signed-in account (and reset it on
+  // logout) so every delayed write is fenced to the right user.
+  const authUserId = user?.id ?? null;
+  useEffect(() => {
+    syncWithUser(authUserId);
+  }, [authUserId, syncWithUser]);
+
   /** Fetches due tours and shows the first eligible one. `manual` bypasses
    *  the automatic-tours preference — used for Settings replay requests. */
   const showDue = useCallback(
     async (opts?: { manual?: boolean; onlyKey?: string }) => {
-      if (!user || fetchingRef.current || dismissedRef.current || tourRef.current) return;
+      const uid = authUserId;
+      if (!uid || fetchingRef.current || dismissedRef.current || tourRef.current) return;
       fetchingRef.current = true;
+      originRef.current = opts?.manual ? 'manual' : 'auto';
       try {
         const res = await apiClient.get<ApiResponse<{ tours: DueTour[] }>>('gamification/tours/pending', {
           optionalAuth: true,
         });
+        // Post-resolve fences: the account, the automatic-tours preference
+        // (auto path only), and the deferral conditions are all rechecked
+        // against CURRENT state — a lookup that resolves late must not
+        // announce a tour the user has since disabled or navigated away from.
+        if (useAuthStore.getState().user?.id !== uid) return;
+        if (!opts?.manual && !useTourStore.getState().autoTours) return;
+        if (isDeferred(window.location.pathname)) return;
         const tours = res.data?.data?.tours ?? [];
         const due = opts?.onlyKey ? tours.find((t) => t.key === opts.onlyKey) : tours[0];
         // Manual replay bypasses the auto-tours preference but NEVER the
         // deferral rules — payments, proof submission, rooms, and dialogs
         // are never interrupted, automatic or manual.
-        if (due && !isDeferred(pathname)) {
+        if (due) {
           dismissedRef.current = false;
           setTour(due);
           // Resume an interrupted tour directly at its saved step.
@@ -119,7 +139,7 @@ export function MilestoneTour() {
         fetchingRef.current = false;
       }
     },
-    [user, pathname],
+    [authUserId],
   );
 
   const fetchPending = useCallback(() => {
@@ -141,14 +161,10 @@ export function MilestoneTour() {
     async (action: 'complete' | 'dismiss') => {
       const current = tourRef.current;
       if (!current) return;
-      try {
-        await apiClient.post(
-          `gamification/tours/${current.key}/${action}`,
-          { version: current.version },
-          { optionalAuth: true },
-        );
-      } catch {
-        /* best-effort — tour may reshhow next session, never blocks UX */
+      const uid = authUserId;
+      if (uid) {
+        useTourStore.getState().syncWithUser(uid);
+        await useTourStore.getState().recordMilestoneTerminal(current.key, current.version, action);
       }
       setTour(null);
       setPhase('announce');
@@ -164,7 +180,7 @@ export function MilestoneTour() {
         dismissedRef.current = true;
       }
     },
-    [fetchPending],
+    [fetchPending, authUserId],
   );
 
   // Check on mount, route change, and level-up.
@@ -181,19 +197,18 @@ export function MilestoneTour() {
 
   // Persist in-progress step position so an interrupted tour resumes
   // where the user left off (server keeps terminal states immutable).
+  // Routed through the store: fenced to the current account and queued.
   useEffect(() => {
-    if (!tour || phase !== 'step') return;
+    if (!tour || phase !== 'step' || !authUserId) return;
+    const uid = authUserId;
+    const key = tour.key;
+    const version = tour.version;
     const t = setTimeout(() => {
-      void apiClient
-        .post(
-          `gamification/tours/${tour.key}/progress`,
-          { version: tour.version, step: stepIndex },
-          { optionalAuth: true },
-        )
-        .catch(() => undefined);
+      if (useAuthStore.getState().user?.id !== uid) return;
+      useTourStore.getState().recordMilestoneProgress(key, version, stepIndex);
     }, 400);
     return () => clearTimeout(t);
-  }, [tour, phase, stepIndex]);
+  }, [tour, phase, stepIndex, authUserId]);
 
   // Spotlight positioning — poll for the target like the beginner tour.
   useEffect(() => {
