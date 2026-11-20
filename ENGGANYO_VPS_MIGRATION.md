@@ -3149,3 +3149,23 @@ sessions revoked.
 - **Pending:** PR #101 merge on E2E green; rendered multi-width pass
   incl. Telegram hero effect + milestone tours (owner-assisted login);
   gamification cap/catalog + reset-plan decisions await owner review.
+
+## 2026-11-20 (cont.) — milestone tours merged; slot-race fix in flight
+
+- **PR #101** `feat/milestone-tours` — merged **`70cfe20`** after E2E fix:
+  `wallet-errors.spec.ts` uses mock auth with no API catch-all, so the new
+  `MilestoneTour` call to `/gamification/tours/pending` hit the real API,
+  401'd, and the global refresh-fail interceptor redirected to /login.
+  Added an empty-tours mock route (`63c3e93`); E2E then green.
+- **Deploy `44681488908` for `70cfe20` FAILED at CI** — flaky
+  `social-identity.integration.spec.ts` race test: profile-edit vs OAuth
+  lost the slot-create race to Prisma's non-atomic upsert → P2002 abort.
+  Production remains on `2ce4239` (98+99+100+102 live, containers healthy,
+  `.deployed-sha` verified).
+- **PR #103** `fix/social-link-slot-race` — slot-ensure in
+  `upsertSocialLink` replaced with atomic
+  `INSERT ... ON CONFLICT (user_id, platform) DO NOTHING`; eliminates the
+  spurious P2002 on benign profile saves. In CI.
+- **Pending:** #103 merge → deploy `70cfe20`+race-fix; rendered pass for
+  Telegram hero effect + milestone tours (owner-assisted login);
+  gamification cap/catalog + reset-plan owner decisions.
