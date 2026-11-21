@@ -40,22 +40,23 @@ promise of rich-result eligibility; Google decides display.
 | Chat widget safe placement (mobile sheet, clamped desktop dock, position recovery, nav clearance, z under dialogs/consent) | PR #121 → `ecf7b87`, deploy `44891413716` success |
 | Reset-failure session fencing (captured account+epoch gate on every snapshot-path state update; stale snapshot can't clear another session's replay UI) + `__engganyoTourStore` e2e seam | PR #123 → `87458ca`, deploy `44897692076` success; live site 200, tour endpoints 401 |
 | Chat keyboard/viewport acceptance (`interactiveWidget: resizes-content`, visualViewport `--chat-kb` inset, real-visible-height sheet cap, focus return to launcher, covered-nav z-60 at short heights) | PR #124 → `0c90b09`, deploy `44898276456` success; live `interactive-widget=resizes-content` in served viewport meta |
+| Chat sheet geometry anchored to visual viewport bounds (bottom edge = min(nav top, vv bottom); height = anchor minus vv top and margin; covers safe-area, keyboard inset, offsetTop) | PR #125 → `7641ac4`, deploy `44908136566` success; e2e matrix 350/400/500/600px ±nav ±keyboard ±offsetTop, sheet fully inside visible viewport; SIMULATED viewport tests only - real iOS/Android keyboard acceptance still owner-assisted |
+| Tour store e2e seam test-gated (`window.__engganyoTourStore` only when `NEXT_PUBLIC_TOUR_E2E_HOOK=1` in the CI e2e build env; absent from production bundles) | PR #126 → `bab829e`, shipped by deploy `44908148144`; in-session stale-response regression preserved + green |
+| Telegram CTA immediate hover emphasis (fine-pointer only: instant plane nudge + sustained navy outline/shimmer; keyboard focus-visible equivalent; reduced-motion static; no layout shift) | PR #127 → `cb77c7f`, deploy `44908148144` success; e2e video artifact on run `44906759283` |
+| Exact owner title `Engganyo | Small Taps. Big Crowds.` in title/og/twitter/JSON-LD; `contact@engganyo.com` public chrome; `PageTitle` descriptive app-route titles; Terms buying-credits + platform-risk sections; em-dash sweep; hero H1 restored after mobile-layout caught the fold regression | PR #128 → `9f91c44`, deploy `44910686752` success; live: title/og/twitter exact match, /contact serves contact@, `interactive-widget=resizes-content` still served |
+| SEO infra: robots.txt route with `Content-Signal: search=yes, ai-input=yes, ai-train=no` + single UA group; `revalidate = 3600` on all public pages; CSP report-only + Permissions-Policy; `/llms.txt`; `/how-it-works` `/pricing` `/safety` substantive pages (verified behavior; sitemap + nav + JSON-LD wired) | PR #130 → `760963a`, E2E `44910729447` green; deploy in progress; PR #129 carries the remaining `revalidate` delta for the new pages |
 
 ## CI-tested (merged, deploy pending/in-flight)
 
-_Nothing currently in flight._
+| SEO infra + content pages | PR #130 → `760963a`, main run `44912418342` in progress |
+| `revalidate` on the three new pages | PR #129 `1af73bd`, CI pending |
 
 ## Awaiting owner decision
 
-- **Canonical contact email** - `support@` vs `contact@` for public pages/JSON-LD contactPoint.
 - **Cloudflare PerplexityBot allow** - verified live 403 despite robots allow (Security → Bots → AI Crawl Control).
 - **Cloudflare email obfuscation** - currently hides the contact email from crawlers.
-- **Public HTML edge caching** - page rule decision; current Next `s-maxage=3600` already handles shared caching; do not blindly enable.
-- **CSP / Permissions-Policy headers** - needs review of third-party script usage (reCAPTCHA, Turnstile, analytics) before shipping.
-- **Trustpilot/Google review legal wording** - owner to confirm platform-policy-safe claims.
-- **Homepage title/H1/meta wording** - owner copy sign-off (handoff suggestion lists YouTube, which is disabled - needs corrected version).
-- **New content routes** (`/how-it-works`, `/pricing`, `/safety`) - publish only with substantive owner-approved content; NOT created (no empty indexable pages).
-- **Gamification cap/catalog proposals** - `docs/GAMIFICATION_AUDIT_AND_PROPOSAL.md` is a proposal; not enabled.
+- **Cloudflare edge caching** - page rule decision only; app now emits uniform `s-maxage=3600` + swr on every public page via `revalidate` (#130). Do not add a CF cache rule without review.- **CSP enforcement** - report-only CSP + Permissions-Policy shipped (#130); owner reviews violation reports before any enforcement.- **Trustpilot/Google review legal wording** - owner to confirm platform-policy-safe claims.
+- **Homepage copy fine-tuning** - exact owner title `Engganyo | Small Taps. Big Crowds.` applied everywhere (title/og/twitter/JSON-LD/H1 tagline); owner may still request wording changes.- **Content page wording review** - `/how-it-works` `/pricing` `/safety` now live with verified-behavior content (no fabricated policies; pricing points to live Wallet packages); owner may request copy changes. `/blog` stays unpublished until an approved article exists.- **Gamification cap/catalog proposals** - `docs/GAMIFICATION_AUDIT_AND_PROPOSAL.md` is a proposal; not enabled.
 - **Launch-reset / Danger Zone replacement** - `docs/DANGER_ZONE_RESET_PLAN.md`; `DANGER_RESET_ENABLED` stays off.
 - **SSH local-key access** - `engganyo@134.255.232.68` rejects all four local keys; deploy works via `VPS_SSH_KEY` secret. Owner to authorize a local key or confirm deploy port.
 - **GSC indexing actions** - owner to use "Request indexing" once redirects land; GSC/CrUX current metrics not available to the agent.
