@@ -1194,29 +1194,28 @@ test.describe('tour state hardening', () => {
     await replayBtn.click();
     await expect(replayBtn).toBeDisabled();
 
-    // Switch to account B IN-SESSION (storage event rehydrates the auth
-    // store — no reload, so A's pending snapshot stays alive).
+    // Switch to account B IN-SESSION via the store's identity seam — no
+    // reload, so A's pending snapshot stays alive and resolves into a
+    // session it no longer owns.
     await page.evaluate(() => {
-      const raw = localStorage.getItem('engganyo-auth')!;
-      const blob = JSON.parse(raw);
-      blob.state.user = {
-        ...blob.state.user,
-        id: 'account-b-test-id',
-        email: 'account-b-test-id@test.local',
-        username: 'account-b-test-id',
-      };
-      const next = JSON.stringify(blob);
-      localStorage.setItem('engganyo-auth', next);
-      window.dispatchEvent(
-        new StorageEvent('storage', { key: 'engganyo-auth', newValue: next }),
-      );
+      const store = (window as unknown as {
+        __engganyoTourStore: { getState: () => { syncWithUser: (id: string | null) => void } };
+      }).__engganyoTourStore;
+      store.getState().syncWithUser('account-b-test-id');
     });
 
-    // B starts its own replay — held at the snapshot so replayBusy stays
-    // true while A's stale response lands.
+    // B starts its own replay through the store seam (the card would
+    // re-bind syncWithUser to the auth id and flip the session back).
+    // Its snapshot is held so replayBusy stays true while A's stale
+    // response lands.
     await page.waitForTimeout(1500);
     await expect(replayBtn).toBeEnabled();
-    await replayBtn.click();
+    await page.evaluate(() => {
+      const store = (window as unknown as {
+        __engganyoTourStore: { getState: () => { resetTour: () => Promise<boolean> } };
+      }).__engganyoTourStore;
+      void store.getState().resetTour();
+    });
     await expect(replayBtn).toBeDisabled();
 
     // A's delayed snapshot resolves into B's session — it must neither

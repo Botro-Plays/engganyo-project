@@ -1519,4 +1519,10 @@ if (typeof window !== 'undefined') {
     const prevId = prev.user?.id ?? null;
     if (id !== prevId) useTourStore.getState().syncWithUser(id);
   });
+
+  // E2E seam: rendered tests flip the session identity in-session (no
+  // reload, so in-flight promises survive) to deterministically exercise
+  // stale-response fencing. Client-local store only — no secrets.
+  (window as unknown as { __engganyoTourStore?: typeof useTourStore }).__engganyoTourStore =
+    useTourStore;
 }
