@@ -810,19 +810,38 @@ test.describe('tour state hardening', () => {
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 }).catch(() => {});
     await expect(tourDialog(page)).toBeVisible({ timeout: 20_000 });
 
-    // Walk the tour to completion — real progress posts each advance.
-    for (let i = 0; i < 16; i++) {
-      if (!(await tourDialog(page).isVisible().catch(() => false))) break;
-      const next = tourDialog(page).getByRole('button', { name: /^(next|finish)$/i });
-      const go = tourDialog(page).getByRole('button', { name: /go there/i });
-      if ((await next.count()) > 0) {
-        await next.first().click();
-      } else if ((await go.count()) > 0) {
-        await go.first().click();
-        await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-      } else break;
-      await page.waitForTimeout(800);
+    // Walk the tour to completion using the REAL highlighted elements —
+    // navigate steps only advance when the user activates the step's
+    // target (URL-only navigation is intentionally not an advance).
+    const visNav = (sel: string) => page.locator(`[data-tour="${sel}"]:visible`);
+    const SLOW = { timeout: 15_000 };
+    await tourDialog(page).getByRole('button', { name: 'Next' }).click(); // step 1 -> 2
+    await visNav('nav-tasks').click();
+    await expect(page).toHaveURL(/\/tasks$/, SLOW);
+    await expect(tourDialog(page)).toContainText('Step 3 of 10', SLOW);
+    await tourDialog(page).getByRole('button', { name: 'Next' }).click(); // step 3 -> 4
+    for (const [nav, url] of [
+      ['nav-missions', '/missions'],
+      ['nav-campaigns', '/campaigns'],
+      ['nav-leaderboard', '/leaderboard'],
+      ['nav-store', '/store'],
+      ['nav-wallet', '/wallet'],
+    ] as const) {
+      await visNav(nav).click();
+      await expect(page).toHaveURL(new RegExp(`${url}$`), SLOW);
+      await expect(tourDialog(page)).toBeVisible(SLOW);
     }
+    // Step 9 is two-hop: /wallet -> /settings -> /referrals.
+    await visNav('nav-settings').click();
+    await expect(page).toHaveURL(/\/settings$/, SLOW);
+    await expect(tourDialog(page)).toBeVisible(SLOW);
+    await visNav('nav-referrals').click();
+    await expect(page).toHaveURL(/\/referrals$/, SLOW);
+    await expect(tourDialog(page)).toContainText('Step 10 of 10', SLOW);
+    await visNav('nav-dashboard').click();
+    await expect(page).toHaveURL(/\/dashboard$/, SLOW);
+    await expect(tourDialog(page)).toHaveCount(0);
+
     await page.waitForTimeout(2500); // queued writes drain to the server
 
     const after = await readState();
