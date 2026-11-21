@@ -104,7 +104,7 @@ export function PublicHeader() {
   );
 }
 
-/** Shared footer — identical links on every public page so crawlers and
+/** Shared footer: identical links on every public page so crawlers and
  *  visitors see one consistent public navigation. */
 export function PublicFooter() {
   return (
@@ -124,6 +124,12 @@ export function PublicFooter() {
           >
             <TelegramIcon className="h-4 w-4" />
             Telegram
+          </a>
+          <a
+            href="mailto:contact@engganyo.com"
+            className="hover:text-sc-text transition-colors"
+          >
+            contact@engganyo.com
           </a>
           <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
           <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>

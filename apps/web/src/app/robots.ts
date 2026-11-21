@@ -10,7 +10,7 @@ export default function robots(): MetadataRoute.Robots {
         // and a blocked page's noindex is never observed. Their raw HTML
         // is an auth-gated client shell with no private data, so crawling
         // them is safe and lets crawlers actually see the directive.
-        // /api/ stays disallowed — JSON has no meta directives to read.
+        // /api/ stays disallowed: JSON has no meta directives to read.
         disallow: ['/api/'],
       },
     ],

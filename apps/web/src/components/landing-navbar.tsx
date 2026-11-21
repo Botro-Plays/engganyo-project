@@ -26,7 +26,7 @@ export function LandingNavbar() {
           <Link href="#about" className="hover:text-surface-warm-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded">About</Link>
         </div>
 
-        {/* Right side — auth buttons + mobile toggle */}
+        {/* Right side: auth buttons + mobile toggle */}
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/login"

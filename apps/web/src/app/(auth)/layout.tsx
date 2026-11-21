@@ -2,15 +2,26 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { AuthenticatedProviders } from '@/app/providers';
 import { BrandLogo } from '@/components/brand-logo';
+import { PageTitle } from '@/components/page-title';
 
 // Auth flows are functional pages, not content — keep them out of the index.
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+const AUTH_PAGE_TITLES: [string, string][] = [
+  ['/login', 'Sign in'],
+  ['/register', 'Sign up'],
+  ['/forgot-password', 'Forgot password'],
+  ['/reset-password', 'Reset password'],
+  ['/check-email', 'Check your email'],
+  ['/verify-email', 'Verify email'],
+];
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthenticatedProviders>
+    <PageTitle rules={AUTH_PAGE_TITLES} />
     <div className="min-h-screen bg-sc flex flex-col">
       {/* Ambient gradient */}
       <div className="fixed inset-0 bg-gradient-hero pointer-events-none" />

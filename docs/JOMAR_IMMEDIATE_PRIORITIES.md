@@ -13,14 +13,14 @@ Source feedback is in [Jomar's document](https://docs.google.com/document/d/1UHC
 
 Track each item through verification, implementation, review, and deployment. Record the PR, tested SHA, evidence, and outstanding decisions here as work progresses. Existing wheel/streak releases do not close these items.
 
-## Phase 1 audit — current main `13dc36c` (7 Nov 2026)
+## Phase 1 audit - current main `13dc36c` (7 Nov 2026)
 
 Verified against local API (`:3001`, `engganyo_test` DB, 51 migrations) + Chromium at 1440px and 390px as `player_two` (1 linked TikTok account, 0 own campaigns).
 
 **Already works**
 - Three-column desktop grid (`lg:grid-cols-3`), single-column mobile; card shows reward, platform badge, proof requirement, slots left, creator.
 - API pagination: `GET /tasks?page&limit` returns `meta.{total,page,totalPages}`; UI requests `limit=12` and renders Previous/Next only when `totalPages > 1`.
-- API filters exist but are unused by the UI: `?platform=TWITTER` → 2 items, `?platform=TIKTOK` → 1, `?taskType=` exact match. Lowercase values do not match (prefix match is case-sensitive) — client must send uppercase.
+- API filters exist but are unused by the UI: `?platform=TWITTER` → 2 items, `?platform=TIKTOK` → 1, `?taskType=` exact match. Lowercase values do not match (prefix match is case-sensitive) - client must send uppercase.
 - API already excludes campaigns the viewer has a completion for, and `GET /challenges` (`listPublic`) already excludes own challenges via `creatorId: { not: viewer }` at the API level.
 - Accept flow: `POST /tasks/:id/assign` → optimistic grid removal → pinned "Task accepted" panel with Open link / Submit proof / Track in My tasks. Panel renders above the grid independent of list contents, so it survives the list emptying.
 - Telegram and Discord task types have no `TASK_TYPE_PLATFORM` entry, so no account link is required for them today.
@@ -28,16 +28,16 @@ Verified against local API (`:3001`, `engganyo_test` DB, 51 migrations) + Chromi
 **Requires changes**
 - **Self-owned campaigns still appear in Find tasks.** `campaignsService.browseActive` filters status/assignments/geo/taskType but never excludes `campaign.userId === viewer`; own campaigns render as "Owner View Only" cards and consume page slots. Creator management remains available via `/campaigns` (My campaigns) and `tasks/my`.
 - **No platform picker in the UI.** Platform exists only as a per-card badge; the working `platform` query param is never sent.
-- **Pagination is page-based, not a manageable batch.** Doc asks for a small initial batch + Show more; batch size decision recorded below (6 initial, +6 per Show more — two desktop rows, documented for design review).
+- **Pagination is page-based, not a manageable batch.** Doc asks for a small initial batch + Show more; batch size decision recorded below (6 initial, +6 per Show more - two desktop rows, documented for design review).
 - **Accept does not open the target.** "Accept task" only assigns; the user must then find "Open {platform}" in the pinned panel. No popup-blocked fallback exists because no popup is attempted.
 - **Server over-requires account linking (Phase 3 core).** `tasksService.assignTask` demands a linked social account for *every* task type in `TASK_TYPE_PLATFORM` (Twitter, Instagram, Facebook, TikTok, Trustpilot, Google included). Verified live: `player_two` (TikTok linked only) gets `400 "You must link your Twitter account…"` on TWITTER_RETWEET/TWITTER_FOLLOW/INSTAGRAM_FOLLOW, while TIKTOK_FOLLOW assigns `201`. The web gate (`OAUTH_REQUIRED_PLATFORMS` = YouTube/Twitch/Spotify) disagrees with the server, so manual-proof tasks show "Accept task" then fail.
-- **Real API verification exists for only 4 task types** (`verifyPlatformAction` switch): YOUTUBE_SUBSCRIBE, YOUTUBE_LIKE (both disabled platform-wide), TWITCH_FOLLOW, SPOTIFY_FOLLOW. Everything else already falls back to `campaign.autoVerify`/manual review at submit time — linking is not a verification dependency for manual tasks.
+- **Real API verification exists for only 4 task types** (`verifyPlatformAction` switch): YOUTUBE_SUBSCRIBE, YOUTUBE_LIKE (both disabled platform-wide), TWITCH_FOLLOW, SPOTIFY_FOLLOW. Everything else already falls back to `campaign.autoVerify`/manual review at submit time - linking is not a verification dependency for manual tasks.
 - **Top up has no discoverable label.** Wallet page tabs are "Transaction History" / "Deposit Credits"; sidebar says "Wallet"; dashboard Credits card is not a link. No "Top up" wording anywhere.
 - **Landing page has no supported-platforms section.** `platform-icon.tsx` already ships local inline SVGs for all 11 `SocialPlatform` values; `enabledPlatforms` config currently lists all 11.
 
 ## 1. Manageable task discovery
 
-**Status — partially delivered, verification and refinement required.**
+**Status - partially delivered, verification and refinement required.**
 
 The reported release provides a responsive three-column desktop task grid. Jomar wants a manageable choice of two or three tasks and a clear platform selector.
 
@@ -49,7 +49,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 2. Hide self-owned work and simplify acceptance
 
-**Status — accepted-task panel reported live, further changes required.**
+**Status - accepted-task panel reported live, further changes required.**
 
 - Verify that discovery excludes the viewer's own campaigns and v1 challenge listings at the API level. Creator management views must still provide access to their work.
 - Provide a clearly labeled Accept & open [platform] interaction. The external destination opens after successful assignment, with Engganyo available for proof submission.
@@ -60,7 +60,7 @@ The reported release provides a responsive three-column desktop task grid. Jomar
 
 ## 3. Optional account linking for manual tasks
 
-**Status — open.**
+**Status - open.**
 
 Jomar wants beginners to complete manually reviewed tasks using their chosen social account, including switching between their own social accounts.
 
@@ -73,7 +73,7 @@ Jomar wants beginners to complete manually reviewed tasks using their chosen soc
 
 ## 4. User-to-user credit marketplace
 
-**Status — proposal required.**
+**Status - proposal required.**
 
 Jomar describes listings where users buy credits from other users and receive the purchased credits immediately.
 
@@ -84,7 +84,7 @@ Jomar describes listings where users buy credits from other users and receive th
 
 ## 5. Discoverable Top up
 
-**Status — existing payment flow reported live, discoverability improvement open.**
+**Status - existing payment flow reported live, discoverability improvement open.**
 
 - Inspect Wallet → Deposit Credits and add a clear Top up entry point or label where users look for it.
 - Reuse the existing deposit flow and display the actual enabled payment options, charge currency, minimums, and server-calculated amount.
@@ -94,7 +94,7 @@ Jomar describes listings where users buy credits from other users and receive th
 
 ## 6. Distinct and usable visual design
 
-**Status — earlier redesign shipped, further refinement requested.**
+**Status - earlier redesign shipped, further refinement requested.**
 
 Jomar still finds the presentation generic. Review layout and interactions alongside color and typography.
 
@@ -106,7 +106,7 @@ Jomar still finds the presentation generic. Review layout and interactions along
 
 ## 7. Fewer avoidable prerequisites
 
-**Status — onboarding audit required.**
+**Status - onboarding audit required.**
 
 - Trace signup → discovery → acceptance → task opening → proof → review tracking.
 - List each blocking prerequisite, its purpose, and whether it is necessary for that action.
@@ -116,7 +116,7 @@ Jomar still finds the presentation generic. Review layout and interactions along
 
 ## 8. Paid Discover ads
 
-**Status — proposal required.**
+**Status - proposal required.**
 
 Jomar wants an affordable feed of user-submitted ads, paid directly with money, with visible per-ad views and content moderation.
 
@@ -127,7 +127,7 @@ Jomar wants an affordable feed of user-submitted ads, paid directly with money, 
 
 ## 9. Supported-platform logos on the landing page
 
-**Status — new owner request, ready for design and implementation.**
+**Status - new owner request, ready for design and implementation.**
 
 Add a graceful, visually balanced platform section so visitors immediately understand which social platforms Engganyo supports. Include Facebook, TikTok, Telegram, and X, and inspect the configured supported platforms for other eligible entries such as YouTube and Instagram.
 

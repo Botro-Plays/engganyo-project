@@ -7,7 +7,7 @@ import './globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('https://engganyo.com'),
   title: {
-    default: 'Engganyo — Small Taps. Big Crowds.',
+    default: 'Engganyo | Small Taps. Big Crowds.',
     template: '%s | Engganyo',
   },
   description:
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://engganyo.com',
     siteName: 'Engganyo',
-    title: 'Engganyo — Small Taps. Big Crowds.',
+    title: 'Engganyo | Small Taps. Big Crowds.',
     description: 'Grow your social presence through real human engagement.',
     images: [
       {
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Engganyo — Small Taps. Big Crowds.',
+    title: 'Engganyo | Small Taps. Big Crowds.',
     description: 'Grow your social presence through real human engagement.',
     images: ['https://engganyo.com/brand/social-1200x630.png'],
   },

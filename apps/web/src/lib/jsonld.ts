@@ -3,7 +3,7 @@ const BASE = 'https://engganyo.com';
 /**
  * Server-rendered JSON-LD for the public inner pages. Each graph links
  * into the homepage ids (#website, #organization) emitted in
- * `app/page.tsx` — keep those ids stable.
+ * `app/page.tsx`. Keep those ids stable.
  */
 export function innerPageJsonLd(opts: {
   type: 'AboutPage' | 'ContactPage' | 'FAQPage' | 'WebPage';

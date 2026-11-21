@@ -84,7 +84,7 @@ export class EmailService {
     this.logger.debug(`Queued announcement → ${to}`);
   }
 
-  /** Send announcement directly (not via queue) — used for test sends to get immediate feedback */
+  /** Send announcement directly (not via queue). Used for test sends to get immediate feedback */
   async sendAnnouncementEmailDirect(
     to: string,
     data: {

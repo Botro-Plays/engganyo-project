@@ -179,7 +179,7 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Through our <Link href="/contact" className="text-brand-400 hover:underline">contact page</Link></li>
-              <li>By email at: privacy@engganyo.com</li>
+              <li>By email at: <address className="not-italic inline">contact@engganyo.com</address></li>
             </ul>
           </section>
         </div>

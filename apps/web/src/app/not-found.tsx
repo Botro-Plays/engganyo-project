@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
+// Next renders one robots noindex meta for 404 pages automatically.
+// Declaring robots here too would emit a duplicate tag.
 export const metadata: Metadata = {
   title: 'Page Not Found',
   description: 'The page you are looking for does not exist.',
-  robots: { index: false, follow: false },
 };
 
 export default function NotFound() {

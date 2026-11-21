@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { PageTitle } from '@/components/page-title';
 import {
   LayoutDashboard,
   ListTodo,
@@ -301,6 +302,28 @@ interface WalletData {
   updatedAt: string;
 }
 
+const PAGE_TITLES: [string, string][] = [
+  ['/dashboard', 'Dashboard'],
+  ['/discover', 'Discover'],
+  ['/tasks', 'Tasks'],
+  ['/campaigns', 'Campaigns'],
+  ['/wallet', 'Wallet'],
+  ['/marketplace', 'Marketplace'],
+  ['/chat', 'Chat'],
+  ['/rooms', 'P2P Rooms'],
+  ['/search', 'Search'],
+  ['/forum', 'Forum'],
+  ['/leaderboard', 'Leaderboard'],
+  ['/missions', 'Missions'],
+  ['/achievements', 'Achievements'],
+  ['/store', 'Store'],
+  ['/profile', 'Profile'],
+  ['/users', 'Profile'],
+  ['/referrals', 'Referrals'],
+  ['/notifications', 'Notifications'],
+  ['/settings', 'Settings'],
+];
+
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthStore();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -372,6 +395,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthGuard>
+      <PageTitle rules={PAGE_TITLES} />
       <AuthenticatedProviders>
         <div className="min-h-screen bg-sc flex" data-tour-scope>
           {/* ── Desktop sidebar ───────────────────────────────── */}
