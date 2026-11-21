@@ -584,8 +584,11 @@ test.describe('tour state hardening', () => {
 
   test('two tabs share one drain — no double send, no lost writes', async ({ page, context }) => {
     await settleOnDashboard(page);
-    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
-    await page.route('**/api/gamification/tours/pending', (r) =>
+    // Routes are registered at CONTEXT level: page.route would only
+    // intercept tab 1, leaving tab 2's sends unmocked and the counters
+    // unable to attribute a genuine duplicate.
+    await context.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
+    await context.route('**/api/gamification/tours/pending', (r) =>
       r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
     );
 
@@ -593,14 +596,14 @@ test.describe('tour state hardening', () => {
     let completeCalls = 0;
     const gateHolder: { fn?: () => void } = {};
     const gate = new Promise<void>((r) => (gateHolder.fn = r));
-    await page.route('**/api/gamification/tours/beginner/dismiss', async (r) => {
+    await context.route('**/api/gamification/tours/beginner/dismiss', async (r) => {
       dismissCalls += 1;
       const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
       await gate; // keep tab 1's request in flight while tab 2 tries
       if (body?.expectedGeneration !== 0) return r.fulfill(fulfill(409, { success: false }));
       return r.fulfill(apiOk({ dismissed: true }));
     });
-    await page.route('**/api/gamification/tours/beginner/complete', (r) => {
+    await context.route('**/api/gamification/tours/beginner/complete', (r) => {
       completeCalls += 1;
       const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
       if (body?.expectedGeneration !== 0) return r.fulfill(fulfill(409, { success: false }));
