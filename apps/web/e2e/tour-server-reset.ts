@@ -16,6 +16,11 @@ export async function resetServerTourState(page: Page, autoTours: boolean): Prom
         .map((e) => e.name)
         .find((n) => n.includes('/api/'))
         ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
+    // One resetId per cleanup INVOCATION (shared across its retries):
+    // the server's idempotent-replay path would otherwise treat a new
+    // cleanup as a retry of the previous one and return success
+    // WITHOUT deleting — leaving stale tour state behind.
+    const resetNonce = `e2e-cleanup-${Date.now()}`;
     for (let attempt = 0; attempt < 20; attempt++) {
       const token = localStorage.getItem('access_token');
       if (!token) break;
@@ -45,7 +50,7 @@ export async function resetServerTourState(page: Page, autoTours: boolean): Prom
           body: JSON.stringify({
             expectedGeneration: gen,
             expectedTerminalUpdatedAt: term ?? null,
-            resetId: `e2e-cleanup-${attempt}`,
+            resetId: resetNonce,
           }),
         });
         const patch = await fetch(`${apiBase}/gamification/tours/preferences`, {
