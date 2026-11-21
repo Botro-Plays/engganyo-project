@@ -222,7 +222,7 @@ export class ToursService {
       }),
       this.prisma.tourGeneration.findMany({
         where: { userId },
-        select: { tourKey: true, generation: true },
+        select: { tourKey: true, generation: true, lastResetId: true },
       }),
     ]);
     if (!user) throw new NotFoundException('User not found');
@@ -256,6 +256,16 @@ export class ToursService {
         [BEGINNER_TOUR_KEY, ...MILESTONE_TOURS.map((t) => t.key)].map((k) => [
           k,
           gens.find((g) => g.tourKey === k)?.generation ?? 0,
+        ]),
+      ),
+      // Identity of the reset that produced each generation — lets a
+      // client recover an orphaned replay group's acknowledged
+      // generation by reset identity instead of borrowing the current
+      // generation (which could belong to a NEWER replay's reset).
+      lastResetIds: Object.fromEntries(
+        [BEGINNER_TOUR_KEY, ...MILESTONE_TOURS.map((t) => t.key)].map((k) => [
+          k,
+          gens.find((g) => g.tourKey === k)?.lastResetId ?? null,
         ]),
       ),
     };

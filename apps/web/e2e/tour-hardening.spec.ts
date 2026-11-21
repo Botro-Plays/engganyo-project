@@ -509,10 +509,18 @@ test.describe('tour state hardening', () => {
       r.fulfill(apiOk({ interval: 5, version: 1, autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerSeenVersion: 2, tours: [] })),
     );
     await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(freshTerminal)));
+    const deleteBodies: ({ expectedTerminalUpdatedAt?: string | null } | null)[] = [];
     await page.route('**/api/gamification/tours/beginner/state', (r) => {
       if (r.request().method() === 'DELETE') {
         deleteCalls += 1;
-        return r.fulfill(apiOk({ reset: true }));
+        // The SERVER enforces the fence: an expectation anchored before
+        // the newer completion (null when the terminal is newer than the
+        // reset's request time) conflicts instead of erasing it.
+        const body = r.request().postDataJSON() as {
+          expectedTerminalUpdatedAt?: string | null;
+        } | null;
+        deleteBodies.push(body);
+        return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
       }
       return r.fallback();
     });
@@ -529,9 +537,12 @@ test.describe('tour state hardening', () => {
     await replayBtn.click();
     await page.waitForTimeout(4000);
 
-    // The stale reset must NOT erase the newer server-side completion —
-    // DELETE is never sent and the replay group is vetoed.
-    expect(deleteCalls).toBe(0);
+    // The stale reset must NOT erase the newer server-side completion:
+    // the DELETE is sent once with an expectation anchored to the
+    // reset's request time (null — the terminal is newer), the server
+    // refuses it with 409, and the whole replay group drops with it.
+    expect(deleteCalls).toBe(1);
+    expect(deleteBodies[0]?.expectedTerminalUpdatedAt ?? null).toBeNull();
     expect(progressCalls).toBe(0);
   });
 
@@ -842,11 +853,264 @@ test.describe('tour state hardening', () => {
     await expect(page).toHaveURL(/\/dashboard$/, SLOW);
     await expect(tourDialog(page)).toHaveCount(0);
 
-    await page.waitForTimeout(2500); // queued writes drain to the server
-
-    const after = await readState();
+    // Wait for the queued writes to drain rather than a fixed delay —
+    // group ops recover their generation through an extra state fetch,
+    // which can outlast a short sleep on a loaded runner.
+    let after = await readState();
+    await expect
+      .poll(async () => {
+        after = await readState();
+        return (after?.completions ?? []).find((c) => c.tourKey === 'beginner')?.status;
+      }, { timeout: 20_000 })
+      .toBe('COMPLETED');
     expect(after?.generations?.['beginner']).toBeGreaterThan(gen0);
-    const row = (after?.completions ?? []).find((c) => c.tourKey === 'beginner');
-    expect(row?.status).toBe('COMPLETED');
+  });
+
+  test('a surviving R1-group write is fenced after another device\'s R2 reset', async ({ page }) => {
+    await settleOnDashboard(page);
+    // Server state AFTER R1 (gen 1) AND another device's R2 (gen 2, which
+    // completed a fresh tour): the R1 group's generation is 1 forever.
+    const progressBodies: { expectedGeneration?: number }[] = [];
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: false,
+          beginner: { status: 'COMPLETED', step: 10 },
+          beginnerTerminal: null,
+          completions: [{ tourKey: 'beginner', version: 2, status: 'COMPLETED', step: 10, updatedAt: new Date().toISOString() }],
+          generations: { beginner: 2 },
+          lastResetIds: { beginner: 'r2-other-device' },
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
+      if (body) progressBodies.push(body);
+      if (body?.expectedGeneration !== 2) return r.fulfill(fulfill(409, { success: false }));
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    // The R1-group write as the drain left it durably stamped after R1's
+    // ack — resetAckedGen is the binding that must survive the reload.
+    await page.evaluate(() => {
+      const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+        state?: { user?: { id?: string } };
+      };
+      const uid = auth.state?.user?.id;
+      if (!uid) throw new Error('no user id');
+      localStorage.removeItem(`engganyo-tour-v1-${uid}`);
+      localStorage.setItem(
+        `engganyo-tour-writes-${uid}-p1`,
+        JSON.stringify({ op: 'progress', key: 'beginner', version: 2, step: 3, epoch: 1, ts: 1000, seq: 1, id: 'p1', gen: 0, afterReset: 'r1', resetAckedGen: 1 }),
+      );
+    });
+
+    await page.reload();
+    await page.waitForTimeout(3500); // drain runs
+
+    // The write retried at ITS OWN reset's generation (1) — never the
+    // current 2 — so R2's server state could not be modified by it.
+    expect(progressBodies.length).toBe(1);
+    expect(progressBodies[0]?.expectedGeneration).toBe(1);
+    const remaining = await page.evaluate(() =>
+      Object.keys(localStorage).filter((k) => k.includes('-p1')),
+    );
+    expect(remaining).toHaveLength(0); // 409 → dropped, not resurrected
+  });
+
+  test('an unstamped group op recovers via reset identity or drops — never borrows the current generation', async ({
+    page,
+  }) => {
+    await settleOnDashboard(page);
+    // Only reset R2's identity is on the server now; R1 never committed
+    // (or was superseded). generations says 2 — an unrelated current gen.
+    const progressBodies: { expectedGeneration?: number }[] = [];
+    // Stateful mock: reflect the landed progress row so post-drain
+    // hydrates see a real server row (a permanently-null mock loops the
+    // local→server migration enqueue forever).
+    let serverStep: number | null = null;
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: false,
+          beginner: serverStep === null ? null : { status: 'IN_PROGRESS', step: serverStep },
+          beginnerTerminal: null,
+          completions:
+            serverStep === null
+              ? []
+              : [{ tourKey: 'beginner', version: 2, status: 'IN_PROGRESS', step: serverStep, updatedAt: new Date().toISOString() }],
+          generations: { beginner: 2 },
+          lastResetIds: { beginner: 'r2-device-b' },
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      const body = r.request().postDataJSON() as { expectedGeneration?: number; step?: number } | null;
+      if (body) progressBodies.push(body);
+      if (body?.expectedGeneration !== 2) return r.fulfill(fulfill(409, { success: false }));
+      serverStep = body?.step ?? 0;
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    let completeCalls = 0;
+    await page.route('**/api/gamification/tours/beginner/complete', (r) => {
+      completeCalls += 1;
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    await page.evaluate(() => {
+      const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+        state?: { user?: { id?: string } };
+      };
+      const uid = auth.state?.user?.id;
+      if (!uid) throw new Error('no user id');
+      // No local tour state — the hydrate migration path must not add
+      // ops of its own.
+      localStorage.removeItem(`engganyo-tour-v1-${uid}`);
+      const put = (id: string, op: object) =>
+        localStorage.setItem(`engganyo-tour-writes-${uid}-${id}`, JSON.stringify(op));
+      // Orphaned: its reset is not the server's lastResetId → drop before
+      // any send (complete, not progress — progress ops would be
+      // compacted away by the later write first).
+      put('p-stale', { op: 'complete', key: 'beginner', version: 2, epoch: 1, ts: 1000, seq: 1, id: 'p-stale', gen: 0, afterReset: 'r1' });
+      // Recoverable: bound to the reset the server still reports → its
+      // generation is legitimately recoverable through reset identity.
+      put('p-live', { op: 'progress', key: 'beginner', version: 2, step: 4, epoch: 1, ts: 1001, seq: 2, id: 'p-live', gen: 0, afterReset: 'r2-device-b' });
+    });
+
+    await page.reload();
+    await page.waitForTimeout(3500);
+
+    // Exactly one send — the recoverable op stamped with gen 2 through its
+    // reset's identity. The orphan dropped without ever borrowing gen 2.
+    expect(progressBodies.length).toBe(1);
+    expect(progressBodies[0]?.expectedGeneration).toBe(2);
+    expect(completeCalls).toBe(0);
+  });
+
+  test('a committed reset with a lost response is re-acknowledged idempotently past newer completion state', async ({
+    page,
+  }) => {
+    await settleOnDashboard(page);
+    // Mock the REAL server contract: idempotent resetId replay is checked
+    // before terminal/generation fencing and never re-deletes.
+    let gen = 0;
+    let lastResetId: string | null = null;
+    let respondNow = false; // flips once the newer completion is injected
+    const t1 = Date.now() - 60_000;
+    const rows: { tourKey: string; status: string; updatedAt: string }[] = [
+      { tourKey: 'beginner', status: 'COMPLETED', updatedAt: new Date(t1).toISOString() },
+    ];
+    const deleteOrder: string[] = [];
+    const progressGens: (number | undefined)[] = [];
+    const stateBody = () =>
+      apiOk({
+        autoTours: false,
+        beginner: rows.find((x) => x.tourKey === 'beginner') ? { status: 'COMPLETED', step: 10 } : null,
+        beginnerTerminal: null,
+        completions: rows.map((x) => ({ tourKey: x.tourKey, version: 2, status: x.status, step: 10, updatedAt: x.updatedAt })),
+        generations: { beginner: gen },
+        lastResetIds: { beginner: lastResetId },
+      });
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(stateBody()));
+    await page.route('**/api/gamification/tours/beginner/state', (r) => {
+      if (r.request().method() !== 'DELETE') return r.fallback();
+      const body = r.request().postDataJSON() as {
+        expectedGeneration?: number;
+        expectedTerminalUpdatedAt?: string | null;
+        resetId?: string;
+      } | null;
+      // Idempotent replay FIRST — a committed resetId is an ack, not a
+      // re-delete, no matter what newer terminal state exists. Until
+      // respondNow, every attempt is aborted (the lost response), which
+      // includes the apiClient's own internal retries.
+      if (body?.resetId && body.resetId === lastResetId) {
+        if (!respondNow) {
+          deleteOrder.push('delete-aborted-retry');
+          return r.abort();
+        }
+        deleteOrder.push('delete-idempotent');
+        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 0, generation: gen, idempotent: true }));
+      }
+      const latest = rows.filter((x) => x.status !== 'IN_PROGRESS').reduce(
+        (m, x) => Math.max(m, Date.parse(x.updatedAt)),
+        0,
+      );
+      const expectedMs =
+        body?.expectedTerminalUpdatedAt === null || body?.expectedTerminalUpdatedAt === undefined
+          ? null
+          : Date.parse(body.expectedTerminalUpdatedAt);
+      if (body?.expectedGeneration !== gen || (latest > 0 && (expectedMs === null || latest > expectedMs))) {
+        deleteOrder.push('delete-409');
+        return r.fulfill(fulfill(409, { success: false }));
+      }
+      // The reset COMMITS but its response is lost — and stays lost for
+      // every retry until the test injects newer completion state.
+      rows.length = 0;
+      gen += 1;
+      lastResetId = body?.resetId ?? null;
+      deleteOrder.push('delete-commit-then-lost');
+      return r.abort();
+    });
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
+      progressGens.push(body?.expectedGeneration);
+      if (body?.expectedGeneration !== gen) return r.fulfill(fulfill(409, { success: false }));
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    // R1 reset + its replay-group progress op, queued together.
+    await page.evaluate(() => {
+      const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+        state?: { user?: { id?: string } };
+      };
+      const uid = auth.state?.user?.id;
+      if (!uid) throw new Error('no user id');
+      localStorage.removeItem(`engganyo-tour-v1-${uid}`);
+      const put = (id: string, op: object) =>
+        localStorage.setItem(`engganyo-tour-writes-${uid}-${id}`, JSON.stringify(op));
+      // ts must be realistic: the reset's terminal expectation anchors
+      // to its request time, so an ancient ts would look stale-by-design.
+      put('r1', { op: 'reset', key: 'beginner', epoch: 1, ts: Date.now(), seq: 1, id: 'r1', gen: 0 });
+      put('p1', { op: 'progress', key: 'beginner', version: 2, step: 3, epoch: 1, ts: Date.now() + 1, seq: 2, id: 'p1', gen: 0, afterReset: 'r1' });
+    });
+
+    // Drain 1: the reset commits server-side but the response is lost —
+    // every attempt (internal retries included) aborts while the client
+    // sees only failure. Under the old timestamp veto, a retried reset
+    // would be dropped once terminal state moved past the client's view.
+    await page.reload();
+    await expect
+      .poll(() => deleteOrder.length >= 1 && deleteOrder[0] === 'delete-commit-then-lost', {
+        timeout: 20_000,
+      })
+      .toBe(true);
+
+    // Meanwhile another device completes the tour inside R1's replay —
+    // terminal state is now NEWER than anything the client saw.
+    rows.push({ tourKey: 'beginner', status: 'COMPLETED', updatedAt: new Date().toISOString() });
+    respondNow = true;
+
+    // The retry must be recognized as R1's idempotent ack — NOT vetoed
+    // by the newer terminal state and NOT re-deleting it.
+    await expect
+      .poll(() => deleteOrder.includes('delete-idempotent'), { timeout: 35_000 })
+      .toBe(true);
+
+    // The group op then sends under R1's acknowledged generation.
+    await expect
+      .poll(() => progressGens.length, { timeout: 15_000 })
+      .toBe(1);
+    expect(progressGens[0]).toBe(1);
+    // The newer completion was NEVER deleted.
+    expect(rows.length).toBe(1);
   });
 });

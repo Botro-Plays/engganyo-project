@@ -198,8 +198,8 @@ function writeUserTour(state: PersistedTourState): void {
 // case of an owner tab reviving a just-deleted key).
 
 type PendingOp =
-  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string }
-  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string }
+  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string; resetAckedGen?: number }
+  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string; resetAckedGen?: number }
   | { op: 'reset'; key: string; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; expectedTerminalUpdatedAt?: string | null; afterReset?: string };
 
 let opSeq = 0;
@@ -317,6 +317,7 @@ interface ServerTourState {
   beginnerTerminal?: ServerBeginnerTerminal | null;
   completions?: { tourKey: string; version: number; status: string; step: number; updatedAt?: string }[];
   generations?: Record<string, number>;
+  lastResetIds?: Record<string, string | null>;
 }
 
 interface DerivedBeginner {
@@ -724,7 +725,12 @@ export const useTourStore = create<TourState>()((set, get) => {
   const fetchTerminalUpdatedAt = async (
     userId: string,
     epoch: number,
-  ): Promise<{ map: Map<string, number>; skewMs: number; gens: Map<string, number> } | null> => {
+  ): Promise<{
+    map: Map<string, number>;
+    skewMs: number;
+    gens: Map<string, number>;
+    resetIds: Map<string, string | null>;
+  } | null> => {
     try {
       const res = await apiClient.get<{ data?: ServerTourState }>('gamification/tours/state', {
         optionalAuth: true,
@@ -734,6 +740,11 @@ export const useTourStore = create<TourState>()((set, get) => {
       const gd = res.data?.data?.generations;
       if (gd && typeof gd === 'object') {
         for (const [k, v] of Object.entries(gd)) if (typeof v === 'number') gens.set(k, v);
+      }
+      const resetIds = new Map<string, string | null>();
+      const rd = res.data?.data?.lastResetIds;
+      if (rd && typeof rd === 'object') {
+        for (const [k, v] of Object.entries(rd)) resetIds.set(k, typeof v === 'string' ? v : null);
       }
       const rows = res.data?.data?.completions ?? [];
       const map = new Map<string, number>();
@@ -745,7 +756,7 @@ export const useTourStore = create<TourState>()((set, get) => {
       const dateHeader = res.headers?.date ?? res.headers?.Date;
       const serverMs = dateHeader ? Date.parse(String(dateHeader)) : NaN;
       const skewMs = Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
-      return { map, skewMs, gens };
+      return { map, skewMs, gens, resetIds };
     } catch {
       return null;
     }
@@ -816,9 +827,14 @@ export const useTourStore = create<TourState>()((set, get) => {
           // group ops (afterReset) can be stamped or dropped explicitly.
           const ackedResets = new Set<string>();
           const droppedResets = new Set<string>();
-          const VETO_SKEW_TOLERANCE_MS = 5_000;
+          const RESET_ANCHOR_TOLERANCE_MS = 5_000;
           let terminalInfo:
-            | { map: Map<string, number>; skewMs: number; gens: Map<string, number> }
+            | {
+                map: Map<string, number>;
+                skewMs: number;
+                gens: Map<string, number>;
+                resetIds: Map<string, string | null>;
+              }
             | null
             | undefined;
           let blockedByFailure = false;
@@ -850,19 +866,29 @@ export const useTourStore = create<TourState>()((set, get) => {
               if (op.id) doneIds.add(op.id);
               continue;
             }
-            // Replay-group member: the reset that gates it either acked
-            // (stamp the post-reset generation — the write belongs to the
-            // new replay by construction), dropped (drop with the group),
-            // or was processed outside this drain (fetch the current
-            // authoritative generation before sending).
-            if (op.afterReset) {
+            // Replay-group member: the write is gated by ITS reset's
+            // acknowledged generation — durably recorded (resetAckedGen)
+            // once known, so a surviving op can never be re-stamped with
+            // a newer replay's generation.
+            //  - acked in this drain → stamp the reset's returned gen.
+            //  - reset dropped → drop with the group.
+            //  - reset processed outside this drain → recover by reset
+            //    IDENTITY: only when the server reports this resetId as
+            //    the key's lastResetId is its generation ours to stamp.
+            //    Any other outcome (a newer reset superseded it, or it
+            //    never committed) leaves no legitimate generation → drop.
+            if (op.op !== 'reset' && op.afterReset) {
               if (droppedResets.has(op.afterReset)) {
                 recordOutcome(op.id, 'drop');
                 if (op.id) doneIds.add(op.id);
                 continue;
               }
-              if (ackedResets.has(op.afterReset)) {
+              if (op.resetAckedGen !== undefined) {
+                op.gen = op.resetAckedGen;
+              } else if (ackedResets.has(op.afterReset)) {
                 op.gen = keyGens.get(genKey(userId, op.key));
+                op.resetAckedGen = op.gen;
+                if (op.id) putOp(userId, op); // durable group↔gen binding
               } else {
                 if (terminalInfo === undefined) {
                   terminalInfo = await fetchTerminalUpdatedAt(userId, drainEpoch);
@@ -872,7 +898,19 @@ export const useTourStore = create<TourState>()((set, get) => {
                   blockedByFailure = true;
                   break;
                 }
-                op.gen = terminalInfo.gens.get(op.key) ?? 0;
+                if (terminalInfo.resetIds.get(op.key) === op.afterReset) {
+                  // Our reset committed and is still the latest one —
+                  // the reported generation IS its acknowledged gen.
+                  op.gen = terminalInfo.gens.get(op.key) ?? 0;
+                  op.resetAckedGen = op.gen;
+                  if (op.id) putOp(userId, op);
+                } else {
+                  // Superseded by a newer reset or never committed:
+                  // no generation legitimately gates this write.
+                  recordOutcome(op.id, 'drop');
+                  if (op.id) doneIds.add(op.id);
+                  continue;
+                }
               }
             }
             let result: 'ok' | ClassifiedFailure;
@@ -881,19 +919,26 @@ export const useTourStore = create<TourState>()((set, get) => {
               if (terminalInfo === null) {
                 result = { kind: 'retry' };
               } else {
-                const t = terminalInfo.map.get(op.key);
-                if (t !== undefined && t > op.ts + terminalInfo.skewMs + VETO_SKEW_TOLERANCE_MS) {
-                  vetoed.set(op.key, op.epoch);
-                  recentVetoes.set(op.key, Date.now());
-                  result = { kind: 'drop' };
-                } else {
-                  // Carry the observed newest-terminal timestamp into the
-                  // DELETE: a completion committing between this lookup
-                  // and the server's delete is fenced atomically → 409.
+                // Anchor the terminal expectation to WHEN THE RESET WAS
+                // REQUESTED (op.ts), computed once and persisted — the
+                // server's atomic check then enforces the stale-reset
+                // veto transactionally:
+                //  - terminal state newer than the request → expectation
+                //    is null → the server 409s instead of erasing it;
+                //  - an already-committed resetId (lost response) is
+                //    acknowledged idempotently BEFORE that check, so
+                //    recovery never re-deletes newer state either;
+                //  - a completion landing between this lookup and the
+                //    delete is fenced the same way.
+                if (op.expectedTerminalUpdatedAt === undefined) {
+                  const t = terminalInfo.map.get(op.key);
                   op.expectedTerminalUpdatedAt =
-                    t !== undefined ? new Date(t).toISOString() : null;
-                  result = await sendOp(userId, op, drainEpoch);
+                    t !== undefined && t <= op.ts + terminalInfo.skewMs + RESET_ANCHOR_TOLERANCE_MS
+                      ? new Date(t).toISOString()
+                      : null;
+                  putOp(userId, op); // one expectation for all retries
                 }
+                result = await sendOp(userId, op, drainEpoch);
               }
             } else {
               result = await sendOp(userId, op, drainEpoch);
