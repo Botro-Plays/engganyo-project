@@ -36,13 +36,15 @@ promise of rich-result eligibility; Google decides display.
 | SEO round-2: factual copy, shared chrome, inner-page JSON-LD/og, custom 404, honest lastmod, www→apex 301 | PR #120 → `eed9a70`, deploy `44886461224`; live: www 301 path-preserving, AboutPage/FAQPage schema, single 404 title, "cannot be withdrawn" copy |
 | Hero Telegram CTA filled gold + navy | PR #122 → `3e7e798`, deploy `44887262394`; live `bg-accent-500` verified in served HTML |
 | `421fce7` docs deploy | deploy `44890127700` success |
-| Reset request-time server snapshot (`expectedTerminalUpdatedAt` bound at enqueue; stale resets fail closed; deterministic completion-after-request regression) | PR #119 → `d9b6bff`, CI run `44884535004` all green |
+| Reset request-time server snapshot (`expectedTerminalUpdatedAt` bound at enqueue; stale resets fail closed; deterministic completion-after-request regression) | PR #119 → `d9b6bff`; own deploy run `44885676972` failed on SSH transport (not code), content shipped by next main deploy `44886461224` (`eed9a70`) |
+| Chat widget safe placement (mobile sheet, clamped desktop dock, position recovery, nav clearance, z under dialogs/consent) | PR #121 → `ecf7b87`, deploy `44891413716` success |
+| Reset-failure session fencing (captured account+epoch gate on every snapshot-path state update; stale snapshot can't clear another session's replay UI) + `__engganyoTourStore` e2e seam | PR #123 → `87458ca`, deploy `44897692076` success; live site 200, tour endpoints 401 |
 
 ## CI-tested (merged, deploy pending/in-flight)
 
 | Item | Status |
 |------|--------|
-| `ecf7b87` (PR #121 chat widget) | CI `44890111639` fully green; main deploy run in flight |
+| Chat keyboard/viewport acceptance (visualViewport inset, `resizes-content` meta, focus return to launcher, page-scroll stability, covered-nav z-60 at short heights) | PR #124 → `0c90b09`, CI green `44896998077`; deploy `44898276456` in flight |
 
 ## Awaiting owner decision
 
