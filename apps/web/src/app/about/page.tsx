@@ -6,7 +6,7 @@ import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'Learn about Engganyo — a creator engagement exchange where members complete social tasks for each other, earn credits, and grow their own audiences.',
+    'Learn about Engganyo, a creator engagement exchange where members complete social tasks for each other, earn credits, and grow their own audiences.',
   alternates: { canonical: 'https://engganyo.com/about' },
   robots: { index: true, follow: true },
   openGraph: {
@@ -45,7 +45,7 @@ export default function AboutPage() {
             <h2 className="text-xl font-semibold text-white mb-4">What Engganyo is</h2>
             <p className="text-zinc-300 leading-relaxed">
               Engganyo is a web platform where creators help each other grow. You complete small
-              tasks for other creators — such as following an account or joining a channel — and
+              tasks for other creators, such as following an account or joining a channel, and
               you earn credits once the campaign owner approves your proof. You can then spend
               your credits on campaigns for your own accounts.
             </p>
@@ -59,7 +59,7 @@ export default function AboutPage() {
                 <div>
                   <h3 className="text-white font-medium mb-1">Browse open tasks</h3>
                   <p className="text-zinc-300 text-sm">
-                    See open tasks across TikTok, Instagram, Telegram, Discord, and more — each
+                    See open tasks across TikTok, Instagram, Telegram, Discord, and more, each
                     shows the reward, the platform, and exactly what proof is needed.
                   </p>
                 </div>
@@ -70,7 +70,7 @@ export default function AboutPage() {
                   <h3 className="text-white font-medium mb-1">Complete the task</h3>
                   <p className="text-zinc-300 text-sm">
                     Do the action on that platform and submit your proof. Most tasks are reviewed
-                    by the campaign owner; some — like Twitch and Spotify follows — verify
+                    by the campaign owner; some, like Twitch and Spotify follows, verify
                     automatically through a linked account.
                   </p>
                 </div>
@@ -81,7 +81,7 @@ export default function AboutPage() {
                   <h3 className="text-white font-medium mb-1">Earn and spend credits</h3>
                   <p className="text-zinc-300 text-sm">
                     Approved completions add credits to your wallet. Spend them on campaigns for
-                    your own accounts — or buy more credits from your wallet if you want to scale
+                    your own accounts, or buy more credits from your wallet if you want to scale
                     faster.
                   </p>
                 </div>
@@ -98,7 +98,7 @@ export default function AboutPage() {
             <ul className="space-y-2 text-zinc-300 text-sm">
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Real member engagement — no bots or fake accounts</span>
+                <span>Real member engagement, reviewed before credits move</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
@@ -118,7 +118,7 @@ export default function AboutPage() {
           <section className="card-glass rounded-xl p-6">
             <h2 className="text-xl font-semibold text-white mb-4">For members</h2>
             <p className="text-zinc-300 leading-relaxed mb-4">
-              Every member starts with 200 free credits — no card is needed.
+              Every member starts with 200 free credits. No card is needed.
             </p>
             <ul className="space-y-2 text-zinc-300 text-sm">
               <li className="flex items-start gap-2">
@@ -176,9 +176,11 @@ export default function AboutPage() {
             <h2 className="text-xl font-semibold text-white mb-4">Questions?</h2>
             <p className="text-zinc-300 leading-relaxed">
               Write to{' '}
-              <a href="mailto:support@engganyo.com" className="text-brand-400 hover:underline">
-                support@engganyo.com
-              </a>{' '}
+              <address className="not-italic inline">
+                <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                contact@engganyo.com
+              </a>
+              </address>{' '}
               or join our community on{' '}
               <a
                 href="https://t.me/Engganyo"

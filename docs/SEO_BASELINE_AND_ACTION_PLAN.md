@@ -1,4 +1,4 @@
-# SEO Baseline & Action Plan — engganyo.com
+# SEO Baseline & Action Plan - engganyo.com
 
 ## 2026-11-21 round-2 reconciliation (handoff `Engganyo-SEO-Full-Handoff-2026-11-21.pdf`)
 
@@ -6,23 +6,23 @@ Fresh verification against deployed `023978b` / live site on 2026-11-21:
 
 **Confirmed facts used for copy corrections** (verified in source, not
 copied from the handoff):
-- Creator↔creator exchange — **no brands exist anywhere in the product**
+- Creator↔creator exchange - **no brands exist anywhere in the product**
   (no brand entity, no brand onboarding, no business@ mailbox in code).
-- Credits **cannot** be withdrawn — no withdrawal endpoint or UI exists.
+- Credits **cannot** be withdrawn - no withdrawal endpoint or UI exists.
   Deposits DO exist (PayMongo PHP, PayPal USD, USDT BEP-20/Base →
-  `creditsToAward`) — copy says "you can buy credits", nothing more.
+  `creditsToAward`) - copy says "you can buy credits", nothing more.
 - Welcome bonus: **200 credits** (`WELCOME_CREDITS = 200`).
 - Review: manual proof → **campaign owner reviews** (product copy already
   promises "within 48 hours"); **Twitch/Spotify follows auto-verify** via
   linked OAuth accounts (`API_VERIFIED_TASK_TYPES`, `autoVerify` default
-  ON for OAuth platforms) — so "every task is creator-reviewed" is FALSE
+  ON for OAuth platforms) - so "every task is creator-reviewed" is FALSE
   and was not copied.
 - Rewarded platforms (matches homepage + `MANAGED_PLATFORMS`): TikTok,
   Instagram, Facebook, X, Telegram, Discord, Twitch, Spotify, Trustpilot,
-  Google — **YouTube engagement disabled** (`DISABLED_ENGAGEMENT_TASK_TYPES`,
+  Google - **YouTube engagement disabled** (`DISABLED_ENGAGEMENT_TASK_TYPES`,
   platform-policy compliance). The handoff's 8-platform list was wrong.
 - Fee volume tiers measure `wallet.lifetimeSpent` in **credits**
-  (500/2000/5000), not pesos — Terms said "₱500+" (wrong).
+  (500/2000/5000), not pesos - Terms said "₱500+" (wrong).
 
 **Shipped in this round (code + repo-managed infra):**
 - About/FAQ/Contact rewritten to the verified model; Contact's duplicated
@@ -35,10 +35,10 @@ copied from the handoff):
 - Per-page `openGraph`/`twitter` titles + descriptions.
 - Inner-page JSON-LD (AboutPage/ContactPage/FAQPage/WebPage + BreadcrumbList,
   `isPartOf` → `/#website`), server-rendered like the homepage graph.
-- Custom `not-found.tsx` — real 404 styling + single title (fixes the
+- Custom `not-found.tsx` - real 404 styling + single title (fixes the
   duplicate `<title>` bug verified live).
 - Sitemap `lastModified` = honest per-page content dates (2026-11-21 for
-  all six — this round changed them all).
+  all six - this round changed them all).
 - Homepage copy aligned: "Every completion is verified" (was "by a human");
   trust point says most completions are owner-reviewed, some auto-verify.
 - `infra/nginx/nginx.conf`: `www.engganyo.com` moved to its own
@@ -50,37 +50,37 @@ copied from the handoff):
 - TTFB: `/` 0.50s, `/about` 0.32s, `/faq` 0.36s, `/contact` 0.31s,
   `/privacy` 0.34s, `/terms` 0.31s; HTML sizes 21–86KB.
 - `/` sends `Cache-Control: s-maxage=3600, stale-while-revalidate`
-  (the handoff's 31536000 claim is stale — already 1h).
-- `cf-cache-status: DYNAMIC` — Cloudflare not caching HTML (correct until
+  (the handoff's 31536000 claim is stale - already 1h).
+- `cf-cache-status: DYNAMIC` - Cloudflare not caching HTML (correct until
   owner reviews a cache rule).
 - `https://www.engganyo.com/` + `/about` → **200** (fix staged in nginx.conf).
-- `PerplexityBot/1.0` UA → **403 at Cloudflare edge** — robots.txt already
+- `PerplexityBot/1.0` UA → **403 at Cloudflare edge** - robots.txt already
   allows it; the block is CF-side only (AI Crawl Control / bot rules).
 - Unknown URLs return real 404; duplicate `<title>` verified live (fix
   staged).
-- GSC / CrUX / PageSpeed: **no fresh data** — requires owner-run PSI or
+- GSC / CrUX / PageSpeed: **no fresh data** - requires owner-run PSI or
   Search Console access; the re-audit's CWV numbers remain estimates.
 
-**Owner/external decisions — NOT shipped:**
+**Owner/external decisions - NOT shipped:**
 - Canonical public email: pages still show `support@engganyo.com`
-  (existing public mailbox). Handoff wants `contact@engganyo.com` —
+  (existing public mailbox). Handoff wants `contact@engganyo.com` -
   confirm the mailbox exists before switching + adding `contactPoint`
   to Organization JSON-LD (deliberately withheld until confirmed).
 - CF AI Crawl Control: allow PerplexityBot (or add explicit rule).
 - CF email obfuscation: currently mangles the contact email in raw HTML
-  — disable for the public address once the canonical one is confirmed.
+  - disable for the public address once the canonical one is confirmed.
 - Public-HTML edge caching: only after cookie/personalization review;
   s-maxage already 1h.
-- CSP + Permissions-Policy: needs inline-script/wallet/socket tuning —
+- CSP + Permissions-Policy: needs inline-script/wallet/socket tuning -
   separate hardening PR, not SEO work.
 - Trustpilot + Google task types: legal review pending (homepage lists
-  them; About/FAQ now mirror the real product list — revisit if the
+  them; About/FAQ now mirror the real product list - revisit if the
   decision changes).
 - Homepage title/H1 and "one-sentence definition" wording: owner copy
-  still pending — not invented.
+  still pending - not invented.
 - New content routes (/blog, /safety, /how-it-works, /pricing): remain
-  unpublished until real content exists — no empty indexable pages.
-- robots.txt second `User-agent:*` group: Cloudflare-managed block —
+  unpublished until real content exists - no empty indexable pages.
+- robots.txt second `User-agent:*` group: Cloudflare-managed block -
   infra-side tidy, not in app code.
 - GSC "Request indexing" after this deploy lands.
 
@@ -94,23 +94,23 @@ VPS, all containers healthy, 2026-11-20). Source = `main` @ `3b99a3a`.
   2026-11-20): `FOR-DEVELOPER.md`, `FOR-OWNER-PLAYBOOK.md`,
   `Engganyo-SEO-Audit-2026-11-20.pdf`, `schema-generated.json`.
   ChatGPT-reviewed upstream revision `468ed5b`.
-- SEO skill collection `AgriciDaniel/claude-seo` — **installed and
+- SEO skill collection `AgriciDaniel/claude-seo` - **installed and
   verified**: skills live at `~/.codex/skills/seo*` (hub + 28 sub-skills,
   MIT license, v2.6.2). Spot-verified SKILL.md files for seo, seo-audit,
   seo-technical, seo-page, seo-content, seo-schema, seo-sitemap,
   seo-images are **byte-identical** to upstream `468ed5b`. Bundled Python
   tools (`scripts/claude-seo`, uv.lock) are present but not installed
-  locally — audits below used source inspection + live HTTP checks
+  locally - audits below used source inspection + live HTTP checks
   instead. No paid integrations enabled.
 
 **Method:** every Jomar claim was re-verified against current source and
 live production before being treated as fact. Claims that could not be
-verified are marked as such — no Search Console, ranking, traffic, or
+verified are marked as such - no Search Console, ranking, traffic, or
 Core Web Vitals numbers were invented.
 
 ---
 
-## 1. Verified findings — evidence table
+## 1. Verified findings - evidence table
 
 | # | Claim (Jomar) | Source evidence | Live observation (2026-11-20, `3b99a3a`) | Verdict | Proposed correction | Acceptance check |
 |---|---|---|---|---|---|---|
@@ -118,27 +118,27 @@ Core Web Vitals numbers were invented.
 | 2 | App pages indexable | same | same four + `/challenge/[id]`, `/payment/return`, `(admin)` group all inherit | **CONFIRMED** | noindex via route-group metadata | X-Robots/meta noindex on all app routes |
 | 3 | `/privacy`, `/terms` are `index, nofollow` | `privacy/page.tsx:9`, `terms/page.tsx:9` `follow:false` | live `index, nofollow` | **CONFIRMED** | `follow: true` | live meta `index, follow` |
 | 4 | Brand-duplicated titles | template `%s \| Engganyo` + page titles containing "Engganyo" | `/about` = "About Engganyo \| Engganyo", `/faq` = "FAQ - Engganyo \| Engganyo" | **CONFIRMED** | De-duplicate page-level titles (mechanical, no copy change) | titles render "About \| Engganyo" etc. |
-| 5 | JSON-LD only visible after JS | `page.tsx:91-95` uses `next/script` `<Script>` | raw HTML has exactly 1 `ld+json` occurrence, inside `self.__next_f.push` RSC payload — **no real `<script type="application/ld+json">` tag** | **CONFIRMED** | Render plain `<script type="application/ld+json">` from server component | `curl /` shows real ld+json tag |
+| 5 | JSON-LD only visible after JS | `page.tsx:91-95` uses `next/script` `<Script>` | raw HTML has exactly 1 `ld+json` occurrence, inside `self.__next_f.push` RSC payload - **no real `<script type="application/ld+json">` tag** | **CONFIRMED** | Render plain `<script type="application/ld+json">` from server component | `curl /` shows real ld+json tag |
 | 6 | `SearchAction` → `/search` soft-404 | `page.tsx:34-38` | source confirmed; `/search` is an authed app route | **CONFIRMED** | Remove `potentialAction` | no SearchAction in emitted JSON-LD |
-| 7 | `sameAs` placeholder | `schema-generated.json` marks VERIFY | no verified official profiles list supplied yet (only `t.me/Engganyo` confirmed) | **CONFIRMED — placeholder must not ship** | Emit only verified `sameAs` (Telegram); omit others | JSON-LD validates, no VERIFY text |
-| 8 | www duplicate host | — | `https://www.engganyo.com/` → **200**, no redirect | **CONFIRMED** | 301 www→apex (Cloudflare rule or nginx) — **external/infra, owner review** | `curl -I www.` → 301 to apex |
-| 9 | http→https one step | — | `http://engganyo.com/` → 301 → `https://engganyo.com/` | **VERIFIED GOOD** | none | — |
+| 7 | `sameAs` placeholder | `schema-generated.json` marks VERIFY | no verified official profiles list supplied yet (only `t.me/Engganyo` confirmed) | **CONFIRMED - placeholder must not ship** | Emit only verified `sameAs` (Telegram); omit others | JSON-LD validates, no VERIFY text |
+| 8 | www duplicate host | - | `https://www.engganyo.com/` → **200**, no redirect | **CONFIRMED** | 301 www→apex (Cloudflare rule or nginx) - **external/infra, owner review** | `curl -I www.` → 301 to apex |
+| 9 | http→https one step | - | `http://engganyo.com/` → 301 → `https://engganyo.com/` | **VERIFIED GOOD** | none | - |
 | 10 | robots.txt: two `User-agent:*` groups + `Host:` line + Disallow vs index,follow contradiction | `src/app/robots.ts` emits second group + `host:`; Cloudflare injects managed block (Content-Signal + training-bot disallows) | live robots.txt shows both groups; `/login`,`/register` disallowed yet index,follow | **CONFIRMED** | Remove `host` from robots.ts; once noindex ships, drop `/login`,`/register` from Disallow; Cloudflare-managed block is external | single app group; no disallowed-but-indexable URLs |
 | 11 | Sitemap: identical build-time `lastmod`, changefreq/priority | `src/app/sitemap.ts` `new Date()` ×6 | live sitemap: all `lastmod=2026-11-20T06:04:49` (deploy time), `changefreq`+`priority` present | **CONFIRMED** | per-page `lastModified` constants; drop changefreq/priority | distinct lastmod per page |
-| 12 | Sitemap contains only 6 public URLs | `sitemap.ts` | live: exactly `/`, `/about`, `/faq`, `/contact`, `/privacy`, `/terms` | **VERIFIED GOOD** | keep app routes out | — |
-| 13 | PerplexityBot 403 at edge | — | `curl -A PerplexityBot/1.0 /` → **403** | **CONFIRMED (Cloudflare)** | Allow in CF AI Crawl Control — **external/owner** | UA fetch → 200 |
-| 14 | HTML not edge-cached | — | `cf-cache-status: DYNAMIC` | **CONFIRMED (Cloudflare)** | Cache rule for public HTML only — **external/owner, needs cookie/auth review first** | `cf-cache-status: HIT` on public pages |
-| 15 | No CSP / Permissions-Policy | `next.config` headers() only has nosniff/frame/referrer | response headers confirm absent | **CONFIRMED** | Add CSP + Permissions-Policy (careful: app uses inline scripts/styles, wallets, sockets — needs tuning) | headers present, no breakage |
-| 16 | Email obfuscation hides contact emails | — | `data-cfemail` attributes on /contact | **CONFIRMED (Cloudflare)** | Disable obfuscation for public contact email — **external/owner** | raw HTML shows plain email |
+| 12 | Sitemap contains only 6 public URLs | `sitemap.ts` | live: exactly `/`, `/about`, `/faq`, `/contact`, `/privacy`, `/terms` | **VERIFIED GOOD** | keep app routes out | - |
+| 13 | PerplexityBot 403 at edge | - | `curl -A PerplexityBot/1.0 /` → **403** | **CONFIRMED (Cloudflare)** | Allow in CF AI Crawl Control - **external/owner** | UA fetch → 200 |
+| 14 | HTML not edge-cached | - | `cf-cache-status: DYNAMIC` | **CONFIRMED (Cloudflare)** | Cache rule for public HTML only - **external/owner, needs cookie/auth review first** | `cf-cache-status: HIT` on public pages |
+| 15 | No CSP / Permissions-Policy | `next.config` headers() only has nosniff/frame/referrer | response headers confirm absent | **CONFIRMED** | Add CSP + Permissions-Policy (careful: app uses inline scripts/styles, wallets, sockets - needs tuning) | headers present, no breakage |
+| 16 | Email obfuscation hides contact emails | - | `data-cfemail` attributes on /contact | **CONFIRMED (Cloudflare)** | Disable obfuscation for public contact email - **external/owner** | raw HTML shows plain email |
 | 17 | No shared header/footer on public subpages | only `landing-navbar.tsx` exists; no footer component | about/faq/contact/privacy/terms have no nav/footer markup | **CONFIRMED** | Shared `PublicFooter` + reuse navbar (UI work, next PR) | subpages show nav+footer |
-| 18 | Homepage title = slogan only, no category keyword; meta description generic | `layout.tsx` default title/description | live `<title>Engganyo — Small Taps. Big Crowds.</title>` | **CONFIRMED** | **Owner decision** — Jomar's suggested title/description conflict with "wait for owner's final wording"; structure ready, copy pending | owner-approved copy ships |
-| 19 | Homepage body copy contradicts itself across pages (business model, platforms, review times, cash-out claims) | audit + page sources | not re-verified line-by-line; consistent with prior knowledge | **REPORTED — needs owner wording** | Owner supplies final copy; no invented claims | single consistent model everywhere |
-| 20 | Policy/legal risk (credit-trading, Trustpilot review tasks, "verified by human" claims) | audit | feature set confirmed (manual-proof tasks, social linking) | **REPORTED — legal review, owner** | Legal review; allowed-tasks page later | owner/legal sign-off |
-| 21 | Only 6 indexable pages; no how-it-works/pricing/safety/blog/comparisons | sitemap + routes | confirmed — no such routes exist | **CONFIRMED** | **Deferred** — do NOT publish empty indexable pages; create routes only with real content | routes ship with content, not before |
-| 22 | CWV unmeasured (PageSpeed quota) | audit admits estimate | no PSI/CrUX data available to me | **UNVERIFIED — needs API key or owner run** | Owner runs PageSpeed; record baseline | real CWV numbers recorded |
+| 18 | Homepage title = slogan only, no category keyword; meta description generic | `layout.tsx` default title/description | live `<title>Engganyo - Small Taps. Big Crowds.</title>` | **CONFIRMED** | **Owner decision** - Jomar's suggested title/description conflict with "wait for owner's final wording"; structure ready, copy pending | owner-approved copy ships |
+| 19 | Homepage body copy contradicts itself across pages (business model, platforms, review times, cash-out claims) | audit + page sources | not re-verified line-by-line; consistent with prior knowledge | **REPORTED - needs owner wording** | Owner supplies final copy; no invented claims | single consistent model everywhere |
+| 20 | Policy/legal risk (credit-trading, Trustpilot review tasks, "verified by human" claims) | audit | feature set confirmed (manual-proof tasks, social linking) | **REPORTED - legal review, owner** | Legal review; allowed-tasks page later | owner/legal sign-off |
+| 21 | Only 6 indexable pages; no how-it-works/pricing/safety/blog/comparisons | sitemap + routes | confirmed - no such routes exist | **CONFIRMED** | **Deferred** - do NOT publish empty indexable pages; create routes only with real content | routes ship with content, not before |
+| 22 | CWV unmeasured (PageSpeed quota) | audit admits estimate | no PSI/CrUX data available to me | **UNVERIFIED - needs API key or owner run** | Owner runs PageSpeed; record baseline | real CWV numbers recorded |
 | 23 | GSC: 1 indexed / 12 not; /faq 5xx Sep 29; www alternate canonical; `/search?q=` crawled | Jomar's GSC export | cannot access GSC; `/faq` returns 200 today | **REPORTED (Jomar's data) + partially verified** | fixes in this plan address root causes; owner requests re-indexing after ship | GSC recrawl shows fixes |
-| 24 | Cookie banner ~25% mobile viewport; 3 similar hero CTAs; tiny low-contrast stats; gradient contrast; thin body font | audit screenshots | rendered claims — plausible, not independently measured | **UNVERIFIED rendered** | UI polish batch (owner-session verification) | mobile screenshots reviewed |
-| 25 | Backlinks/authority ~zero | audit: not in Common Crawl | consistent with young site | **REPORTED** | Owner playbook (directories, profiles) — external | referring domains grow |
+| 24 | Cookie banner ~25% mobile viewport; 3 similar hero CTAs; tiny low-contrast stats; gradient contrast; thin body font | audit screenshots | rendered claims - plausible, not independently measured | **UNVERIFIED rendered** | UI polish batch (owner-session verification) | mobile screenshots reviewed |
+| 25 | Backlinks/authority ~zero | audit: not in Common Crawl | consistent with young site | **REPORTED** | Owner playbook (directories, profiles) - external | referring domains grow |
 
 ---
 
@@ -154,7 +154,7 @@ Core Web Vitals numbers were invented.
 | `/admin/*` | admin | inherits (BUG) | **noindex,nofollow** | none | no |
 | `/challenge/[id]` | functional join page | inherits (BUG) | **noindex,nofollow** | none | no |
 | `/payment/return` | payment callback | inherits (BUG) | **noindex,nofollow** | none | no |
-| future `/blog`, `/how-it-works`, `/pricing`, `/safety`, `/alternatives/*` | content | — | index,follow **only when real content ships** | self | yes, when live |
+| future `/blog`, `/how-it-works`, `/pricing`, `/safety`, `/alternatives/*` | content | - | index,follow **only when real content ships** | self | yes, when live |
 
 Private boundaries preserved: rooms, payments, moderation, account
 surfaces stay noindex + auth-gated; marketplace access requirements
@@ -164,7 +164,7 @@ unchanged (no SEO-motivated opening).
 
 ## 3. Safe implementation batches
 
-**Batch A — indexing correctness (this PR series, code-only, low risk):**
+**Batch A - indexing correctness (this PR series, code-only, low risk):**
 1. Root `layout.tsx`: drop `robots` + `alternates.canonical`; add
    `metadataBase`; keep title template + existing copy.
 2. `(auth)/layout.tsx` (server component): `robots noindex,nofollow`.
@@ -185,16 +185,16 @@ unchanged (no SEO-motivated opening).
    SearchAction**; `sameAs` = verified profiles only (`t.me/Engganyo`);
    no fabricated ratings/claims.
 
-**Batch B — shared public chrome:** `PublicFooter` + navbar reuse on
+**Batch B - shared public chrome:** `PublicFooter` + navbar reuse on
 about/faq/contact/privacy/terms (UI PR, ui-ux skill applies).
 
-**Batch C — safety gate:** `DANGER_RESET_ENABLED` env flag on
-`/admin/system/reset` (verified gap: endpoint is armed today —
+**Batch C - safety gate:** `DANGER_RESET_ENABLED` env flag on
+`/admin/system/reset` (verified gap: endpoint is armed today -
 SUPER_ADMIN + 2FA + PIN + typed `RESET` + seeded-account check, but no
 environment gate; UI Danger Zone fully functional).
 
-**Batch D — owner/external (NOT code):**
-- www→apex 301 (Cloudflare or nginx — needs DNS/path verification).
+**Batch D - owner/external (NOT code):**
+- www→apex 301 (Cloudflare or nginx - needs DNS/path verification).
 - PerplexityBot allow (CF AI Crawl Control).
 - Public-HTML cache rule (audit cookies/personalization first).
 - Email-obfuscation off for contact address.
@@ -203,7 +203,7 @@ environment gate; UI Danger Zone fully functional).
 - robots.txt Cloudflare-managed block tidy (external).
 - Official profile URLs for `sameAs` expansion.
 - Homepage title/description + all page copy (owner wording pending).
-- Content routes — only with real content.
+- Content routes - only with real content.
 - PageSpeed API key → real CWV baseline.
 
 **Explicitly NOT doing:** no empty indexable pages, no invented
@@ -229,11 +229,11 @@ changes for SEO.
 **Unavailable (do not invent):**
 - Core Web Vitals / INP / LCP / CLS field or lab data.
 - Search Console impressions/clicks/indexing (Jomar reports 1 indexed /
-  12 not — treated as reported, not independently verified).
+  12 not - treated as reported, not independently verified).
 - Backlink profile.
 - Keyword volumes.
 - Rendered-viewport claims (cookie banner %, CTA count, stats
-  contrast) — queued for owner-assisted pass.
+  contrast) - queued for owner-assisted pass.
 
 ---
 
@@ -241,16 +241,16 @@ changes for SEO.
 
 - **Milestone-tour resilience (verified):** `MilestoneTour` fetches
   `/gamification/tours/pending` inside `useEffect` with try/catch and
-  renders `null` without a due tour — it cannot block page render. The
+  renders `null` without a due tour - it cannot block page render. The
   only redirect path is apiClient's global 401→refresh→logout, which
   fires solely when the session is genuinely invalid (refresh also
-  fails) — correct behavior, not an optional-request hazard. 5xx/network
+  fails) - correct behavior, not an optional-request hazard. 5xx/network
   failures reject → caught → silent. The earlier E2E failure was a
   mock-auth artifact, fixed by mocking the endpoint; production path is
   resilient by construction.
 - **Unsafe reset (verified ARMED, not disabled):** endpoint requires
   SUPER_ADMIN + 2FA + admin PIN + literal `RESET` + caller being a
-  seeded `admin`/`botro` account — but there is **no environment
+  seeded `admin`/`botro` account - but there is **no environment
   gate**; the admin UI Danger Zone is fully functional. Batch C closes
   this.
 - Social-identity concurrency fixes (#98/#103) and their real-PG

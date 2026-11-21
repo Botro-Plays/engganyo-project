@@ -221,7 +221,7 @@ export function passwordResetEmailTemplate(resetUrl: string): string {
               <td style="padding:16px 20px;">
                 <p style="margin:0;font-size:12px;color:#6E7CA3;line-height:1.6;">
                   &#9888;&#65039; This link expires in <strong style="color:#A9B6D8;">1 hour</strong>.
-                  If you didn't request a password reset, you can safely ignore this email —
+                  If you didn't request a password reset, you can safely ignore this email;
                   your password will not be changed.
                 </p>
               </td>
@@ -473,7 +473,7 @@ export function twoFactorEmailTemplate(code: string): string {
             <tr>
               <td style="padding:16px 20px;">
                 <p style="margin:0;font-size:12px;color:#6E7CA3;line-height:1.6;">
-                  &#128274; If you didn&rsquo;t try to sign in to Engganyo, please ignore this email —
+                  &#128274; If you didn&rsquo;t try to sign in to Engganyo, please ignore this email;
                   your account remains secure.
                 </p>
               </td>

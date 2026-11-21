@@ -2,12 +2,12 @@ import type { MetadataRoute } from 'next';
 
 const BASE_URL = 'https://engganyo.com';
 
-// Real per-page content dates — update when a page's substance changes.
+// Real per-page content dates. Update when a page's substance changes.
 // Google ignores changefreq/priority, so they are omitted.
 const PAGES: Array<{ path: string; lastModified: string }> = [
   // All six pages last substantively changed 2026-11-21 (factual copy
   // corrections, shared chrome, honest verification claims). Update
-  // these when page content actually changes — never stamp the deploy
+  // these when page content actually changes. Never stamp the deploy
   // date.
   { path: '', lastModified: '2026-11-21' },
   { path: '/about', lastModified: '2026-11-21' },

@@ -5,17 +5,17 @@ import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
 export const metadata: Metadata = {
   title: 'Contact Us',
-  description: 'Get in touch with the Engganyo team — questions, feedback, or support.',
+  description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
   alternates: { canonical: 'https://engganyo.com/contact' },
   robots: { index: true, follow: true },
   openGraph: {
     title: 'Contact | Engganyo',
-    description: 'Get in touch with the Engganyo team — questions, feedback, or support.',
+    description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
     url: 'https://engganyo.com/contact',
   },
   twitter: {
     title: 'Contact | Engganyo',
-    description: 'Get in touch with the Engganyo team — questions, feedback, or support.',
+    description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
   },
 };
 
@@ -23,7 +23,7 @@ const jsonLd = innerPageJsonLd({
   type: 'ContactPage',
   path: '/contact',
   name: 'Contact Engganyo',
-  description: 'Get in touch with the Engganyo team — questions, feedback, or support.',
+  description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
   breadcrumb: 'Contact',
 });
 
@@ -46,9 +46,11 @@ export default function ContactPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-medium text-zinc-400 mb-1">Email</h3>
-                <a href="mailto:support@engganyo.com" className="text-brand-400 hover:underline">
-                  support@engganyo.com
-                </a>
+                <address className="not-italic">
+                  <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                    contact@engganyo.com
+                  </a>
+                </address>
               </div>
 
               <div>
@@ -76,7 +78,7 @@ export default function ContactPage() {
               Found a bug or have a feature request? Let us know!
             </p>
             <a
-              href="mailto:support@engganyo.com?subject=Bug Report or Feature Request"
+              href="mailto:contact@engganyo.com?subject=Bug Report or Feature Request"
               className="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
             >
               Report Issue

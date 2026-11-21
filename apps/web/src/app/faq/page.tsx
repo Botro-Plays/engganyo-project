@@ -6,7 +6,7 @@ import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 export const metadata: Metadata = {
   title: 'FAQ',
   description:
-    'Frequently asked questions about Engganyo — how credits work, how tasks are reviewed, which platforms are supported, and how to get started.',
+    'Frequently asked questions about Engganyo: how credits work, how tasks are reviewed, which platforms are supported, and how to get started.',
   alternates: { canonical: 'https://engganyo.com/faq' },
   robots: { index: true, follow: true },
   openGraph: {
@@ -36,7 +36,7 @@ const faqs = [
       },
       {
         q: 'Is Engganyo free to use?',
-        a: 'Joining is free and every member starts with 200 free credits — no card is needed. You can earn more credits by completing tasks, or buy credits in your wallet if you want to run larger campaigns.',
+        a: 'Joining is free and every member starts with 200 free credits. No card is needed. You can earn more credits by completing tasks, or buy credits in your wallet if you want to run larger campaigns.',
       },
     ],
   },
@@ -57,7 +57,7 @@ const faqs = [
       },
       {
         q: 'Can I withdraw credits as money?',
-        a: 'No. Credits are used inside Engganyo — they pay for campaigns and platform features — and cannot be withdrawn as money.',
+        a: 'No. Credits are used inside Engganyo. They pay for campaigns and platform features, and cannot be withdrawn as money.',
       },
       {
         q: 'What happens if my task is rejected?',
@@ -74,11 +74,11 @@ const faqs = [
     questions: [
       {
         q: 'Which platforms are supported?',
-        a: 'Tasks are available for TikTok, Instagram, Facebook, X, Telegram, Discord, Twitch, Spotify, Trustpilot, and Google. Each platform has its own rules — read them before running or completing a task. Engganyo does not offer rewarded YouTube engagement tasks.',
+        a: 'Tasks are available for TikTok, Instagram, Facebook, X, Telegram, Discord, Twitch, Spotify, Trustpilot, and Google. Each platform has its own rules, so read them before running or completing a task. Engganyo does not offer rewarded YouTube engagement tasks.',
       },
       {
         q: 'How are tasks verified?',
-        a: 'Most tasks are reviewed manually: you upload proof and the campaign owner approves or rejects it. Some tasks — like Twitch and Spotify follows — verify automatically through a linked account instead.',
+        a: 'Most tasks are reviewed manually: you upload proof and the campaign owner approves or rejects it. Some tasks, like Twitch and Spotify follows, verify automatically through a linked account instead.',
       },
       {
         q: 'Can I complete the same campaign twice?',
@@ -86,7 +86,7 @@ const faqs = [
       },
       {
         q: 'What if a campaign runs out of slots?',
-        a: 'Campaigns have limited slots set by their creator. Once filled, the campaign closes — check back for new ones.',
+        a: 'Campaigns have limited slots set by their creator. Once filled, the campaign closes. Check back for new ones.',
       },
     ],
   },

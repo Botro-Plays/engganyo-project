@@ -17,7 +17,7 @@ import { BrandLogo } from '@/components/brand-logo';
 import { TelegramIcon } from '@/components/telegram-icon';
 import { PublicFooter } from '@/components/public-chrome';
 
-// Server-rendered JSON-LD — a plain <script type="application/ld+json">
+// Server-rendered JSON-LD: a plain <script type="application/ld+json">
 // lands in the raw HTML for non-JS crawlers (next/script injects only
 // into the RSC payload). sameAs lists only verified official profiles;
 // no SearchAction (the /search target is an authenticated app route).
@@ -36,6 +36,11 @@ const jsonLd = {
       description:
         'Engganyo is a creator growth platform where creators complete social tasks for each other, earn credits, and grow their audience through community-driven engagement.',
       sameAs: ['https://t.me/Engganyo'],
+      contactPoint: {
+        '@type': 'ContactPoint',
+        contactType: 'customer support',
+        email: 'contact@engganyo.com',
+      },
     },
     {
       '@type': 'WebSite',
@@ -67,7 +72,7 @@ const jsonLd = {
       '@type': 'WebPage',
       '@id': 'https://engganyo.com/#webpage',
       url: 'https://engganyo.com/',
-      name: 'Engganyo — Small Taps. Big Crowds.',
+      name: 'Engganyo | Small Taps. Big Crowds.',
       isPartOf: { '@id': 'https://engganyo.com/#website' },
       about: { '@id': 'https://engganyo.com/#app' },
       inLanguage: 'en',
@@ -75,8 +80,21 @@ const jsonLd = {
   ],
 };
 
+const HOME_DESCRIPTION =
+  'Engganyo is a creator engagement exchange where members complete small social tasks for each other, earn credits, and spend them on campaigns for their own accounts.';
+const HOME_TITLE = 'Engganyo | Small Taps. Big Crowds.';
+
 export const metadata: Metadata = {
+  description: HOME_DESCRIPTION,
   alternates: { canonical: 'https://engganyo.com' },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
+  twitter: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
 };
 
 interface PublicStats {
@@ -136,7 +154,7 @@ export default async function LandingPage() {
         {/* ── Hero ─────────────────────────────────────────────── */}
         <section className="relative z-10 pt-12 pb-20 sm:pt-16 sm:pb-28 px-4 sm:px-6 max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left — headline + CTA */}
+            {/* Left: headline + CTA */}
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 text-xs font-medium mb-6">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
@@ -150,8 +168,7 @@ export default async function LandingPage() {
               </h1>
 
               <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-8 max-w-lg">
-                Complete social tasks for other creators, earn credits, then use them to grow your own audience.
-                Every completion is verified — no bots, no fake engagement.
+                Complete small tasks for other creators, earn credits, and spend them on your own campaigns.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
@@ -201,7 +218,7 @@ export default async function LandingPage() {
               )}
             </div>
 
-            {/* Right — live task card mock */}
+            {/* Right: live task card mock */}
             <div className="relative lg:flex lg:justify-end" aria-hidden="true">
               {/* Glow behind card */}
               <div className="absolute -inset-8 bg-brand-500/10 rounded-3xl blur-3xl" />
@@ -216,7 +233,7 @@ export default async function LandingPage() {
                     <span className="text-sm font-bold text-green-400 shrink-0">+15 credits</span>
                   </div>
                   {/* Title */}
-                  <p className="text-sm font-semibold text-sc-text mb-1">Follow @artbyjamie — TikTok art creator</p>
+                  <p className="text-sm font-semibold text-sc-text mb-1">Follow @artbyjamie, TikTok art creator</p>
                   {/* URL mock */}
                   <p className="text-xs text-sc-dim mb-3 flex items-center gap-1 truncate">
                     <ExternalLink className="w-3 h-3 shrink-0" />
@@ -370,7 +387,7 @@ export default async function LandingPage() {
           <div className="text-center mb-10">
             <h2 className="text-3xl sm:text-4xl font-bold mb-3">Built for real engagement</h2>
             <p className="text-sc-muted text-base sm:text-lg max-w-xl mx-auto">
-              Every task completion is reviewed by the creator before credits are released. No bots. No shortcuts.
+              Completions are reviewed by the campaign owner before credits are released. Twitch and Spotify follows can verify automatically through linked accounts.
             </p>
           </div>
 
@@ -444,8 +461,8 @@ export default async function LandingPage() {
 }
 
 const earnerSteps = [
-  { title: 'Browse the task marketplace', desc: 'See open tasks across TikTok, Instagram, Telegram, Discord, and more — each showing reward, platform, and what proof is needed.' },
-  { title: 'Accept and open the target', desc: 'Click Accept, then open the creator\'s link in a new tab. Complete the action — follow, like, comment, or join.' },
+  { title: 'Browse the task marketplace', desc: 'See open tasks across TikTok, Instagram, Telegram, Discord, and more, each showing reward, platform, and what proof is needed.' },
+  { title: 'Accept and open the target', desc: 'Click Accept, then open the creator\'s link in a new tab. Complete the action: follow, like, comment, or join.' },
   { title: 'Submit your screenshot', desc: 'Upload a screenshot showing the completed action. The creator reviews it, usually within 48 hours.' },
   { title: 'Credits land in your wallet', desc: 'Once approved, credits are released to your wallet. Spend them on your own campaigns or save up.' },
 ];
@@ -454,7 +471,7 @@ const creatorSteps = [
   { title: 'Set up a campaign', desc: 'Choose a platform (TikTok, Instagram, Telegram…), set your target URL, the reward per completion, and the total slots you want to fill.' },
   { title: 'Community members accept and act', desc: 'Real verified users browse the marketplace, accept your task, and complete the required action.' },
   { title: 'Review the proof', desc: 'Each completion arrives with a screenshot. Approve the ones that look genuine; reject the rest. You\'re in control.' },
-  { title: 'Credits are released on approval', desc: 'Credits only leave your wallet when you approve a submission — no wasted spend on bad completions.' },
+  { title: 'Credits are released on approval', desc: 'Credits only leave your wallet when you approve a submission, so there is no wasted spend on bad completions.' },
 ];
 
 // Platforms with live task types in the released product (matches the
@@ -476,7 +493,7 @@ const trustPoints = [
   {
     Icon: CheckCircle2,
     title: 'Creator-reviewed',
-    desc: 'Most completions are reviewed by the campaign owner before credits change hands — the rest verify automatically through linked accounts. Either way, no credits move on unverified work.',
+    desc: 'Most completions are reviewed by the campaign owner before credits change hands; the rest verify automatically through linked accounts. Either way, no credits move on unverified work.',
   },
   {
     Icon: Shield,
@@ -486,6 +503,6 @@ const trustPoints = [
   {
     Icon: Users,
     title: 'Real human community',
-    desc: 'Engganyo is built on verified human engagement. No bot traffic, no fake accounts — the platform enforces this at the API level.',
+    desc: 'Tasks are completed by members, not automated traffic. Trust scoring and linked-account checks flag suspicious completions.',
   },
 ];

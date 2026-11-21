@@ -72,7 +72,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">4. Task Completion & Payments</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">4. Task Completion and Credits</h2>
             <p className="mb-2">
               Credits are earned upon successful task verification. We reserve the right to:
             </p>
@@ -104,7 +104,31 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">6. Anti-Abuse & Fraud Prevention</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">6. Buying Credits</h2>
+            <p className="mb-2">
+              Credits can also be purchased in the Wallet. Packages are priced in USD; a peso
+              equivalent is shown at a live rate where supported, and larger packages may include
+              bonus credits. Current packages and payment options are shown in the Wallet before you
+              pay.
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>Purchased credits and earned credits are used the same way on the platform.</li>
+              <li>Credits are used inside Engganyo and cannot be withdrawn as money.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-white mb-3">7. Third-Party Platform Rules</h2>
+            <p>
+              Completing tasks on Engganyo may violate the Terms of Service of third-party platforms
+              (Instagram, TikTok, X, Facebook, and others) and could result in account warnings,
+              restrictions, or permanent bans on those platforms. Participate at your own risk, and
+              read each platform&apos;s rules before running or completing a task.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-white mb-3">8. Anti-Abuse & Fraud Prevention</h2>
             <p className="mb-2">
               Engganyo employs automated anti-abuse systems to protect the integrity of the platform 
               and ensure fair participation for all users. By using our service, you acknowledge and 
@@ -154,7 +178,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">7. Content & Intellectual Property</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">9. Content & Intellectual Property</h2>
             <p>
               You retain ownership of content you submit. By using our service, you grant us a license 
               to use your content for the purpose of providing our services. You agree not to submit 
@@ -163,7 +187,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">8. Termination</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">10. Termination</h2>
             <p>
               We reserve the right to suspend or terminate accounts that violate these terms.
               You may also terminate your account at any time through your account settings.
@@ -171,7 +195,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">9. Limitation of Liability</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">11. Limitation of Liability</h2>
             <p>
               Engganyo is provided &quot;as is&quot; without warranties of any kind. We shall not be liable
               for any indirect, incidental, or consequential damages arising from use of our service.
@@ -179,7 +203,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">10. Changes to Terms</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">12. Changes to Terms</h2>
             <p>
               We may update these terms from time to time. Continued use of the service after
               changes constitutes acceptance of the new terms.
@@ -187,7 +211,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-white mb-3">11. Contact Us</h2>
+            <h2 className="text-xl font-semibold text-white mb-3">13. Contact Us</h2>
             <p>
               For questions about these terms, please{' '}
               <Link href="/contact" className="text-brand-400 hover:underline">contact us</Link>.
