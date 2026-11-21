@@ -217,12 +217,15 @@ test.describe('message list scrolling', () => {
     const metrics = await scroller.evaluate((el) => ({
       scrollHeight: el.scrollHeight,
       clientHeight: el.clientHeight,
-      scrollTop: el.scrollTop,
     }));
     expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
-    // Auto-scrolled to the newest message.
-    expect(metrics.scrollTop + metrics.clientHeight).toBeGreaterThanOrEqual(
-      metrics.scrollHeight - 4,
-    );
+    // Smooth scrolling is async — poll until the newest message is reached.
+    await expect
+      .poll(
+        () =>
+          scroller.evaluate((el) => el.scrollTop + el.clientHeight),
+        { timeout: 5_000 },
+      )
+      .toBeGreaterThanOrEqual(metrics.scrollHeight - 4);
   });
 });
