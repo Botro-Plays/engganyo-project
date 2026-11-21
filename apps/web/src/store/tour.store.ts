@@ -1204,7 +1204,13 @@ export const useTourStore = create<TourState>()((set, get) => {
       // request is ill-defined; refusing beats queuing a blind reset.
       const snap = await fetchTerminalUpdatedAt(userId, epoch);
       if (snap === null || get().userId !== userId || epoch !== sessionEpoch) {
-        set({ replayBusy: false, replayError: true });
+        // Only touch the replay UI when THIS request still owns the
+        // session — a delayed response from a previous account/epoch
+        // must neither clear the current replay's busy state nor raise
+        // an error for it.
+        if (get().userId === userId && epoch === sessionEpoch) {
+          set({ replayBusy: false, replayError: true });
+        }
         return false;
       }
       const t = snap.map.get(key);
@@ -1223,7 +1229,7 @@ export const useTourStore = create<TourState>()((set, get) => {
       // A transiently-blocked reset gets one bounded window for the
       // scheduled backoff retry before we declare failure.
       let outcome = opOutcomes.get(resetId);
-      if (outcome !== 'ok' && outcome !== 'drop' && get().userId === userId) {
+      if (outcome !== 'ok' && outcome !== 'drop' && get().userId === userId && epoch === sessionEpoch) {
         const wait = Math.min(Math.max(0, nextFlushAllowedAt - Date.now()) + 500, 4_000);
         if (wait > 0) {
           await new Promise((r) => setTimeout(r, wait));
@@ -1232,7 +1238,7 @@ export const useTourStore = create<TourState>()((set, get) => {
         }
       }
       opOutcomes.delete(resetId);
-      if (get().userId !== userId) return false;
+      if (get().userId !== userId || epoch !== sessionEpoch) return false;
       // 'ok' = the DELETE reached the server. 'drop' = permanently
       // rejected or vetoed by newer server state — both are failures the
       // user must see, never a silent success.
@@ -1243,7 +1249,9 @@ export const useTourStore = create<TourState>()((set, get) => {
       syncUnsyncedFlag(userId);
       return ok;
     } catch {
-      if (get().userId === userId) set({ replayBusy: false, replayError: true });
+      if (get().userId === userId && epoch === sessionEpoch) {
+        set({ replayBusy: false, replayError: true });
+      }
       return false;
     }
   };
@@ -1511,4 +1519,10 @@ if (typeof window !== 'undefined') {
     const prevId = prev.user?.id ?? null;
     if (id !== prevId) useTourStore.getState().syncWithUser(id);
   });
+
+  // E2E seam: rendered tests flip the session identity in-session (no
+  // reload, so in-flight promises survive) to deterministically exercise
+  // stale-response fencing. Client-local store only — no secrets.
+  (window as unknown as { __engganyoTourStore?: typeof useTourStore }).__engganyoTourStore =
+    useTourStore;
 }

@@ -88,7 +88,11 @@ export function FeatureToursCard() {
     // Ensure the store is bound to this user before resetting —
     // resetTour persists via the server and needs userId set.
     if (user?.id) useTourStore.getState().syncWithUser(user.id);
+    const uid = useTourStore.getState().userId;
     const ok = await resetTour();
+    // The request may resolve after an account switch — a stale
+    // session's result must not redirect or error the current one.
+    if (useTourStore.getState().userId !== uid) return;
     if (ok) {
       router.push('/dashboard');
     } else {
@@ -99,8 +103,10 @@ export function FeatureToursCard() {
   const replay = async (key: string) => {
     setBusy(key);
     setActionError(null);
+    const uid = useTourStore.getState().userId;
     try {
       const ok = await resetTourKey(key);
+      if (useTourStore.getState().userId !== uid) return;
       if (!ok) {
         setActionError('Could not reset this tour — check your connection and try again.');
         return;
@@ -110,7 +116,7 @@ export function FeatureToursCard() {
       requestReplay(key);
       await load();
     } finally {
-      setBusy(null);
+      if (useTourStore.getState().userId === uid) setBusy(null);
     }
   };
 
