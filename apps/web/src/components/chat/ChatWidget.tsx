@@ -54,6 +54,7 @@ function savePos(pos: Pos) {
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [aboveMobileNav, setAboveMobileNav] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -188,6 +189,12 @@ export function ChatWidget() {
   // Focus the composer on open and let Escape close the panel/sheet.
   useEffect(() => {
     if (!isOpen) return;
+    // The dashboard mobile nav is a fixed z-50 strip at the bottom edge.
+    // Lift the sheet above it so the composer is never overlapped; public
+    // pages have no nav and keep the sheet flush to the safe-area edge.
+    setAboveMobileNav(
+      !!document.querySelector('nav[aria-label="Mobile navigation"]'),
+    );
     inputRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsOpen(false);
@@ -304,7 +311,11 @@ export function ChatWidget() {
         e.preventDefault();
         startDrag(e.clientX, e.clientY);
       }}
-      className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)]"
+      className={`fixed inset-x-3 z-40 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)] ${
+        aboveMobileNav
+          ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))]'
+          : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom))]'
+      } sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]`}
     >
       {/* Header — drag handle on desktop */}
       <div

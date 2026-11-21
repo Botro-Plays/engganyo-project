@@ -163,10 +163,13 @@ test.describe('mobile sheet @390px', () => {
 
     const sheet = await dialog.boundingBox();
     const vw = page.viewportSize()!.width;
-    const vh = page.viewportSize()!.height;
-    // Sheet spans nearly the full width and anchors to the bottom edge.
+    // Sheet spans nearly the full width.
     expect(sheet!.width).toBeGreaterThanOrEqual(vw - 40);
-    expect(vh - (sheet!.y + sheet!.height)).toBeLessThanOrEqual(24);
+    // Its bottom edge clears the dashboard mobile nav so the composer is
+    // never overlapped by the fixed nav strip.
+    const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
+    expect(nav).not.toBeNull();
+    expect(sheet!.y + sheet!.height).toBeLessThanOrEqual(nav!.y + 1);
 
     const input = page.getByLabel('Chat message');
     await expect(input).toBeFocused();
