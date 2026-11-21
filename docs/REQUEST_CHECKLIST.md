@@ -44,12 +44,11 @@ promise of rich-result eligibility; Google decides display.
 | Tour store e2e seam test-gated (`window.__engganyoTourStore` only when `NEXT_PUBLIC_TOUR_E2E_HOOK=1` in the CI e2e build env; absent from production bundles) | PR #126 → `bab829e`, shipped by deploy `44908148144`; in-session stale-response regression preserved + green |
 | Telegram CTA immediate hover emphasis (fine-pointer only: instant plane nudge + sustained navy outline/shimmer; keyboard focus-visible equivalent; reduced-motion static; no layout shift) | PR #127 → `cb77c7f`, deploy `44908148144` success; e2e video artifact on run `44906759283` |
 | Exact owner title `Engganyo | Small Taps. Big Crowds.` in title/og/twitter/JSON-LD; `contact@engganyo.com` public chrome; `PageTitle` descriptive app-route titles; Terms buying-credits + platform-risk sections; em-dash sweep; hero H1 restored after mobile-layout caught the fold regression | PR #128 → `9f91c44`, deploy `44910686752` success; live: title/og/twitter exact match, /contact serves contact@, `interactive-widget=resizes-content` still served |
-| SEO infra: robots.txt route with `Content-Signal: search=yes, ai-input=yes, ai-train=no` + single UA group; `revalidate = 3600` on all public pages; CSP report-only + Permissions-Policy; `/llms.txt`; `/how-it-works` `/pricing` `/safety` substantive pages (verified behavior; sitemap + nav + JSON-LD wired) | PR #130 → `760963a`, E2E `44910729447` green; deploy in progress; PR #129 carries the remaining `revalidate` delta for the new pages |
+| SEO infra: robots.txt route with `Content-Signal: search=yes, ai-input=yes, ai-train=no` + single UA group; `revalidate = 3600` on all public pages; CSP report-only + Permissions-Policy; `/llms.txt`; `/how-it-works` `/pricing` `/safety` substantive pages (verified behavior; sitemap + nav + JSON-LD wired) | PR #130 → `760963a`, deploy `44912418342`; PR #129 → `5838fe2` (revalidate on the 3 new pages), deploy `44914226801`; live: robots.txt serves our group + Content-Signal ai-input=yes, CSP report-only + Permissions-Policy headers, /llms.txt 200, all public pages s-maxage=3600 swr, page titles `Pricing | Engganyo` etc. NOTE: Cloudflare prepends its own managed block (own UA:* group + `search=yes,ai-train=no,use=reference` + AI-crawler disallows incl. ClaudeBot) - true single-group merge needs a CF dashboard change |
 
 ## CI-tested (merged, deploy pending/in-flight)
 
-| SEO infra + content pages | PR #130 → `760963a`, main run `44912418342` in progress |
-| `revalidate` on the three new pages | PR #129 `1af73bd`, CI pending |
+_Nothing currently in flight._
 
 ## Awaiting owner decision
 
