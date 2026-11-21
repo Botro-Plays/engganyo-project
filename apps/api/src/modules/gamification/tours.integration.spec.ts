@@ -383,6 +383,36 @@ run('tour server state — real PostgreSQL', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('exposes lastResetIds and fences a superseded replay group write', async () => {
+    const u = await mkUser();
+    await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION);
+    // R1 commits.
+    const seen = (await tours.getState(u.id)).completions.find(
+      (c) => c.tourKey === BEGINNER_TOUR_KEY,
+    );
+    await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, {
+      generation: 0,
+      terminalUpdatedAt: seen?.updatedAt,
+      resetId: 'r-1',
+    });
+    let s = await tours.getState(u.id);
+    expect(s.lastResetIds?.[BEGINNER_TOUR_KEY]).toBe('r-1');
+    expect(s.generations?.[BEGINNER_TOUR_KEY]).toBe(1);
+    // R1's replay progresses, then another device performs R2 — the
+    // identity binding moves to R2.
+    await tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 3, 1);
+    await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 1, resetId: 'r-2' });
+    s = await tours.getState(u.id);
+    expect(s.lastResetIds?.[BEGINNER_TOUR_KEY]).toBe('r-2');
+    expect(s.generations?.[BEGINNER_TOUR_KEY]).toBe(2);
+    // A delayed R1-group write retried at ITS acknowledged generation is
+    // fenced — it must not land inside R2's replay.
+    await expect(
+      tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 5, 1),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect((await tours.getState(u.id)).beginner).toBeNull();
+  });
+
   it('rejects future generations and fails closed on a missing expectation', async () => {
     const u = await mkUser();
     await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 0 });
