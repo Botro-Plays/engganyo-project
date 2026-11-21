@@ -1522,7 +1522,12 @@ if (typeof window !== 'undefined') {
 
   // E2E seam: rendered tests flip the session identity in-session (no
   // reload, so in-flight promises survive) to deterministically exercise
-  // stale-response fencing. Client-local store only — no secrets.
-  (window as unknown as { __engganyoTourStore?: typeof useTourStore }).__engganyoTourStore =
-    useTourStore;
+  // stale-response fencing. Client-local store only — no secrets. The
+  // hook exists only in builds that explicitly opt in via
+  // NEXT_PUBLIC_TOUR_E2E_HOOK=1 (the e2e CI job); ordinary production
+  // bundles do not contain it.
+  if (process.env['NEXT_PUBLIC_TOUR_E2E_HOOK'] === '1') {
+    (window as unknown as { __engganyoTourStore?: typeof useTourStore }).__engganyoTourStore =
+      useTourStore;
+  }
 }
