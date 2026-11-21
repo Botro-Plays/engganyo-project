@@ -631,11 +631,16 @@ model TourCompletion {
 // deleting. `generation` increments on each successful reset; writes
 // carrying an expected generation older than current are rejected 409.
 model TourGeneration {
-  userId     String   @map("user_id")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tourKey    String   @map("tour_key")
-  generation Int      @default(0)
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourKey     String   @map("tour_key")
+  generation  Int      @default(0)
+  // Id of the most recently applied reset — makes replay DELETEs
+  // idempotent: a retried reset carrying the same id returns success
+  // without re-deleting, while an unrelated reset at a stale generation
+  // still conflicts (409).
+  lastResetId String?  @map("last_reset_id")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@id([userId, tourKey])
   @@map("tour_generations")

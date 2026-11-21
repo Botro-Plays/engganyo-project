@@ -198,9 +198,9 @@ function writeUserTour(state: PersistedTourState): void {
 // case of an owner tab reviving a just-deleted key).
 
 type PendingOp =
-  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number }
-  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number }
-  | { op: 'reset'; key: string; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; expectedTerminalUpdatedAt?: string | null };
+  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string }
+  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string }
+  | { op: 'reset'; key: string; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; expectedTerminalUpdatedAt?: string | null; afterReset?: string };
 
 let opSeq = 0;
 const newOpId = () =>
@@ -540,10 +540,13 @@ async function withQueueLock<T>(userId: string, fn: () => Promise<T>): Promise<T
   }
 }
 
-// Replay generations the server last reported per tour key — ops carry
-// the generation captured at enqueue so the server can fence writes
-// from before a reset with 409. User-scoped via syncWithUser reset.
+// Replay generations the server last reported, keyed per user+tour so
+// a late acknowledgement can never stamp another account's generation.
+// Ops carry the generation captured at enqueue; ops belonging to a
+// replay group (afterReset) are re-stamped with the post-reset
+// generation explicitly at send time — never "upgraded" silently.
 const keyGens = new Map<string, number>();
+const genKey = (userId: string, tourKey: string) => `${userId} ${tourKey}`;
 
 const opPath = (op: PendingOp): { path: string; body?: unknown; method: 'post' | 'delete' } => {
   const gen = op.gen !== undefined ? { expectedGeneration: op.gen } : {};
@@ -551,7 +554,7 @@ const opPath = (op: PendingOp): { path: string; body?: unknown; method: 'post' |
     return {
       path: `${op.key}/state`,
       method: 'delete',
-      body: { ...gen, expectedTerminalUpdatedAt: op.expectedTerminalUpdatedAt },
+      body: { ...gen, expectedTerminalUpdatedAt: op.expectedTerminalUpdatedAt, resetId: op.id },
     };
   }
   if (op.op === 'progress') {
@@ -639,9 +642,20 @@ export const useTourStore = create<TourState>()((set, get) => {
   const enqueueOp = (userId: string, op: PendingOp): void => {
     // Replay-generation fence: capture the server's last-reported
     // generation so writes delayed past a reset are rejected (409).
-    if (op.gen === undefined) op.gen = keyGens.get(op.key);
-    if (op.seq === undefined) op.seq = opSeq++;
     const ops = readPendingOps(userId);
+    if (op.gen === undefined) op.gen = keyGens.get(genKey(userId, op.key));
+    if (op.seq === undefined) op.seq = opSeq++;
+    // Replay-group linkage: an op enqueued while a reset for the same
+    // key is still unacknowledged belongs to that reset's NEW replay —
+    // it is stamped with the post-reset generation when the group is
+    // reached in the drain, so it is never sent with the pre-reset
+    // generation it was enqueued under.
+    if (op.op !== 'reset') {
+      const lastReset = [...ops]
+        .reverse()
+        .find((o) => o.key === op.key && o.op === 'reset' && o.ts < op.ts);
+      if (lastReset?.id) op.afterReset = lastReset.id;
+    }
     if (op.op === 'reset') {
       const stale = new Set<string>();
       for (const o of ops) if (o.key === op.key && o.ts < op.ts && o.id) stale.add(o.id);
@@ -702,12 +716,18 @@ export const useTourStore = create<TourState>()((set, get) => {
    *  state blindly). */
   const fetchTerminalUpdatedAt = async (
     userId: string,
-  ): Promise<{ map: Map<string, number>; skewMs: number } | null> => {
+    epoch: number,
+  ): Promise<{ map: Map<string, number>; skewMs: number; gens: Map<string, number> } | null> => {
     try {
       const res = await apiClient.get<{ data?: ServerTourState }>('gamification/tours/state', {
         optionalAuth: true,
       });
-      if (get().userId !== userId) return null;
+      if (get().userId !== userId || epoch !== sessionEpoch) return null;
+      const gens = new Map<string, number>();
+      const gd = res.data?.data?.generations;
+      if (gd && typeof gd === 'object') {
+        for (const [k, v] of Object.entries(gd)) if (typeof v === 'number') gens.set(k, v);
+      }
       const rows = res.data?.data?.completions ?? [];
       const map = new Map<string, number>();
       for (const r of rows) {
@@ -718,14 +738,23 @@ export const useTourStore = create<TourState>()((set, get) => {
       const dateHeader = res.headers?.date ?? res.headers?.Date;
       const serverMs = dateHeader ? Date.parse(String(dateHeader)) : NaN;
       const skewMs = Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
-      return { map, skewMs };
+      return { map, skewMs, gens };
     } catch {
       return null;
     }
   };
 
-  const sendOp = async (userId: string, op: PendingOp): Promise<'ok' | ClassifiedFailure> => {
-    if (get().userId !== userId) return { kind: 'pause' };
+  /** Send one op under the session epoch the drain captured. The epoch
+   *  is re-checked AFTER the await: an acknowledgement arriving across
+   *  a logout/re-login boundary must not stamp state into the new
+   *  session — the op stays queued ('pause') and its resend is
+   *  idempotent (resetId replays a committed reset as a no-op). */
+  const sendOp = async (
+    userId: string,
+    op: PendingOp,
+    epoch: number,
+  ): Promise<'ok' | ClassifiedFailure> => {
+    if (get().userId !== userId || epoch !== sessionEpoch) return { kind: 'pause' };
     const { path, body, method } = opPath(op);
     try {
       if (method === 'delete') {
@@ -733,11 +762,13 @@ export const useTourStore = create<TourState>()((set, get) => {
           `gamification/tours/${path}`,
           { optionalAuth: true, data: body },
         );
+        if (get().userId !== userId || epoch !== sessionEpoch) return { kind: 'pause' };
         // Post-reset generation becomes the new fence for later writes.
         const g = res.data?.data?.generation;
-        if (typeof g === 'number') keyGens.set(op.key, g);
+        if (typeof g === 'number') keyGens.set(genKey(userId, op.key), g);
       } else {
         await apiClient.post(`gamification/tours/${path}`, body, { optionalAuth: true });
+        if (get().userId !== userId || epoch !== sessionEpoch) return { kind: 'pause' };
       }
       return 'ok';
     } catch (err) {
@@ -758,6 +789,10 @@ export const useTourStore = create<TourState>()((set, get) => {
     if (!flushPromise) {
       const drain = (async () => {
         const res = await withQueueLock(userId, async () => {
+          // Session fence: everything below is validated against the
+          // epoch captured here — an account change (or logout/re-login)
+          // mid-drain stops the loop and fences every acknowledgement.
+          const drainEpoch = sessionEpoch;
           const ops = readPendingOps(userId);
           const doneIds = new Set<string>();
           // Per-key reset barrier: a queued reset supersedes every
@@ -770,13 +805,20 @@ export const useTourStore = create<TourState>()((set, get) => {
           // vetoed[key] = reset epoch: a reset dropped because the server
           // holds NEWER terminal state drops its whole replay group.
           const vetoed = new Map<string, number>();
+          // Replay-group tracking: resets this drain finished with, so
+          // group ops (afterReset) can be stamped or dropped explicitly.
+          const ackedResets = new Set<string>();
+          const droppedResets = new Set<string>();
           const VETO_SKEW_TOLERANCE_MS = 5_000;
-          let terminalInfo: { map: Map<string, number>; skewMs: number } | null | undefined;
+          let terminalInfo:
+            | { map: Map<string, number>; skewMs: number; gens: Map<string, number> }
+            | null
+            | undefined;
           let blockedByFailure = false;
           let pauseBlocked = false;
           for (let i = 0; i < ops.length; i++) {
             const op = ops[i];
-            if (get().userId !== userId) break;
+            if (get().userId !== userId || drainEpoch !== sessionEpoch) break;
             if (op.notBefore && op.notBefore > Date.now()) {
               blockedByFailure = true;
               break;
@@ -801,9 +843,34 @@ export const useTourStore = create<TourState>()((set, get) => {
               if (op.id) doneIds.add(op.id);
               continue;
             }
+            // Replay-group member: the reset that gates it either acked
+            // (stamp the post-reset generation — the write belongs to the
+            // new replay by construction), dropped (drop with the group),
+            // or was processed outside this drain (fetch the current
+            // authoritative generation before sending).
+            if (op.afterReset) {
+              if (droppedResets.has(op.afterReset)) {
+                recordOutcome(op.id, 'drop');
+                if (op.id) doneIds.add(op.id);
+                continue;
+              }
+              if (ackedResets.has(op.afterReset)) {
+                op.gen = keyGens.get(genKey(userId, op.key));
+              } else {
+                if (terminalInfo === undefined) {
+                  terminalInfo = await fetchTerminalUpdatedAt(userId, drainEpoch);
+                }
+                if (terminalInfo === null) {
+                  recordOutcome(op.id, 'blocked');
+                  blockedByFailure = true;
+                  break;
+                }
+                op.gen = terminalInfo.gens.get(op.key) ?? 0;
+              }
+            }
             let result: 'ok' | ClassifiedFailure;
             if (op.op === 'reset') {
-              if (terminalInfo === undefined) terminalInfo = await fetchTerminalUpdatedAt(userId);
+              if (terminalInfo === undefined) terminalInfo = await fetchTerminalUpdatedAt(userId, drainEpoch);
               if (terminalInfo === null) {
                 result = { kind: 'retry' };
               } else {
@@ -818,15 +885,16 @@ export const useTourStore = create<TourState>()((set, get) => {
                   // and the server's delete is fenced atomically → 409.
                   op.expectedTerminalUpdatedAt =
                     t !== undefined ? new Date(t).toISOString() : null;
-                  result = await sendOp(userId, op);
+                  result = await sendOp(userId, op, drainEpoch);
                 }
               }
             } else {
-              result = await sendOp(userId, op);
+              result = await sendOp(userId, op, drainEpoch);
             }
             if (result === 'ok') {
               recordOutcome(op.id, 'ok');
               if (op.id) doneIds.add(op.id);
+              if (op.op === 'reset' && op.id) ackedResets.add(op.id);
               continue;
             }
             if (result.kind === 'drop') {
@@ -836,6 +904,7 @@ export const useTourStore = create<TourState>()((set, get) => {
               if (op.op === 'reset') {
                 vetoed.set(op.key, op.epoch);
                 recentVetoes.set(op.key, Date.now());
+                if (op.id) droppedResets.add(op.id);
               }
               recordOutcome(op.id, 'drop');
               if (op.id) doneIds.add(op.id);
@@ -942,7 +1011,9 @@ export const useTourStore = create<TourState>()((set, get) => {
         if (get().userId !== userId || epoch !== sessionEpoch) return;
         if (data.generations && typeof data.generations === 'object') {
           for (const [k, g] of Object.entries(data.generations)) {
-            if (typeof g === 'number' && g > (keyGens.get(k) ?? 0)) keyGens.set(k, g);
+            if (typeof g === 'number' && g > (keyGens.get(genKey(userId, k)) ?? 0)) {
+              keyGens.set(genKey(userId, k), g);
+            }
           }
         }
         const autoTours = data.autoTours === true;

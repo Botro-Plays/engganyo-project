@@ -250,27 +250,35 @@ export class ToursService {
         // would erase newer terminal state written on another device.
         updatedAt: r.updatedAt.toISOString(),
       })),
-      // Replay-generation counters — clients attach the generation they
-      // last observed so writes from before a reset are fenced (409).
-      generations: Object.fromEntries(gens.map((g) => [g.tourKey, g.generation])),
+      // Replay-generation counters — explicit 0 for untouched keys so
+      // clients always have an authoritative expectation to attach.
+      generations: Object.fromEntries(
+        [BEGINNER_TOUR_KEY, ...MILESTONE_TOURS.map((t) => t.key)].map((k) => [
+          k,
+          gens.find((g) => g.tourKey === k)?.generation ?? 0,
+        ]),
+      ),
     };
   }
 
-  /** Lock the (user, tour) generation row inside `tx` and return its
-   *  current generation. This row is the mutex that serializes every
-   *  mutating tour write for the pair: the check-then-write steps that
-   *  follow are atomic against concurrent progress/terminal/reset
-   *  requests, so a completion can never commit between a reset's
-   *  expectation check and its delete.
+  /** Lock the (user, tour) generation row inside `tx` and return the
+   *  row. This row is the mutex that serializes every mutating tour
+   *  write for the pair: the check-then-write steps that follow are
+   *  atomic against concurrent progress/terminal/reset requests, so a
+   *  completion can never commit between a reset's expectation check
+   *  and its delete.
    *
-   *  Throws ConflictException when the caller's expected generation is
-   *  already behind — the write belongs to an older replay generation. */
+   *  Generation contract (authoritative, see assertGeneration):
+   *  expectations must EQUAL the current generation — older AND future
+   *  values conflict (409). A missing expectation means an older
+   *  client did not send one; the fail-closed policy treats it as 0,
+   *  so such writes still work on untouched keys but are fenced the
+   *  moment a first reset lands. */
   private async lockGeneration(
     tx: Prisma.TransactionClient,
     userId: string,
     tourKey: string,
-    expectedGeneration?: number,
-  ): Promise<number> {
+  ): Promise<{ generation: number; lastResetId: string | null }> {
     // ON CONFLICT DO NOTHING creates the row without waiting on a
     // competing first insert; SELECT FOR UPDATE then serializes every
     // writer on the row lock for the rest of the transaction.
@@ -278,15 +286,21 @@ export class ToursService {
       INSERT INTO "tour_generations" ("user_id", "tour_key", "updated_at")
       VALUES (${userId}, ${tourKey}, now())
       ON CONFLICT ("user_id", "tour_key") DO NOTHING`;
-    const rows = await tx.$queryRaw<{ generation: number }[]>`
-      SELECT "generation" FROM "tour_generations"
+    const rows = await tx.$queryRaw<{ generation: number; last_reset_id: string | null }[]>`
+      SELECT "generation", "last_reset_id" FROM "tour_generations"
       WHERE "user_id" = ${userId} AND "tour_key" = ${tourKey}
       FOR UPDATE`;
-    const generation = rows[0]?.generation ?? 0;
-    if (expectedGeneration !== undefined && generation > expectedGeneration) {
+    const row = rows[0] ?? { generation: 0, last_reset_id: null };
+    return { generation: row.generation, lastResetId: row.last_reset_id };
+  }
+
+  /** Authoritative expectation check: the expected generation must
+   *  EQUAL the current one — older and future values conflict (409).
+   *  Missing expectation is treated as 0 (fail-closed, see above). */
+  private assertGeneration(generation: number, expectedGeneration?: number): void {
+    if (generation !== (expectedGeneration ?? 0)) {
       throw new ConflictException('Tour state changed on the server — refresh and try again');
     }
-    return generation;
   }
 
   /** Automatic-tours preference — applies to BOTH beginner and
@@ -411,7 +425,8 @@ export class ToursService {
     await this.prisma.$transaction(async (tx) => {
       // Generation fence + write mutex: a progress write delayed from
       // before a replay reset must not resurrect state the reset erased.
-      await this.lockGeneration(tx, userId, resolved.tourKey, expectedGeneration);
+      const row = await this.lockGeneration(tx, userId, resolved.tourKey);
+      this.assertGeneration(row.generation, expectedGeneration);
       // Create IN_PROGRESS when absent; existing rows are left untouched
       // here so terminal states cannot be reopened by a stray progress call.
       await tx.tourCompletion.upsert({
@@ -445,7 +460,8 @@ export class ToursService {
     // is created terminal; an existing terminal row is never flipped
     // (first write wins, so a late duplicate cannot change the outcome).
     await this.prisma.$transaction(async (tx) => {
-      await this.lockGeneration(tx, userId, key, expectedGeneration);
+      const row = await this.lockGeneration(tx, userId, key);
+      this.assertGeneration(row.generation, expectedGeneration);
       const moved = await tx.tourCompletion.updateMany({
         where: { userId, tourKey: key, version: resolved.version, status: 'IN_PROGRESS' },
         data: { status },
@@ -483,12 +499,28 @@ export class ToursService {
   async resetForReplay(
     userId: string,
     tourKey: string,
-    expected?: { generation?: number; terminalUpdatedAt?: string | null },
+    expected?: { generation?: number; terminalUpdatedAt?: string | null; resetId?: string },
   ) {
     const resolved = this.resolveKey(tourKey);
     if (!resolved) throw new NotFoundException('Unknown tour');
     return this.prisma.$transaction(async (tx) => {
-      await this.lockGeneration(tx, userId, resolved.tourKey, expected?.generation);
+      const row = await this.lockGeneration(tx, userId, resolved.tourKey);
+      // Idempotent replay: a retried reset carrying the id of the reset
+      // that already committed returns success WITHOUT deleting again —
+      // a completion that committed since would otherwise be erased by
+      // the re-run. An unrelated reset at a stale generation still 409s,
+      // and "committed but response lost" recovery is thereby
+      // distinguishable from a genuinely conflicting reset.
+      if (expected?.resetId && expected.resetId === row.lastResetId) {
+        return {
+          reset: true,
+          tourKey: resolved.tourKey,
+          cleared: 0,
+          generation: row.generation,
+          idempotent: true,
+        };
+      }
+      this.assertGeneration(row.generation, expected?.generation);
       if (expected?.terminalUpdatedAt !== undefined) {
         // Under the lock: no terminal write can interleave between this
         // aggregate and the delete — the check is atomic.
@@ -513,7 +545,7 @@ export class ToursService {
       });
       const updated = await tx.tourGeneration.update({
         where: { userId_tourKey: { userId, tourKey: resolved.tourKey } },
-        data: { generation: { increment: 1 } },
+        data: { generation: { increment: 1 }, lastResetId: expected?.resetId ?? null },
         select: { generation: true },
       });
       return { reset: true, tourKey: resolved.tourKey, cleared: res.count, generation: updated.generation };

@@ -7,6 +7,7 @@ CREATE TABLE "tour_generations" (
     "user_id" TEXT NOT NULL,
     "tour_key" TEXT NOT NULL,
     "generation" INTEGER NOT NULL DEFAULT 0,
+    "last_reset_id" TEXT,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "tour_generations_pkey" PRIMARY KEY ("user_id", "tour_key")

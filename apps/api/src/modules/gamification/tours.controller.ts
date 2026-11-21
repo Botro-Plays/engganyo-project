@@ -44,6 +44,13 @@ class TourResetDto {
   @IsString()
   @IsOptional()
   expectedTerminalUpdatedAt?: string | null;
+
+  /** Idempotency key for this reset (the queued op's id). A retried
+   *  DELETE after a committed-but-lost response replays as a no-op
+   *  success instead of conflicting or re-deleting. */
+  @IsString()
+  @IsOptional()
+  resetId?: string;
 }
 
 @ApiTags('tours')
@@ -101,6 +108,7 @@ export class ToursController {
     return this.toursService.resetForReplay(user.sub, key, {
       generation: dto.expectedGeneration,
       terminalUpdatedAt: dto.expectedTerminalUpdatedAt,
+      resetId: dto.resetId,
     });
   }
 }
