@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { MessageSquare, X, Send, Minimize2, Maximize2, RefreshCw, GripVertical } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient } from '@/lib/api';
 import type { ApiResponse } from '@/types';
@@ -22,6 +23,14 @@ interface ChatResponse {
 const STORAGE_KEY = 'chat-widget-pos';
 const EDGE_MARGIN = 8;
 const DESKTOP_QUERY = '(min-width: 640px)';
+// Sheet geometry (mobile): the sheet's bottom edge anchors to the lower of
+// the mobile-nav top edge and the visual viewport's bottom edge. Its height
+// budget is that anchor minus the visual viewport's top edge and margins.
+const SHEET_GAP = 8;
+const SHEET_TOP_MARGIN = 8;
+const SHEET_BASE_CLEARANCE = 12;
+const MIN_SHEET_HEIGHT = 160;
+const MIN_HEIGHT_FOR_NAV_CLEARANCE = 200;
 
 type Pos = { x: number; y: number };
 
@@ -51,10 +60,28 @@ function savePos(pos: Pos) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
 }
 
+// env(safe-area-inset-bottom) can't be read from JS directly; measure a
+// fixed probe with the same bottom value.
+function measureSafeAreaInsetBottom(): number {
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;bottom:env(safe-area-inset-bottom);left:0;width:0;height:0;visibility:hidden;pointer-events:none';
+  document.body.appendChild(probe);
+  const inset = Math.max(0, window.innerHeight - probe.getBoundingClientRect().bottom);
+  probe.remove();
+  return inset;
+}
+
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [aboveMobileNav, setAboveMobileNav] = useState(false);
+  // Computed mobile sheet geometry: px bottom offset, px max height, and
+  // whether the sheet rests above the nav (vs covering it when cramped).
+  const [sheetGeom, setSheetGeom] = useState<{
+    bottom: number;
+    maxHeight: number;
+    aboveNav: boolean;
+  } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -112,20 +139,17 @@ export function ChatWidget() {
     return () => mq.removeEventListener('change', update);
   }, []);
 
-  // Track the ACTUAL visible viewport. On browsers where the layout
-  // viewport doesn't shrink for the software keyboard, the sheet's
-  // bottom edge is lifted by the occluded strip so the composer stays
-  // reachable; its height is also capped to what's really visible.
-  const [vv, setVv] = useState({ height: 0, offsetTop: 0 });
+  const pathname = usePathname();
+
+  // Re-render trigger when the ACTUAL visible viewport changes. On
+  // browsers where the layout viewport doesn't shrink for the software
+  // keyboard, the occluded strip shows up as innerHeight - vv.height -
+  // vv.offsetTop.
+  const [vvTick, setVvTick] = useState(0);
   useEffect(() => {
     const el = window.visualViewport;
     if (!el) return;
-    const update = () => {
-      setVv({ height: el.height, offsetTop: el.offsetTop });
-      if (document.querySelector('nav[aria-label="Mobile navigation"]')) {
-        setAboveMobileNav(el.height > 340);
-      }
-    };
+    const update = () => setVvTick((t) => t + 1);
     update();
     el.addEventListener('resize', update);
     el.addEventListener('scroll', update);
@@ -135,14 +159,54 @@ export function ChatWidget() {
     };
   }, []);
 
-  const kbInset =
-    !isDesktop && vv.height > 0
-      ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-      : 0;
-  const sheetMaxH =
-    !isDesktop && vv.height > 0
-      ? Math.max(Math.min(vv.height - 16, window.innerHeight * 0.85), 160)
-      : undefined;
+  // Sheet geometry, recomputed whenever the visible viewport, the route
+  // (nav presence), or open state changes. The budget is the visual
+  // viewport bounds minus the real bottom offset, safe-area clearance,
+  // and a top margin — so header, messages and composer always stay
+  // inside what's actually visible.
+  useEffect(() => {
+    if (!isOpen || isDesktop) {
+      setSheetGeom(null);
+      return;
+    }
+    const vvEl = window.visualViewport;
+    const ih = window.innerHeight;
+    const vvH = vvEl?.height ?? ih;
+    const vvTop = vvEl?.offsetTop ?? 0;
+    const vvBottom = vvTop + vvH;
+    const kbInset = Math.max(0, ih - vvH - vvTop);
+    const safe = measureSafeAreaInsetBottom();
+
+    const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
+    const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
+
+    let aboveNav = false;
+    let bottomEdge: number;
+    if (navTop < vvBottom) {
+      // The nav's top edge pokes into the visible region — rest above it.
+      bottomEdge = navTop - SHEET_GAP;
+      aboveNav = true;
+      if (bottomEdge - vvTop - SHEET_TOP_MARGIN < MIN_HEIGHT_FOR_NAV_CLEARANCE) {
+        // Too cramped to clear the nav — cover it instead (transient; the
+        // composer staying reachable wins) and use the tighter anchor.
+        aboveNav = false;
+        bottomEdge = vvBottom - safe - SHEET_BASE_CLEARANCE;
+      }
+    } else {
+      bottomEdge = vvBottom - safe - SHEET_BASE_CLEARANCE;
+    }
+
+    const avail = Math.max(0, bottomEdge - vvTop - SHEET_TOP_MARGIN);
+    // With the keyboard open the budget is already the binding
+    // constraint; without it keep the comfortable 85% ceiling.
+    const cap = kbInset > 0 ? vvH : vvH * 0.85;
+    const maxHeight = Math.max(MIN_SHEET_HEIGHT, Math.min(avail, cap));
+    setSheetGeom({
+      bottom: Math.max(0, ih - bottomEdge),
+      maxHeight,
+      aboveNav,
+    });
+  }, [isOpen, isDesktop, vvTick, pathname]);
 
   // Load + recover the persisted offset once the widget exists, and re-clamp
   // on resize/orientation change. Invalid or unreachable offsets collapse to
@@ -231,14 +295,6 @@ export function ChatWidget() {
   // Focus the composer on open and let Escape close the panel/sheet.
   useEffect(() => {
     if (!isOpen) return;
-    // The dashboard mobile nav is a fixed z-50 strip at the bottom edge.
-    // Lift the sheet above it so the composer is never overlapped — but
-    // only when the visible viewport has room; when the keyboard leaves
-    // very little space the sheet falls back to covering the nav so the
-    // composer stays reachable instead of being pushed off-screen.
-    const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
-    const vvH = window.visualViewport?.height ?? window.innerHeight;
-    setAboveMobileNav(!!nav && vvH > 340);
     inputRef.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
@@ -318,7 +374,9 @@ export function ChatWidget() {
   };
 
   // z-40 keeps the widget under dialogs/room modals (z-50), the mobile nav,
-  // and the cookie consent bar (z-[60]) — those always take precedence.
+  // and the cookie consent bar (z-[60]) — those always take precedence. When
+  // the sheet covers the nav (cramped heights only) it rises to z-[60] so the
+  // nav can't intercept composer taps.
   if (!isOpen) {
     return (
       <button
@@ -352,10 +410,11 @@ export function ChatWidget() {
       aria-label="Engganyo support chat"
       style={{
         ...dragStyle,
-        ...(sheetMaxH ? { maxHeight: sheetMaxH } : {}),
-        // Lift above the occluded strip when the software keyboard covers
-        // the layout viewport's bottom edge (no-op when it resizes instead).
-        ['--chat-kb' as string]: `${kbInset}px`,
+        // Computed px geometry overrides the CSS fallback once measured;
+        // the classes below keep a sane default for the first frame.
+        ...(sheetGeom && !isDesktop
+          ? { bottom: sheetGeom.bottom, maxHeight: sheetGeom.maxHeight }
+          : {}),
       }}
       onMouseDown={(e) => {
         if (!isDesktop || isInteractiveTarget(e)) return;
@@ -363,12 +422,8 @@ export function ChatWidget() {
         startDrag(e.clientX, e.clientY);
       }}
       className={`fixed inset-x-3 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)] sm:z-40 ${
-        aboveMobileNav ? 'z-40' : 'z-[60]'
-      } ${
-        aboveMobileNav
-          ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom)+var(--chat-kb,0px))]'
-          : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom)+var(--chat-kb,0px))]'
-      } sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]`}
+        sheetGeom && !sheetGeom.aboveNav && !isDesktop ? 'z-[60]' : 'z-40'
+      } bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]`}
     >
       {/* Header — drag handle on desktop */}
       <div
@@ -425,7 +480,7 @@ export function ChatWidget() {
         <>
           {/* Messages */}
           <div
-            className="min-h-0 max-h-[50dvh] flex-1 space-y-4 overflow-y-auto p-4 sm:min-h-[300px]"
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:min-h-[300px]"
             data-no-drag
           >
             {messages.length === 0 && (

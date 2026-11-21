@@ -56,6 +56,71 @@ const insideViewport = async (page: Page, selector: string) => {
   return box!;
 };
 
+
+// ── Simulated software-keyboard geometry ────────────────────────────────
+// Playwright can't drive a real IME, so these cases replace
+// window.visualViewport with an EventTarget whose height/offsetTop the
+// test controls. innerHeight stays the layout height; the difference
+// simulates the occluded strip a keyboard leaves. This is SIMULATED
+// keyboard coverage — real-device acceptance remains owner-assisted.
+async function installFakeVisualViewport(page: Page) {
+  await page.addInitScript(() => {
+    const target = new EventTarget();
+    let h = window.innerHeight;
+    let top = 0;
+    const g = (k: string, fn: () => number) =>
+      Object.defineProperty(target, k, { get: fn });
+    g('height', () => h);
+    g('offsetTop', () => top);
+    g('offsetLeft', () => 0);
+    g('width', () => window.innerWidth);
+    g('scale', () => 1);
+    g('pageTop', () => top);
+    g('pageLeft', () => 0);
+    (window as unknown as { __vvSet: (a: number, b: number) => void }).__vvSet =
+      (height: number, offsetTop: number) => {
+        h = height;
+        top = offsetTop;
+        target.dispatchEvent(new Event('resize'));
+      };
+    Object.defineProperty(window, 'visualViewport', {
+      value: target,
+      configurable: true,
+    });
+  });
+}
+
+function setVisibleViewport(page: Page, height: number, offsetTop: number) {
+  return page.evaluate(
+    ([a, b]) =>
+      (window as unknown as { __vvSet: (x: number, y: number) => void }).__vvSet(a, b),
+    [height, offsetTop],
+  );
+}
+
+// Assert the whole sheet plus its reachable controls sit inside the
+// simulated visible region [vvTop, vvTop + vvH] of the layout viewport.
+async function expectSheetInsideVisible(
+  page: Page,
+  vvH: number,
+  vvTop: number,
+) {
+  const box = await page.locator(DIALOG).boundingBox();
+  expect(box, 'sheet should be measurable').not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(vvTop);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(vvTop + vvH + 1);
+
+  for (const sel of [
+    'button[aria-label="Close chat"]',
+    'button[aria-label="Send message"]',
+  ]) {
+    const b = await page.locator(sel).boundingBox();
+    expect(b, `${sel} should be measurable`).not.toBeNull();
+    expect(b!.y).toBeGreaterThanOrEqual(vvTop);
+    expect(b!.y + b!.height).toBeLessThanOrEqual(vvTop + vvH + 1);
+  }
+}
+
 test.describe('launcher placement across widths', () => {
   for (const width of [320, 360, 390, 768, 1440]) {
     test(`stays fully inside viewport @${width}px`, async ({ page }) => {
@@ -277,5 +342,78 @@ test.describe('message list scrolling', () => {
         { timeout: 5_000 },
       )
       .toBeGreaterThanOrEqual(metrics.scrollHeight - 4);
+  });
+});
+
+test.describe('sheet height budget vs visible viewport (simulated keyboard)', () => {
+  // Layout viewport fixed at 390x800; the faked visualViewport models the
+  // keyboard-occluded strip (innerHeight - vv.height - vv.offsetTop).
+  // Dashboard pages render the fixed mobile nav; the homepage has none.
+  test.use({ viewport: { width: 390, height: 800 } });
+
+  const CASES: { vvH: number; vvTop: number; nav: boolean }[] = [
+    { vvH: 350, vvTop: 0, nav: true },
+    { vvH: 350, vvTop: 40, nav: false },
+    { vvH: 400, vvTop: 0, nav: true },
+    { vvH: 400, vvTop: 0, nav: false },
+    { vvH: 500, vvTop: 0, nav: true },
+    { vvH: 500, vvTop: 60, nav: false },
+    { vvH: 600, vvTop: 0, nav: true },
+    { vvH: 600, vvTop: 0, nav: false },
+  ];
+
+  for (const c of CASES) {
+    test(`vv ${c.vvH}+${c.vvTop} ${c.nav ? 'with nav in DOM' : 'no nav'}: sheet stays fully visible`, async ({
+      page,
+    }) => {
+      await installFakeVisualViewport(page);
+      await mockChatApi(page);
+      if (c.nav) {
+        await gotoDashboard(page);
+      } else {
+        await page.goto('/');
+        await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+      }
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+      await setVisibleViewport(page, c.vvH, c.vvTop);
+      await page.locator(LAUNCHER).click();
+      await expect(page.locator(DIALOG)).toBeVisible();
+      await expectSheetInsideVisible(page, c.vvH, c.vvTop);
+      await expect(page.getByLabel('Chat message')).toBeVisible();
+    });
+  }
+
+  test('partially visible nav: sheet rests above it when there is room', async ({ page }) => {
+    await installFakeVisualViewport(page);
+    await mockChatApi(page);
+    await gotoDashboard(page);
+    // vv 780 of 800: the nav's top edge (~740) pokes into the visible
+    // region, so the sheet should anchor just above it.
+    await setVisibleViewport(page, 780, 0);
+    await page.locator(LAUNCHER).click();
+    const dialog = page.locator(DIALOG);
+    await expect(dialog).toBeVisible();
+    await expectSheetInsideVisible(page, 780, 0);
+    const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
+    const sheet = await dialog.boundingBox();
+    expect(nav).not.toBeNull();
+    expect(sheet!.y + sheet!.height).toBeLessThanOrEqual(nav!.y + 1);
+  });
+
+  test('cramped heights cover the nav but keep every control inside', async ({ page }) => {
+    await installFakeVisualViewport(page);
+    await mockChatApi(page);
+    await gotoDashboard(page);
+    // vv 250: clearing the nav would leave < 200px, so the sheet covers
+    // it (z-60) — but the whole sheet must stay inside the visible area.
+    await setVisibleViewport(page, 250, 0);
+    await page.locator(LAUNCHER).click();
+    await expect(page.locator(DIALOG)).toBeVisible();
+    await expectSheetInsideVisible(page, 250, 0);
+    const send = page.getByRole('button', { name: 'Send message' });
+    await expect(send).toBeVisible();
+    await page.getByLabel('Chat message').fill('Cramped');
+    await send.click();
+    await expect(page.locator(DIALOG).getByText('Cramped')).toBeVisible();
   });
 });
