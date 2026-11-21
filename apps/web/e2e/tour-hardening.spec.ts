@@ -1183,7 +1183,11 @@ test.describe('tour state hardening', () => {
 
     await page.goto('/settings');
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
-    const replayBtn = page.getByRole('button', { name: 'Replay' }).first();
+    // Scope to the FeatureToursCard row — a floating "Replay onboarding
+    // tour" FAB also matches the plain name lookup.
+    const replayBtn = page
+      .locator('li', { hasText: 'Getting started tour' })
+      .getByRole('button', { name: 'Replay' });
     await expect(replayBtn).toBeVisible();
 
     // Account A starts a replay — its snapshot request is held.
