@@ -300,16 +300,21 @@ run('tour server state — real PostgreSQL', () => {
   it('concurrent reset vs completion never silently erases the completion', async () => {
     const u = await mkUser();
     // Whichever wins the generation lock, the outcome is safe: if the
-    // completion commits first the reset 409s; if the reset wins the
-    // completion lands after it. The completion must ALWAYS persist.
-    await Promise.all([
+    // completion commits first the reset 409s on the terminal-timestamp
+    // check; if the reset wins, the gen-0 completion is fenced (409) as a
+    // delayed pre-reset write. The two writes can never both commit.
+    const [completion, reset] = await Promise.allSettled([
       tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION),
-      tours
-        .resetForReplay(u.id, BEGINNER_TOUR_KEY, { terminalUpdatedAt: null })
-        .catch(() => undefined),
+      tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { terminalUpdatedAt: null }),
     ]);
     const s = await tours.getState(u.id);
-    expect(s.beginner?.status).toBe('COMPLETED');
+    if (completion.status === 'fulfilled') {
+      expect(s.beginner?.status).toBe('COMPLETED');
+      expect(reset.status).toBe('rejected');
+    } else {
+      expect(reset.status).toBe('fulfilled');
+      expect(s.beginner).toBeNull();
+    }
   });
 
   it('a matching expectation allows the reset and bumps the generation', async () => {
