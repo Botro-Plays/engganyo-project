@@ -162,18 +162,13 @@ export default async function LandingPage() {
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-5">
-                Engganyo: a creator
+                Small Taps.
                 <br />
-                <span className="text-gradient">engagement exchange.</span>
+                <span className="text-gradient">Big Crowds.</span>
               </h1>
 
-              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-3 max-w-lg">
-                Engganyo is a web platform where creators complete small tasks for each other, earn credits,
-                and spend them on campaigns for their own accounts.
-              </p>
-              <p className="text-sm sm:text-base text-sc-dim leading-relaxed mb-8 max-w-lg">
-                Small Taps. Big Crowds. Completions are reviewed by the campaign owner before credits are
-                released; Twitch and Spotify follows can also verify automatically through linked accounts.
+              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-8 max-w-lg">
+                Complete small tasks for other creators, earn credits, and spend them on your own campaigns.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
