@@ -26,21 +26,16 @@ Legend:
 | Tour persistence hardening (op-per-key queue, locks drain, epoch fencing, bounded sync) | PR #117 → `8cf66dc`, deploy `44870087861` |
 | Replay-group durable generation binding (`resetAckedGen`, `lastResetIds` recovery, `resetId` idempotency, request-time anchor) | PR #118 → `44c9158`, deploy `44880889015`; on-host `Deployment healthy: 44c9158`; live site 200, tour endpoints 401 |
 | Landing "Start Engaging" CTA | PR #116 → `c8d3643`, deploy `44767070772` |
+| SEO round-2: factual copy, shared chrome, inner-page JSON-LD/og, custom 404, honest lastmod, www→apex 301 | PR #120 → `eed9a70`, deploy `44886461224`; live: www 301 path-preserving, AboutPage/FAQPage schema, single 404 title, "cannot be withdrawn" copy |
+| Hero Telegram CTA filled gold + navy | PR #122 → `3e7e798`, deploy `44887262394`; live `bg-accent-500` verified in served HTML |
+| `421fce7` docs deploy | deploy `44890127700` success |
 | Reset request-time server snapshot (`expectedTerminalUpdatedAt` bound at enqueue; stale resets fail closed; deterministic completion-after-request regression) | PR #119 → `d9b6bff`, CI run `44884535004` all green |
 
 ## CI-tested (merged, deploy pending/in-flight)
 
 | Item | Status |
 |------|--------|
-| `d9b6bff` deploy run | triggered by PR #119 merge — verify on-host health + live 401s |
-
-## Implemented (open PRs, CI pending)
-
-| PR | Scope |
-|----|-------|
-| #120 `feat/seo-round2-factual-copy` | Factual About/FAQ/Contact copy (no brands, no withdrawals; real platforms, deposits, review paths), shared public chrome, inner-page JSON-LD + social meta, custom 404, honest sitemap lastmod, nginx www→apex 301, SEO baseline doc update |
-| #121 `feat/chat-safe-placement` | Chat widget: mobile sheet, desktop clamped dock, offset recovery, z-40 under dialogs/consent, Escape/autofocus, e2e spec |
-| #122 `feat/telegram-filled-cta` | Hero Telegram CTA filled gold + navy text, navy-edge keyframes, reduced-motion fallback |
+| `ecf7b87` (PR #121 chat widget) | CI `44890111639` fully green; main deploy run in flight |
 
 ## Awaiting owner decision
 
