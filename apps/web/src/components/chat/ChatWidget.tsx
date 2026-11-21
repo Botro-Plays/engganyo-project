@@ -362,7 +362,9 @@ export function ChatWidget() {
         e.preventDefault();
         startDrag(e.clientX, e.clientY);
       }}
-      className={`fixed inset-x-3 z-40 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)] ${
+      className={`fixed inset-x-3 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)] sm:z-40 ${
+        aboveMobileNav ? 'z-40' : 'z-[60]'
+      } ${
         aboveMobileNav
           ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom)+var(--chat-kb,0px))]'
           : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom)+var(--chat-kb,0px))]'

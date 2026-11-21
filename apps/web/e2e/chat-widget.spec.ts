@@ -152,9 +152,12 @@ test.describe('desktop dock @1440px', () => {
 
   test('opening the panel does not scroll the underlying page', async ({ page }) => {
     await mockChatApi(page);
-    await gotoDashboard(page);
-    await page.evaluate(() => window.scrollTo(0, 300));
+    // The homepage is a long document — real document scroll to verify.
+    await page.goto('/');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.evaluate(() => window.scrollTo(0, 600));
     const before = await page.evaluate(() => window.scrollY);
+    expect(before).toBeGreaterThan(100);
     await page.locator(LAUNCHER).click();
     await expect(page.locator(DIALOG)).toBeVisible();
     // Autofocus + layout must not pull the document.
