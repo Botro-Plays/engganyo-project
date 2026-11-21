@@ -39,12 +39,11 @@ promise of rich-result eligibility; Google decides display.
 | Reset request-time server snapshot (`expectedTerminalUpdatedAt` bound at enqueue; stale resets fail closed; deterministic completion-after-request regression) | PR #119 → `d9b6bff`; own deploy run `44885676972` failed on SSH transport (not code), content shipped by next main deploy `44886461224` (`eed9a70`) |
 | Chat widget safe placement (mobile sheet, clamped desktop dock, position recovery, nav clearance, z under dialogs/consent) | PR #121 → `ecf7b87`, deploy `44891413716` success |
 | Reset-failure session fencing (captured account+epoch gate on every snapshot-path state update; stale snapshot can't clear another session's replay UI) + `__engganyoTourStore` e2e seam | PR #123 → `87458ca`, deploy `44897692076` success; live site 200, tour endpoints 401 |
+| Chat keyboard/viewport acceptance (`interactiveWidget: resizes-content`, visualViewport `--chat-kb` inset, real-visible-height sheet cap, focus return to launcher, covered-nav z-60 at short heights) | PR #124 → `0c90b09`, deploy `44898276456` success; live `interactive-widget=resizes-content` in served viewport meta |
 
 ## CI-tested (merged, deploy pending/in-flight)
 
-| Item | Status |
-|------|--------|
-| Chat keyboard/viewport acceptance (visualViewport inset, `resizes-content` meta, focus return to launcher, page-scroll stability, covered-nav z-60 at short heights) | PR #124 → `0c90b09`, CI green `44896998077`; deploy `44898276456` in flight |
+_Nothing currently in flight._
 
 ## Awaiting owner decision
 
