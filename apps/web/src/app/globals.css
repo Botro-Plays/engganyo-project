@@ -272,6 +272,13 @@
   .tg-hero-icon {
     display: inline-flex;
   }
+  /* Hover/focus deepen the static outline — color change only, no motion. */
+  .tg-hero-cta:is(:hover, :focus-visible) {
+    border-color: rgba(5, 9, 24, 0.75);
+    box-shadow:
+      0 0 0 1px rgba(31, 98, 240, 0.6),
+      0 0 22px 4px rgba(232, 168, 0, 0.4);
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
   /* Entrance: slight overshoot so the button "lands" with emphasis. */
@@ -331,8 +338,20 @@
   .tg-hero-cta {
     animation:
       tg-hero-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.15) both,
-      tg-hero-flash 1.4s ease-out 0.55s both,
-      tg-hero-glow 3.5s ease-in-out 1.6s infinite;
+      tg-hero-flash 1.4s ease-out 0.55s both;
+  }
+  /* The ambient outline cycle lives on ::before so hover/focus can swap
+     it for a sustained emphasis without replaying the entrance
+     animations (an animation list change would restart them). Replaying
+     the glow itself on un-hover is invisible: its first 74% is idle. */
+  .tg-hero-cta::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border: 1px solid rgba(5, 9, 24, 0.35);
+    border-radius: 13px;
+    pointer-events: none;
+    animation: tg-hero-glow 3.5s ease-in-out 1.6s infinite;
   }
   .tg-hero-icon {
     animation: tg-hero-plane 3.5s ease-in-out 1.6s infinite;
@@ -359,5 +378,42 @@
       transparent
     );
     animation: tg-hero-shimmer 3.5s ease-in-out 1.6s infinite;
+  }
+}
+
+/* Immediate hover/focus emphasis for fine pointers only. Touch devices
+   (hover: none) never match, so tap behavior stays predictable. All
+   effects start at 0ms: a one-shot paper-plane drift and shimmer sweep,
+   plus a sustained outline while hovered/focused. No transform on the
+   button itself, so nothing shifts layout; the icon is the only element
+   animating, so no competing transforms. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  @keyframes tg-hero-plane-hover {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    35% { transform: translate(4px, -5px) rotate(-14deg); }
+    70% { transform: translate(2px, -2px) rotate(-6deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
+  }
+  @keyframes tg-hero-shimmer-sweep {
+    0% { opacity: 0; transform: translateX(-120%); }
+    30% { opacity: 0.5; }
+    100% { opacity: 0; transform: translateX(120%); }
+  }
+  .tg-hero-cta:is(:hover, :focus-visible)::before {
+    animation: none;
+    border-color: rgba(5, 9, 24, 0.8);
+    box-shadow:
+      0 0 0 1px rgba(31, 98, 240, 0.6),
+      0 0 16px 3px rgba(31, 98, 240, 0.35),
+      0 0 22px 4px rgba(232, 168, 0, 0.45);
+    transition:
+      box-shadow 0.18s ease-out,
+      border-color 0.18s ease-out;
+  }
+  .tg-hero-cta:is(:hover, :focus-visible) .tg-hero-icon {
+    animation: tg-hero-plane-hover 0.55s ease-out both;
+  }
+  .tg-hero-cta:is(:hover, :focus-visible) .tg-hero-shine::after {
+    animation: tg-hero-shimmer-sweep 0.6s ease-out both;
   }
 }
