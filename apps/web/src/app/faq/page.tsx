@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
+// Uniform public-page caching: one hour shared cache with
+// stale-while-revalidate (emits s-maxage=3600).
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: 'FAQ',
   description:
