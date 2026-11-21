@@ -155,9 +155,11 @@ test.describe('desktop dock @1440px', () => {
     // The homepage is a long document — real document scroll to verify.
     await page.goto('/');
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
-    await page.evaluate(() => window.scrollTo(0, 600));
+    // html { scroll-behavior: smooth } makes a plain scrollTo animate —
+    // use 'instant' and wait for the value to land before measuring.
+    await page.evaluate(() => window.scrollTo({ top: 600, behavior: 'instant' }));
+    await page.waitForFunction(() => window.scrollY > 100);
     const before = await page.evaluate(() => window.scrollY);
-    expect(before).toBeGreaterThan(100);
     await page.locator(LAUNCHER).click();
     await expect(page.locator(DIALOG)).toBeVisible();
     // Autofocus + layout must not pull the document.
