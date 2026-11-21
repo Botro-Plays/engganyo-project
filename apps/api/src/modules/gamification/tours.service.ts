@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { TourCompletionStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, TourCompletionStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
 /**
@@ -209,11 +214,15 @@ export class ToursService {
    *  recorded (tour, version) row. Clients treat localStorage only as
    *  a cache and migrate local-only beginner state up once. */
   async getState(userId: string) {
-    const [user, rows] = await Promise.all([
+    const [user, rows, gens] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
       this.prisma.tourCompletion.findMany({
         where: { userId },
         select: { tourKey: true, version: true, status: true, stepIndex: true, updatedAt: true },
+      }),
+      this.prisma.tourGeneration.findMany({
+        where: { userId },
+        select: { tourKey: true, generation: true },
       }),
     ]);
     if (!user) throw new NotFoundException('User not found');
@@ -241,7 +250,43 @@ export class ToursService {
         // would erase newer terminal state written on another device.
         updatedAt: r.updatedAt.toISOString(),
       })),
+      // Replay-generation counters — clients attach the generation they
+      // last observed so writes from before a reset are fenced (409).
+      generations: Object.fromEntries(gens.map((g) => [g.tourKey, g.generation])),
     };
+  }
+
+  /** Lock the (user, tour) generation row inside `tx` and return its
+   *  current generation. This row is the mutex that serializes every
+   *  mutating tour write for the pair: the check-then-write steps that
+   *  follow are atomic against concurrent progress/terminal/reset
+   *  requests, so a completion can never commit between a reset's
+   *  expectation check and its delete.
+   *
+   *  Throws ConflictException when the caller's expected generation is
+   *  already behind — the write belongs to an older replay generation. */
+  private async lockGeneration(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    tourKey: string,
+    expectedGeneration?: number,
+  ): Promise<number> {
+    // ON CONFLICT DO NOTHING creates the row without waiting on a
+    // competing first insert; SELECT FOR UPDATE then serializes every
+    // writer on the row lock for the rest of the transaction.
+    await tx.$executeRaw`
+      INSERT INTO "tour_generations" ("user_id", "tour_key", "updated_at")
+      VALUES (${userId}, ${tourKey}, now())
+      ON CONFLICT ("user_id", "tour_key") DO NOTHING`;
+    const rows = await tx.$queryRaw<{ generation: number }[]>`
+      SELECT "generation" FROM "tour_generations"
+      WHERE "user_id" = ${userId} AND "tour_key" = ${tourKey}
+      FOR UPDATE`;
+    const generation = rows[0]?.generation ?? 0;
+    if (expectedGeneration !== undefined && generation > expectedGeneration) {
+      throw new ConflictException('Tour state changed on the server — refresh and try again');
+    }
+    return generation;
   }
 
   /** Automatic-tours preference — applies to BOTH beginner and
@@ -347,7 +392,13 @@ export class ToursService {
 
   /** Persists in-progress step position. Never resurrects a terminal
    *  (COMPLETED/DISMISSED) row — first terminal write wins. */
-  async recordProgress(userId: string, tourKey: string, version: number, step: number) {
+  async recordProgress(
+    userId: string,
+    tourKey: string,
+    version: number,
+    step: number,
+    expectedGeneration?: number,
+  ) {
     const resolved = this.resolveKey(tourKey);
     if (!resolved) throw new NotFoundException('Unknown tour');
     if (version !== resolved.version) {
@@ -357,22 +408,33 @@ export class ToursService {
     const where = {
       userId_tourKey_version: { userId, tourKey: resolved.tourKey, version: resolved.version },
     };
-    // Create IN_PROGRESS when absent; existing rows are left untouched
-    // here so terminal states cannot be reopened by a stray progress call.
-    await this.prisma.tourCompletion.upsert({
-      where,
-      create: { userId, tourKey: resolved.tourKey, version: resolved.version, status: 'IN_PROGRESS', stepIndex },
-      update: {},
-    });
-    // Refresh the step only while the row is still in progress.
-    await this.prisma.tourCompletion.updateMany({
-      where: { userId, tourKey: resolved.tourKey, version: resolved.version, status: 'IN_PROGRESS' },
-      data: { stepIndex },
+    await this.prisma.$transaction(async (tx) => {
+      // Generation fence + write mutex: a progress write delayed from
+      // before a replay reset must not resurrect state the reset erased.
+      await this.lockGeneration(tx, userId, resolved.tourKey, expectedGeneration);
+      // Create IN_PROGRESS when absent; existing rows are left untouched
+      // here so terminal states cannot be reopened by a stray progress call.
+      await tx.tourCompletion.upsert({
+        where,
+        create: { userId, tourKey: resolved.tourKey, version: resolved.version, status: 'IN_PROGRESS', stepIndex },
+        update: {},
+      });
+      // Refresh the step only while the row is still in progress.
+      await tx.tourCompletion.updateMany({
+        where: { userId, tourKey: resolved.tourKey, version: resolved.version, status: 'IN_PROGRESS' },
+        data: { stepIndex },
+      });
     });
     return { recorded: true, tourKey: resolved.tourKey, version: resolved.version, step: stepIndex };
   }
 
-  private async record(userId: string, tourKey: string, version: number, status: TourCompletionStatus) {
+  private async record(
+    userId: string,
+    tourKey: string,
+    version: number,
+    status: TourCompletionStatus,
+    expectedGeneration?: number,
+  ) {
     const resolved = this.resolveKey(tourKey);
     if (!resolved) throw new NotFoundException('Unknown tour');
     if (version !== resolved.version) {
@@ -382,37 +444,79 @@ export class ToursService {
     // IN_PROGRESS → terminal is the normal finish path. A missing row
     // is created terminal; an existing terminal row is never flipped
     // (first write wins, so a late duplicate cannot change the outcome).
-    const moved = await this.prisma.tourCompletion.updateMany({
-      where: { userId, tourKey: key, version: resolved.version, status: 'IN_PROGRESS' },
-      data: { status },
-    });
-    if (moved.count === 0) {
-      await this.prisma.tourCompletion.upsert({
-        where: { userId_tourKey_version: { userId, tourKey: key, version: resolved.version } },
-        create: { userId, tourKey: key, version: resolved.version, status },
-        update: {},
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockGeneration(tx, userId, key, expectedGeneration);
+      const moved = await tx.tourCompletion.updateMany({
+        where: { userId, tourKey: key, version: resolved.version, status: 'IN_PROGRESS' },
+        data: { status },
       });
-    }
+      if (moved.count === 0) {
+        await tx.tourCompletion.upsert({
+          where: { userId_tourKey_version: { userId, tourKey: key, version: resolved.version } },
+          create: { userId, tourKey: key, version: resolved.version, status },
+          update: {},
+        });
+      }
+    });
     return { recorded: true, tourKey: key, version: resolved.version, status };
   }
 
-  complete(userId: string, tourKey: string, version: number) {
-    return this.record(userId, tourKey, version, TourCompletionStatus.COMPLETED);
+  complete(userId: string, tourKey: string, version: number, expectedGeneration?: number) {
+    return this.record(userId, tourKey, version, TourCompletionStatus.COMPLETED, expectedGeneration);
   }
 
-  dismiss(userId: string, tourKey: string, version: number) {
-    return this.record(userId, tourKey, version, TourCompletionStatus.DISMISSED);
+  dismiss(userId: string, tourKey: string, version: number, expectedGeneration?: number) {
+    return this.record(userId, tourKey, version, TourCompletionStatus.DISMISSED, expectedGeneration);
   }
 
   /** Replay support: clears state rows for a tour key (any version) so
    *  it becomes due again. Works for `beginner` and milestone keys;
-   *  never touches the automatic-tours preference or other tours. */
-  async resetForReplay(userId: string, tourKey: string) {
+   *  never touches the automatic-tours preference or other tours.
+   *
+   *  The reset is fenced server-side, not just by client veto: the
+   *  expectation check and the delete run inside one transaction under
+   *  the per-(user, tour) generation lock, so a terminal write that
+   *  commits after the caller's lookup but before this DELETE causes a
+   *  409 conflict instead of being erased. A successful reset bumps the
+   *  generation, which retroactively fences delayed writes from earlier
+   *  replay generations (they see generation > expected → 409). */
+  async resetForReplay(
+    userId: string,
+    tourKey: string,
+    expected?: { generation?: number; terminalUpdatedAt?: string | null },
+  ) {
     const resolved = this.resolveKey(tourKey);
     if (!resolved) throw new NotFoundException('Unknown tour');
-    const res = await this.prisma.tourCompletion.deleteMany({
-      where: { userId, tourKey: resolved.tourKey },
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockGeneration(tx, userId, resolved.tourKey, expected?.generation);
+      if (expected?.terminalUpdatedAt !== undefined) {
+        // Under the lock: no terminal write can interleave between this
+        // aggregate and the delete — the check is atomic.
+        const latest = await tx.tourCompletion.aggregate({
+          _max: { updatedAt: true },
+          where: { userId, tourKey: resolved.tourKey, status: { not: 'IN_PROGRESS' } },
+        });
+        const maxT = latest._max.updatedAt;
+        const expectedMs =
+          expected.terminalUpdatedAt === null ? null : Date.parse(expected.terminalUpdatedAt);
+        if (
+          maxT &&
+          (expectedMs === null || !Number.isFinite(expectedMs) || maxT.getTime() > expectedMs)
+        ) {
+          throw new ConflictException(
+            'A newer completion exists on the server — refresh and replay again',
+          );
+        }
+      }
+      const res = await tx.tourCompletion.deleteMany({
+        where: { userId, tourKey: resolved.tourKey },
+      });
+      const updated = await tx.tourGeneration.update({
+        where: { userId_tourKey: { userId, tourKey: resolved.tourKey } },
+        data: { generation: { increment: 1 } },
+        select: { generation: true },
+      });
+      return { reset: true, tourKey: resolved.tourKey, cleared: res.count, generation: updated.generation };
     });
-    return { reset: true, tourKey: resolved.tourKey, cleared: res.count };
   }
 }

@@ -436,6 +436,7 @@ model User {
   friendshipsRequested   Friendship[]            @relation("FriendshipRequester")
   friendshipsReceived    Friendship[]            @relation("FriendshipAddressee")
   tourCompletions        TourCompletion[]
+  tourGenerations        TourGeneration[]
 
   @@index([email])
   @@index([username])
@@ -620,6 +621,24 @@ model TourCompletion {
   @@unique([userId, tourKey, version])
   @@index([userId])
   @@map("tour_completions")
+}
+
+// Replay-generation fencing for tour state. One row per (user, tour)
+// doubles as the write mutex: every mutating tour endpoint locks this
+// row inside its transaction before touching tour_completions, so
+// writers serialize and a replay reset can atomically verify that no
+// terminal row newer than the client's expectation exists before
+// deleting. `generation` increments on each successful reset; writes
+// carrying an expected generation older than current are rejected 409.
+model TourGeneration {
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourKey    String   @map("tour_key")
+  generation Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@id([userId, tourKey])
+  @@map("tour_generations")
 }
 
 enum TourCompletionStatus {

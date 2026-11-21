@@ -46,6 +46,7 @@ export function FeatureToursCard() {
   const autoToursError = useTourStore((s) => s.autoToursError);
   const hydrated = useTourStore((s) => s.hydrated);
   const unsyncedWrites = useTourStore((s) => s.unsyncedWrites);
+  const queueOverflow = useTourStore((s) => s.queueOverflow);
   const replayError = useTourStore((s) => s.replayError);
   const replayBusy = useTourStore((s) => s.replayBusy);
   const resetTour = useTourStore((s) => s.resetTour);
@@ -172,7 +173,7 @@ export function FeatureToursCard() {
           </button>
         </p>
       )}
-      {(unsyncedWrites || replayError) && (
+      {(unsyncedWrites || replayError || queueOverflow) && (
         <p className="mb-3 flex items-center gap-2 text-xs text-amber-400">
           Some tour changes haven&apos;t synced to your account yet.
           <button
