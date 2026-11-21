@@ -827,6 +827,7 @@ export const useTourStore = create<TourState>()((set, get) => {
           // group ops (afterReset) can be stamped or dropped explicitly.
           const ackedResets = new Set<string>();
           const droppedResets = new Set<string>();
+          const RESET_ANCHOR_TOLERANCE_MS = 5_000;
           let terminalInfo:
             | {
                 map: Map<string, number>;
@@ -918,22 +919,25 @@ export const useTourStore = create<TourState>()((set, get) => {
               if (terminalInfo === null) {
                 result = { kind: 'retry' };
               } else {
-                // Carry the observed newest-terminal timestamp into the
-                // DELETE and let the SERVER decide atomically:
+                // Anchor the terminal expectation to WHEN THE RESET WAS
+                // REQUESTED (op.ts), computed once and persisted — the
+                // server's atomic check then enforces the stale-reset
+                // veto transactionally:
+                //  - terminal state newer than the request → expectation
+                //    is null → the server 409s instead of erasing it;
                 //  - an already-committed resetId (lost response) is
-                //    acknowledged idempotently — even when newer terminal
-                //    state now exists, nothing is re-deleted;
-                //  - a genuinely stale expectation 409s, which drops the
-                //    reset and its replay group below;
+                //    acknowledged idempotently BEFORE that check, so
+                //    recovery never re-deletes newer state either;
                 //  - a completion landing between this lookup and the
                 //    delete is fenced the same way.
-                // No client-side timestamp veto: it cannot distinguish
-                // "newer state written by our own committed replay" from
-                // unrelated newer state, and vetoing here would silently
-                // discard a reset the server already acknowledges.
-                const t = terminalInfo.map.get(op.key);
-                op.expectedTerminalUpdatedAt =
-                  t !== undefined ? new Date(t).toISOString() : null;
+                if (op.expectedTerminalUpdatedAt === undefined) {
+                  const t = terminalInfo.map.get(op.key);
+                  op.expectedTerminalUpdatedAt =
+                    t !== undefined && t <= op.ts + terminalInfo.skewMs + RESET_ANCHOR_TOLERANCE_MS
+                      ? new Date(t).toISOString()
+                      : null;
+                  putOp(userId, op); // one expectation for all retries
+                }
                 result = await sendOp(userId, op, drainEpoch);
               }
             } else {
