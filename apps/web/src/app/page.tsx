@@ -17,6 +17,10 @@ import { BrandLogo } from '@/components/brand-logo';
 import { TelegramIcon } from '@/components/telegram-icon';
 import { PublicFooter } from '@/components/public-chrome';
 
+// Uniform public-page caching: one hour shared cache with
+// stale-while-revalidate (emits s-maxage=3600).
+export const revalidate = 3600;
+
 // Server-rendered JSON-LD: a plain <script type="application/ld+json">
 // lands in the raw HTML for non-JS crawlers (next/script injects only
 // into the RSC payload). sameAs lists only verified official profiles;
