@@ -13,8 +13,8 @@ import { TelegramIcon } from '@/components/telegram-icon';
  */
 
 const NAV_LINKS: { href: string; label: string }[] = [
-  { href: '/#features', label: 'Features' },
-  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/how-it-works', label: 'How it works' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/about', label: 'About' },
   { href: '/faq', label: 'FAQ' },
   { href: '/contact', label: 'Contact' },
@@ -131,6 +131,9 @@ export function PublicFooter() {
           >
             contact@engganyo.com
           </a>
+          <Link href="/how-it-works" className="hover:text-sc-text transition-colors">How It Works</Link>
+          <Link href="/pricing" className="hover:text-sc-text transition-colors">Pricing</Link>
+          <Link href="/safety" className="hover:text-sc-text transition-colors">Safety</Link>
           <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
           <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>
           <Link href="/contact" className="hover:text-sc-text transition-colors">Contact</Link>
