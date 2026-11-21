@@ -128,11 +128,20 @@ test.describe('optional tour failure isolation', () => {
     await settleOnDashboard(page);
 
     await page.route('**/api/gamification/tours/state', (r) =>
-      r.fulfill(apiOk({ autoTours: false, beginner: null, completions: [] })),
+      r.fulfill(apiOk({ autoTours: false, beginner: null, completions: [], generations: { beginner: 0 } })),
     );
     await page.route('**/api/gamification/tours/catalog', (r) =>
       r.fulfill(apiOk({ interval: 5, version: 1, autoTours: false, beginner: null, tours: [] })),
     );
+    // Hermetic reset: an unmocked DELETE would hit the real server whose
+    // generation may already be > 0 — the fail-closed contract would
+    // then (correctly) 409 it and the replay would fail for the wrong
+    // reason.
+    await page.route('**/api/gamification/tours/beginner/state', (r) => {
+      if (r.request().method() === 'DELETE')
+        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 0, generation: 1 }));
+      return r.fallback();
+    });
     await page.route('**/api/gamification/tours/*/progress', (r) => r.fulfill(apiOk({ ok: true })));
 
     await page.reload();

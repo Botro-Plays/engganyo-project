@@ -16,12 +16,43 @@ export async function resetServerTourState(page: Page, autoTours: boolean): Prom
         .map((e) => e.name)
         .find((n) => n.includes('/api/'))
         ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
+    // One resetId per cleanup INVOCATION (shared across its retries):
+    // the server's idempotent-replay path would otherwise treat a new
+    // cleanup as a retry of the previous one and return success
+    // WITHOUT deleting — leaving stale tour state behind.
+    const resetNonce = `e2e-cleanup-${Date.now()}`;
     for (let attempt = 0; attempt < 20; attempt++) {
       const token = localStorage.getItem('access_token');
       if (!token) break;
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
       try {
-        const del = await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers });
+        // Generation-fenced reset: read the authoritative generation +
+        // newest terminal timestamp first so the DELETE passes the
+        // server's atomic expectation check (a stale expectation 409s
+        // and the loop refetches).
+        const st = await fetch(`${apiBase}/gamification/tours/state`, { headers });
+        const body = (await st.json().catch(() => null)) as {
+          data?: {
+            generations?: Record<string, number>;
+            completions?: { tourKey: string; status: string; updatedAt?: string }[];
+          };
+        } | null;
+        const gen = body?.data?.generations?.['beginner'] ?? 0;
+        const term = (body?.data?.completions ?? [])
+          .filter((c) => c.tourKey === 'beginner' && c.status !== 'IN_PROGRESS')
+          .map((c) => c.updatedAt)
+          .filter((x): x is string => !!x)
+          .sort()
+          .pop();
+        const del = await fetch(`${apiBase}/gamification/tours/beginner/state`, {
+          method: 'DELETE',
+          headers,
+          body: JSON.stringify({
+            expectedGeneration: gen,
+            expectedTerminalUpdatedAt: term ?? null,
+            resetId: resetNonce,
+          }),
+        });
         const patch = await fetch(`${apiBase}/gamification/tours/preferences`, {
           method: 'PATCH',
           headers,

@@ -32,8 +32,8 @@ const apiOk = <T,>(data: T) => fulfill(200, { success: true, data, timestamp: ne
 const tourDialog = (page: Page) => page.getByRole('dialog').filter({ hasText: /Step \d+ of 10/ });
 const milestoneCard = (page: Page) => page.locator('[data-milestone-tour]');
 
-const BEGINNER_STATE = { autoTours: true, beginner: { status: 'IN_PROGRESS', step: 0 }, beginnerTerminal: null, completions: [] };
-const BEGINNER_DONE = { autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [] };
+const BEGINNER_STATE = { autoTours: true, beginner: { status: 'IN_PROGRESS', step: 0 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } };
+const BEGINNER_DONE = { autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } };
 
 async function settleOnDashboard(page: Page) {
   await page.goto('/dashboard');
@@ -148,7 +148,7 @@ test.describe('tour state hardening', () => {
 
     const queued = await page.evaluate(() => {
       const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
-      return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
+      return keys.flatMap((k) => ((v) => (Array.isArray(v) ? v : [v]))(JSON.parse(localStorage.getItem(k) ?? '[]')) as { op: string }[]);
     });
     expect(queued.some((o) => o.op === 'dismiss')).toBe(true);
 
@@ -161,7 +161,7 @@ test.describe('tour state hardening', () => {
     await expect(tourDialog(page)).toHaveCount(0, { timeout: 15_000 });
     const remaining = await page.evaluate(() => {
       const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
-      return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as unknown[]);
+      return keys.flatMap((k) => ((v) => (Array.isArray(v) ? v : [v]))(JSON.parse(localStorage.getItem(k) ?? '[]')) as unknown[]);
     });
     expect(remaining).toHaveLength(0);
   });
@@ -247,17 +247,30 @@ test.describe('tour state hardening', () => {
       ),
     );
     await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_DONE)));
+    let gen = 0;
     await page.route('**/api/gamification/tours/beginner/state', async (r) => {
       if (r.request().method() === 'DELETE') {
         order.push('delete-start');
         await gateDelete;
         order.push('delete-end');
-        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 1 }));
+        const body = r.request().postDataJSON() as { expectedGeneration?: number; resetId?: string } | null;
+        if (body?.expectedGeneration !== gen) {
+          order.push(`delete-409(exp:${String(body?.expectedGeneration)})`);
+          return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+        }
+        gen += 1;
+        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 1, generation: gen }));
       }
       return r.fallback();
     });
     await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
       order.push('progress');
+      // Real contract: post-reset progress must carry the NEW generation.
+      if (body?.expectedGeneration !== gen) {
+        order.push(`progress-409(exp:${String(body?.expectedGeneration)})`);
+        return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+      }
       return r.fulfill(apiOk({ recorded: true }));
     });
     await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
@@ -279,7 +292,7 @@ test.describe('tour state hardening', () => {
     if (!deleteStarted) {
       const queuedNow = await page.evaluate(() => {
         const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
-        return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
+        return keys.flatMap((k) => ((v) => (Array.isArray(v) ? v : [v]))(JSON.parse(localStorage.getItem(k) ?? '[]')) as { op: string }[]);
       });
       throw new Error(`replay DELETE never fired; order=${JSON.stringify(order)} queued=${JSON.stringify(queuedNow)}`);
     }
@@ -352,20 +365,32 @@ test.describe('tour state hardening', () => {
     );
     // Conflict-check state: no terminal rows → reset is allowed through.
     await page.route('**/api/gamification/tours/state', (r) =>
-      r.fulfill(apiOk({ autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [] })),
+      r.fulfill(apiOk({ autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } })),
     );
+    let gen = 0;
     await page.route('**/api/gamification/tours/beginner/state', async (r) => {
       if (r.request().method() === 'DELETE') {
         deleteCalls += 1;
         order.push(`delete-${deleteCalls}`);
         // First attempt fails — the replay's progress MUST NOT overtake it.
         if (deleteCalls === 1) return r.fulfill(fulfill(500, { message: 'boom' }));
-        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 1 }));
+        const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
+        if (body?.expectedGeneration !== gen) {
+          order.push(`delete-409`);
+          return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+        }
+        gen += 1;
+        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 1, generation: gen }));
       }
       return r.fallback();
     });
     await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
       order.push('progress');
+      if (body?.expectedGeneration !== gen) {
+        order.push('progress-409');
+        return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+      }
       return r.fulfill(apiOk({ recorded: true }));
     });
     await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
@@ -406,7 +431,7 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(4000);
     const queued = await page.evaluate(() => {
       const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
-      return keys.flatMap((k) => JSON.parse(localStorage.getItem(k) ?? '[]') as { op: string }[]);
+      return keys.flatMap((k) => ((v) => (Array.isArray(v) ? v : [v]))(JSON.parse(localStorage.getItem(k) ?? '[]')) as { op: string }[]);
     });
     expect(queued.some((o) => o.op === 'progress')).toBe(true);
     // Bounded: a handful of retries, not a tight loop.
@@ -447,7 +472,7 @@ test.describe('tour state hardening', () => {
             .filter((k) => k.startsWith('engganyo-tour-writes-'))
             .map((k) => ({
               k,
-              ops: (JSON.parse(localStorage.getItem(k) ?? '[]') as { op?: string }[]).map((o) => o.op),
+              ops: (((v) => (Array.isArray(v) ? v : [v]))(JSON.parse(localStorage.getItem(k) ?? '[]')) as { op?: string }[]).map((o) => o.op),
             })),
           tourCache: keys.filter((k) => k.startsWith('engganyo-tour-v1-')),
         };
@@ -462,7 +487,7 @@ test.describe('tour state hardening', () => {
     // The original user's queue is retained, untouched.
     const retained = await page.evaluate(() => {
       const keys = Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-'));
-      return keys.map((k) => ({ key: k, n: (JSON.parse(localStorage.getItem(k) ?? '[]') as unknown[]).length }));
+      return keys.map((k) => ({ key: k, n: (((v) => (Array.isArray(v) ? v : [v]))(JSON.parse(localStorage.getItem(k) ?? '[]')) as unknown[]).length }));
     });
     expect(retained.some((r) => r.n > 0)).toBe(true);
   });
@@ -508,5 +533,320 @@ test.describe('tour state hardening', () => {
     // DELETE is never sent and the replay group is vetoed.
     expect(deleteCalls).toBe(0);
     expect(progressCalls).toBe(0);
+  });
+
+  test('a delayed first-session response is fenced after same-account relogin', async ({ page }) => {
+    await settleOnDashboard(page);
+    const realId = await page.evaluate(() => {
+      const raw = localStorage.getItem('engganyo-auth');
+      return raw ? (JSON.parse(raw) as { state?: { user?: { id?: string } } }).state?.user?.id : null;
+    });
+    expect(realId).toBeTruthy();
+
+    // First /state stays in flight across a full A → B → A cycle; every
+    // later session gets autoTours:false. The stale response carries a
+    // live tour — if applied, the dialog appears.
+    let releaseA: (() => void) | null = null;
+    const gateA = new Promise<void>((r) => (releaseA = r));
+    let calls = 0;
+    await page.route('**/api/gamification/tours/state', async (route) => {
+      calls += 1;
+      if (calls === 1) {
+        await gateA;
+        return route.fulfill(apiOk(BEGINNER_STATE));
+      }
+      return route.fulfill(
+        apiOk({ autoTours: false, beginner: null, beginnerTerminal: null, completions: [] }),
+      );
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    await page.reload();
+    await page.waitForTimeout(1500); // session-1 hydrate is in flight
+
+    await switchAuthUser(page, 'account-b-test-id');
+    await page.waitForTimeout(1500); // session-2 hydrate applied (off)
+
+    // Back to the SAME original account — a third session epoch.
+    await switchAuthUser(page, realId!);
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(1500); // session-3 hydrate applied (off)
+
+    // The stale session-1 response resolves NOW: the user id matches
+    // account A again, so only the session-epoch fence can reject it.
+    releaseA!();
+    await page.waitForTimeout(2000);
+    await expect(tourDialog(page)).toHaveCount(0);
+  });
+
+  test('two tabs share one drain — no double send, no lost writes', async ({ page, context }) => {
+    await settleOnDashboard(page);
+    // Routes are registered at CONTEXT level: page.route would only
+    // intercept tab 1, leaving tab 2's sends unmocked and the counters
+    // unable to attribute a genuine duplicate.
+    await context.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
+    await context.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    let dismissCalls = 0;
+    let completeCalls = 0;
+    const gateHolder: { fn?: () => void } = {};
+    const gate = new Promise<void>((r) => (gateHolder.fn = r));
+    await context.route('**/api/gamification/tours/beginner/dismiss', async (r) => {
+      dismissCalls += 1;
+      const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
+      await gate; // keep tab 1's request in flight while tab 2 tries
+      if (body?.expectedGeneration !== 0) return r.fulfill(fulfill(409, { success: false }));
+      return r.fulfill(apiOk({ dismissed: true }));
+    });
+    await context.route('**/api/gamification/tours/beginner/complete', (r) => {
+      completeCalls += 1;
+      const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
+      if (body?.expectedGeneration !== 0) return r.fulfill(fulfill(409, { success: false }));
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+
+    // Tab 1: Skip → dismiss op enqueued, drain acquires the lock and its
+    // request stays in flight (the old 15s stale lock would be stealable
+    // under a request like this; Web Locks hold until it finishes).
+    const skip = tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first();
+    await expect(skip).toBeVisible({ timeout: 15_000 });
+    await skip.click();
+    await page.waitForTimeout(800);
+
+    // Tab 2 (same context → shared localStorage + session): enqueue an
+    // op directly into the shared pool, then reload so its own hydrate
+    // attempts a drain while tab 1's request is still open.
+    const tab2 = await context.newPage();
+    try {
+      await tab2.goto('/dashboard');
+      await tab2.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+      await tab2.evaluate(() => {
+        const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+          state?: { user?: { id?: string } };
+        };
+        const uid = auth.state?.user?.id;
+        if (!uid) throw new Error('no user id in persisted auth');
+        const id = `tab2-${Date.now().toString(36)}`;
+        localStorage.setItem(
+          `engganyo-tour-writes-${uid}-${id}`,
+          JSON.stringify({ op: 'complete', key: 'beginner', version: 2, epoch: 1, ts: Date.now() + 1, seq: 1, id, gen: 0 }),
+        );
+      });
+      await tab2.reload();
+      await tab2.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+      await tab2.waitForTimeout(800);
+
+      // While tab 1 still owns the drain, tab 2's own send must not run —
+      // no concurrent owner, no duplicate dismiss.
+      expect(dismissCalls).toBe(1);
+      expect(completeCalls).toBe(0);
+
+      gateHolder.fn?.();
+      await page.waitForTimeout(4000); // tab 2's deferred drain picks it up
+
+      expect(dismissCalls).toBe(1);
+      expect(completeCalls).toBe(1);
+      const remaining = await tab2.evaluate(() =>
+        Object.keys(localStorage).filter((k) => k.startsWith('engganyo-tour-writes-')),
+      );
+      expect(remaining).toHaveLength(0);
+    } finally {
+      gateHolder.fn?.();
+      await tab2.close();
+    }
+  });
+
+  test('a queue beyond 50 ops never silently drops pending user choices', async ({ page }) => {
+    await settleOnDashboard(page);
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_STATE)));
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+    // Writes are unavailable — everything must be RETAINED for retry.
+    await page.route('**/api/gamification/tours/*/*', (r) => {
+      if (r.request().method() === 'POST' || r.request().method() === 'DELETE') {
+        return r.fulfill(fulfill(503, { success: false, error: 'unavailable' }));
+      }
+      return r.fallback();
+    });
+
+    // Seed 55 terminal/reset ops (never evictable) across tour keys —
+    // beyond the old silent slice(-50) cap.
+    await page.evaluate(() => {
+      const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+        state?: { user?: { id?: string } };
+      };
+      const uid = auth.state?.user?.id;
+      if (!uid) throw new Error('no user id in persisted auth');
+      const keys = ['beginner', 'feature-inventory', 'feature-marketplace', 'feature-rooms', 'feature-wallet', 'feature-achievements'];
+      for (let i = 0; i < 55; i++) {
+        const id = `seed-${i}`;
+        const kind = i % 2 === 0 ? 'complete' : 'dismiss';
+        localStorage.setItem(
+          `engganyo-tour-writes-${uid}-${id}`,
+          JSON.stringify({ op: kind, key: keys[i % keys.length], version: 1, epoch: 1, ts: 1000 + i, seq: i, id, gen: 0 }),
+        );
+      }
+    });
+
+    await page.reload();
+    await page.waitForTimeout(3000); // drains run, all blocked → retained
+
+    // One more real write — enqueue must surface overflow, not truncate.
+    const skip = tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first();
+    await expect(skip).toBeVisible({ timeout: 15_000 });
+    await skip.click();
+    await page.waitForTimeout(2000);
+
+    const count = await page.evaluate(() => {
+      const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
+        state?: { user?: { id?: string } };
+      };
+      const uid = auth.state?.user?.id;
+      return Object.keys(localStorage).filter((k) => k.startsWith(`engganyo-tour-writes-${uid}-`)).length;
+    });
+    // Old code sliced the pool to 50 — the oldest six user choices would
+    // be gone. Now every op survives (56 ≥ cap → surfaced, not dropped).
+    expect(count).toBeGreaterThan(50);
+  });
+
+  test('a server-fenced 409 reset drops the replay group and surfaces the failure', async ({ page }) => {
+    await page.goto('/settings');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+
+    // The client-side veto sees an OLDER terminal row (passes), but the
+    // DELETE itself is fenced by the server — a completion committed
+    // between the lookup and the delete must surface, not erase.
+    const seenTerminal = {
+      autoTours: true,
+      beginner: { status: 'COMPLETED', step: 10 },
+      beginnerTerminal: null,
+      completions: [
+        { tourKey: 'beginner', version: 2, status: 'COMPLETED', step: 10, updatedAt: new Date(Date.now() - 60_000).toISOString() },
+      ],
+      generations: { beginner: 0 },
+    };
+    let deleteCalls = 0;
+    let progressCalls = 0;
+    const deleteInfo: { body?: { expectedGeneration?: number; expectedTerminalUpdatedAt?: string | null; resetId?: string } | null } = {};
+    await page.route('**/api/gamification/tours/catalog', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerSeenVersion: 2, tours: [] })),
+    );
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(seenTerminal)));
+    await page.route('**/api/gamification/tours/beginner/state', (r) => {
+      if (r.request().method() === 'DELETE') {
+        deleteCalls += 1;
+        deleteInfo.body = r.request().postDataJSON() as typeof deleteInfo.body;
+        return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+      }
+      return r.fallback();
+    });
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      progressCalls += 1;
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+
+    const replayBtn = page.getByRole('button', { name: /^Replay$/ }).first();
+    await expect(replayBtn).toBeVisible({ timeout: 20_000 });
+    await replayBtn.click();
+    await page.waitForTimeout(4000);
+
+    // The fenced reset must NOT let its replay group's progress through,
+    // and the failure is surfaced to the user — never a silent success.
+    expect(deleteCalls).toBe(1);
+    expect(progressCalls).toBe(0);
+    // The DELETE carried the atomic expectations — generation, observed
+    // terminal timestamp, and the idempotency resetId.
+    expect(deleteInfo.body?.resetId).toBeTruthy();
+    expect(deleteInfo.body).toHaveProperty('expectedTerminalUpdatedAt');
+    await expect(page.getByText(/haven't synced/i)).toBeVisible();
+  });
+
+  test('real API: beginner replay → progress → completion bumps generation', async ({ page }) => {
+    // NO tour-endpoint mocks — the real API + Postgres enforce the
+    // generation contract end to end.
+    const readState = () =>
+      page.evaluate(async () => {
+        const apiBase =
+          (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+            .map((e) => e.name)
+            .find((n) => n.includes('/api/'))
+            ?.replace(/\/api\/.*$/, '/api') ?? 'http://localhost:3001/api';
+        const token = localStorage.getItem('access_token');
+        const res = await fetch(`${apiBase}/gamification/tours/state`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const j = (await res.json().catch(() => null)) as {
+          data?: {
+            beginner?: { status: string; step: number } | null;
+            generations?: Record<string, number>;
+            completions?: { tourKey: string; status: string; step: number }[];
+          };
+        } | null;
+        return j?.data ?? null;
+      });
+
+    await page.goto('/settings');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    const before = await readState();
+    const gen0 = before?.generations?.['beginner'] ?? 0;
+
+    const startBtn = page.getByRole('button', { name: /^(Replay|Start)$/ }).first();
+    await expect(startBtn).toBeVisible({ timeout: 20_000 });
+    await startBtn.click();
+
+    await page.waitForURL(/\/dashboard/, { timeout: 15_000 }).catch(() => {});
+    await expect(tourDialog(page)).toBeVisible({ timeout: 20_000 });
+
+    // Walk the tour to completion using the REAL highlighted elements —
+    // navigate steps only advance when the user activates the step's
+    // target (URL-only navigation is intentionally not an advance).
+    const visNav = (sel: string) => page.locator(`[data-tour="${sel}"]:visible`);
+    const SLOW = { timeout: 15_000 };
+    await tourDialog(page).getByRole('button', { name: 'Next' }).click(); // step 1 -> 2
+    await visNav('nav-tasks').click();
+    await expect(page).toHaveURL(/\/tasks$/, SLOW);
+    await expect(tourDialog(page)).toContainText('Step 3 of 10', SLOW);
+    await tourDialog(page).getByRole('button', { name: 'Next' }).click(); // step 3 -> 4
+    for (const [nav, url] of [
+      ['nav-missions', '/missions'],
+      ['nav-campaigns', '/campaigns'],
+      ['nav-leaderboard', '/leaderboard'],
+      ['nav-store', '/store'],
+      ['nav-wallet', '/wallet'],
+    ] as const) {
+      await visNav(nav).click();
+      await expect(page).toHaveURL(new RegExp(`${url}$`), SLOW);
+      await expect(tourDialog(page)).toBeVisible(SLOW);
+    }
+    // Step 9 is two-hop: /wallet -> /settings -> /referrals.
+    await visNav('nav-settings').click();
+    await expect(page).toHaveURL(/\/settings$/, SLOW);
+    await expect(tourDialog(page)).toBeVisible(SLOW);
+    await visNav('nav-referrals').click();
+    await expect(page).toHaveURL(/\/referrals$/, SLOW);
+    await expect(tourDialog(page)).toContainText('Step 10 of 10', SLOW);
+    await visNav('nav-dashboard').click();
+    await expect(page).toHaveURL(/\/dashboard$/, SLOW);
+    await expect(tourDialog(page)).toHaveCount(0);
+
+    await page.waitForTimeout(2500); // queued writes drain to the server
+
+    const after = await readState();
+    expect(after?.generations?.['beginner']).toBeGreaterThan(gen0);
+    const row = (after?.completions ?? []).find((c) => c.tourKey === 'beginner');
+    expect(row?.status).toBe('COMPLETED');
   });
 });

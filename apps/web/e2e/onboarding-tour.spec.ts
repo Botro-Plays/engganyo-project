@@ -39,6 +39,12 @@ async function prepare(page: Page, opts: { consent?: boolean } = {}) {
   // enough. Reset the beginner row + auto-tours preference so every
   // test starts from a clean server state.
   await resetServerTourState(page, true);
+  // The strict-contract reset is a two-round-trip call (state GET →
+  // DELETE), so the /settings hydrate settles first and keeps a stale
+  // snapshot in the SPA store — later gotos are client-side navigations
+  // that never re-hydrate. Reload so the store re-reads the reset state.
+  await page.reload();
+  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 }
 
 test.afterAll(async ({ browser }) => {

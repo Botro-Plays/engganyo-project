@@ -17,7 +17,7 @@
  * - replay reset clears state for one key only.
  */
 import { PrismaClient } from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
   ToursService,
   BEGINNER_TOUR_KEY,
@@ -275,5 +275,126 @@ run('tour server state — real PostgreSQL', () => {
     const ach = cat.tours.find((t) => t.key === 'feature-achievements');
     expect(ach?.seen).toBe(true);
     expect(ach?.status).toBe('COMPLETED'); // latest known status — Replay stays visible
+  });
+
+  // ─── Replay generation fencing (atomic reset conflicts) ──────────
+
+  it('reset is refused 409 when a terminal row is newer than the expectation', async () => {
+    const u = await mkUser();
+    await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION);
+    // Client looked up state before the completion existed.
+    await expect(
+      tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { terminalUpdatedAt: null }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    // And with a stale (earlier) timestamp.
+    await expect(
+      tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, {
+        terminalUpdatedAt: new Date(Date.now() - 60_000).toISOString(),
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    // The completion was never erased.
+    const s = await tours.getState(u.id);
+    expect(s.beginner?.status).toBe('COMPLETED');
+  });
+
+  it('concurrent reset vs completion never silently erases the completion', async () => {
+    const u = await mkUser();
+    // Whichever wins the generation lock, the outcome is safe: if the
+    // completion commits first the reset 409s on the terminal-timestamp
+    // check; if the reset wins, the gen-0 completion is fenced (409) as a
+    // delayed pre-reset write. The two writes can never both commit.
+    const [completion, reset] = await Promise.allSettled([
+      tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION),
+      tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { terminalUpdatedAt: null }),
+    ]);
+    const s = await tours.getState(u.id);
+    if (completion.status === 'fulfilled') {
+      expect(s.beginner?.status).toBe('COMPLETED');
+      expect(reset.status).toBe('rejected');
+    } else {
+      expect(reset.status).toBe('fulfilled');
+      expect(s.beginner).toBeNull();
+    }
+  });
+
+  it('a matching expectation allows the reset and bumps the generation', async () => {
+    const u = await mkUser();
+    await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION);
+    const s = await tours.getState(u.id);
+    const seen = s.completions.find((c) => c.tourKey === BEGINNER_TOUR_KEY);
+    const res = await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, {
+      generation: 0,
+      terminalUpdatedAt: seen?.updatedAt,
+    });
+    expect(res.reset).toBe(true);
+    expect(res.generation).toBe(1);
+    expect((await tours.getState(u.id)).beginner).toBeNull();
+    // A second reset at the same old generation is fenced.
+    await expect(
+      tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 0 }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('writes carrying a stale generation are fenced after a reset', async () => {
+    const u = await mkUser();
+    await tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 2, 0);
+    await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 0 });
+    // A write delayed from the pre-reset generation is rejected, and no
+    // row is resurrected.
+    await expect(
+      tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 4, 0),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      tours.dismiss(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 0),
+    ).rejects.toBeInstanceOf(ConflictException);
+    const s = await tours.getState(u.id);
+    expect(s.beginner).toBeNull();
+    // A write at the current generation succeeds normally.
+    await tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 4, 1);
+    expect((await tours.getState(u.id)).beginner).toEqual({ status: 'IN_PROGRESS', step: 4 });
+  });
+
+  it('a committed reset replays idempotently via resetId; unrelated resets conflict', async () => {
+    const u = await mkUser();
+    await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION);
+    const seen = (await tours.getState(u.id)).completions.find(
+      (c) => c.tourKey === BEGINNER_TOUR_KEY,
+    );
+    const r1 = await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, {
+      generation: 0,
+      terminalUpdatedAt: seen?.updatedAt,
+      resetId: 'r-1',
+    });
+    expect(r1.generation).toBe(1);
+    // Simulate "committed but response lost": a NEW completion commits at
+    // the new generation, then the SAME resetId is retried — the server
+    // must replay it idempotently and NOT re-delete the newer completion.
+    await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 1);
+    const r2 = await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, {
+      generation: 0, // stale — it was issued before the first ack
+      resetId: 'r-1',
+    });
+    expect(r2.idempotent).toBe(true);
+    expect(r2.generation).toBe(1);
+    expect((await tours.getState(u.id)).beginner?.status).toBe('COMPLETED');
+    // An UNRELATED reset at the stale generation still conflicts.
+    await expect(
+      tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 0, resetId: 'r-2' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects future generations and fails closed on a missing expectation', async () => {
+    const u = await mkUser();
+    await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 0 });
+    // gen is now 1.
+    await expect(
+      tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 9, 5),
+    ).rejects.toBeInstanceOf(ConflictException); // future value — never equal
+    await expect(
+      tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 9),
+    ).rejects.toBeInstanceOf(ConflictException); // missing → fail-closed as 0
+    // Current generation still works.
+    await tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 9, 1);
+    expect((await tours.getState(u.id)).beginner).toEqual({ status: 'IN_PROGRESS', step: 9 });
   });
 });

@@ -153,8 +153,6 @@ interface PersistedTourState {
 
 const STATUSES: readonly TourStatus[] = ['idle', 'active', 'skipped', 'completed'];
 const tourKey = (userId: string) => `engganyo-tour-v1-${userId}`;
-const pendingKey = (userId: string) => `engganyo-tour-writes-${userId}`;
-
 function readUserTour(userId: string): PersistedTourState | null {
   try {
     const raw = localStorage.getItem(tourKey(userId));
@@ -190,45 +188,115 @@ function writeUserTour(state: PersistedTourState): void {
 // Every server write goes through this FIFO queue so ordering is
 // preserved (a replay reset always lands before the new replay's
 // progress) and failures are retained for the owning user only.
+//
+// Storage layout: one localStorage KEY PER OPERATION
+// (`engganyo-tour-writes-${userId}-${opId}`). Enqueue is a single atomic
+// setItem — there is no read-modify-write, so two tabs can never
+// overwrite each other's ops and an unload can never strand a half-
+// written array. The drainer is the only component that removes keys,
+// and only for ops it finished (idempotent resends self-heal the rare
+// case of an owner tab reviving a just-deleted key).
 
 type PendingOp =
-  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; id?: string; notBefore?: number }
-  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; id?: string; notBefore?: number }
-  | { op: 'reset'; key: string; epoch: number; ts: number; id?: string; notBefore?: number };
+  | { op: 'progress'; key: string; version: number; step: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string }
+  | { op: 'complete' | 'dismiss'; key: string; version: number; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; afterReset?: string }
+  | { op: 'reset'; key: string; epoch: number; ts: number; seq?: number; id?: string; notBefore?: number; gen?: number; expectedTerminalUpdatedAt?: string | null; afterReset?: string };
 
 let opSeq = 0;
 const newOpId = () =>
   `${Date.now().toString(36)}-${(opSeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+const pendingPrefix = (userId: string) => `engganyo-tour-writes-${userId}-`;
+const pendingKeyFor = (userId: string, id: string) => `${pendingPrefix(userId)}${id}`;
+
+const isPendingOp = (o: unknown): o is PendingOp =>
+  !!o &&
+  typeof o === 'object' &&
+  ['progress', 'complete', 'dismiss', 'reset'].includes((o as PendingOp).op) &&
+  typeof (o as PendingOp).key === 'string' &&
+  typeof (o as PendingOp).ts === 'number';
+
+/** One-time migration of the pre-split single-array queue key. */
+function migrateLegacyQueue(userId: string): void {
+  const legacy = `engganyo-tour-writes-${userId}`;
+  try {
+    const raw = localStorage.getItem(legacy);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as unknown;
+    localStorage.removeItem(legacy);
+    if (!Array.isArray(parsed)) return;
+    for (const o of parsed) if (isPendingOp(o)) putOp(userId, o);
+  } catch {
+    try {
+      localStorage.removeItem(legacy);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function putOp(userId: string, op: PendingOp): boolean {
+  try {
+    const id = typeof op.id === 'string' ? op.id : newOpId();
+    localStorage.setItem(pendingKeyFor(userId, id), JSON.stringify({ ...op, id }));
+    return true;
+  } catch {
+    // Storage failure (quota, private mode) — surfaced by the caller
+    // via queueOverflow rather than silently losing the user's choice.
+    return false;
+  }
+}
+
+function removeOpsByIds(userId: string, ids: Set<string>): void {
+  if (ids.size === 0) return;
+  try {
+    const prefix = pendingPrefix(userId);
+    // Iterate backwards — removing keys while enumerating is safe in
+    // reverse order (indices shrink from the front).
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
+      if (ids.has(k.slice(prefix.length))) localStorage.removeItem(k);
+    }
+  } catch {
+    /* a later drain re-lists and removes them again */
+  }
+}
+
+/** Merged queue view across every writer (this tab and others), in
+ *  submission order: op.ts then per-tab seq then id. */
 function readPendingOps(userId: string): PendingOp[] {
   try {
-    const raw = localStorage.getItem(pendingKey(userId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (o): o is PendingOp =>
-        !!o &&
-        typeof o === 'object' &&
-        ['progress', 'complete', 'dismiss', 'reset'].includes((o as PendingOp).op) &&
-        typeof (o as PendingOp).key === 'string',
+    migrateLegacyQueue(userId);
+    const prefix = pendingPrefix(userId);
+    const ops: PendingOp[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(prefix)) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      try {
+        const op = JSON.parse(raw) as PendingOp;
+        if (isPendingOp(op)) ops.push({ ...op, id: op.id ?? k.slice(prefix.length) });
+      } catch {
+        /* malformed entry — ignore; the drainer leaves it alone */
+      }
+    }
+    ops.sort(
+      (a, b) => a.ts - b.ts || (a.seq ?? 0) - (b.seq ?? 0) || (a.id ?? '').localeCompare(b.id ?? ''),
     );
+    return ops;
   } catch {
     return [];
   }
 }
 
-function writePendingOps(userId: string, ops: PendingOp[]): void {
-  try {
-    // Stable operation ids are assigned once at write time so queued ops
-    // keep identity across tabs, reloads, and drain retries.
-    const withIds = ops.map((o) => (typeof o.id === 'string' ? o : { ...o, id: newOpId() }));
-    if (withIds.length === 0) localStorage.removeItem(pendingKey(userId));
-    else localStorage.setItem(pendingKey(userId), JSON.stringify(withIds.slice(-MAX_PENDING_OPS)));
-  } catch {
-    /* storage unavailable — writes degrade to best-effort */
-  }
-}
+/** True when a later op for the same key already supersedes this
+ *  progress write — only the newest step matters server-side, so older
+ *  progress ops are redundant and safe to compact away. Terminal writes
+ *  and resets are never "redundant" and are never compacted. */
+const isSupersededProgress = (ops: PendingOp[], op: PendingOp): boolean =>
+  op.op === 'progress' && ops.some((x) => x !== op && x.key === op.key && x.ts > op.ts);
 
 type ServerBeginnerStatus = 'IN_PROGRESS' | 'COMPLETED' | 'DISMISSED';
 interface ServerBeginner {
@@ -248,6 +316,7 @@ interface ServerTourState {
   beginner?: ServerBeginner | null;
   beginnerTerminal?: ServerBeginnerTerminal | null;
   completions?: { tourKey: string; version: number; status: string; step: number; updatedAt?: string }[];
+  generations?: Record<string, number>;
 }
 
 interface DerivedBeginner {
@@ -331,6 +400,9 @@ interface TourState {
   replayBusy: boolean;
   /** The last replay reset failed to persist — shown to the user. */
   replayError: boolean;
+  /** The pending-write queue exceeded its capacity or storage failed —
+   *  surfaced so pending user choices are never silently lost. */
+  queueOverflow: boolean;
   syncWithUser: (userId: string | null) => void;
   retrySync: () => void;
   /** Serialized preference save — resolves true when the server value
@@ -385,14 +457,40 @@ const recordOutcome = (id: string | undefined, outcome: 'ok' | 'drop' | 'blocked
   opOutcomes.set(id, outcome);
 };
 
-// Cross-tab drain coordination: the pending queue lives in shared
-// localStorage, so only one tab may drain it at a time. The lock is
-// short-lived and stolen when stale (a crashed tab cannot wedge it).
+// Cross-tab drain coordination. The queue is op-per-key shared
+// localStorage, so ONLY SENDING needs serialization — enqueues are
+// atomic single-key writes and write-back merges by id. The Web Locks
+// API is the coordination primitive: it is a real mutex (no read-then-
+// write race), it auto-releases when the owning tab dies (a crashed tab
+// can never wedge the queue), a suspended tab keeps ownership without
+// producing a second drainer, and a request outliving any timeout
+// heuristic is handled naturally. When unavailable (older browser or
+// non-secure context), the localStorage fallback is explicitly
+// NON-ATOMIC: two tabs can read the lock as free simultaneously and
+// both drain. That is a bounded degradation, not a correctness hole —
+// ops carry monotonic content (same step/state) and server-side
+// generation fencing rejects stale or conflicting writes, so worst
+// case is a duplicate idempotent send — never a lost write or an
+// overwrite of newer state. Web Locks-capable
+// browsers (all modern, secure contexts) get the real mutex.
 const TAB_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const DRAIN_LOCK_STALE_MS = 15_000;
 const drainLockKey = (userId: string) => `engganyo-tour-drain-${userId}`;
 
-function acquireDrainLock(userId: string): boolean {
+type WebLockHandle = { name: string; mode: string; clientId: string } | null;
+interface WebLockManager {
+  request(
+    name: string,
+    opts: { ifAvailable?: boolean; mode?: string },
+    cb: (lock: WebLockHandle) => Promise<unknown> | unknown,
+  ): Promise<unknown>;
+}
+const webLocks = (): WebLockManager | null => {
+  const l = (navigator as unknown as { locks?: WebLockManager }).locks;
+  return typeof l?.request === 'function' ? l : null;
+};
+
+function acquireFallbackLock(userId: string): boolean {
   try {
     const raw = localStorage.getItem(drainLockKey(userId));
     if (raw) {
@@ -404,11 +502,10 @@ function acquireDrainLock(userId: string): boolean {
     localStorage.setItem(drainLockKey(userId), JSON.stringify({ tab: TAB_ID, ts: Date.now() }));
     return true;
   } catch {
-    return true; // storage unavailable — degrade to single-tab assumption
+    return true;
   }
 }
-
-function releaseDrainLock(userId: string): void {
+function releaseFallbackLock(userId: string): void {
   try {
     const raw = localStorage.getItem(drainLockKey(userId));
     if (raw && (JSON.parse(raw) as { tab?: string }).tab === TAB_ID) {
@@ -419,12 +516,56 @@ function releaseDrainLock(userId: string): void {
   }
 }
 
-const opPath = (op: PendingOp): { path: string; body?: unknown; method: 'post' | 'delete' } => {
-  if (op.op === 'reset') return { path: `${op.key}/state`, method: 'delete' };
-  if (op.op === 'progress') {
-    return { path: `${op.key}/progress`, body: { version: op.version, step: op.step }, method: 'post' };
+/** Run `fn` holding the exclusive per-user drain lock. Returns 'busy'
+ *  when another tab already owns it — the owner drains everything, so a
+ *  skipped attempt only defers this tab's turn to the next schedule. */
+async function withQueueLock<T>(userId: string, fn: () => Promise<T>): Promise<T | 'busy'> {
+  const locks = typeof navigator !== 'undefined' ? webLocks() : null;
+  if (locks) {
+    try {
+      let busy = true;
+      let result: T | undefined;
+      await locks.request(drainLockKey(userId), { ifAvailable: true }, async (lock) => {
+        if (!lock) return;
+        busy = false;
+        result = await fn();
+      });
+      return busy ? 'busy' : (result as T);
+    } catch (err) {
+      // fn() failures propagate — everything else (e.g. unsupported
+      // name/mode) degrades to the fallback path below.
+      if ((err as { name?: string }).name !== 'NotSupportedError') throw err;
+    }
   }
-  return { path: `${op.key}/${op.op}`, body: { version: op.version }, method: 'post' };
+  if (!acquireFallbackLock(userId)) return 'busy';
+  try {
+    return await fn();
+  } finally {
+    releaseFallbackLock(userId);
+  }
+}
+
+// Replay generations the server last reported, keyed per user+tour so
+// a late acknowledgement can never stamp another account's generation.
+// Ops carry the generation captured at enqueue; ops belonging to a
+// replay group (afterReset) are re-stamped with the post-reset
+// generation explicitly at send time — never "upgraded" silently.
+const keyGens = new Map<string, number>();
+const genKey = (userId: string, tourKey: string) => `${userId} ${tourKey}`;
+
+const opPath = (op: PendingOp): { path: string; body?: unknown; method: 'post' | 'delete' } => {
+  const gen = op.gen !== undefined ? { expectedGeneration: op.gen } : {};
+  if (op.op === 'reset') {
+    return {
+      path: `${op.key}/state`,
+      method: 'delete',
+      body: { ...gen, expectedTerminalUpdatedAt: op.expectedTerminalUpdatedAt, resetId: op.id },
+    };
+  }
+  if (op.op === 'progress') {
+    return { path: `${op.key}/progress`, body: { version: op.version, step: op.step, ...gen }, method: 'post' };
+  }
+  return { path: `${op.key}/${op.op}`, body: { version: op.version, ...gen }, method: 'post' };
 };
 
 /** Failure classification for queued tour writes:
@@ -450,12 +591,19 @@ function classifyWriteError(err: unknown): ClassifiedFailure {
   }
   if (status === 401) return { kind: 'pause' };
   if (status === 429) {
+    // Retry-After is either delta-seconds OR an HTTP-date — honor both
+    // and never retry before the server's stated availability.
     const ra = e?.response?.headers?.['retry-after'];
-    const secs = ra !== undefined ? Number(ra) : NaN;
-    return {
-      kind: 'retry-after',
-      retryAfterMs: Number.isFinite(secs) ? Math.min(Math.max(secs, 1) * 1000, 60_000) : 5_000,
-    };
+    let ms = 5_000;
+    if (ra !== undefined) {
+      const secs = Number(ra);
+      if (Number.isFinite(secs)) ms = Math.max(secs, 0) * 1000;
+      else {
+        const at = Date.parse(ra);
+        if (Number.isFinite(at)) ms = Math.max(at - Date.now(), 0);
+      }
+    }
+    return { kind: 'retry-after', retryAfterMs: Math.min(Math.max(ms, 1), 60_000) };
   }
   // No response (network/timeout) or 5xx — transient.
   return { kind: 'retry' };
@@ -491,43 +639,79 @@ export const useTourStore = create<TourState>()((set, get) => {
     }
   };
 
-  /** Enqueue a write for `userId` (durable, per-user). A reset op for the
-   *  same key supersedes every earlier op for that key; ops carrying an
-   *  epoch older than the reset are dropped as stale. */
+  /** Enqueue a write for `userId` — a single atomic setItem per op, so
+   *  concurrent tabs can never lose each other's writes. A reset op for
+   *  the same key supersedes every EARLIER write for that key (whichever
+   *  tab queued it): those writes would resurrect state the reset erases.
+   *  Newer ops for the key (a fresh replay's progress) are kept. */
   const enqueueOp = (userId: string, op: PendingOp): void => {
+    // Replay-generation fence: capture the server's last-reported
+    // generation so writes delayed past a reset are rejected (409).
     const ops = readPendingOps(userId);
+    if (op.gen === undefined) op.gen = keyGens.get(genKey(userId, op.key));
+    if (op.seq === undefined) op.seq = opSeq++;
+    // Replay-group linkage: an op enqueued while a reset for the same
+    // key is still unacknowledged belongs to that reset's NEW replay —
+    // it is stamped with the post-reset generation when the group is
+    // reached in the drain, so it is never sent with the pre-reset
+    // generation it was enqueued under.
+    if (op.op !== 'reset') {
+      // <= not <: the replay group's first progress op is enqueued
+      // synchronously after its reset — frequently in the same ms.
+      const lastReset = [...ops]
+        .reverse()
+        .find((o) => o.key === op.key && o.op === 'reset' && o.ts <= op.ts);
+      if (lastReset?.id) op.afterReset = lastReset.id;
+    }
     if (op.op === 'reset') {
-      const kept = ops.filter((o) => o.key !== op.key);
-      kept.push(op);
-      writePendingOps(userId, kept);
+      const stale = new Set<string>();
+      for (const o of ops) if (o.key === op.key && o.ts < op.ts && o.id) stale.add(o.id);
+      removeOpsByIds(userId, stale);
+      putWithOverflow(userId, op);
     } else {
-      // Drop ops superseded by an already-queued reset for this key.
-      const resetEpoch = ops.reduce((max, o) => (o.key === op.key && o.op === 'reset' ? Math.max(max, o.epoch) : max), -1);
-      if (op.epoch < resetEpoch) {
+      // Superseded by an already-queued reset for this key — the reset
+      // will erase the write's target anyway.
+      const resetTs = ops.reduce(
+        (m, o) => (o.key === op.key && o.op === 'reset' ? Math.max(m, o.ts) : m),
+        -1,
+      );
+      if (resetTs >= 0 && op.ts < resetTs) {
         syncUnsyncedFlag(userId);
         return;
       }
       if (op.op === 'progress') {
-        // Coalesce: replace the most recent progress op for this
-        // key+version when nothing else for the key came after it.
-        let replaced = false;
-        for (let i = ops.length - 1; i >= 0; i--) {
-          const o = ops[i];
-          if (o.key !== op.key) continue;
-          if (o.op === 'progress' && o.version === op.version) {
-            ops[i] = op;
-            replaced = true;
-          }
-          break;
-        }
-        if (!replaced) ops.push(op);
-      } else {
-        ops.push(op);
+        // Coalesce older same-version progress ONLY while nothing else
+        // for this key sits after it — ordering against terminal/reset
+        // writes must be preserved.
+        const keyOps = ops.filter((o) => o.key === op.key);
+        const coalesceable =
+          keyOps.length > 0 &&
+          keyOps.every((o) => o.op === 'progress' && o.version === op.version);
+        if (coalesceable) removeOpsByIds(userId, new Set(keyOps.map((o) => o.id).filter((x): x is string => !!x)));
       }
-      writePendingOps(userId, ops);
+      putWithOverflow(userId, op);
     }
     syncUnsyncedFlag(userId);
     scheduleFlush(userId);
+  };
+
+  /** Write an op, surfacing capacity pressure instead of silently
+   *  dropping user choices: at the cap, only strictly-redundant
+   *  superseded progress ops are evicted; anything still over is kept
+   *  and flagged via `queueOverflow`. Storage failures surface too. */
+  const putWithOverflow = (userId: string, op: PendingOp): void => {
+    const ops = readPendingOps(userId);
+    if (ops.length >= MAX_PENDING_OPS) {
+      const evict = new Set<string>();
+      for (const o of ops) if (isSupersededProgress(ops, o) && o.id) evict.add(o.id);
+      if (evict.size > 0) removeOpsByIds(userId, evict);
+      if (readPendingOps(userId).length >= MAX_PENDING_OPS && get().userId === userId) {
+        set({ queueOverflow: true });
+      }
+    }
+    if (!putOp(userId, op) && get().userId === userId) {
+      set({ queueOverflow: true });
+    }
   };
 
   /** Latest terminal-row updatedAt (ms) per tour key from fresh server
@@ -539,12 +723,18 @@ export const useTourStore = create<TourState>()((set, get) => {
    *  state blindly). */
   const fetchTerminalUpdatedAt = async (
     userId: string,
-  ): Promise<{ map: Map<string, number>; skewMs: number } | null> => {
+    epoch: number,
+  ): Promise<{ map: Map<string, number>; skewMs: number; gens: Map<string, number> } | null> => {
     try {
       const res = await apiClient.get<{ data?: ServerTourState }>('gamification/tours/state', {
         optionalAuth: true,
       });
-      if (get().userId !== userId) return null;
+      if (get().userId !== userId || epoch !== sessionEpoch) return null;
+      const gens = new Map<string, number>();
+      const gd = res.data?.data?.generations;
+      if (gd && typeof gd === 'object') {
+        for (const [k, v] of Object.entries(gd)) if (typeof v === 'number') gens.set(k, v);
+      }
       const rows = res.data?.data?.completions ?? [];
       const map = new Map<string, number>();
       for (const r of rows) {
@@ -555,18 +745,38 @@ export const useTourStore = create<TourState>()((set, get) => {
       const dateHeader = res.headers?.date ?? res.headers?.Date;
       const serverMs = dateHeader ? Date.parse(String(dateHeader)) : NaN;
       const skewMs = Number.isFinite(serverMs) ? serverMs - Date.now() : 0;
-      return { map, skewMs };
+      return { map, skewMs, gens };
     } catch {
       return null;
     }
   };
 
-  const sendOp = async (userId: string, op: PendingOp): Promise<'ok' | ClassifiedFailure> => {
-    if (get().userId !== userId) return { kind: 'pause' };
+  /** Send one op under the session epoch the drain captured. The epoch
+   *  is re-checked AFTER the await: an acknowledgement arriving across
+   *  a logout/re-login boundary must not stamp state into the new
+   *  session — the op stays queued ('pause') and its resend is
+   *  idempotent (resetId replays a committed reset as a no-op). */
+  const sendOp = async (
+    userId: string,
+    op: PendingOp,
+    epoch: number,
+  ): Promise<'ok' | ClassifiedFailure> => {
+    if (get().userId !== userId || epoch !== sessionEpoch) return { kind: 'pause' };
     const { path, body, method } = opPath(op);
     try {
-      if (method === 'delete') await apiClient.delete(`gamification/tours/${path}`, { optionalAuth: true });
-      else await apiClient.post(`gamification/tours/${path}`, body, { optionalAuth: true });
+      if (method === 'delete') {
+        const res = await apiClient.delete<{ data?: { generation?: number } }>(
+          `gamification/tours/${path}`,
+          { optionalAuth: true, data: body },
+        );
+        if (get().userId !== userId || epoch !== sessionEpoch) return { kind: 'pause' };
+        // Post-reset generation becomes the new fence for later writes.
+        const g = res.data?.data?.generation;
+        if (typeof g === 'number') keyGens.set(genKey(userId, op.key), g);
+      } else {
+        await apiClient.post(`gamification/tours/${path}`, body, { optionalAuth: true });
+        if (get().userId !== userId || epoch !== sessionEpoch) return { kind: 'pause' };
+      }
       return 'ok';
     } catch (err) {
       return classifyWriteError(err);
@@ -577,60 +787,62 @@ export const useTourStore = create<TourState>()((set, get) => {
    *  predecessor stops the drain so dependent writes (e.g. a replay's
    *  progress behind its reset) can never execute ahead of it. Failed
    *  ops are never reordered; 'drop' removes permanently-dead ops and
-   *  the drain continues. A localStorage drain lock keeps two tabs from
-   *  sending the shared queue concurrently; ops carry stable ids. */
+   *  the drain continues. Sending is serialized cross-tab by
+   *  withQueueLock (Web Locks; localStorage fallback). Op storage is
+   *  one-key-per-op, so enqueues from other tabs during the drain can
+   *  never be clobbered — the worst race is an idempotent resend. */
   const flushQueue = (userId: string, depth = 0): Promise<void> => {
     if (get().userId !== userId) return Promise.resolve();
     if (!flushPromise) {
       const drain = (async () => {
-        // The drain lock is released in finally; flushPromise itself is
-        // cleared by the .finally() microtask attached below — NOT here.
-        // A synchronously-completing drain (empty queue, or lock
-        // contention) resolves before the `flushPromise = drain`
-        // assignment lands, so clearing inside the body would be
-        // overwritten and wedge every later flushQueue into returning a
-        // stale resolved promise — writes would never drain again.
-        let locked = false;
-        try {
-          locked = acquireDrainLock(userId);
-          if (!locked) {
-            // Another tab holds the drain, or a stale lock is still
-            // cooling down — ops stay queued and a later flush retries.
-            // scheduleFlush keeps this bounded (>=400ms between attempts).
-            if (readPendingOps(userId).length > 0) scheduleFlush(userId);
-            return;
-          }
+        const res = await withQueueLock(userId, async () => {
+          // Session fence: everything below is validated against the
+          // epoch captured here — an account change (or logout/re-login)
+          // mid-drain stops the loop and fences every acknowledgement.
+          const drainEpoch = sessionEpoch;
           const ops = readPendingOps(userId);
-          // Ids of ops this drain finished with (sent or permanently
-          // dropped). Write-back MERGES against fresh storage so ops
-          // enqueued by another tab mid-drain are never clobbered.
           const doneIds = new Set<string>();
-          // vetoedResetEpoch[key]: a reset was dropped because the server
-          // holds NEWER terminal state (written on another device after
-          // the reset was requested). Ops from that replay group — same
-          // or older epoch — are dropped with it; a later, newer replay
-          // (higher epoch) is still allowed through.
+          // Per-key reset barrier: a queued reset supersedes every
+          // EARLIER write for that key — including ones enqueued by
+          // another tab after this tab's enqueue-time purge ran.
+          const resetTsByKey = new Map<string, number>();
+          for (const o of ops) {
+            if (o.op === 'reset') resetTsByKey.set(o.key, Math.max(resetTsByKey.get(o.key) ?? 0, o.ts));
+          }
+          // vetoed[key] = reset epoch: a reset dropped because the server
+          // holds NEWER terminal state drops its whole replay group.
           const vetoed = new Map<string, number>();
-          // { map, skewMs } — skew corrects client op.ts into server
-          // time so the "newer than request" veto isn't fooled by clock
-          // drift. VETO_SKEW_TOLERANCE_MS leans toward NOT vetoing for
-          // near-simultaneous writes (a completion racing the replay
-          // click is ambiguous; the explicit replay wins).
+          // Replay-group tracking: resets this drain finished with, so
+          // group ops (afterReset) can be stamped or dropped explicitly.
+          const ackedResets = new Set<string>();
+          const droppedResets = new Set<string>();
           const VETO_SKEW_TOLERANCE_MS = 5_000;
-          let terminalInfo: { map: Map<string, number>; skewMs: number } | null | undefined;
+          let terminalInfo:
+            | { map: Map<string, number>; skewMs: number; gens: Map<string, number> }
+            | null
+            | undefined;
           let blockedByFailure = false;
-          let blockedOp: PendingOp | null = null;
+          let pauseBlocked = false;
           for (let i = 0; i < ops.length; i++) {
             const op = ops[i];
-            if (get().userId !== userId) {
-              // Account switched mid-drain — keep everything not yet sent.
+            if (get().userId !== userId || drainEpoch !== sessionEpoch) break;
+            if (op.notBefore && op.notBefore > Date.now()) {
+              blockedByFailure = true;
               break;
             }
-            if (op.notBefore && op.notBefore > Date.now()) {
-              // 429 backoff — stop here, preserving order for dependents.
-              blockedByFailure = true;
-              blockedOp = op;
-              break;
+            // Stale pre-reset write — the reset erases its target.
+            const resetTs = resetTsByKey.get(op.key);
+            if (resetTs !== undefined && op.ts < resetTs) {
+              recordOutcome(op.id, 'drop');
+              if (op.id) doneIds.add(op.id);
+              continue;
+            }
+            // Redundant progress: a later op for the key already carries
+            // the newer state — compact, don't send.
+            if (isSupersededProgress(ops, op)) {
+              recordOutcome(op.id, 'drop');
+              if (op.id) doneIds.add(op.id);
+              continue;
             }
             const veto = vetoed.get(op.key);
             if (veto !== undefined && op.epoch <= veto) {
@@ -638,63 +850,85 @@ export const useTourStore = create<TourState>()((set, get) => {
               if (op.id) doneIds.add(op.id);
               continue;
             }
+            // Replay-group member: the reset that gates it either acked
+            // (stamp the post-reset generation — the write belongs to the
+            // new replay by construction), dropped (drop with the group),
+            // or was processed outside this drain (fetch the current
+            // authoritative generation before sending).
+            if (op.afterReset) {
+              if (droppedResets.has(op.afterReset)) {
+                recordOutcome(op.id, 'drop');
+                if (op.id) doneIds.add(op.id);
+                continue;
+              }
+              if (ackedResets.has(op.afterReset)) {
+                op.gen = keyGens.get(genKey(userId, op.key));
+              } else {
+                if (terminalInfo === undefined) {
+                  terminalInfo = await fetchTerminalUpdatedAt(userId, drainEpoch);
+                }
+                if (terminalInfo === null) {
+                  recordOutcome(op.id, 'blocked');
+                  blockedByFailure = true;
+                  break;
+                }
+                op.gen = terminalInfo.gens.get(op.key) ?? 0;
+              }
+            }
             let result: 'ok' | ClassifiedFailure;
             if (op.op === 'reset') {
-              if (terminalInfo === undefined) terminalInfo = await fetchTerminalUpdatedAt(userId);
+              if (terminalInfo === undefined) terminalInfo = await fetchTerminalUpdatedAt(userId, drainEpoch);
               if (terminalInfo === null) {
-                // Cannot verify server state — do NOT risk erasing newer
-                // terminal state; treat as a transient block.
                 result = { kind: 'retry' };
               } else {
                 const t = terminalInfo.map.get(op.key);
-                // Server updatedAt vs request time, both in server clock.
                 if (t !== undefined && t > op.ts + terminalInfo.skewMs + VETO_SKEW_TOLERANCE_MS) {
                   vetoed.set(op.key, op.epoch);
                   recentVetoes.set(op.key, Date.now());
                   result = { kind: 'drop' };
                 } else {
-                  result = await sendOp(userId, op);
+                  // Carry the observed newest-terminal timestamp into the
+                  // DELETE: a completion committing between this lookup
+                  // and the server's delete is fenced atomically → 409.
+                  op.expectedTerminalUpdatedAt =
+                    t !== undefined ? new Date(t).toISOString() : null;
+                  result = await sendOp(userId, op, drainEpoch);
                 }
               }
             } else {
-              result = await sendOp(userId, op);
+              result = await sendOp(userId, op, drainEpoch);
             }
             if (result === 'ok') {
               recordOutcome(op.id, 'ok');
               if (op.id) doneIds.add(op.id);
+              if (op.op === 'reset' && op.id) ackedResets.add(op.id);
               continue;
             }
             if (result.kind === 'drop') {
+              // A reset fenced server-side (409 — newer terminal state or
+              // generation already bumped) drops its whole replay group,
+              // exactly like the client-side veto path.
+              if (op.op === 'reset') {
+                vetoed.set(op.key, op.epoch);
+                recentVetoes.set(op.key, Date.now());
+                if (op.id) droppedResets.add(op.id);
+              }
               recordOutcome(op.id, 'drop');
               if (op.id) doneIds.add(op.id);
               continue;
             }
-            // pause / retry / retry-after — STOP the drain. Dependents
-            // behind this op must wait for it.
             recordOutcome(op.id, 'blocked');
             if (result.kind === 'retry-after') {
               op.notBefore = Date.now() + (result.retryAfterMs ?? 5_000);
+              putOp(userId, op); // persist the notBefore marker durably
             }
+            if (result.kind === 'pause') pauseBlocked = true;
             blockedByFailure = true;
-            blockedOp = op;
             break;
           }
-          // Merge write-back: drop only the ops this drain finished;
-          // preserve ops enqueued concurrently (other tabs) and update
-          // the blocked head's notBefore in place.
-          const stored = readPendingOps(userId);
-          const remaining = stored.filter((o) => !o.id || !doneIds.has(o.id));
-          if (blockedOp?.id) {
-            const idx = remaining.findIndex((o) => o.id === blockedOp!.id);
-            if (idx >= 0) remaining[idx] = { ...remaining[idx], notBefore: blockedOp.notBefore };
-          }
-          writePendingOps(userId, remaining);
+          removeOpsByIds(userId, doneIds);
           syncUnsyncedFlag(userId);
-          // Ops reached the server — re-hydrate so the display converges
-          // (e.g. a dismiss that drained after hydrate must hide the
-          // tour; a progress write must move the resume step). If a
-          // hydrate is already in flight its snapshot may predate these
-          // writes, so chain one more fetch behind it.
+          // Ops reached the server — re-hydrate so the display converges.
           if (doneIds.size > 0 && get().userId === userId) {
             const inflight = hydrateInflight;
             if (inflight?.userId === userId) {
@@ -708,15 +942,21 @@ export const useTourStore = create<TourState>()((set, get) => {
           if (!blockedByFailure) {
             flushFailCount = 0;
             nextFlushAllowedAt = 0;
-          } else if (remaining.length > 0) {
-            // Bounded backoff for the NEXT automatic flush — explicit
-            // triggers (hydrate, focus, Retry) still flush immediately.
+          } else if (!pauseBlocked) {
+            // Transient failure — bounded backoff for the NEXT automatic
+            // flush. Explicit triggers bypass it. A 'pause' (401) is
+            // deliberately NOT retried on a timer: ops wait for normal
+            // authentication restore (hydrate/focus/Retry triggers).
             flushFailCount = Math.min(flushFailCount + 1, 6);
             nextFlushAllowedAt = Date.now() + Math.min(1000 * 2 ** flushFailCount, 30_000);
             scheduleFlush(userId);
           }
-        } finally {
-          if (locked) releaseDrainLock(userId);
+          return undefined;
+        });
+        if (res === 'busy' && readPendingOps(userId).length > 0) {
+          // Another tab owns the drain — it processes the shared queue;
+          // retry anyway in case its snapshot predates our op.
+          scheduleFlush(userId);
         }
       })();
       flushPromise = drain;
@@ -762,6 +1002,7 @@ export const useTourStore = create<TourState>()((set, get) => {
   const hydrate = async (userId: string): Promise<void> => {
     if (hydrateInflight?.userId === userId) return hydrateInflight.promise;
     lastStateSyncAt = Date.now();
+    const epoch = sessionEpoch;
     const promise = (async () => {
       try {
         const res = await apiClient.get<{ data?: ServerTourState }>(
@@ -770,9 +1011,23 @@ export const useTourStore = create<TourState>()((set, get) => {
         );
         const data = res.data?.data;
         if (!data || typeof data !== 'object') throw new Error('malformed tour state');
-        // Identity fence: a response for account A must never be applied
-        // after the session switched to account B (or logged out).
-        if (get().userId !== userId) return;
+        // Identity + generation fence: a response for account A must
+        // never be applied after logout/switch — and a response issued
+        // before a replay reset must not overwrite post-reset state,
+        // even when the user id is identical (A → logout → A).
+        if (get().userId !== userId || epoch !== sessionEpoch) return;
+        if (data.generations && typeof data.generations === 'object') {
+          for (const [k, g] of Object.entries(data.generations)) {
+            if (typeof g !== 'number') continue;
+            // Store explicit 0 for untouched keys too — missing means
+            // "unknown", which opPath would omit entirely; the server
+            // contract and test mocks distinguish omitted from explicit
+            // 0. Never downgrade a newer known generation on a stale
+            // response.
+            const cur = keyGens.get(genKey(userId, k));
+            if (cur === undefined || g > cur) keyGens.set(genKey(userId, k), g);
+          }
+        }
         const autoTours = data.autoTours === true;
         const beginner = data.beginner ?? null;
         const beginnerTerminal = data.beginnerTerminal ?? null;
@@ -855,13 +1110,16 @@ export const useTourStore = create<TourState>()((set, get) => {
    *  requested value is what the server ends up with; a failure reverts
    *  the display to the last confirmed value and exposes Retry. */
   const saveAutoTours = async (userId: string, enabled: boolean): Promise<boolean> => {
+    const epoch = sessionEpoch;
     if (get().userId !== userId) return false;
     const prev = get().autoTours;
     set({ autoToursSaving: true, autoToursError: false, autoToursFailed: null, autoTours: enabled });
     rederiveBeginner();
     try {
       await apiClient.patch('gamification/tours/preferences', { autoTours: enabled }, { optionalAuth: true });
-      if (get().userId !== userId) return false;
+      // Stale-session acknowledgement — a save that resolved across a
+      // logout/re-login or replay reset must not mutate current state.
+      if (get().userId !== userId || epoch !== sessionEpoch) return false;
       set({ autoToursSaving: false });
       writePrefMarker(userId, enabled);
       return true;
@@ -961,6 +1219,7 @@ export const useTourStore = create<TourState>()((set, get) => {
     replayRequest: null,
     replayBusy: false,
     replayError: false,
+    queueOverflow: false,
 
     syncWithUser: (userId) => {
       const s = get();
@@ -973,7 +1232,9 @@ export const useTourStore = create<TourState>()((set, get) => {
       }
       // Account change or logout: invalidate every delayed write captured
       // under the previous session, cancel timers, and reset display state.
+      // Generations are per-account — a different user's map must not leak.
       sessionEpoch += 1;
+      keyGens.clear();
       cancelPendingProgress();
       clearRetry();
       if (flushTimer) {
@@ -996,6 +1257,7 @@ export const useTourStore = create<TourState>()((set, get) => {
         replayRequest: null,
         replayBusy: false,
         replayError: false,
+        queueOverflow: false,
         unsyncedWrites: userId ? readPendingOps(userId).length > 0 : false,
       });
       if (userId) void hydrate(userId);
@@ -1174,6 +1436,16 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', onFocusOrVisible);
   // bfcache restore fires pageshow, not necessarily visibilitychange.
   window.addEventListener('pageshow', onFocusOrVisible);
+  // Bounded ACTIVE synchronization: while this tab is visible, state is
+  // re-fetched at most every STATE_REFRESH_MIN_MS — this is real polling
+  // (not just event-driven refresh), so changes made on another device
+  // propagate while the app is in use. Hidden tabs do not poll:
+  // onFocusOrVisible's visibility guard is enforced by the interval too,
+  // and focus/visibility events handle the wake-up path.
+  window.setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    onFocusOrVisible();
+  }, STATE_REFRESH_MIN_MS);
 
   // Release the drain lock on unload — a reload/navigation landing
   // mid-drain would otherwise orphan it for up to DRAIN_LOCK_STALE_MS,
@@ -1182,7 +1454,7 @@ if (typeof window !== 'undefined') {
   // tab still orphans the lock; the stale timeout remains the backstop.
   window.addEventListener('pagehide', () => {
     const s = useTourStore.getState();
-    if (s.userId) releaseDrainLock(s.userId);
+    if (s.userId) releaseFallbackLock(s.userId);
   });
 
   // Central identity fence: any auth-user change (login, logout,

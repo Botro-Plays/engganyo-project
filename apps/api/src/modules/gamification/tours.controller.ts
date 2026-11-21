@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -11,6 +11,14 @@ class TourVersionDto {
   @Min(1)
   @IsOptional()
   version?: number;
+
+  /** Replay generation the client last observed. Writes carrying a
+   *  generation older than the server's are fenced with 409 — they
+   *  belong to a replay generation the reset already erased. */
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  expectedGeneration?: number;
 }
 
 class TourProgressDto extends TourVersionDto {
@@ -22,6 +30,27 @@ class TourProgressDto extends TourVersionDto {
 class TourPreferencesDto {
   @IsBoolean()
   autoTours!: boolean;
+}
+
+class TourResetDto {
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  expectedGeneration?: number;
+
+  /** ISO timestamp of the newest terminal row the client saw at lookup,
+   *  or null when none existed. A terminal row newer than this commits
+   *  between lookup and DELETE → 409, never a silent erase. */
+  @IsString()
+  @IsOptional()
+  expectedTerminalUpdatedAt?: string | null;
+
+  /** Idempotency key for this reset (the queued op's id). A retried
+   *  DELETE after a committed-but-lost response replays as a no-op
+   *  success instead of conflicting or re-deleting. */
+  @IsString()
+  @IsOptional()
+  resetId?: string;
 }
 
 @ApiTags('tours')
@@ -58,24 +87,28 @@ export class ToursController {
   @Post(':key/progress')
   @ApiOperation({ summary: 'Persist in-progress step so an interrupted tour can resume' })
   progress(@CurrentUser() user: JwtPayload, @Param('key') key: string, @Body() dto: TourProgressDto) {
-    return this.toursService.recordProgress(user.sub, key, dto.version ?? 0, dto.step);
+    return this.toursService.recordProgress(user.sub, key, dto.version ?? 0, dto.step, dto.expectedGeneration);
   }
 
   @Post(':key/complete')
   @ApiOperation({ summary: 'Mark a tour completed for this version' })
   complete(@CurrentUser() user: JwtPayload, @Param('key') key: string, @Body() dto: TourVersionDto) {
-    return this.toursService.complete(user.sub, key, dto.version ?? 0);
+    return this.toursService.complete(user.sub, key, dto.version ?? 0, dto.expectedGeneration);
   }
 
   @Post(':key/dismiss')
   @ApiOperation({ summary: 'Dismiss a tour for this version' })
   dismiss(@CurrentUser() user: JwtPayload, @Param('key') key: string, @Body() dto: TourVersionDto) {
-    return this.toursService.dismiss(user.sub, key, dto.version ?? 0);
+    return this.toursService.dismiss(user.sub, key, dto.version ?? 0, dto.expectedGeneration);
   }
 
   @Delete(':key/state')
-  @ApiOperation({ summary: 'Clear state so the tour can be replayed' })
-  reset(@CurrentUser() user: JwtPayload, @Param('key') key: string) {
-    return this.toursService.resetForReplay(user.sub, key);
+  @ApiOperation({ summary: 'Clear state so the tour can be replayed (fenced by expected generation/terminal state)' })
+  reset(@CurrentUser() user: JwtPayload, @Param('key') key: string, @Body() dto: TourResetDto) {
+    return this.toursService.resetForReplay(user.sub, key, {
+      generation: dto.expectedGeneration,
+      terminalUpdatedAt: dto.expectedTerminalUpdatedAt,
+      resetId: dto.resetId,
+    });
   }
 }
