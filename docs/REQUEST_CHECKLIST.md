@@ -12,6 +12,13 @@ Legend:
 - **Awaiting owner** — needs a decision, credential, or manual action.
 - **Deferred** — deliberately not doing now.
 
+Evidence tiers are kept separate throughout: **source review** (code
+inspection), **CI coverage** (Actions runs incl. Playwright), **live HTTP
+checks** (curl headers/JSON-LD/HTML), and **owner-assisted rendered
+acceptance** (real browser + login). Structured data (e.g. FAQPage
+JSON-LD) being present and valid is a crawl/schema fact — it is NOT a
+promise of rich-result eligibility; Google decides display.
+
 ---
 
 ## Live-verified
