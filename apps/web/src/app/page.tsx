@@ -15,6 +15,7 @@ import { LandingNavbar } from '@/components/landing-navbar';
 import { PlatformIcon } from '@/components/platform-icon';
 import { BrandLogo } from '@/components/brand-logo';
 import { TelegramIcon } from '@/components/telegram-icon';
+import { PublicFooter } from '@/components/public-chrome';
 
 // Server-rendered JSON-LD — a plain <script type="application/ld+json">
 // lands in the raw HTML for non-JS crawlers (next/script injects only
@@ -150,7 +151,7 @@ export default async function LandingPage() {
 
               <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-8 max-w-lg">
                 Complete social tasks for other creators, earn credits, then use them to grow your own audience.
-                Every interaction is verified by a human — no bots, no fake engagement.
+                Every completion is verified — no bots, no fake engagement.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
@@ -436,31 +437,7 @@ export default async function LandingPage() {
         </section>
 
         {/* ── Footer ───────────────────────────────────────────── */}
-        <footer className="relative z-10 border-t border-surface-border py-10 sm:py-12 px-4 sm:px-6">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <BrandLogo wordmark={false} className="w-6 h-6" />
-              <span className="font-semibold text-sm">Engganyo</span>
-            </div>
-            <p className="text-sc-dim text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 sm:gap-6 text-sc-dim text-sm">
-              <a
-                href="https://t.me/Engganyo"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 py-2 hover:text-accent-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300 rounded"
-              >
-                <TelegramIcon className="h-4 w-4" />
-                Telegram
-              </a>
-              <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
-              <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>
-              <Link href="/contact" className="hover:text-sc-text transition-colors">Contact</Link>
-              <Link href="/privacy" className="hover:text-sc-text transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-sc-text transition-colors">Terms of Service</Link>
-            </div>
-          </div>
-        </footer>
+        <PublicFooter />
       </main>
     </>
   );
@@ -499,7 +476,7 @@ const trustPoints = [
   {
     Icon: CheckCircle2,
     title: 'Creator-reviewed',
-    desc: 'Every task completion is manually reviewed by the campaign creator before credits change hands. Automation doesn\'t substitute for human judgment.',
+    desc: 'Most completions are reviewed by the campaign owner before credits change hands — the rest verify automatically through linked accounts. Either way, no credits move on unverified work.',
   },
   {
     Icon: Shield,
