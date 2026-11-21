@@ -1141,4 +1141,91 @@ test.describe('tour state hardening', () => {
     // The newer completion was NEVER deleted.
     expect(rows.length).toBe(1);
   });
+  test('a stale account-A reset response cannot touch account-B replay UI', async ({ page }) => {
+    // /state call order: A hydrate (#1, served), A replay snapshot (#2,
+    // held), B hydrate (#3, served), B replay snapshot (#4, held).
+    let releaseA!: () => void;
+    let releaseB!: () => void;
+    const gateA = new Promise<void>((r) => (releaseA = r));
+    const gateB = new Promise<void>((r) => (releaseB = r));
+    let calls = 0;
+    await page.route('**/api/gamification/tours/state', async (route) => {
+      calls += 1;
+      if (calls === 2) {
+        await gateA;
+        return route.fulfill(apiOk(BEGINNER_DONE));
+      }
+      if (calls === 4) {
+        await gateB;
+        return route.fulfill(apiOk(BEGINNER_DONE));
+      }
+      return route.fulfill(apiOk(BEGINNER_DONE));
+    });
+    await page.route('**/api/gamification/tours/catalog', (r) =>
+      r.fulfill(
+        apiOk({
+          interval: 5,
+          version: 1,
+          autoTours: true,
+          beginner: { status: 'COMPLETED', step: 10 },
+          beginnerSeenVersion: 2,
+          tours: [],
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+    await page.route('**/api/gamification/tours/beginner/state', (r) => {
+      if (r.request().method() === 'DELETE') return r.fulfill(apiOk({ reset: true }));
+      return r.fulfill(apiOk(BEGINNER_DONE));
+    });
+
+    await page.goto('/settings');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    const replayBtn = page.getByRole('button', { name: 'Replay' }).first();
+    await expect(replayBtn).toBeVisible();
+
+    // Account A starts a replay — its snapshot request is held.
+    await replayBtn.click();
+    await expect(replayBtn).toBeDisabled();
+
+    // Switch to account B IN-SESSION (storage event rehydrates the auth
+    // store — no reload, so A's pending snapshot stays alive).
+    await page.evaluate(() => {
+      const raw = localStorage.getItem('engganyo-auth')!;
+      const blob = JSON.parse(raw);
+      blob.state.user = {
+        ...blob.state.user,
+        id: 'account-b-test-id',
+        email: 'account-b-test-id@test.local',
+        username: 'account-b-test-id',
+      };
+      const next = JSON.stringify(blob);
+      localStorage.setItem('engganyo-auth', next);
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'engganyo-auth', newValue: next }),
+      );
+    });
+
+    // B starts its own replay — held at the snapshot so replayBusy stays
+    // true while A's stale response lands.
+    await page.waitForTimeout(1500);
+    await expect(replayBtn).toBeEnabled();
+    await replayBtn.click();
+    await expect(replayBtn).toBeDisabled();
+
+    // A's delayed snapshot resolves into B's session — it must neither
+    // clear B's busy state nor raise an error for B.
+    releaseA();
+    await page.waitForTimeout(1500);
+    await expect(replayBtn).toBeDisabled();
+    await expect(page.getByText(/haven't synced/i)).toHaveCount(0);
+    await expect(page.getByText(/could not reset/i)).toHaveCount(0);
+
+    // B's snapshot then resolves and the replay completes cleanly.
+    releaseB();
+    await expect(replayBtn).toBeEnabled({ timeout: 15_000 });
+    await expect(page.getByText(/haven't synced/i)).toHaveCount(0);
+  });
 });
