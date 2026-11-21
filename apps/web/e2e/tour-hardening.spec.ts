@@ -1196,7 +1196,14 @@ test.describe('tour state hardening', () => {
 
     // Switch to account B IN-SESSION via the store's identity seam — no
     // reload, so A's pending snapshot stays alive and resolves into a
-    // session it no longer owns.
+    // session it no longer owns. The seam exists only in builds with
+    // NEXT_PUBLIC_TOUR_E2E_HOOK=1 (CI e2e); skip otherwise.
+    const hasSeam = await page.evaluate(
+      () =>
+        !!(window as unknown as { __engganyoTourStore?: unknown })
+          .__engganyoTourStore,
+    );
+    test.skip(!hasSeam, 'tour store seam requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
     await page.evaluate(() => {
       const store = (window as unknown as {
         __engganyoTourStore: { getState: () => { syncWithUser: (id: string | null) => void } };

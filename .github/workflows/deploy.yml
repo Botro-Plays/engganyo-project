@@ -98,6 +98,9 @@ jobs:
 
     env:
       NEXT_PUBLIC_API_URL: http://localhost:3001/api
+      # Test-only seam: exposes the client-local tour store on window for
+      # the in-session stale-response e2e. Not present in release builds.
+      NEXT_PUBLIC_TOUR_E2E_HOOK: "1"
 
     steps:
       - name: Checkout
