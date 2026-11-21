@@ -1018,9 +1018,14 @@ export const useTourStore = create<TourState>()((set, get) => {
         if (get().userId !== userId || epoch !== sessionEpoch) return;
         if (data.generations && typeof data.generations === 'object') {
           for (const [k, g] of Object.entries(data.generations)) {
-            if (typeof g === 'number' && g > (keyGens.get(genKey(userId, k)) ?? 0)) {
-              keyGens.set(genKey(userId, k), g);
-            }
+            if (typeof g !== 'number') continue;
+            // Store explicit 0 for untouched keys too — missing means
+            // "unknown", which opPath would omit entirely; the server
+            // contract and test mocks distinguish omitted from explicit
+            // 0. Never downgrade a newer known generation on a stale
+            // response.
+            const cur = keyGens.get(genKey(userId, k));
+            if (cur === undefined || g > cur) keyGens.set(genKey(userId, k), g);
           }
         }
         const autoTours = data.autoTours === true;
