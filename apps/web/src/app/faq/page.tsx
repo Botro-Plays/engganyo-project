@@ -1,76 +1,97 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BrandLogo } from '@/components/brand-logo';
+import { innerPageJsonLd } from '@/lib/jsonld';
+import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
 export const metadata: Metadata = {
   title: 'FAQ',
-  description: 'Frequently asked questions about Engganyo. Learn how to earn credits, withdraw earnings, and more.',
+  description:
+    'Frequently asked questions about Engganyo — how credits work, how tasks are reviewed, which platforms are supported, and how to get started.',
   alternates: { canonical: 'https://engganyo.com/faq' },
   robots: { index: true, follow: true },
+  openGraph: {
+    title: 'FAQ | Engganyo',
+    description:
+      'How Engganyo credits work: earn them on tasks, spend them on campaigns, buy more in your wallet. No cash withdrawals.',
+    url: 'https://engganyo.com/faq',
+  },
+  twitter: {
+    title: 'FAQ | Engganyo',
+    description:
+      'How Engganyo credits work: earn them on tasks, spend them on campaigns, buy more in your wallet. No cash withdrawals.',
+  },
 };
 
 const faqs = [
   {
-    category: 'Getting Started',
+    category: 'Getting started',
     questions: [
       {
         q: 'What is Engganyo?',
-        a: 'Engganyo is a platform that connects brands with social media users. Users complete social media tasks (like following, subscribing, watching) and earn credits that can be withdrawn as real currency.',
+        a: 'A web platform where creators help each other grow with small tasks and credits. Members complete tasks for other creators, earn credits, and spend them on campaigns for their own accounts.',
       },
       {
         q: 'How do I create an account?',
-        a: 'Click the "Sign Up" button on the homepage, fill in your username, email, and password. You\'ll need to verify your email address before you can start earning.',
+        a: 'Click "Sign Up" on the homepage, fill in your username, email, and password. You\'ll need to verify your email address before you can start.',
       },
       {
         q: 'Is Engganyo free to use?',
-        a: 'Yes, creating an account and participating in campaigns is completely free. You earn money by completing tasks, not by paying us.',
+        a: 'Joining is free and every member starts with 200 free credits — no card is needed. You can earn more credits by completing tasks, or buy credits in your wallet if you want to run larger campaigns.',
       },
     ],
   },
   {
-    category: 'Earning Credits',
+    category: 'Earning and spending credits',
     questions: [
       {
         q: 'How do I earn credits?',
-        a: 'Browse the campaigns page, select a campaign that interests you, complete the required task (e.g., subscribe to a YouTube channel, follow on Twitch), and submit proof. Once verified, credits are added to your wallet.',
+        a: 'Browse the open tasks, accept one, do the action on that platform, and upload a screenshot as proof. The campaign owner reviews it, and credits are released to your wallet once it is approved.',
       },
       {
-        q: 'How are credits calculated?',
-        a: 'Each campaign has a set credit reward based on the task difficulty and the brand\'s budget. Credits are awarded upon successful verification of your proof.',
+        q: 'How do I spend credits?',
+        a: 'Create a campaign: choose a platform, add your link, set the reward for each task and how many completions you want. Credits for the campaign budget are held until the campaign ends or tasks are approved.',
+      },
+      {
+        q: 'Can I buy credits?',
+        a: 'Yes. The wallet page offers credit purchases; available payment methods depend on your region and are shown during checkout. Purchased credits work exactly like earned credits.',
+      },
+      {
+        q: 'Can I withdraw credits as money?',
+        a: 'No. Credits are used inside Engganyo — they pay for campaigns and platform features — and cannot be withdrawn as money.',
       },
       {
         q: 'What happens if my task is rejected?',
-        a: 'If your proof doesn\'t meet the campaign requirements, it will be rejected. You can review the rejection reason, correct your submission, and try again.',
+        a: 'If your proof doesn\'t meet the campaign requirements, it will be rejected. You can review the reason, correct your submission, and try again.',
       },
       {
-        q: 'How long does verification take?',
-        a: 'Verification typically takes 24-72 hours depending on the campaign volume and admin availability. You can check the status in your tasks page.',
+        q: 'How long does review take?',
+        a: 'The campaign owner reviews your proof, usually within 48 hours. You can check the status on your tasks page at any time.',
       },
     ],
   },
   {
-    category: 'Withdrawals',
+    category: 'Platforms and tasks',
     questions: [
       {
-        q: 'How do I withdraw my earnings?',
-        a: 'Go to the Wallet page, check your available balance, and request a withdrawal. You\'ll need to select a payment method and provide the necessary details.',
+        q: 'Which platforms are supported?',
+        a: 'Tasks are available for TikTok, Instagram, Facebook, X, Telegram, Discord, Twitch, Spotify, Trustpilot, and Google. Each platform has its own rules — read them before running or completing a task. Engganyo does not offer rewarded YouTube engagement tasks.',
       },
       {
-        q: 'What payment methods are available?',
-        a: 'We support various payment methods including PayPal, bank transfer, and other options depending on your region. Available methods are shown in the withdrawal page.',
+        q: 'How are tasks verified?',
+        a: 'Most tasks are reviewed manually: you upload proof and the campaign owner approves or rejects it. Some tasks — like Twitch and Spotify follows — verify automatically through a linked account instead.',
       },
       {
-        q: 'What is the minimum withdrawal amount?',
-        a: 'The minimum withdrawal amount varies by payment method. Check the Wallet page for current thresholds.',
+        q: 'Can I complete the same campaign twice?',
+        a: 'No, each campaign can only be completed once per account to keep distribution fair.',
       },
       {
-        q: 'How long do withdrawals take to process?',
-        a: 'Withdrawal processing times vary by method. PayPal is typically instant, while bank transfers may take 3-5 business days.',
+        q: 'What if a campaign runs out of slots?',
+        a: 'Campaigns have limited slots set by their creator. Once filled, the campaign closes — check back for new ones.',
       },
     ],
   },
   {
-    category: 'Account & Security',
+    category: 'Account and security',
     questions: [
       {
         q: 'Can I have multiple accounts?',
@@ -78,73 +99,43 @@ const faqs = [
       },
       {
         q: 'How do I reset my password?',
-        a: 'Click "Forgot Password" on the login page, enter your email, and follow the instructions sent to your inbox to reset your password.',
+        a: 'Click "Forgot Password" on the login page, enter your email, and follow the instructions sent to your inbox.',
       },
       {
         q: 'Is my personal information secure?',
-        a: 'Yes, we use industry-standard encryption and security practices to protect your data. We never share your personal information with third parties without your consent.',
+        a: 'We use industry-standard encryption and security practices to protect your data. See our Privacy Policy for details.',
       },
       {
         q: 'Can I delete my account?',
-        a: 'Yes, you can request account deletion from the Settings page. Note that this action is irreversible and all your data will be permanently removed.',
-      },
-    ],
-  },
-  {
-    category: 'Campaigns & Tasks',
-    questions: [
-      {
-        q: 'What platforms are supported?',
-        a: 'We currently support YouTube, Twitch, and Spotify. More platforms may be added in the future.',
-      },
-      {
-        q: 'Can I participate in the same campaign multiple times?',
-        a: 'No, each campaign can only be completed once per account to ensure fair distribution of opportunities.',
-      },
-      {
-        q: 'What type of proof is required?',
-        a: 'Proof requirements vary by campaign. Common types include screenshots, video recordings, or links to your completed action. The requirements are clearly listed on each campaign page.',
-      },
-      {
-        q: 'What if a campaign runs out of slots?',
-        a: 'Campaigns have limited slots based on the brand\'s budget. Once all slots are filled, the campaign closes. Check back often for new campaigns.',
-      },
-    ],
-  },
-  {
-    category: 'For Brands',
-    questions: [
-      {
-        q: 'How can I launch a campaign?',
-        a: 'Contact our business team at business@engganyo.com to discuss your campaign goals and get started with the brand onboarding process.',
-      },
-      {
-        q: 'What are the pricing options?',
-        a: 'Pricing depends on campaign scope, target audience, and duration. Contact us for a custom quote based on your needs.',
-      },
-      {
-        q: 'How do you ensure quality engagement?',
-        a: 'We use verification systems, proof review, and anti-fraud measures to ensure all engagement is genuine. Suspicious activity is investigated and removed.',
+        a: 'Yes, you can request account deletion from the Settings page. This action is irreversible and your data will be permanently removed.',
       },
     ],
   },
 ];
 
+const jsonLd = innerPageJsonLd({
+  type: 'FAQPage',
+  path: '/faq',
+  name: 'Frequently Asked Questions',
+  description:
+    'Answers about Engganyo credits, task review, supported platforms, and accounts.',
+  breadcrumb: 'FAQ',
+  mainEntity: faqs.flatMap((s) =>
+    s.questions.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  ),
+});
+
 export default function FAQPage() {
   return (
-    <div className="min-h-screen bg-sc">
-      {/* Header with logo - visible on mobile */}
-      <header className="md:hidden border-b border-surface-border p-4">
-        <Link href="/" className="inline-flex items-center">
-          <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
-        </Link>
-      </header>
+    <div className="min-h-screen bg-sc text-sc-text">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PublicHeader />
 
       <div className="max-w-3xl mx-auto px-4 py-12">
-        <Link href="/" className="hidden md:inline-flex items-center text-zinc-400 hover:text-white mb-8">
-          ← Back to Home
-        </Link>
-
         <h1 className="text-3xl font-bold text-white mb-2">Frequently Asked Questions</h1>
         <p className="text-zinc-400 mb-8">Everything you need to know about Engganyo</p>
 
@@ -177,6 +168,8 @@ export default function FAQPage() {
           </section>
         </div>
       </div>
+
+      <PublicFooter />
     </div>
   );
 }

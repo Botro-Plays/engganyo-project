@@ -1,7 +1,93 @@
 # SEO Baseline & Action Plan — engganyo.com
 
-**Baseline:** production `3b99a3a` (verified `.deployed-sha` on VPS, all
-containers healthy, 2026-11-20). Source = `main` @ `3b99a3a`.
+## 2026-11-21 round-2 reconciliation (handoff `Engganyo-SEO-Full-Handoff-2026-11-21.pdf`)
+
+Fresh verification against deployed `023978b` / live site on 2026-11-21:
+
+**Confirmed facts used for copy corrections** (verified in source, not
+copied from the handoff):
+- Creator↔creator exchange — **no brands exist anywhere in the product**
+  (no brand entity, no brand onboarding, no business@ mailbox in code).
+- Credits **cannot** be withdrawn — no withdrawal endpoint or UI exists.
+  Deposits DO exist (PayMongo PHP, PayPal USD, USDT BEP-20/Base →
+  `creditsToAward`) — copy says "you can buy credits", nothing more.
+- Welcome bonus: **200 credits** (`WELCOME_CREDITS = 200`).
+- Review: manual proof → **campaign owner reviews** (product copy already
+  promises "within 48 hours"); **Twitch/Spotify follows auto-verify** via
+  linked OAuth accounts (`API_VERIFIED_TASK_TYPES`, `autoVerify` default
+  ON for OAuth platforms) — so "every task is creator-reviewed" is FALSE
+  and was not copied.
+- Rewarded platforms (matches homepage + `MANAGED_PLATFORMS`): TikTok,
+  Instagram, Facebook, X, Telegram, Discord, Twitch, Spotify, Trustpilot,
+  Google — **YouTube engagement disabled** (`DISABLED_ENGAGEMENT_TASK_TYPES`,
+  platform-policy compliance). The handoff's 8-platform list was wrong.
+- Fee volume tiers measure `wallet.lifetimeSpent` in **credits**
+  (500/2000/5000), not pesos — Terms said "₱500+" (wrong).
+
+**Shipped in this round (code + repo-managed infra):**
+- About/FAQ/Contact rewritten to the verified model; Contact's duplicated
+  FAQ section removed; withdrawal/payment-partner claims gone everywhere.
+- Terms: volume tiers restated in credits; minimum age (13) added to match
+  Privacy; visible "Last updated" on both legal pages.
+- Privacy: "Section 9" contact reference corrected to Section 12.
+- Shared `PublicHeader`/`PublicFooter` on all five inner pages (consistent
+  public navigation); homepage footer extracted to the same component.
+- Per-page `openGraph`/`twitter` titles + descriptions.
+- Inner-page JSON-LD (AboutPage/ContactPage/FAQPage/WebPage + BreadcrumbList,
+  `isPartOf` → `/#website`), server-rendered like the homepage graph.
+- Custom `not-found.tsx` — real 404 styling + single title (fixes the
+  duplicate `<title>` bug verified live).
+- Sitemap `lastModified` = honest per-page content dates (2026-11-21 for
+  all six — this round changed them all).
+- Homepage copy aligned: "Every completion is verified" (was "by a human");
+  trust point says most completions are owner-reviewed, some auto-verify.
+- `infra/nginx/nginx.conf`: `www.engganyo.com` moved to its own
+  default_server 443 block → **path-preserving 301 → apex** for every
+  non-apex hostname. Ships via the normal deploy (nginx force-recreate +
+  `nginx -t`).
+
+**Fresh live measurements (2026-11-21, curl from local):**
+- TTFB: `/` 0.50s, `/about` 0.32s, `/faq` 0.36s, `/contact` 0.31s,
+  `/privacy` 0.34s, `/terms` 0.31s; HTML sizes 21–86KB.
+- `/` sends `Cache-Control: s-maxage=3600, stale-while-revalidate`
+  (the handoff's 31536000 claim is stale — already 1h).
+- `cf-cache-status: DYNAMIC` — Cloudflare not caching HTML (correct until
+  owner reviews a cache rule).
+- `https://www.engganyo.com/` + `/about` → **200** (fix staged in nginx.conf).
+- `PerplexityBot/1.0` UA → **403 at Cloudflare edge** — robots.txt already
+  allows it; the block is CF-side only (AI Crawl Control / bot rules).
+- Unknown URLs return real 404; duplicate `<title>` verified live (fix
+  staged).
+- GSC / CrUX / PageSpeed: **no fresh data** — requires owner-run PSI or
+  Search Console access; the re-audit's CWV numbers remain estimates.
+
+**Owner/external decisions — NOT shipped:**
+- Canonical public email: pages still show `support@engganyo.com`
+  (existing public mailbox). Handoff wants `contact@engganyo.com` —
+  confirm the mailbox exists before switching + adding `contactPoint`
+  to Organization JSON-LD (deliberately withheld until confirmed).
+- CF AI Crawl Control: allow PerplexityBot (or add explicit rule).
+- CF email obfuscation: currently mangles the contact email in raw HTML
+  — disable for the public address once the canonical one is confirmed.
+- Public-HTML edge caching: only after cookie/personalization review;
+  s-maxage already 1h.
+- CSP + Permissions-Policy: needs inline-script/wallet/socket tuning —
+  separate hardening PR, not SEO work.
+- Trustpilot + Google task types: legal review pending (homepage lists
+  them; About/FAQ now mirror the real product list — revisit if the
+  decision changes).
+- Homepage title/H1 and "one-sentence definition" wording: owner copy
+  still pending — not invented.
+- New content routes (/blog, /safety, /how-it-works, /pricing): remain
+  unpublished until real content exists — no empty indexable pages.
+- robots.txt second `User-agent:*` group: Cloudflare-managed block —
+  infra-side tidy, not in app code.
+- GSC "Request indexing" after this deploy lands.
+
+---
+
+**Original baseline:** production `3b99a3a` (verified `.deployed-sha` on
+VPS, all containers healthy, 2026-11-20). Source = `main` @ `3b99a3a`.
 
 **Inputs:**
 - Jomar handoff (Google Drive folder `1bG3x5WxpoGwoB5UjUsC5IzHBwMU8colY`,

@@ -1,30 +1,41 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BrandLogo } from '@/components/brand-logo';
+import { innerPageJsonLd } from '@/lib/jsonld';
+import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'Learn how Engganyo collects, uses, and protects your personal information on our creator growth platform.',
   alternates: { canonical: 'https://engganyo.com/privacy' },
   robots: { index: true, follow: true },
+  openGraph: {
+    title: 'Privacy Policy | Engganyo',
+    description: 'Learn how Engganyo collects, uses, and protects your personal information.',
+    url: 'https://engganyo.com/privacy',
+  },
+  twitter: {
+    title: 'Privacy Policy | Engganyo',
+    description: 'Learn how Engganyo collects, uses, and protects your personal information.',
+  },
 };
+
+const jsonLd = innerPageJsonLd({
+  type: 'WebPage',
+  path: '/privacy',
+  name: 'Privacy Policy',
+  description: 'Learn how Engganyo collects, uses, and protects your personal information.',
+  breadcrumb: 'Privacy Policy',
+});
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-sc">
-      {/* Header with logo - visible on mobile */}
-      <header className="md:hidden border-b border-surface-border p-4">
-        <Link href="/" className="inline-flex items-center">
-          <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
-        </Link>
-      </header>
+    <div className="min-h-screen bg-sc text-sc-text">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PublicHeader />
 
       <div className="max-w-4xl mx-auto px-4 py-12">
-        <Link href="/" className="hidden md:inline-flex items-center text-zinc-400 hover:text-white mb-8">
-          ← Back to Home
-        </Link>
-
-        <h1 className="text-3xl font-bold text-white mb-8">Privacy Policy</h1>
+        <h1 className="text-3xl font-bold text-white mb-2">Privacy Policy</h1>
+        <p className="text-sm text-zinc-500 mb-8">Last updated: November 21, 2026</p>
 
         <div className="space-y-8 text-zinc-300">
           <section>
@@ -106,7 +117,7 @@ export default function PrivacyPage() {
               <li><strong>Opt-out:</strong> Opt-out of marketing communications (you can still receive essential service communications)</li>
             </ul>
             <p className="mt-3">
-              To exercise these rights, please contact us at the address provided in Section 9.
+              To exercise these rights, please contact us at the address provided in Section 12.
             </p>
           </section>
 
@@ -173,6 +184,8 @@ export default function PrivacyPage() {
           </section>
         </div>
       </div>
+
+      <PublicFooter />
     </div>
   );
 }

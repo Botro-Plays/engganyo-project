@@ -1,118 +1,157 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BrandLogo } from '@/components/brand-logo';
+import { innerPageJsonLd } from '@/lib/jsonld';
+import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
 export const metadata: Metadata = {
   title: 'About',
-  description: 'Learn about Engganyo - the platform that connects brands with social media users for authentic engagement campaigns.',
+  description:
+    'Learn about Engganyo — a creator engagement exchange where members complete social tasks for each other, earn credits, and grow their own audiences.',
   alternates: { canonical: 'https://engganyo.com/about' },
   robots: { index: true, follow: true },
+  openGraph: {
+    title: 'About | Engganyo',
+    description:
+      'A creator engagement exchange: complete small tasks for other creators, earn credits, and spend them on campaigns for your own accounts.',
+    url: 'https://engganyo.com/about',
+  },
+  twitter: {
+    title: 'About | Engganyo',
+    description:
+      'A creator engagement exchange: complete small tasks for other creators, earn credits, and spend them on campaigns for your own accounts.',
+  },
 };
+
+const jsonLd = innerPageJsonLd({
+  type: 'AboutPage',
+  path: '/about',
+  name: 'About Engganyo',
+  description:
+    'Engganyo is a creator engagement exchange where members complete social tasks for each other, earn credits, and grow their own audiences.',
+  breadcrumb: 'About',
+});
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-sc">
-      {/* Header with logo - visible on mobile */}
-      <header className="md:hidden border-b border-surface-border p-4">
-        <Link href="/" className="inline-flex items-center">
-          <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
-        </Link>
-      </header>
+    <div className="min-h-screen bg-sc text-sc-text">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PublicHeader />
 
       <div className="max-w-3xl mx-auto px-4 py-12">
-        <Link href="/" className="hidden md:inline-flex items-center text-zinc-400 hover:text-white mb-8">
-          ← Back to Home
-        </Link>
-
         <h1 className="text-3xl font-bold text-white mb-8">About Engganyo</h1>
 
         <div className="space-y-8">
           <section className="card-glass rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Our Mission</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">What Engganyo is</h2>
             <p className="text-zinc-300 leading-relaxed">
-              Engganyo is a platform that bridges the gap between brands and social media users. We enable authentic engagement campaigns where users complete social media tasks and earn rewards, while brands reach real audiences through genuine interactions.
+              Engganyo is a web platform where creators help each other grow. You complete small
+              tasks for other creators — such as following an account or joining a channel — and
+              you earn credits once the campaign owner approves your proof. You can then spend
+              your credits on campaigns for your own accounts.
             </p>
           </section>
 
           <section className="card-glass rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">How It Works</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">How it works</h2>
             <div className="space-y-4">
               <div className="flex gap-4">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm">1</div>
                 <div>
-                  <h3 className="text-white font-medium mb-1">Browse Campaigns</h3>
-                  <p className="text-zinc-300 text-sm">Explore available campaigns from brands across YouTube, Twitch, Spotify, and more.</p>
+                  <h3 className="text-white font-medium mb-1">Browse open tasks</h3>
+                  <p className="text-zinc-300 text-sm">
+                    See open tasks across TikTok, Instagram, Telegram, Discord, and more — each
+                    shows the reward, the platform, and exactly what proof is needed.
+                  </p>
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm">2</div>
                 <div>
-                  <h3 className="text-white font-medium mb-1">Complete Tasks</h3>
-                  <p className="text-zinc-300 text-sm">Follow the campaign requirements and submit proof of completion.</p>
+                  <h3 className="text-white font-medium mb-1">Complete the task</h3>
+                  <p className="text-zinc-300 text-sm">
+                    Do the action on that platform and submit your proof. Most tasks are reviewed
+                    by the campaign owner; some — like Twitch and Spotify follows — verify
+                    automatically through a linked account.
+                  </p>
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm">3</div>
                 <div>
-                  <h3 className="text-white font-medium mb-1">Earn Credits</h3>
-                  <p className="text-zinc-300 text-sm">Get your task verified and earn credits that can be withdrawn as real currency.</p>
+                  <h3 className="text-white font-medium mb-1">Earn and spend credits</h3>
+                  <p className="text-zinc-300 text-sm">
+                    Approved completions add credits to your wallet. Spend them on campaigns for
+                    your own accounts — or buy more credits from your wallet if you want to scale
+                    faster.
+                  </p>
                 </div>
               </div>
             </div>
           </section>
 
           <section className="card-glass rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">For Brands</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">For task creators</h2>
             <p className="text-zinc-300 leading-relaxed mb-4">
-              Brands can launch targeted campaigns to reach engaged audiences. Our platform ensures:
+              Create a campaign: choose a platform, add your link, set the reward for each task
+              and how many completions you want. Engganyo provides:
             </p>
             <ul className="space-y-2 text-zinc-300 text-sm">
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Real user engagement — no bots or fake accounts</span>
+                <span>Real member engagement — no bots or fake accounts</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Transparent verification through proof submission</span>
+                <span>You review each proof before credits are released</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Flexible campaign management and analytics</span>
+                <span>Campaign management tools and progress tracking</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Cost-effective reach compared to traditional advertising</span>
+                <span>Credits stay escrowed in the campaign until you approve the work</span>
               </li>
             </ul>
           </section>
 
           <section className="card-glass rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">For Users</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">For members</h2>
             <p className="text-zinc-300 leading-relaxed mb-4">
-              Users can monetize their social media presence by participating in campaigns they genuinely enjoy.
+              Every member starts with 200 free credits — no card is needed.
             </p>
             <ul className="space-y-2 text-zinc-300 text-sm">
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Earn rewards for activities you already do</span>
+                <span>Earn credits for tasks you complete</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Choose campaigns that match your interests</span>
+                <span>Choose the platforms and campaigns that match your accounts</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Secure withdrawal options for your earnings</span>
+                <span>Credits are used inside Engganyo and cannot be withdrawn as money</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-brand-400 mt-1">•</span>
-                <span>Grow your social media presence through authentic engagement</span>
+                <span>Grow your social presence through genuine engagement</span>
               </li>
             </ul>
           </section>
 
           <section className="card-glass rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Our Values</h2>
+            <h2 className="text-xl font-semibold text-white mb-4">Supported platforms</h2>
+            <p className="text-zinc-300 leading-relaxed">
+              Tasks are available for TikTok, Instagram, Facebook, X, Telegram, Discord, Twitch,
+              Spotify, Trustpilot, and Google. Each platform has its own rules, so please read
+              them before you run or complete any task. Engganyo does not offer rewarded YouTube
+              engagement tasks.
+            </p>
+          </section>
+
+          <section className="card-glass rounded-xl p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">Our values</h2>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <h3 className="text-white font-medium mb-1">Authenticity</h3>
@@ -120,17 +159,37 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className="text-white font-medium mb-1">Fairness</h3>
-                <p className="text-zinc-300 text-sm">Transparent verification and fair compensation for all users.</p>
+                <p className="text-zinc-300 text-sm">Transparent verification and fair credit handling for all members.</p>
               </div>
               <div>
                 <h3 className="text-white font-medium mb-1">Security</h3>
-                <p className="text-zinc-300 text-sm">Robust protection against fraud and abuse for both brands and users.</p>
+                <p className="text-zinc-300 text-sm">Protection against fraud and abuse for the whole community.</p>
               </div>
               <div>
                 <h3 className="text-white font-medium mb-1">Community</h3>
-                <p className="text-zinc-300 text-sm">Building a trusted ecosystem where everyone benefits.</p>
+                <p className="text-zinc-300 text-sm">A trusted ecosystem where creators help each other grow.</p>
               </div>
             </div>
+          </section>
+
+          <section className="card-glass rounded-xl p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">Questions?</h2>
+            <p className="text-zinc-300 leading-relaxed">
+              Write to{' '}
+              <a href="mailto:support@engganyo.com" className="text-brand-400 hover:underline">
+                support@engganyo.com
+              </a>{' '}
+              or join our community on{' '}
+              <a
+                href="https://t.me/Engganyo"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-400 hover:underline"
+              >
+                Telegram
+              </a>
+              .
+            </p>
           </section>
 
           <section className="text-center">
@@ -143,6 +202,8 @@ export default function AboutPage() {
           </section>
         </div>
       </div>
+
+      <PublicFooter />
     </div>
   );
 }

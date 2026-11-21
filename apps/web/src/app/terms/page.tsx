@@ -1,30 +1,41 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BrandLogo } from '@/components/brand-logo';
+import { innerPageJsonLd } from '@/lib/jsonld';
+import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description: 'Read the terms and conditions governing your use of the Engganyo creator growth platform.',
   alternates: { canonical: 'https://engganyo.com/terms' },
   robots: { index: true, follow: true },
+  openGraph: {
+    title: 'Terms of Service | Engganyo',
+    description: 'Read the terms and conditions governing your use of the Engganyo creator growth platform.',
+    url: 'https://engganyo.com/terms',
+  },
+  twitter: {
+    title: 'Terms of Service | Engganyo',
+    description: 'Read the terms and conditions governing your use of the Engganyo creator growth platform.',
+  },
 };
+
+const jsonLd = innerPageJsonLd({
+  type: 'WebPage',
+  path: '/terms',
+  name: 'Terms of Service',
+  description: 'Read the terms and conditions governing your use of the Engganyo creator growth platform.',
+  breadcrumb: 'Terms of Service',
+});
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-sc">
-      {/* Header with logo - visible on mobile */}
-      <header className="md:hidden border-b border-surface-border p-4">
-        <Link href="/" className="inline-flex items-center">
-          <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
-        </Link>
-      </header>
+    <div className="min-h-screen bg-sc text-sc-text">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PublicHeader />
 
       <div className="max-w-3xl mx-auto px-4 py-12">
-        <Link href="/" className="hidden md:inline-flex items-center text-zinc-400 hover:text-white mb-8">
-          ← Back to Home
-        </Link>
-
-        <h1 className="text-3xl font-bold text-white mb-8">Terms of Service</h1>
+        <h1 className="text-3xl font-bold text-white mb-2">Terms of Service</h1>
+        <p className="text-sm text-zinc-500 mb-8">Last updated: November 21, 2026</p>
 
         <div className="space-y-6 text-zinc-300">
           <section>
@@ -37,7 +48,9 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-xl font-semibold text-white mb-3">2. Account Responsibilities</h2>
-            <p className="mb-2">You are responsible for:</p>
+            <p className="mb-2">
+              You must be at least 13 years old to use Engganyo, matching the age requirement in
+              our Privacy Policy. You are responsible for:</p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Maintaining the confidentiality of your account credentials</li>
               <li>All activities that occur under your account</li>
@@ -79,9 +92,9 @@ export default function TermsPage() {
               <li>Base platform fee: 10% of the total campaign budget.</li>
               <li>Volume discounts apply based on your lifetime campaign spend:
                 <ul className="list-disc list-inside ml-6 mt-1">
-                  <li>₱500+ lifetime spend: 8% fee</li>
-                  <li>₱2,000+ lifetime spend: 6% fee</li>
-                  <li>₱5,000+ lifetime spend: 5% fee</li>
+                  <li>500+ lifetime credits spent: 8% fee</li>
+                  <li>2,000+ lifetime credits spent: 6% fee</li>
+                  <li>5,000+ lifetime credits spent: 5% fee</li>
                 </ul>
               </li>
               <li>Promotional fee rates may be offered periodically and will be displayed during campaign creation.</li>
@@ -182,6 +195,8 @@ export default function TermsPage() {
           </section>
         </div>
       </div>
+
+      <PublicFooter />
     </div>
   );
 }
