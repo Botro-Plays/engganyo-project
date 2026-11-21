@@ -51,6 +51,9 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#050918',
+  // Where supported (Chrome/Android), the layout viewport itself shrinks
+  // when the software keyboard opens, so fixed-bottom UI stays visible.
+  interactiveWidget: 'resizes-content',
 };
 
 export default function RootLayout({

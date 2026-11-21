@@ -146,6 +146,26 @@ test.describe('desktop dock @1440px', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(page.locator(LAUNCHER)).toBeVisible();
+    // Focus returns to the launcher for keyboard users.
+    await expect(page.locator(LAUNCHER)).toBeFocused();
+  });
+
+  test('opening the panel does not scroll the underlying page', async ({ page }) => {
+    await mockChatApi(page);
+    // The homepage is a long document — real document scroll to verify.
+    await page.goto('/');
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    // html { scroll-behavior: smooth } makes a plain scrollTo animate —
+    // use 'instant' and wait for the value to land before measuring.
+    await page.evaluate(() => window.scrollTo({ top: 600, behavior: 'instant' }));
+    await page.waitForFunction(() => window.scrollY > 100);
+    const before = await page.evaluate(() => window.scrollY);
+    await page.locator(LAUNCHER).click();
+    await expect(page.locator(DIALOG)).toBeVisible();
+    // Autofocus + layout must not pull the document.
+    expect(await page.evaluate(() => window.scrollY)).toBe(before);
+    await page.getByRole('button', { name: 'Minimize chat' }).click();
+    expect(await page.evaluate(() => window.scrollY)).toBe(before);
   });
 });
 
@@ -192,6 +212,36 @@ test.describe('mobile sheet @390px', () => {
     await expect(page.getByLabel('Chat message')).toHaveCount(0);
     await expect(dialog.getByText('Engganyo Support')).toBeVisible();
     await insideViewport(page, DIALOG);
+  });
+});
+
+test.describe('short landscape viewport (keyboard-open shape)', () => {
+  // Below the sm breakpoint with 200px visible height approximates the
+  // space left above a software keyboard in landscape — the sheet must
+  // still fit header + messages + composer inside the visible area.
+  test.use({ viewport: { width: 600, height: 200 } });
+
+  test('header, messages and composer stay inside the visible viewport', async ({ page }) => {
+    await mockChatApi(page);
+    await gotoDashboard(page);
+    await page.locator(LAUNCHER).click();
+
+    const dialog = page.locator(DIALOG);
+    await expect(dialog).toBeVisible();
+    await insideViewport(page, DIALOG);
+
+    const input = page.getByLabel('Chat message');
+    await expect(input).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+
+    const send = await page.getByRole('button', { name: 'Send message' }).boundingBox();
+    const vh = page.viewportSize()!.height;
+    expect(send!.y + send!.height).toBeLessThanOrEqual(vh);
+
+    await input.fill('Landscape check');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect(dialog.getByText('Landscape check')).toBeVisible();
+    await expect(dialog.getByText('Mocked support reply from e2e.')).toBeVisible();
   });
 });
 

@@ -71,6 +71,7 @@ export function ChatWidget() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
   const { user, isAuthenticated } = useAuthStore();
 
   const quickActions = [
@@ -111,6 +112,38 @@ export function ChatWidget() {
     return () => mq.removeEventListener('change', update);
   }, []);
 
+  // Track the ACTUAL visible viewport. On browsers where the layout
+  // viewport doesn't shrink for the software keyboard, the sheet's
+  // bottom edge is lifted by the occluded strip so the composer stays
+  // reachable; its height is also capped to what's really visible.
+  const [vv, setVv] = useState({ height: 0, offsetTop: 0 });
+  useEffect(() => {
+    const el = window.visualViewport;
+    if (!el) return;
+    const update = () => {
+      setVv({ height: el.height, offsetTop: el.offsetTop });
+      if (document.querySelector('nav[aria-label="Mobile navigation"]')) {
+        setAboveMobileNav(el.height > 340);
+      }
+    };
+    update();
+    el.addEventListener('resize', update);
+    el.addEventListener('scroll', update);
+    return () => {
+      el.removeEventListener('resize', update);
+      el.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  const kbInset =
+    !isDesktop && vv.height > 0
+      ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      : 0;
+  const sheetMaxH =
+    !isDesktop && vv.height > 0
+      ? Math.max(Math.min(vv.height - 16, window.innerHeight * 0.85), 160)
+      : undefined;
+
   // Load + recover the persisted offset once the widget exists, and re-clamp
   // on resize/orientation change. Invalid or unreachable offsets collapse to
   // the docked position.
@@ -133,7 +166,10 @@ export function ChatWidget() {
   }, [clampToViewport, isOpen]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll the message container directly — scrollIntoView could also
+    // pull the underlying page when the sheet opens mid-document.
+    const el = messagesEndRef.current?.parentElement;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   };
 
   const startNewConversation = () => {
@@ -186,22 +222,30 @@ export function ChatWidget() {
     scrollToBottom();
   }, [messages]);
 
+  const close = useCallback(() => {
+    setIsOpen(false);
+    // Return focus to the launcher so keyboard users don't lose their place.
+    requestAnimationFrame(() => launcherRef.current?.focus({ preventScroll: true }));
+  }, []);
+
   // Focus the composer on open and let Escape close the panel/sheet.
   useEffect(() => {
     if (!isOpen) return;
     // The dashboard mobile nav is a fixed z-50 strip at the bottom edge.
-    // Lift the sheet above it so the composer is never overlapped; public
-    // pages have no nav and keep the sheet flush to the safe-area edge.
-    setAboveMobileNav(
-      !!document.querySelector('nav[aria-label="Mobile navigation"]'),
-    );
-    inputRef.current?.focus();
+    // Lift the sheet above it so the composer is never overlapped — but
+    // only when the visible viewport has room; when the keyboard leaves
+    // very little space the sheet falls back to covering the nav so the
+    // composer stays reachable instead of being pushed off-screen.
+    const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
+    const vvH = window.visualViewport?.height ?? window.innerHeight;
+    setAboveMobileNav(!!nav && vvH > 340);
+    inputRef.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen]);
+  }, [isOpen, close]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -280,6 +324,7 @@ export function ChatWidget() {
       <button
         ref={(el) => {
           widgetRef.current = el;
+          launcherRef.current = el;
         }}
         onClick={(e) => {
           if (isClick(e.clientX, e.clientY)) setIsOpen(true);
@@ -305,16 +350,24 @@ export function ChatWidget() {
       }}
       role="dialog"
       aria-label="Engganyo support chat"
-      style={dragStyle}
+      style={{
+        ...dragStyle,
+        ...(sheetMaxH ? { maxHeight: sheetMaxH } : {}),
+        // Lift above the occluded strip when the software keyboard covers
+        // the layout viewport's bottom edge (no-op when it resizes instead).
+        ['--chat-kb' as string]: `${kbInset}px`,
+      }}
       onMouseDown={(e) => {
         if (!isDesktop || isInteractiveTarget(e)) return;
         e.preventDefault();
         startDrag(e.clientX, e.clientY);
       }}
-      className={`fixed inset-x-3 z-40 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)] ${
+      className={`fixed inset-x-3 flex max-h-[85dvh] flex-col rounded-2xl border border-surface-border bg-surface shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 sm:max-h-[min(80vh,640px)] sm:z-40 ${
+        aboveMobileNav ? 'z-40' : 'z-[60]'
+      } ${
         aboveMobileNav
-          ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom))]'
-          : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom))]'
+          ? 'bottom-[calc(4.5rem+env(safe-area-inset-bottom)+var(--chat-kb,0px))]'
+          : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom)+var(--chat-kb,0px))]'
       } sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]`}
     >
       {/* Header — drag handle on desktop */}
@@ -358,7 +411,7 @@ export function ChatWidget() {
             )}
           </button>
           <button
-            onClick={() => setIsOpen(false)}
+            onClick={close}
             onMouseDown={(e) => e.stopPropagation()}
             className="rounded-lg p-1.5 text-sc-muted transition-colors hover:bg-surface-border hover:text-sc-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
             aria-label="Close chat"
@@ -372,7 +425,7 @@ export function ChatWidget() {
         <>
           {/* Messages */}
           <div
-            className="min-h-[300px] max-h-[50dvh] flex-1 space-y-4 overflow-y-auto p-4"
+            className="min-h-0 max-h-[50dvh] flex-1 space-y-4 overflow-y-auto p-4 sm:min-h-[300px]"
             data-no-drag
           >
             {messages.length === 0 && (
