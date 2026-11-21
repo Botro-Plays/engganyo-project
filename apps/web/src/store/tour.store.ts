@@ -465,9 +465,14 @@ const recordOutcome = (id: string | undefined, outcome: 'ok' | 'drop' | 'blocked
 // can never wedge the queue), a suspended tab keeps ownership without
 // producing a second drainer, and a request outliving any timeout
 // heuristic is handled naturally. When unavailable (older browser or
-// non-secure context), the localStorage fallback preserves the previous
-// best-effort behavior — ops are idempotent, so worst case is a
-// duplicate send, never a lost write.
+// non-secure context), the localStorage fallback is explicitly
+// NON-ATOMIC: two tabs can read the lock as free simultaneously and
+// both drain. That is a bounded degradation, not a correctness hole —
+// ops carry monotonic content (same step/state) and server-side
+// generation fencing rejects stale or conflicting writes, so worst
+// case is a duplicate idempotent send — never a lost write or an
+// overwrite of newer state. Web Locks-capable
+// browsers (all modern, secure contexts) get the real mutex.
 const TAB_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const DRAIN_LOCK_STALE_MS = 15_000;
 const drainLockKey = (userId: string) => `engganyo-tour-drain-${userId}`;
@@ -651,9 +656,11 @@ export const useTourStore = create<TourState>()((set, get) => {
     // reached in the drain, so it is never sent with the pre-reset
     // generation it was enqueued under.
     if (op.op !== 'reset') {
+      // <= not <: the replay group's first progress op is enqueued
+      // synchronously after its reset — frequently in the same ms.
       const lastReset = [...ops]
         .reverse()
-        .find((o) => o.key === op.key && o.op === 'reset' && o.ts < op.ts);
+        .find((o) => o.key === op.key && o.op === 'reset' && o.ts <= op.ts);
       if (lastReset?.id) op.afterReset = lastReset.id;
     }
     if (op.op === 'reset') {
