@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: 'Pricing',
   description:

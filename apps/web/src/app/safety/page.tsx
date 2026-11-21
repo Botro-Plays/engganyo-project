@@ -4,6 +4,8 @@ import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { TelegramIcon } from '@/components/telegram-icon';
 
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: 'Safety',
   description:
