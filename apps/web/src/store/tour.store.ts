@@ -827,7 +827,6 @@ export const useTourStore = create<TourState>()((set, get) => {
           // group ops (afterReset) can be stamped or dropped explicitly.
           const ackedResets = new Set<string>();
           const droppedResets = new Set<string>();
-          const RESET_ANCHOR_TOLERANCE_MS = 5_000;
           let terminalInfo:
             | {
                 map: Map<string, number>;
@@ -913,36 +912,15 @@ export const useTourStore = create<TourState>()((set, get) => {
                 }
               }
             }
-            let result: 'ok' | ClassifiedFailure;
-            if (op.op === 'reset') {
-              if (terminalInfo === undefined) terminalInfo = await fetchTerminalUpdatedAt(userId, drainEpoch);
-              if (terminalInfo === null) {
-                result = { kind: 'retry' };
-              } else {
-                // Anchor the terminal expectation to WHEN THE RESET WAS
-                // REQUESTED (op.ts), computed once and persisted — the
-                // server's atomic check then enforces the stale-reset
-                // veto transactionally:
-                //  - terminal state newer than the request → expectation
-                //    is null → the server 409s instead of erasing it;
-                //  - an already-committed resetId (lost response) is
-                //    acknowledged idempotently BEFORE that check, so
-                //    recovery never re-deletes newer state either;
-                //  - a completion landing between this lookup and the
-                //    delete is fenced the same way.
-                if (op.expectedTerminalUpdatedAt === undefined) {
-                  const t = terminalInfo.map.get(op.key);
-                  op.expectedTerminalUpdatedAt =
-                    t !== undefined && t <= op.ts + terminalInfo.skewMs + RESET_ANCHOR_TOLERANCE_MS
-                      ? new Date(t).toISOString()
-                      : null;
-                  putOp(userId, op); // one expectation for all retries
-                }
-                result = await sendOp(userId, op, drainEpoch);
-              }
-            } else {
-              result = await sendOp(userId, op, drainEpoch);
-            }
+            // Reset expectations were bound at REQUEST time from a
+            // server-issued snapshot (see resetKey) — terminal state
+            // newer than the request conflicts server-side instead of
+            // being erased, a committed resetId is acknowledged
+            // idempotently before that check, and ops persisted before
+            // this contract send no expectation, which the server
+            // treats fail-closed (only a truly empty terminal can be
+            // cleared). No client-clock tolerance is involved anywhere.
+            const result: 'ok' | ClassifiedFailure = await sendOp(userId, op, drainEpoch);
             if (result === 'ok') {
               recordOutcome(op.id, 'ok');
               if (op.id) doneIds.add(op.id);
@@ -1212,11 +1190,34 @@ export const useTourStore = create<TourState>()((set, get) => {
     if (!userId || get().replayBusy) return false;
     sessionEpoch += 1;
     cancelPendingProgress();
+    const epoch = sessionEpoch;
     const startedAt = Date.now();
     const resetId = newOpId();
     set({ replayBusy: true, replayError: false });
     try {
-      enqueueOp(userId, { op: 'reset', key, epoch: sessionEpoch, ts: Date.now(), id: resetId });
+      // Bind this replay request to a SERVER-ISSUED snapshot captured
+      // NOW: the DELETE carries the terminal timestamp and generation
+      // the server reported at request time, so anything newer — e.g.
+      // a completion landing one second later on another device —
+      // conflicts atomically instead of being erased. No client clock
+      // or tolerance window is involved. Without a snapshot the
+      // request is ill-defined; refusing beats queuing a blind reset.
+      const snap = await fetchTerminalUpdatedAt(userId, epoch);
+      if (snap === null || get().userId !== userId || epoch !== sessionEpoch) {
+        set({ replayBusy: false, replayError: true });
+        return false;
+      }
+      const t = snap.map.get(key);
+      keyGens.set(genKey(userId, key), snap.gens.get(key) ?? 0);
+      enqueueOp(userId, {
+        op: 'reset',
+        key,
+        epoch,
+        ts: Date.now(),
+        id: resetId,
+        gen: snap.gens.get(key) ?? 0,
+        expectedTerminalUpdatedAt: t !== undefined ? new Date(t).toISOString() : null,
+      });
       afterReset?.();
       await flushQueue(userId);
       // A transiently-blocked reset gets one bounded window for the

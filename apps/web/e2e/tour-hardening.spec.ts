@@ -492,35 +492,60 @@ test.describe('tour state hardening', () => {
     expect(retained.some((r) => r.n > 0)).toBe(true);
   });
 
-  test('a queued replay reset is vetoed when the server holds newer terminal state', async ({ page }) => {
+  test('a reset whose snapshot predates a 1s-later completion cannot erase it', async ({ page }) => {
     await page.goto('/settings');
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 
-    let deleteCalls = 0;
-    let progressCalls = 0;
-    const freshTerminal = {
-      autoTours: true,
-      beginner: { status: 'COMPLETED', step: 10 },
-      beginnerTerminal: null,
-      // Another device completed the tour AFTER this reset was requested.
-      completions: [{ tourKey: 'beginner', version: 2, status: 'COMPLETED', step: 10, updatedAt: new Date(Date.now() + 60_000).toISOString() }],
-    };
+    // Server-issued contract, deterministically modeled: the request
+    // snapshots terminal T0; another device's completion T0+1s lands
+    // between that snapshot and the DELETE — it must survive.
+    let gen = 0;
+    const t0 = Date.now() - 120_000;
+    const rows: { tourKey: string; status: string; updatedAt: string }[] = [
+      { tourKey: 'beginner', status: 'COMPLETED', updatedAt: new Date(t0).toISOString() },
+    ];
+    const stateBody = () =>
+      apiOk({
+        autoTours: true,
+        beginner: { status: 'COMPLETED', step: 10 },
+        beginnerTerminal: null,
+        completions: rows.map((x) => ({ tourKey: x.tourKey, version: 2, status: x.status, step: 10, updatedAt: x.updatedAt })),
+        generations: { beginner: gen },
+        lastResetIds: { beginner: null },
+      });
     await page.route('**/api/gamification/tours/catalog', (r) =>
       r.fulfill(apiOk({ interval: 5, version: 1, autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerSeenVersion: 2, tours: [] })),
     );
-    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(freshTerminal)));
+    await page.route('**/api/gamification/tours/state', (r) => r.fulfill(stateBody()));
     const deleteBodies: ({ expectedTerminalUpdatedAt?: string | null } | null)[] = [];
+    let deleteCalls = 0;
+    let progressCalls = 0;
+    let injected = false;
     await page.route('**/api/gamification/tours/beginner/state', (r) => {
       if (r.request().method() === 'DELETE') {
         deleteCalls += 1;
-        // The SERVER enforces the fence: an expectation anchored before
-        // the newer completion (null when the terminal is newer than the
-        // reset's request time) conflicts instead of erasing it.
+        // The "one second later" completion: lands between the request
+        // snapshot and this DELETE, exactly once.
+        if (!injected) {
+          injected = true;
+          rows.push({ tourKey: 'beginner', status: 'COMPLETED', updatedAt: new Date(t0 + 1_000).toISOString() });
+        }
         const body = r.request().postDataJSON() as {
           expectedTerminalUpdatedAt?: string | null;
+          expectedGeneration?: number;
         } | null;
         deleteBodies.push(body);
-        return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+        const latest = rows.reduce((m, x) => Math.max(m, Date.parse(x.updatedAt)), 0);
+        const expectedMs =
+          body?.expectedTerminalUpdatedAt === null || body?.expectedTerminalUpdatedAt === undefined
+            ? null
+            : Date.parse(body.expectedTerminalUpdatedAt);
+        if (body?.expectedGeneration !== gen || (latest > 0 && (expectedMs === null || latest > expectedMs))) {
+          return r.fulfill(fulfill(409, { success: false, error: 'conflict' }));
+        }
+        rows.length = 0;
+        gen += 1;
+        return r.fulfill(apiOk({ reset: true, tourKey: 'beginner', cleared: 1, generation: gen }));
       }
       return r.fallback();
     });
@@ -537,12 +562,12 @@ test.describe('tour state hardening', () => {
     await replayBtn.click();
     await page.waitForTimeout(4000);
 
-    // The stale reset must NOT erase the newer server-side completion:
-    // the DELETE is sent once with an expectation anchored to the
-    // reset's request time (null — the terminal is newer), the server
-    // refuses it with 409, and the whole replay group drops with it.
+    // The DELETE carries the request-time snapshot (T0), the server
+    // refuses it — the +1s completion AND the original row survive,
+    // and the whole replay group drops with the reset.
     expect(deleteCalls).toBe(1);
-    expect(deleteBodies[0]?.expectedTerminalUpdatedAt ?? null).toBeNull();
+    expect(deleteBodies[0]?.expectedTerminalUpdatedAt).toBe(new Date(t0).toISOString());
+    expect(rows.length).toBe(2);
     expect(progressCalls).toBe(0);
   });
 
@@ -1068,7 +1093,7 @@ test.describe('tour state hardening', () => {
     );
 
     // R1 reset + its replay-group progress op, queued together.
-    await page.evaluate(() => {
+    await page.evaluate((t1Iso) => {
       const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
         state?: { user?: { id?: string } };
       };
@@ -1077,11 +1102,14 @@ test.describe('tour state hardening', () => {
       localStorage.removeItem(`engganyo-tour-v1-${uid}`);
       const put = (id: string, op: object) =>
         localStorage.setItem(`engganyo-tour-writes-${uid}-${id}`, JSON.stringify(op));
-      // ts must be realistic: the reset's terminal expectation anchors
-      // to its request time, so an ancient ts would look stale-by-design.
-      put('r1', { op: 'reset', key: 'beginner', epoch: 1, ts: Date.now(), seq: 1, id: 'r1', gen: 0 });
+      // The reset's terminal expectation is bound at request time from
+      // a server snapshot — a seeded op carries it explicitly (T1 ISO).
+      put('r1', {
+        op: 'reset', key: 'beginner', epoch: 1, ts: Date.now(), seq: 1, id: 'r1', gen: 0,
+        expectedTerminalUpdatedAt: t1Iso,
+      });
       put('p1', { op: 'progress', key: 'beginner', version: 2, step: 3, epoch: 1, ts: Date.now() + 1, seq: 2, id: 'p1', gen: 0, afterReset: 'r1' });
-    });
+    }, new Date(t1).toISOString());
 
     // Drain 1: the reset commits server-side but the response is lost —
     // every attempt (internal retries included) aborts while the client
