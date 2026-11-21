@@ -171,10 +171,10 @@ test.describe('mobile sheet @390px', () => {
     const input = page.getByLabel('Chat message');
     await expect(input).toBeFocused();
     await input.fill('Test from mobile');
-    await page.getByLabel('Send message').click();
+    await page.getByRole('button', { name: 'Send message' }).click();
     await expect(dialog.getByText('Test from mobile')).toBeVisible();
 
-    await page.getByLabel('Close chat').click();
+    await page.getByRole('button', { name: 'Close chat' }).click();
     await expect(dialog).toHaveCount(0);
   });
 
@@ -185,7 +185,7 @@ test.describe('mobile sheet @390px', () => {
     const dialog = page.locator(DIALOG);
     await expect(dialog).toBeVisible();
 
-    await page.getByLabel('Minimize chat').click();
+    await page.getByRole('button', { name: 'Minimize chat' }).click();
     await expect(page.getByLabel('Chat message')).toHaveCount(0);
     await expect(dialog.getByText('Engganyo Support')).toBeVisible();
     await insideViewport(page, DIALOG);
@@ -204,7 +204,7 @@ test.describe('message list scrolling', () => {
 
     for (let i = 1; i <= 8; i++) {
       await input.fill(`Message number ${i}`);
-      await page.getByLabel('Send message').click();
+      await page.getByRole('button', { name: 'Send message' }).click();
       await expect(dialog.getByText(`Message number ${i}`)).toBeVisible();
       // Wait for the mocked reply so isLoading releases the input.
       await expect(dialog.getByText('Mocked support reply from e2e.').last()).toBeVisible();
