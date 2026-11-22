@@ -30,7 +30,7 @@ test.describe('blog publishing lifecycle', () => {
     });
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
-    token = body.data?.access_token ?? body.access_token;
+    token = body.data?.accessToken ?? body.accessToken;
     expect(token).toBeTruthy();
   });
 
