@@ -215,7 +215,7 @@ export default function CampaignsPage() {
   });
 
   const enabledPlatforms = publicConfig?.enabledPlatforms ?? null;
-  // Platforms tracked in oAuthConfig — all others (TRUSTPILOT, GOOGLE, unmapped) are always shown
+  // Platforms tracked in oAuthConfig - all others (TRUSTPILOT, GOOGLE, unmapped) are always shown
   const MANAGED_PLATFORMS = new Set(['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE']);
   const TASK_TYPES = ALL_TASK_TYPES.filter((t) => {
     if (DISABLED_TASK_TYPES.has(t.value)) return false;
@@ -489,7 +489,7 @@ export default function CampaignsPage() {
                 {authUser?.vipTier && (
                   <div className="flex items-center gap-1.5 text-xs text-brand-400 bg-brand-500/5 border border-brand-500/10 rounded-md px-2 py-1">
                     <span style={{ color: authUser.vipTier.perks.color }}>{authUser.vipTier.displayName}</span>
-                    <span>— Fee discount: {authUser.vipTier.perks.feeDiscountPercent}% · Task limit bonus: +{authUser.vipTier.perks.taskLimitBonus}</span>
+                    <span> - Fee discount: {authUser.vipTier.perks.feeDiscountPercent}% · Task limit bonus: +{authUser.vipTier.perks.taskLimitBonus}</span>
                   </div>
                 )}
               </div>
@@ -600,8 +600,8 @@ export default function CampaignsPage() {
                 {watchedTaskType && (
                   <p className="text-xs text-sc-dim mt-2">
                     {getAutoVerifyDefault(watchedTaskType)
-                      ? '✓ This platform supports OAuth API verification — auto-verify is recommended.'
-                      : '⚠ This platform has no API verification — manual review is recommended.'}
+                      ? '✓ This platform supports OAuth API verification - auto-verify is recommended.'
+                      : '⚠ This platform has no API verification - manual review is recommended.'}
                   </p>
                 )}
               </div>

@@ -417,7 +417,7 @@ export default function ServerConfigPage() {
                             </div>
                           )}
                           {!cfg.isOAuth && (
-                            <p className="text-xs text-sc-dim mt-0.5">Manual link only — no OAuth credentials required</p>
+                            <p className="text-xs text-sc-dim mt-0.5">Manual link only - no OAuth credentials required</p>
                           )}
                         </div>
                       </div>
@@ -446,7 +446,7 @@ export default function ServerConfigPage() {
                           </div>
                           <div>
                             <label className="block text-xs text-sc-dim mb-1">
-                              Client Secret {cfg.clientSecretSet && <span className="text-green-400">(set — leave blank to keep)</span>}
+                              Client Secret {cfg.clientSecretSet && <span className="text-green-400">(set - leave blank to keep)</span>}
                             </label>
                             <div className="relative">
                               <input
@@ -836,8 +836,7 @@ export default function ServerConfigPage() {
                 <div>
                   <p className="text-sm font-semibold text-sc-text">Reset Database</p>
                   <p className="text-xs text-sc-dim mt-0.5">
-                    Delete <span className="text-red-400 font-medium">all data</span> — users, campaigns, tasks, transactions, reports, analytics —
-                    except SUPER_ADMIN accounts. SUPER_ADMIN wallets will be reset to the configured welcome credits.
+                    Delete <span className="text-red-400 font-medium">all data</span> - users, campaigns, tasks, transactions, reports, analytics - except SUPER_ADMIN accounts. SUPER_ADMIN wallets will be reset to the configured welcome credits.
                   </p>
                   <ul className="mt-2 space-y-0.5 text-xs text-sc-dim">
                     <li>• All regular users and their data are permanently deleted</li>

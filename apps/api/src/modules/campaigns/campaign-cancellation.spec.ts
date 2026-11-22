@@ -2,7 +2,7 @@
  * Campaign cancellation must be atomic and refund only funded pools:
  * - the campaign row is locked FOR UPDATE inside the transaction, and
  *   each locked counter is validated (nonneg integers, no oversubscription,
- *   valid credit_per_task) — malformed rows fail closed for manual review
+ *   valid credit_per_task) - malformed rows fail closed for manual review
  * - an atomic status claim prevents concurrent double-refunds
  * - funding resolution distinguishes ABSENT funding (audited no-refund
  *   cancel) from MALFORMED funding (wrong wallet, bad status/direction,
@@ -69,7 +69,7 @@ const makeTx = (opts: TxOpts = {}) => ({
 
 const campaignRow = () => ({ id: 'c1', userId: 'owner', title: 'Funded campaign', feeAmount: 25 });
 
-describe('CampaignsService — cancellation funding & atomicity', () => {
+describe('CampaignsService - cancellation funding & atomicity', () => {
   let prisma: Record<string, jest.Mock>;
   let walletService: Record<string, jest.Mock>;
   let eventsService: Record<string, jest.Mock>;
@@ -183,7 +183,7 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
     ['oversubscribed counters', { completed_slots: 6, pending_slots: 5 }],
     ['zero credit_per_task', { credit_per_task: 0 }],
     ['non-integer total_slots', { total_slots: 10.5 }],
-  ])('locked counters %s fail closed — no claim, no credit', async (_label, row) => {
+  ])('locked counters %s fail closed - no claim, no credit', async (_label, row) => {
     const tx = makeTx({ row: [lockedRow(row)], funding: goodFunding() });
     wire(tx);
 
@@ -207,7 +207,7 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
-  it('prior refund reduces capacity — over-refunding fails closed', async () => {
+  it('prior refund reduces capacity - over-refunding fails closed', async () => {
     const tx = makeTx({
       funding: goodFunding(),
       priorRefunds: [{ amount: 200, status: 'COMPLETED', wallet: { userId: 'owner' } }],
@@ -230,7 +230,7 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
     expect(walletService.credit).not.toHaveBeenCalled();
   });
 
-  it('zero-request refund still validates records — malformed funding throws', async () => {
+  it('zero-request refund still validates records - malformed funding throws', async () => {
     const tx = makeTx({
       row: [lockedRow({ completed_slots: 5, pending_slots: 5 })], // refundable = 0
       funding: [{ amount: 525, status: 'COMPLETED', wallet: { userId: 'owner' } }], // positive = malformed
@@ -304,7 +304,7 @@ describe('CampaignsService — cancellation funding & atomicity', () => {
   });
 });
 
-describe('AdminService — cancellation funding & atomicity', () => {
+describe('AdminService - cancellation funding & atomicity', () => {
   let prisma: Record<string, jest.Mock>;
   let walletService: Record<string, jest.Mock>;
   let service: AdminService;
@@ -379,7 +379,7 @@ describe('AdminService — cancellation funding & atomicity', () => {
     ['wrong-wallet funding', null, [{ amount: -525, status: 'COMPLETED', wallet: { userId: 'intruder' } }]],
     ['non-COMPLETED funding', null, [{ amount: -525, status: 'FAILED', wallet: { userId: 'owner' } }]],
     ['debit below pool', null, [{ amount: -300, status: 'COMPLETED', wallet: { userId: 'owner' } }]],
-  ])('bad state (%s) fails closed — no credit, no audit', async (_label, row, funding) => {
+  ])('bad state (%s) fails closed - no credit, no audit', async (_label, row, funding) => {
     const tx = makeTx({ row: row ? [lockedRow(row)] : undefined, funding: funding ?? goodFunding() });
     wire(tx);
 
@@ -390,7 +390,7 @@ describe('AdminService — cancellation funding & atomicity', () => {
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
-  it('zero-request refund still validates records — malformed funding throws', async () => {
+  it('zero-request refund still validates records - malformed funding throws', async () => {
     const tx = makeTx({
       row: [lockedRow({ completed_slots: 5, pending_slots: 5 })],
       funding: [{ amount: 525, status: 'COMPLETED', wallet: { userId: 'owner' } }],
@@ -421,7 +421,7 @@ describe('AdminService — cancellation funding & atomicity', () => {
     expect(walletService.credit).not.toHaveBeenCalled();
   });
 
-  it('repeat cancel fails at the locked status check — cannot refund twice', async () => {
+  it('repeat cancel fails at the locked status check - cannot refund twice', async () => {
     const tx = makeTx({ row: [lockedRow({ status: 'CANCELLED' })] });
     wire(tx);
 

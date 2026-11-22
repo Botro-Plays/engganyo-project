@@ -47,14 +47,14 @@ const MAX_RETRY = 5;
 /**
  * Rollout boundary for entitlement backfill: deposits completed before
  * the durable-entitlement deploy (1c9b622, ~10:18 UTC 11 Nov 2026) are
- * HISTORICAL — their VP was never entitlement-backed, so the sweep must
+ * HISTORICAL - their VP was never entitlement-backed, so the sweep must
  * not auto-create entitlements (and thus auto-award VP) for them.
  * Those cases go through the read-only impact audit + owner approval.
  */
 const ENTITLEMENT_ROLLOUT_AT = new Date('2026-11-11T10:18:00.000Z');
 
 /** How long an unresolvable entitlement waits before its next sweep
- *  attempt — keeps persistent UNRESOLVED rows from starving the queue. */
+ *  attempt - keeps persistent UNRESOLVED rows from starving the queue. */
 const ENTITLEMENT_RETRY_BACKOFF_MS = 60 * 60 * 1000; // 1 hour
 
 /**
@@ -175,14 +175,14 @@ export class WalletService {
     return tx;
   }
 
-  // ─── Credit (internal — used by other services) ────────────
+  // ─── Credit (internal - used by other services) ────────────
 
   async credit(userId: string, amount: number, opts: CreditOptions, tx?: Prisma.TransactionClient) {
     if (amount <= 0) throw new BadRequestException('Credit amount must be positive');
     return this.executeWithOptimisticLock(userId, amount, 'credit', opts, tx);
   }
 
-  // ─── Debit (internal — used by other services) ─────────────
+  // ─── Debit (internal - used by other services) ─────────────
 
   async debit(userId: string, amount: number, opts: DebitOptions, tx?: Prisma.TransactionClient) {
     if (amount <= 0) throw new BadRequestException('Debit amount must be positive');
@@ -191,8 +191,7 @@ export class WalletService {
 
   // ─── Optimistic-locking engine ─────────────────────────────
 
-  // When `tx` is provided, the operation joins the caller's transaction —
-  // all wallet writes commit or roll back atomically with the caller's other
+  // When `tx` is provided, the operation joins the caller's transaction - // all wallet writes commit or roll back atomically with the caller's other
   // writes. The optimistic-lock retry still applies inside the outer tx
   // (PostgreSQL READ COMMITTED gives each statement a fresh snapshot).
   private async executeWithOptimisticLock(
@@ -282,8 +281,8 @@ export class WalletService {
   /**
    * Reconcile the denormalized `user.creditBalance` mirror to the
    * ledger-backed `wallets.balance`. Locks the wallet row FOR UPDATE
-   * first — the same lock order as executeWithOptimisticLock (wallet row,
-   * then user row) — so a concurrent settlement either commits before our
+   * first - the same lock order as executeWithOptimisticLock (wallet row,
+   * then user row) - so a concurrent settlement either commits before our
    * read (we copy the newest balance) or waits for this tx and rewrites
    * the mirror itself. Idempotent; safe to call per user under live
    * traffic. Returns { changed, from?, to }.
@@ -391,7 +390,7 @@ export class WalletService {
         isPopular: pkg.isPopular,
         methods: pkg.methods,
         phpEquivalent: Math.ceil(pkg.usdAmount * usdToPhp),
-        // Exact amount the PayMongo checkout will charge — mirrors
+        // Exact amount the PayMongo checkout will charge - mirrors
         // initiateDeposit's Math.max(1, …) clamp so UI and provider agree.
         phpAmount: Math.max(1, this.usdToPhpCentavos(pkg.usdAmount, usdToPhp) / 100),
         usdToPhp,
@@ -432,7 +431,7 @@ export class WalletService {
     if (!cfg?.enabled) throw new BadRequestException(`${method} deposits are not currently available`);
 
     const isCryptoMethod = method === 'USDT_BEP20' || method === 'USDT_BASE';
-    // Crypto deposits must declare the paying wallet up front — it is bound
+    // Crypto deposits must declare the paying wallet up front - it is bound
     // against the on-chain Transfer `from` during verification so other
     // accounts cannot claim public tx hashes.
     let userWalletAddress: string | null = null;
@@ -443,7 +442,7 @@ export class WalletService {
       }
       userWalletAddress = dto.userWalletAddress.trim();
       // Connected-wallet path: a valid signature on a fresh challenge proves
-      // the account controls the declared wallet — marks the deposit verified.
+      // the account controls the declared wallet - marks the deposit verified.
       // Without one, the deposit stays unverified: it may still submit a hash
       // (manual transfers), but on-chain match routes to review, not credit.
       if (dto.signature && dto.challengeNonce) {
@@ -457,7 +456,7 @@ export class WalletService {
       userWalletAddress = dto.userWalletAddress?.trim() ?? null;
     }
     // Normalize tx hashes: chain identifiers are case-insensitive but the
-    // paymentRef unique column is case-sensitive — casing variants must not
+    // paymentRef unique column is case-sensitive - casing variants must not
     // allow the same transaction to be claimed twice.
     let txHash: string | null = null;
     if (dto.txHash) {
@@ -469,7 +468,7 @@ export class WalletService {
     }
 
     const { creditsPerUsd, usdToPhp, minDepositUsd, minDepositPhp } = options.pricing;
-    // Package method allowlist — empty means all methods (e.g. a PAYMONGO-only
+    // Package method allowlist - empty means all methods (e.g. a PAYMONGO-only
     // ₱1 test package cannot be used via PayPal or crypto).
     if (pkg.methods?.length && !pkg.methods.includes(method)) {
       throw new BadRequestException('This package is not available for the selected payment method');
@@ -485,7 +484,7 @@ export class WalletService {
       throw new BadRequestException(`Minimum deposit is $${minDepositUsd} USD`);
     }
     // PayMongo-only packages use the provider floor (₱1) instead of the
-    // configured PHP minimum — internal test packages rely on this.
+    // configured PHP minimum - internal test packages rely on this.
     const effectiveMinPhp =
       pkg.methods?.length && pkg.methods.every((m) => m === 'PAYMONGO') ? 1 : minDepositPhp;
     if (isPhp && amountFiat < effectiveMinPhp) {
@@ -504,7 +503,7 @@ export class WalletService {
           method: method as DepositMethod,
           status: txHash ? DepositStatus.PROCESSING : DepositStatus.PENDING,
           walletVerified,
-          // Exclusive claim only for ownership-verified payers — an unverified
+          // Exclusive claim only for ownership-verified payers - an unverified
           // manual submission must not squat the globally-unique paymentRef and
           // block the rightful payer. Evidence stays in gatewayData for review.
           ...(txHash && walletVerified ? { paymentRef: txHash } : {}),
@@ -515,7 +514,7 @@ export class WalletService {
           bonusCredits: pkg.bonusCredits,
           creditsAwarded: 0,
           exchangeRate: isPhp ? usdToPhp : null,
-          // Immutable USD valuation snapshot — package prices are editable,
+          // Immutable USD valuation snapshot - package prices are editable,
           // so completion must not re-read the live package row.
           usdValue: pkg.usdAmount,
           userWalletAddress,
@@ -698,7 +697,7 @@ export class WalletService {
             settlement?: { fee?: number; feeCurrency?: string; net?: number; netCurrency?: string;
                            converted?: number; convertedCurrency?: string };
             // CAS guard: the claim this settle was verified against must be
-            // unchanged — protects against stale RPC results settling a
+            // unchanged - protects against stale RPC results settling a
             // replaced claim. Covers paymentRef and gatewayData.submittedHash.
             guard?: { claimHash: string; userWalletAddress: string; walletVerified: boolean } } = {},
   ) {
@@ -764,12 +763,12 @@ export class WalletService {
       const updatedDeposit = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!updatedDeposit) throw new NotFoundException('Deposit disappeared');
 
-      // Route through the versioned engine — the deposit claim above stops
+      // Route through the versioned engine - the deposit claim above stops
       // double completion, but the wallet write still has to be safe against
       // OTHER concurrent balance changes on the same wallet.
       await this.credit(existing.userId, amount, {
         type: txType,
-        description: `Deposit via ${existing.method} — ${existing.amountFiat} ${existing.currency}`,
+        description: `Deposit via ${existing.method} - ${existing.amountFiat} ${existing.currency}`,
         referenceId: depositId,
         referenceType: 'Deposit',
       }, tx);
@@ -782,7 +781,7 @@ export class WalletService {
       // Written INSIDE this tx (unique source+referenceId → replay-safe);
       // awardVp runs in the SAME tx when the valuation resolves, so
       // deposit + wallet + VP + entitlement commit or roll back together.
-      // Unresolvable valuations commit as UNRESOLVED — retained for later
+      // Unresolvable valuations commit as UNRESOLVED - retained for later
       // re-settlement, never a peso-as-dollar guess.
       const { status: vpEntitlementStatus, vpAmount } = await this.ensureDepositVpEntitlement(tx, existing);
       const vpUnresolved = vpEntitlementStatus === 'UNRESOLVED';
@@ -830,11 +829,11 @@ export class WalletService {
     }
 
     // VP was settled INSIDE the deposit transaction (or retained as an
-    // UNRESOLVED entitlement) — nothing left to do post-commit except
+    // UNRESOLVED entitlement) - nothing left to do post-commit except
     // flush reward-outbox deliveries (level/tier notifications) promptly.
     if (vpUnresolved) {
       this.logger.warn(
-        `Deposit ${depositId} completed with no resolvable USD valuation — VP entitlement retained as UNRESOLVED for reconciliation`,
+        `Deposit ${depositId} completed with no resolvable USD valuation - VP entitlement retained as UNRESOLVED for reconciliation`,
       );
     }
     void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
@@ -848,16 +847,15 @@ export class WalletService {
   /**
    * Authoritative USD value of a deposit for VP purposes.
    *
-   * `amountFiat` is charged in GATEWAY currency — PHP pesos for PayMongo —
-   * so it must never be treated as dollars or multiplied by the per-dollar
+   * `amountFiat` is charged in GATEWAY currency - PHP pesos for PayMongo - * so it must never be treated as dollars or multiplied by the per-dollar
    * rate directly. Resolution order:
-   *   1. `usdValue` — immutable snapshot written at initiation (package
+   *   1. `usdValue` - immutable snapshot written at initiation (package
    *      prices are admin-editable, so the live package row is NOT
    *      authoritative for an existing deposit).
    *   2. PHP deposits: `amountFiat / exchangeRate` using the
    *      initiation-time rate snapshot (covers deposits created before
    *      usdValue existed). The ₱1 minimum-charge package resolves here
-   *      too — its peso charge divided by the rate yields its nominal USD
+   *      too - its peso charge divided by the rate yields its nominal USD
    *      value (~$0.02 → 0 VP).
    *   3. USD-denominated rails (PayPal/USDT): `amountFiat` IS USD.
    *   4. PHP deposit with no snapshot AND no valid rate → null: recorded
@@ -922,7 +920,7 @@ export class WalletService {
     });
 
     if (entitlement.status === 'PENDING') {
-      // Resolved valuation — award and settle atomically in this tx.
+      // Resolved valuation - award and settle atomically in this tx.
       // vpAmount may be 0 (₱1 minimum-charge package): no VP event is
       // written, but the entitlement still settles as fulfilled.
       if (vpAmount > 0) {
@@ -943,7 +941,7 @@ export class WalletService {
   /**
    * Re-attempt settlement of a retained deposit VP entitlement. Runs on
    * the already-completed replay path and from processRewardEntitlements
-   * — covers backfilled valuations and legacy crash-window losses.
+   * - covers backfilled valuations and legacy crash-window losses.
    * Idempotent: status is re-checked inside the tx and awardVp dedupes
    * on (userId, source, referenceId).
    *
@@ -959,7 +957,7 @@ export class WalletService {
     if (!ent || (ent.status !== 'UNRESOLVED' && ent.status !== 'PENDING')) return;
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit) {
-      // No deposit to value — the entitlement can never settle. Cancel it
+      // No deposit to value - the entitlement can never settle. Cancel it
       // rather than retrying a permanently impossible case every sweep.
       await this.prisma.rewardEntitlement.update({
         where: { id: ent.id },
@@ -969,7 +967,7 @@ export class WalletService {
     }
     const vpUsd = this.depositUsdValue(deposit);
     if (vpUsd == null) {
-      // Still unresolvable — retain the entitlement but back off so the
+      // Still unresolvable - retain the entitlement but back off so the
       // sweep reaches other eligible work. Manual valuation backfill
       // clears this on the next eligible attempt.
       await this.prisma.rewardEntitlement.update({
@@ -1001,7 +999,7 @@ export class WalletService {
   }
 
   /**
-   * Ongoing recovery sweep — TWO separate concerns:
+   * Ongoing recovery sweep - TWO separate concerns:
    *
    * 1} RETAINED ENTITLEMENTS (PENDING/UNRESOLVED): settle idempotently.
    *    Eligibility is gated by nextAttemptAt so unresolved cases retry
@@ -1010,15 +1008,14 @@ export class WalletService {
    *
    * 2} ENTITLEMENT BACKFILL: COMPLETED deposits with NO entitlement row.
    *    Restricted to deposits completed at/after ENTITLEMENT_ROLLOUT_AT
-   *    (the 1c9b622 deploy) — the in-tx entitlement writer covers every
+   *    (the 1c9b622 deploy) - the in-tx entitlement writer covers every
    *    post-rollout completion, so a missing row there is an anomaly
    *    worth repairing. Pre-rollout deposits are HISTORICAL
    *    RECONCILIATION: their VP was never entitlement-backed and any
-   *    award requires the read-only impact audit + owner approval —
-   *    this sweep must never create entitlements for them.
+   *    award requires the read-only impact audit + owner approval - *    this sweep must never create entitlements for them.
    *
    * Backfill scans oldest-first (completed_at ASC, id ASC) over deposits
-   * still missing an entitlement — each settled deposit drops out of
+   * still missing an entitlement - each settled deposit drops out of
    * the result set, so successive bounded batches progress
    * deterministically through the whole eligible range instead of
    * re-scanning the newest N forever.
@@ -1075,7 +1072,7 @@ export class WalletService {
     void Promise.resolve(this.gamificationService.flushRewardOutbox()).catch(() => null);
   }
 
-  /** Periodic ongoing recovery — retained entitlements only need
+  /** Periodic ongoing recovery - retained entitlements only need
    *  minutes-scale latency; backfill is bounded per run. */
   @Cron(CronExpression.EVERY_10_MINUTES)
   async scheduledRewardEntitlementSweep() {
@@ -1092,7 +1089,7 @@ export class WalletService {
   // A connected wallet proves ownership by signing a server-issued,
   // expiring, single-use challenge bound to the account, wallet, chain,
   // and (when supplied) the deposit. Reuse across deposits/accounts/
-  // chains is impossible — each field is checked before consume.
+  // chains is impossible - each field is checked before consume.
 
   private cryptoChainOf(method: string): 'BSC' | 'BASE' {
     return method === 'USDT_BEP20' ? 'BSC' : 'BASE';
@@ -1138,7 +1135,7 @@ export class WalletService {
       throw new BadRequestException('Challenge was issued for a different deposit');
     }
     if (ch.expiresAt.getTime() < Date.now()) {
-      throw new BadRequestException('Wallet verification challenge expired — request a new one');
+      throw new BadRequestException('Wallet verification challenge expired - request a new one');
     }
     let recovered: string;
     try {
@@ -1149,7 +1146,7 @@ export class WalletService {
     if (recovered.toLowerCase() !== ch.wallet) {
       throw new BadRequestException('Signature does not match the declared wallet');
     }
-    // Single-use: consume atomically — a concurrent second consume wins 0 rows.
+    // Single-use: consume atomically - a concurrent second consume wins 0 rows.
     const consumed = await this.prisma.walletChallenge.updateMany({
       where: { nonce, consumedAt: null },
       data: { consumedAt: new Date() },
@@ -1161,7 +1158,7 @@ export class WalletService {
 
   // Post-submission ownership proof: a fresh challenge bound to THIS
   // deposit + the declared sending wallet upgrades an unverified manual
-  // claim to verified — the only way a manual transfer earns auto-credit.
+  // claim to verified - the only way a manual transfer earns auto-credit.
   async proveWalletOwnership(userId: string, depositId: string, challengeNonce: string, signature: string) {
     const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
     if (!deposit || deposit.userId !== userId) throw new BadRequestException('Deposit not found');
@@ -1182,7 +1179,7 @@ export class WalletService {
       where: { id: depositId, walletVerified: false, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
       data: { walletVerified: true },
     });
-    if (upgraded.count === 0) throw new BadRequestException('Deposit state changed — try again');
+    if (upgraded.count === 0) throw new BadRequestException('Deposit state changed - try again');
     this.eventsService.emitToUser(userId, 'deposit:updated', { depositId, status: deposit.status, walletVerified: true });
     return { verified: true, depositId };
   }
@@ -1206,7 +1203,7 @@ export class WalletService {
 
     // Every crypto deposit must carry the paying wallet so verification can
     // bind the Transfer `from` to this account. Older PENDING deposits may
-    // lack it — accept it on submission.
+    // lack it - accept it on submission.
     let walletAddress = deposit.userWalletAddress;
     if (!walletAddress) {
       if (!userWalletAddress || !/^0x[a-fA-F0-9]{40}$/.test(userWalletAddress.trim())) {
@@ -1216,7 +1213,7 @@ export class WalletService {
     }
 
     // A fresh signature on a deposit-bound challenge upgrades this deposit to
-    // wallet-verified — required before any on-chain match can auto-credit.
+    // wallet-verified - required before any on-chain match can auto-credit.
     let walletVerified = deposit.walletVerified;
     if (!walletVerified && signature && challengeNonce) {
       await this.consumeWalletChallenge({
@@ -1227,8 +1224,7 @@ export class WalletService {
     }
 
     // Verified payers take the exclusive paymentRef; unverified submissions
-    // keep the hash as review evidence in gatewayData without reserving it —
-    // a manual claim must never block the ownership-verified payer.
+    // keep the hash as review evidence in gatewayData without reserving it - // a manual claim must never block the ownership-verified payer.
     const claimData: Prisma.DepositUpdateManyMutationInput = walletVerified
       ? { paymentRef: normalized }
       : { gatewayData: { submittedHash: normalized, manualClaim: true } };
@@ -1264,7 +1260,7 @@ export class WalletService {
   // ─── Frontend-triggered crypto deposit verification ────────
 
   // A claim that can never verify (wrong sender, or the tx predates this
-  // deposit) must release the reserved hash — otherwise an invalid claim
+  // deposit) must release the reserved hash - otherwise an invalid claim
   // permanently blocks the rightful owner from submitting it on their own
   // deposit. The release is conditioned on the deposit still holding the
   // same claim so a concurrent resubmission is untouched.
@@ -1278,7 +1274,7 @@ export class WalletService {
   private async releaseCryptoClaim(depositId: string, claimHash: string) {
     // Verified-claim release: null the exclusive ref (conditional on it being
     // unchanged). Unverified-claim release: clear the gatewayData evidence and
-    // revert — the rightful payer's claim is untouched either way.
+    // revert - the rightful payer's claim is untouched either way.
     const released = await this.prisma.deposit.updateMany({
       where: { id: depositId, status: DepositStatus.PROCESSING, paymentRef: claimHash },
       data: { status: DepositStatus.PENDING, paymentRef: null },
@@ -1364,7 +1360,7 @@ export class WalletService {
       throw new BadRequestException('Platform wallet address not configured for this network');
     }
     if (!deposit.userWalletAddress) {
-      throw new BadRequestException('No paying wallet is declared on this deposit — it cannot be verified. Submit the wallet address you paid from.');
+      throw new BadRequestException('No paying wallet is declared on this deposit - it cannot be verified. Submit the wallet address you paid from.');
     }
 
     const expectedAmount = deposit.package?.usdAmount ?? deposit.amountFiat;
@@ -1387,16 +1383,16 @@ export class WalletService {
         });
         return { status: 'COMPLETED', depositId, txHash: claimHash, message: 'Deposit verified and completed' };
       }
-      // Valid transfer but ownership never proven — route to review, not credit.
+      // Valid transfer but ownership never proven - route to review, not credit.
       await this.flagNeedsReview(deposit, claimHash, result.fromAddress);
       return {
         status: 'PROCESSING', depositId, txHash: claimHash, needsReview: true,
-        message: 'On-chain payment found but wallet ownership was not proven — routed to review',
+        message: 'On-chain payment found but wallet ownership was not proven - routed to review',
       };
     }
     if (this.isTerminalClaimFailure(result.error)) {
       await this.releaseCryptoClaim(deposit.id, claimHash);
-      return { status: 'PENDING', depositId, message: result.error + ' — the hash was released; resubmit the correct wallet' };
+      return { status: 'PENDING', depositId, message: result.error + ' - the hash was released; resubmit the correct wallet' };
     }
 
     // If still waiting for confirmations, persist them to gatewayData and tell the user to wait
@@ -1529,12 +1525,12 @@ export class WalletService {
             });
           } else {
             await this.flagNeedsReview(deposit, claimHash, result.fromAddress);
-            this.logger.warn(`Crypto deposit ${deposit.id} verified on-chain but wallet ownership unproven — needs review`);
+            this.logger.warn(`Crypto deposit ${deposit.id} verified on-chain but wallet ownership unproven - needs review`);
           }
         } else {
           if (this.isTerminalClaimFailure(result.error)) {
             await this.releaseCryptoClaim(deposit.id, claimHash);
-            this.logger.warn(`Crypto deposit ${deposit.id} claim released (terminal mismatch) — hash freed`);
+            this.logger.warn(`Crypto deposit ${deposit.id} claim released (terminal mismatch) - hash freed`);
             continue;
           }
           this.logger.warn(`Crypto deposit ${deposit.id} verification failed: ${result.error}`);
@@ -1597,7 +1593,7 @@ export class WalletService {
                 void this.notificationsService.createNotification(
                   admin.id,
                   NotificationType.SYSTEM_ANNOUNCEMENT,
-                  'Crypto Deposit Failed — Review Needed',
+                  'Crypto Deposit Failed - Review Needed',
                   `Deposit ${deposit.id} (${deposit.method}) for ${deposit.currency} ${deposit.amountFiat} failed verification: ${result.error}. Check /admin/finances.`,
                   adminAlertPayload,
                 ).catch(() => null);

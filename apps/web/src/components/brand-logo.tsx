@@ -8,7 +8,7 @@ interface BrandLogoProps {
   wordmarkClassName?: string;
   /** When false the glyph is decorative and the wordmark carries the alt text. */
   alt?: string;
-  /** Explicit pixel size (width and height attributes) — required for
+  /** Explicit pixel size (width and height attributes) - required for
       layout stability, defaults to the common 32px header size. */
   size?: number;
   /** Eager + high-priority loading for the above-the-fold header glyph. */
@@ -16,7 +16,7 @@ interface BrandLogoProps {
 }
 
 /**
- * Official Engganyo brand mark — pixel glyph + wordmark.
+ * Official Engganyo brand mark - pixel glyph + wordmark.
  * Glyph: /brand/web-logo-transparent.svg (gold #E8A800 + blue #1F62F0 on transparent).
  */
 export function BrandLogo({

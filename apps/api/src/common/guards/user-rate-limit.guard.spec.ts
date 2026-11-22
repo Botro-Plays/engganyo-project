@@ -12,7 +12,7 @@ function ctx(user?: { sub: string; role: string }, ip = '1.2.3.4') {
   } as unknown as ExecutionContext;
 }
 
-describe('A08 — UserRateLimitGuard', () => {
+describe('A08 - UserRateLimitGuard', () => {
   let reflector: { getAllAndOverride: jest.Mock };
   let redis: { incrWithExpiry: jest.Mock; ttl: jest.Mock };
   let guard: UserRateLimitGuard;

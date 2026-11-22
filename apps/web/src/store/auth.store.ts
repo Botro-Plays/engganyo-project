@@ -43,7 +43,7 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   hasHydrated: boolean;
-  adminPin: string | null; // ephemeral — not persisted; set after admin PIN verify
+  adminPin: string | null; // ephemeral - not persisted; set after admin PIN verify
 
   // Actions
   setUser: (user: AuthUser) => void;

@@ -57,12 +57,12 @@ export class CryptoVerificationService {
     expectedAmountUsd: number;
     platformWalletAddress: string;
     // Wallet address declared on the deposit at initiation. When provided the
-    // on-chain Transfer `from` MUST equal it — this binds the payment to the
+    // on-chain Transfer `from` MUST equal it - this binds the payment to the
     // account that created the deposit and blocks hash-theft claims by other
     // accounts (tx hashes are public on-chain).
     expectedFromAddress?: string;
     // Unix seconds. Reject transactions whose block was mined BEFORE the
-    // deposit was initiated — an attacker cannot claim transfers that already
+    // deposit was initiated - an attacker cannot claim transfers that already
     // existed when they created their deposit.
     notBeforeTimestamp?: number;
   }): Promise<VerificationResult> {

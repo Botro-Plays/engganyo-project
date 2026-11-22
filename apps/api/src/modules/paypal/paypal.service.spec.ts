@@ -88,7 +88,7 @@ describe('PayPalService', () => {
     ['foreign reference', { reference_id: 'dep-OTHER' }],
     ['missing capture', { payments: { captures: [] } }],
     ['incomplete capture', { payments: { captures: [{ id: 'CAP-1', status: 'PENDING', amount: { value: '1.00', currency_code: 'USD' } }] } }],
-  ])('rejects capture with %s — wallet untouched', async (_n, unitOver) => {
+  ])('rejects capture with %s - wallet untouched', async (_n, unitOver) => {
     prisma.deposit.findUnique.mockResolvedValue(deposit());
     prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
     (fetch as jest.Mock)
@@ -142,7 +142,7 @@ describe('PayPalService', () => {
   it.each([
     ['amount mismatch', captureEvent('9.99')],
     ['currency mismatch', captureEvent('1.00', 'PHP')],
-  ])('webhook %s is ignored — wallet untouched', async (_n, payload) => {
+  ])('webhook %s is ignored - wallet untouched', async (_n, payload) => {
     prisma.deposit.findUnique.mockResolvedValue(deposit());
     const out = await signedWebhook(payload);
     expect(out.action).toBe('ignored_amount_mismatch');
@@ -186,12 +186,12 @@ describe('PayPalService', () => {
 
     const a = service.createOrder('dep-1', 1, 'USD');
     await new Promise((r) => setImmediate(r)); // let A acquire + start provider call
-    // B attempts mid-flight — must not claim or call the provider.
+    // B attempts mid-flight - must not claim or call the provider.
     await expect(service.createOrder('dep-1', 1, 'USD')).rejects.toThrow('being prepared');
     resolveProvider!(null);
     const aOut = await a;
     expect(aOut.orderId).toBe('ORDER-A');
-    // B retry — sees persisted order, reuses it.
+    // B retry - sees persisted order, reuses it.
     const bOut = await service.createOrder('dep-1', 1, 'USD');
     expect(bOut.orderId).toBe('ORDER-A');
   });
@@ -214,7 +214,7 @@ describe('PayPalService', () => {
     prisma.deposit.findUnique.mockImplementation(async () => ({ id: 'dep-1', paymentRef: row.paymentRef, gatewayData: { approvalUrl: 'https://paypal.com/approveB' } }));
     const out = await service.createOrder('dep-1', 1, 'USD');
     expect(out.orderId).toBe('ORDER-B');
-    // Simulate old owner finishing its conditional persist — count=0, no overwrite.
+    // Simulate old owner finishing its conditional persist - count=0, no overwrite.
     expect(row.paymentRef).toBe('ORDER-B');
   });
 
@@ -242,7 +242,7 @@ describe('PayPalService', () => {
     ['mismatched reference', {}, { reference_id: 'dep-OTHER' }],
     ['missing capture', {}, { payments: { captures: [] } }],
     ['incomplete capture', {}, { payments: { captures: [{ id: 'CAP-1', status: 'PENDING', amount: { value: '1.00', currency_code: 'USD' } }] } }],
-  ])('ORDER_ALREADY_CAPTURED recovery rejects %s — wallet untouched', async (_n, orderOver, unitOver) => {
+  ])('ORDER_ALREADY_CAPTURED recovery rejects %s - wallet untouched', async (_n, orderOver, unitOver) => {
     prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
     (fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
@@ -252,7 +252,7 @@ describe('PayPalService', () => {
     expect(walletService.completeDeposit).not.toHaveBeenCalled();
   });
 
-  it('ORDER_ALREADY_CAPTURED with unavailable order lookup is retryable — wallet untouched', async () => {
+  it('ORDER_ALREADY_CAPTURED with unavailable order lookup is retryable - wallet untouched', async () => {
     prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.PROCESSING }));
     (fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
@@ -286,7 +286,7 @@ describe('PayPalService', () => {
     const out = await signedWebhook(captureEvent());
     expect(out.action).toBe('completed');
     expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
-    // Webhook redelivery — no second credit.
+    // Webhook redelivery - no second credit.
     prisma.deposit.findUnique.mockResolvedValue(deposit({ status: DepositStatus.COMPLETED }));
     const dup = await signedWebhook(captureEvent());
     expect(dup.action).toBe('already_completed');
@@ -380,12 +380,12 @@ describe('PayPalService', () => {
     expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);
   });
 
-  it('non-finite amount (Infinity) rejected via lookup path — zero credit when evidence missing', async () => {
+  it('non-finite amount (Infinity) rejected via lookup path - zero credit when evidence missing', async () => {
     prisma.deposit.findUnique.mockResolvedValue(deposit());
     (fetch as jest.Mock)
       .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 't' }) })
       .mockResolvedValueOnce({ ok: true, json: async () => verifiedOrder() });
-    // Infinity serializes oddly — send via raw payload to simulate malformed number
+    // Infinity serializes oddly - send via raw payload to simulate malformed number
     const out = await signedWebhook({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'CAP-1', status: 'COMPLETED', amount: { value: 'Infinity', currency_code: 'USD' }, supplementary_data: { related_ids: { order_id: 'ORDER-123' } } } });
     expect(out.action).toBe('completed'); // event evidence insufficient → provider lookup verified instead
     expect(walletService.completeDeposit).toHaveBeenCalledTimes(1);

@@ -424,7 +424,7 @@ export default function AdminStorePage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-xs font-mono text-sc-dim">
-                            {(item.metadata?.['effectType'] as string | undefined) ?? '—'}
+                            {(item.metadata?.['effectType'] as string | undefined) ?? 'None'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -441,7 +441,7 @@ export default function AdminStorePage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center text-sc-muted text-xs">
-                          {item.isLimited ? `${item.limitedQty ?? '∞'} qty` : '—'}
+                          {item.isLimited ? `${item.limitedQty ?? '∞'} qty` : 'None'}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
@@ -561,7 +561,7 @@ export default function AdminStorePage() {
                           <td className="px-4 py-2 text-right text-sc-text">{d.purchases}</td>
                           <td className="px-4 py-2 text-right text-brand-300">{formatCredits(d.creditsSpent)}</td>
                           <td className="px-4 py-2 text-sc-muted text-xs">
-                            {d.topItem ? `${d.topItem} (${d.topItemCount})` : '—'}
+                            {d.topItem ? `${d.topItem} (${d.topItemCount})` : 'None'}
                           </td>
                         </tr>
                       ))}
@@ -661,7 +661,7 @@ export default function AdminStorePage() {
                     onChange={(e) => setGrantForm({ ...grantForm, itemId: e.target.value })}
                     className="w-full bg-sc-panel-2 border border-sc-line rounded-lg px-3 py-2 text-sm text-sc-text"
                   >
-                    <option value="">— Select item —</option>
+                    <option value="">Select item</option>
                     {items.filter((i) => i.isActive).map((i) => (
                       <option key={i.id} value={i.id}>{i.name}</option>
                     ))}

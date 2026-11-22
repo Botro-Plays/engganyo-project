@@ -151,7 +151,7 @@ export class StoreService implements OnModuleInit {
       },
     });
 
-    // Strip ALL internal metadata from public response — the store frontend
+    // Strip ALL internal metadata from public response - the store frontend
     // only needs top-level fields. Anything in metadata leaks config values
     // (multipliers, odds, durations) that could be exploited.
     return items.map((item) => ({
@@ -162,12 +162,12 @@ export class StoreService implements OnModuleInit {
 
   /**
    * Serialize equip-state changes for one (user, cosmeticType) slot.
-   * Every writer that can set `equipped` — equipCosmetic, purchaseItem
-   * auto-equip, loot-box cosmetic grants — must hold this advisory lock
+   * Every writer that can set `equipped` - equipCosmetic, purchaseItem
+   * auto-equip, loot-box cosmetic grants - must hold this advisory lock
    * before reading or changing equipped rows, so two different items in
    * the same slot can never both end up equipped.
    *
-   * Actual lock sequences (no universal order exists — wallet engine
+   * Actual lock sequences (no universal order exists - wallet engine
    * locks wallet→user mirror; daily reward claims the user row first):
    *   purchaseItem:  store_items → equip advisory → wallet → user → inventory
    *   useItem:       user_inventory → effect advisory → effects/user/wallet
@@ -177,7 +177,7 @@ export class StoreService implements OnModuleInit {
    * Residual cross-path cycles (e.g. useItem holds inventory→wants wallet
    * while wheel holds wallet→wants inventory) are possible; Postgres
    * deadlock detection aborts one side and withTransactionRetry replays
-   * the whole tx — that, not lock ordering alone, is the safety net.
+   * the whole tx - that, not lock ordering alone, is the safety net.
    */
   private async lockEquipSlot(
     tx: Prisma.TransactionClient,
@@ -189,7 +189,7 @@ export class StoreService implements OnModuleInit {
 
   /**
    * Bounded whole-transaction retry on deadlock (40P01) / serialization
-   * failure (40001) / Prisma write-conflict (P2034) — see tx-retry.ts.
+   * failure (40001) / Prisma write-conflict (P2034) - see tx-retry.ts.
    */
   private async withTxRetry<T>(
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
@@ -205,7 +205,7 @@ export class StoreService implements OnModuleInit {
       throw new BadRequestException('Quantity must be between 1 and 99');
     }
 
-    // Existence pre-check only — all eligibility revalidated under the lock.
+    // Existence pre-check only - all eligibility revalidated under the lock.
     const itemExists = await this.prisma.storeItem.findUnique({
       where: { id: itemId },
       select: { id: true },
@@ -215,7 +215,7 @@ export class StoreService implements OnModuleInit {
     // ── Everything else runs inside ONE transaction under a row lock ──
     // SELECT ... FOR UPDATE serializes purchases of the same item, so the
     // VIP/cosmetic/ownership/stock guards below cannot be raced by a
-    // concurrent purchase. A failure anywhere rolls the debit back — no
+    // concurrent purchase. A failure anywhere rolls the debit back - no
     // compensating refund path is needed.
     const { purchase, walletTx, item } = await this.withTxRetry(async (tx) => {
       // Lock the item row and re-read its current settings.
@@ -245,7 +245,7 @@ export class StoreService implements OnModuleInit {
         }
       }
 
-      // ── Cosmetic dedup guard (under the lock — no double-charge) ──
+      // ── Cosmetic dedup guard (under the lock - no double-charge) ──
       if (item.category === StoreCategory.COSMETIC) {
         const existingCosmetic = await tx.userInventory.findFirst({
           where: { userId, itemId },
@@ -424,7 +424,7 @@ export class StoreService implements OnModuleInit {
   // ─── Use an inventory item ─────────────────────────────────
 
   async useItem(userId: string, inventoryId: string) {
-    // Everything — validation, effect application, and consumption — runs in
+    // Everything - validation, effect application, and consumption - runs in
     // ONE transaction under a row lock on the inventory row. The effect's DB
     // writes (user_active_effects / streakFreezeCharges / loot-box rewards)
     // commit or roll back together with the quantity decrement, so an item
@@ -457,7 +457,7 @@ export class StoreService implements OnModuleInit {
       if (effectType === 'xp_boost' || effectType === 'task_limit_boost') {
         // Serialize same-type effect creation per user across ALL transactions
         // (useItem, wheel, loot box). Advisory xact locks participate in
-        // Postgres deadlock detection — see lockEquipSlot for the actual
+        // Postgres deadlock detection - see lockEquipSlot for the actual
         // per-path lock sequences; withTransactionRetry covers residual
         // cross-path cycles.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${effectType}`}, 0))`;
@@ -474,14 +474,14 @@ export class StoreService implements OnModuleInit {
         }
       }
 
-      // Apply effect FIRST — if it fails, the item is NOT consumed and the
+      // Apply effect FIRST - if it fails, the item is NOT consumed and the
       // whole transaction (including any partial effect writes) rolls back.
       const effectResult = await this.applyEffect(userId, effectType, meta, tx);
       if (!effectResult.applied) {
         throw new BadRequestException((effectResult.reason as string) ?? 'Effect could not be applied');
       }
 
-      // Consume under the row lock — quantity cannot change beneath us.
+      // Consume under the row lock - quantity cannot change beneath us.
       const newQty = inventory.quantity - 1;
       if (newQty <= 0) {
         await tx.userInventory.delete({ where: { id: inventoryId } });
@@ -511,7 +511,7 @@ export class StoreService implements OnModuleInit {
     });
 
     // Post-commit: refresh Redis effect caches from the DB source of truth.
-    // Best-effort — readers already fall back to DB on a cache miss.
+    // Best-effort - readers already fall back to DB on a cache miss.
     await this.syncEffectCaches(userId).catch((err: unknown) => {
       this.logger.error(`Post-commit effect cache sync failed for user ${userId}`, err);
     });
@@ -541,7 +541,7 @@ export class StoreService implements OnModuleInit {
   /**
    * Rebuild Redis effect caches from committed DB state after an item use.
    * Covers xp_boost, task_limit_boost, and streak_freeze keys. Safe to call
-   * any time — it only mirrors authoritative DB rows.
+   * any time - it only mirrors authoritative DB rows.
    */
   async syncEffectCaches(userId: string): Promise<void> {
     const [xpEffect, taskEffect, user] = await Promise.all([
@@ -580,7 +580,7 @@ export class StoreService implements OnModuleInit {
   // ─── Apply effect to the database (inside caller's transaction) ──
   //
   // All writes go through `tx` so they commit atomically with the item
-  // consumption. Redis cache writes are intentionally NOT done here — the
+  // consumption. Redis cache writes are intentionally NOT done here - the
   // caller refreshes caches post-commit via syncEffectCaches.
 
   private async applyEffect(
@@ -641,7 +641,7 @@ export class StoreService implements OnModuleInit {
       }
 
       case 'cosmetic': {
-        // Cosmetics are passive — no active effect to apply
+        // Cosmetics are passive - no active effect to apply
         return { applied: true, type: 'cosmetic', message: 'Cosmetic equipped' };
       }
 
@@ -660,8 +660,8 @@ export class StoreService implements OnModuleInit {
     // Lock order: advisory equip-slot lock BEFORE the inventory row lock,
     // matching purchaseItem (store_items → advisory → inventory rows). The
     // slot lock serializes every writer that can set `equipped` for this
-    // (user, cosmeticType) — this method, purchaseItem auto-equip, and
-    // loot-box cosmetic grants — so two different items in the same slot
+    // (user, cosmeticType) - this method, purchaseItem auto-equip, and
+    // loot-box cosmetic grants - so two different items in the same slot
     // can never both end up equipped.
     const result = await this.withTxRetry(async (tx) => {
       // Unlocked pre-read only to learn the slot key; cosmeticType is
@@ -712,7 +712,7 @@ export class StoreService implements OnModuleInit {
       return { inventoryId, equipped: true, itemName: inventory.item.name };
     });
 
-    // Post-commit: cached profile embeds equippedCosmetics — invalidate
+    // Post-commit: cached profile embeds equippedCosmetics - invalidate
     // best-effort; a failure must not turn a committed equip into an error.
     await this.invalidateProfileCache(userId);
     return result;
@@ -720,7 +720,7 @@ export class StoreService implements OnModuleInit {
 
   /**
    * Drop cached profile data (equippedCosmetics is embedded in `user:profile`)
-   * after an equip-state change. Non-critical — a cache failure must not turn a
+   * after an equip-state change. Non-critical - a cache failure must not turn a
    * successful equip/unequip into an error.
    */
   private async invalidateProfileCache(userId: string): Promise<void> {
@@ -785,7 +785,7 @@ export class StoreService implements OnModuleInit {
           { multiplier: 2 },
           hours,
           tx,
-          true, // deferRedis — caches sync post-commit
+          true, // deferRedis - caches sync post-commit
         );
         return {
           applied: true,
@@ -825,7 +825,7 @@ export class StoreService implements OnModuleInit {
           if (!existing) {
             // Add to inventory and auto-equip (mirrors purchase behaviour).
             // The (userId,itemId) unique index means a racing grant/purchase
-            // makes this create fail with P2002 — the whole use transaction
+            // makes this create fail with P2002 - the whole use transaction
             // rolls back (item NOT consumed); a retry then finds `existing`
             // and takes the credits fallback below.
             const cMeta = cosmeticItem.metadata as Record<string, unknown>;
@@ -860,7 +860,7 @@ export class StoreService implements OnModuleInit {
             return { applied: true, type: 'loot_box', reward: 'cosmetic', cosmetic: cosmeticItem.name };
           }
 
-          // Already owned (or lost the create race) — fall back to credits
+          // Already owned (or lost the create race) - fall back to credits
           const fallbackCredits = Math.floor(Math.random() * 200) + 100;
           await this.walletService.credit(userId, fallbackCredits, {
             type: TransactionType.EARN_LOOT_BOX,
@@ -869,7 +869,7 @@ export class StoreService implements OnModuleInit {
           return { applied: true, type: 'loot_box', reward: 'credits', amount: fallbackCredits, message: `You already own ${cosmeticItem.name}, converted to ${fallbackCredits} credits` };
         }
 
-        // No matching cosmetic found — fall back to credits
+        // No matching cosmetic found - fall back to credits
         const fallbackCredits = Math.floor(Math.random() * 200) + 100;
         await this.walletService.credit(userId, fallbackCredits, {
           type: TransactionType.EARN_LOOT_BOX,
@@ -901,7 +901,7 @@ export class StoreService implements OnModuleInit {
     const redisKey = type === 'xp_boost' ? `boost:xp:${userId}` : `boost:task_limit:${userId}`;
 
     // Inside a transaction, serialize find-then-write on this (user,type)
-    // effect slot — prevents duplicate active-effect rows when a wheel/loot-box
+    // effect slot - prevents duplicate active-effect rows when a wheel/loot-box
     // reward races a store-item use of the same boost type.
     if (tx) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${userId}:${type}`}, 0))`;
@@ -924,7 +924,7 @@ export class StoreService implements OnModuleInit {
       });
 
       // Update Redis cache with new TTL (skipped when the caller will sync
-      // caches post-commit — a rolled-back tx must not leave a phantom boost)
+      // caches post-commit - a rolled-back tx must not leave a phantom boost)
       if (!deferRedis) {
         const ttlSeconds = Math.ceil((newExpiresAt.getTime() - Date.now()) / 1000);
         try {
@@ -937,7 +937,7 @@ export class StoreService implements OnModuleInit {
       return { expiresAt: newExpiresAt.toISOString(), extended: true };
     }
 
-    // 2. No active effect — create a fresh one
+    // 2. No active effect - create a fresh one
     const expiresAtDate = new Date(Date.now() + durationMs);
     const expiresAt = expiresAtDate.toISOString();
     const newMetadata = { ...metadata, expiresAt };
@@ -1071,7 +1071,7 @@ export class StoreService implements OnModuleInit {
   // ─── Cron: clean up expired active effects ─────────────────
   //
   // SAFETY: This cron is PURELY garbage collection. It does NOT control
-  // when a boost expires — the `expiresAt` timestamp does. All read
+  // when a boost expires - the `expiresAt` timestamp does. All read
   // queries already filter with `expiresAt > NOW()`, so an expired row
   // is never returned to a user even if this cron hasn't run yet.
   // We run every 5 minutes so expired rows don't linger long in the DB.

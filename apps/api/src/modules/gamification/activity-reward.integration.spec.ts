@@ -1,20 +1,19 @@
 /**
  * PostgreSQL-backed integration tests for the weekly ACTIVITY_REWARD
  * grant (Option B). Requires TEST_DATABASE_URL pointing at a disposable,
- * migrated database — skipped automatically when unset.
+ * migrated database - skipped automatically when unset.
  *
  * Proves:
  * - threshold boundary (>=10 VERIFIED completions) and the >=3 distinct
  *   UTC day rule inside one ISO week;
  * - ISO week/year boundaries produce separate entitlements;
- * - eligibility binds to verifiedAt — delayed processing credits the
+ * - eligibility binds to verifiedAt - delayed processing credits the
  *   verified week, never the processing week;
  * - NULL verifiedAt on VERIFIED is investigated (audit row), never
  *   backdated to createdAt;
  * - concurrent/duplicate evaluation grants exactly once;
  * - issuance disablement stops grants while preserving everything else;
- * - unwhitelisted/inactive items raise a recoverable retry error —
- *   the same completion grants after configuration recovery, and a
+ * - unwhitelisted/inactive items raise a recoverable retry error - *   the same completion grants after configuration recovery, and a
  *   midweek itemId change cannot mint a second grant (per-program
  *   weekly identity; awarded itemId kept on the entitlement).
  */
@@ -31,7 +30,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `arw_${Date.now().toString(36)}_`;
 
-run('activity reward weekly grant — real PostgreSQL', () => {
+run('activity reward weekly grant - real PostgreSQL', () => {
   jest.setTimeout(90000);
 
   let prisma: PrismaClient;
@@ -73,7 +72,7 @@ run('activity reward weekly grant — real PostgreSQL', () => {
     });
 
   // task_completions requires exactly one of campaign_id/challenge_id,
-  // and (campaign_id, user_id) is unique — one completion per user per
+  // and (campaign_id, user_id) is unique - one completion per user per
   // campaign, so each VERIFIED fixture gets its own campaign row.
   const mkCampaign = (userId: string) =>
     prisma.campaign.create({
@@ -149,7 +148,7 @@ run('activity reward weekly grant — real PostgreSQL', () => {
     };
     await prisma.activityRewardEntitlement.deleteMany({ where: { userId: userIds } });
     await prisma.taskCompletion.deleteMany({ where: { userId: userIds } });
-    // Campaign fixtures are owned by the test users — remove before users.
+    // Campaign fixtures are owned by the test users - remove before users.
     await prisma.campaign.deleteMany({ where: { userId: userIds } });
     await prisma.inventoryMovement.deleteMany({ where: { userId: userIds } });
     await prisma.userInventory.deleteMany({ where: { userId: userIds } });
@@ -337,7 +336,7 @@ run('activity reward weekly grant — real PostgreSQL', () => {
     await setConfig({ enabled: true, itemId: unflaggedItemId, thresholdCompletions: 10, minDistinctDays: 3 });
     try {
       // Recoverable: throws so the outcome flag stays unset and the
-      // sweeper retries — never settles as a silent no-award.
+      // sweeper retries - never settles as a silent no-award.
       await expect(service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt)).rejects.toThrow(
         ActivityRewardRetryableError,
       );
@@ -384,8 +383,7 @@ run('activity reward weekly grant — real PostgreSQL', () => {
       await setConfig({ enabled: true, itemId, thresholdCompletions: 10, minDistinctDays: 3 });
       expect((await service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt)).outcome).toBe('granted');
 
-      // Operator repoints the reward at a different whitelisted item —
-      // the (user, week) entitlement must block any second grant.
+      // Operator repoints the reward at a different whitelisted item - // the (user, week) entitlement must block any second grant.
       await setConfig({ enabled: true, itemId: secondItem.id, thresholdCompletions: 10, minDistinctDays: 3 });
       const again = await service.evaluateWeeklyGrant(u.id, trigger.id, verifiedAt);
       expect(again.outcome).toBe('already_granted');
@@ -403,8 +401,7 @@ run('activity reward weekly grant — real PostgreSQL', () => {
 
   it('defaults: missing config row → enabled with spec defaults (10 completions / 3 days / default item)', async () => {
     const u = await mkUser();
-    // Point the default item id at our test item is impossible (cuid) —
-    // qualify the user so evaluation reaches item resolution, then the
+    // Point the default item id at our test item is impossible (cuid) - // qualify the user so evaluation reaches item resolution, then the
     // missing prod default id exercises the recoverable item path.
     await completionsAcrossDays(u.id, '2026-11-09', [4, 3, 3]);
     const trigger = await mkVerified(u.id, new Date('2026-11-11T00:00:00Z'));

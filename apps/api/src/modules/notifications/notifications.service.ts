@@ -30,8 +30,7 @@ export class NotificationsService {
     } catch (err) {
       // Idempotent replay: a dedupeKey uniquely binds the notification to
       // its outbox event. A retry after a crash between the notification
-      // commit and the outbox acknowledgement hits the unique constraint —
-      // return the already-persisted row instead of creating a duplicate
+      // commit and the outbox acknowledgement hits the unique constraint - // return the already-persisted row instead of creating a duplicate
       // (and without re-emitting the live socket event, which would
       // double-toast the client).
       if (opts?.dedupeKey && (err as { code?: string })?.code === 'P2002') {

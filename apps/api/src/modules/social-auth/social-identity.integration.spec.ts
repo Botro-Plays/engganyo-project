@@ -2,7 +2,7 @@
  * PostgreSQL-backed integration tests for exclusive VERIFIED social
  * identity ownership + the 24-hour post-unlink reservation.
  * Requires TEST_DATABASE_URL pointing at a disposable, migrated
- * database — skipped automatically when unset.
+ * database - skipped automatically when unset.
  *
  * Proves:
  * - a verified (platform, platformUserId) identity belongs to one user;
@@ -28,7 +28,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `sid_${Date.now().toString(36)}_`;
 
-run('social identity uniqueness + unlink reservation — real PostgreSQL', () => {
+run('social identity uniqueness + unlink reservation - real PostgreSQL', () => {
   jest.setTimeout(90000);
 
   let prisma: PrismaClient;
@@ -67,8 +67,8 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     });
 
   /**
-   * Exercises the REAL service write path — SocialAuthService
-   * .linkVerifiedAccount — the same transaction the OAuth callback uses,
+   * Exercises the REAL service write path - SocialAuthService
+   * .linkVerifiedAccount - the same transaction the OAuth callback uses,
    * minus JWT/state/token-exchange (profile + tokens supplied directly).
    */
   const oauthLink = (userId: string, platform: SocialPlatform, pid: string, username?: string) =>
@@ -92,7 +92,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await prisma.$connect();
     const prismaSvc = prisma as never;
     identity = new SocialIdentityService(prismaSvc);
-    // Crypto is mocked to identity — token encryption is not under test.
+    // Crypto is mocked to identity - token encryption is not under test.
     socialAuth = new SocialAuthService(
       prismaSvc,
       {} as never,
@@ -115,13 +115,13 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
 
   // ─── Exclusive ownership ────────────────────────────────────
 
-  it('verified identity belongs to one user — second verified claim hits the unique index', async () => {
+  it('verified identity belongs to one user - second verified claim hits the unique index', async () => {
     const a = await mkUser();
     const b = await mkUser();
     const pid = platformUserId('dup1');
     await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
 
-    // B proves ownership of the same platform id — the partial unique
+    // B proves ownership of the same platform id - the partial unique
     // index must reject the write even though B's own (user,platform)
     // slot is free.
     await expect(oauthLink(b.id, SocialPlatform.YOUTUBE, pid)).rejects.toBeInstanceOf(
@@ -147,7 +147,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
       where: { platform: SocialPlatform.YOUTUBE, platformUserId: pid, isVerified: true },
     });
     expect([a.id, b.id]).toContain(holder?.userId);
-    // Exactly one user holds it — the loser has no row at all.
+    // Exactly one user holds it - the loser has no row at all.
     const counts = await prisma.socialAccount.count({
       where: { platform: SocialPlatform.YOUTUBE, platformUserId: pid },
     });
@@ -158,7 +158,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     const a = await mkUser();
     const b = await mkUser();
     const handle = `${PREFIX}shared_handle`;
-    // Two users declare the same public handle — allowed (manual proof path).
+    // Two users declare the same public handle - allowed (manual proof path).
     await socialAuth.manualLink(a.id, SocialPlatform.TWITTER, `@${handle}`);
     await socialAuth.manualLink(b.id, SocialPlatform.TWITTER, handle);
     const rows = await prisma.socialAccount.findMany({
@@ -244,7 +244,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     const r = await reservation(SocialPlatform.YOUTUBE, pid);
     expect(r).not.toBeNull();
     // Reservation row stores owner id server-side only; API surface
-    // returns just availableAt — asserted via the ConflictException shape.
+    // returns just availableAt - asserted via the ConflictException shape.
     try {
       await prisma.$transaction((tx) =>
         identity.claimVerifiedIdentity(tx, { platform: SocialPlatform.YOUTUBE, identityKey: pid, userId: b.id }),
@@ -281,7 +281,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await mkVerified(a.id, SocialPlatform.YOUTUBE, pid);
     await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
 
-    // Move reservedUntil to exactly now — boundary is "reservedUntil > now".
+    // Move reservedUntil to exactly now - boundary is "reservedUntil > now".
     await prisma.socialIdentityReservation.update({
       where: { platform_identityKey: { platform: SocialPlatform.YOUTUBE, identityKey: pid } },
       data: { reservedUntil: new Date(Date.now() - 1) },
@@ -301,7 +301,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
     const before = (await reservation(SocialPlatform.YOUTUBE, pid))!.reservedUntil;
 
-    // Claim path throws ConflictException before any write — the
+    // Claim path throws ConflictException before any write - the
     // reservation timestamp must not move.
     await expect(
       prisma.$transaction((tx) =>
@@ -359,7 +359,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await mkVerified(a.id, SocialPlatform.YOUTUBE, oldPid);
     await mkVerified(c.id, SocialPlatform.YOUTUBE, takenPid);
 
-    // Switch to an identity owned by C — whole tx must roll back,
+    // Switch to an identity owned by C - whole tx must roll back,
     // leaving oldPid unreserved and still linked to A.
     await expect(oauthLink(a.id, SocialPlatform.YOUTUBE, takenPid)).rejects.toBeInstanceOf(
       Prisma.PrismaClientKnownRequestError,
@@ -379,7 +379,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     await socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE);
     expect(await reservation(SocialPlatform.YOUTUBE, pid)).not.toBeNull();
 
-    // Simulate account deletion cascade — socialAccount rows go,
+    // Simulate account deletion cascade - socialAccount rows go,
     // reservation row must remain.
     await prisma.user.delete({ where: { id: a.id } });
     const r = await reservation(SocialPlatform.YOUTUBE, pid);
@@ -413,7 +413,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
       }),
       oauthLink(u.id, SocialPlatform.YOUTUBE, stableId, 'verified_name'),
     ]);
-    // Both may succeed (serialized) — what must NEVER happen is a
+    // Both may succeed (serialized) - what must NEVER happen is a
     // verified row whose platformUserId is the unproven handle.
     expect(editRes.status).toBe('fulfilled');
     expect(linkRes.status).toBe('fulfilled');
@@ -458,7 +458,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
     ]);
     expect(discRes.status).toBe('fulfilled');
     // B's upsert unblocks only after A's delete commits, then the
-    // post-upsert reservation check must reject — cooldown cannot be
+    // post-upsert reservation check must reject - cooldown cannot be
     // consumed by a racing claim.
     expect(linkRes.status).toBe('rejected');
 
@@ -517,7 +517,7 @@ run('social identity uniqueness + unlink reservation — real PostgreSQL', () =>
       socialAuth.disconnect(a.id, SocialPlatform.YOUTUBE),
       oauthLink(a.id, SocialPlatform.YOUTUBE, pid),
     ]);
-    // Same slot lock serializes both — neither may fail or deadlock.
+    // Same slot lock serializes both - neither may fail or deadlock.
     expect(dRes.status).toBe('fulfilled');
     expect(lRes.status).toBe('fulfilled');
 

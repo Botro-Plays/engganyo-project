@@ -39,7 +39,7 @@ export function MyListings() {
       return res.data.data;
     },
     onSuccess: () => {
-      addToast('Listing cancelled — your items are back in inventory.', 'success');
+      addToast('Listing cancelled - your items are back in inventory.', 'success');
       setCancelTarget(null);
       void queryClient.invalidateQueries({ queryKey: ['marketplace'], type: 'all' });
       void queryClient.invalidateQueries({ queryKey: ['store', 'inventory'] });
@@ -99,13 +99,13 @@ export function MyListings() {
               </p>
               {paused && (
                 <p className="text-xs text-amber-400/90 mt-1">
-                  Paused — the item&apos;s store terms changed, so it can&apos;t sell as listed.
+                  Paused - the item&apos;s store terms changed, so it can&apos;t sell as listed.
                   Cancel to return your units, then relist if still eligible.
                 </p>
               )}
               {active && l.catalogChanged && (
                 <p className="text-xs text-amber-400/90 mt-1">
-                  The item&apos;s store terms changed — this listing will pause on next view or purchase attempt.
+                  The item&apos;s store terms changed - this listing will pause on next view or purchase attempt.
                 </p>
               )}
             </div>

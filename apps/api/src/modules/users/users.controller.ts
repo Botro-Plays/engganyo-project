@@ -93,7 +93,7 @@ export class UsersController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get equipped cosmetics for a batch of user IDs (comma-separated, max 100)' })
   getEquippedCosmetics(@Query('ids') ids?: string | string[]) {
-    // ?ids=a&ids=b parses to an array — accept only a single comma-separated string.
+    // ?ids=a&ids=b parses to an array - accept only a single comma-separated string.
     if (ids !== undefined && typeof ids !== 'string') {
       throw new BadRequestException('ids must be a single comma-separated string');
     }

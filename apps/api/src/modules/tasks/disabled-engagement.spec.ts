@@ -1,7 +1,7 @@
 /**
  * Rewarded YouTube engagement is disabled for platform-policy compliance.
  * These tests prove that no code path can issue credits, XP, VP, or other
- * completion rewards for YOUTUBE_* task types — including assignment,
+ * completion rewards for YOUTUBE_* task types - including assignment,
  * submission/auto-verify, recheck, owner review, and admin review.
  */
 import { BadRequestException } from '@nestjs/common';
@@ -49,7 +49,7 @@ describe('assertEngagementTaskAllowed', () => {
   });
 });
 
-describe('seed.ts — no disabled engagement tasks can be recreated', () => {
+describe('seed.ts - no disabled engagement tasks can be recreated', () => {
   const seedPath = path.resolve(__dirname, '../../../prisma/seed.ts');
   const seedSource = fs.readFileSync(seedPath, 'utf8');
 
@@ -63,7 +63,7 @@ describe('seed.ts — no disabled engagement tasks can be recreated', () => {
   });
 });
 
-describe('TasksService — disabled YouTube engagement', () => {
+describe('TasksService - disabled YouTube engagement', () => {
   let prisma: Record<string, jest.Mock>;
   let walletService: Record<string, jest.Mock>;
   let gamificationService: Record<string, jest.Mock>;
@@ -142,7 +142,7 @@ describe('TasksService — disabled YouTube engagement', () => {
   });
 });
 
-describe('CampaignsService — disabled YouTube engagement', () => {
+describe('CampaignsService - disabled YouTube engagement', () => {
   let prisma: Record<string, jest.Mock>;
   let walletService: Record<string, jest.Mock>;
   let gamificationService: Record<string, jest.Mock>;
@@ -199,7 +199,7 @@ describe('CampaignsService — disabled YouTube engagement', () => {
   });
 });
 
-describe('AdminService — disabled YouTube engagement', () => {
+describe('AdminService - disabled YouTube engagement', () => {
   let prisma: Record<string, jest.Mock>;
   let walletService: Record<string, jest.Mock>;
   let gamificationService: Record<string, jest.Mock>;

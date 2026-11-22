@@ -1,5 +1,5 @@
 /**
- * Cosmetic style resolver — turns equipped cosmetics into CSS classes/styles
+ * Cosmetic style resolver - turns equipped cosmetics into CSS classes/styles
  * for profile cards (themes) and avatars (frames).
  */
 

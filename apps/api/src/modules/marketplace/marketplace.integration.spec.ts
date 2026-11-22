@@ -30,7 +30,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `mkt_${Date.now().toString(36)}_`;
 
-run('marketplace — real PostgreSQL', () => {
+run('marketplace - real PostgreSQL', () => {
   jest.setTimeout(90000);
 
   let prisma: PrismaClient;
@@ -50,7 +50,7 @@ run('marketplace — real PostgreSQL', () => {
     invalidateUserCaches: jest.fn(async () => {}),
   };
 
-  // Atomic balance mutations — mirrors WalletService semantics closely
+  // Atomic balance mutations - mirrors WalletService semantics closely
   // enough for concurrency tests: increments/decrements are single
   // UPDATEs so reciprocal purchases can't lost-update each other.
   const walletStub = {
@@ -312,7 +312,7 @@ run('marketplace — real PostgreSQL', () => {
 
   // ─── Listing vs use race ───────────────────────────────────
 
-  it('listing escrow and useItem serialize on the inventory row — no lost units', async () => {
+  it('listing escrow and useItem serialize on the inventory row - no lost units', async () => {
     const seller = await mkUser();
     const inv = await mkInventory(seller.id, convItemId, 3);
 
@@ -321,7 +321,7 @@ run('marketplace — real PostgreSQL', () => {
       storeService.useItem(seller.id, inv.id),
     ]);
     // Both must succeed in SOME serialized order: use consumes 1, listing
-    // escrows 2 — together they account for all 3 units exactly once.
+    // escrows 2 - together they account for all 3 units exactly once.
     expect(listRes.status).toBe('fulfilled');
     expect(useRes.status).toBe('fulfilled');
 
@@ -400,7 +400,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(buyA.status).toBe('fulfilled');
     expect(buyB.status).toBe('fulfilled');
 
-    // Each paid 100 and received 100 — net zero on a 1000 starting balance.
+    // Each paid 100 and received 100 - net zero on a 1000 starting balance.
     expect(await balance(a.id)).toBe(1000);
     expect(await balance(b.id)).toBe(1000);
     expect(await invQty(a.id, convItemId, InventoryProvenance.MARKETPLACE)).toBe(1);
@@ -486,7 +486,7 @@ run('marketplace — real PostgreSQL', () => {
     // Unknown key → null (uncommitted attempt).
     expect((await service.findPurchaseByKey(buyer.id, purchaseKey('missing'))).order).toBeNull();
 
-    // Buyer spends their entire balance — the committed order must still
+    // Buyer spends their entire balance - the committed order must still
     // be discoverable afterwards (zero balance must not hide it).
     const key = purchaseKey('lookup');
     const bought = await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: key });
@@ -505,7 +505,7 @@ run('marketplace — real PostgreSQL', () => {
     // Buyer-scoped: another user with the same key sees nothing.
     expect((await service.findPurchaseByKey(other.id, key)).order).toBeNull();
 
-    // Listing is now SOLD_OUT — the lookup is unaffected by listing state.
+    // Listing is now SOLD_OUT - the lookup is unaffected by listing state.
     const db = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
     expect(db.status).toBe(MarketplaceListingStatus.SOLD_OUT);
     expect((await service.findPurchaseByKey(buyer.id, key)).order!.id).toBe(bought.order.id);
@@ -537,7 +537,7 @@ run('marketplace — real PostgreSQL', () => {
       expect(await invQty(buyer.id, boostItemId, InventoryProvenance.MARKETPLACE)).toBe(1);
       expect(await balance(seller.id)).toBe(100);
     } else {
-      // Cancel (or lazy expiry path) won — units returned, purchase failed.
+      // Cancel (or lazy expiry path) won - units returned, purchase failed.
       expect(final.status === MarketplaceListingStatus.CANCELLED || final.status === MarketplaceListingStatus.EXPIRED).toBe(true);
       expect(orders).toBe(0);
       expect(await invQty(seller.id, boostItemId)).toBe(1);
@@ -608,7 +608,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(await invQty(b1.id, boostItemId, InventoryProvenance.MARKETPLACE)).toBe(2);
     expect(await invQty(b2.id, boostItemId, InventoryProvenance.MARKETPLACE)).toBe(1);
 
-    // b2 resells the marketplace-bought unit — resale chain works.
+    // b2 resells the marketplace-bought unit - resale chain works.
     const b2Inv = await prisma.userInventory.findFirstOrThrow({
       where: { userId: b2.id, itemId: boostItemId, provenance: InventoryProvenance.MARKETPLACE },
     });
@@ -760,7 +760,7 @@ run('marketplace — real PostgreSQL', () => {
   // ─── Catalog drift protection ──────────────────────────────
 
   it('catalog edits pause the listing; purchase conflicts and seller can recover via cancel', async () => {
-    // Dedicated item — shared suite items must not drift for other tests.
+    // Dedicated item - shared suite items must not drift for other tests.
     const driftItem = await mkItem({
       name: `${PREFIX}Drift Boost`,
       metadata: { boostType: 'xp', multiplier: 2, durationHours: 24, effectType: 'xp_boost' },
@@ -792,7 +792,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(dbListing.status).toBe(MarketplaceListingStatus.PAUSED);
     expect(dbListing.removedReason).toBe('catalog_changed');
 
-    // Purchase rejects with LISTING_PAUSED — no order, escrow untouched.
+    // Purchase rejects with LISTING_PAUSED - no order, escrow untouched.
     try {
       await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('drift') });
       throw new Error('expected pause conflict');
@@ -825,7 +825,7 @@ run('marketplace — real PostgreSQL', () => {
     const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: item.id } });
     const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
 
-    // Deactivate the catalog item — advertised terms no longer fulfillable.
+    // Deactivate the catalog item - advertised terms no longer fulfillable.
     await prisma.storeItem.update({ where: { id: item.id }, data: { isActive: false } });
     const detail = await service.getListingDetail(listing.id);
     expect(detail.status).toBe(MarketplaceListingStatus.PAUSED);
@@ -834,7 +834,7 @@ run('marketplace — real PostgreSQL', () => {
       service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('deact') }),
     ).rejects.toThrow(ConflictException);
 
-    // Even after reactivation the paused listing stays paused — the seller
+    // Even after reactivation the paused listing stays paused - the seller
     // must cancel and relist so a fresh snapshot is taken.
     await prisma.storeItem.update({ where: { id: item.id }, data: { isActive: true } });
     const still = await prisma.marketplaceListing.findUniqueOrThrow({ where: { id: listing.id } });
@@ -863,7 +863,7 @@ run('marketplace — real PostgreSQL', () => {
     const l1 = await service.createListing(s1.id, { inventoryId: inv1.id, quantity: 1, unitPrice: 100 });
     const l2 = await service.createListing(s2.id, { inventoryId: inv2.id, quantity: 1, unitPrice: 100 });
 
-    // Two concurrent receipts for one remaining cap slot — exactly one wins.
+    // Two concurrent receipts for one remaining cap slot - exactly one wins.
     const results = await Promise.allSettled([
       service.purchaseListing(buyer.id, l1.id, { quantity: 1, purchaseKey: purchaseKey('cap1') }),
       service.purchaseListing(buyer.id, l2.id, { quantity: 1, purchaseKey: purchaseKey('cap2') }),
@@ -904,7 +904,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(ok).toHaveLength(1);
     expect(bad).toHaveLength(1);
 
-    // Exactly at cap — never 3.
+    // Exactly at cap - never 3.
     expect(await invQty(buyer.id, capped.id)).toBe(2);
   });
 
@@ -921,7 +921,7 @@ run('marketplace — real PostgreSQL', () => {
     // List 1 → on-hand 1 + escrow 1 = effective 2 = cap.
     await service.createListing(seller.id, { inventoryId: inv.id, quantity: 1, unitPrice: 100 });
 
-    // A store purchase would take effective ownership to 3 — must reject even
+    // A store purchase would take effective ownership to 3 - must reject even
     // though only 1 unit sits on hand.
     await expect(storeService.purchaseItem(seller.id, capped.id, 1)).rejects.toThrow(/Max ownership/);
     expect(await invQty(seller.id, capped.id)).toBe(1);
@@ -950,7 +950,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(db.remainingQuantity).toBe(0);
     expect(await invQty(seller.id, convItemId, InventoryProvenance.PURCHASE)).toBe(3);
 
-    // Second attempt hits the already-EXPIRED status — no second return.
+    // Second attempt hits the already-EXPIRED status - no second return.
     await expect(
       service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('exp2') }),
     ).rejects.toThrow(/expired/i);
@@ -968,7 +968,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(db.status).toBe(MarketplaceListingStatus.EXPIRED);
   });
 
-  it('expired-listing purchase races cancel and sweep — escrow returns exactly once', async () => {
+  it('expired-listing purchase races cancel and sweep - escrow returns exactly once', async () => {
     const seller = await mkUser();
     const buyer = await mkUser(5_000);
     await mkInventory(seller.id, boostItemId, 2);
@@ -1023,7 +1023,7 @@ run('marketplace — real PostgreSQL', () => {
     const listing = await service.createListing(seller.id, { inventoryId: sInv.id, quantity: 2, unitPrice: 100 });
 
     // Race: buyer cancels own listing (escrow 1 → on-hand) while buying 2 units
-    // (would make effective 2+2=4 > cap 3 regardless of cancel timing — escrow
+    // (would make effective 2+2=4 > cap 3 regardless of cancel timing - escrow
     // transitions preserve the sum, so the count must stay consistent).
     const [cancelRes, buyRes] = await Promise.allSettled([
       service.cancelListing(buyer.id, ownListing.id),
@@ -1144,7 +1144,7 @@ run('marketplace — real PostgreSQL', () => {
     const inv = await prisma.userInventory.findFirstOrThrow({ where: { userId: seller.id, itemId: item.id } });
     const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
 
-    // Phase A — edit wins the catalog row lock first: the in-flight purchase
+    // Phase A - edit wins the catalog row lock first: the in-flight purchase
     // must observe the NEW terms, detect drift, and pause the listing.
     const editFirst = prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${item.id} FOR UPDATE`;
@@ -1168,7 +1168,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(await prisma.marketplaceOrder.count({ where: { listingId: listing.id } })).toBe(0);
     expect(db.remainingQuantity).toBe(2); // escrow intact for seller recovery
 
-    // Phase B — purchase commits BEFORE the edit: the order settles under the
+    // Phase B - purchase commits BEFORE the edit: the order settles under the
     // validated (pre-edit) terms; the listing pauses afterwards.
     await service.cancelListing(seller.id, listing.id); // recover escrow (PAUSED cancellable)
     // Restore catalog to snapshot terms, then relist → fresh snapshot.
@@ -1184,7 +1184,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(bought.replayed).toBe(false);
     expect(await invQty(buyer.id, item.id, InventoryProvenance.MARKETPLACE)).toBe(1);
 
-    // Edit lands AFTER the validated purchase committed — the remaining
+    // Edit lands AFTER the validated purchase committed - the remaining
     // ACTIVE listing pauses on next view; the completed order is untouched.
     await prisma.storeItem.update({
       where: { id: item.id },
@@ -1241,7 +1241,7 @@ run('marketplace — real PostgreSQL', () => {
       service.createListing(seller.id, { inventoryId: unflaggedInv.id, quantity: 1, unitPrice: 120 }),
     ).rejects.toMatchObject({ status: 403 });
 
-    // Purchase settles normally — buyer receives MARKETPLACE provenance.
+    // Purchase settles normally - buyer receives MARKETPLACE provenance.
     await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('actreward') });
     expect(await invQty(buyer.id, flagged.id, InventoryProvenance.MARKETPLACE)).toBe(1);
     expect(await invQty(seller.id, flagged.id, InventoryProvenance.ACTIVITY_REWARD)).toBe(1);
@@ -1277,7 +1277,7 @@ run('marketplace — real PostgreSQL', () => {
     const inv = await mkInventory(seller.id, convItemId, 4);
     const listing = await service.createListing(seller.id, { inventoryId: inv.id, quantity: 2, unitPrice: 100 });
 
-    // A committed purchase BEFORE suspension — its replay must still
+    // A committed purchase BEFORE suspension - its replay must still
     // resolve while suspended (orders are preserved).
     const committedKey = purchaseKey('pre');
     await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: committedKey });
@@ -1296,12 +1296,12 @@ run('marketplace — real PostgreSQL', () => {
     expect(pub.resaleSuspended).toBe(true);
     expect(pub.resaleSuspensionReason).toBe('incident review');
 
-    // Committed-order replay still resolves — no error, no second debit.
+    // Committed-order replay still resolves - no error, no second debit.
     const replay = await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: committedKey });
     expect((replay as { replayed?: boolean }).replayed).toBe(true);
     expect(await balance(buyer.id)).toBe(buyerAfterFirst);
 
-    // New purchase blocked — nothing moves.
+    // New purchase blocked - nothing moves.
     try {
       await service.purchaseListing(buyer.id, listing.id, { quantity: 1, purchaseKey: purchaseKey('susp') });
       throw new Error('should have thrown');
@@ -1311,8 +1311,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(await balance(buyer.id)).toBe(buyerAfterFirst);
     expect(await prisma.marketplaceOrder.count({ where: { listingId: listing.id } })).toBe(1);
 
-    // Seller cancellation recovery still works during suspension —
-    // remaining escrow returns to inventory.
+    // Seller cancellation recovery still works during suspension - // remaining escrow returns to inventory.
     const cancelled = await service.cancelListing(seller.id, listing.id);
     expect(cancelled.status).toBe(MarketplaceListingStatus.CANCELLED);
     // Stack: 4 minted − 2 escrowed; 1 sold; cancel returns the last escrowed
@@ -1328,7 +1327,7 @@ run('marketplace — real PostgreSQL', () => {
     expect(audit!.userId).toBe(seller.id);
 
     // Resume → new purchases work again. The seller's stack (inv) holds
-    // the 3 returned/untouched units — (userId,itemId,provenance) is unique
+    // the 3 returned/untouched units - (userId,itemId,provenance) is unique
     // so a second mkInventory for the same triple would violate it.
     await service.setResaleSuspension(seller.id, { suspended: false });
     expect((await service.getResaleSuspension()).suspended).toBe(false);

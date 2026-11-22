@@ -14,5 +14,5 @@ export class SubmitTxHashDto {
 
   @IsString()
   @IsOptional()
-  signature?: string; // personal_sign of the challenge message — proves wallet ownership
+  signature?: string; // personal_sign of the challenge message - proves wallet ownership
 }

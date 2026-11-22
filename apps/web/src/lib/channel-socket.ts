@@ -10,7 +10,7 @@ export function connectChannelSocket(token: string): Socket {
   if (channelSocket?.connected) {
     return channelSocket;
   }
-  // A dead socket keeps its reconnection loop alive — stop it before
+  // A dead socket keeps its reconnection loop alive - stop it before
   // replacing, or stale sockets accumulate on every token refresh.
   channelSocket?.disconnect();
 

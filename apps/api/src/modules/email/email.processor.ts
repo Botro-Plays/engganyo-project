@@ -75,7 +75,7 @@ export class EmailProcessor {
 
     await this.smtp.sendMail({
       to,
-      subject: `Your Engganyo Weekly Digest — ${data.weekStart} to ${data.weekEnd}`,
+      subject: `Your Engganyo Weekly Digest - ${data.weekStart} to ${data.weekEnd}`,
       html: weeklyDigestEmailTemplate(data),
     });
 
@@ -113,7 +113,7 @@ export class EmailProcessor {
   @OnQueueFailed()
   onQueueFailed(job: Job, err: Error) {
     this.logger.error(
-      `Queue job FAILED — id: ${job.id}, name: ${job.name}, to: ${(job.data as { to?: string })?.to ?? 'unknown'} | error: ${err.message}`,
+      `Queue job FAILED - id: ${job.id}, name: ${job.name}, to: ${(job.data as { to?: string })?.to ?? 'unknown'} | error: ${err.message}`,
     );
   }
 }

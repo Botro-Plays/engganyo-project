@@ -8,7 +8,7 @@
  *
  * Covers the forward fix for the mirror-divergence audit:
  *  - referral awards credit wallets AND the user.creditBalance mirror
- *    through WalletService.credit(tx) — ledger rows included
+ *    through WalletService.credit(tx) - ledger rows included
  *  - the milestone flag is claimed atomically under SELECT ... FOR UPDATE
  *    and re-read inside the tx: concurrent awarders award exactly once
  *  - an award racing ordinary wallet settlements leaves exact balances
@@ -34,7 +34,7 @@ const mockService = () =>
     },
   });
 
-run('Referral balance consistency — real PostgreSQL integration', () => {
+run('Referral balance consistency - real PostgreSQL integration', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -144,7 +144,7 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
     expect(updated.creditsAwarded).toBe(10);
   });
 
-  it('is idempotent — a second award attempt pays nothing', async () => {
+  it('is idempotent - a second award attempt pays nothing', async () => {
     const referrer = await makeUser(0);
     const referee = await makeUser(0);
     const ref = await makeReferral(referrer.id, referee.id);
@@ -155,7 +155,7 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
     expect((await walletState(referrer.id)).wallet.balance).toBe(10);
     expect((await walletState(referee.id)).wallet.balance).toBe(25);
     expect(await referralLedger(ref.id)).toHaveLength(2);
-    // Only the first (committed) call notifies — the repeat is a no-op.
+    // Only the first (committed) call notifies - the repeat is a no-op.
     expect(notificationsMock.createNotification).toHaveBeenCalledTimes(2);
   });
 
@@ -249,7 +249,7 @@ run('Referral balance consistency — real PostgreSQL integration', () => {
     const ref = await makeReferral(referrer.id, referee.id);
 
     // Wrap the real WalletService so the FIRST credit call inside the
-    // referral tx throws WalletContentionException — forcing the whole
+    // referral tx throws WalletContentionException - forcing the whole
     // award tx (milestone claim + re-read + both awards) to restart.
     const { ws: realWallet } = buildServices();
     let threw = false;

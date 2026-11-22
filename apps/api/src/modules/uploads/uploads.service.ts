@@ -11,7 +11,7 @@ import * as path from 'path';
 import sharp from 'sharp';
 import { PrismaService } from '../../database/prisma.service';
 
-// Path segments must match this shape — no separators, dots, or traversal.
+// Path segments must match this shape - no separators, dots, or traversal.
 const SAFE_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 
 // All stored uploads are re-encoded to webp; extensions are server-assigned.
@@ -59,7 +59,7 @@ export class UploadsService {
   }
 
   /**
-   * A04: the upload "taskId" is a TaskCompletion id — the caller must own that
+   * A04: the upload "taskId" is a TaskCompletion id - the caller must own that
    * assignment. Resolves the on-disk directory server-side with containment
    * enforcement and returns a server-generated filename.
    */

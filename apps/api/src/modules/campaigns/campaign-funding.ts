@@ -1,12 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 
-const INCONSISTENT = 'Inconsistent campaign funding ledger — manual review required.';
+const INCONSISTENT = 'Inconsistent campaign funding ledger - manual review required.';
 
 /**
  * Validate a campaign row read under FOR UPDATE, field by field.
  * Malformed counters (negative, non-integer, oversubscribed) are a data
- * integrity problem — cancellation must fail closed for manual review
+ * integrity problem - cancellation must fail closed for manual review
  * rather than refund against impossible numbers.
  */
 export function assertValidCampaignCounters(row: {
@@ -24,14 +24,14 @@ export function assertValidCampaignCounters(row: {
     row.credit_per_task <= 0 ||
     row.completed_slots + row.pending_slots > row.total_slots
   ) {
-    throw new BadRequestException('Inconsistent campaign counters — manual review required.');
+    throw new BadRequestException('Inconsistent campaign counters - manual review required.');
   }
 }
 
 /**
  * Resolve how much of a requested campaign cancellation refund may be
  * issued. Every campaign-linked funding and refund record is validated
- * BEFORE the result is decided — a zero requested refund or absent
+ * BEFORE the result is decided - a zero requested refund or absent
  * funding never bypasses ledger checks.
  *
  * Funding semantics:
@@ -98,7 +98,7 @@ export async function resolveFundedRefund(
 
   if (funded === 0) {
     if (refunded > 0) throw new BadRequestException(INCONSISTENT);
-    return 0; // genuinely unfunded — nothing to refund
+    return 0; // genuinely unfunded - nothing to refund
   }
 
   const refundable = funded - campaign.feeAmount - refunded;

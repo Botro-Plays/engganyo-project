@@ -166,7 +166,7 @@ export class ChannelsService implements OnModuleInit {
       }
     }
 
-    // Idempotent join — existing members return BEFORE the rate limit.
+    // Idempotent join - existing members return BEFORE the rate limit.
     // Socket clients re-emit channel:join on every connect/reconnect and
     // page load; charging those against the new-join quota locked members
     // out of their own channel's live messages after a few reloads.
@@ -305,7 +305,7 @@ export class ChannelsService implements OnModuleInit {
     if (until > new Date()) {
       return { muted: true, until };
     }
-    // Mute expired — clean up
+    // Mute expired - clean up
     await this.prisma.platformConfig.deleteMany({ where: { key: `chat:mute:${userId}` } });
     return { muted: false };
   }
@@ -408,7 +408,7 @@ export class ChannelsService implements OnModuleInit {
       },
       tip: null,
     };
-    // Broadcast to channel room members — REST sends bypass the gateway's
+    // Broadcast to channel room members - REST sends bypass the gateway's
     // chat:send handler, so without this emit recipients only see the
     // message on their next refetch.
     this.eventEmitter.emit('channel.message.created', { channelId, message: dto });
@@ -444,7 +444,7 @@ export class ChannelsService implements OnModuleInit {
     senderId: string,
   ) {
     try {
-      // Extract @username mentions (alphanumeric, underscore, hyphen — up to 30 chars)
+      // Extract @username mentions (alphanumeric, underscore, hyphen - up to 30 chars)
       const mentionRegex = /@([a-zA-Z0-9_-]{1,30})/g;
       const usernames: string[] = [];
       let match;
@@ -576,7 +576,7 @@ export class ChannelsService implements OnModuleInit {
       throw new BadRequestException(validation.reason);
     }
 
-    // Debit + credit + message link in ONE transaction — a failure
+    // Debit + credit + message link in ONE transaction - a failure
     // between them can no longer strand credits mid-transfer.
     const { debitTx, creditTx } = await this.prisma.withTransaction(async (tx) => {
       const d = await this.walletService.debit(fromUserId, amount, {
@@ -604,7 +604,7 @@ export class ChannelsService implements OnModuleInit {
       return { debitTx: d, creditTx: c };
     });
 
-    // Record tip in 48h sliding window budget (Redis — non-transactional)
+    // Record tip in 48h sliding window budget (Redis - non-transactional)
     await this.recordTipInWindow(fromUserId, amount);
 
     // Emit real-time notifications
@@ -644,7 +644,7 @@ export class ChannelsService implements OnModuleInit {
     if (count > opts.limit) {
       const retryAfter = await this.redis.ttl(key);
       throw new BadRequestException(
-        `Rate limit exceeded — try again in ${retryAfter}s`,
+        `Rate limit exceeded - try again in ${retryAfter}s`,
       );
     }
   }
@@ -781,7 +781,7 @@ export class ChannelsService implements OnModuleInit {
     });
     const senderName = sender?.displayName ?? sender?.username ?? 'Someone';
 
-    // All debits and credits in ONE transaction — a mid-loop failure can
+    // All debits and credits in ONE transaction - a mid-loop failure can
     // no longer distribute a partial rain.
     await this.prisma.withTransaction(async (tx) => {
       for (let i = 0; i < selected.length; i++) {

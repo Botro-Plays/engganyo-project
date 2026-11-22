@@ -94,7 +94,7 @@ function AuthInitializer() {
 
     // Reconcile store vs. localStorage: apiClient sends localStorage's
     // access_token (refresh writes there first), while the persisted store
-    // token can be staler — e.g. sessions from before the refresh-sync
+    // token can be staler - e.g. sessions from before the refresh-sync
     // fix. Socket auth reads the store, so adopt the fresher token.
     const lsToken = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     if (lsToken && lsToken !== accessToken) {
@@ -112,7 +112,7 @@ function AuthInitializer() {
         }
       })
       .catch(() => {
-        // Silently fail — AuthGuard will handle unauthenticated state
+        // Silently fail - AuthGuard will handle unauthenticated state
       });
   }, [hasHydrated, accessToken, setUser]);
 
@@ -126,7 +126,7 @@ export function AuthenticatedProviders({ children }: { children: React.ReactNode
       const res = await apiClient.get<ApiResponse<PublicConfig>>('auth/public-config');
       return res.data.data;
     },
-    // Config changes are admin-driven and rare — a short cache keeps
+    // Config changes are admin-driven and rare - a short cache keeps
     // routine page mounts from stampeding the API on cold loads.
     staleTime: 60_000,
     refetchOnMount: true,

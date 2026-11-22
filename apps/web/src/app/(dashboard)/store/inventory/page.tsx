@@ -226,7 +226,7 @@ export default function InventoryPage() {
                     {!isCosmetic && entry.provenance && entry.provenance !== 'PURCHASE' && (
                       <span
                         className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/5 text-sc-dim border border-white/10"
-                        title={entry.provenance === 'MARKETPLACE' ? 'Bought on the marketplace — resellable' : 'Bound to your account'}
+                        title={entry.provenance === 'MARKETPLACE' ? 'Bought on the marketplace - resellable' : 'Bound to your account'}
                       >
                         {PROVENANCE_LABELS[entry.provenance] ?? entry.provenance}
                       </span>

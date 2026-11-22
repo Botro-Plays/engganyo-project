@@ -121,7 +121,7 @@ export class RoomsService {
 
   private assertActive(room: { status: RoomStatus; expiresAt: Date | null }, now = new Date()) {
     if (!ACTIVE_STATUSES.includes(room.status)) {
-      throw new ConflictException(`Room is ${room.status.toLowerCase()} — no further actions allowed`);
+      throw new ConflictException(`Room is ${room.status.toLowerCase()} - no further actions allowed`);
     }
     if (room.expiresAt && room.expiresAt <= now) {
       throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
@@ -141,8 +141,7 @@ export class RoomsService {
    * Evidence-scored same-IP check for room joins.
    *
    * Returns 'block' | 'low' | 'medium' | null (no shared IP → nothing to do).
-   * The old rule hard-blocked ANY join whose IP matched a creator session —
-   * which also blocked legitimate pairs on one household/office/CGNAT
+   * The old rule hard-blocked ANY join whose IP matched a creator session - * which also blocked legitimate pairs on one household/office/CGNAT
    * connection. Rooms pay no wallet credits (only +1 P2P point), so the
    * yield being protected is small; the rule therefore blocks only on
    * high-confidence farming signals and flags everything else for review:
@@ -152,9 +151,9 @@ export class RoomsService {
    *    IP (burner-pair pattern); or the pair already completed ≥5 rooms in
    *    7d while sharing an IP (industrial farming loop).
    *  - 'medium': one side is new (<7d) or the pair shares a registration
-   *    IP, or ≥3 completed same-IP rooms in 7d — allowed, flagged for
+   *    IP, or ≥3 completed same-IP rooms in 7d - allowed, flagged for
    *    admin review.
-   *  - 'low': both accounts established — allowed, flagged for review.
+   *  - 'low': both accounts established - allowed, flagged for review.
    */
   private async assessRoomSameIp(
     joinerId: string,
@@ -218,7 +217,7 @@ export class RoomsService {
   // Every room-state mutation takes this row lock FIRST inside its
   // transaction, then re-reads status/deadline before writing. This
   // serializes offer edits vs agreement, proof/review/cancel/dispute vs
-  // the expiry sweep, and chat purge vs late reports — the conditional
+  // the expiry sweep, and chat purge vs late reports - the conditional
   // UPDATE guards remain as backstops for paths that don't lock.
   private async lockRoom(tx: Tx, roomId: string) {
     await tx.$executeRaw`SELECT id FROM challenge_rooms WHERE id = ${roomId} FOR UPDATE`;
@@ -236,7 +235,7 @@ export class RoomsService {
     });
   }
 
-  // Re-read helpers used after lockRoom() — callers verify the status
+  // Re-read helpers used after lockRoom() - callers verify the status
   // set and deadline appropriate to their action against this fresh row.
   private roomDeadlinePassed(room: { status: RoomStatus; expiresAt: Date | null; claimExpiresAt: Date }, now = new Date()) {
     const deadline = room.status === RoomStatus.OPEN ? room.claimExpiresAt : room.expiresAt;
@@ -256,7 +255,7 @@ export class RoomsService {
   ): Date {
     if (clientDeadline === undefined || clientDeadline === null || clientDeadline === '') {
       if (!room.expiresAt) {
-        throw new ConflictException('Room deadline unavailable — cannot set offer terms');
+        throw new ConflictException('Room deadline unavailable - cannot set offer terms');
       }
       return room.expiresAt;
     }
@@ -264,8 +263,7 @@ export class RoomsService {
     if (Number.isNaN(parsed.getTime())) {
       throw new BadRequestException('Offer deadline must be a valid date');
     }
-    // Naive datetimes ("2026-11-10T10:49") parse in the SERVER's timezone —
-    // silently shifting the instant for clients in other zones. Require an
+    // Naive datetimes ("2026-11-10T10:49") parse in the SERVER's timezone - // silently shifting the instant for clients in other zones. Require an
     // explicit offset/Z so the stored deadline means the same thing to
     // everyone. (UI clients omit the field entirely and inherit the room
     // deadline.)
@@ -288,7 +286,7 @@ export class RoomsService {
     }
     const reviewable: RoomStatus[] = [RoomStatus.AGREED, RoomStatus.IN_PROGRESS, RoomStatus.SUBMITTED];
     if (!reviewable.includes(room.status)) {
-      throw new ConflictException(`Room is ${room.status.toLowerCase()} — reviews only apply while the room is active`);
+      throw new ConflictException(`Room is ${room.status.toLowerCase()} - reviews only apply while the room is active`);
     }
     if (room.expiresAt && room.expiresAt <= now) {
       throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
@@ -384,7 +382,7 @@ export class RoomsService {
       }),
     ]);
     return {
-      // claimSecondsRemaining is the single claim-window field — the UI
+      // claimSecondsRemaining is the single claim-window field - the UI
       // keys Join eligibility off it. secondsRemaining stays reserved for
       // the active-room deadline (expiresAt) everywhere else.
       rooms: rooms.map((r) => ({ ...r, claimSecondsRemaining: Math.max(0, Math.floor((r.claimExpiresAt.getTime() - now.getTime()) / 1000)) })),
@@ -527,7 +525,7 @@ export class RoomsService {
       await this.redis.del(`room:pwfail:${roomId}:${ip}`);
     }
 
-    // Same-IP evidence check — distinguishes legitimate pairs (household,
+    // Same-IP evidence check - distinguishes legitimate pairs (household,
     // office, CGNAT, friends on one connection) from reward farming.
     // Rooms pay no wallet credits (only +1 P2P point), so same-IP joins are
     // allowed when the accounts show independent establishment; only
@@ -546,7 +544,7 @@ export class RoomsService {
         { clientIp: ip, creatorId: room.creatorId, roomId, verdict: ipVerdict }).catch(() => null);
     }
 
-    // Pair-frequency signal: flag for review beyond the weekly cap (allow — admins review)
+    // Pair-frequency signal: flag for review beyond the weekly cap (allow - admins review)
     const cfg = await this.getConfig();
     const weekAgo = new Date(Date.now() - 7 * 24 * 3600_000);
     const pairRooms = await this.prisma.challengeRoom.count({
@@ -567,7 +565,7 @@ export class RoomsService {
     const expiresAt = new Date(now.getTime() + cfg.activeMinutes * 60_000);
 
     const joined = await this.prisma.$transaction(async (tx) => {
-      // 1) Active-room slot — unique partial index; loser gets 23505 → 409,
+      // 1) Active-room slot - unique partial index; loser gets 23505 → 409,
       //    no debit, no membership.
       await tx.roomParticipation.create({
         data: { userId, roomId, role: RoomRole.CLAIMER },
@@ -626,7 +624,7 @@ export class RoomsService {
         throw new ConflictException('ACTIVE_ROOM_EXISTS: you already have an active room');
       }
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
-        throw new ConflictException('Room state changed — please retry');
+        throw new ConflictException('Room state changed - please retry');
       }
       throw err;
     });
@@ -634,7 +632,7 @@ export class RoomsService {
     this.notifyRoom(room.creatorId, roomId, NotificationType.ROOM_UPDATE,
       'Room joined', `${room.claimer?.username ?? 'A player'} joined your P2P room. The 30-minute clock has started.`);
     this.notifyRoom(userId, roomId, NotificationType.ROOM_UPDATE,
-      'You joined a P2P room', `Room "${room.title}" is live — finish before the deadline.`);
+      'You joined a P2P room', `Room "${room.title}" is live - finish before the deadline.`);
     this.events.emitToUser(room.creatorId, 'room:joined', { roomId });
     this.events.emitToUser(userId, 'room:joined', { roomId });
 
@@ -748,7 +746,7 @@ export class RoomsService {
     const room = await this.findRoom(roomId);
     const myRole = this.roleOf(room, userId);
     if (!myRole) throw new ForbiddenException('Not a room participant');
-    // Fast-fail pre-checks only — authoritative state is re-read under the
+    // Fast-fail pre-checks only - authoritative state is re-read under the
     // room-row lock inside the transaction (same lock approve() takes, so
     // an edit can never interleave with the second approval).
     if (room.status !== RoomStatus.NEGOTIATING) {
@@ -780,7 +778,7 @@ export class RoomsService {
         throw new ConflictException('ROOM_CLOSED: the room deadline has passed');
       }
       // Deadline is validated against FRESH server time and the locked
-      // room row — a client-supplied deadline may not be invalid, past,
+      // room row - a client-supplied deadline may not be invalid, past,
       // or beyond the room expiry. When omitted it defaults to the room
       // deadline, so offer terms can never outlive the room clock.
       const offerDeadline = this.resolveOfferDeadline(dto.deadline, fresh);
@@ -813,7 +811,7 @@ export class RoomsService {
     });
 
     this.notifyRoom(this.counterpartyId(room, userId), roomId, NotificationType.ROOM_UPDATE,
-      'Offer updated', 'Your room partner updated their offer — review and re-approve.');
+      'Offer updated', 'Your room partner updated their offer - review and re-approve.');
     this.events.emitToUser(this.counterpartyId(room, userId), 'room:offer-updated', { roomId, version: offer.version });
     return offer;
   }
@@ -824,17 +822,17 @@ export class RoomsService {
     const room = await this.findRoom(roomId);
     const myRole = this.roleOf(room, userId);
     if (!myRole) throw new ForbiddenException('Not a room participant');
-    // Fast-fail pre-checks only — status, deadline, and BOTH offer versions
+    // Fast-fail pre-checks only - status, deadline, and BOTH offer versions
     // are re-read under the room-row lock inside the transaction so an
     // approval can never be recorded against offer versions that a
     // concurrently-committed edit already replaced.
     if (room.status !== RoomStatus.NEGOTIATING) {
-      throw new ConflictException(`Room is ${room.status.toLowerCase()} — approvals only apply while negotiating`);
+      throw new ConflictException(`Room is ${room.status.toLowerCase()} - approvals only apply while negotiating`);
     }
     this.assertActive(room);
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // Lock the room row FIRST — same lock upsertOffer() takes — then
+      // Lock the room row FIRST - same lock upsertOffer() takes - then
       // re-read room state AND the persisted offer versions.
       await this.lockRoom(tx, roomId);
       const fresh = await this.readLockedRoom(tx, roomId);
@@ -856,19 +854,19 @@ export class RoomsService {
         throw new BadRequestException('Both players must propose an offer before approving');
       }
 
-      // Optional stale-version guard — against the LOCKED versions.
+      // Optional stale-version guard - against the LOCKED versions.
       if (dto.creatorVersion && dto.creatorVersion !== creatorOffer.version) {
-        throw new ConflictException('STALE_VERSION: the creator offer changed — refresh and re-approve');
+        throw new ConflictException('STALE_VERSION: the creator offer changed - refresh and re-approve');
       }
       if (dto.claimerVersion && dto.claimerVersion !== claimerOffer.version) {
-        throw new ConflictException('STALE_VERSION: the joiner offer changed — refresh and re-approve');
+        throw new ConflictException('STALE_VERSION: the joiner offer changed - refresh and re-approve');
       }
 
       // An offer whose deadline lapsed during negotiation must not become
-      // binding — agreement is refused until both offers carry live terms.
+      // binding - agreement is refused until both offers carry live terms.
       const approveNow = new Date();
       if (creatorOffer.deadline <= approveNow || claimerOffer.deadline <= approveNow) {
-        throw new ConflictException('OFFER_EXPIRED: an offer deadline has passed — update the offers and re-approve');
+        throw new ConflictException('OFFER_EXPIRED: an offer deadline has passed - update the offers and re-approve');
       }
 
       const approval = {
@@ -890,7 +888,7 @@ export class RoomsService {
         { creatorVersion: number; claimerVersion: number } | null;
 
       // Both players must have approved the CURRENT persisted offer
-      // versions — a stored approval for superseded versions never counts.
+      // versions - a stored approval for superseded versions never counts.
       const agreed =
         !!cApproval && !!jApproval &&
         cApproval.creatorVersion === creatorOffer.version &&
@@ -932,8 +930,8 @@ export class RoomsService {
     });
 
     if (result.agreed) {
-      this.notifyRoom(room.creatorId, roomId, NotificationType.ROOM_UPDATE, 'Room agreed', 'Both players approved — the room charge was collected. Time to do the tasks!');
-      this.notifyRoom(room.claimerId!, roomId, NotificationType.ROOM_UPDATE, 'Room agreed', 'Both players approved — the room charge was collected. Time to do the tasks!');
+      this.notifyRoom(room.creatorId, roomId, NotificationType.ROOM_UPDATE, 'Room agreed', 'Both players approved - the room charge was collected. Time to do the tasks!');
+      this.notifyRoom(room.claimerId!, roomId, NotificationType.ROOM_UPDATE, 'Room agreed', 'Both players approved - the room charge was collected. Time to do the tasks!');
       this.events.emitToUser(room.creatorId, 'room:agreed', { roomId });
       this.events.emitToUser(room.claimerId!, 'room:agreed', { roomId });
       return { agreed: true, status: 'AGREED', roomCharge: room.roomCharge };
@@ -987,7 +985,7 @@ export class RoomsService {
 
       // Recycled-proof check inside the lock: same-room resubmissions
       // serialize, so a committed duplicate hash is always visible here.
-      // (Cross-room same-hash races remain best-effort — no unique index,
+      // (Cross-room same-hash races remain best-effort - no unique index,
       // since identical-image resubmission after rejection is legitimate.)
       if (dto.proofHash) {
         const recycled = await tx.roomSubmission.findFirst({
@@ -1038,7 +1036,7 @@ export class RoomsService {
     // Peer reviewer = the offer proposer
     const reviewerId = offer.proposerId;
     this.notifyRoom(reviewerId, roomId, NotificationType.ROOM_UPDATE,
-      'Proof submitted', 'Your room partner submitted proof — review it before the deadline.');
+      'Proof submitted', 'Your room partner submitted proof - review it before the deadline.');
     this.events.emitToUser(reviewerId, 'room:proof-submitted', { roomId, submissionId: submission.id });
     return submission;
   }
@@ -1076,7 +1074,7 @@ export class RoomsService {
 
     if (dto.action === 'approve') {
       const completed = await this.prisma.$transaction(async (tx) => {
-        // Lock the room row and re-verify it is still reviewable — a proof
+        // Lock the room row and re-verify it is still reviewable - a proof
         // review can never commit against a room the sweep just expired.
         await this.lockRoom(tx, room.id);
         const freshRoom = await this.readLockedRoom(tx, room.id);
@@ -1106,7 +1104,7 @@ export class RoomsService {
         }
         if (!allApproved) return false;
 
-        // Terminal transition — expiresAt > now() is enforced IN the WHERE
+        // Terminal transition - expiresAt > now() is enforced IN the WHERE
         // clause so a completion racing expiry loses deterministically.
         const txNow = new Date();
         const done = await tx.challengeRoom.updateMany({
@@ -1121,7 +1119,7 @@ export class RoomsService {
           throw new ConflictException('ROOM_CLOSED: the deadline passed before completion committed');
         }
 
-        // Exactly-once P2P points — @@unique(userId, roomId) backstop.
+        // Exactly-once P2P points - @@unique(userId, roomId) backstop.
         await tx.p2pPointEvent.createMany({
           data: [
             { userId: room.creatorId, roomId: room.id, role: RoomRole.CREATOR, points: 1 },
@@ -1138,8 +1136,8 @@ export class RoomsService {
       });
 
       if (completed) {
-        this.notifyRoom(room.creatorId, room.id, NotificationType.ROOM_UPDATE, 'Room completed!', 'Both tasks verified — you each earned +1 P2P point. Rate your partner!');
-        this.notifyRoom(room.claimerId!, room.id, NotificationType.ROOM_UPDATE, 'Room completed!', 'Both tasks verified — you each earned +1 P2P point. Rate your partner!');
+        this.notifyRoom(room.creatorId, room.id, NotificationType.ROOM_UPDATE, 'Room completed!', 'Both tasks verified - you each earned +1 P2P point. Rate your partner!');
+        this.notifyRoom(room.claimerId!, room.id, NotificationType.ROOM_UPDATE, 'Room completed!', 'Both tasks verified - you each earned +1 P2P point. Rate your partner!');
         this.events.emitToUser(room.creatorId, 'room:completed', { roomId: room.id });
         this.events.emitToUser(room.claimerId!, 'room:completed', { roomId: room.id });
         return { reviewed: true, action: 'approve', completed: true };
@@ -1196,7 +1194,7 @@ export class RoomsService {
     });
     this.events.emitToAdmins('room:dispute', { roomId: room.id, submissionId });
     this.notifyRoom(this.counterpartyId(room, userId), room.id, NotificationType.ROOM_UPDATE,
-      'Dispute opened', 'A proof dispute was opened — moderators will review. The room deadline still applies.');
+      'Dispute opened', 'A proof dispute was opened - moderators will review. The room deadline still applies.');
     return { reviewed: true, action: 'dispute' };
   }
 
@@ -1238,7 +1236,7 @@ export class RoomsService {
     });
     this.events.emitToAdmins('room:dispute', { roomId, reason: dto.reason });
     this.notifyRoom(this.counterpartyId(room, userId), roomId, NotificationType.ROOM_UPDATE,
-      'Room dispute opened', 'Your room partner opened a dispute — moderators will review.');
+      'Room dispute opened', 'Your room partner opened a dispute - moderators will review.');
     return { disputed: true };
   }
 
@@ -1247,7 +1245,7 @@ export class RoomsService {
     const myRole = this.roleOf(room, userId);
     if (!myRole) throw new ForbiddenException('Not a room participant');
     if (!PRE_AGREEMENT_STATUSES.includes(room.status)) {
-      throw new ConflictException('Rooms can only be cancelled before agreement — open a dispute instead');
+      throw new ConflictException('Rooms can only be cancelled before agreement - open a dispute instead');
     }
     // OPEN listings expire on claimExpiresAt; NEGOTIATING rooms on expiresAt.
     const deadline = room.status === RoomStatus.OPEN ? room.claimExpiresAt : room.expiresAt;
@@ -1263,7 +1261,7 @@ export class RoomsService {
         throw new ForbiddenException('Not a room participant');
       }
       if (!PRE_AGREEMENT_STATUSES.includes(fresh.status)) {
-        throw new ConflictException('Rooms can only be cancelled before agreement — open a dispute instead');
+        throw new ConflictException('Rooms can only be cancelled before agreement - open a dispute instead');
       }
       // OPEN listings expire on claimExpiresAt; NEGOTIATING rooms on expiresAt.
       // The deadline is re-checked under the lock so a cancel can never
@@ -1276,12 +1274,12 @@ export class RoomsService {
         data: { status: RoomStatus.CLOSED, closedAt: now, closeReason: 'PLAYER_CANCEL', updatedAt: now },
       });
       if (closed.count !== 1) throw new ConflictException('Room state changed');
-      // Refund from the LOCKED row — a join may have committed between the
+      // Refund from the LOCKED row - a join may have committed between the
       // pre-check read and this transaction, so fresh.claimerId is the
       // authoritative payer set (never refund from the stale snapshot).
-      await this.refundContribution(tx, fresh.creatorId, fresh.contributionCredits, roomId, 'Room cancelled — contribution refunded');
+      await this.refundContribution(tx, fresh.creatorId, fresh.contributionCredits, roomId, 'Room cancelled - contribution refunded');
       if (fresh.claimerId) {
-        await this.refundContribution(tx, fresh.claimerId, fresh.contributionCredits, roomId, 'Room cancelled — contribution refunded');
+        await this.refundContribution(tx, fresh.claimerId, fresh.contributionCredits, roomId, 'Room cancelled - contribution refunded');
       }
       await tx.roomParticipation.updateMany({
         where: { roomId, releasedAt: null },
@@ -1290,7 +1288,7 @@ export class RoomsService {
       return fresh;
     });
     this.notifyRoom(this.counterpartyId(cancelled, userId), roomId, NotificationType.ROOM_UPDATE,
-      'Room closed', 'The room was cancelled — both contributions were refunded.');
+      'Room closed', 'The room was cancelled - both contributions were refunded.');
     return { cancelled: true };
   }
 
@@ -1415,8 +1413,7 @@ export class RoomsService {
       select: { score: true, roomId: true, room: { select: { closedAt: true } } },
     });
     // Anti-retaliation: a rating counts publicly only once its reveal window
-    // closed or BOTH participants rated the room. Ratings are directional —
-    // each targets the counterparty — so "both submitted" must count all
+    // closed or BOTH participants rated the room. Ratings are directional - // each targets the counterparty - so "both submitted" must count all
     // ratings in the room, not just those targeting this ratee.
     const roomIds = [...new Set(ratings.map((r) => r.roomId))];
     const roomCounts = roomIds.length
@@ -1501,7 +1498,7 @@ export class RoomsService {
     });
     for (const room of expiredOpen) {
       await this.prisma.$transaction(async (tx) => {
-        // Same room-row lock as every other room mutation — expiry
+        // Same room-row lock as every other room mutation - expiry
         // serializes against join/cancel/report instead of racing them.
         await this.lockRoom(tx, room.id);
         const closed = await tx.challengeRoom.updateMany({
@@ -1526,7 +1523,7 @@ export class RoomsService {
       },
       take: 100,
     });
-    // AGREED is already inside ACTIVE_STATUSES — dedupe not needed but harmless.
+    // AGREED is already inside ACTIVE_STATUSES - dedupe not needed but harmless.
     for (const room of expiredActive) {
       await this.expireActiveRoom(room, now)
         .catch((err) => this.logger.warn(`Failed to expire room ${room.id}: ${err}`));
@@ -1540,8 +1537,8 @@ export class RoomsService {
     now: Date,
   ) {
     await this.prisma.$transaction(async (tx) => {
-      // Lock the room row first — the same lock held by approve/edit/
-      // submit/review/cancel/dispute — so expiry and room actions
+      // Lock the room row first - the same lock held by approve/edit/
+      // submit/review/cancel/dispute - so expiry and room actions
       // serialize deterministically instead of interleaving writes.
       await this.lockRoom(tx, room.id);
       const expired = await tx.challengeRoom.updateMany({
@@ -1552,7 +1549,7 @@ export class RoomsService {
         },
         data: { status: RoomStatus.EXPIRED, closedAt: now, closeReason: 'ACTIVE_TIMEOUT', updatedAt: now },
       });
-      if (expired.count !== 1) return; // already terminal or completed — sweep is idempotent
+      if (expired.count !== 1) return; // already terminal or completed - sweep is idempotent
 
       await this.refundContribution(tx, room.creatorId, room.contributionCredits, room.id, `Room expired: ${room.title}`);
       if (room.claimerId) {
@@ -1574,19 +1571,19 @@ export class RoomsService {
       select: { creatorId: true, claimerId: true },
     });
     if (full?.creatorId) {
-      this.notifyRoom(full.creatorId, room.id, NotificationType.ROOM_UPDATE, 'Room expired', 'The 30-minute deadline passed — both contributions were refunded.');
+      this.notifyRoom(full.creatorId, room.id, NotificationType.ROOM_UPDATE, 'Room expired', 'The 30-minute deadline passed - both contributions were refunded.');
     }
     if (full?.claimerId) {
-      this.notifyRoom(full.claimerId, room.id, NotificationType.ROOM_UPDATE, 'Room expired', 'The 30-minute deadline passed — both contributions were refunded.');
+      this.notifyRoom(full.claimerId, room.id, NotificationType.ROOM_UPDATE, 'Room expired', 'The 30-minute deadline passed - both contributions were refunded.');
     }
   }
 
   // ─── Room chat retention ───────────────────────────────────
   // Room chat is retained for room_chat_retention_days (default 90) after
-  // the room closes, then purged — UNLESS an unresolved moderation hold
+  // the room closes, then purged - UNLESS an unresolved moderation hold
   // exists (open room dispute, or open report scoped to the room or to a
   // message in its channel). Held rooms keep their full history and stay
-  // eligible — they are re-checked on every pass. Resolved/dismissed
+  // eligible - they are re-checked on every pass. Resolved/dismissed
   // message reports are detached (messageId → null) before deletion so
   // the moderation record itself survives the purge.
   //
@@ -1641,7 +1638,7 @@ export class RoomsService {
         where: {
           channelId: { not: null },
           closedAt: { not: null, lte: cutoff },
-          // Skip channels already emptied by a previous pass — they would
+          // Skip channels already emptied by a previous pass - they would
           // otherwise stay eligible forever and starve later rooms.
           channel: { is: { messages: { some: {} } } },
           id: cursor ? { gt: cursor } : undefined,
@@ -1653,7 +1650,7 @@ export class RoomsService {
 
       if (rooms.length === 0) {
         if (cursor === '') break; // nothing eligible
-        // Tail reached — wrap so the next run re-checks from the head
+        // Tail reached - wrap so the next run re-checks from the head
         // (held rooms keep their messages and remain eligible).
         cursor = '';
         await this.setPurgeCursor(cursor);
@@ -1665,7 +1662,7 @@ export class RoomsService {
         cursor = room.id;
         try {
           const result = await this.prisma.$transaction(async (tx) => {
-            // Same room-row lock as reports/disputes — a moderation action
+            // Same room-row lock as reports/disputes - a moderation action
             // can never slip between the hold check and message deletion.
             await this.lockRoom(tx, room.id);
             const openStatuses = [ReportStatus.OPEN, ReportStatus.UNDER_REVIEW];
@@ -1701,12 +1698,12 @@ export class RoomsService {
         }
       }
 
-      // Persist progress after each batch — durable across restarts and
+      // Persist progress after each batch - durable across restarts and
       // bounded per run; the next scheduled run resumes here.
       await this.setPurgeCursor(cursor);
       hasMore = rooms.length === take;
       if (rooms.length < take) {
-        // Consumed the tail — wrap for the next run.
+        // Consumed the tail - wrap for the next run.
         cursor = '';
         await this.setPurgeCursor(cursor);
         hasMore = false;
@@ -1840,7 +1837,7 @@ export class RoomsService {
     });
     if (!dispute) throw new NotFoundException('Dispute not found');
 
-    // Resolution is an adjudication record ONLY — it never mutates room
+    // Resolution is an adjudication record ONLY - it never mutates room
     // state. A DISPUTED room stays frozen until expiresAt, then the
     // standard expiry sweep refunds both contributions and reverses the
     // room charge exactly once (closeReason ACTIVE_TIMEOUT). Resolving

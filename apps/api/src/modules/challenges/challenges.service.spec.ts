@@ -1,5 +1,5 @@
 /**
- * Unit tests for ChallengesService — lifecycle, economics, and concurrency
+ * Unit tests for ChallengesService - lifecycle, economics, and concurrency
  * guards. Prisma/WalletService are mocked; DB-level atomicity is covered by
  * challenges.integration.spec.ts (requires TEST_DATABASE_URL).
  */
@@ -204,7 +204,7 @@ function makeService(overrides: Partial<Record<string, any>> = {}) {
       create: jest.fn(async ({ data }: any) => { state.auditLogs.push(data); return data; }),
     },
     $executeRaw: jest.fn(async (..._args: any[]) => {
-      // Simulate the atomic claim UPDATE — find the OPEN challenge and flip it.
+      // Simulate the atomic claim UPDATE - find the OPEN challenge and flip it.
       // The real SQL is covered by the integration spec; here we emulate the
       // row-lock semantics: first caller wins, second gets 0.
       // ${userId} is always the first interpolation; the challenge id is the
@@ -451,7 +451,7 @@ describe('ChallengesService', () => {
       return service.create('creator1', 'USER', dto);
     }
 
-    it('claims atomically — first eligible claimant wins', async () => {
+    it('claims atomically - first eligible claimant wins', async () => {
       const { service, state } = makeService();
       const ch = await setupOpenChallenge(service, state);
       const res = await service.claim('player2', ch.id, {} as any, '9.9.9.9');
@@ -473,7 +473,7 @@ describe('ChallengesService', () => {
       const res = await service.claim('player2', ch.id, {} as any, '9.9.9.9');
       expect(res.challengeId).toBe(ch.id);
       expect(res.status).toBe(CompletionStatus.ASSIGNED);
-      // Challenge proofs are always creator-reviewed — linking is never consulted.
+      // Challenge proofs are always creator-reviewed - linking is never consulted.
       expect(social.hasLinkedAccount).not.toHaveBeenCalled();
     });
 
@@ -573,7 +573,7 @@ describe('ChallengesService', () => {
       expect(state.revenue[0].source).toBe('CHALLENGE_FEE');
       expect(state.revenue[0].amount).toBe(5);
       expect(state.revenue[0].challengeId).toBe(ch.id);
-      // Second review must be rejected — no double pay
+      // Second review must be rejected - no double pay
       await expect(service.reviewSubmission('creator1', ch.id, completionId, { action: 'approve' }))
         .rejects.toThrow();
       const earnCount = state.wallet.transactions.filter((t) => t.type === TransactionType.EARN_TASK_COMPLETION).length;
@@ -626,7 +626,7 @@ describe('ChallengesService', () => {
       expect(state.wallet.balance).toBe(10_000);
     });
 
-    it('leaves SUBMITTED claims for review — reserve stays held', async () => {
+    it('leaves SUBMITTED claims for review - reserve stays held', async () => {
       const { service, state } = makeService();
       const ch = await service.create('creator1', 'USER', { ...baseDto, expiresInHours: 1 });
       expect(state.wallet.balance).toBe(9_950); // reserve held since create

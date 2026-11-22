@@ -196,7 +196,7 @@ export default function VisitorTrafficPage() {
         <div>
           <h1 className="text-xl font-bold text-sc-text">Visitor analytics</h1>
           <p className="text-sm text-sc-muted">
-            First-party beacon metrics — {activeLabel} · all times UTC
+            First-party beacon metrics - {activeLabel} · all times UTC
             {collectionStart && ` · collecting since ${collectionStart}`}
           </p>
         </div>
@@ -255,13 +255,13 @@ export default function VisitorTrafficPage() {
             <span className="text-sc-text font-medium">Est. uniques</span> = distinct anonymous visitor ids (cookie-based estimate).
           </p>
           <p>
-            Beacon data covers JavaScript page loads only — it is not a count of all HTTP/API requests
+            Beacon data covers JavaScript page loads only - it is not a count of all HTTP/API requests
             (those need edge/origin log ingestion, deferred). Identifiable bots and static/health routes are excluded by default.
             {overview?.note && <span className="text-amber-400/90"> {overview.note}</span>}
           </p>
           {predatesCollection && collectionStart && (
             <p className="text-amber-400/90">
-              Collection began {collectionStart} — dates before that have no data (shown as zero, not missing).
+              Collection began {collectionStart} - dates before that have no data (shown as zero, not missing).
             </p>
           )}
         </div>
@@ -281,7 +281,7 @@ export default function VisitorTrafficPage() {
           <StatCard label="Est. unique visitors" value={totals?.estimatedUniqueVisitors ?? 0} sub="cookie-based estimate" icon={Eye} color="bg-brand-500" />
           <StatCard
             label="Bounce rate"
-            value={totals?.bounceRate != null ? `${totals.bounceRate}%` : '—'}
+            value={totals?.bounceRate != null ? `${totals.bounceRate}%` : 'None'}
             sub="single-page visits"
             icon={Percent}
             color="bg-emerald-500"
@@ -296,7 +296,7 @@ export default function VisitorTrafficPage() {
         {chartData.length === 0 ? (
           <div className="h-[220px] flex flex-col items-center justify-center text-sc-dim text-sm gap-1">
             <Eye className="w-6 h-6 text-sc-dim" />
-            <p>{collectionStart ? 'No traffic recorded in this range' : 'No traffic data yet — the beacon starts collecting on the next deploy'}</p>
+            <p>{collectionStart ? 'No traffic recorded in this range' : 'No traffic data yet - the beacon starts collecting on the next deploy'}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -398,7 +398,7 @@ export default function VisitorTrafficPage() {
                         <td className="py-2.5 pr-4 text-sc-text tabular-nums">{item.uniques.toLocaleString()}</td>
                         <td className="py-2.5 pr-4 text-sc-text tabular-nums">{item.pageViews.toLocaleString()}</td>
                         <td className="py-2.5 pr-4 text-sc-text tabular-nums">
-                          {item.bounceRate != null ? `${item.bounceRate}%` : '—'}
+                          {item.bounceRate != null ? `${item.bounceRate}%` : 'None'}
                         </td>
                       </tr>
                     );
@@ -440,7 +440,7 @@ export default function VisitorTrafficPage() {
         <div className="card-glass rounded-xl p-6">
           <div className="flex items-center gap-2 mb-1">
             <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-sc-text">Recent visitors — IP detail</h2>
+            <h2 className="text-sm font-semibold text-sc-text">Recent visitors - IP detail</h2>
           </div>
           <p className="text-xs text-sc-dim mb-4">
             SUPER_ADMIN only · latest beacon events with IP and user agent · paginated, not exportable
@@ -470,7 +470,7 @@ export default function VisitorTrafficPage() {
                       <td className="py-2 pr-3 text-sc-text font-mono">{e.path}</td>
                       <td className="py-2 pr-3 text-sc-text">{e.country ?? 'Unknown'}</td>
                       <td className="py-2 pr-3 text-sc-text">{e.deviceClass}</td>
-                      <td className="py-2 pr-3 text-sc-text font-mono">{e.ipAddress ?? '—'}</td>
+                      <td className="py-2 pr-3 text-sc-text font-mono">{e.ipAddress ?? 'None'}</td>
                       <td className="py-2 pr-3 text-sc-muted max-w-[160px] truncate">{e.referrerDomain ?? 'direct'}</td>
                       <td className="py-2">
                         {e.isBot && (

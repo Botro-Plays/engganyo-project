@@ -6,7 +6,7 @@ declare module 'axios' {
     skipRetry?: boolean;
     /** Optional/background call (tours, prefs): still attempts the shared
      *  token refresh and retries once, but a FAILED refresh must not clear
-     *  auth state or redirect — the caller handles the error silently.
+     *  auth state or redirect - the caller handles the error silently.
      *  Genuine session expiry is still enforced by the next normal request. */
     optionalAuth?: boolean;
   }
@@ -58,7 +58,7 @@ apiClient.interceptors.request.use(
 );
 
 // ─── Response Interceptor ────────────────────────────────────
-// Handle 401 — refresh token or redirect to login
+// Handle 401 - refresh token or redirect to login
 // Handle 403 ADMIN_2FA_REQUIRED / ADMIN_PIN_REQUIRED
 // ─── Retry config ───────────────────────────────────────────
 const MAX_RETRIES = 3;
@@ -68,7 +68,7 @@ const RETRY_DELAY_MS = 1000;
 // credentials). A refresh cannot help there and the redirect would discard the error.
 const NO_REFRESH_RE = /^\/?auth\/(login|2fa\/verify|2fa\/send-email-code)(\?|$)/;
 
-// Concurrent 401s share ONE in-flight refresh — without this, an expired
+// Concurrent 401s share ONE in-flight refresh - without this, an expired
 // access token makes every pending query fire its own /auth/refresh and
 // the refresh endpoint's own throttle turns the burst into logouts.
 let refreshPromise: Promise<string> | null = null;
@@ -84,7 +84,7 @@ function refreshAccessToken(): Promise<string> {
       .then((res) => {
         const token = res.data.data.accessToken;
         localStorage.setItem('access_token', token);
-        // Keep the zustand store in sync — socket clients authenticate with
+        // Keep the zustand store in sync - socket clients authenticate with
         // store.accessToken, and without this they keep retrying the expired
         // login-time token forever ("reconnecting…" with dead chat).
         useAuthStore.setState({ accessToken: token });
@@ -97,8 +97,7 @@ function refreshAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
-/** Query-level retry policy: never amplify client errors (incl. 429) —
- *  the next poll interval is the natural retry. Server/network errors get
+/** Query-level retry policy: never amplify client errors (incl. 429) - *  the next poll interval is the natural retry. Server/network errors get
  *  one retry, matching the previous global default. */
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   if (axios.isAxiosError(error)) {
@@ -109,7 +108,7 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 }
 
 function shouldRetry(error: AxiosError, config?: InternalAxiosRequestConfig): boolean {
-  // Mutations can opt out — a replayed non-idempotent POST is not safe.
+  // Mutations can opt out - a replayed non-idempotent POST is not safe.
   if (config?.skipRetry) {
     return false;
   }
@@ -186,12 +185,12 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch {
         // Refresh failed. Optional/background calls never tear down the
-        // session — a flaky tour/prefs request must not log out a valid
+        // session - a flaky tour/prefs request must not log out a valid
         // user. The next ordinary request enforces genuine expiry.
         if (originalRequest.optionalAuth) {
           return Promise.reject(error);
         }
-        // Refresh failed — clear tokens and redirect to login
+        // Refresh failed - clear tokens and redirect to login
         localStorage.removeItem('access_token');
         // Also clear zustand store so UI doesn't show stale authenticated state
         useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false, adminPin: null });
@@ -225,7 +224,7 @@ export function getApiErrorMessage(error: unknown): string {
 
 // One idempotency key per user-initiated spin; axios retries reuse the same
 // request config so a replayed request returns the stored result. Format must
-// satisfy the API contract /^[A-Za-z0-9_-]{8,128}$/ — crypto.randomUUID()
+// satisfy the API contract /^[A-Za-z0-9_-]{8,128}$/ - crypto.randomUUID()
 // (36 chars, hex + hyphens) does; the fallback is digits + '-' + base36.
 export function createSpinIdempotencyKey(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -235,7 +234,7 @@ export function createSpinIdempotencyKey(): string {
 
 // The wheel spin endpoint rejects with 409 + code PRICE_CHANGED when the
 // authoritative cost differs from the price the UI displayed. This is a
-// definitive rejection — nothing settled — unlike a lost response.
+// definitive rejection - nothing settled - unlike a lost response.
 export function isSpinPriceChanged(error: unknown): boolean {
   return (
     axios.isAxiosError(error) &&

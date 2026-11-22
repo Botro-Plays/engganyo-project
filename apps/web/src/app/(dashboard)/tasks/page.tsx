@@ -42,7 +42,7 @@ const TASK_TYPE_TO_PLATFORM: Record<string, string> = {
 
 // Mirrors SocialAuthService.requiresLinkedAccount on the API: a linked
 // account is required only when the offer's verification path uses the
-// platform API — an API-verified task type configured for autoVerify.
+// platform API - an API-verified task type configured for autoVerify.
 // Manual-review offers (autoVerify=false, and all 1v1 challenges, which are
 // always creator-reviewed) complete via screenshot with any account.
 const LINK_REQUIRED_TASK_TYPES = new Set([
@@ -120,7 +120,7 @@ const FILTER_PLATFORM_ORDER = [
   'DISCORD', 'TWITCH', 'SPOTIFY', 'TRUSTPILOT', 'GOOGLE', 'YOUTUBE',
 ];
 
-// Initial discovery batch — two desktop rows of three. "Show more" appends
+// Initial discovery batch - two desktop rows of three. "Show more" appends
 // the next batch; batch size is a design-review decision recorded in
 // docs/JOMAR_IMMEDIATE_PRIORITIES.md.
 const BROWSE_PAGE_SIZE = 6;
@@ -209,7 +209,7 @@ const MY_TASK_STATUS: Record<string, { label: string; color: string; icon: Lucid
 };
 
 // ASSIGNED/IN_PROGRESS past expiresAt is treated as expired for display,
-// ordering, and submit controls — same eligibility rule as the server
+// ordering, and submit controls - same eligibility rule as the server
 // summary. Server-side submission validation remains authoritative.
 const isCompletionExpired = (t: { status: string; expiresAt: string | null }) =>
   (t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS') &&
@@ -217,7 +217,7 @@ const isCompletionExpired = (t: { status: string; expiresAt: string | null }) =>
 const myEffectiveStatus = (t: { status: string; expiresAt: string | null }) =>
   isCompletionExpired(t) ? 'EXPIRED' : t.status;
 
-// Unified offer view — campaign completions carry `campaign`, 1v1 challenge
+// Unified offer view - campaign completions carry `campaign`, 1v1 challenge
 // claims carry `challenge`. Both normalize to the same shape so the grid,
 // My tasks, and the proof modal treat them identically. `id` is the offer id
 // used by tasks/:id/submit (campaign id or challenge id).
@@ -303,13 +303,13 @@ function TasksPageInner() {
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assigningIds, setAssigningIds] = useState<Set<string>>(new Set());
   const assignInFlight = useRef(false);
-  // Completion returned by a successful assign — pinned above the browse grid
+  // Completion returned by a successful assign - pinned above the browse grid
   // so the user can open the target and submit proof without leaving Find tasks.
   const [justAccepted, setJustAccepted] = useState<MyTask | null>(null);
-  // Set when the browser blocked the post-accept tab — the pinned panel then
+  // Set when the browser blocked the post-accept tab - the pinned panel then
   // explains that the Open button is the way to reach the task.
   const [popupBlocked, setPopupBlocked] = useState(false);
-  // Pinned panel for a just-claimed 1v1 challenge — persists even after the
+  // Pinned panel for a just-claimed 1v1 challenge - persists even after the
   // challenge leaves the public list (last-slot disappearance).
   const [justClaimed, setJustClaimed] = useState<{
     challengeId: string;
@@ -823,7 +823,7 @@ function TasksPageInner() {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-sc-text">Task accepted — you can start now</p>
+                  <p className="text-sm font-semibold text-sc-text">Task accepted - you can start now</p>
                   <p className="text-xs text-sc-muted truncate mt-0.5">
                     {acceptedOffer.title} · +{formatCredits(acceptedOffer.creditPerTask)} {creditLabel(acceptedOffer.creditPerTask)} on approval
                   </p>
@@ -855,7 +855,7 @@ function TasksPageInner() {
                   {popupBlocked && (
                     <p className="text-xs text-amber-300/90 flex items-center gap-1.5 mt-3">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      Your browser blocked the new tab — use the Open button above to reach the task.
+                      Your browser blocked the new tab - use the Open button above to reach the task.
                     </p>
                   )}
                 </div>
@@ -941,14 +941,14 @@ function TasksPageInner() {
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
-                      {/* What proof the creator requires — visible BEFORE accepting */}
+                      {/* What proof the creator requires - visible BEFORE accepting */}
                       {task.requiresProof ? (
                         <p className="text-[11px] leading-snug text-amber-300/90 flex items-start gap-1.5 mb-3">
                           <Upload className="w-3.5 h-3.5 shrink-0 mt-px" />
                           <span>
                             <span className="font-medium">Proof required</span>
                             {task.proofInstructions && (
-                              <span className="text-amber-300/60"> — {task.proofInstructions}</span>
+                              <span className="text-amber-300/60"> - {task.proofInstructions}</span>
                             )}
                           </span>
                         </p>
@@ -991,7 +991,7 @@ function TasksPageInner() {
                               <div className={cls}>{'Task done'}</div>
                             ) : (
                               <Link href="/tasks?tab=mine" className={cls} title="Resume in My tasks">
-                                Task accepted — resume
+                                Task accepted - resume
                               </Link>
                             );
                           }
@@ -1058,7 +1058,7 @@ function TasksPageInner() {
             <div>
               <p className="text-sm font-semibold text-brand-200">Looking for mutual P2P rooms?</p>
               <p className="mt-0.5 text-xs text-sc-muted">
-                Rooms are different from challenges — both players stake equal credits, do each other&apos;s tasks,
+                Rooms are different from challenges - both players stake equal credits, do each other&apos;s tasks,
                 and peer-review proof. No credit rewards; finish in time to earn a P2P point.
               </p>
             </div>
@@ -1066,7 +1066,7 @@ function TasksPageInner() {
           </Link>
           <div className="flex items-center justify-between mb-4 gap-3">
             <p className="text-xs text-sc-text">
-              Player-vs-player duels — one slot, one winner, creator-reviewed proof.
+              Player-vs-player duels - one slot, one winner, creator-reviewed proof.
             </p>
             <button
               onClick={() => setShowChallengeForm(true)}
@@ -1081,7 +1081,7 @@ function TasksPageInner() {
               <div className="flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-brand-300 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-sc-text">Challenge claimed — slot is yours</p>
+                  <p className="text-sm font-semibold text-sc-text">Challenge claimed - slot is yours</p>
                   <p className="text-xs text-sc-muted truncate mt-0.5">
                     {justClaimed.card.title} · +{formatCredits(justClaimed.card.rewardCredits)} {creditLabel(justClaimed.card.rewardCredits)} on approval
                   </p>
@@ -1160,7 +1160,7 @@ function TasksPageInner() {
             <div className="card-glass rounded-2xl p-16 text-center">
               <Swords className="w-8 h-8 text-sc-dim mx-auto mb-3" />
               <p className="text-sc-text text-sm">No open challenges right now.</p>
-              <p className="text-sc-dim text-xs mt-1">Create one and challenge another player — or check back later.</p>
+              <p className="text-sc-dim text-xs mt-1">Create one and challenge another player - or check back later.</p>
               <button
                 onClick={() => setShowChallengeForm(true)}
                 className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 min-h-11 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 hover:bg-brand-500/20 text-xs font-medium transition-colors"
@@ -1209,7 +1209,7 @@ function TasksPageInner() {
                           <span>
                             <span className="font-medium">Proof required</span>
                             {ch.proofInstructions && (
-                              <span className="text-amber-300/60"> — {ch.proofInstructions}</span>
+                              <span className="text-amber-300/60"> - {ch.proofInstructions}</span>
                             )}
                           </span>
                         </p>
@@ -1505,7 +1505,7 @@ function TasksPageInner() {
               )}
               {submitOffer.requiresProof && !offerRequiresLinkedAccount(submitOffer.taskType, submitOffer.autoVerify) && (
                 <p className="text-xs text-sc-text mt-2 border-t border-surface-border pt-2">
-                  Manual review — your screenshot must show the completed action and your account identity (username or profile) so the creator can verify it.
+                  Manual review - your screenshot must show the completed action and your account identity (username or profile) so the creator can verify it.
                 </p>
               )}
             </div>

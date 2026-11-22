@@ -70,7 +70,7 @@ export default function ForumPage() {
     },
   });
 
-  // Equipped avatar frames for all visible topic authors — one batched request
+  // Equipped avatar frames for all visible topic authors - one batched request
   const cosmeticsMap = useCosmeticsMap((data?.items ?? []).map((t) => t.author?.id));
 
   return (

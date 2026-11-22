@@ -27,7 +27,7 @@ interface SpinWheelModalProps {
   open: boolean;
   onClose: () => void;
   onSpin: () => Promise<SpinResult>;
-  /** Called when a spin request fails — refresh status/balance, never invent a result. */
+  /** Called when a spin request fails - refresh status/balance, never invent a result. */
   onRecover?: () => void;
   wheelStatus: WheelStatus | undefined;
   /** Current credit balance, shown in the result card once the server settles. */
@@ -43,7 +43,7 @@ interface Segment {
 }
 
 // Visual segments mirror the server prize table in gamification.service.ts
-// (server remains authoritative — animation targets the returned prize id).
+// (server remains authoritative - animation targets the returned prize id).
 const SEGMENTS: Segment[] = [
   { id: 'credits_5', label: '5 Credits', short: '5', color: '#f97316', icon: <Coins className="w-3 h-3" /> },
   { id: 'credits_10', label: '10 Credits', short: '10', color: '#eab308', icon: <Coins className="w-3 h-3" /> },
@@ -105,7 +105,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
   const [result, setResult] = useState<SpinResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Lost-response state: the request may have settled server-side. We never
-  // show an invented prize — recovery refreshes status/balance instead.
+  // show an invented prize - recovery refreshes status/balance instead.
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -154,7 +154,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
       const baseAngle = getBaseAngle(targetIndex);
 
       if (reducedMotion.current) {
-        // Reduced motion: no sweep — land on the result immediately.
+        // Reduced motion: no sweep - land on the result immediately.
         cumulativeRotation.current += 360 * 2 + ((baseAngle - (cumulativeRotation.current % 360) + 360) % 360);
         setRotation(cumulativeRotation.current);
         setResult(spinResult);
@@ -179,7 +179,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
       }, SPIN_DURATION);
     } catch (err) {
       if (isSpinPriceChanged(err)) {
-        // Definitive rejection — the cost changed since the button rendered
+        // Definitive rejection - the cost changed since the button rendered
         // (e.g. the last free spin was taken). Nothing settled; refresh the
         // authoritative status so the button shows the new price, and require
         // a fresh click. Do NOT enter the lost-response recovery state.
@@ -188,7 +188,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
         onRecover?.();
         return;
       }
-      // Lost or failed response — the server may still have settled. Do NOT
+      // Lost or failed response - the server may still have settled. Do NOT
       // present an invented result; offer a status refresh instead.
       setError(err instanceof Error ? err.message : 'Spin failed');
       setUnconfirmed(true);
@@ -237,14 +237,14 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
           </h2>
           <p className="text-xs text-sc-dim mt-1">
             {wheelStatus?.freeSpinAvailable
-              ? 'Free spin available today — prizes up to 100 credits'
+              ? 'Free spin available today - prizes up to 100 credits'
               : wheelStatus
                 ? `${wheelStatus.paidSpinsRemaining} paid spins left · ${wheelStatus.costPerSpin} credits each · max 10/day`
                 : 'Loading spin status…'}
           </p>
         </div>
 
-        {/* Wheel — decorative; prize list is the accessible equivalent */}
+        {/* Wheel - decorative; prize list is the accessible equivalent */}
         <div className="flex justify-center mb-5" aria-hidden="true">
           <div className="relative w-[280px] h-[280px]">
             <div className="absolute inset-0 rounded-full border-4 border-sc-line shadow-[0_0_30px_rgba(232,168,0,0.18)]" />
@@ -324,7 +324,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               disabled={!canSpin || isSpinning}
               className="flex items-center justify-center gap-2 mx-auto py-2.5 px-8 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 hover:border-brand-500/30 text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed min-w-[160px]"
             >
-              {isSpinning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RotateCcw className="w-4 h-4" /> {spinCost === 0 ? 'Spin — Free' : `Spin — ${spinCost} credits`}</>}
+              {isSpinning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><RotateCcw className="w-4 h-4" /> {spinCost === 0 ? 'Spin - Free' : `Spin - ${spinCost} credits`}</>}
             </button>
             {error && <p className="text-xs text-red-400 mt-3" role="alert">{error}</p>}
             {!canSpin && !error && wheelStatus && (
@@ -333,7 +333,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
           </div>
         )}
 
-        {/* Lost-response recovery — never invent a result */}
+        {/* Lost-response recovery - never invent a result */}
         {unconfirmed && !showResult && (
           <div className="text-center">
             <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3 mb-3">
@@ -342,7 +342,7 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
               </p>
               <p className="text-xs text-sc-muted mt-1">
                 The connection dropped before we heard back. If the spin went through, it is already
-                settled — check your status below. We will not guess a prize.
+                settled - check your status below. We will not guess a prize.
               </p>
             </div>
             <div className="flex items-center justify-center gap-2">
@@ -383,10 +383,10 @@ export function SpinWheelModal({ open, onClose, onSpin, onRecover, wheelStatus, 
                   <p className="text-sm text-brand-300">{result.durationHours}h 2× XP boost is now active</p>
                 )}
                 {result.charges && (
-                  <p className="text-sm text-sky-300">Streak freeze charge added — protects your streak!</p>
+                  <p className="text-sm text-sky-300">Streak freeze charge added - protects your streak!</p>
                 )}
                 {result.itemName && (
-                  <p className="text-sm text-brand-300">{result.itemName} added to your inventory — open it there to reveal the prize!</p>
+                  <p className="text-sm text-brand-300">{result.itemName} added to your inventory - open it there to reveal the prize!</p>
                 )}
                 <p className="text-[10px] text-sc-dim mt-2">
                   {result.isFree ? 'Free spin' : `${result.cost} credits`}

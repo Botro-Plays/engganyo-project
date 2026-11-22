@@ -31,7 +31,7 @@ const mockService = () =>
     },
   });
 
-run('Review payouts — real PostgreSQL integration', () => {
+run('Review payouts - real PostgreSQL integration', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -189,7 +189,7 @@ run('Review payouts — real PostgreSQL integration', () => {
     await prisma.$disconnect();
   });
 
-  it('ordered outcome — assign → submit → owner approve pays exactly once with correct counters', async () => {
+  it('ordered outcome - assign → submit → owner approve pays exactly once with correct counters', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeCampaign(owner.id);
@@ -265,7 +265,7 @@ run('Review payouts — real PostgreSQL integration', () => {
     ).toHaveLength(1);
   });
 
-  it('ordered outcome — reject releases the pending slot; a later approve fails', async () => {
+  it('ordered outcome - reject releases the pending slot; a later approve fails', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeCampaign(owner.id);
@@ -322,7 +322,7 @@ run('Review payouts — real PostgreSQL integration', () => {
     await tasks.submitProof(worker.id, campaign.id, { proofUrl: 'https://example.com/p.png' });
     const completion = (await state(campaign.id, worker.id)).completion!;
 
-    // Corrupt the counter — the anomaly class that produced pending_slots=-1.
+    // Corrupt the counter - the anomaly class that produced pending_slots=-1.
     await prisma.campaign.update({ where: { id: campaign.id }, data: { pendingSlots: 0 } });
 
     await expect(
@@ -379,7 +379,7 @@ run('Review payouts — real PostgreSQL integration', () => {
     expect(s.earnLedger).toHaveLength(1);
     expect(s.walletRow.balance).toBe(50);
     expect(s.user.creditBalance).toBe(50);
-    // Exactly one audit — the loser's claim aborts before its audit write.
+    // Exactly one audit - the loser's claim aborts before its audit write.
     const approvals = s.audits.filter(
       (a) => a.entityId === completion.id && a.action === 'submission.approved',
     );
@@ -395,7 +395,7 @@ run('Review payouts — real PostgreSQL integration', () => {
     const completion = (await state(campaign.id, worker.id)).completion!;
 
     // On an autoVerify campaign the completion never persists as SUBMITTED,
-    // so the manual path cannot interleave — this asserts the claim guard
+    // so the manual path cannot interleave - this asserts the claim guard
     // keeps it from paying even if the state check were bypassed.
     const results = await Promise.allSettled([
       tasks.submitProof(worker.id, campaign.id, { proofUrl: 'https://example.com/a.png' }),
@@ -559,7 +559,7 @@ run('Review payouts — real PostgreSQL integration', () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const adminUser = await makeUser('SUPER_ADMIN');
-    // Single slot — completing it would fill the campaign entirely.
+    // Single slot - completing it would fill the campaign entirely.
     const campaign = await makeCampaign(owner.id, false, 1);
     await tasks.assignTask(worker.id, campaign.id, 'ADMIN');
     await tasks.submitProof(worker.id, campaign.id, { proofUrl: 'https://example.com/p.png' });

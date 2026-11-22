@@ -245,7 +245,7 @@ export default function ChatModerationPage() {
                           {msg.reportCount}
                         </span>
                       ) : (
-                        <span className="text-sc-dim text-xs">—</span>
+                        <span className="text-sc-dim text-xs">None</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

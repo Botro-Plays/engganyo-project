@@ -29,7 +29,7 @@ export class SocialAuthController {
   }
 
   @Get(':platform/callback')
-  @ApiOperation({ summary: 'OAuth callback — browser redirect, do not call directly' })
+  @ApiOperation({ summary: 'OAuth callback - browser redirect, do not call directly' })
   async handleCallback(
     @Param('platform') platform: string,
     @Query('code') code: string,

@@ -608,7 +608,7 @@ export default function AdminCampaignsPage() {
               <button onClick={() => setEditing(null)} className="text-sc-dim hover:text-sc-text"><X className="w-5 h-5" /></button>
             </div>
             <p className="text-xs text-sc-dim mb-4 px-3 py-2 rounded-lg bg-surface-hover border border-surface-border">
-              Task Type: <span className="text-sc-text font-medium">{editing.taskType.replace(/_/g, ' ')}</span> — task type cannot be changed after creation.
+              Task Type: <span className="text-sc-text font-medium">{editing.taskType.replace(/_/g, ' ')}</span> - task type cannot be changed after creation.
             </p>
             <form onSubmit={handleEdit((d) => editMutation.mutate({ id: editing.id, data: d }))} className="space-y-4">
               <div>

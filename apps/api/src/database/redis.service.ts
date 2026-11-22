@@ -68,7 +68,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Fixed-window counter: the expiry is set only when the key has no expiry
    * (i.e., on window creation). Blocked and allowed requests inside the
    * window increment the counter but never extend it, so a saturated client
-   * regains access exactly when the window ends — ttl(key) is a truthful
+   * regains access exactly when the window ends - ttl(key) is a truthful
    * retryAfter.
    */
   async incrWithExpiry(key: string, ttlSeconds: number): Promise<number> {
@@ -129,7 +129,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async delByPattern(pattern: string): Promise<void> {
     // ioredis applies keyPrefix to key arguments but not to the KEYS
-    // pattern, and DEL re-applies the prefix — so scan the prefixed names,
+    // pattern, and DEL re-applies the prefix - so scan the prefixed names,
     // then strip the prefix before deleting.
     const prefix = this.configService.get<string>('redis.keyPrefix', 'engganyo:');
     const keys = await this.client.keys(`${prefix}${pattern}`);

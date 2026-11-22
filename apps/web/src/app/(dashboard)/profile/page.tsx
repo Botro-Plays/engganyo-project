@@ -295,7 +295,7 @@ function MyReferralsCard() {
             <p className="text-xs text-sc-muted leading-relaxed">
               <span className="text-brand-300 font-medium">How it works:</span>{' '}
               When someone signs up with your code and completes their first verified task, both you and they earn{' '}
-              <span className="text-brand-300">50 credits</span> each. Bonuses are awarded automatically — no manual claiming needed.
+              <span className="text-brand-300">50 credits</span> each. Bonuses are awarded automatically - no manual claiming needed.
             </p>
           </div>
 
@@ -559,7 +559,7 @@ export default function ProfilePage() {
         url: getReferralUrl(),
       });
     } catch {
-      // User cancelled or share failed — fallback to copying the link
+      // User cancelled or share failed - fallback to copying the link
       copyReferralLink();
     }
   };
@@ -620,7 +620,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-2 mt-2">
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-sc-panel-2/50 text-sc-muted border border-sc-line/50">
                 <Award className="w-3 h-3" />
-                No VIP Tier — earn VP to unlock
+                No VIP Tier - earn VP to unlock
               </span>
             </div>
           )}
@@ -689,7 +689,7 @@ export default function ProfilePage() {
           <h2 className="font-semibold text-sc-text">Refer & Earn</h2>
         </div>
         <p className="text-sm text-sc-muted mb-4">
-          Invite friends and earn credits when they sign up and complete their first verified task. Both you and your friend get 50 credits each — awarded automatically.
+          Invite friends and earn credits when they sign up and complete their first verified task. Both you and your friend get 50 credits each - awarded automatically.
         </p>
 
         <div className="flex flex-col gap-3 mb-4">
@@ -699,7 +699,7 @@ export default function ProfilePage() {
               onClick={copyReferral}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm font-mono hover:bg-brand-500/20 transition-all"
             >
-              {profile?.referralCode ?? user?.referralCode ?? '—'}
+              {profile?.referralCode ?? user?.referralCode ?? 'None'}
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
             <span className="text-xs text-sc-dim">Tap to copy your referral code</span>

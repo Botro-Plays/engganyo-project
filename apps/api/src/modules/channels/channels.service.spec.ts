@@ -202,7 +202,7 @@ describe('ChannelsService', () => {
       const result = await service.joinChannel('user-1', 'ch-1');
 
       expect(result.success).toBe(true);
-      // Socket reconnects/page loads re-emit channel:join — an existing
+      // Socket reconnects/page loads re-emit channel:join - an existing
       // member must not burn the 3/hour new-join quota.
       expect(redis.incrWithExpiry).not.toHaveBeenCalledWith(expect.stringContaining('chat_join'), expect.anything());
       expect(prisma.channelMember.create).not.toHaveBeenCalled();
@@ -252,7 +252,7 @@ describe('ChannelsService', () => {
 
       expect(result.content).toBe('Hello world');
       expect(prisma.channelMessage.create).toHaveBeenCalled();
-      // REST sends must broadcast — recipients rely on chat:message pushes
+      // REST sends must broadcast - recipients rely on chat:message pushes
       // (the gateway translates this event into the socket emit).
       expect(mockEventEmitter.emit).toHaveBeenCalledWith('channel.message.created', {
         channelId: 'ch-1',

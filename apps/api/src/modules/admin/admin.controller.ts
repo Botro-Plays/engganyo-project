@@ -84,7 +84,7 @@ export class AdminController {
 
   @Patch('users/:id/role')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change a user\'s role — SUPER_ADMIN only' })
+  @ApiOperation({ summary: 'Change a user\'s role - SUPER_ADMIN only' })
   @Roles(UserRole.SUPER_ADMIN)
   changeUserRole(
     @CurrentUser() admin: JwtPayload,
@@ -118,7 +118,7 @@ export class AdminController {
 
   @Patch('users/:id/details')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update user details (email, username, displayName, password) — SUPER_ADMIN only' })
+  @ApiOperation({ summary: 'Update user details (email, username, displayName, password) - SUPER_ADMIN only' })
   @Roles(UserRole.SUPER_ADMIN)
   updateUserDetails(
     @Param('id') id: string,
@@ -139,7 +139,7 @@ export class AdminController {
 
   @Delete('users/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a user and all related data — SUPER_ADMIN only' })
+  @ApiOperation({ summary: 'Delete a user and all related data - SUPER_ADMIN only' })
   @Roles(UserRole.SUPER_ADMIN)
   deleteUser(
     @CurrentUser() admin: JwtPayload,
@@ -420,7 +420,7 @@ export class AdminController {
 
   @Patch('finances/deposits/:id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Review a deposit — approve, fail, or refund' })
+  @ApiOperation({ summary: 'Review a deposit - approve, fail, or refund' })
   reviewDeposit(
     @CurrentUser() admin: JwtPayload,
     @Param('id') id: string,
@@ -570,7 +570,7 @@ export class AdminController {
   @Post('system/reset')
   @Roles(UserRole.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset database — wipes all data except SUPER_ADMIN accounts (SUPER_ADMIN only)' })
+  @ApiOperation({ summary: 'Reset database - wipes all data except SUPER_ADMIN accounts (SUPER_ADMIN only)' })
   resetDatabase(
     @CurrentUser() admin: JwtPayload,
     @Body() body: { confirmToken: string },
@@ -802,7 +802,7 @@ export class AdminController {
 
   @Get('store/analytics')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Store purchase analytics — totals, per-item breakdown, daily trends' })
+  @ApiOperation({ summary: 'Store purchase analytics - totals, per-item breakdown, daily trends' })
   getStoreAnalytics(@Query('days') days?: string) {
     return this.adminService.getStoreAnalytics(days ? Number(days) : 30);
   }

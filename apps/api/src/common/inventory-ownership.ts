@@ -17,10 +17,9 @@ import { Prisma } from '@prisma/client';
  *   6. wallet writes
  *
  * invcap is ALWAYS taken before touching user_inventory rows, and every
- * transition that changes either ownership representation — listing
+ * transition that changes either ownership representation - listing
  * creation (escrow out), purchase receipt (units in), cancel/expiry/
- * takedown returns (escrow back), and the sale-side escrow decrement —
- * holds the relevant (user,item) lock so a cap count can never split
+ * takedown returns (escrow back), and the sale-side escrow decrement - * holds the relevant (user,item) lock so a cap count can never split
  * across a concurrent transition.
  *
  * effectiveOwnedQuantity reads BOTH representations in ONE SQL statement,

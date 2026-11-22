@@ -8,7 +8,7 @@
  *
  * Regression coverage for the stale-balance bug: `auth:me` and
  * `user:profile` cache the full user payload for 3600s, but wallet
- * settlements never invalidate those keys — so a cached read used to serve
+ * settlements never invalidate those keys - so a cached read used to serve
  * the pre-settlement balance for up to an hour. The fix resolves
  * creditBalance from the ledger-backed wallets row on every read.
  *
@@ -42,7 +42,7 @@ const mockService = () =>
     },
   });
 
-run('Profile endpoints — cached balance freshness (real PG + Redis)', () => {
+run('Profile endpoints - cached balance freshness (real PG + Redis)', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -124,7 +124,7 @@ run('Profile endpoints — cached balance freshness (real PG + Redis)', () => {
 
     const first = await auth.getMe(user.id);
     expect(first.creditBalance).toBe(100);
-    // Prove the payload is actually cached — the regression only matters on hits.
+    // Prove the payload is actually cached - the regression only matters on hits.
     expect(await redis.get(`auth:me:${user.id}`)).toBeTruthy();
 
     await wallet.credit(user.id, 50, {
@@ -166,7 +166,7 @@ run('Profile endpoints — cached balance freshness (real PG + Redis)', () => {
         }),
       ]);
       // The fresh wallet read is a single statement: the response must be
-      // exactly the pre-commit or post-commit balance — never torn, stale
+      // exactly the pre-commit or post-commit balance - never torn, stale
       // beyond the commit, or corrupted.
       expect([before, before + 10]).toContain(me.creditBalance);
     }
@@ -183,7 +183,7 @@ run('Profile endpoints — cached balance freshness (real PG + Redis)', () => {
     const offlineUsers = new UsersService(prisma as never, brokenRedis as never, {} as never);
     const user = await makeUser(40);
 
-    // Settlement never depends on Redis — it must commit normally.
+    // Settlement never depends on Redis - it must commit normally.
     await wallet.credit(user.id, 60, {
       type: TransactionType.EARN_ADMIN_GRANT,
       description: 'itest credit during redis outage',

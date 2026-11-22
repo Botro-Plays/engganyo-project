@@ -24,7 +24,7 @@ import { EventsService } from '../events/events.service';
 import { effectiveOwnedQuantity, lockOwnershipSlots } from '../../common/inventory-ownership';
 
 /**
- * Player item marketplace — internal-test configuration.
+ * Player item marketplace - internal-test configuration.
  *
  * These are PROPOSED DEFAULTS pending owner confirmation, not final product
  * policy. Credits-only, 0% fee (permanent seller fee stays disabled),
@@ -148,7 +148,7 @@ export class MarketplaceService {
   //
   // The advertised terms frozen at list time must equal what the buyer
   // receives. Any material catalog change (name/description/category/
-  // price/consumable/active/VIP/ownership/metadata — metadata carries the
+  // price/consumable/active/VIP/ownership/metadata - metadata carries the
   // effect definition: multiplier, duration, protectedDays, loot odds)
   // pauses the listing instead of silently transferring changed terms.
   // The seller keeps escrow and can cancel (units return) then relist.
@@ -178,7 +178,7 @@ export class MarketplaceService {
   }
 
   private catalogDrifted(snapshot: Prisma.JsonValue, item: CatalogItem | null | undefined): boolean {
-    if (!item) return true; // deleted/inaccessible catalog row — treat as drift
+    if (!item) return true; // deleted/inaccessible catalog row - treat as drift
     const snap = snapshot as unknown as CatalogSnapshot;
     return (
       snap.name !== item.name ||
@@ -197,7 +197,7 @@ export class MarketplaceService {
   //
   // A purchaseKey identifies ONE purchase intent. Replaying it with a
   // different listing, quantity, or agreed unit price is a client bug or
-  // abuse — return 409 rather than silently replaying the wrong order.
+  // abuse - return 409 rather than silently replaying the wrong order.
 
   private assertReplayMatches(
     order: { listingId: string; quantity: number; unitPrice: number },
@@ -205,7 +205,7 @@ export class MarketplaceService {
     quantity: number,
   ): void {
     // The identity check must compare the stored order against the listing
-    // the client is asking to buy NOW — never the order's own listing row,
+    // the client is asking to buy NOW - never the order's own listing row,
     // which would make the listingId comparison trivially true.
     if (
       !requestedListing ||
@@ -295,14 +295,14 @@ export class MarketplaceService {
     ]);
     if (!item) throw new NotFoundException('Listing item no longer exists');
 
-    // Lazily persist PAUSED when the catalog drifted — display must agree
+    // Lazily persist PAUSED when the catalog drifted - display must agree
     // with what fulfillment would actually deliver.
     if (listing.status === MarketplaceListingStatus.ACTIVE && this.catalogDrifted(listing.itemSnapshot, item)) {
       listing = await this.withTxRetry(async (tx) => {
         await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${listingId} FOR UPDATE`;
         const locked = await tx.marketplaceListing.findUniqueOrThrow({ where: { id: listingId } });
         if (locked.status !== MarketplaceListingStatus.ACTIVE) return locked;
-        // Catalog row lock — same serialization as purchase fulfillment.
+        // Catalog row lock - same serialization as purchase fulfillment.
         await tx.$executeRaw`SELECT id FROM store_items WHERE id = ${locked.itemId} FOR UPDATE`;
         const freshItem = await tx.storeItem.findUniqueOrThrow({ where: { id: locked.itemId } });
         if (!this.catalogDrifted(locked.itemSnapshot, freshItem)) return locked;
@@ -322,7 +322,7 @@ export class MarketplaceService {
       description: (snap['description'] as string | null) ?? item.description,
       isActive: item.isActive,
       viewerIsSeller: viewerId === listing.sellerId,
-      // Anonymous viewers can't purchase — require a signed-in non-seller.
+      // Anonymous viewers can't purchase - require a signed-in non-seller.
       canPurchase: active && viewerId != null && viewerId !== listing.sellerId,
       resaleSuspended: suspension.suspended,
       resaleSuspensionReason: suspension.reason,
@@ -447,7 +447,7 @@ export class MarketplaceService {
       // Ownership lock BEFORE the inventory row lock (global order): the
       // escrow decrement changes the seller's (user,item) representation
       // and must serialize against concurrent cap counts. Lock-free
-      // pre-read only resolves itemId — everything is revalidated below.
+      // pre-read only resolves itemId - everything is revalidated below.
       const preInv = await tx.userInventory.findFirst({
         where: { id: inventoryId, userId },
         select: { itemId: true },
@@ -455,8 +455,7 @@ export class MarketplaceService {
       if (!preInv) throw new NotFoundException('Inventory item not found');
       await lockOwnershipSlots(tx, [{ userId, itemId: preInv.itemId }]);
 
-      // Lock the inventory row and re-validate everything under the lock —
-      // a concurrent useItem/grant cannot race the escrow decrement.
+      // Lock the inventory row and re-validate everything under the lock - // a concurrent useItem/grant cannot race the escrow decrement.
       await tx.$executeRaw`SELECT id FROM user_inventory WHERE id = ${inventoryId} FOR UPDATE`;
       const inv = await tx.userInventory.findFirst({
         where: { id: inventoryId, userId },
@@ -584,14 +583,14 @@ export class MarketplaceService {
       const listing = await tx.marketplaceListing.findUnique({ where: { id: listingId } });
       if (!listing) throw new NotFoundException('Listing not found');
       if (listing.sellerId !== userId) throw new ForbiddenException('Not your listing');
-      // ACTIVE and PAUSED listings both hold escrow — either can be
+      // ACTIVE and PAUSED listings both hold escrow - either can be
       // cancelled to return units (the actionable exit for paused stock).
       if (listing.status !== MarketplaceListingStatus.ACTIVE && listing.status !== MarketplaceListingStatus.PAUSED) {
         throw new BadRequestException(`Listing is already ${listing.status.toLowerCase()}`);
       }
 
       const expired = listing.expiresAt <= new Date();
-      // Escrow return is an ownership-representation change — hold the
+      // Escrow return is an ownership-representation change - hold the
       // seller's (user,item) lock so concurrent cap counts stay consistent.
       await lockOwnershipSlots(tx, [{ userId: listing.sellerId, itemId: listing.itemId }]);
       await this.returnEscrowedUnits(tx, listing, expired ? 'marketplace_expire' : 'marketplace_cancel');
@@ -804,7 +803,7 @@ export class MarketplaceService {
       throw new BadRequestException('Quantity must be a positive integer');
     }
 
-    // Requested listing identity — needed to validate replay params on the
+    // Requested listing identity - needed to validate replay params on the
     // fast path before any transaction opens.
     const requestedListing = await this.prisma.marketplaceListing.findUnique({
       where: { id: listingId },
@@ -812,7 +811,7 @@ export class MarketplaceService {
     });
 
     // Fast-path idempotent replay: a committed order for this key returns
-    // its result without touching wallets or stock again — but only when
+    // its result without touching wallets or stock again - but only when
     // the request identity (listing, quantity, agreed price) matches.
     const existing = await this.prisma.marketplaceOrder.findUnique({
       where: { buyerId_purchaseKey: { buyerId, purchaseKey } },
@@ -823,7 +822,7 @@ export class MarketplaceService {
       return { order: this.serializeOrder(existing), replayed: true };
     }
 
-    // Emergency resale suspension blocks NEW purchases only — committed
+    // Emergency resale suspension blocks NEW purchases only - committed
     // order replays above still resolve, and cancel/refund paths are
     // untouched. Stock, orders, and accounting are preserved.
     const suspension = await this.getResaleSuspension();
@@ -839,7 +838,7 @@ export class MarketplaceService {
     let result: PurchaseTxResult;
     try {
       result = await this.withTxRetry(async (tx) => {
-        // Lock the listing row — serializes all purchases/cancels/expiry
+        // Lock the listing row - serializes all purchases/cancels/expiry
         // races for THIS listing.
         await tx.$executeRaw`SELECT id FROM marketplace_listings WHERE id = ${listingId} FOR UPDATE`;
         const listing = await tx.marketplaceListing.findUnique({ where: { id: listingId } });
@@ -858,7 +857,7 @@ export class MarketplaceService {
           if (listing.status === MarketplaceListingStatus.PAUSED) {
             throw new ConflictException({
               code: 'LISTING_PAUSED',
-              message: 'This listing is paused — the item\'s store terms changed. The seller can cancel it to recover the items.',
+              message: 'This listing is paused - the item\'s store terms changed. The seller can cancel it to recover the items.',
             });
           }
           throw new BadRequestException(`Listing is ${listing.status.toLowerCase()}`);
@@ -928,7 +927,7 @@ export class MarketplaceService {
             );
           }
         }
-        // Ownership cap — invcap locks already held above (sorted with the
+        // Ownership cap - invcap locks already held above (sorted with the
         // seller pair). effectiveOwnedQuantity reads on-hand + escrow in a
         // single atomic statement.
         if (item.maxOwnedPerUser !== null) {
@@ -1024,8 +1023,7 @@ export class MarketplaceService {
       });
     } catch (err) {
       // Concurrent same-key purchase lost the unique-index race: its whole
-      // tx (including wallet moves) rolled back. Replay the committed order —
-      // but only if the request identity matches.
+      // tx (including wallet moves) rolled back. Replay the committed order - // but only if the request identity matches.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const committed = await this.prisma.marketplaceOrder.findUnique({
           where: { buyerId_purchaseKey: { buyerId, purchaseKey } },
@@ -1039,7 +1037,7 @@ export class MarketplaceService {
       throw err;
     }
 
-    // Terminal states committed inside the tx — surface them as errors only
+    // Terminal states committed inside the tx - surface them as errors only
     // now that the escrow return / pause transition is durable.
     if (result.kind === 'expired') {
       throw new BadRequestException('Listing has expired');
@@ -1132,7 +1130,7 @@ export class MarketplaceService {
    * Non-mutating recovery lookup: returns the committed order for a
    * buyer-scoped purchaseKey, or null when the attempt never committed.
    * The UI uses this to distinguish "already purchased" from "unconfirmed"
-   * without re-issuing the purchase — and to display the order regardless
+   * without re-issuing the purchase - and to display the order regardless
    * of current balance, stock, or listing status.
    */
   async findPurchaseByKey(buyerId: string, purchaseKey: string) {
@@ -1228,7 +1226,7 @@ type MarketplaceOrderRow = Prisma.MarketplaceOrderGetPayload<Record<string, neve
 type MarketplaceListingRow = Prisma.MarketplaceListingGetPayload<Record<string, never>>;
 
 // Discriminated union returned by the purchase transaction. 'expired' and
-// 'paused' are committed terminal transitions — the service throws the
+// 'paused' are committed terminal transitions - the service throws the
 // client-facing error only after commit so the escrow return persists.
 type PurchaseTxResult =
   | { kind: 'replayed'; order: MarketplaceOrderRow }

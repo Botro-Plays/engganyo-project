@@ -66,20 +66,20 @@ export class PayPalService {
   }
 
   async createOrder(depositId: string, amount: number, currency: string, userId?: string) {
-    // Reuse a payable order — retries/concurrent calls must not mint a second.
+    // Reuse a payable order - retries/concurrent calls must not mint a second.
     const existing = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true, userId: true } });
     if (!existing || (userId && existing.userId !== userId)) {
       throw new NotFoundException('Deposit not found');
     }
     const exGw = (existing?.gatewayData ?? {}) as Record<string, unknown>;
     if (existing?.paymentRef && exGw.approvalUrl && !existing.paymentRef.startsWith('creating:')) {
-      this.logger.log(`Deposit ${depositId} already has PayPal order ${existing.paymentRef} — reusing`);
+      this.logger.log(`Deposit ${depositId} already has PayPal order ${existing.paymentRef} - reusing`);
       return { orderId: existing.paymentRef, approvalUrl: exGw.approvalUrl as string };
     }
     const cfg = await this.getConfig();
     if (!cfg) throw new BadRequestException('PayPal not configured');
 
-    // Atomic claim — only an unclaimed row or a provably stale claim may be
+    // Atomic claim - only an unclaimed row or a provably stale claim may be
     // acquired; an active `creating:` claim is never overwritten.
     const claimTag = `creating:${crypto.randomUUID()}`;
     const staleBefore = new Date(Date.now() - 60_000);
@@ -99,7 +99,7 @@ export class PayPalService {
       if (row?.paymentRef && gw.approvalUrl && !row.paymentRef.startsWith('creating:')) {
         return { orderId: row.paymentRef, approvalUrl: gw.approvalUrl as string };
       }
-      throw new BadRequestException('PayPal checkout is being prepared — please retry in a moment');
+      throw new BadRequestException('PayPal checkout is being prepared - please retry in a moment');
     }
     const releaseClaim = () =>
       this.prisma.deposit.updateMany({ where: { id: depositId, paymentRef: claimTag }, data: { paymentRef: null } }).catch((e) => this.logger.warn(`claim release failed for ${depositId}: ${e}`));
@@ -147,7 +147,7 @@ export class PayPalService {
       throw new BadRequestException('PayPal order response missing required fields');
     }
 
-    // Ownership-conditioned persist — if we lost the claim (reclaimed stale
+    // Ownership-conditioned persist - if we lost the claim (reclaimed stale
     // while the provider call was in flight), never overwrite the winner.
     const persisted = await this.prisma.deposit.updateMany({
       where: { id: depositId, paymentRef: claimTag },
@@ -160,10 +160,10 @@ export class PayPalService {
       const row = await this.prisma.deposit.findUnique({ where: { id: depositId }, select: { paymentRef: true, gatewayData: true } });
       const gw = (row?.gatewayData ?? {}) as Record<string, unknown>;
       if (row?.paymentRef && gw.approvalUrl && !row.paymentRef.startsWith('creating:')) {
-        this.logger.warn(`Deposit ${depositId} claim lost — returning persisted winner ${row.paymentRef}`);
+        this.logger.warn(`Deposit ${depositId} claim lost - returning persisted winner ${row.paymentRef}`);
         return { orderId: row.paymentRef, approvalUrl: gw.approvalUrl as string };
       }
-      throw new BadRequestException('PayPal checkout could not be confirmed — please retry');
+      throw new BadRequestException('PayPal checkout could not be confirmed - please retry');
     }
 
     return { orderId, approvalUrl };
@@ -189,7 +189,7 @@ export class PayPalService {
     };
   }
 
-  // ─── Capture verification — single path for normal capture AND recovery ──
+  // ─── Capture verification - single path for normal capture AND recovery ──
   // Verifies an Orders v2 resource (capture response or GET /orders result):
   // order id, purchase-unit reference, provider capture id + COMPLETED status,
   // exact expected amount and currency. Throws → caller must not credit.
@@ -200,7 +200,7 @@ export class PayPalService {
     expectedCaptureId?: string,
   ): void {
     if ((order.id as string | undefined) !== orderId) {
-      this.logger.warn(`PayPal order id mismatch: expected ${orderId}, got ${order.id} — deposit NOT completed`);
+      this.logger.warn(`PayPal order id mismatch: expected ${orderId}, got ${order.id} - deposit NOT completed`);
       throw new BadRequestException('PayPal order ID mismatch');
     }
     if ((order.status as string | undefined) !== 'COMPLETED') {
@@ -220,15 +220,15 @@ export class PayPalService {
     }
     const amount = capture.amount as { value?: string; currency_code?: string } | undefined;
     if (!amount?.value || Math.abs(parseFloat(amount.value) - deposit.amountFiat) > 0.005) {
-      this.logger.warn(`PayPal amount mismatch: expected ${deposit.amountFiat}, got ${amount?.value} — deposit NOT completed`);
+      this.logger.warn(`PayPal amount mismatch: expected ${deposit.amountFiat}, got ${amount?.value} - deposit NOT completed`);
       throw new BadRequestException('PayPal capture amount does not match deposit');
     }
     if (amount.currency_code && deposit.currency && amount.currency_code.toUpperCase() !== deposit.currency.toUpperCase()) {
-      this.logger.warn(`PayPal currency mismatch: ${amount.currency_code} vs ${deposit.currency} — deposit NOT completed`);
+      this.logger.warn(`PayPal currency mismatch: ${amount.currency_code} vs ${deposit.currency} - deposit NOT completed`);
       throw new BadRequestException('PayPal capture currency does not match deposit');
     }
     if (referenceId !== deposit.id) {
-      this.logger.warn(`PayPal reference ${referenceId} != matched deposit ${deposit.id} — deposit NOT completed`);
+      this.logger.warn(`PayPal reference ${referenceId} != matched deposit ${deposit.id} - deposit NOT completed`);
       throw new BadRequestException('PayPal capture reference mismatch');
     }
   }
@@ -246,7 +246,7 @@ export class PayPalService {
       throw new NotFoundException('Deposit not found');
     }
     if (deposit?.status === DepositStatus.COMPLETED) {
-      this.logger.log(`PayPal order ${orderId} already captured — skipping`);
+      this.logger.log(`PayPal order ${orderId} already captured - skipping`);
       return { depositId: deposit.id, orderId, status: 'COMPLETED' };
     }
     if (deposit?.status === DepositStatus.CANCELLED || deposit?.status === DepositStatus.FAILED) {
@@ -267,17 +267,17 @@ export class PayPalService {
           return { depositId: deposit.id, orderId, status: 'COMPLETED' };
         }
         if (deposit?.status === DepositStatus.PROCESSING) {
-          this.logger.log(`PayPal order ${orderId} already being captured by another request — skipping`);
+          this.logger.log(`PayPal order ${orderId} already being captured by another request - skipping`);
           return { depositId: deposit.id, orderId, status: 'PROCESSING' };
         }
       }
     } else if (deposit?.status === DepositStatus.PROCESSING) {
-      // A PROCESSING deposit may mean a lost provider response — re-attempt
+      // A PROCESSING deposit may mean a lost provider response - re-attempt
       // the capture so we can recover the existing capture via
       // ORDER_ALREADY_CAPTURED rather than waiting only on the webhook.
       // Concurrent calls are safe: PayPal captures an order once, and
       // completeDeposit is atomic.
-      this.logger.log(`PayPal order ${orderId} is PROCESSING — re-attempting capture for recovery`);
+      this.logger.log(`PayPal order ${orderId} is PROCESSING - re-attempting capture for recovery`);
     }
 
     const accessToken = await this.getAccessToken(cfg);
@@ -309,8 +309,8 @@ export class PayPalService {
           signal: AbortSignal.timeout(10_000),
         }).catch(() => null);
         if (!orderRes || !orderRes.ok) {
-          // Evidence unavailable — keep the deposit recoverable; caller retries.
-          throw new InternalServerErrorException('Could not verify captured PayPal order — retry');
+          // Evidence unavailable - keep the deposit recoverable; caller retries.
+          throw new InternalServerErrorException('Could not verify captured PayPal order - retry');
         }
         const orderJson = (await orderRes.json()) as Record<string, unknown>;
         this.assertVerifiedCapture(deposit, orderId, orderJson); // throws → wallet untouched
@@ -322,10 +322,10 @@ export class PayPalService {
             settlement: this.extractSettlement(orderJson),
           });
         }
-        // Report the real local state — COMPLETED only if settlement is confirmed.
+        // Report the real local state - COMPLETED only if settlement is confirmed.
         const settled = await this.prisma.deposit.findUnique({ where: { paymentRef: orderId }, select: { status: true } });
         if (settled?.status === DepositStatus.COMPLETED) {
-          this.logger.log(`PayPal order ${orderId} recovered via ORDER_ALREADY_CAPTURED — deposit settled`);
+          this.logger.log(`PayPal order ${orderId} recovered via ORDER_ALREADY_CAPTURED - deposit settled`);
           return { depositId: deposit.id, orderId, status: 'COMPLETED' };
         }
         return { depositId: deposit.id, orderId, status: 'PROCESSING' };
@@ -334,7 +334,7 @@ export class PayPalService {
       throw new BadRequestException('Failed to capture PayPal order');
     }
 
-    // deposit was ownership-checked above — non-null here.
+    // deposit was ownership-checked above - non-null here.
     const dep = deposit as { id: string; amountFiat: number; currency: string };
     this.assertVerifiedCapture(dep, orderId, json);
 
@@ -345,7 +345,7 @@ export class PayPalService {
     return { depositId: dep.id, orderId, status: json.status as string };
   }
 
-  // Read-only settlement lookup for backfill — verifies the order's
+  // Read-only settlement lookup for backfill - verifies the order's
   // reference matches the deposit before returning figures.
   async getOrderSettlement(orderId: string, depositId: string) {
     const cfg = await this.getConfig();
@@ -367,7 +367,7 @@ export class PayPalService {
   async cancelOrder(orderId: string) {
     const cfg = await this.getConfig();
     if (!cfg) {
-      this.logger.warn('PayPal not configured — cannot cancel order');
+      this.logger.warn('PayPal not configured - cannot cancel order');
       return;
     }
 
@@ -387,20 +387,20 @@ export class PayPalService {
     // PayPal v2 checkout orders (intent=CAPTURE) have no programmatic cancel endpoint.
     // CREATED orders auto-expire after 3 hours. APPROVED orders can only be captured.
     if (status === 'CREATED') {
-      this.logger.log(`PayPal order ${orderId} is CREATED — will auto-expire, no action needed`);
+      this.logger.log(`PayPal order ${orderId} is CREATED - will auto-expire, no action needed`);
       return;
     }
     if (status === 'APPROVED') {
       this.logger.warn(
-        `PayPal order ${orderId} is APPROVED — cannot cancel programmatically. Buyer may still complete payment. Deposit is marked CANCELLED locally; any capture will be rejected.`,
+        `PayPal order ${orderId} is APPROVED - cannot cancel programmatically. Buyer may still complete payment. Deposit is marked CANCELLED locally; any capture will be rejected.`,
       );
       return;
     }
     if (status === 'COMPLETED') {
-      this.logger.warn(`PayPal order ${orderId} is already COMPLETED — too late to cancel`);
+      this.logger.warn(`PayPal order ${orderId} is already COMPLETED - too late to cancel`);
       return;
     }
-    this.logger.log(`PayPal order ${orderId} status: ${status} — no cancel action needed`);
+    this.logger.log(`PayPal order ${orderId} status: ${status} - no cancel action needed`);
   }
 
   // ─── Webhook Verification ───────────────────────────────────
@@ -411,7 +411,7 @@ export class PayPalService {
     headers: Record<string, string | undefined>,
   ): Promise<boolean> {
     if (!cfg.webhookId) {
-      this.logger.warn('PayPal webhook_id not configured — skipping signature verification');
+      this.logger.warn('PayPal webhook_id not configured - skipping signature verification');
       return false;
     }
 
@@ -471,7 +471,7 @@ export class PayPalService {
       throw new UnauthorizedException('Invalid webhook signature');
     }
     if (!isVerified && !cfg.webhookId) {
-      this.logger.warn('PayPal webhook_id not configured — accepting webhook without signature verification (configure webhook_id in Server Config for production)');
+      this.logger.warn('PayPal webhook_id not configured - accepting webhook without signature verification (configure webhook_id in Server Config for production)');
     }
 
     // Parse payload
@@ -529,7 +529,7 @@ export class PayPalService {
       const eventOrderId = relatedOrderId;
       const eventCaptureId = resource?.id as string | undefined;
       if (!eventOrderId) {
-        this.logger.warn(`PAYMENT.CAPTURE.COMPLETED missing order id (capture ${eventCaptureId ?? 'unknown'}) — deposit untouched`);
+        this.logger.warn(`PAYMENT.CAPTURE.COMPLETED missing order id (capture ${eventCaptureId ?? 'unknown'}) - deposit untouched`);
         return { received: true, action: 'ignored_no_order_id' };
       }
       const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: eventOrderId } });
@@ -553,20 +553,20 @@ export class PayPalService {
 
       let webhookSettlement: ReturnType<PayPalService['extractSettlement']>;
       if (hasFullEvidence) {
-        // Signed event carries full capture evidence — verify directly.
+        // Signed event carries full capture evidence - verify directly.
         webhookSettlement = this.extractSettlement({ purchase_units: [{ payments: { captures: [resource] } }] } as Record<string, unknown>, eventCaptureId);
         const paidCents = Math.round(evAmountCents * 100);
         const expectedCents = Math.round(target.amountFiat * 100);
         if (paidCents !== expectedCents) {
-          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED amount mismatch on ${target.id}: ${evValue} vs ${target.amountFiat} (capture ${eventCaptureId}) — not completing`);
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED amount mismatch on ${target.id}: ${evValue} vs ${target.amountFiat} (capture ${eventCaptureId}) - not completing`);
           return { received: true, action: 'ignored_amount_mismatch', depositId: target.id };
         }
         if (target.currency && evCurrency!.toUpperCase() !== target.currency.toUpperCase()) {
-          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED currency mismatch on ${target.id}: ${evCurrency} vs ${target.currency} (capture ${eventCaptureId}) — not completing`);
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED currency mismatch on ${target.id}: ${evCurrency} vs ${target.currency} (capture ${eventCaptureId}) - not completing`);
           return { received: true, action: 'ignored_amount_mismatch', depositId: target.id };
         }
       } else {
-        // Signed event lacks verifiable evidence — retrieve the order and
+        // Signed event lacks verifiable evidence - retrieve the order and
         // verify the completed capture against the event's capture id.
         const accessToken = await this.getAccessToken(cfg);
         const orderRes = await fetch(`${this.baseUrl(cfg.mode)}/v2/checkout/orders/${eventOrderId}`, {
@@ -574,15 +574,15 @@ export class PayPalService {
           signal: AbortSignal.timeout(10_000),
         }).catch(() => null);
         if (!orderRes || !orderRes.ok) {
-          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence lookup unavailable for ${eventOrderId} (capture ${eventCaptureId ?? 'unknown'}) — retryable`);
-          throw new InternalServerErrorException('Could not verify PayPal capture evidence — retry');
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence lookup unavailable for ${eventOrderId} (capture ${eventCaptureId ?? 'unknown'}) - retryable`);
+          throw new InternalServerErrorException('Could not verify PayPal capture evidence - retry');
         }
         const orderJson = (await orderRes.json()) as Record<string, unknown>;
         try {
           this.assertVerifiedCapture(target, eventOrderId, orderJson, eventCaptureId);
           webhookSettlement = this.extractSettlement(orderJson, eventCaptureId);
         } catch (e) {
-          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence conflict on ${target.id} (order ${eventOrderId}, capture ${eventCaptureId ?? 'unknown'}) — not completing`);
+          this.logger.warn(`PAYMENT.CAPTURE.COMPLETED evidence conflict on ${target.id} (order ${eventOrderId}, capture ${eventCaptureId ?? 'unknown'}) - not completing`);
           return { received: true, action: 'ignored', depositId: target.id };
         }
       }
@@ -599,7 +599,7 @@ export class PayPalService {
       const evOrderId = relatedOrderId;
       const evCaptureId = resource?.id as string | undefined;
       if (!evOrderId) {
-        this.logger.warn(`PAYMENT.CAPTURE.PENDING missing order id (capture ${evCaptureId ?? 'unknown'}) — deposit untouched`);
+        this.logger.warn(`PAYMENT.CAPTURE.PENDING missing order id (capture ${evCaptureId ?? 'unknown'}) - deposit untouched`);
         return { received: true, action: 'ignored_no_order_id' };
       }
       const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: evOrderId } });
@@ -607,7 +607,7 @@ export class PayPalService {
       if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
       if (deposit.status === DepositStatus.PROCESSING) return { received: true, action: 'already_processing', depositId: deposit.id };
 
-      // Conditional write — a concurrent COMPLETED/browser settle between the
+      // Conditional write - a concurrent COMPLETED/browser settle between the
       // read above and this update must affect zero rows.
       const transitioned = await this.prisma.deposit.updateMany({
         where: { id: deposit.id, status: DepositStatus.PENDING },
@@ -615,7 +615,7 @@ export class PayPalService {
       });
       if (transitioned.count === 0) {
         const fresh = await this.prisma.deposit.findUnique({ where: { id: deposit.id }, select: { status: true } });
-        this.logger.log(`PAYMENT.CAPTURE.PENDING arrived after ${fresh?.status} on ${deposit.id} (capture ${evCaptureId ?? 'unknown'}) — no transition`);
+        this.logger.log(`PAYMENT.CAPTURE.PENDING arrived after ${fresh?.status} on ${deposit.id} (capture ${evCaptureId ?? 'unknown'}) - no transition`);
         return { received: true, action: fresh?.status === DepositStatus.COMPLETED ? 'already_completed' : 'ignored_wrong_status', depositId: deposit.id };
       }
       this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.PROCESSING });
@@ -627,14 +627,14 @@ export class PayPalService {
       const evOrderId = relatedOrderId;
       const evCaptureId = resource?.id as string | undefined;
       if (!evOrderId) {
-        this.logger.warn(`PAYMENT.CAPTURE.DENIED missing order id (capture ${evCaptureId ?? 'unknown'}) — deposit untouched`);
+        this.logger.warn(`PAYMENT.CAPTURE.DENIED missing order id (capture ${evCaptureId ?? 'unknown'}) - deposit untouched`);
         return { received: true, action: 'ignored_no_order_id' };
       }
       const deposit = await this.prisma.deposit.findUnique({ where: { paymentRef: evOrderId } });
       if (!deposit) return { received: true, action: 'ignored_no_deposit' };
       if (deposit.status === DepositStatus.COMPLETED) return { received: true, action: 'already_completed', depositId: deposit.id };
 
-      // Conditional write — only PENDING/PROCESSING may transition to FAILED;
+      // Conditional write - only PENDING/PROCESSING may transition to FAILED;
       // a concurrent settle between read and update affects zero rows.
       const transitioned = await this.prisma.deposit.updateMany({
         where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
@@ -642,7 +642,7 @@ export class PayPalService {
       });
       if (transitioned.count === 0) {
         const fresh = await this.prisma.deposit.findUnique({ where: { id: deposit.id }, select: { status: true } });
-        this.logger.log(`PAYMENT.CAPTURE.DENIED arrived after ${fresh?.status} on ${deposit.id} (capture ${evCaptureId ?? 'unknown'}) — no transition`);
+        this.logger.log(`PAYMENT.CAPTURE.DENIED arrived after ${fresh?.status} on ${deposit.id} (capture ${evCaptureId ?? 'unknown'}) - no transition`);
         return { received: true, action: fresh?.status === DepositStatus.COMPLETED ? 'already_completed' : 'ignored_wrong_status', depositId: deposit.id };
       }
       this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.FAILED });
@@ -662,7 +662,7 @@ export class PayPalService {
       });
       if (transitioned.count === 0) {
         const fresh = await this.prisma.deposit.findUnique({ where: { id: deposit.id }, select: { status: true } });
-        this.logger.log(`CHECKOUT.ORDER.VOIDED arrived after ${fresh?.status} on ${deposit.id} — no transition`);
+        this.logger.log(`CHECKOUT.ORDER.VOIDED arrived after ${fresh?.status} on ${deposit.id} - no transition`);
         return { received: true, action: fresh?.status === DepositStatus.COMPLETED ? 'already_completed' : 'ignored_wrong_status', depositId: deposit.id };
       }
       this.eventsService.emitToUser(deposit.userId, 'deposit:updated', { depositId: deposit.id, status: DepositStatus.CANCELLED });
@@ -689,7 +689,7 @@ export class PayPalService {
 
     if (expired.length === 0) return;
 
-    this.logger.log(`Found ${expired.length} PayPal deposit(s) older than 3h — auto-cancelling`);
+    this.logger.log(`Found ${expired.length} PayPal deposit(s) older than 3h - auto-cancelling`);
 
     for (const deposit of expired) {
       try {
@@ -698,7 +698,7 @@ export class PayPalService {
           try {
             await this.cancelOrder(deposit.paymentRef);
           } catch {
-            /* ignore — order may already be expired at PayPal */
+            /* ignore - order may already be expired at PayPal */
           }
         }
 
@@ -712,11 +712,11 @@ export class PayPalService {
         });
 
         if (cancelled.count === 0) {
-          this.logger.log(`Deposit ${deposit.id} already processed — skipping auto-cancel`);
+          this.logger.log(`Deposit ${deposit.id} already processed - skipping auto-cancel`);
           continue;
         }
 
-        this.logger.log(`Deposit ${deposit.id} auto-cancelled — PayPal order expired`);
+        this.logger.log(`Deposit ${deposit.id} auto-cancelled - PayPal order expired`);
         this.eventsService.emitToUser(deposit.userId, 'deposit:updated', {
           depositId: deposit.id,
           status: DepositStatus.CANCELLED,

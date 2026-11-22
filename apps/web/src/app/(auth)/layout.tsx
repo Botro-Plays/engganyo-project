@@ -4,7 +4,7 @@ import { AuthenticatedProviders } from '@/app/providers';
 import { BrandLogo } from '@/components/brand-logo';
 import { PageTitle } from '@/components/page-title';
 
-// Auth flows are functional pages, not content — keep them out of the index.
+// Auth flows are functional pages, not content - keep them out of the index.
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };

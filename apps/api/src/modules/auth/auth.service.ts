@@ -437,7 +437,7 @@ export class AuthService {
 
   async getMe(userId: string): Promise<SafeUser> {
     const cacheKey = `auth:me:${userId}`;
-    // Cache failures degrade to a fresh DB read — a Redis outage must not
+    // Cache failures degrade to a fresh DB read - a Redis outage must not
     // turn a successful read (or a preceding settlement) into an error.
     const cached = await this.redisService.getJson<SafeUser>(cacheKey).catch((err: unknown) => {
       this.logger.warn(`auth:me cache read failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
@@ -488,7 +488,7 @@ export class AuthService {
       nextTierProgress,
       creditBalance: user.wallet?.balance ?? base.creditBalance,
     };
-    // Best-effort cache write — a Redis failure must not fail the request.
+    // Best-effort cache write - a Redis failure must not fail the request.
     await this.redisService.setJson(cacheKey, result, 3600).catch((err: unknown) => {
       this.logger.warn(`auth:me cache write failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -588,7 +588,7 @@ export class AuthService {
     });
 
     if (!user) {
-      return; // Silent — don't reveal if email is registered
+      return; // Silent - don't reveal if email is registered
     }
 
     if (user.status === UserStatus.ACTIVE) {
@@ -791,7 +791,7 @@ export class AuthService {
 
   async getPublicConfig() {
     const cfg = await this.getRecaptchaConfig();
-    // Fetch all rows (no filter) — platforms with no row default to enabled=true on the backend
+    // Fetch all rows (no filter) - platforms with no row default to enabled=true on the backend
     const ALL_MANAGED_PLATFORMS = ['YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER', 'TWITCH', 'SPOTIFY', 'TELEGRAM', 'DISCORD', 'TRUSTPILOT', 'GOOGLE'] as const;
     const oauthRows = await this.prisma.oAuthConfig.findMany({
       select: { platform: true, enabled: true },
@@ -839,7 +839,7 @@ export class AuthService {
 
     // Fail closed: enabled without a usable configuration is an outage, not a bypass.
     if (!secret) {
-      this.logger.error('reCAPTCHA is enabled but no secret key is configured — failing closed');
+      this.logger.error('reCAPTCHA is enabled but no secret key is configured - failing closed');
       throw new ServiceUnavailableException('Human verification is temporarily unavailable. Please try again later.');
     }
 
@@ -864,7 +864,7 @@ export class AuthService {
       throw new BadRequestException('reCAPTCHA validation failed. Please try again.');
     }
 
-    // Hostname must match this deployment — a token minted for another
+    // Hostname must match this deployment - a token minted for another
     // property using the same keys must not be accepted.
     const expectedHosts = this.expectedRecaptchaHosts();
     if (typeof data.hostname !== 'string' || !expectedHosts.has(data.hostname.toLowerCase())) {

@@ -265,7 +265,7 @@ export default function UserProfilePage() {
             { icon: Star,        label: 'XP',          value: data.xp.toLocaleString() },
             { icon: CheckCircle2,label: 'Tasks done',  value: data.profile?.totalTasksDone ?? 0 },
             { icon: BarChart2,   label: 'Completion',  value: `${Math.round((data.profile?.completionRate ?? 0) * 100)}%` },
-            { icon: Shield,      label: 'Trust',       value: data.trustScore ? `${Math.round(data.trustScore.score)}` : '—' },
+            { icon: Shield,      label: 'Trust',       value: data.trustScore ? `${Math.round(data.trustScore.score)}` : 'None' },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center">
               <Icon className="w-4 h-4 text-brand-400 mx-auto mb-1" />
@@ -284,7 +284,7 @@ export default function UserProfilePage() {
             {data.socialAccounts.map((s) => {
               const socialUrl = getSocialUrl(s.platform, s.profileUrl, s.platformUsername);
               const label = s.platform.charAt(0) + s.platform.slice(1).toLowerCase();
-              // TODO: Discord profile links — investigate how to generate a public profile URL.
+              // TODO: Discord profile links - investigate how to generate a public profile URL.
               // See: https://www.google.com/search?q=how+to+get+discord+profile+link%3F&ie=UTF-8
               const showAt = s.platform !== 'DISCORD';
               const displayHandle = s.platformUsername.replace(/^@/, '');

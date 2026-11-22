@@ -213,8 +213,8 @@ function UserDetailPanel({ userId }: { userId: string }) {
           <div className="space-y-1">
             {data.ipRecords.map((ip, i) => (
               <div key={i} className="flex items-center gap-3 text-xs">
-                <code className="font-mono text-sc-text bg-sc-panel-2 px-1.5 py-0.5 rounded">{ip.ipAddress ?? '—'}</code>
-                <span className="text-sc-muted">{[ip.country, ip.region].filter(Boolean).join(' · ') || '—'}</span>
+                <code className="font-mono text-sc-text bg-sc-panel-2 px-1.5 py-0.5 rounded">{ip.ipAddress ?? 'None'}</code>
+                <span className="text-sc-muted">{[ip.country, ip.region].filter(Boolean).join(' · ') || 'None'}</span>
                 <span className="text-sc-dim ml-auto">{formatDate(ip.createdAt)}</span>
               </div>
             ))}
@@ -446,7 +446,7 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sc-dim text-xs">
-                    {u.ipRecords?.[0]?.country ?? '—'}
+                    {u.ipRecords?.[0]?.country ?? 'None'}
                     {u.ipRecords?.[0]?.region && <span className="text-sc-dim"> · {u.ipRecords[0].region}</span>}
                   </td>
                   <td className="px-4 py-3 text-sc-dim">{formatDate(u.createdAt)}</td>
@@ -461,7 +461,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'SUSPENDED' })}
                               className="px-2 py-1 text-xs rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
-                              title="Suspend — temporarily restrict the user's access. They cannot log in until reactivated."
+                              title="Suspend - temporarily restrict the user's access. They cannot log in until reactivated."
                             >
                               Suspend
                             </button>
@@ -470,7 +470,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'BANNED' })}
                               className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                              title="Ban — permanently block the user. Their account and data remain but they cannot access the platform."
+                              title="Ban - permanently block the user. Their account and data remain but they cannot access the platform."
                             >
                               Ban
                             </button>
@@ -479,7 +479,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })}
                               className="px-2 py-1 text-xs rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
-                              title="Activate — restore the user's access and allow them to log in again."
+                              title="Activate - restore the user's access and allow them to log in again."
                             >
                               Activate
                             </button>
@@ -488,7 +488,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => statusMutation.mutate({ userId: u.id, newStatus: 'ACTIVE' })}
                               className="px-2 py-1 text-xs rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
-                              title="Approve — manually verify the user's email and activate their account."
+                              title="Approve - manually verify the user's email and activate their account."
                             >
                               Approve
                             </button>
@@ -497,7 +497,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => { setSelectedUser(u); setCreditSuccess(false); setCreditError(null); creditForm.reset({ action: 'grant' }); }}
                               className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors"
-                              title="Adjust Credits — grant or deduct credits from this user's wallet balance."
+                              title="Adjust Credits - grant or deduct credits from this user's wallet balance."
                             >
                               <Coins className="w-3 h-3" />
                             </button>
@@ -506,7 +506,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => { setTrustUser(u); setTrustSuccess(false); setTrustError(null); trustForm.reset({ action: 'add' }); }}
                               className="px-2 py-1 text-xs rounded bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
-                              title="Adjust Trust Score — add or subtract trust score points to influence the user's platform reputation."
+                              title="Adjust Trust Score - add or subtract trust score points to influence the user's platform reputation."
                             >
                               <Shield className="w-3 h-3" />
                             </button>
@@ -515,7 +515,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => { setRoleUser(u); setRoleSuccess(false); setRoleError(null); roleForm.reset({ role: u.role as typeof ASSIGNABLE_ROLES[number] }); }}
                               className="px-2 py-1 text-xs rounded bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 transition-colors"
-                              title="Change Role — assign a different platform role (USER, CREATOR, MODERATOR, ADMIN)."
+                              title="Change Role - assign a different platform role (USER, CREATOR, MODERATOR, ADMIN)."
                             >
                               <ShieldCheck className="w-3 h-3" />
                             </button>
@@ -524,7 +524,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => { setEditUser(u); setEditSuccess(false); setEditError(null); userDetailsForm.reset({ email: u.email, username: u.username, displayName: u.displayName ?? '' }); }}
                               className="px-2 py-1 text-xs rounded bg-sc-soft/10 text-sc-muted hover:bg-sc-soft/20 transition-colors"
-                              title="Edit — update the user's basic info such as email, username, and display name."
+                              title="Edit - update the user's basic info such as email, username, and display name."
                             >
                               Edit
                             </button>
@@ -533,7 +533,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => { setDisable2faUser(u); setDisable2faError(null); }}
                               className="px-2 py-1 text-xs rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
-                              title="Disable 2FA — remove two-factor authentication from this user's account."
+                              title="Disable 2FA - remove two-factor authentication from this user's account."
                             >
                               <ShieldOff className="w-3 h-3" />
                             </button>
@@ -542,7 +542,7 @@ export default function AdminUsersPage() {
                             <button
                               onClick={() => { setDeleteUser(u); setDeleteError(null); }}
                               className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                              title="Delete — permanently remove this user and all associated data. Referrals linked to this user are also cleaned up."
+                              title="Delete - permanently remove this user and all associated data. Referrals linked to this user are also cleaned up."
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -582,7 +582,7 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Role change modal — SUPER_ADMIN only */}
+      {/* Role change modal - SUPER_ADMIN only */}
       {roleUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
@@ -662,7 +662,7 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Edit user details modal — SUPER_ADMIN only */}
+      {/* Edit user details modal - SUPER_ADMIN only */}
       {editUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">
@@ -782,7 +782,7 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Delete user confirmation modal — SUPER_ADMIN only */}
+      {/* Delete user confirmation modal - SUPER_ADMIN only */}
       {deleteUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm card-glass rounded-2xl p-6">

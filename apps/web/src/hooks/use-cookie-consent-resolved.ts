@@ -8,7 +8,7 @@ const CONSENT_KEY = 'cookie-consent';
  * True once the visitor has chosen a cookie consent ('all'/'essential').
  *
  * Tour overlays render above the consent banner (z-70+ vs z-60), so any
- * tour UI must stay hidden until this resolves — otherwise the modal
+ * tour UI must stay hidden until this resolves - otherwise the modal
  * backdrop makes "Accept All" unclickable. Polls briefly and listens for
  * storage events so a choice made after mount flips this true, and a
  * settings reset flips it back false.

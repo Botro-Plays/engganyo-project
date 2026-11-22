@@ -140,8 +140,7 @@ describe('A01: token purpose separation', () => {
   it.each(['two_factor_auth', 'refresh', 'oauth_state', undefined])(
     'both sockets disconnect on an access-SIGNED token with purpose %s (purpose check, not signature)',
     async (purpose) => {
-      // Signed with the access secret, so signature verification passes —
-      // only the purpose check can reject it. Removing that check fails this test.
+      // Signed with the access secret, so signature verification passes - // only the purpose check can reject it. Removing that check fails this test.
       const token = accessSigned({ purpose });
 
       const eventsClient = fakeSocket(token);
@@ -224,7 +223,7 @@ describe('A01: token purpose separation', () => {
     expect(client.join).toHaveBeenCalledWith('user:user-1');
 
     // Refresh token: signed with refresh secret, purpose 'refresh', verified
-    // by the refresh path's own check — and unusable as an access token.
+    // by the refresh path's own check - and unusable as an access token.
     const refreshPayload = jwt.verify<JwtPayload>(refreshToken, { secret: REFRESH_SECRET });
     expect(refreshPayload.purpose).toBe('refresh');
     expect(() => jwt.verify(refreshToken, { secret: ACCESS_SECRET })).toThrow();

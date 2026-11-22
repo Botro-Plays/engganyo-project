@@ -7,7 +7,7 @@
  *
  * Asserts: sender debit + recipient credit (+ message link for tips),
  * rain distribution, and purchase + inventory + debit for the store all
- * commit or roll back as ONE transaction — exact persisted balances,
+ * commit or roll back as ONE transaction - exact persisted balances,
  * ledger rows, and balance mirrors. Redis tip-window accounting and
  * notifications/events are non-transactional post-commit effects and are
  * not asserted here.
@@ -24,7 +24,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `xfer_${Date.now().toString(36)}_`;
 
-/** Fixture rows created by this run — cleanup is scoped to these only. */
+/** Fixture rows created by this run - cleanup is scoped to these only. */
 const created = {
   userIds: new Set<string>(),
   channelIds: new Set<string>(),
@@ -34,7 +34,7 @@ const created = {
 /**
  * Assert TEST_DATABASE_URL actually targets an isolated disposable DB
  * before any fixture write: loopback host, a *_test database name, and
- * the server reporting that same database — so a mistaken production or
+ * the server reporting that same database - so a mistaken production or
  * dev URL fails loudly instead of deleting rows.
  */
 async function assertIsolatedDb(client: PrismaClient) {
@@ -72,7 +72,7 @@ const mockRedis = () => {
   return redis;
 };
 
-run('Transfers & purchases — real PostgreSQL integration', () => {
+run('Transfers & purchases - real PostgreSQL integration', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -138,7 +138,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
-    // PrismaService.withTransaction is just $transaction — attach the same
+    // PrismaService.withTransaction is just $transaction - attach the same
     // surface so services built on the raw client behave identically.
     (prisma as never as Record<string, unknown>).withTransaction = (
       fn: (tx: unknown) => Promise<unknown>,
@@ -167,7 +167,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
   });
 
   afterEach(async () => {
-    // Scoped teardown — only rows owned by this run's fixtures, in
+    // Scoped teardown - only rows owned by this run's fixtures, in
     // dependency order. Untracked rows (e.g. the sentinel below, or
     // another suite's leftovers) are never touched.
     const users = [...created.userIds];
@@ -198,7 +198,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
 
   afterAll(async () => {
     // The sentinel created by the last test survived every scoped
-    // afterEach teardown — proof cleanup never sweeps untracked rows.
+    // afterEach teardown - proof cleanup never sweeps untracked rows.
     if (sentinelId) {
       const still = await prisma.user.findUnique({
         where: { id: sentinelId },
@@ -255,7 +255,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     expect((await balances(sender.id)).wallet).toBe(1000);
     expect((await balances(sender.id)).mirror).toBe(1000);
     expect((await balances(recipient.id)).wallet).toBe(0);
-    // Only the fixture credit exists — no tip ledger rows on either side.
+    // Only the fixture credit exists - no tip ledger rows on either side.
     expect(await ledgerRows(sender.id)).toHaveLength(1);
     expect(await ledgerRows(recipient.id)).toHaveLength(0);
   });
@@ -294,7 +294,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
 
     const got = await Promise.all(recipients.map((r) => balances(r.id)));
     const totalReceived = got.reduce((s, b) => s + b.wallet, 0);
-    // 100 split 3 ways = 33/33/34 — every credit landed, sum conserved.
+    // 100 split 3 ways = 33/33/34 - every credit landed, sum conserved.
     expect(totalReceived).toBe(100);
     for (const b of got) {
       expect([33, 34]).toContain(b.wallet);
@@ -307,7 +307,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     const ok1 = await makeUser(0);
     const broken = await makeUser(0);
     const ok2 = await makeUser(0);
-    // Delete a recipient's wallet — its in-tx credit must fail.
+    // Delete a recipient's wallet - its in-tx credit must fail.
     await prisma.wallet.delete({ where: { userId: broken.id } });
     const channel = await makeChannel([sender.id, ok1.id, broken.id, ok2.id]);
 
@@ -315,11 +315,11 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
       channels.handleRainCommand(sender.id, channel.id, '/rain 90 3', UserRole.ADMIN),
     ).rejects.toThrow();
 
-    // Sender keeps everything — no partial rain survived.
+    // Sender keeps everything - no partial rain survived.
     expect((await balances(sender.id)).wallet).toBe(1000);
     expect((await balances(ok1.id)).wallet).toBe(0);
     expect((await balances(ok2.id)).wallet).toBe(0);
-    // Sender ledger: fixture credit only — zero rain debits.
+    // Sender ledger: fixture credit only - zero rain debits.
     expect(await ledgerRows(sender.id)).toHaveLength(1);
     expect(await ledgerRows(ok1.id)).toHaveLength(0);
   });
@@ -351,7 +351,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     expect(spend.balanceAfter).toBe(300);
   });
 
-  it('concurrent purchases of a limited item never oversell — loser keeps full balance and gains NO refund row', async () => {
+  it('concurrent purchases of a limited item never oversell - loser keeps full balance and gains NO refund row', async () => {
     const b1 = await makeUser(500);
     const b2 = await makeUser(500);
     const item = await makeItem({
@@ -382,7 +382,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     expect((await balances(loserId)).wallet).toBe(500);
     expect((await balances(loserId)).mirror).toBe(500);
 
-    // The loser has exactly their fixture credit — the old code would have
+    // The loser has exactly their fixture credit - the old code would have
     // left a debit + best-effort refund pair. Single-tx design leaves none.
     const loserRows = await ledgerRows(loserId);
     expect(loserRows).toHaveLength(1);
@@ -422,7 +422,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
       maxOwnedPerUser: 2,
     });
 
-    // Two concurrent buys of qty 2 — only the first may pass the cap.
+    // Two concurrent buys of qty 2 - only the first may pass the cap.
     const results = await Promise.allSettled([
       store.purchaseItem(buyer.id, item.id, 2),
       store.purchaseItem(buyer.id, item.id, 2),
@@ -457,7 +457,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
   });
 
   it('scoped cleanup preserves an unrelated sentinel record', async () => {
-    // Deliberately untracked — mimics pre-existing or another suite's
+    // Deliberately untracked - mimics pre-existing or another suite's
     // data. afterEach must leave it alone; afterAll asserts it survived.
     const sentinel = await prisma.user.create({
       data: {
@@ -470,7 +470,7 @@ run('Transfers & purchases — real PostgreSQL integration', () => {
     });
     sentinelId = sentinel.id;
 
-    // A normal tracked fixture alongside it — removed by afterEach.
+    // A normal tracked fixture alongside it - removed by afterEach.
     const temp = await makeUser(100);
     expect((await balances(temp.id)).wallet).toBe(100);
     expect(created.userIds.has(temp.id)).toBe(true);

@@ -112,7 +112,7 @@ export interface RoomState {
 }
 
 /**
- * Single proof-eligibility rule — mirrors the API (`submitProof` accepts
+ * Single proof-eligibility rule - mirrors the API (`submitProof` accepts
  * proof only in post-agreement statuses before the ROOM deadline; offer
  * deadlines are informational and never gate submission). Keep in sync with
  * `POST_AGREEMENT_STATUSES` + `roomDeadlinePassed` in rooms.service.ts.

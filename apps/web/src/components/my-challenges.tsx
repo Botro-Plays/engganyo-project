@@ -272,7 +272,7 @@ export function MyChallenges() {
                           )}
                         </div>
                         <p className="text-xs text-sc-dim mt-0.5">
-                          Submitted {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '—'}
+                          Submitted {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : 'None'}
                           {s.reviewDeadline && !s.escalated && (
                             <> · deadline {new Date(s.reviewDeadline).toLocaleString()}</>
                           )}

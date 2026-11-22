@@ -60,7 +60,7 @@ export class UserRateLimitGuard implements CanActivate {
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: `Too many requests — try again in ${retryAfter}s`,
+          message: `Too many requests - try again in ${retryAfter}s`,
           retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,

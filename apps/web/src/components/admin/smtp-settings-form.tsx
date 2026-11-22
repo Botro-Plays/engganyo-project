@@ -120,7 +120,7 @@ export function SmtpSettingsForm() {
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <p className="text-sc-muted text-sm">
         Configure Resend, SendGrid, or another SMTP provider. Changes apply to verification, password-reset, and
-        announcement emails immediately — no server restart required.
+        announcement emails immediately - no server restart required.
       </p>
 
       {/* Active source banner */}
@@ -187,7 +187,7 @@ export function SmtpSettingsForm() {
           <div>
             <label className={LABEL} htmlFor="smtp-password">
               Password / API key{' '}
-              {data.passwordSet && <span className="text-sc-dim">(a value is stored — leave blank to keep)</span>}
+              {data.passwordSet && <span className="text-sc-dim">(a value is stored - leave blank to keep)</span>}
             </label>
             <div className="relative">
               <input
@@ -268,7 +268,7 @@ export function SmtpSettingsForm() {
         <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
         <p className="text-xs text-amber-300/80">
           <span className="font-semibold text-amber-300">Security note:</span> Saved passwords are encrypted in the
-          database and never shown again. A stored value only means something is saved — it does not confirm delivery
+          database and never shown again. A stored value only means something is saved - it does not confirm delivery
           works; use the test button after saving. Test emails go only to your own account address.
         </p>
       </div>

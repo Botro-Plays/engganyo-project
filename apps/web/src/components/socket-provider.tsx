@@ -24,7 +24,7 @@ export function useSocketContext() {
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
-  // Subscribe to the store token — token refresh updates it, and the socket
+  // Subscribe to the store token - token refresh updates it, and the socket
   // must reconnect with the fresh JWT or the server rejects it forever.
   const accessToken = useAuthStore((s) => s.accessToken);
 

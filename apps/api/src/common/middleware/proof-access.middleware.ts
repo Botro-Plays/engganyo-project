@@ -24,14 +24,13 @@ type HandlerResponse = {
 };
 
 /**
- * Express handler mounted at /uploads/proofs — proofs are NOT part of the
+ * Express handler mounted at /uploads/proofs - proofs are NOT part of the
  * broad static-served uploads tree, so this handler is the only code path
  * that can return proof bytes.
  *
  * A03 hardening:
  *  - Requires a genuinely valid access token (signature + purpose==='access').
- *  - Resolves the user's CURRENT role and account status from the database —
- *    stale JWT role claims never grant access, and suspended/banned/deactivated
+ *  - Resolves the user's CURRENT role and account status from the database - *    stale JWT role claims never grant access, and suspended/banned/deactivated
  *    accounts are rejected.
  *  - Authorizes the requested resource <ownerId>/<completionId>/<filename> for
  *    the proof owner, the owning campaign's reviewer, or an admin role.
@@ -78,7 +77,7 @@ export function createProofAccessHandler(
       return;
     }
 
-    // Fresh, trusted account state — a stale JWT role never grants access.
+    // Fresh, trusted account state - a stale JWT role never grants access.
     // Soft-deleted users are excluded, consistent with JwtStrategy.
     let user: { role: string; status: string } | null;
     try {
@@ -121,7 +120,7 @@ export function createProofAccessHandler(
         });
         // Proof is visible to the completer, the campaign creator, the
         // challenge creator, and the challenge claimant (who is the
-        // completer anyway — kept for clarity).
+        // completer anyway - kept for clarity).
         allowed =
           completion?.userId === ownerId &&
           (completion.campaign?.userId === payload.sub ||

@@ -13,18 +13,18 @@ import { PrismaService } from '../../database/prisma.service';
  * Correctness properties:
  * - Eligibility binds to the completion's authoritative verification
  *   timestamp (`verifiedAt`). A VERIFIED row with NULL verifiedAt is an
- *   anomaly: it is NEVER backdated to createdAt — an audit entry is
+ *   anomaly: it is NEVER backdated to createdAt - an audit entry is
  *   written for investigation and the row is excluded from counts.
  * - Grant + user_inventory stack + inventory_movements row + unique
  *   (userId, isoWeek) entitlement commit in ONE transaction. The
- *   entitlement identity is per user+program+week — changing the
+ *   entitlement identity is per user+program+week - changing the
  *   configured itemId midweek can never mint a second grant; the
  *   awarded itemId is preserved on the row for audit.
  * - A per-(user, week) advisory xact lock serializes concurrent
  *   qualifying completions; the entitlement unique key is the backstop.
  * - Issuance is controlled by PlatformConfig `activity_reward_config`
  *   ({enabled, itemId, thresholdCompletions, minDistinctDays}). When
- *   disabled, evaluation is a no-op — existing stock/trades unaffected.
+ *   disabled, evaluation is a no-op - existing stock/trades unaffected.
  * - The configured item must carry metadata.activityRewardTradable so a
  *   misconfiguration cannot mint tradable-by-policy stock for an
  *   unapproved item.
@@ -32,11 +32,10 @@ import { PrismaService } from '../../database/prisma.service';
  *   below_threshold, already_granted, granted and missing_verified_at
  *   settle the outcome flag; a missing/inactive/unwhitelisted item
  *   throws ActivityRewardRetryableError so the outcome stays PENDING
- *   and the sweeper retries after the configuration is repaired —
- *   no additional task completion is required.
+ *   and the sweeper retries after the configuration is repaired - *   no additional task completion is required.
  */
 
-/** Thrown for recoverable grant blockers — the outcome effect leaves
+/** Thrown for recoverable grant blockers - the outcome effect leaves
  *  activityRewardSettled=false so the sweeper retries the same
  *  completion's evaluation after configuration recovery. */
 export class ActivityRewardRetryableError extends Error {
@@ -115,7 +114,7 @@ export class ActivityRewardService {
 
   /**
    * Evaluate the weekly grant for the ISO week containing `verifiedAt`.
-   * Called as a TaskCompletionOutcome effect — idempotent and safe to
+   * Called as a TaskCompletionOutcome effect - idempotent and safe to
    * re-run: the entitlement unique key + advisory lock make repeat calls
    * return 'already_granted' without side effects.
    */
@@ -125,10 +124,9 @@ export class ActivityRewardService {
     verifiedAt: Date | null,
   ): Promise<{ outcome: WeeklyGrantOutcome; isoWeek?: string; detail?: Record<string, unknown> }> {
     if (!verifiedAt) {
-      // VERIFIED without an authoritative timestamp is a data anomaly —
-      // record it for investigation; never substitute createdAt.
+      // VERIFIED without an authoritative timestamp is a data anomaly - // record it for investigation; never substitute createdAt.
       this.logger.warn(
-        `activity_reward: completion ${completionId} is VERIFIED with NULL verifiedAt — skipping weekly-grant evaluation for user ${userId}`,
+        `activity_reward: completion ${completionId} is VERIFIED with NULL verifiedAt - skipping weekly-grant evaluation for user ${userId}`,
       );
       await this.prisma.auditLog
         .create({
@@ -148,7 +146,7 @@ export class ActivityRewardService {
     const isoWeek = ActivityRewardService.isoWeekKey(verifiedAt);
 
     return this.prisma.$transaction(async (tx) => {
-      // Serialize all grant evaluations for this (user, ISO week) — the
+      // Serialize all grant evaluations for this (user, ISO week) - the
       // count→grant sequence must be atomic against concurrent
       // qualifying completions processed by different workers.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`activity_reward:${userId}:${isoWeek}`}, 0))`;
@@ -166,7 +164,7 @@ export class ActivityRewardService {
       if (existing) return { outcome: 'already_granted' as const, isoWeek };
 
       // Threshold first: non-qualifying completions settle cleanly even
-      // while the reward item is unavailable — only a qualifying
+      // while the reward item is unavailable - only a qualifying
       // evaluation depends on item configuration.
       const completions = await tx.taskCompletion.findMany({
         where: {
@@ -189,14 +187,14 @@ export class ActivityRewardService {
 
       const item = await tx.storeItem.findUnique({ where: { id: cfg.itemId } });
       if (!item || !item.isActive) {
-        this.logger.warn(`activity_reward: configured item ${cfg.itemId} missing/inactive — will retry`);
+        this.logger.warn(`activity_reward: configured item ${cfg.itemId} missing/inactive - will retry`);
         throw new ActivityRewardRetryableError(
           `activity_reward: configured item ${cfg.itemId} missing or inactive`,
         );
       }
       const meta = (item.metadata ?? {}) as Record<string, unknown>;
       if (meta['activityRewardTradable'] !== true) {
-        this.logger.warn(`activity_reward: item ${item.id} lacks activityRewardTradable whitelist — will retry`);
+        this.logger.warn(`activity_reward: item ${item.id} lacks activityRewardTradable whitelist - will retry`);
         throw new ActivityRewardRetryableError(
           `activity_reward: item ${item.id} lacks activityRewardTradable whitelist`,
         );

@@ -143,7 +143,7 @@ export default function AdminRoomsPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-sc-text">{r.title}</p>
                     <p className="mt-0.5 text-[10px] text-sc-dim">
-                      @{r.creator.username} vs {r.claimer ? `@${r.claimer.username}` : '—'} · {formatCredits(r.contributionCredits)} ea · {r.status}
+                      @{r.creator.username} vs {r.claimer ? `@${r.claimer.username}` : 'None'} · {formatCredits(r.contributionCredits)} ea · {r.status}
                     </p>
                   </div>
                   <ChevronRight className="h-4 w-4 shrink-0 text-sc-dim" />
@@ -161,7 +161,7 @@ export default function AdminRoomsPage() {
             </p>
           ) : resolveTarget ? (
             <div className="rounded-xl border border-sc-line bg-sc-panel/60 p-4">
-              <h2 className="text-sm font-semibold text-sc-text">Dispute — {resolveTarget.room.title}</h2>
+              <h2 className="text-sm font-semibold text-sc-text">Dispute - {resolveTarget.room.title}</h2>
               <p className="mt-1 text-xs text-sc-muted">{resolveTarget.reason}</p>
               <div className="mt-3 space-y-2">
                 <p className="text-xs font-medium text-sc-dim">Offers</p>
@@ -183,7 +183,7 @@ export default function AdminRoomsPage() {
               </div>
               <div className="mt-4 space-y-2">
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/80">
-                  Recording a decision does not change the room. It stays frozen until its original deadline, then expires with both contributions refunded and the room charge reversed. Resolution records adjudication only — it never resumes work or completes the room.
+                  Recording a decision does not change the room. It stays frozen until its original deadline, then expires with both contributions refunded and the room charge reversed. Resolution records adjudication only - it never resumes work or completes the room.
                 </div>
                 <select value={action} onChange={(e) => setAction(e.target.value as 'resolve' | 'dismiss')} className="w-full rounded-lg border border-sc-line bg-sc-panel px-3 py-2 text-sm text-sc-text">
                   <option value="resolve">Resolve</option>
@@ -221,17 +221,17 @@ export default function AdminRoomsPage() {
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-sc-dim sm:grid-cols-4">
                   <div>Creator: @{detail.creator.username}</div>
-                  <div>Joiner: {detail.claimer ? `@${detail.claimer.username}` : '—'}</div>
+                  <div>Joiner: {detail.claimer ? `@${detail.claimer.username}` : 'None'}</div>
                   <div>Contribution: {formatCredits(detail.contributionCredits)} ea</div>
                   <div>Charge: {detail.chargeCollectedAt ? `${formatCredits(detail.roomCharge)} collected` : `${formatCredits(detail.roomCharge)} pending`}</div>
-                  <div>Started: {detail.startedAt ? formatRelativeTime(detail.startedAt) : '—'}</div>
-                  <div>Deadline: {detail.expiresAt ? new Date(detail.expiresAt).toLocaleString() : '—'}</div>
-                  <div>Closed: {detail.closedAt ? formatRelativeTime(detail.closedAt) : '—'}</div>
-                  <div>Reason: {detail.closeReason ?? '—'}</div>
+                  <div>Started: {detail.startedAt ? formatRelativeTime(detail.startedAt) : 'None'}</div>
+                  <div>Deadline: {detail.expiresAt ? new Date(detail.expiresAt).toLocaleString() : 'None'}</div>
+                  <div>Closed: {detail.closedAt ? formatRelativeTime(detail.closedAt) : 'None'}</div>
+                  <div>Reason: {detail.closeReason ?? 'None'}</div>
                 </div>
                 {detail.status === 'DISPUTED' && (
                   <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-200/80">
-                    Frozen until the original deadline, then expires with both contributions refunded and the room charge reversed. Moderator decisions record adjudication only — they never resume work or complete the room.
+                    Frozen until the original deadline, then expires with both contributions refunded and the room charge reversed. Moderator decisions record adjudication only - they never resume work or complete the room.
                   </p>
                 )}
               </div>

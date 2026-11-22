@@ -186,7 +186,7 @@ export default function LeaderboardPage() {
     enabled: mainTab === 'referrals',
   });
 
-  // Equipped avatar frames for every visible list — one batched request
+  // Equipped avatar frames for every visible list - one batched request
   const cosmeticsMap = useCosmeticsMap([
     ...(lbData ?? []).map((e) => e.id),
     ...(achLbData ?? []).map((e) => e.id),

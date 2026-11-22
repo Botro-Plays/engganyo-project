@@ -124,7 +124,7 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
   ],
   providers: [
     // A08: ThrottlerModule was configured but no guard was registered, so
-    // @Throttle/@SkipThrottle were dead metadata. Register it globally — the
+    // @Throttle/@SkipThrottle were dead metadata. Register it globally - the
     // configured default (app.throttle.*, 100/60s) applies to every route and
     // per-route @Throttle overrides now enforce. Health already @SkipThrottle.
     {

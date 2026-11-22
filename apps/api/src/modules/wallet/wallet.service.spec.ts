@@ -353,11 +353,11 @@ describe('WalletService', () => {
       ...over,
     });
 
-    it('$1 package at rate 63.46 qualifies — derived min equals the exact charge', async () => {
+    it('$1 package at rate 63.46 qualifies - derived min equals the exact charge', async () => {
       currencyMock().getUsdToPhp.mockResolvedValue(63.46);
       const options = await service.getDepositOptions();
       expect(options.pricing.minDepositPhp).toBeCloseTo(63.46, 2);
-      // Charge uses identical rounding — 6346c >= 6346c.
+      // Charge uses identical rounding - 6346c >= 6346c.
       prismaPlatformConfigMock.findMany.mockResolvedValue([
         ...DEFAULT_CONFIGS,
         { key: 'paymongo_enabled', value: true },
@@ -406,7 +406,7 @@ describe('WalletService', () => {
       );
     });
 
-    it('half-centavo boundary: $1 at rate 60.025 — displayed charge, checkout charge, and floor agree', async () => {
+    it('half-centavo boundary: $1 at rate 60.025 - displayed charge, checkout charge, and floor agree', async () => {
       currencyMock().getUsdToPhp.mockResolvedValue(60.025);
       const options = await service.getDepositOptions();
       // 6002.5 centavos → one integer-centavo rounding for floor AND charge.
@@ -595,7 +595,7 @@ describe('crypto deposit binding', () => {
       );
     });
 
-    it('signature is single-use — a second consume is rejected', async () => {
+    it('signature is single-use - a second consume is rejected', async () => {
       const ch = await issueChallenge(PAYER_ADDR);
       const signature = await payer.signMessage(ch.message);
       prismaWalletChallengeMock.updateMany
@@ -686,9 +686,9 @@ describe('crypto deposit binding', () => {
     });
   });
 
-  describe('two-account attack — exclusive claim vs manual evidence', () => {
+  describe('two-account attack - exclusive claim vs manual evidence', () => {
     // Faithful uniqueness fixture: a shared set models the paymentRef unique
-    // constraint across ALL write paths — create, updateMany, completeDeposit.
+    // constraint across ALL write paths - create, updateMany, completeDeposit.
     let claimedRefs: Set<string>;
     const installUniqFixture = () => {
       claimedRefs = new Set<string>();
@@ -718,14 +718,14 @@ describe('crypto deposit binding', () => {
       prismaDepositMock.findFirst = jest.fn().mockResolvedValue(null);
     });
 
-    it('attacker claims hash first unverified — verified payer still credits; attacker gets zero', async () => {
+    it('attacker claims hash first unverified - verified payer still credits; attacker gets zero', async () => {
       const claim = installUniqFixture();
       // 1) Attacker declares the VICTIM's wallet (unverified) and submits the
-      //    hash at initiation — before the tx is mined.
+      //    hash at initiation - before the tx is mined.
       await service.initiateDeposit('attacker', {
         packageId: 'pkg-1', method: 'USDT_BEP20', txHash: VALID_HASH, userWalletAddress: WALLET_A,
       } as never);
-      // The attacker's create stored NO paymentRef — gatewayData evidence only.
+      // The attacker's create stored NO paymentRef - gatewayData evidence only.
       expect(claimedRefs.size).toBe(0);
       const atkCreate = (prismaDepositMock.create as jest.Mock).mock.calls[0][0].data;
       expect(atkCreate.paymentRef).toBeUndefined();
@@ -757,7 +757,7 @@ describe('crypto deposit binding', () => {
       expect(() => claim(VALID_HASH)).toThrow();
     });
 
-    it('concurrent manual approval vs automatic settlement — exactly one wins', async () => {
+    it('concurrent manual approval vs automatic settlement - exactly one wins', async () => {
       installUniqFixture();
       const cryptoMock = (service as never as { cryptoVerification: { verifyDeposit: jest.Mock } }).cryptoVerification;
       const ledger: string[] = [];
@@ -776,7 +776,7 @@ describe('crypto deposit binding', () => {
       expect(ledger).toEqual([`dep-vic:${VALID_HASH}`]); // one credit, one ledger row
     });
 
-    it('mixed-case hash — unverified evidence vs verified claim normalize to the same key', async () => {
+    it('mixed-case hash - unverified evidence vs verified claim normalize to the same key', async () => {
       installUniqFixture();
       await service.initiateDeposit('attacker', {
         packageId: 'pkg-1', method: 'USDT_BEP20', txHash: '0x' + 'AB'.repeat(32), userWalletAddress: WALLET_A,
@@ -796,7 +796,7 @@ describe('crypto deposit binding', () => {
     });
   });
 
-  describe('stale RPC result — CAS settlement guard', () => {
+  describe('stale RPC result - CAS settlement guard', () => {
     beforeEach(() => {
       prismaDepositMock.findUnique.mockReset();
       prismaDepositMock.update.mockReset().mockResolvedValue({});
@@ -811,12 +811,12 @@ describe('crypto deposit binding', () => {
 
     it('stale valid result for released claim A cannot settle or touch claim B', async () => {
       const cryptoMock = (service as never as { cryptoVerification: { verifyDeposit: jest.Mock } }).cryptoVerification;
-      // Deposit currently holds claim B — claim A was released mid-flight.
+      // Deposit currently holds claim B - claim A was released mid-flight.
       prismaDepositMock.findUnique.mockResolvedValue({ ...depA, paymentRef: HASH_B });
       // A paused verifier for A, then B submitted; stale A result returns.
       cryptoMock.verifyDeposit.mockResolvedValueOnce({ valid: true, txHash: HASH_A, fromAddress: PAYER_ADDR, confirmations: 20 });
       // Guard semantics: the settle's updateMany matches only when the WHERE
-      // still covers the verified claim — HASH_B ≠ HASH_A → 0 rows.
+      // still covers the verified claim - HASH_B ≠ HASH_A → 0 rows.
       const completeSpy = jest.spyOn(service, 'completeDeposit').mockResolvedValue({} as never);
       const out = await service.verifyCryptoDeposit('user-1', 'dep-1');
       expect(out.status).toBe('COMPLETED'); // B verifies+credits once
@@ -829,7 +829,7 @@ describe('crypto deposit binding', () => {
       // Deposit was read with claim A before the RPC call.
       prismaDepositMock.findUnique.mockResolvedValue({ ...depA, paymentRef: HASH_A });
       cryptoMock.verifyDeposit.mockResolvedValueOnce({ valid: true, txHash: HASH_A, fromAddress: PAYER_ADDR, confirmations: 20 });
-      // Mid-flight: A released and B claimed — DB no longer matches A's guard.
+      // Mid-flight: A released and B claimed - DB no longer matches A's guard.
       // updateMany returns 0 rows for any where carrying paymentRef HASH_A.
       prismaDepositMock.updateMany.mockImplementation(({ where }) =>
         Promise.resolve({ count: JSON.stringify(where).includes(HASH_A) ? 0 : 1 }));
@@ -845,7 +845,7 @@ describe('crypto deposit binding', () => {
       const completeSpy = jest.spyOn(service, 'completeDeposit').mockResolvedValue({} as never);
       const out = await service.verifyCryptoDeposit('user-1', 'dep-1');
       expect(out.status).toBe('COMPLETED');
-      // guard carried the gatewayData claim — OR covers submittedHash
+      // guard carried the gatewayData claim - OR covers submittedHash
       const call = completeSpy.mock.calls[0][1] as { guard?: { claimHash: string } };
       expect(call.guard?.claimHash).toBe(HASH_B);
     });

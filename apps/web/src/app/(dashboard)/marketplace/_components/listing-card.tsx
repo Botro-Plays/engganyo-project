@@ -52,7 +52,7 @@ export function MarketplaceListingCard({ listing }: { listing: MarketplaceListin
         <div className="mt-2 text-[11px] text-sc-dim truncate">Seller: {listing.sellerUsername}</div>
       )}
       {listing.catalogChanged && listing.status === 'ACTIVE' && (
-        <div className="mt-2 text-[11px] text-amber-400">Item terms changed — listing will pause</div>
+        <div className="mt-2 text-[11px] text-amber-400">Item terms changed - listing will pause</div>
       )}
       {soldOut && listing.status === 'ACTIVE' && !listing.catalogChanged && (
         <div className="mt-2 text-[11px] text-amber-400">Listing expired</div>

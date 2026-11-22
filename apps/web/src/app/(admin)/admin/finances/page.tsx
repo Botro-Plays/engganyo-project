@@ -89,7 +89,7 @@ const PROVIDER_CARD_CFG: Record<string, { title: string; color: string; accent: 
 };
 
 // One monetary figure row inside a provider card. `verified` distinguishes a
-// provider-reported zero from missing data — never substituted silently.
+// provider-reported zero from missing data - never substituted silently.
 function SettlementFigure({ label, figs, count, currencyHint, prominent }: {
   label: string; figs: SettlementFig[]; count: number; currencyHint?: string; prominent?: boolean;
 }) {
@@ -335,7 +335,7 @@ export default function FinancesPage() {
         </div>
       )}
 
-      {/* ── Provider settlement — dedicated cards per provider ── */}
+      {/* ── Provider settlement - dedicated cards per provider ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(['PAYPAL', 'PAYMONGO'] as const).map((provider) => {
           const rows = (settlementSummary ?? []).filter((r) => r.method === provider);
@@ -365,7 +365,7 @@ export default function FinancesPage() {
               ) : (
                 <div className="space-y-4">
                   {settlementRefetchError && settlementSummary && (
-                    <p className="text-[10px] text-amber-400/80">refresh failed — showing last loaded figures</p>
+                    <p className="text-[10px] text-amber-400/80">refresh failed - showing last loaded figures</p>
                   )}
                   {rows.map((r) => (
                     <div key={`${r.method}-${r.currency}`} className="space-y-1.5">
@@ -400,11 +400,11 @@ export default function FinancesPage() {
                             figs={r.converted}
                             count={r.count}
                           />
-                          <p className="text-[10px] text-sc-dim mt-0.5">settled in the provider&apos;s payout currency — not counted in net</p>
+                          <p className="text-[10px] text-sc-dim mt-0.5">settled in the provider&apos;s payout currency - not counted in net</p>
                         </div>
                       )}
                       {(r.feePartial || r.netPartial || r.convertedPartial) && (
-                        <p className="text-[10px] text-amber-400/80">partial — some deposits lack provider figures (counts shown per figure)</p>
+                        <p className="text-[10px] text-amber-400/80">partial - some deposits lack provider figures (counts shown per figure)</p>
                       )}
                     </div>
                   ))}
@@ -588,7 +588,7 @@ export default function FinancesPage() {
                   byCurrency.set(m.currency, (byCurrency.get(m.currency) ?? 0) + m.amountFiat);
                 }
                 if (byCurrency.size === 0) {
-                  return <p className="text-3xl font-bold text-green-400">—</p>;
+                  return <p className="text-3xl font-bold text-green-400">None</p>;
                 }
                 return Array.from(byCurrency.entries()).map(([currency, amount]) => {
                   const symbol = currency === 'USD' ? '$' : currency === 'PHP' ? '₱' : currency;
@@ -743,7 +743,7 @@ export default function FinancesPage() {
                                 Review
                               </button>
                             ) : (
-                              <span className="text-xs text-sc-dim">—</span>
+                              <span className="text-xs text-sc-dim">None</span>
                             )}
                           </td>
                         </tr>

@@ -13,7 +13,7 @@ class TourVersionDto {
   version?: number;
 
   /** Replay generation the client last observed. Writes carrying a
-   *  generation older than the server's are fenced with 409 — they
+   *  generation older than the server's are fenced with 409 - they
    *  belong to a replay generation the reset already erased. */
   @IsInt()
   @Min(0)

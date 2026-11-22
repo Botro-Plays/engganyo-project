@@ -31,8 +31,8 @@ const statusLabel = (s: string | null | undefined) =>
  * Tours settings surface: the automatic-tours preference (persisted per
  * account, respected across devices) plus per-tour replay for the
  * beginner tour and every milestone feature tour. Manual replay works
- * even while automatic tours are disabled — replay is an explicit user
- * action. Tours grant nothing — replay is pure UI state.
+ * even while automatic tours are disabled - replay is an explicit user
+ * action. Tours grant nothing - replay is pure UI state.
  *
  * The tour store owns the authoritative preference state: saves are
  * awaited and serialized, failures expose a Retry, and overlapping
@@ -66,7 +66,7 @@ export function FeatureToursCard() {
       const d = res.data?.data;
       if (d && Array.isArray(d.tours)) setState(d);
     } catch {
-      /* optional call — leave previous state */
+      /* optional call - leave previous state */
     }
   }, []);
 
@@ -85,18 +85,17 @@ export function FeatureToursCard() {
 
   const replayBeginner = async () => {
     setActionError(null);
-    // Ensure the store is bound to this user before resetting —
-    // resetTour persists via the server and needs userId set.
+    // Ensure the store is bound to this user before resetting - // resetTour persists via the server and needs userId set.
     if (user?.id) useTourStore.getState().syncWithUser(user.id);
     const uid = useTourStore.getState().userId;
     const ok = await resetTour();
-    // The request may resolve after an account switch — a stale
+    // The request may resolve after an account switch - a stale
     // session's result must not redirect or error the current one.
     if (useTourStore.getState().userId !== uid) return;
     if (ok) {
       router.push('/dashboard');
     } else {
-      setActionError('Could not reset the tour — check your connection and try again.');
+      setActionError('Could not reset the tour - check your connection and try again.');
     }
   };
 
@@ -108,10 +107,10 @@ export function FeatureToursCard() {
       const ok = await resetTourKey(key);
       if (useTourStore.getState().userId !== uid) return;
       if (!ok) {
-        setActionError('Could not reset this tour — check your connection and try again.');
+        setActionError('Could not reset this tour - check your connection and try again.');
         return;
       }
-      // Ask MilestoneTour to surface this specific tour now — manual
+      // Ask MilestoneTour to surface this specific tour now - manual
       // replay bypasses the automatic-tours preference.
       requestReplay(key);
       await load();
@@ -164,8 +163,8 @@ export function FeatureToursCard() {
         {autoToursSaving
           ? 'Saving tour preference…'
           : effectiveAutoTours
-            ? 'Automatic tours are on — new guidance appears as you progress.'
-            : 'Automatic tours are off — replay any tour manually below.'}
+            ? 'Automatic tours are on - new guidance appears as you progress.'
+            : 'Automatic tours are off - replay any tour manually below.'}
       </p>
       {autoToursError && (
         <p className="mb-3 flex items-center gap-2 text-xs text-red-400">

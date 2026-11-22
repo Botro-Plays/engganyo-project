@@ -154,14 +154,14 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     await this.seedMissions();
     await this.seedVipTiers();
 
-    // Reward outbox sweeper — delivers committed PENDING rows so a crash
+    // Reward outbox sweeper - delivers committed PENDING rows so a crash
     // between commit and inline flush cannot lose notifications/events.
     this.outboxTimer = setInterval(() => {
       void this.flushRewardOutbox();
     }, 15_000);
     this.outboxTimer.unref?.();
 
-    // Task-outcome sweeper — resumes PENDING durable outcomes whose
+    // Task-outcome sweeper - resumes PENDING durable outcomes whose
     // processing was interrupted, so reward effects are never lost.
     this.outcomeTimer = setInterval(() => {
       void this.processPendingTaskOutcomes();
@@ -220,7 +220,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     tx?: Prisma.TransactionClient,
     // XP boost policy: callers replaying a delayed qualifying event pass
     // the multiplier captured at that event so retries/recovery cannot
-    // change the reward — undefined reads the currently active boost,
+    // change the reward - undefined reads the currently active boost,
     // null means "no boost applied at the event", a number is the frozen
     // multiplier.
     boostOverride?: number | null,
@@ -282,7 +282,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       });
 
       if (leveledUp) {
-      // Post-commit delivery via durable outbox — rows commit with this
+      // Post-commit delivery via durable outbox - rows commit with this
       // tx, so a rollback or retry can never emit a phantom level-up.
       await t.rewardOutboxEvent.create({
         data: {
@@ -298,7 +298,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         data: { userId, kind: 'socket', socketEvent: 'level:up', socketPayload: { newLevel, previousLevel: user.level } },
       });
 
-      // Award bonus VP for leveling up (same tx — commits atomically)
+      // Award bonus VP for leveling up (same tx - commits atomically)
       const vpReward = VP_REWARDS.LEVEL_UP_MULTIPLIER * newLevel;
       await this.awardVp(userId, vpReward, 'level_up', undefined, `Level ${newLevel} bonus`, t);
 
@@ -392,7 +392,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       });
       if (!user) return { newVp: 0, tierUp: false, newTier: null };
 
-      // Replay protection — same stable-identity rule as awardXp.
+      // Replay protection - same stable-identity rule as awardXp.
       if (referenceId != null) {
         const dup = await t.vpEvent.findFirst({
           where: { userId, source, referenceId },
@@ -424,7 +424,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       });
 
     if (tierUp) {
-      // Durable outbox — delivered only after this tx commits.
+      // Durable outbox - delivered only after this tx commits.
       await t.rewardOutboxEvent.create({
         data: {
           userId,
@@ -460,8 +460,8 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Record the durable outcome obligation INSIDE the caller's VERIFIED
-   * transition transaction. Every completion surface — auto-verify,
-   * creator review, admin review, challenge settlement — must call this
+   * transition transaction. Every completion surface - auto-verify,
+   * creator review, admin review, challenge settlement - must call this
    * in the same tx that flips the completion to VERIFIED, so the reward
    * obligation commits or rolls back with the verification itself.
    * Upsert on the unique completionId makes repeat calls safe.
@@ -471,7 +471,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     completionId: string,
   ) {
-    // The qualifying event's authoritative timestamp — VERIFIED time,
+    // The qualifying event's authoritative timestamp - VERIFIED time,
     // falling back to the completion's creation time exactly as the
     // processor does.
     const completion = await tx.taskCompletion.findUnique({
@@ -484,7 +484,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     // Freeze the reward terms that apply to THIS qualifying event inside
     // the VERIFIED transaction: the missions active right now (with their
     // current requirement/credit/xp terms) and the XP boost multiplier
-    // observed now. Delayed recovery replays these terms verbatim — a
+    // observed now. Delayed recovery replays these terms verbatim - a
     // mission created afterward cannot join, a later edit/disable cannot
     // change or erase an earned reward, and a boost that expires before
     // recovery still applies to this event's XP.
@@ -495,7 +495,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     const snapshot: TaskOutcomeRewardSnapshot = { missions };
 
     // Boost eligibility is read from the authoritative DB inside this
-    // transaction — never Redis — and evaluated against the event
+    // transaction - never Redis - and evaluated against the event
     // timestamp, not wall-clock processing time. Every new outcome
     // explicitly records its multiplier or null (no boost); a lookup
     // failure aborts the VERIFIED tx rather than writing an incomplete
@@ -515,7 +515,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     // written once per UTC period (first touch wins). Edits schedule
     // into the next period and every worker pays identical terms for
     // (mission, date) regardless of processing order. No-op before the
-    // rollout boundary — legacy snapshot terms govern those periods.
+    // rollout boundary - legacy snapshot terms govern those periods.
     await this.ensureMissionPeriodTerms(periodDay, tx);
 
     await tx.taskCompletionOutcome.upsert({
@@ -531,14 +531,14 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Post-commit entry point for a verified completion's reward outcome.
-   * Ensures the durable row exists (defensive — the VERIFIED tx should
+   * Ensures the durable row exists (defensive - the VERIFIED tx should
    * already have created it) and processes it. Effects are idempotent,
    * so calling this again after a crash simply resumes.
    */
   async awardTaskCompletionOutcome(userId: string, completionId: string) {
     // The VERIFIED transaction already committed the outcome row; this
     // call is the fast-path processor. Any failure here is recovered by
-    // processPendingTaskOutcomes — it must not fail the caller's request
+    // processPendingTaskOutcomes - it must not fail the caller's request
     // for an already-verified, already-paid completion.
     try {
       const outcome = await this.prisma.taskCompletionOutcome.upsert({
@@ -549,7 +549,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       await this.processTaskCompletionOutcome(outcome.id);
     } catch (err) {
       this.logger.warn(
-        `Task outcome fast-path failed for completion ${completionId} (user ${userId}) — sweeper will retry: ${(err as Error)?.message}`,
+        `Task outcome fast-path failed for completion ${completionId} (user ${userId}) - sweeper will retry: ${(err as Error)?.message}`,
       );
     }
   }
@@ -570,7 +570,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    * Serialization: the outcome is claimed with a conditional
    * updateMany (status PENDING + claim absent-or-stale) carrying a
    * unique claimToken and an attempts increment. Every subsequent
-   * outcome write — per-effect flags and the final status — is
+   * outcome write - per-effect flags and the final status - is
    * conditional on that token, so:
    * - two workers can never process the same outcome concurrently
    *   (only one claim matches);
@@ -578,21 +578,21 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    *   DONE/CANCELLED, re-claim, or acknowledge the new owner's work
    *   (its writes match zero rows and it stops);
    * - a crashed worker's claim expires after OUTCOME_CLAIM_STALE_MS
-   *   and the sweeper re-claims it — recovery is preserved.
+   *   and the sweeper re-claims it - recovery is preserved.
    *
    * Guards: the completion must exist, belong to the outcome's user,
-   * and still be VERIFIED — anything else cancels the outcome rather
+   * and still be VERIFIED - anything else cancels the outcome rather
    * than paying out.
    *
    * Mission progress is attributed to the completion's VERIFIED UTC
    * date (verifiedAt, falling back to createdAt), NOT the processing
-   * day — a delayed recovery can never advance a later day's mission.
+   * day - a delayed recovery can never advance a later day's mission.
    * Mission eligibility and reward terms come from the snapshot frozen
    * at the VERIFIED event (reward_snapshot): missions created after it
    * cannot join and later edits/disables cannot change or erase an
    * earned reward. Outcomes without a snapshot (recorded before this
    * column existed, or the defensive upsert path) fall back to the
-   * missions active at processing time — the explicit legacy policy.
+   * missions active at processing time - the explicit legacy policy.
    *
    * Each effect is tracked by its own flag, committed independently:
    * a crash after an effect commits but before its flag update simply
@@ -677,7 +677,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       {
         key: 'missionSettled',
         name: 'mission',
-        // completionId is the mission-event dedupe identity — outcome
+        // completionId is the mission-event dedupe identity - outcome
         // recovery can never count the same task twice.
         run: () => this.updateMissionProgress(fresh.userId, MissionType.COMPLETE_N_TASKS, 1, {
           sourceId: fresh.completionId,
@@ -719,7 +719,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         await eff.run();
         // Flag write is claim-conditional: if our lease was taken over
         // mid-pass the new owner re-runs this effect (idempotent) and
-        // we must stop — never acknowledge work we no longer own.
+        // we must stop - never acknowledge work we no longer own.
         const flagged = await this.prisma.taskCompletionOutcome.updateMany({
           where: { id: outcomeId, claimToken },
           data: { [eff.key]: true },
@@ -737,7 +737,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       }
     }
     if (claimLost) {
-      this.logger.warn(`Task outcome ${outcomeId} claim superseded mid-pass — stopping`);
+      this.logger.warn(`Task outcome ${outcomeId} claim superseded mid-pass - stopping`);
       return outcome;
     }
 
@@ -760,7 +760,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       // Our lease expired and another worker claimed the outcome while
       // we were processing. Its conditional writes own the row now;
       // our effect writes were idempotent, so nothing is lost or duped.
-      this.logger.warn(`Task outcome ${outcomeId} final write lost claim — superseded worker result discarded`);
+      this.logger.warn(`Task outcome ${outcomeId} final write lost claim - superseded worker result discarded`);
       return outcome;
     }
 
@@ -770,7 +770,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Recovery sweep: process PENDING outcomes oldest-first. Each outcome
-   * is isolated — one failing outcome never blocks the rest of the
+   * is isolated - one failing outcome never blocks the rest of the
    * batch, and settled effects are never re-run.
    */
   async processPendingTaskOutcomes(limit = 50) {
@@ -919,12 +919,12 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    * together, so a failed initialization leaves neither a marker nor
    * partial terms and the next attempt starts clean. Only the
    * transaction that inserts the mission_period_catalogs marker writes
-   * term rows — the catalog is all-or-nothing and a mission created
+   * term rows - the catalog is all-or-nothing and a mission created
    * mid-period can never acquire a current-period term. Scheduled
    * next-period rows are preserved (term createMany skips existing
    * mission rows, keeping the values scheduled at mutation time =
    * intended period-start config). A period with zero active missions
-   * is a legitimate empty catalog — the marker still commits.
+   * is a legitimate empty catalog - the marker still commits.
    */
   private async freezeMissionPeriodCatalogTx(
     tx: Prisma.TransactionClient,
@@ -973,7 +973,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Write a mission's terms for the NEXT UTC period — used by admin
+   * Write a mission's terms for the NEXT UTC period - used by admin
    * mutations so config changes take effect at the period boundary
    * instead of silently altering the current one. `active` mirrors the
    * mission's post-mutation isActive: an inactive/retired mission gets
@@ -1022,7 +1022,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     const today = utcDay(at ?? new Date());
 
     // Period-catalog policy: display, eligibility, progress and
-    // settlement all read the same frozen per-period terms — a mid-day
+    // settlement all read the same frozen per-period terms - a mid-day
     // edit cannot make the UI promise different rewards than payout.
     if (today.getTime() >= missionPeriodEffectiveDate().getTime()) {
       await this.ensureMissionPeriodTerms(today);
@@ -1293,14 +1293,14 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
   /**
    * Claim the daily login reward.
    *
-   * Timing rules (backend clock only — no calendar days, no client timezone):
+   * Timing rules (backend clock only - no calendar days, no client timezone):
    *   - Eligibility: >= 24h must have elapsed since the last successful claim.
    *     Exactly 24h elapsed is eligible.
    *   - Streak: advances while the gap between successful claims is <= 45h.
    *     A gap > 45h resets the streak to 1. Streak freezes cannot prevent this.
    *
    * Atomicity: the conditional updateMany inside the transaction IS the
-   * claim — only one concurrent request can satisfy its where clause. The
+   * claim - only one concurrent request can satisfy its where clause. The
    * claim marker, wallet credit, XP, VP, loot box, reward log and streak
    * achievements all run through the same transaction client, so a failure
    * at ANY step rolls back everything and the user can retry safely. A
@@ -1355,11 +1355,10 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     let bonusLootBox = false;
 
     // Opt-in bounded retry (deadlock/serialization only). The callback
-    // mutates `bonusLootBox`, so it is reset at the start of EVERY attempt —
-    // an aborted attempt must not leak state into the retry or post-commit.
+    // mutates `bonusLootBox`, so it is reset at the start of EVERY attempt - // an aborted attempt must not leak state into the retry or post-commit.
     await withTransactionRetry(this.prisma, async (tx) => {
       bonusLootBox = false;
-      // Atomic eligibility claim — only one concurrent request gets count=1
+      // Atomic eligibility claim - only one concurrent request gets count=1
       const eligibleSince = new Date(now.getTime() - DAILY_REWARD_COOLDOWN_MS);
       const claimed = await tx.user.updateMany({
         where: {
@@ -1382,10 +1381,10 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
       await this.walletService.credit(userId, creditReward, {
         type: TransactionType.EARN_DAILY_REWARD,
-        description: `Daily reward — day ${newStreak} streak`,
+        description: `Daily reward - day ${newStreak} streak`,
       }, tx);
 
-      // Stable per-day source identity — the 24h claim CAS already
+      // Stable per-day source identity - the 24h claim CAS already
       // guarantees once-per-window; the date ref makes events traceable.
       const dailyRef = new Date().toISOString().slice(0, 10);
       await this.awardXp(userId, xpReward, 'daily_login', dailyRef, undefined, tx);
@@ -1397,7 +1396,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
           where: { name: 'Mystery Gift Box', isActive: true },
         });
         if (lootBoxItem) {
-          // Upsert on the (userId,itemId,provenance) unique key — stacks onto
+          // Upsert on the (userId,itemId,provenance) unique key - stacks onto
           // an existing reward-provenance row. Reward grants are bound.
           await tx.userInventory.upsert({
             where: { userId_itemId_provenance: { userId, itemId: lootBoxItem.id, provenance: InventoryProvenance.REWARD } },
@@ -1423,7 +1422,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       await this.checkStreakAchievements(userId, newStreak, tx);
     });
 
-    // Best-effort side effects (after commit — safe to retry/ignore)
+    // Best-effort side effects (after commit - safe to retry/ignore)
     void this.notificationsService.createNotification(
       userId,
       NotificationType.VIP_POINTS_EARNED,
@@ -1529,7 +1528,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       date?: Date;
       // Frozen terms from a task outcome's reward snapshot: when present,
       // these exact mission IDs/terms are used instead of whatever is
-      // active now — delayed recovery cannot acquire later missions or
+      // active now - delayed recovery cannot acquire later missions or
       // lose rewards to config edits. Entries whose mission row was
       // deleted are skipped.
       missions?: MissionRewardTerms[];
@@ -1567,7 +1566,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       }));
     } else if (opts?.missions) {
       // Legacy path (pre-rollout periods): frozen terms from a task
-      // outcome's reward snapshot — delayed recovery cannot acquire
+      // outcome's reward snapshot - delayed recovery cannot acquire
       // later missions or lose rewards to config edits. Entries whose
       // mission row was deleted are skipped.
       const ids = opts.missions.map((m) => m.id);
@@ -1587,7 +1586,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     for (const mission of missions) {
       // One transaction per mission: advisory lock serializes concurrent
       // progress updates for the same (user, mission), and the payout +
-      // progress row + outbox rows commit or roll back together — no
+      // progress row + outbox rows commit or roll back together - no
       // double-pay, no lost payout, no crash window before delivery rows
       // exist.
       const outcome = await withTransactionRetry(this.prisma, async (tx) => {
@@ -1601,7 +1600,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
         // Event-level dedupe: when the caller supplies a stable source
         // identity (e.g. a task completionId), the same event can never
-        // count twice for this mission — outcome recovery replays are
+        // count twice for this mission - outcome recovery replays are
         // safe. INSERT ... ON CONFLICT DO NOTHING keeps the transaction
         // valid on a duplicate (a caught P2002 would abort the Postgres
         // transaction); the event row commits atomically with progress.
@@ -1648,7 +1647,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         const missionRef = `${mission.id}:${day.toISOString().slice(0, 10)}`;
         await this.awardXp(userId, mission.xpReward, 'mission_complete', missionRef, mission.name, tx, opts?.boostMultiplier);
 
-        // Durable outbox rows INSIDE the payout tx — they commit or roll
+        // Durable outbox rows INSIDE the payout tx - they commit or roll
         // back with the reward itself, so there is no window where the
         // mission paid out but its notifications were never recorded.
         await tx.rewardOutboxEvent.create({
@@ -1727,7 +1726,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     boostOverride?: number | null,
   ) {
     // Achievement row + credit + XP settle in ONE transaction: the unique
-    // (userId, achievementId) constraint is the exactly-once guard — a
+    // (userId, achievementId) constraint is the exactly-once guard - a
     // concurrent unlock either wins (and pays once) or hits P2002 and pays
     // nothing. A failure anywhere rolls back the whole settlement, so the
     // reward can never be lost after the row is recorded.
@@ -1755,7 +1754,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         await this.awardXp(userId, xpReward, 'achievement', achievementId, name, t, boostOverride);
       }
 
-      // Durable outbox — commits with the settlement, delivered post-commit.
+      // Durable outbox - commits with the settlement, delivered post-commit.
       await t.rewardOutboxEvent.create({
         data: {
           userId,
@@ -1774,7 +1773,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
     let unlocked: boolean;
     if (tx) {
-      // Inside a caller tx a P2002 aborts that tx — propagate so the caller's
+      // Inside a caller tx a P2002 aborts that tx - propagate so the caller's
       // whole operation rolls back atomically (previous behavior, now safe).
       unlocked = await settle(tx);
     } else {
@@ -1797,14 +1796,14 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
    * - PERSISTED notifications are exactly-once: each is bound to its
    *   outbox event id via Notification.dedupeKey, so a crash after the
    *   notification row commits but before the outbox row is acknowledged
-   *   cannot create a second notification — the retry finds the existing
+   *   cannot create a second notification - the retry finds the existing
    *   row. The outbox claim (processingAt) ensures only one flusher
    *   handles a given event at a time.
    * - SOCKET events are at-least-once: a crash between emit and
    *   acknowledgement may redeliver. Every emitted payload carries a
    *   stable `_eventId` (the outbox row id) so clients can dedupe.
    *
-   * NEVER throws — reward settlement must not fail because notification
+   * NEVER throws - reward settlement must not fail because notification
    * delivery did.
    */
   async flushRewardOutbox() {
@@ -1947,8 +1946,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
           sortOrder: Number(sortOrder ?? 0),
         },
       });
-      // A mission created mid-period joins the catalog NEXT period —
-      // today's frozen set is untouched. Inactive missions get no row.
+      // A mission created mid-period joins the catalog NEXT period - // today's frozen set is untouched. Inactive missions get no row.
       await this.scheduleMissionPeriodTerm(mission, nextUtcDay(today), tx);
       return mission;
     });
@@ -1993,7 +1991,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
   // Idempotent wrapper: the attempt key + recoverable result live in
   // `wheel_spin_attempts` inside the SAME transaction as the spin settlement
-  // and the daily allowance. unique(userId, key) is enforced by Postgres — a
+  // and the daily allowance. unique(userId, key) is enforced by Postgres - a
   // repeated key replays the committed result; a concurrent same-key request
   // blocks on the uncommitted row, then fails the unique check after the
   // first commits. The daily allowance (`wheel_daily_allowances`) is claimed
@@ -2017,11 +2015,11 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       return result;
     };
 
-    // The no-key entry point gets the same transactional allowance — only the
+    // The no-key entry point gets the same transactional allowance - only the
     // attempt bookkeeping is skipped.
     const settle = async (): Promise<Record<string, unknown>> => {
       // withTransactionRetry: bounded whole-tx retry on deadlock/serialization
-      // — wheel settlement touches wallet + inventory + effect rows.
+      // - wheel settlement touches wallet + inventory + effect rows.
       const run = () => withTransactionRetry(this.prisma, execute) as Promise<Record<string, unknown>>;
       if (!idempotencyKey) return run();
       try {
@@ -2042,7 +2040,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
     const result = await settle();
     // Post-commit: rebuild effect caches from DB (deferred Redis writes).
-    // Idempotent — also safe on replayed idempotent results.
+    // Idempotent - also safe on replayed idempotent results.
     await this.storeService.syncEffectCaches(userId).catch((err: unknown) => {
       this.logger.error(`Post-spin effect cache sync failed for user ${userId}`, err);
     });
@@ -2080,7 +2078,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
       const rp = redisPaid ? parseInt(redisPaid, 10) : 0;
       if (Number.isFinite(rp)) paidUsed = Math.max(paidUsed, rp);
     } catch {
-      // Redis is only a rollout-day hint — wheel_spins is authoritative.
+      // Redis is only a rollout-day hint - wheel_spins is authoritative.
     }
     return { freeUsed, paidUsed };
   }
@@ -2106,7 +2104,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
 
     // Claim the free spin atomically. The conditional updateMany takes the
     // allowance row lock and re-evaluates its WHERE clause after any wait, so
-    // two concurrent spins cannot both take the last free spin — the loser
+    // two concurrent spins cannot both take the last free spin - the loser
     // falls through to the paid path.
     const freeClaim = await tx.wheelDailyAllowance.updateMany({
       where: { id: allowance.id, freeUsed: false },
@@ -2136,12 +2134,12 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     // Bind the attempt to the cost the player confirmed. The authoritative
     // cost is only known after the allowance claims above; a mismatch (e.g.
     // the last free spin was taken by a concurrent request) aborts the whole
-    // transaction — no debit, no reward, no spin row, no consumed slot — and
+    // transaction - no debit, no reward, no spin row, no consumed slot - and
     // returns a price-change response so the client can refresh and require a
     // fresh click at the new price.
     if (expectedCost !== undefined && expectedCost !== cost) {
       throw new ConflictException({
-        message: `Spin cost changed to ${cost} credits — review the updated price and spin again.`,
+        message: `Spin cost changed to ${cost} credits - review the updated price and spin again.`,
         code: 'PRICE_CHANGED',
         expectedCost,
         actualCost: cost,
@@ -2192,7 +2190,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
         { multiplier: 2 },
         prize.hours,
         tx,
-        true, // deferRedis — synced post-commit so a rollback leaves no phantom boost
+        true, // deferRedis - synced post-commit so a rollback leaves no phantom boost
       );
       result = { ...result, multiplier: 2, durationHours: prize.hours, expiresAt, extended };
     } else if (prize.effect === 'streak_freeze') {
@@ -2262,7 +2260,7 @@ export class GamificationService implements OnModuleInit, OnModuleDestroy {
     });
     // Row exists → authoritative. Otherwise derive the same seeded view a
     // first spin would compute (history + legacy Redis floor), without
-    // creating the row — status reads must not mutate.
+    // creating the row - status reads must not mutate.
     const usage = allowance
       ? { freeUsed: allowance.freeUsed, paidUsed: allowance.paidUsed }
       : await this.dailyAllowanceUsage(userId, day, this.prisma);

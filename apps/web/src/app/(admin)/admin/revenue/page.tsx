@@ -210,7 +210,7 @@ export default function RevenuePage() {
                 <p className="text-xl font-bold text-sc-text">${cashTotalUSD.toFixed(2)} <span className="text-xs font-normal text-sc-dim">USD incl. USDT</span></p>
               )}
               {cashTotalPHP === 0 && cashTotalUSD === 0 && (
-                <p className="text-2xl font-bold text-sc-text">—</p>
+                <p className="text-2xl font-bold text-sc-text">None</p>
               )}
             </div>
             <p className="text-xs text-sc-dim mt-1">mixed currencies, not directly comparable</p>
@@ -308,7 +308,7 @@ export default function RevenuePage() {
           <div className="flex-1">
             <p className="text-sm font-semibold text-sc-text">Data Model Warning</p>
             <p className="text-xs text-sc-dim mt-0.5">
-              Credit revenue tracks <span className="text-red-400 font-medium">platform credits</span> earned from campaign creation fees — <span className="text-red-400 font-medium">not actual fiat revenue</span>.
+              Credit revenue tracks <span className="text-red-400 font-medium">platform credits</span> earned from campaign creation fees - <span className="text-red-400 font-medium">not actual fiat revenue</span>.
               Cash flow below shows real money from completed deposits only.
               Do not use credit totals for tax or accounting purposes.
             </p>

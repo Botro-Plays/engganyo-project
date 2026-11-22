@@ -125,7 +125,7 @@ export default function ChatPage() {
     }
   }, [initialMessages]);
 
-  // Equipped avatar frames for all visible message senders — one batched request
+  // Equipped avatar frames for all visible message senders - one batched request
   const cosmeticsMap = useCosmeticsMap(messages.map((m) => m.user?.id));
 
   // ─── Socket setup ──────────────────────────────────────────

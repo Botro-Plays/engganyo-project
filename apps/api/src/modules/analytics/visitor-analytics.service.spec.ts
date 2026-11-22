@@ -1,5 +1,5 @@
 /**
- * Unit tests for VisitorAnalyticsService — normalization, attribution,
+ * Unit tests for VisitorAnalyticsService - normalization, attribution,
  * dedupe, and visit-window semantics with a mocked Prisma client.
  * Real-Postgres coverage lives in visitor-analytics.integration.spec.ts.
  */
@@ -27,7 +27,7 @@ describe('normalizeVisitorPath', () => {
     expect(normalizeVisitorPath('/payment/return?session_id=tok_abc')).toBe('/payment/return');
   });
 
-  it('labels dynamic routes — raw identifiers never persist', () => {
+  it('labels dynamic routes - raw identifiers never persist', () => {
     expect(normalizeVisitorPath('/challenge/cmw4b42t200hpj64jfsfwqvub')).toBe('/challenge/[id]');
     expect(normalizeVisitorPath('/users/botro_plays')).toBe('/users/[username]');
     expect(normalizeVisitorPath('/campaigns/clxyz1234567890abcdefgh')).toBe('/campaigns/[id]');
@@ -36,7 +36,7 @@ describe('normalizeVisitorPath', () => {
   });
 
   it('private share route: id never reaches storage in any form', () => {
-    // A private 1v1 challenge link — the raw cuid must not survive.
+    // A private 1v1 challenge link - the raw cuid must not survive.
     const PRIVATE_ID = 'cmw4b42t200hpj64jfsfwqvub';
     const label = normalizeVisitorPath(`/challenge/${PRIVATE_ID}`);
     expect(label).toBe('/challenge/[id]');
@@ -47,7 +47,7 @@ describe('normalizeVisitorPath', () => {
     expect(normalizeVisitorPath('/challenge/my-secret-slug')).toBe('/challenge/[id]');
   });
 
-  it('excludes unknown/deep paths — crafted beacons cannot smuggle identifiers', () => {
+  it('excludes unknown/deep paths - crafted beacons cannot smuggle identifiers', () => {
     expect(normalizeVisitorPath('/tasks/cmabc123def456ghi789jkl0')).toBeNull(); // no such route
     expect(normalizeVisitorPath('/some/deep/secret/path')).toBeNull();
     expect(normalizeVisitorPath('/payment/return/extra')).toBeNull();
@@ -68,7 +68,7 @@ describe('normalizeVisitorPath', () => {
 
   it('rejects malformed input', () => {
     expect(normalizeVisitorPath('')).toBeNull();
-    expect(normalizeVisitorPath('not-a-path')).toBeNull(); // → '/not-a-path' — not a known route
+    expect(normalizeVisitorPath('not-a-path')).toBeNull(); // → '/not-a-path' - not a known route
     expect(normalizeVisitorPath('/bad path with spaces')).toBeNull();
     expect(normalizeVisitorPath(`/${'a'.repeat(400)}`)).toBeNull();
     expect(normalizeVisitorPath('/path\nwith\nnewline')).toBeNull();
@@ -204,7 +204,7 @@ describe('VisitorAnalyticsService.ingestBeacon', () => {
     expect(state.visits[0].pageViews).toBe(1); // retry did not inflate the visit
   });
 
-  it('never lets the client spoof ip/country — server ctx wins', async () => {
+  it('never lets the client spoof ip/country - server ctx wins', async () => {
     const { prisma, state } = makePrisma();
     const svc = new VisitorAnalyticsService(prisma);
     await svc.ingestBeacon({ ...dto, ip: '1.2.3.4', country: 'US' } as any, { ...ctx, country: null });

@@ -17,7 +17,7 @@ const run = TEST_DB ? describe : describe.skip;
 const PREFIX = `va_${Date.now().toString(36)}_`;
 const DAY = 24 * 60 * 60 * 1000;
 
-run('visitor analytics — real PostgreSQL', () => {
+run('visitor analytics - real PostgreSQL', () => {
   jest.setTimeout(60000);
 
   let prisma: PrismaClient;
@@ -102,7 +102,7 @@ run('visitor analytics — real PostgreSQL', () => {
     expect(visits[1].entryPath).toBe('/leaderboard');
   });
 
-  it('normalizes sensitive URLs before storage — no query strings persist', async () => {
+  it('normalizes sensitive URLs before storage - no query strings persist', async () => {
     await service.ingestBeacon(
       beacon({ path: '/reset-password?token=SUPERSECRET', referrer: 'https://engganyo.com/x?sig=abc' }),
       ctx(),
@@ -123,7 +123,7 @@ run('visitor analytics — real PostgreSQL', () => {
     expect(bd.items.some((i) => i.value.includes('some_player_name'))).toBe(false);
   });
 
-  it('private challenge route stores only the label — id never persists', async () => {
+  it('private challenge route stores only the label - id never persists', async () => {
     const PRIVATE_ID = 'cmw4b42t200hpj64jfsfwqvub';
     await service.ingestBeacon(
       beacon({ path: `/challenge/${PRIVATE_ID}?share=1`, visitId: `${PREFIX}priv` }),

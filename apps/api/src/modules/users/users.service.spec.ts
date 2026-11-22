@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 
-describe('UsersService — getEquippedCosmeticsForUsers (batched lookup)', () => {
+describe('UsersService - getEquippedCosmeticsForUsers (batched lookup)', () => {
   let service: UsersService;
   let prisma: { userInventory: { findMany: jest.Mock } };
 
@@ -52,7 +52,7 @@ describe('UsersService — getEquippedCosmeticsForUsers (batched lookup)', () =>
   });
 });
 
-describe('UsersController — GET /users/cosmetics ids validation', () => {
+describe('UsersController - GET /users/cosmetics ids validation', () => {
   let controller: UsersController;
   let service: { getEquippedCosmeticsForUsers: jest.Mock };
 

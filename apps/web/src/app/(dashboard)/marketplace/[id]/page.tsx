@@ -22,7 +22,7 @@ const CATEGORY_COLORS: Record<string, string> = {
  * An unresolved purchase intent survives reloads/navigation: the idempotency
  * key + quantity are persisted BEFORE the request fires, so a committed
  * purchase whose response was lost can be retried into the same order
- * instead of double-charging. The quantity is locked while pending — the
+ * instead of double-charging. The quantity is locked while pending - the
  * key is bound to its parameters server-side.
  */
 interface PendingPurchase {
@@ -34,7 +34,7 @@ interface PendingPurchase {
   createdAt: string;
 }
 
-// Scoped per user — a shared browser must never replay one account's
+// Scoped per user - a shared browser must never replay one account's
 // purchase intent under another account's identity.
 const pendingKey = (userId: string, listingId: string) => `engganyo:marketplace:pending:${userId}:${listingId}`;
 
@@ -98,7 +98,7 @@ export default function MarketplaceListingPage() {
     if (user?.id) {
       try {
         localStorage.removeItem(pendingKey(user.id, listingId));
-      } catch { /* storage unavailable — state still clears */ }
+      } catch { /* storage unavailable - state still clears */ }
     }
     setPending(null);
   };
@@ -107,7 +107,7 @@ export default function MarketplaceListingPage() {
     mutationFn: async () => {
       // Reuse the persisted intent when one exists; otherwise mint a new key
       // and persist it BEFORE the request so an interrupted attempt stays
-      // recoverable. Params are frozen at intent creation — never mutated.
+      // recoverable. Params are frozen at intent creation - never mutated.
       let intent = pending;
       if (!intent) {
         if (!user?.id) throw new Error('Sign in required to purchase');
@@ -121,7 +121,7 @@ export default function MarketplaceListingPage() {
         };
         try {
           localStorage.setItem(pendingKey(user.id, listingId), JSON.stringify(intent));
-        } catch { /* storage unavailable — in-memory retry still works */ }
+        } catch { /* storage unavailable - in-memory retry still works */ }
         setPending(intent);
       }
       const res = await apiClient.post<ApiResponse<{ order: { id: string; totalPrice: number }; replayed: boolean }>>(
@@ -133,7 +133,7 @@ export default function MarketplaceListingPage() {
     onSuccess: (data) => {
       addToast(
         data?.replayed
-          ? 'Purchase already completed — showing your existing order.'
+          ? 'Purchase already completed - showing your existing order.'
           : `Purchased ${pending?.quantity ?? quantity}× ${listing?.itemName ?? 'item'} for ${formatCredits(data?.order?.totalPrice ?? 0)} credits!`,
         'success',
       );
@@ -145,7 +145,7 @@ export default function MarketplaceListingPage() {
     },
     onError: (err) => {
       addToast(getApiErrorMessage(err), 'error');
-      // Keep the pending intent — a retry replays the same order, not a
+      // Keep the pending intent - a retry replays the same order, not a
       // second charge. Params stay frozen; the user may explicitly discard.
       void queryClient.invalidateQueries({ queryKey: ['marketplace', 'listing', listingId] });
     },
@@ -174,28 +174,28 @@ export default function MarketplaceListingPage() {
   const colorClass = CATEGORY_COLORS[listing.category] ?? 'border-sc-line bg-sc-panel-2/50 text-sc-muted';
   const purchasable = listing.canPurchase && listing.remainingQuantity > 0;
   const suspended = listing.resaleSuspended === true;
-  // While a purchase intent is unresolved its quantity is frozen — the
+  // While a purchase intent is unresolved its quantity is frozen - the
   // idempotency key is bound to these exact params server-side.
   const effectiveQty = pending ? pending.quantity : Math.max(1, Math.min(listing.remainingQuantity, quantity));
   const qty = effectiveQty;
   const total = listing.unitPrice * qty;
   const balance = user?.creditBalance ?? 0;
   const canAfford = balance >= total;
-  // A committed order for the pending key resolves the intent — show it
+  // A committed order for the pending key resolves the intent - show it
   // even when the listing sold out, paused, expired, or funds are now
   // insufficient (the debit already happened server-side).
   const committedOrder = pending ? (purchaseLookup.data ?? null) : null;
   const lookupChecking = !!pending && purchaseLookup.isFetching;
   // Lookup outcome states: order / confirmed-null / still-loading / failed.
   // A failed status check must NOT claim the purchase failed or invite a
-  // discard/rebuy — the key and params stay preserved until the server
+  // discard/rebuy - the key and params stay preserved until the server
   // answers definitively.
   const lookupFailed = !!pending && purchaseLookup.isError && !purchaseLookup.isFetching;
   const lookupResolvedNull = !!pending && purchaseLookup.isSuccess && purchaseLookup.data === null;
   const endsIn = Math.max(0, Math.ceil((new Date(listing.expiresAt).getTime() - Date.now()) / 86_400_000));
   const discardPending = () => {
     clearPending();
-    addToast('Unconfirmed purchase attempt discarded — check Order history in case it completed.', 'info');
+    addToast('Unconfirmed purchase attempt discarded - check Order history in case it completed.', 'info');
   };
 
   return (
@@ -263,7 +263,7 @@ export default function MarketplaceListingPage() {
               <div className="flex-1">
                 <div className="text-sm font-semibold text-emerald-300">Purchase completed</div>
                 <div className="text-sm text-sc-text mt-1">
-                  {committedOrder.quantity}× {committedOrder.itemName} —{' '}
+                  {committedOrder.quantity}× {committedOrder.itemName} - {' '}
                   {formatCredits(committedOrder.totalPrice)} credits
                 </div>
                 <div className="text-xs text-sc-dim mt-1">
@@ -271,7 +271,7 @@ export default function MarketplaceListingPage() {
                   {committedOrder.status.toLowerCase()}
                 </div>
                 <p className="text-[11px] text-sc-dim mt-2">
-                  This purchase was already settled — no additional charge was made and no
+                  This purchase was already settled - no additional charge was made and no
                   extra items were transferred. Your items are in inventory.
                 </p>
                 <div className="flex items-center gap-4 mt-3">
@@ -296,7 +296,7 @@ export default function MarketplaceListingPage() {
                 <div className="text-sm font-semibold text-amber-200">Purchase status unavailable</div>
                 <p className="text-sm text-sc-text mt-1">
                   We couldn&apos;t confirm whether your earlier purchase completed. Your attempt
-                  details are saved on this device — please check again before taking any other
+                  details are saved on this device - please check again before taking any other
                   action. Do not start a new purchase for this listing yet.
                 </p>
                 <div className="flex items-center gap-4 mt-3">
@@ -352,10 +352,10 @@ export default function MarketplaceListingPage() {
                   <span className="font-medium">Unconfirmed purchase attempt.</span>{' '}
                   {lookupChecking
                     ? 'Checking whether it already completed…'
-                    : 'If it already completed, your order is shown instead. Otherwise, confirming retries the same order — you will not be charged twice.'}
+                    : 'If it already completed, your order is shown instead. Otherwise, confirming retries the same order - you will not be charged twice.'}
                   {pending.quantity > listing.remainingQuantity && (
                     <span className="block mt-1 text-amber-300/90">
-                      Note: only {listing.remainingQuantity} unit(s) remain — if the original attempt did not complete, this retry may fail.
+                      Note: only {listing.remainingQuantity} unit(s) remain - if the original attempt did not complete, this retry may fail.
                     </span>
                   )}
                 </div>
@@ -379,8 +379,7 @@ export default function MarketplaceListingPage() {
                         ? listing.status.toLowerCase().replace('_', ' ')
                         : listing.isExpired
                           ? 'expired'
-                          : 'sold out'}{' '}
-                    — the unconfirmed attempt cannot complete. If it had already gone through, the
+                          : 'sold out'}{' '} - the unconfirmed attempt cannot complete. If it had already gone through, the
                     committed order would be displayed instead. Check Order history, then discard
                     this attempt.
                   </>
@@ -416,7 +415,7 @@ export default function MarketplaceListingPage() {
                 </div>
                 <div className="text-xs text-sc-dim">
                   Balance: {formatCredits(balance)} credits
-                  {!canAfford && <span className="text-red-400 ml-1">— insufficient funds</span>}
+                  {!canAfford && <span className="text-red-400 ml-1"> - insufficient funds</span>}
                 </div>
               </div>
               <button

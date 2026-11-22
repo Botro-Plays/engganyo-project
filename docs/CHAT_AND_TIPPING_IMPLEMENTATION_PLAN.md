@@ -1,6 +1,6 @@
 # Implementation Plan: Real-time Chat + Credits Tipping
 
-> **Status:** ✅ IMPLEMENTED (2026-06-15) — All backend endpoints, frontend pages, Socket.io namespace, admin moderation dashboard, @mentions, message reporting, and mute enforcement are live.
+> **Status:** ✅ IMPLEMENTED (2026-06-15) - All backend endpoints, frontend pages, Socket.io namespace, admin moderation dashboard, @mentions, message reporting, and mute enforcement are live.
 
 ## 1. Executive Summary
 
@@ -35,7 +35,7 @@ Both features are **viable within the current architecture** with minimal infras
 |-----------|--------|----------|
 | Credit engine | ✅ Active | `WalletService.credit()` with optimistic locking |
 | Debit engine | ✅ Active | `WalletService.debit()` with balance validation |
-| Transaction types | ✅ Active | `TransactionType` enum — extensible |
+| Transaction types | ✅ Active | `TransactionType` enum - extensible |
 | Denormalized balance | ✅ Active | `User.creditBalance` for quick reads |
 | Race condition handling | ✅ Active | `executeWithOptimisticLock()` with retry logic |
 
@@ -43,7 +43,7 @@ Both features are **viable within the current architecture** with minimal infras
 | Component | Status | Location |
 |-----------|--------|----------|
 | Trust score engine | ✅ Active | `AntiAbuseService.recalculateTrustScore()` |
-| IP-based multi-account | ✅ Active | `checkForMultiAccount()` — 24h window, 2+ accounts triggers flag |
+| IP-based multi-account | ✅ Active | `checkForMultiAccount()` - 24h window, 2+ accounts triggers flag |
 | Abuse flagging | ✅ Active | `flagUser()` / `checkAndEscalate()` with auto-suspension |
 | Report system | ✅ Active | `submitReport()` with auto-flagging for critical reasons |
 
@@ -51,7 +51,7 @@ Both features are **viable within the current architecture** with minimal infras
 | Component | Status | Location |
 |-----------|--------|----------|
 | Tier lookup | ✅ Active | `GamificationService.getVipStatus()` returns `currentTier` + `perks` |
-| Perks schema | ✅ Active | JSON field on `VipTier` — already holds `taskLimitBonus`, `feeDiscountPercent` |
+| Perks schema | ✅ Active | JSON field on `VipTier` - already holds `taskLimitBonus`, `feeDiscountPercent` |
 | VP tracking | ✅ Active | `User.vp` denormalized field |
 
 ### 2.6 User Model
@@ -80,7 +80,7 @@ Both features are **viable within the current architecture** with minimal infras
 | Gap | Solution | Effort |
 |-----|----------|--------|
 | No `SPEND_TIP` / `EARN_TIP` in `TransactionType` | Add to Prisma enum | Low |
-| No alt-account detection for tipping | Reuse `AntiAbuseService` — check shared IPs within 30-day window | Medium |
+| No alt-account detection for tipping | Reuse `AntiAbuseService` - check shared IPs within 30-day window | Medium |
 | No VIP gating on specific actions | Check `gamificationService.getVipStatus()` for `perks.canTip` | Low |
 | No tip amount limits | Config-driven (`minTip`, `maxTip`) in `PlatformConfig` | Low |
 
@@ -164,7 +164,7 @@ model ChannelMessage {
 
 ### 4.3 Existing Model Updates
 
-**TransactionType enum** — add:
+**TransactionType enum** - add:
 ```prisma
 enum TransactionType {
   // ... existing types ...
@@ -173,7 +173,7 @@ enum TransactionType {
 }
 ```
 
-**Transaction model** — add relation:
+**Transaction model** - add relation:
 ```prisma
 model Transaction {
   // ... existing fields ...
@@ -181,7 +181,7 @@ model Transaction {
 }
 ```
 
-**User model** — add relation:
+**User model** - add relation:
 ```prisma
 model User {
   // ... existing fields and relations ...
@@ -531,7 +531,7 @@ useSocketEvent('tip:received', (tip) => {
 ### 8.2 Content Moderation
 1. **Profanity filter**: `bad-words` library on every outgoing message
 2. **Repeat detection**: Block identical messages within 30s (Redis key: `chat:spam:repeat:${userId}:${hash}`)
-3. **Link filtering**: Optional — strip or warn on URLs from new/trust-level-NEW users
+3. **Link filtering**: Optional - strip or warn on URLs from new/trust-level-NEW users
 4. **Auto-mute**: 3 profanity strikes → 5-minute mute (Redis key with TTL)
 5. **Admin override**: Admins/mods can delete any message instantly
 
@@ -611,4 +611,4 @@ useSocketEvent('tip:received', (tip) => {
 
 ## 12. Conclusion
 
-Both features are **solidly viable** within the current Engganyo architecture. The required work is additive — no existing systems need refactoring. The existing socket infrastructure, rate limiting, wallet engine, and anti-abuse systems provide a strong foundation. Estimated total effort: **5-6 days** for a production-ready implementation.
+Both features are **solidly viable** within the current Engganyo architecture. The required work is additive - no existing systems need refactoring. The existing socket infrastructure, rate limiting, wallet engine, and anti-abuse systems provide a strong foundation. Estimated total effort: **5-6 days** for a production-ready implementation.

@@ -17,7 +17,7 @@ export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get('overview')
-  @ApiOperation({ summary: 'Platform overview stats — admin only' })
+  @ApiOperation({ summary: 'Platform overview stats - admin only' })
   @ApiQuery({ name: 'days', required: false, type: Number, example: 30 })
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'MODERATOR', 'SUPER_ADMIN')
@@ -26,7 +26,7 @@ export class AnalyticsController {
   }
 
   @Get('campaigns/:id')
-  @ApiOperation({ summary: 'Per-campaign funnel — owner or admin' })
+  @ApiOperation({ summary: 'Per-campaign funnel - owner or admin' })
   getCampaignFunnel(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
