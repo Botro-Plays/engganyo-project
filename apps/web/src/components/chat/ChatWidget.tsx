@@ -224,7 +224,7 @@ export function ChatWidget() {
   // Sheet geometry, recomputed whenever the visible viewport, the route
   // (nav presence), or open state changes. The budget is the visual
   // viewport bounds minus the real bottom offset, safe-area clearance,
-  // and a top margin — so header, messages and composer always stay
+  // and a top margin - so header, messages and composer always stay
   // inside what's actually visible.
   useEffect(() => {
     if (!isOpen || isDesktop) {
@@ -245,11 +245,11 @@ export function ChatWidget() {
     let aboveNav = false;
     let bottomEdge: number;
     if (navTop < vvBottom) {
-      // The nav's top edge pokes into the visible region — rest above it.
+      // The nav's top edge pokes into the visible region - rest above it.
       bottomEdge = navTop - SHEET_GAP;
       aboveNav = true;
       if (bottomEdge - vvTop - SHEET_TOP_MARGIN < MIN_HEIGHT_FOR_NAV_CLEARANCE) {
-        // Too cramped to clear the nav — cover it instead (transient; the
+        // Too cramped to clear the nav - cover it instead (transient; the
         // composer staying reachable wins) and use the tighter anchor.
         aboveNav = false;
         bottomEdge = vvBottom - safe - SHEET_BASE_CLEARANCE;
@@ -307,7 +307,7 @@ export function ChatWidget() {
   }, [isDesktop, vvTick, clampMobileSpot]);
 
   const scrollToBottom = () => {
-    // Scroll the message container directly — scrollIntoView could also
+    // Scroll the message container directly - scrollIntoView could also
     // pull the underlying page when the sheet opens mid-document.
     const el = messagesEndRef.current?.parentElement;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
@@ -492,7 +492,7 @@ export function ChatWidget() {
   };
 
   // z-40 keeps the widget under dialogs/room modals (z-50), the mobile nav,
-  // and the cookie consent bar (z-[60]) — those always take precedence. When
+  // and the cookie consent bar (z-[60]) - those always take precedence. When
   // the sheet covers the nav (cramped heights only) it rises to z-[60] so the
   // nav can't intercept composer taps.
   if (!isOpen) {
@@ -569,7 +569,7 @@ export function ChatWidget() {
         sheetGeom && !sheetGeom.aboveNav && !isDesktop ? 'z-[60]' : 'z-40'
       } bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]`}
     >
-      {/* Header — drag handle on desktop */}
+      {/* Header - drag handle on desktop */}
       <div
         className={`flex items-center justify-between border-b border-surface-border bg-surface-hover p-4 select-none ${
           isDesktop ? 'cursor-grab active:cursor-grabbing' : ''

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Hero Telegram CTA — immediate hover/focus emphasis on fine pointers.
+ * Hero Telegram CTA - immediate hover/focus emphasis on fine pointers.
  *
  * `video: 'on'` records the hover sequence; the clip ships in the
  * playwright-report/test-results artifact as the requested desktop
@@ -163,7 +163,7 @@ test.describe('mobile: full filled treatment without hover', () => {
       href: (el as HTMLAnchorElement).href,
       target: (el as HTMLAnchorElement).target,
     }));
-    // accent-500 gold fill — no hover needed on touch.
+    // accent-500 gold fill - no hover needed on touch.
     expect(styles.bg).toBe('rgb(232, 168, 0)');
     expect(parseFloat(styles.radius)).toBe(14);
     // One tap opens Telegram in a new tab (plain anchor, untouched).

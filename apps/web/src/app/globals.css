@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Self-hosted pixel fonts load via next/font/local (subset WOFF2 in
-   src/fonts/, SIL OFL 1.1 — see public/fonts/*-OFL.txt). The CSS vars
+   src/fonts/, SIL OFL 1.1 - see public/fonts/*-OFL.txt). The CSS vars
    below carry metric-compatible fallbacks so font swap does not shift
    layout; non-subset glyphs (e.g. CJK names) fall back to the system
    monospace stack. */
@@ -142,7 +142,7 @@
     background-size: 28px 28px;
   }
 
-  /* Square pixel panel — thin border + hard offset shadow */
+  /* Square pixel panel - thin border + hard offset shadow */
   .panel {
     background-color: var(--sc-panel);
     border: 1px solid var(--sc-border);
@@ -161,7 +161,7 @@
     box-shadow: 3px 3px 0 0 var(--sc-hard);
   }
 
-  /* Primary CTA — SeeCareer violet with hard shadow press effect */
+  /* Primary CTA - SeeCareer violet with hard shadow press effect */
   .btn-cta {
     background-color: var(--sc-cta);
     color: var(--sc-on-cta);
@@ -245,7 +245,7 @@
   transition: outline-color 0.15s ease;
 }
 
-/* Landing hero Telegram CTA — noticeable but tasteful navy/blue/gold
+/* Landing hero Telegram CTA - noticeable but tasteful navy/blue/gold
    attention effect. Transform/opacity/box-shadow/border-color only:
    no layout shift, no rapid flashing, registration CTA stays primary.
    Reduced-motion users get a static emphasized outline instead. */
@@ -271,7 +271,7 @@
   .tg-hero-icon {
     display: inline-flex;
   }
-  /* Hover/focus deepen the static outline — color change only, no motion. */
+  /* Hover/focus deepen the static outline - color change only, no motion. */
   .tg-hero-cta:is(:hover, :focus-visible) {
     border-color: rgba(5, 9, 24, 0.75);
     box-shadow:
@@ -286,7 +286,7 @@
     55% { opacity: 1; transform: translateY(-3px) scale(1.02); }
     100% { opacity: 1; transform: translateY(0) scale(1); }
   }
-  /* One-shot entrance flash — blue core + gold rim, ~1.3s then gone. */
+  /* One-shot entrance flash - blue core + gold rim, ~1.3s then gone. */
   @keyframes tg-hero-flash {
     0% {
       box-shadow: 0 0 0 0 rgba(232, 168, 0, 0), 0 0 0 0 rgba(31, 98, 240, 0);
@@ -320,7 +320,7 @@
       border-color: rgba(5, 9, 24, 0.7);
     }
   }
-  /* Paper-plane "send": quick up-right drift + tilt, then settle —
+  /* Paper-plane "send": quick up-right drift + tilt, then settle -
      visible movement once per glow cycle, synced to the outline. */
   @keyframes tg-hero-plane {
     0%, 74%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 1; }

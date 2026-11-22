@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Support chat widget — viewport-safe placement and interaction.
+ * Support chat widget - viewport-safe placement and interaction.
  *
  * Covers:
  * - Launcher fully inside the viewport at 320/360/390/768/1440px.
@@ -62,7 +62,7 @@ const insideViewport = async (page: Page, selector: string) => {
 // window.visualViewport with an EventTarget whose height/offsetTop the
 // test controls. innerHeight stays the layout height; the difference
 // simulates the occluded strip a keyboard leaves. This is SIMULATED
-// keyboard coverage — real-device acceptance remains owner-assisted.
+// keyboard coverage - real-device acceptance remains owner-assisted.
 async function installFakeVisualViewport(page: Page) {
   await page.addInitScript(() => {
     const target = new EventTarget();
@@ -184,7 +184,7 @@ test.describe('desktop dock @1440px', () => {
     expect(after!.y).toBeGreaterThanOrEqual(0);
     // Dragging far past the top-left corner must not strand it off-screen.
     expect(after!.x + after!.width).toBeGreaterThanOrEqual(after!.width);
-    // A >5px drag is a drag, not a click — the chat stays closed.
+    // A >5px drag is a drag, not a click - the chat stays closed.
     await expect(page.locator(DIALOG)).toHaveCount(0);
   });
 
@@ -217,10 +217,10 @@ test.describe('desktop dock @1440px', () => {
 
   test('opening the panel does not scroll the underlying page', async ({ page }) => {
     await mockChatApi(page);
-    // The homepage is a long document — real document scroll to verify.
+    // The homepage is a long document - real document scroll to verify.
     await page.goto('/');
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
-    // html { scroll-behavior: smooth } makes a plain scrollTo animate —
+    // html { scroll-behavior: smooth } makes a plain scrollTo animate -
     // use 'instant' and wait for the value to land before measuring.
     await page.evaluate(() => window.scrollTo({ top: 600, behavior: 'instant' }));
     await page.waitForFunction(() => window.scrollY > 100);
@@ -282,7 +282,7 @@ test.describe('mobile sheet @390px', () => {
 
 test.describe('short landscape viewport (keyboard-open shape)', () => {
   // Below the sm breakpoint with 200px visible height approximates the
-  // space left above a software keyboard in landscape — the sheet must
+  // space left above a software keyboard in landscape - the sheet must
   // still fit header + messages + composer inside the visible area.
   test.use({ viewport: { width: 600, height: 200 } });
 
@@ -334,7 +334,7 @@ test.describe('message list scrolling', () => {
       clientHeight: el.clientHeight,
     }));
     expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
-    // Smooth scrolling is async — poll until the newest message is reached.
+    // Smooth scrolling is async - poll until the newest message is reached.
     await expect
       .poll(
         () =>
@@ -405,7 +405,7 @@ test.describe('sheet height budget vs visible viewport (simulated keyboard)', ()
     await mockChatApi(page);
     await gotoDashboard(page);
     // vv 250: clearing the nav would leave < 200px, so the sheet covers
-    // it (z-60) — but the whole sheet must stay inside the visible area.
+    // it (z-60) - but the whole sheet must stay inside the visible area.
     await setVisibleViewport(page, 250, 0);
     await page.locator(LAUNCHER).click();
     await expect(page.locator(DIALOG)).toBeVisible();
@@ -481,7 +481,7 @@ test.describe('mobile launcher drag @390px', () => {
       bubbles: true,
     });
     await expect(page.locator(DIALOG)).toHaveCount(0);
-    // transition-all animates left/top — let it settle before measuring.
+    // transition-all animates left/top - let it settle before measuring.
     await page.waitForTimeout(400);
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBeGreaterThan(40);
@@ -543,7 +543,7 @@ test.describe('mobile launcher drag @390px', () => {
 
   test('drag clamps at viewport edges and stays off the nav', async ({ page }) => {
     const before = (await page.locator(LAUNCHER).boundingBox())!;
-    // Fling hard to the bottom-right — past the nav.
+    // Fling hard to the bottom-right - past the nav.
     const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
       { x: 999, y: 999 },
     ]);
@@ -580,7 +580,7 @@ test.describe('mobile launcher drag @390px', () => {
     const restored = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(restored.x - before.x)).toBeLessThanOrEqual(4);
     expect(Math.abs(restored.y - before.y)).toBeLessThanOrEqual(4);
-    // Stored spot is cleared too — a reload must not resurrect it.
+    // Stored spot is cleared too - a reload must not resurrect it.
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
     const reloaded = (await page.locator(LAUNCHER).boundingBox())!;
@@ -597,7 +597,7 @@ test.describe('mobile launcher drag @390px', () => {
     await page.waitForTimeout(400); // transition-all animates left/top
     await expect(page.locator(LAUNCHER)).toBeVisible();
     await insideViewport(page, LAUNCHER);
-    // Rotate: 844x390 landscape — the saved 600px-tall spot is out of range.
+    // Rotate: 844x390 landscape - the saved 600px-tall spot is out of range.
     await page.setViewportSize({ width: 844, height: 390 });
     await page.waitForTimeout(400); // re-clamp + transition settle
     await expect(page.locator(LAUNCHER)).toBeVisible();
