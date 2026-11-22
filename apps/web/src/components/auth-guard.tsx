@@ -39,7 +39,7 @@ export function AuthGuard({ children, roles = [], redirectTo = '/login' }: AuthG
     );
   }
 
-  // After hydration: if not authenticated, we are redirecting — keep spinner
+  // After hydration: if not authenticated, we are redirecting - keep spinner
   if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">

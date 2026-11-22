@@ -209,8 +209,8 @@ export default function CommunicationsPage() {
             <StatBox label="In Progress" value={preview.tasksInProgress} color="text-cyan-400" />
             <StatBox label="Pending Review" value={preview.tasksPending} color="text-orange-400" />
             <StatBox label="Streak" value={`${preview.streak}d`} color="text-rose-400" />
-            <StatBox label="Weekly Rank" value={`#${preview.weeklyRank || '—'}`} color="text-emerald-400" />
-            <StatBox label="All-Time Rank" value={`#${preview.allTimeRank || '—'}`} color="text-brand-400" />
+            <StatBox label="Weekly Rank" value={`#${preview.weeklyRank || 'unranked'}`} color="text-emerald-400" />
+            <StatBox label="All-Time Rank" value={`#${preview.allTimeRank || 'unranked'}`} color="text-brand-400" />
             <StatBox label="Total Done" value={preview.totalTasksCompleted} color="text-teal-400" />
             <StatBox label="Period" value={`${preview.weekStart} – ${preview.weekEnd}`} color="text-sc-text" />
           </div>
@@ -271,7 +271,7 @@ export default function CommunicationsPage() {
           </div>
           <div>
             <h2 className="font-semibold text-sc-text text-base">Email Queue Status</h2>
-            <p className="text-xs text-sc-dim mt-0.5">Coming soon — monitor BullMQ email queue depth and retry counts.</p>
+            <p className="text-xs text-sc-dim mt-0.5">Coming soon - monitor BullMQ email queue depth and retry counts.</p>
           </div>
         </div>
       </div>

@@ -20,7 +20,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `wh_${Date.now().toString(36)}_`;
 
-run('wheel spin idempotency — real PostgreSQL', () => {
+run('wheel spin idempotency - real PostgreSQL', () => {
   jest.setTimeout(60000);
 
   let prisma: PrismaClient;
@@ -165,7 +165,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     await prisma.$disconnect();
   });
 
-  it('retry with the same key replays the committed result — one charge, one reward, one spin row', async () => {
+  it('retry with the same key replays the committed result - one charge, one reward, one spin row', async () => {
     const before = await balanceOf();
 
     const first = await service.spinWheel(userId, 'key-retry-1');
@@ -216,7 +216,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(await balanceOf()).toBe(before - 15);
   });
 
-  it('Redis failure after commit cannot authorize a second charge — result stays recoverable', async () => {
+  it('Redis failure after commit cannot authorize a second charge - result stays recoverable', async () => {
     const before = await balanceOf();
     const spinsBefore = await spinRows();
     const ledgerBefore = (await ledgerRows()).length;
@@ -224,7 +224,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     const first = await service.spinWheel(userId, 'key-redis-down-1');
     expect(first).toMatchObject({ credits: 5 });
 
-    // Every Redis call fails now — replay must come from Postgres alone.
+    // Every Redis call fails now - replay must come from Postgres alone.
     redisDown = true;
     try {
       const second = await service.spinWheel(userId, 'key-redis-down-1');
@@ -238,7 +238,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect((await ledgerRows()).length).toBe(ledgerBefore + 2); // 1 debit + 1 credit only
   });
 
-  it('insufficient balance rejects before any settlement — attempt rolls back', async () => {
+  it('insufficient balance rejects before any settlement - attempt rolls back', async () => {
     const poor = await prisma.user.create({
       data: {
         email: `${PREFIX}poor@itest.local`,
@@ -258,7 +258,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     ).toBe(10);
   });
 
-  it('concurrent different-key spins compete for the last free spin — exactly one wins it', async () => {
+  it('concurrent different-key spins compete for the last free spin - exactly one wins it', async () => {
     const u = await mkUser(500);
 
     const [a, b] = await Promise.all([
@@ -319,12 +319,11 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(await attemptRows(u.id)).toHaveLength(0);
     expect(await balanceOf(u.id)).toBe(500);
 
-    // Same-key retry succeeds — eligibility was restored by the rollback.
+    // Same-key retry succeeds - eligibility was restored by the rollback.
     const first = await service.spinWheel(u.id, 'rb-free');
     expect(first).toMatchObject({ isFree: true, cost: 0 });
 
-    // Paid-spin path: debit commits inside the tx, then credit fails —
-    // the paid slot, debit and ledger row must all roll back.
+    // Paid-spin path: debit commits inside the tx, then credit fails - // the paid slot, debit and ledger row must all roll back.
     walletStub.credit.mockRejectedValueOnce(new Error('credit failed'));
     await expect(service.spinWheel(u.id, 'rb-paid')).rejects.toThrow('credit failed');
     expect(await allowanceOf(u.id)).toMatchObject({ freeUsed: true, paidUsed: 0 });
@@ -345,7 +344,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
   it('rollout day: allowance seeds from wheel_spins history with the legacy Redis floor', async () => {
     const u = await mkUser(500);
     const dayStart = new Date(`${today()}T00:00:00.000Z`);
-    // Spins recorded before this deploy — rows exist, no allowance row yet.
+    // Spins recorded before this deploy - rows exist, no allowance row yet.
     await prisma.wheelSpin.create({
       data: { userId: u.id, result: 'credits_5', isFree: true, cost: 0, createdAt: dayStart },
     });
@@ -355,7 +354,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     await prisma.wheelSpin.create({
       data: { userId: u.id, result: 'credits_5', isFree: false, cost: 20, createdAt: new Date(dayStart.getTime() + 7200e3) },
     });
-    // Legacy Redis counter ran ahead of history — the floor must win.
+    // Legacy Redis counter ran ahead of history - the floor must win.
     redisStore.set(`wheel:paid:${u.id}`, '7');
 
     const r = await service.spinWheel(u.id, 'rollout-1');
@@ -378,7 +377,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(rejected).toHaveLength(1);
 
     // The loser confirmed the free price but the authoritative cost became
-    // 20 — definitive rejection, NOT a silent paid charge.
+    // 20 - definitive rejection, NOT a silent paid charge.
     const loser = (rejected[0] as PromiseRejectedResult).reason;
     expect(loser).toBeInstanceOf(ConflictException);
     expect((loser as ConflictException).getResponse()).toMatchObject({
@@ -409,7 +408,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(await balanceOf(u.id)).toBe(505 - 20 + 5);
   });
 
-  it('no-key calls enforce the same daily allowance — 1 free + 10 paid, then rejected', async () => {
+  it('no-key calls enforce the same daily allowance - 1 free + 10 paid, then rejected', async () => {
     const u = await mkUser(2000);
 
     for (let i = 0; i < 11; i++) {
@@ -426,7 +425,7 @@ run('wheel spin idempotency — real PostgreSQL', () => {
     expect(await allowanceOf(u.id)).toMatchObject({ paidUsed: 10 });
   });
 
-  it('HTTP boundary: missing or malformed Idempotency-Key rejects before settlement — zero DB trace', async () => {
+  it('HTTP boundary: missing or malformed Idempotency-Key rejects before settlement - zero DB trace', async () => {
     // Exercise the real controller → real service → real PostgreSQL path.
     const controller = new GamificationController(service as never);
     const u = await mkUser(500);

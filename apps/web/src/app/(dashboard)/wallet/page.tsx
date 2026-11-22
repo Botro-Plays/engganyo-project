@@ -182,7 +182,7 @@ function DetailItem({ label, value, copyable }: { label: string; value: string; 
 function CountdownTimer({ expiredAt, createdAt }: { expiredAt?: string; createdAt?: string }) {
   const rawExpired = expiredAt ? new Date(expiredAt).getTime() : NaN;
 
-  // No hardcoded fallback — if expiredAt is missing, we don't know the exact expiry.
+  // No hardcoded fallback - if expiredAt is missing, we don't know the exact expiry.
   // Old deposits are handled by backend cron; frontend just shows "Expires soon".
   const effectiveExpiredAt = Number.isFinite(rawExpired) ? rawExpired : 0;
 
@@ -484,13 +484,13 @@ export default function WalletPage() {
   }, [packages, depositOptions]);
 
   // Recover an in-flight or sent-but-unregistered transfer independently of
-  // the form snapshot — it must restore even if the package list reloads.
+  // the form snapshot - it must restore even if the package list reloads.
   useEffect(() => {
     try {
       const pendingSend = localStorage.getItem('engganyo-pending-send');
       if (pendingSend) {
         const rec = JSON.parse(pendingSend);
-        // Reloaded mid-send: the transfer may have broadcast — recovery-only.
+        // Reloaded mid-send: the transfer may have broadcast - recovery-only.
         if (rec.phase === 'sending') rec.phase = 'uncertain';
         setUnresolvedSend(rec);
       }
@@ -521,7 +521,7 @@ export default function WalletPage() {
     onSuccess: (data) => {
       setDepositResult(data ?? null);
       setDepositError(null);
-      clearPersistedForm(); // deposit created — form state no longer needed
+      clearPersistedForm(); // deposit created - form state no longer needed
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'me'] });
     },
@@ -597,9 +597,8 @@ export default function WalletPage() {
   const cryptoCfg = selectedMethod === 'USDT_BEP20' ? depositOptions?.usdtBep20 : depositOptions?.usdtBase;
 
   // Ownership proof: a free personal_sign on a server-issued challenge.
-  // Distinct from sending funds — it moves nothing on-chain.
-  // Returns the proof it just captured so callers can use it immediately —
-  // callers must NOT re-read ownershipProof state (stale within this render).
+  // Distinct from sending funds - it moves nothing on-chain.
+  // Returns the proof it just captured so callers can use it immediately - // callers must NOT re-read ownershipProof state (stale within this render).
   const signOwnership = async (): Promise<{ nonce: string; signature: string } | null> => {
     if (!evmWallet.address || !selectedMethod) return null;
     setSigningOwnership(true);
@@ -609,7 +608,7 @@ export default function WalletPage() {
         'wallet/crypto/challenge',
         { method: selectedMethod, wallet: evmWallet.address },
       )).data.data;
-      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge — try again'); return null; }
+      if (!ch?.nonce || !ch.message) { setDepositError('Could not issue a verification challenge - try again'); return null; }
       const signature = await evmWallet.signMessage(ch.message);
       if (!signature) return null; // hook already shows rejection/error
       const proof = { nonce: ch.nonce, signature };
@@ -635,7 +634,7 @@ export default function WalletPage() {
       const signature = await evmWallet.signMessage(ch.message);
       if (!signature) return;
       await apiClient.post(`wallet/deposit/${depositId}/prove-ownership`, { challengeNonce: ch.nonce, signature });
-      addToast('Wallet ownership verified — your deposit can now be credited on-chain.', 'success', 5000);
+      addToast('Wallet ownership verified - your deposit can now be credited on-chain.', 'success', 5000);
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
     } catch (err) {
       setDepositError(getApiErrorMessage(err));
@@ -654,11 +653,11 @@ export default function WalletPage() {
     sendInFlightRef.current = true;
     setDepositError(null);
     try {
-    // 1) Establish the deposit intent FIRST — bound to account, verified
-    //    wallet, chain and package — so a sent hash always has a home.
+    // 1) Establish the deposit intent FIRST - bound to account, verified
+    //    wallet, chain and package - so a sent hash always has a home.
     let depositId: string | null = null;
     try {
-      // Direct call — the mutation's onSuccess would show the manual 'Deposit
+      // Direct call - the mutation's onSuccess would show the manual 'Deposit
       // Submitted' view before the transfer is even requested.
       const initiated = (await apiClient.post<ApiResponse<{ deposit: DepositRecord; instructions: DepositInstructions }>>('wallet/deposit/initiate', {
         packageId: selectedPackage.id,
@@ -670,9 +669,9 @@ export default function WalletPage() {
       depositId = initiated?.deposit?.id ?? null;
     } catch (err) {
       setDepositError(getApiErrorMessage(err));
-      return; // nothing was sent — nothing to recover
+      return; // nothing was sent - nothing to recover
     }
-    if (!depositId) { setDepositError('Could not open the deposit — try again'); return; }
+    if (!depositId) { setDepositError('Could not open the deposit - try again'); return; }
 
     // Persist the open intent BEFORE requesting the transfer, marked in-flight.
     const base = { depositId, network: cryptoCfg.network, chainId: cryptoCfg.chainId, wallet: evmWallet.address, packageId: selectedPackage.id, method: selectedMethod!, amountUsd: selectedPackage.usdAmount };
@@ -687,12 +686,12 @@ export default function WalletPage() {
     );
     if (!hash) {
       // Confirmed pre-broadcast (rejection/preflight) → safe retry on this deposit.
-      // Uncertain (RPC/disconnect/reload) → may have broadcast — recovery only.
+      // Uncertain (RPC/disconnect/reload) → may have broadcast - recovery only.
       persistSend({ ...base, hash: null, phase: outcome === 'uncertain' ? 'uncertain' : 'retry' });
       if (outcome === 'uncertain') {
-        setDepositError('Could not confirm the transfer — check your wallet activity. If it broadcast, recover with your transaction hash below.');
+        setDepositError('Could not confirm the transfer - check your wallet activity. If it broadcast, recover with your transaction hash below.');
       }
-      return; // intent persists — no re-initiate, no re-sign
+      return; // intent persists - no re-initiate, no re-sign
     }
 
     const sent = { ...base, hash, phase: 'sent' as const };
@@ -720,7 +719,7 @@ export default function WalletPage() {
         return;
       }
 
-      // Confirmed on-chain — trigger backend verification, retry if backend RPC lags
+      // Confirmed on-chain - trigger backend verification, retry if backend RPC lags
       addToast('Transaction confirmed! Verifying deposit...', 'success', 3000);
 
       const maxVerifyAttempts = 6;
@@ -731,12 +730,12 @@ export default function WalletPage() {
           return;
         }
         if (verifyResult.status === 'PROCESSING' && verifyResult.message?.includes('Waiting for confirmations')) {
-          // Backend RPC hasn't caught up yet — wait 15s and retry
+          // Backend RPC hasn't caught up yet - wait 15s and retry
           if (attempt < maxVerifyAttempts) {
             await new Promise((r) => setTimeout(r, 15000));
           }
         } else {
-          // Other error (amount mismatch, wrong recipient, etc.) — stop retrying
+          // Other error (amount mismatch, wrong recipient, etc.) - stop retrying
           return;
         }
       }
@@ -744,18 +743,18 @@ export default function WalletPage() {
       // Exhausted retries without completion
       addToast('Deposit is confirmed on-chain but verification is still processing. It will complete automatically shortly.', 'info', 6000);
     } catch (err) {
-      // The transfer was sent but registration/verification failed — surface the
+      // The transfer was sent but registration/verification failed - surface the
       // recovery path bound to THIS hash instead of a bare error.
       setDepositError('Your USDT transfer was submitted on-chain, but we could not register or confirm it yet.');
       console.error('[handleEvmSend] error:', err);
     }
     } finally {
-      // 'uncertain'/'sent' records stay — the deposit may have been broadcast.
+      // 'uncertain'/'sent' records stay - the deposit may have been broadcast.
       sendInFlightRef.current = false;
     }
   };
 
-  // Resume the ORIGINAL transfer on the ORIGINAL deposit — never initiates
+  // Resume the ORIGINAL transfer on the ORIGINAL deposit - never initiates
   // a second deposit and never re-sends. If the hash already registered
   // (lost response), the deposit is already PROCESSING → verify resumes it.
   const abandonIntent = async () => {
@@ -769,12 +768,12 @@ export default function WalletPage() {
   const resumeTransfer = async () => {
     if (!unresolvedSend) return;
     setDepositError(null);
-    // The transfer is bound to the wallet that sent it — reconnect it first.
+    // The transfer is bound to the wallet that sent it - reconnect it first.
     if (evmWallet.address && evmWallet.address.toLowerCase() !== unresolvedSend.wallet.toLowerCase()) {
-      setDepositError(`Reconnect the original wallet ${unresolvedSend.wallet.slice(0, 8)}…${unresolvedSend.wallet.slice(-6)} — this transfer is bound to it.`);
+      setDepositError(`Reconnect the original wallet ${unresolvedSend.wallet.slice(0, 8)}…${unresolvedSend.wallet.slice(-6)} - this transfer is bound to it.`);
       return;
     }
-    // Only 'retry' may broadcast again — sent/uncertain are recovery-only,
+    // Only 'retry' may broadcast again - sent/uncertain are recovery-only,
     // 'sending' means a wallet request is already in flight.
     if (!unresolvedSend.hash) {
       if (unresolvedSend.phase !== 'retry' || sendInFlightRef.current) return;
@@ -791,9 +790,9 @@ export default function WalletPage() {
         sentHash = res.hash;
         persistSend({ ...unresolvedSend, hash: res.hash, phase: 'sent' });
       } catch (err) {
-        // Wallet call threw outside its own handling — outcome unknown → recovery-only.
+        // Wallet call threw outside its own handling - outcome unknown → recovery-only.
         persistSend({ ...unresolvedSend, hash: null, phase: 'uncertain' });
-        setDepositError('Could not confirm the transfer — check your wallet activity. If it broadcast, recover with your transaction hash below.');
+        setDepositError('Could not confirm the transfer - check your wallet activity. If it broadcast, recover with your transaction hash below.');
         return;
       } finally {
         sendInFlightRef.current = false;
@@ -808,7 +807,7 @@ export default function WalletPage() {
       try {
         await submitTxHashMutation.mutateAsync({ depositId: unresolvedSend.depositId, txHash: unresolvedSend.hash });
       } catch {
-        // Already registered (lost response earlier) or state moved on — the
+        // Already registered (lost response earlier) or state moved on - the
         // verify step resumes the existing deposit either way.
       }
     }
@@ -816,12 +815,12 @@ export default function WalletPage() {
       const out = await verifyDepositMutation.mutateAsync({ depositId: unresolvedSend.depositId });
       if (out.status === 'COMPLETED' || out.status === 'PROCESSING') {
         persistSend(null);
-        addToast(out.status === 'COMPLETED' ? 'Deposit credited.' : 'Transfer recovered — verification in progress.', 'success', 4000);
+        addToast(out.status === 'COMPLETED' ? 'Deposit credited.' : 'Transfer recovered - verification in progress.', 'success', 4000);
       }
     } catch (err) {
       const msg = getApiErrorMessage(err);
       if (/signature|challenge|expired|used|verified/i.test(msg)) {
-        setDepositError('Your ownership proof expired — sign again to prove this wallet is yours (no new transfer needed).');
+        setDepositError('Your ownership proof expired - sign again to prove this wallet is yours (no new transfer needed).');
       } else {
         setDepositError(msg);
       }
@@ -850,7 +849,7 @@ export default function WalletPage() {
     onSuccess: (data) => {
       setFiatCheckoutUrl(data?.checkoutUrl ?? null);
       if (data?.checkoutUrl) {
-        // Same-tab navigation — the Checkout Session carries success/cancel
+        // Same-tab navigation - the Checkout Session carries success/cancel
         // return URLs back to /payment/return.
         window.location.assign(data.checkoutUrl);
       }
@@ -865,7 +864,7 @@ export default function WalletPage() {
       setCancelConfirmId(null);
       // Only reset the deposit form if we are canceling the deposit the user
       // is currently in the middle of (depositResult matches). If depositResult
-      // is null (page was refreshed) we do NOT reset — the user may be
+      // is null (page was refreshed) we do NOT reset - the user may be
       // creating a new deposit and we must not destroy that state.
       if (depositResult?.deposit.id === depositId) {
         resetDeposit();
@@ -883,7 +882,7 @@ export default function WalletPage() {
     onSuccess: (data) => {
       setFiatCheckoutUrl(data?.approvalUrl ?? null);
       if (data?.approvalUrl) {
-        // Same-tab navigation — PayPal returns to /payment/return.
+        // Same-tab navigation - PayPal returns to /payment/return.
         window.location.assign(data.approvalUrl);
       }
     },
@@ -944,7 +943,7 @@ export default function WalletPage() {
             return;
           }
           // Rate may have moved between the displayed quote and deposit
-          // creation — surface the updated charge and require confirmation
+          // creation - surface the updated charge and require confirmation
           // before opening checkout. After creation the stored amount is
           // authoritative for checkout, retries, and settlement.
           const stored = data?.deposit?.amountFiat;
@@ -985,7 +984,7 @@ export default function WalletPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-sc-text">Wallet</h1>
-        <p className="text-sc-muted text-sm mt-1">Manage your credits — deposit and track transactions.</p>
+        <p className="text-sc-muted text-sm mt-1">Manage your credits - deposit and track transactions.</p>
       </div>
 
       {/* ── Balance cards ── */}
@@ -1001,17 +1000,17 @@ export default function WalletPage() {
           <>
             <div className="card-glass rounded-xl p-5">
               <p className="text-xs text-sc-dim mb-1">Available Balance</p>
-              <p className="text-3xl font-bold text-brand-300">{wallet ? formatCredits(wallet.balance) : '—'}</p>
+              <p className="text-3xl font-bold text-brand-300">{wallet ? formatCredits(wallet.balance) : 'None'}</p>
               <p className="text-xs text-sc-dim mt-0.5">credits</p>
             </div>
             <div className="card-glass rounded-xl p-5">
               <p className="text-xs text-sc-dim mb-1">Lifetime Earned</p>
-              <p className="text-3xl font-bold text-green-400">{wallet ? formatCredits(wallet.lifetimeEarned) : '—'}</p>
+              <p className="text-3xl font-bold text-green-400">{wallet ? formatCredits(wallet.lifetimeEarned) : 'None'}</p>
               <p className="text-xs text-sc-dim mt-0.5">total credits earned</p>
             </div>
             <div className="card-glass rounded-xl p-5">
               <p className="text-xs text-sc-dim mb-1">Lifetime Spent</p>
-              <p className="text-3xl font-bold text-red-400">{wallet ? formatCredits(wallet.lifetimeSpent) : '—'}</p>
+              <p className="text-3xl font-bold text-red-400">{wallet ? formatCredits(wallet.lifetimeSpent) : 'None'}</p>
               <p className="text-xs text-sc-dim mt-0.5">total credits spent</p>
             </div>
           </>
@@ -1466,12 +1465,12 @@ export default function WalletPage() {
                                   <p className="flex items-start gap-1.5 text-xs text-amber-300">
                                     <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                                     {unresolvedSend.phase === 'uncertain'
-                                      ? <>Check your wallet activity — this transfer may have broadcast on {unresolvedSend.network}. If it did, attach the hash below to finish. Do not send again.</>
+                                      ? <>Check your wallet activity - this transfer may have broadcast on {unresolvedSend.network}. If it did, attach the hash below to finish. Do not send again.</>
                                       : unresolvedSend.phase === 'sending'
-                                        ? <>Wallet request in progress — check your wallet for the transfer prompt. Please wait.</>
+                                        ? <>Wallet request in progress - check your wallet for the transfer prompt. Please wait.</>
                                         : unresolvedSend.hash
-                                          ? <>Transfer submitted on {unresolvedSend.network} — Engganyo could not register or confirm it yet.</>
-                                          : <>Deposit opened on {unresolvedSend.network} — the transfer wasn&apos;t sent. Retry uses this deposit.</>}
+                                          ? <>Transfer submitted on {unresolvedSend.network} - Engganyo could not register or confirm it yet.</>
+                                          : <>Deposit opened on {unresolvedSend.network} - the transfer wasn&apos;t sent. Retry uses this deposit.</>}
                                   </p>
                                   {unresolvedSend.hash && (
                                     <p className="text-[11px] text-sc-dim font-mono break-all pl-5">{unresolvedSend.hash}</p>
@@ -1530,13 +1529,13 @@ export default function WalletPage() {
                                     </button>
                                     )}
                                   </div>
-                                  <p className="text-[10px] text-sc-dim pl-5">Do not send again — this exact transfer is retained. Sending is disabled until it resolves.</p>
+                                  <p className="text-[10px] text-sc-dim pl-5">Do not send again - this exact transfer is retained. Sending is disabled until it resolves.</p>
                                 </div>
                               ) : evmWallet.state === 'idle' || evmWallet.state === 'error' ? (
                             <div className="space-y-3">
                               {evmWallet.providers.length > 0 ? (
                                 <>
-                                  <p className="text-xs text-sc-muted">Detected wallets — select one to connect:</p>
+                                  <p className="text-xs text-sc-muted">Detected wallets - select one to connect:</p>
                                   <div className="grid grid-cols-2 gap-2">
                                     {evmWallet.providers.map((p) => (
                                       <button
@@ -1600,7 +1599,7 @@ export default function WalletPage() {
                                       ? <><Loader2 className="w-4 h-4 animate-spin" />Check your wallet…</>
                                       : <><ShieldCheck className="w-4 h-4" />1. Verify wallet ownership</>}
                                   </button>
-                                  <p className="text-[11px] text-sc-dim">Free signature — proves this wallet is yours. Not a transaction; nothing moves on-chain.</p>
+                                  <p className="text-[11px] text-sc-dim">Free signature - proves this wallet is yours. Not a transaction; nothing moves on-chain.</p>
                                 </div>
                               ) : (
                                 <div className="space-y-2">
@@ -1721,12 +1720,12 @@ export default function WalletPage() {
                     </div>
                   )}
 
-                  {/* Rate-change confirmation — the stored deposit amount is
+                  {/* Rate-change confirmation - the stored deposit amount is
                       authoritative; user must confirm before checkout opens. */}
                   {rateChangePending && (
                     <div className="mt-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm space-y-2">
                       <p className="text-amber-300">
-                        The exchange rate changed — the charge is now <span className="font-semibold">₱{rateChangePending.newAmount.toLocaleString()}</span> instead of ₱{(selectedPackage?.phpAmount ?? selectedPackage?.phpEquivalent ?? 0).toLocaleString()}.
+                        The exchange rate changed - the charge is now <span className="font-semibold">₱{rateChangePending.newAmount.toLocaleString()}</span> instead of ₱{(selectedPackage?.phpAmount ?? selectedPackage?.phpEquivalent ?? 0).toLocaleString()}.
                       </p>
                       <div className="flex gap-2">
                         <button
@@ -1737,18 +1736,17 @@ export default function WalletPage() {
                           }}
                           className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold transition-all"
                         >
-                          Pay ₱{rateChangePending.newAmount.toLocaleString()} — continue
+                          Pay ₱{rateChangePending.newAmount.toLocaleString()} - continue
                         </button>
                         <button
                           onClick={() => {
                             const { depositId } = rateChangePending;
                             setRateChangePending(null);
-                            // Declining the revised quote must free the slot —
-                            // cancel the pending deposit via the same guarded
+                            // Declining the revised quote must free the slot - // cancel the pending deposit via the same guarded
                             // path used elsewhere, or the user is blocked by a
                             // stale PENDING row.
                             cancelDepositMutation.mutate(depositId, {
-                              onError: () => setDepositError('Could not cancel the deposit — please cancel it from Deposit History.'),
+                              onError: () => setDepositError('Could not cancel the deposit - please cancel it from Deposit History.'),
                             });
                           }}
                           className="px-4 py-2 rounded-lg bg-sc-panel-2 hover:bg-sc-soft text-sc-text text-xs font-medium transition-all"

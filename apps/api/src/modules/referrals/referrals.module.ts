@@ -7,7 +7,7 @@ import { ReferralsController } from './referrals.controller';
 import { ReferralsService } from './referrals.service';
 
 /**
- * ReferralsModule — Phase 6
+ * ReferralsModule - Phase 6
  * Handles: referral tracking, qualification, reward distribution
  */
 @Module({

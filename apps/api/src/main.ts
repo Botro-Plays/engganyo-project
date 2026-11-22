@@ -67,7 +67,7 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser(configService.get<string>('app.cookieSecret')));
 
   // ─── Static File Serving (Uploads) ─────────────────────────
-  // Only avatars are served statically — proofs are NOT part of the public
+  // Only avatars are served statically - proofs are NOT part of the public
   // uploads tree. Proof downloads go through an authenticated, authorized
   // handler (valid purpose:'access' token, current DB role/status, resource
   // ownership/reviewer/admin authorization, contained file resolution,

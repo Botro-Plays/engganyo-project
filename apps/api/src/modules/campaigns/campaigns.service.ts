@@ -22,7 +22,7 @@ import type { CreateCampaignDto } from './dto/create-campaign.dto';
 import type { UpdateCampaignDto } from './dto/update-campaign.dto';
 import type { ListCampaignsDto } from './dto/list-campaigns.dto';
 
-// Platforms with full OAuth API verification — auto-verify defaults to true for these
+// Platforms with full OAuth API verification - auto-verify defaults to true for these
 const OAUTH_PLATFORMS = new Set(['YOUTUBE', 'TWITCH', 'SPOTIFY']);
 
 const CAMPAIGN_SELECT = {
@@ -417,14 +417,14 @@ export class CampaignsService {
           },
         });
 
-        // Durable reward outcome — commits atomically with VERIFIED.
+        // Durable reward outcome - commits atomically with VERIFIED.
         await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completionId);
 
         return res;
       });
 
       // Only a real transition to COMPLETED justifies the campaign-full
-      // notification — an in-flight completion on a CANCELLED campaign
+      // notification - an in-flight completion on a CANCELLED campaign
       // fills the last slot without flipping the status.
       const willBeFull = txResult.becameCompleted;
 
@@ -571,7 +571,7 @@ export class CampaignsService {
       }
       assertValidCampaignCounters(row);
 
-      // Completion count under the lock — no new assignment can interleave.
+      // Completion count under the lock - no new assignment can interleave.
       const completionCount = await tx.taskCompletion.count({ where: { campaignId } });
       if (completionCount > 0) {
         throw new ForbiddenException(
@@ -646,7 +646,7 @@ export class CampaignsService {
       try {
         return JSON.parse(cached);
       } catch {
-        /* parse fail — fall through to DB */
+        /* parse fail - fall through to DB */
       }
     }
 
@@ -659,7 +659,7 @@ export class CampaignsService {
 
     // Geo filter: if country provided, show campaigns targeting that country OR unrestricted ones
     const andClauses: object[] = [
-      // Hide the viewer's own campaigns from discovery — creators manage them
+      // Hide the viewer's own campaigns from discovery - creators manage them
       // via /campaigns. Platform tasks stay visible to everyone, including
       // the admin who owns them.
       { OR: [{ userId: { not: excludeUserId } }, { isPlatformTask: true }] },

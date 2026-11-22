@@ -58,4 +58,4 @@ CI notes: GitHub dropped `pull_request` synchronize events for PR #135's pushes 
 
 Swept this round: all files authored/touched by this round's PRs, all `apps/web/e2e` spec comments and test-coupled strings, and the two app-side copy strings the specs assert (`Cancel room - refunds both contributions`, tour teasers in `tours.service.ts`).
 
-Remaining inventory for a separate reviewed batch: ~795 pure-comment lines and ~458 mixed lines across `apps/web/src` and `apps/api/src`. The mixed lines include intentional semantic em-dash placeholders in admin UI (`'—'` no-value glyphs), error messages, and seeded fixture strings that must not be mechanically rewritten without checking render/test coupling.
+Remaining inventory for a separate reviewed batch: ~795 pure-comment lines and ~458 mixed lines across `apps/web/src` and `apps/api/src`. The mixed lines include intentional semantic em-dash placeholders in admin UI (`'None'` no-value glyphs), error messages, and seeded fixture strings that must not be mechanically rewritten without checking render/test coupling.

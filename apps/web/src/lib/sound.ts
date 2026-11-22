@@ -40,7 +40,7 @@ export function playNotificationSound() {
 
   const now = ctx.currentTime;
 
-  // Oscillator 1 — higher pitch (B5)
+  // Oscillator 1 - higher pitch (B5)
   const osc1 = ctx.createOscillator();
   const gain1 = ctx.createGain();
   osc1.type = 'sine';
@@ -51,7 +51,7 @@ export function playNotificationSound() {
   osc1.start(now);
   osc1.stop(now + 0.25);
 
-  // Oscillator 2 — harmony (E6)
+  // Oscillator 2 - harmony (E6)
   const osc2 = ctx.createOscillator();
   const gain2 = ctx.createGain();
   osc2.type = 'sine';

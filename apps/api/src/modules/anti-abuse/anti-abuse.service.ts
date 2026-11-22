@@ -16,12 +16,12 @@ export const TRUST_SCORE_JOBS = {
 
 // ─── Trust score weights ──────────────────────────────────────
 // Max 100 pts:
-//  40 pts — completion rate (verified tasks / assigned tasks)
-//  20 pts — account age (capped at 365 days → 1 yr)
-//  25 pts — verified social accounts (5 pts each, max 5)
-//  15 pts — clean flags (penalised per high/critical abuse flag)
+//  40 pts - completion rate (verified tasks / assigned tasks)
+//  20 pts - account age (capped at 365 days → 1 yr)
+//  25 pts - verified social accounts (5 pts each, max 5)
+//  15 pts - clean flags (penalised per high/critical abuse flag)
 // Penalty deductions:
-//  -10 pts max — received reports
+//  -10 pts max - received reports
 
 const getTrustLevel = (score: number): TrustLevel => {
   if (score <= 20) return TrustLevel.NEW;

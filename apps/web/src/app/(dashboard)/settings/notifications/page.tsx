@@ -75,7 +75,7 @@ export default function NotificationsSettingsPage() {
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-sm text-sc-muted block">
-                {enabled ? 'Enabled — sent every Monday' : 'Disabled'}
+                {enabled ? 'Enabled - sent every Monday' : 'Disabled'}
               </span>
               {status && (
                 <span className={`text-xs block ${status.includes('digest') ? 'text-green-400' : 'text-red-400'}`}>

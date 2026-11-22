@@ -146,7 +146,7 @@ export function SellPanel() {
                 {!s.listable && (
                   <p className="text-[11px] text-sc-dim flex items-center gap-1 mt-1">
                     <Lock className="w-3 h-3" />
-                    {s.alreadyListed ? 'Already has an active listing' : 'Bound — not sellable'}
+                    {s.alreadyListed ? 'Already has an active listing' : 'Bound - not sellable'}
                   </p>
                 )}
               </button>

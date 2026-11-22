@@ -72,7 +72,7 @@ export class UpsertOfferDto {
   @MaxLength(500)
   targetUrl!: string;
 
-  @ApiPropertyOptional({ description: 'Offer deadline — must be a future date ≤ room expiresAt. Optional: defaults to the room deadline.' })
+  @ApiPropertyOptional({ description: 'Offer deadline - must be a future date ≤ room expiresAt. Optional: defaults to the room deadline.' })
   @IsOptional()
   @IsDateString()
   deadline?: string;
@@ -90,7 +90,7 @@ export class UpsertOfferDto {
 }
 
 export class ApproveRoomDto {
-  @ApiPropertyOptional({ description: 'Expected current offer versions — stale values are rejected' })
+  @ApiPropertyOptional({ description: 'Expected current offer versions - stale values are rejected' })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -144,7 +144,7 @@ export class DisputeRoomDto {
 }
 
 export class NudgeRoomDto {
-  @ApiProperty({ description: 'Client-generated uuid — makes retries idempotent' })
+  @ApiProperty({ description: 'Client-generated uuid - makes retries idempotent' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(64)

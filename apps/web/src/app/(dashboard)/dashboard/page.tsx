@@ -94,7 +94,7 @@ function DashboardPageInner() {
     void queryClient.invalidateQueries({ queryKey: ['wallet', 'deposits'] });
   });
   // Task-state events refresh the next-action summary (and any cached task
-  // lists) while the dashboard stays mounted — same events Tasks/Discover use.
+  // lists) while the dashboard stays mounted - same events Tasks/Discover use.
   const invalidateTasks = () => void queryClient.invalidateQueries({ queryKey: ['tasks'] });
   useSocketEvent('task:assigned', invalidateTasks);
   useSocketEvent('task:completed', invalidateTasks);
@@ -153,7 +153,7 @@ function DashboardPageInner() {
   });
 
   const rewardMutation = useMutation({
-    // skipRetry: a lost claim response must not be replayed — the server would
+    // skipRetry: a lost claim response must not be replayed - the server would
     // answer the retry with "not yet available" and mask a successful claim.
     // onError refreshes authoritative state so the card shows the truth.
     mutationFn: () => apiClient.post<ApiResponse<typeof rewardResult>>('gamification/daily-reward', undefined, { skipRetry: true }),
@@ -199,7 +199,7 @@ function DashboardPageInner() {
     // config so a replayed request returns the stored result, not a second spin.
     mutationFn: () => {
       const idempotencyKey = createSpinIdempotencyKey();
-      // Bind the attempt to the price the UI displayed — the server rejects
+      // Bind the attempt to the price the UI displayed - the server rejects
       // with PRICE_CHANGED if the authoritative cost differs (e.g. the last
       // free spin was taken concurrently) instead of silently charging.
       const expectedCost = wheelStatus?.freeSpinAvailable ? 0 : (wheelStatus?.costPerSpin ?? 20);
@@ -241,7 +241,7 @@ function DashboardPageInner() {
 
   const levelInfo = gamStats ? getLevelProgress(gamStats.xp) : null;
 
-  // Next useful action — from the server summary; states stay distinct:
+  // Next useful action - from the server summary; states stay distinct:
   // loading / request failure / confirmed data (actionable → review → empty).
   const nextAction = upNextLoading
     ? { title: 'Checking your tasks…', body: 'Loading your task status.', href: '/tasks', cta: 'Open Tasks', muted: true }
@@ -274,25 +274,25 @@ function DashboardPageInner() {
   const statCards = [
     {
       label: 'Credits',
-      value: stats ? formatCredits(stats.credits.balance) : (user ? formatCredits(user.creditBalance) : '—'),
+      value: stats ? formatCredits(stats.credits.balance) : (user ? formatCredits(user.creditBalance) : 'None'),
       sub: stats ? `${formatCredits(stats.credits.lifetimeEarned)} earned total` : 'Available balance',
       icon: null, color: 'text-yellow-400',
     },
     {
       label: 'Tasks Verified',
-      value: stats?.tasks.totalVerified ?? '—',
+      value: stats?.tasks.totalVerified ?? 'None',
       sub: `+${stats?.tasks.last7Days ?? 0} this week`,
       icon: CheckSquare, color: 'text-emerald-400',
     },
     {
       label: 'Campaigns',
-      value: stats?.campaigns.total ?? '—',
+      value: stats?.campaigns.total ?? 'None',
       sub: `${stats?.campaigns.active ?? 0} active`,
       icon: Megaphone, color: 'text-brand-400',
     },
     {
       label: 'Level',
-      value: stats?.gamification.level ?? (user?.level ?? '—'),
+      value: stats?.gamification.level ?? (user?.level ?? 'None'),
       sub: gamStats ? `${gamStats.xpToNext} XP to next` : `${(stats?.gamification.xp ?? user?.xp ?? 0).toLocaleString()} XP`,
       icon: Trophy, color: 'text-brand-400',
       progress: levelInfo?.progress ?? 0,
@@ -332,7 +332,7 @@ function DashboardPageInner() {
         )}
       </div>
 
-      {/* Next useful action — primary hero card */}
+      {/* Next useful action - primary hero card */}
       {!isWelcome && (
         <Link
           href={nextAction.href}
@@ -459,7 +459,7 @@ function DashboardPageInner() {
         {/* Activity sparkline */}
         <div className="card-glass rounded-xl p-6">
           <h2 className="font-semibold text-sc-text mb-1">Task Activity</h2>
-          <p className="text-xs text-sc-text mb-4">Verified completions — last 30 days</p>
+          <p className="text-xs text-sc-text mb-4">Verified completions - last 30 days</p>
           {activityData.length > 0 ? (
             <ResponsiveContainer width="100%" height={160}>
               <AreaChart data={activityData}>
@@ -477,7 +477,7 @@ function DashboardPageInner() {
             </ResponsiveContainer>
           ) : (
             <div className="h-40 flex items-center justify-center">
-              <p className="text-sc-text text-sm">No activity yet — complete some tasks!</p>
+              <p className="text-sc-text text-sm">No activity yet - complete some tasks!</p>
             </div>
           )}
         </div>
@@ -502,7 +502,7 @@ function DashboardPageInner() {
               <div className="flex items-center gap-2 text-sm text-sc-muted">
                 <Trophy className="w-4 h-4 text-yellow-400" /> Leaderboard rank
               </div>
-              <span className="text-sc-text font-medium">#{stats?.gamification.leaderboardRank ?? '—'}</span>
+              <span className="text-sc-text font-medium">#{stats?.gamification.leaderboardRank ?? 'unranked'}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-sc-muted">

@@ -135,7 +135,7 @@ export class RoomsController {
 
   @Post(':id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve current offer versions — dual approval transitions to AGREED and collects 2X once' })
+  @ApiOperation({ summary: 'Approve current offer versions - dual approval transitions to AGREED and collects 2X once' })
   approve(@CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: ApproveRoomDto) {
     return this.roomsService.approve(user.sub, id, dto);
   }

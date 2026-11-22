@@ -86,7 +86,7 @@ const navGroups = [
   },
 ];
 
-// All items flat — used for active-state calculations
+// All items flat - used for active-state calculations
 const allNavItems = navGroups.flatMap((g) => g.items);
 
 // 5 primary mobile bottom-nav items (home + the 4 core P2P actions)
@@ -350,7 +350,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     // Escape key closes drawer
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') { e.preventDefault(); closeDrawer(); return; }
-      // Focus trap — wrap Tab within drawer
+      // Focus trap - wrap Tab within drawer
       if (e.key !== 'Tab' || !drawerRef.current) return;
       const focusable = Array.from(
         drawerRef.current.querySelectorAll<HTMLElement>(
@@ -407,7 +407,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
 
-            {/* Credit balance chip — links to Wallet deposit flow */}
+            {/* Credit balance chip - links to Wallet deposit flow */}
             {user && (
               <Link
                 href="/wallet?tab=deposit"
@@ -472,7 +472,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
               <div className="flex items-center gap-2 sm:gap-3 ml-auto">
-                {/* Mobile balance chip — wallet/top-up entry point */}
+                {/* Mobile balance chip - wallet/top-up entry point */}
                 {user && (
                   <Link
                     href="/wallet?tab=deposit"
@@ -563,16 +563,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        {/* More drawer — backdrop (decorative) separate from dialog (accessible) */}
+        {/* More drawer - backdrop (decorative) separate from dialog (accessible) */}
         {moreOpen && (
           <>
-            {/* Decorative backdrop — aria-hidden so AT ignores it */}
+            {/* Decorative backdrop - aria-hidden so AT ignores it */}
             <div
               className="fixed inset-0 z-40 md:hidden bg-black/40"
               onClick={closeDrawer}
               aria-hidden="true"
             />
-            {/* Dialog — elevated above backdrop, fully accessible */}
+            {/* Dialog - elevated above backdrop, fully accessible */}
             <div
               id="more-nav-drawer"
               ref={drawerRef}

@@ -8,7 +8,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UploadsService } from './uploads.service';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
-// Cheap pre-filter only — the real gate is decoding the actual bytes.
+// Cheap pre-filter only - the real gate is decoding the actual bytes.
 const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/jpeg',
@@ -19,7 +19,7 @@ const ALLOWED_MIME_TYPES = [
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-// Files are held in memory only — nothing untrusted ever lands on disk.
+// Files are held in memory only - nothing untrusted ever lands on disk.
 const imageInterceptor = () =>
   FileInterceptor('file', {
     storage: memoryStorage(),
@@ -50,7 +50,7 @@ export class UploadsController {
       throw new BadRequestException('No file uploaded');
     }
 
-    // taskId is a TaskCompletion id — verifies the caller owns that assignment
+    // taskId is a TaskCompletion id - verifies the caller owns that assignment
     // and derives the storage directory server-side with containment enforced.
     const { relativeUrl, destPath } = await this.uploadsService.prepareProofStorage(
       user.sub,
@@ -85,7 +85,7 @@ export class UploadsController {
     }
 
     // roomId must be a mutual P2P room the caller participates in, past
-    // agreement and before the deadline — verified server-side.
+    // agreement and before the deadline - verified server-side.
     const { relativeUrl, destPath } = await this.uploadsService.prepareRoomProofStorage(
       user.sub,
       body.roomId,

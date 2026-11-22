@@ -113,7 +113,7 @@ export class SocialAuthService {
 
     const oauthPlatforms = [SocialPlatform.YOUTUBE, SocialPlatform.TWITCH, SocialPlatform.SPOTIFY];
     if ((oauthPlatforms as SocialPlatform[]).includes(platform)) {
-      throw new BadRequestException(`${platform} requires OAuth — use the Connect button instead.`);
+      throw new BadRequestException(`${platform} requires OAuth - use the Connect button instead.`);
     }
 
     const { profileUrl, username } = this.normalizeInput(platform, input);
@@ -146,7 +146,7 @@ export class SocialAuthService {
   ): { profileUrl: string | null; username: string | null } {
     const trimmed = input.trim();
 
-    // Already a full URL — keep it and extract username
+    // Already a full URL - keep it and extract username
     if (/^https?:\/\//i.test(trimmed)) {
       return { profileUrl: trimmed, username: this.extractUsernameFromUrl(trimmed) };
     }
@@ -315,17 +315,16 @@ export class SocialAuthService {
   }
 
   /**
-   * Transactional verified-identity link — the single write path used by
+   * Transactional verified-identity link - the single write path used by
    * the OAuth callback (and directly exercisable in tests).
    *
    * Lock ordering (consistent across all social-identity writers):
-   *   1. SELECT ... FOR UPDATE on the (userId, platform) slot row —
-   *      serializes against profile edits and same-user unlink/reconnect.
-   *   2. socialAccount.upsert — the partial unique index on
+   *   1. SELECT ... FOR UPDATE on the (userId, platform) slot row - *      serializes against profile edits and same-user unlink/reconnect.
+   *   2. socialAccount.upsert - the partial unique index on
    *      (platform, platform_user_id) WHERE is_verified serializes
    *      against concurrent claims/unlinks of the same stable identity;
    *      this tx waits for them to commit.
-   *   3. claimVerifiedIdentity — runs AFTER the upsert so the reservation
+   *   3. claimVerifiedIdentity - runs AFTER the upsert so the reservation
    *      read sees the settled post-conflict state. Without this order a
    *      claim could pass the check, then consume a reservation created
    *      by an unlink that committed while the upsert was blocked,
@@ -363,7 +362,7 @@ export class SocialAuthService {
         FOR UPDATE`;
       const existing = slot[0];
 
-      // 2. Upsert — serializes on both the slot unique key and the
+      // 2. Upsert - serializes on both the slot unique key and the
       //    verified-identity partial unique index.
       await tx.socialAccount.upsert({
         where: { userId_platform: { userId, platform } },
@@ -393,7 +392,7 @@ export class SocialAuthService {
         },
       });
 
-      // 3. Reservation claim — post-upsert, settled state.
+      // 3. Reservation claim - post-upsert, settled state.
       await this.socialIdentity.claimVerifiedIdentity(tx, {
         platform,
         identityKey: profile.platformUserId,
@@ -445,7 +444,7 @@ export class SocialAuthService {
 
   async disconnect(userId: string, platform: SocialPlatform) {
     const result = await this.prisma.$transaction(async (tx) => {
-      // Lock the (user, platform) slot row — serializes against a
+      // Lock the (user, platform) slot row - serializes against a
       // concurrent link/reconnect on the same slot.
       const rows = await tx.$queryRaw<
         Array<{ id: string; platform_user_id: string; is_verified: boolean }>
@@ -578,7 +577,7 @@ export class SocialAuthService {
     const channelMatch = url.match(/youtube\.com\/channel\/(UC[\w-]+)/);
     if (channelMatch) return channelMatch[1];
 
-    // Handle @handle format — look up via YouTube API
+    // Handle @handle format - look up via YouTube API
     const handleMatch = url.match(/youtube\.com\/@([\w.-]+)/);
     if (handleMatch) {
       const res = await fetch(
@@ -590,7 +589,7 @@ export class SocialAuthService {
       return data.items?.[0]?.id ?? null;
     }
 
-    // Handle /user/xxx or /c/xxx — try search fallback
+    // Handle /user/xxx or /c/xxx - try search fallback
     const legacyMatch = url.match(/youtube\.com\/(?:user|c)\/([\w-]+)/);
     if (legacyMatch) {
       const res = await fetch(
@@ -667,7 +666,7 @@ export class SocialAuthService {
     }
 
     if (userMatch) {
-      // Spotify doesn't support checking user follows via API — fall back
+      // Spotify doesn't support checking user follows via API - fall back
       return true; // Accept on good faith for user follows
     }
 
@@ -827,7 +826,7 @@ export class SocialAuthService {
     let headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
 
     if (isSpotify) {
-      // Spotify uses Basic Auth for token exchange — credentials are in body, use them then remove
+      // Spotify uses Basic Auth for token exchange - credentials are in body, use them then remove
       const b64 = Buffer.from(`${body.client_id ?? ''}:${body.client_secret ?? ''}`).toString('base64');
       headers = { ...headers, Authorization: `Basic ${b64}` };
       delete body.client_id;
@@ -862,9 +861,9 @@ export class SocialAuthService {
 
   // Linking is required only when the offer's verification path actually
   // uses the platform API: an API-verified task type configured for
-  // automatic verification (autoVerify). Manual-review offers — including
+  // automatic verification (autoVerify). Manual-review offers - including
   // API-capable types with autoVerify=false and all 1v1 challenges, whose
-  // proofs are always creator-reviewed — complete via screenshot, where
+  // proofs are always creator-reviewed - complete via screenshot, where
   // the image itself identifies the account used.
   private static readonly API_VERIFIED_TASK_TYPES = new Set<TaskType>([
     TaskType.YOUTUBE_SUBSCRIBE,

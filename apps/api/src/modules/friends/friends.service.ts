@@ -46,7 +46,7 @@ export class FriendsService {
       where: { requesterId_addresseeId: { requesterId: targetUserId, addresseeId: userId } },
     });
     if (incoming?.status === FriendshipStatus.PENDING) {
-      // They already asked me — mutual consent: accept their request.
+      // They already asked me - mutual consent: accept their request.
       const accepted = await this.prisma.friendship.update({
         where: { id: incoming.id },
         data: { status: FriendshipStatus.ACCEPTED, respondedAt: new Date() },

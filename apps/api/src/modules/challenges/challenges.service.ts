@@ -75,7 +75,7 @@ const CHALLENGE_SELECT = {
   },
 } as const;
 
-// Public listing shape — never leaks passwordHash or private-only fields.
+// Public listing shape - never leaks passwordHash or private-only fields.
 const PUBLIC_CHALLENGE_SELECT = {
   id: true,
   title: true,
@@ -141,7 +141,7 @@ export class ChallengesService {
     };
   }
 
-  // Fee/reserve quote for the create form's review step — same math as publish.
+  // Fee/reserve quote for the create form's review step - same math as publish.
   async quote(rewardCredits: number) {
     const cfg = await this.getConfig();
     const feeAmount = Math.ceil(rewardCredits * cfg.feeRate);
@@ -324,7 +324,7 @@ export class ChallengesService {
     return rest;
   }
 
-  // Minimal public probe — reveals nothing beyond "this exists and is private".
+  // Minimal public probe - reveals nothing beyond "this exists and is private".
   async getPrivatePreview(challengeId: string) {
     const challenge = await this.prisma.challenge.findUnique({
       where: { id: challengeId },
@@ -356,7 +356,7 @@ export class ChallengesService {
     await this.redisService.del(`challenge:pwfail:${challengeId}:${ip}`).catch(() => null);
   }
 
-  // Password gate for private challenges — returns the full challenge on success.
+  // Password gate for private challenges - returns the full challenge on success.
   async verifyAccess(userId: string, challengeId: string, dto: ChallengePasswordDto, ip: string) {
     const challenge = await this.prisma.challenge.findUnique({
       where: { id: challengeId },
@@ -458,12 +458,12 @@ export class ChallengesService {
 
     // Atomic claim: conditional UPDATE serializes concurrent claimants on the
     // row lock; exactly one gets count=1. TaskCompletion.challengeId @unique
-    // is the database backstop — a second insert would violate it.
+    // is the database backstop - a second insert would violate it.
     // NOTE: expires_at is `timestamp` (no tz). Binding a JS Date lets Prisma
     // type the param as timestamptz, which coerces the column through the
-    // session TimeZone — shifting the deadline by the server offset (a
+    // session TimeZone - shifting the deadline by the server offset (a
     // challenge expiring within the offset window becomes unclaimable).
-    // Send a naive-UTC string cast to ::timestamp instead — the same frame
+    // Send a naive-UTC string cast to ::timestamp instead - the same frame
     // Prisma uses when it writes DateTime fields.
     const nowParam = new Date().toISOString().slice(0, -1).replace('T', ' ');
     const completion = await this.prisma.$transaction(async (tx) => {
@@ -546,7 +546,7 @@ export class ChallengesService {
       if (closed.count !== 1) {
         throw new ConflictException('Challenge is no longer open');
       }
-      // Full reserve returned — nothing was earned
+      // Full reserve returned - nothing was earned
       await this.walletService.credit(userId, challenge.reservedCredits, {
         type: TransactionType.REFUND_CHALLENGE_CLOSE,
         description: `Challenge cancelled: ${challenge.title} (reward + fee refunded)`,
@@ -643,7 +643,7 @@ export class ChallengesService {
 
     if (dto.action === 'approve') {
       await this.prisma.$transaction(async (tx) => {
-        // Claim the completion exactly once — concurrent reviews lose with count 0
+        // Claim the completion exactly once - concurrent reviews lose with count 0
         const claim = await tx.taskCompletion.updateMany({
           where: { id: completionId, status: CompletionStatus.SUBMITTED },
           data: {
@@ -654,7 +654,7 @@ export class ChallengesService {
           },
         });
         if (claim.count !== 1) {
-          throw new ConflictException('Submission is not pending review — already processed.');
+          throw new ConflictException('Submission is not pending review - already processed.');
         }
 
         // Close the challenge + settle: reward to claimant, fee to platform revenue.
@@ -700,7 +700,7 @@ export class ChallengesService {
           },
         });
 
-        // Durable reward outcome — commits atomically with VERIFIED.
+        // Durable reward outcome - commits atomically with VERIFIED.
         await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completionId);
       });
 
@@ -734,7 +734,7 @@ export class ChallengesService {
         },
       });
       if (claim.count !== 1) {
-        throw new ConflictException('Submission is not pending review — already processed.');
+        throw new ConflictException('Submission is not pending review - already processed.');
       }
 
       const closed = await tx.challenge.updateMany({
@@ -804,7 +804,7 @@ export class ChallengesService {
     });
     for (const ch of expiredOpen) {
       // OPEN-only source state: if the offer was claimed between selection
-      // and this write, the guarded update matches zero rows — no close,
+      // and this write, the guarded update matches zero rows - no close,
       // no refund. Claimed expiry is handled by the assignment-aware path.
       await this.closeWithoutAward(ch.id, ChallengeStatus.EXPIRED, 'Challenge offer expired', ChallengeStatus.OPEN)
         .catch((err) => this.logger.warn(`Failed to expire challenge ${ch.id}: ${err}`));
@@ -837,7 +837,7 @@ export class ChallengesService {
           },
           data: { status: CompletionStatus.EXPIRED },
         });
-        if (expired.count !== 1) return; // already moved on — leave it
+        if (expired.count !== 1) return; // already moved on - leave it
         const closed = await tx.challenge.updateMany({
           where: { id: ch.id, status: ChallengeStatus.CLAIMED },
           data: { status: ChallengeStatus.EXPIRED, closedAt: now, updatedAt: now },
@@ -854,7 +854,7 @@ export class ChallengesService {
   }
 
   // Closes a challenge without an award and refunds the full reserve.
-  // `fromStatus` is the ONLY source state the atomic update may match — a
+  // `fromStatus` is the ONLY source state the atomic update may match - a
   // stale sweep candidate (e.g. an OPEN row that was claimed between
   // selection and close) writes zero rows and refunds zero credits. For
   // OPEN offers we also re-check expiresAt so the guard holds even if the

@@ -18,7 +18,7 @@ import { ActivityRewardIssuanceDto, ResaleSuspensionDto } from './dto/operationa
 export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
 
-  /** Proposed internal-test rules + live operational switches — public so
+  /** Proposed internal-test rules + live operational switches - public so
    *  the UI can display exact terms and suspension state. */
   @Get('config')
   @HttpCode(HttpStatus.OK)
@@ -49,7 +49,7 @@ export class MarketplaceController {
   @OptionalAuth()
   @HttpCode(HttpStatus.OK)
   async detail(@CurrentUser() user: JwtPayload | null | undefined, @Param('id') id: string) {
-    // Optional auth — anonymous callers get viewerIsSeller=false and
+    // Optional auth - anonymous callers get viewerIsSeller=false and
     // canPurchase=false; signed-in sellers/buyers get correct flags.
     return this.marketplaceService.getListingDetail(id, user?.sub);
   }
@@ -76,7 +76,7 @@ export class MarketplaceController {
   }
 
   /**
-   * Recovery lookup for an unresolved purchase intent — authenticated,
+   * Recovery lookup for an unresolved purchase intent - authenticated,
    * buyer-scoped, read-only. Lets the UI show an already-committed order
    * (or confirm none exists) without re-issuing the purchase.
    */
@@ -130,7 +130,7 @@ export class MarketplaceController {
   }
 
   /** Turn ACTIVITY_REWARD issuance on/off. Disabling stops new grants
-   *  only — existing earned items and all trades are preserved. */
+   *  only - existing earned items and all trades are preserved. */
   @Post('admin/activity-reward-issuance')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')

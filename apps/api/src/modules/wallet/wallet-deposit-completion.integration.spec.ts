@@ -35,7 +35,7 @@ const mockService = () =>
     },
   });
 
-run('Deposit completion — real PostgreSQL integration', () => {
+run('Deposit completion - real PostgreSQL integration', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -166,7 +166,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     expect(s.deposits.every((d) => d.creditsAwarded === d.creditsToAward)).toBe(true);
     expect(s.ledger).toHaveLength(2);
     // Whichever deposit lands first, the ledger must form a contiguous
-    // chain 0 → firstAmount → 500 — never overlapping/stale before/after.
+    // chain 0 → firstAmount → 500 - never overlapping/stale before/after.
     const afters = s.ledger.map((t) => t.balanceAfter);
     const befores = s.ledger.map((t) => t.balanceBefore);
     expect(s.ledger.map((t) => t.amount).sort((a, b) => a - b)).toEqual([200, 300]);
@@ -299,7 +299,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
         creditsToAward: 50000,
       },
     });
-    // Admin edits the package price AFTER initiation — must not affect VP.
+    // Admin edits the package price AFTER initiation - must not affect VP.
     await prisma.depositPackage.update({ where: { id: pkg.id }, data: { usdAmount: 999 } });
 
     const { wallet, gamification } = gamificationWallet();
@@ -337,14 +337,14 @@ run('Deposit completion — real PostgreSQL integration', () => {
         method: DepositMethod.PAYMONGO,
         amountFiat: 580,
         currency: 'PHP',
-        exchangeRate: null, // legacy/broken row — no trustworthy USD figure
+        exchangeRate: null, // legacy/broken row - no trustworthy USD figure
         creditsToAward: 50000,
       },
     });
     const { wallet, gamification } = gamificationWallet();
     await wallet.completeDeposit(d.id);
 
-    // No VP awarded — entitlement preserved as a reconciliation record.
+    // No VP awarded - entitlement preserved as a reconciliation record.
     expect(gamification.awardVp).not.toHaveBeenCalled();
     const audit = await prisma.auditLog.findFirst({
       where: { action: 'deposit.vp_unresolved', entityId: d.id },
@@ -502,7 +502,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     });
     expect(ent.status).toBe('UNRESOLVED');
 
-    // Sweep while still unresolvable — entitlement retained, no award,
+    // Sweep while still unresolvable - entitlement retained, no award,
     // and nextAttemptAt is pushed out (backoff) so it can't starve
     // later eligible work.
     await wallet.processRewardEntitlements();
@@ -521,7 +521,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     expect(ent.status).toBe('SETTLED');
     expect(ent.amount).toBe(100);
 
-    // Duplicate sweep / replay — no second award.
+    // Duplicate sweep / replay - no second award.
     await wallet.processRewardEntitlements();
     await expect(wallet.completeDeposit(d.id)).rejects.toThrow();
     const calls = gamification.awardVp.mock.calls.filter((c: any[]) => c[3] === d.id);
@@ -530,7 +530,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
 
   it('never backfills entitlements for pre-rollout (historical) deposits', async () => {
     const user = await makeUser();
-    // Completed before ENTITLEMENT_ROLLOUT_AT — historical reconciliation
+    // Completed before ENTITLEMENT_ROLLOUT_AT - historical reconciliation
     // territory: the sweep must not auto-create an entitlement (which
     // would auto-award VP) for it.
     const d = await prisma.deposit.create({
@@ -560,7 +560,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     const user = await makeUser();
     const ids: string[] = [];
     // Five post-rollout completed deposits missing entitlements, oldest
-    // first — a limit=2 sweep can never cover them in one pass.
+    // first - a limit=2 sweep can never cover them in one pass.
     for (let i = 0; i < 5; i++) {
       const d = await prisma.deposit.create({
         data: {
@@ -651,7 +651,7 @@ run('Deposit completion — real PostgreSQL integration', () => {
     });
 
     // Sweep with batch size 1 repeatedly: the stuck row gets one attempt,
-    // then backs off — the settleable row must still be reached.
+    // then backs off - the settleable row must still be reached.
     for (let i = 0; i < 10; i++) {
       await wallet.processRewardEntitlements(1);
       const s = await prisma.rewardEntitlement.findUniqueOrThrow({ where: { id: settleable.id } });

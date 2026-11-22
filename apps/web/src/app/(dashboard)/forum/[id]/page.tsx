@@ -130,7 +130,7 @@ export default function ForumTopicPage() {
     },
   });
 
-  // Equipped avatar frames for the topic author + every reply author — one batched request
+  // Equipped avatar frames for the topic author + every reply author - one batched request
   const cosmeticsMap = useCosmeticsMap([
     data?.author?.id,
     ...(data?.replies ?? []).flatMap((r) => [

@@ -27,7 +27,7 @@ const cosmeticInventory = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe('StoreService — equipCosmetic (cache invalidation + ownership)', () => {
+describe('StoreService - equipCosmetic (cache invalidation + ownership)', () => {
   let service: StoreService;
   let prisma: {
     userInventory: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock };
@@ -42,7 +42,7 @@ describe('StoreService — equipCosmetic (cache invalidation + ownership)', () =
       userInventory: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
       storeItem: { findUnique: jest.fn() },
       $executeRaw: jest.fn().mockResolvedValue(1),
-      // equipCosmetic runs inside $transaction under a row lock — hand the
+      // equipCosmetic runs inside $transaction under a row lock - hand the
       // callback a tx client exposing the same mocks plus $executeRaw.
       $transaction: jest.fn(),
     };
@@ -62,7 +62,7 @@ describe('StoreService — equipCosmetic (cache invalidation + ownership)', () =
     service = new StoreService(
       prisma as never,
       redis as never,
-      {} as never, // walletService — unused by equipCosmetic
+      {} as never, // walletService - unused by equipCosmetic
       { createNotification: jest.fn().mockResolvedValue(null) } as never,
       { emitToUser: jest.fn() } as never,
     );
@@ -138,7 +138,7 @@ describe('StoreService — equipCosmetic (cache invalidation + ownership)', () =
   });
 });
 
-describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
+describe('StoreService - purchaseItem (cosmetic cache invalidation)', () => {
   let service: StoreService;
   let prisma: Record<string, jest.Mock | Record<string, jest.Mock>>;
   let redis: { invalidateUserCaches: jest.Mock };
@@ -147,7 +147,7 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
 
   beforeEach(() => {
     // purchaseItem now runs every check inside $transaction under a row
-    // lock on the item — the tx mock must carry all guarded reads.
+    // lock on the item - the tx mock must carry all guarded reads.
     tx = {
       storeItem: { findUniqueOrThrow: jest.fn().mockResolvedValue({ ...GOLD_FRAME }) },
       user: { findUnique: jest.fn().mockResolvedValue({ vipTier: null }) },
@@ -165,7 +165,7 @@ describe('StoreService — purchaseItem (cosmetic cache invalidation)', () => {
     };
     (tx as Record<string, jest.Mock | Record<string, jest.Mock>>).$executeRaw =
       jest.fn().mockResolvedValue(1);
-    // effectiveOwnedQuantity runs as ONE atomic $queryRaw — return 0 owned.
+    // effectiveOwnedQuantity runs as ONE atomic $queryRaw - return 0 owned.
     (tx as Record<string, jest.Mock | Record<string, jest.Mock>>).$queryRaw =
       jest.fn().mockResolvedValue([{ total: 0 }]);
 

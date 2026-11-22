@@ -40,7 +40,7 @@ const dbUser = (over: object = {}) => ({
   ...over,
 });
 
-describe('A03 — mounted proof-access stack', () => {
+describe('A03 - mounted proof-access stack', () => {
   let server: http.Server;
   let base: string;
   let uploadsRoot: string;
@@ -183,9 +183,9 @@ describe('A03 — mounted proof-access stack', () => {
     expect(res.status).toBe(401);
   });
 
-  it('401s a soft-deleted (deletedAt set) account — lookup excludes it like JwtStrategy', async () => {
+  it('401s a soft-deleted (deletedAt set) account - lookup excludes it like JwtStrategy', async () => {
     // With { deletedAt: null } in the predicate, a soft-deleted row resolves
-    // to null — the otherwise ACTIVE account cannot retrieve proof bytes.
+    // to null - the otherwise ACTIVE account cannot retrieve proof bytes.
     prisma.user.findUnique.mockResolvedValue(null);
     const res = await get(
       '/uploads/proofs/owner-user/comp-1/secret.webp',
@@ -214,7 +214,7 @@ describe('A03 — mounted proof-access stack', () => {
     },
   );
 
-  it('does not honor a stale JWT admin role — role comes from the database', async () => {
+  it('does not honor a stale JWT admin role - role comes from the database', async () => {
     // Token claims ADMIN but the user was demoted to USER in the database.
     prisma.user.findUnique.mockResolvedValue(dbUser({ role: 'USER' }));
     const res = await get(
@@ -273,7 +273,7 @@ describe('A03 — mounted proof-access stack', () => {
 
   it('never serves proof bytes through literal or encoded traversal', async () => {
     // Browsers/HTTP clients normalize literal '..' and '%2e%2e' before the
-    // request reaches Express — the only 200s possible are the public avatar.
+    // request reaches Express - the only 200s possible are the public avatar.
     // Any encoded/delimiter variant that reaches the proofs mount contains
     // characters outside the safe-segment charset and is rejected.
     for (const p of [
@@ -302,7 +302,7 @@ describe('A03 — mounted proof-access stack', () => {
 
 /* ── A04: upload path safety, ownership, and content validation ───────── */
 
-describe('A04 — uploads service', () => {
+describe('A04 - uploads service', () => {
   const prismaA04 = {
     taskCompletion: { findUnique: jest.fn() },
   };
@@ -375,7 +375,7 @@ describe('A04 — uploads service', () => {
       tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'uploads-spec-'));
     });
     afterEach(() => {
-      // sharp can briefly hold output handles on Windows — cleanup is best
+      // sharp can briefly hold output handles on Windows - cleanup is best
       // effort so a lingering lock never fails the suite (CI runs Linux).
       try {
         for (const f of fs.readdirSync(tmp)) {

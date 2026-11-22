@@ -12,7 +12,7 @@ export interface MarketplaceListing {
   createdAt: string;
   sellerUsername: string | null;
   isExpired: boolean;
-  /** Store terms changed since listing — purchase will pause/reject it. */
+  /** Store terms changed since listing - purchase will pause/reject it. */
   catalogChanged?: boolean;
 }
 
@@ -21,7 +21,7 @@ export interface MarketplaceListingDetail extends MarketplaceListing {
   isActive: boolean;
   viewerIsSeller: boolean;
   canPurchase: boolean;
-  /** Emergency resale suspension — new purchases blocked server-side;
+  /** Emergency resale suspension - new purchases blocked server-side;
    *  committed-order recovery, browsing, and seller cancel still work. */
   resaleSuspended?: boolean;
   resaleSuspensionReason?: string | null;

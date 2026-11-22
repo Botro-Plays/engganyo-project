@@ -9,7 +9,7 @@
  *   cannot both apply the effect (no double streak-freeze charges, no
  *   duplicate UserActiveEffect rows).
  * - purchaseItem stacks consumables onto the single (userId,itemId) row
- *   via upsert under the store_items row lock — no fragmented inventory.
+ *   via upsert under the store_items row lock - no fragmented inventory.
  * - The @@unique(userId,itemId) constraint backstops concurrent grants.
  */
 import { PrismaClient, StoreCategory } from '@prisma/client';
@@ -21,7 +21,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `inv_${Date.now().toString(36)}_`;
 
-run('inventory atomicity — real PostgreSQL', () => {
+run('inventory atomicity - real PostgreSQL', () => {
   jest.setTimeout(60000);
 
   let prisma: PrismaClient;
@@ -221,7 +221,7 @@ run('inventory atomicity — real PostgreSQL', () => {
     expect(r1.status).toBe('fulfilled');
     expect(r2.status).toBe('fulfilled');
 
-    // Both purchases stack onto ONE (userId,itemId) row — never fragments.
+    // Both purchases stack onto ONE (userId,itemId) row - never fragments.
     const rows = await prisma.userInventory.findMany({
       where: { userId: buyer.id, itemId: item.id },
     });
@@ -243,7 +243,7 @@ run('inventory atomicity — real PostgreSQL', () => {
     // Second purchase is blocked by cosmetic dedup guard.
     await expect(service.purchaseItem(buyer.id, cosmeticItemId, 1)).rejects.toThrow(BadRequestException);
 
-    // Unequip then re-equip concurrently — final state must be consistent.
+    // Unequip then re-equip concurrently - final state must be consistent.
     const [e1, e2] = await Promise.allSettled([
       service.equipCosmetic(buyer.id, inv.id),
       service.equipCosmetic(buyer.id, inv.id),
@@ -275,7 +275,7 @@ run('inventory atomicity — real PostgreSQL', () => {
     const equipped = await prisma.userInventory.count({
       where: { userId: buyer.id, equipped: true },
     });
-    expect(equipped).toBe(1); // slot serialization — never two equipped
+    expect(equipped).toBe(1); // slot serialization - never two equipped
   });
 
   it('purchase auto-equip racing a manual equip of the same slot stays consistent', async () => {
@@ -300,7 +300,7 @@ run('inventory atomicity — real PostgreSQL', () => {
       service.equipCosmetic(buyer.id, inv1.id),
     ]);
     expect(p.status).toBe('fulfilled');
-    // equipCosmetic on an equipped row toggles it OFF — both orders are valid
+    // equipCosmetic on an equipped row toggles it OFF - both orders are valid
     // serialized outcomes; the invariant is at most one equipped per slot.
     const equipped = await prisma.userInventory.findMany({
       where: { userId: buyer.id, equipped: true },

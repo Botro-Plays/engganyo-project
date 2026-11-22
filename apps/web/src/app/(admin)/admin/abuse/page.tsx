@@ -323,7 +323,7 @@ export default function AdminAbusePage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-sc-muted max-w-xs truncate" title={flag.description ?? ''}>
-                          {flag.description ?? '—'}
+                          {flag.description ?? 'None'}
                         </td>
                         <td className="px-4 py-3">
                           {flag.isResolved ? (

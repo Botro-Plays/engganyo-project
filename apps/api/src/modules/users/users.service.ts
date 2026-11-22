@@ -76,7 +76,7 @@ export class UsersService {
 
   async getMe(userId: string) {
     const cacheKey = `user:profile:${userId}`;
-    // Cache failures degrade to a fresh DB read — a Redis outage must not
+    // Cache failures degrade to a fresh DB read - a Redis outage must not
     // turn a successful read into an error.
     const cached = await this.redisService.getJson<{
       socialAccounts: unknown[];
@@ -148,7 +148,7 @@ export class UsersService {
       // is only a denormalized mirror and can lag.
       creditBalance: wallet?.balance ?? rest.creditBalance,
     };
-    // Best-effort cache write — a Redis failure must not fail the request.
+    // Best-effort cache write - a Redis failure must not fail the request.
     await this.redisService.setJson(cacheKey, result, 3600).catch((err: unknown) => {
       this.logger.warn(`user:profile cache write failed for userId=${userId}: ${err instanceof Error ? err.message : String(err)}`);
     });
@@ -204,7 +204,7 @@ export class UsersService {
 
   // ─── Batch: equipped cosmetics for many users ──────────────
   // Used by list surfaces (leaderboard, forum, search, chat) to render avatar
-  // frames. Single findMany across all IDs — no per-user queries.
+  // frames. Single findMany across all IDs - no per-user queries.
 
   async getEquippedCosmeticsForUsers(userIds: string[]) {
     const ids = [...new Set(userIds.filter((id) => typeof id === 'string' && id.length > 0))].slice(0, 100);
@@ -298,7 +298,7 @@ export class UsersService {
     // profile edit can never overwrite platformUserId on a row that an
     // OAuth callback verified concurrently.
     const result = await this.prisma.$transaction(async (tx) => {
-      // Ensure the slot row exists atomically — INSERT ... ON CONFLICT
+      // Ensure the slot row exists atomically - INSERT ... ON CONFLICT
       // DO NOTHING cannot hit the (user_id, platform) unique key the way
       // Prisma's non-atomic upsert can when an OAuth link inserts the row
       // concurrently (that race surfaced as a spurious P2002 abort).
@@ -328,7 +328,7 @@ export class UsersService {
           platformUsername: dto.platformUsername,
           ...(dto.profileUrl !== undefined && { profileUrl: dto.profileUrl }),
           // Never rewrite the stable platform id on a verified (OAuth)
-          // row — it is the exclusive-ownership key. Unverified
+          // row - it is the exclusive-ownership key. Unverified
           // declarations keep the legacy username-as-id behavior.
           ...(row.is_verified ? {} : { platformUserId: dto.platformUsername }),
         },
@@ -343,7 +343,7 @@ export class UsersService {
 
   async removeSocialLink(userId: string, platform: SocialPlatform) {
     const reservedUntil = await this.prisma.$transaction(async (tx) => {
-      // Lock the (user, platform) slot row — serializes against a
+      // Lock the (user, platform) slot row - serializes against a
       // concurrent OAuth link/reconnect on the same slot.
       const locked = await tx.$queryRaw<
         Array<{ id: string; platform_user_id: string; is_verified: boolean }>

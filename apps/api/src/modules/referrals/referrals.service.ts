@@ -47,7 +47,7 @@ export class ReferralsService {
     if (ms[milestone]) return; // already awarded
 
     // Whole-transaction retry: a WalletContentionException means a wallet
-    // settlement inside the tx exhausted its optimistic-lock budget — the
+    // settlement inside the tx exhausted its optimistic-lock budget - the
     // ENTIRE unit of work (milestone lock, eligibility re-read, both
     // awards, ledger entries, mirror updates) must restart so the
     // milestones merge is recomputed from fresh state.
@@ -154,7 +154,7 @@ export class ReferralsService {
     // outcome path, so a qualified referral missing the milestone is
     // either a crashed award (retry completes it) or legacy data whose
     // milestone is legitimately earned by this verified task.
-    // awardMilestone dedupes on the locked milestones map — exactly once.
+    // awardMilestone dedupes on the locked milestones map - exactly once.
     const ms = (referral.milestones as Record<string, boolean> | null) ?? {};
     if (referral.isQualified && ms['first_task']) return;
 
@@ -279,7 +279,7 @@ export class ReferralsService {
     return rows.map((r, i) => ({
       rank: i + 1,
       userId: r.referrerId,
-      username: userMap.get(r.referrerId)?.username ?? '—',
+      username: userMap.get(r.referrerId)?.username ?? 'None',
       displayName: userMap.get(r.referrerId)?.displayName ?? null,
       avatarUrl: userMap.get(r.referrerId)?.avatarUrl ?? null,
       referralCount: r._count.id,

@@ -51,7 +51,7 @@ export function AdminPinModal() {
       setError('Please enter your admin PIN.');
       return;
     }
-    // Store in auth store — the axios interceptor will attach it as x-admin-pin header
+    // Store in auth store - the axios interceptor will attach it as x-admin-pin header
     setAdminPin(pin.trim());
     setOpen(false);
     setPin('');
@@ -64,7 +64,7 @@ export function AdminPinModal() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      {/* Backdrop — no click handler, blocking */}
+      {/* Backdrop - no click handler, blocking */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       <div className="max-h-[90vh] overflow-y-auto relative z-10 w-full max-w-sm mx-4 card-glass rounded-xl p-6 border border-surface-border">
         <div className="flex items-center gap-2 mb-4">

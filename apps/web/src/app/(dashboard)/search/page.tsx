@@ -72,7 +72,7 @@ function SearchContent() {
         </h1>
         {q && (
           <p className="text-sc-muted text-sm mt-1">
-            Results for &ldquo;{q}&rdquo; — {total} found
+            Results for &ldquo;{q}&rdquo; - {total} found
           </p>
         )}
       </div>

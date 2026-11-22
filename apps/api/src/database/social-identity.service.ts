@@ -8,7 +8,7 @@ export const SOCIAL_IDENTITY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
 
 export interface SocialIdentityClaim {
   platform: SocialPlatform;
-  /** Stable platform-side account id (OAuth subject/channel id) — never a mutable handle. */
+  /** Stable platform-side account id (OAuth subject/channel id) - never a mutable handle. */
   identityKey: string;
   userId: string;
 }
@@ -28,7 +28,7 @@ export interface SocialIdentityClaim {
  * - Failed link attempts never touch the reservation, so they cannot
  *   extend the cooldown. Re-unlinking after a reconnect upserts a fresh
  *   24h window.
- * - Reservation rows carry no FK to users — account deletion cannot
+ * - Reservation rows carry no FK to users - account deletion cannot
  *   bypass an existing reservation.
  */
 @Injectable()
@@ -69,7 +69,7 @@ export class SocialIdentityService {
 
   /**
    * Removes any reservation for the identity after a successful verified
-   * link — the claim consumes the cooldown (original-owner reconnect or
+   * link - the claim consumes the cooldown (original-owner reconnect or
    * post-expiry claim by a different user).
    */
   async consumeReservation(tx: Tx, claim: Pick<SocialIdentityClaim, 'platform' | 'identityKey'>): Promise<void> {
@@ -109,7 +109,7 @@ export class SocialIdentityService {
     return reservedUntil;
   }
 
-  /** Active reservation lookup for status display — never exposes owner. */
+  /** Active reservation lookup for status display - never exposes owner. */
   async getReservation(
     platform: SocialPlatform,
     identityKey: string,

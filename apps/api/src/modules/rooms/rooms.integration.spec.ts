@@ -2,7 +2,7 @@
  * PostgreSQL-backed integration tests for mutual P2P rooms.
  *
  * Requires TEST_DATABASE_URL pointing at a disposable, migrated database
- * (never production). Skipped automatically when unset — CI's api job runs
+ * (never production). Skipped automatically when unset - CI's api job runs
  * it because migrate deploy precedes npm test there.
  *
  * Covers the invariants that must hold at the database + ledger level:
@@ -20,7 +20,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `rm_${Date.now().toString(36)}_`;
 
-run('mutual P2P rooms — real PostgreSQL', () => {
+run('mutual P2P rooms - real PostgreSQL', () => {
   jest.setTimeout(90000);
 
   let prisma: PrismaClient;
@@ -204,7 +204,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(await balanceOf(creatorId)).toBe(before);
   });
 
-  it('rejects publish on insufficient balance — nothing reserved', async () => {
+  it('rejects publish on insufficient balance - nothing reserved', async () => {
     const before = await balanceOf(poorId);
     await expect(service.create(poorId, { title: 'Too poor', contributionCredits: 25 }))
       .rejects.toThrow(BadRequestException);
@@ -245,7 +245,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(card).toBeTruthy();
     expect(typeof (card as Record<string, unknown>)['claimSecondsRemaining']).toBe('number');
     expect((card as Record<string, unknown>)['claimSecondsRemaining']).toBeGreaterThan(0);
-    // secondsRemaining is reserved for the active-room deadline — OPEN
+    // secondsRemaining is reserved for the active-room deadline - OPEN
     // listings have no expiresAt yet, so it must not carry the claim window.
     expect((card as Record<string, unknown>)['secondsRemaining']).toBeUndefined();
 
@@ -290,7 +290,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(members).toHaveLength(2);
     expect(members.map((m) => m.userId).sort()).toEqual([creatorId, joinerId].sort());
 
-    // second join attempt loses — nothing reserved, no membership
+    // second join attempt loses - nothing reserved, no membership
     const third = await mkTempUser('third', 300);
     const balBefore = await balanceOf(third);
     await expect(service.join(third, room.id, {}, '10.0.0.12')).rejects.toThrow(ConflictException);
@@ -309,7 +309,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const t = await mkTempUser('late', 300);
     await expect(service.join(t, room.id, {}, '10.0.0.13')).rejects.toThrow(BadRequestException);
     expect(await balanceOf(t)).toBe(300);
-    // listing is past claimExpiresAt — sweep expires + refunds it (cancel rejects expired rooms)
+    // listing is past claimExpiresAt - sweep expires + refunds it (cancel rejects expired rooms)
     await service.sweepExpired();
     const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
     expect(fresh.status).toBe(RoomStatus.EXPIRED);
@@ -341,7 +341,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(revenue[0].amount).toBe(50); // 2 × 25
     expect(revenue[0].reversedAt).toBeNull();
 
-    // repeat approve is a no-op — still one revenue row
+    // repeat approve is a no-op - still one revenue row
     await service.approve(creatorId, room.id, {}).catch(() => null);
     expect(await prisma.platformRevenue.count({ where: { roomId: room.id } })).toBe(1);
 
@@ -351,7 +351,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(offerA.id).toBeTruthy();
     expect(offerB.id).toBeTruthy();
 
-    // cleanup via expiry path — set deadline past and sweep
+    // cleanup via expiry path - set deadline past and sweep
     await forceExpireAndSweep(room.id);
   });
 
@@ -364,7 +364,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const fresh = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
     expect(fresh.status).toBe(RoomStatus.AGREED);
 
-    // can't edit once AGREED — negotiation closed
+    // can't edit once AGREED - negotiation closed
     await expect(service.upsertOffer(creatorId, room.id, offerDraft('Task A v2')))
       .rejects.toThrow(ConflictException);
 
@@ -411,7 +411,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     });
     expect(subA.status).toBe(RoomSubmissionStatus.SUBMITTED);
 
-    // proposer cannot review own-requested work? No — proposer IS the reviewer.
+    // proposer cannot review own-requested work? No - proposer IS the reviewer.
     // creator proposed offerA → creator reviews subA
     // outsider cannot review
     await expect(service.reviewSubmission(outsiderId, subA.id, { action: 'approve' }))
@@ -436,7 +436,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(points.map((p) => p.userId).sort()).toEqual([creatorId, joinerId].sort());
     expect(points.every((p) => p.points === 1)).toBe(true);
 
-    // slots released — both can play again
+    // slots released - both can play again
     expect(await prisma.roomParticipation.count({ where: { roomId: room.id, releasedAt: null } })).toBe(0);
 
     // repeat review → conflict, no duplicate points
@@ -501,7 +501,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     // slots released
     expect(await prisma.roomParticipation.count({ where: { roomId: room.id, releasedAt: null } })).toBe(0);
 
-    // idempotent: second sweep changes nothing — both payers refunded exactly once
+    // idempotent: second sweep changes nothing - both payers refunded exactly once
     await service.sweepExpired();
     expect(await prisma.transaction.count({
       where: { referenceId: room.id, type: TransactionType.REFUND_ROOM_CLOSE },
@@ -620,7 +620,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
       where: { roomId_proposerRole: { roomId, proposerRole: role } },
     });
 
-  it('edit racing second approval — edit wins: approvals invalidated, agreement needs both re-approvals', async () => {
+  it('edit racing second approval - edit wins: approvals invalidated, agreement needs both re-approvals', async () => {
     const { room } = await makeRoom();
     await service.upsertOffer(creatorId, room.id, offerDto('Task A v1'));
     await service.upsertOffer(joinerId, room.id, offerDto('Task B v1'));
@@ -646,7 +646,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(claimerApproval?.claimerVersion).toBe(2); // recorded against CURRENT versions
     expect(await prisma.platformRevenue.count({ where: { roomId: room.id } })).toBe(0);
 
-    // Agreement now requires BOTH players to approve the v2 terms — the
+    // Agreement now requires BOTH players to approve the v2 terms - the
     // joiner's raced approval already recorded {1,2}, so the creator's
     // re-approval alone completes dual approval and collects the charge.
     const r = await service.approve(creatorId, room.id, {});
@@ -657,7 +657,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await forceExpireAndSweep(room.id);
   });
 
-  it('edit racing second approval — approve wins: edit rejected, exactly one charge on v1', async () => {
+  it('edit racing second approval - approve wins: edit rejected, exactly one charge on v1', async () => {
     const { room } = await makeRoom();
     await service.upsertOffer(creatorId, room.id, offerDto('Task A v1'));
     await service.upsertOffer(joinerId, room.id, offerDto('Task B v1'));
@@ -684,7 +684,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await forceExpireAndSweep(room.id);
   });
 
-  it('cancel racing join — cancel first: join loses cleanly, creator refunded once', async () => {
+  it('cancel racing join - cancel first: join loses cleanly, creator refunded once', async () => {
     const room = await service.create(creatorId, { title: 'Cancel vs join' });
     const t = await mkTempUser('joinrace', 300);
     const tBefore = await balanceOf(t);
@@ -708,7 +708,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(refunds).toHaveLength(1);
   });
 
-  it('cancel racing join — join first: room negotiates then cancel refunds both', async () => {
+  it('cancel racing join - join first: room negotiates then cancel refunds both', async () => {
     const room = await service.create(creatorId, { title: 'Join vs cancel' });
     const t = await mkTempUser('joinrace2', 300);
 
@@ -731,7 +731,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(await prisma.roomParticipation.count({ where: { roomId: room.id, releasedAt: null } })).toBe(0);
   });
 
-  it('peer approve racing peer dispute — room freezes DISPUTED, never completes', async () => {
+  it('peer approve racing peer dispute - room freezes DISPUTED, never completes', async () => {
     const { room } = await makeRoom();
     const offerA = await service.upsertOffer(creatorId, room.id, offerDto('Follow me'));
     const offerB = await service.upsertOffer(joinerId, room.id, offerDto('Like my post'));
@@ -744,7 +744,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
       proofUrl: '/u/b', proofHash: `race-b-${seq}`,
     });
 
-    // Creator approves subA while joiner disputes subB — simultaneous.
+    // Creator approves subA while joiner disputes subB - simultaneous.
     await raceOnRoomLock(room.id, [
       () => service.reviewSubmission(creatorId, subA.id, { action: 'approve' }),
       () => service.reviewSubmission(joinerId, subB.id, { action: 'dispute', note: 'proof looks fake' }),
@@ -858,7 +858,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const msg = await prisma.channelMessage.create({
       data: { channelId: fresh.channelId!, userId: c, content: 'reported message' },
     });
-    // Resolved report pointing at the message — must survive the purge.
+    // Resolved report pointing at the message - must survive the purge.
     const report = await prisma.report.create({
       data: {
         submittedById: j, targetUserId: c, roomId: room.id, messageId: msg.id,
@@ -880,7 +880,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const tag = Math.random().toString(36).slice(2, 8);
     const closedAt = new Date(Date.now() - 100 * 24 * 3600_000);
     const TOTAL = 205;          // > one 200-room batch
-    const EMPTY = 8;            // already-empty channels — must never be examined
+    const EMPTY = 8;            // already-empty channels - must never be examined
     const HOLD_N = 10;          // moderation hold inside the first batch
 
     const channels: { id: string; name: string; slug: string; type: 'PRIVATE'; createdById: string }[] = [];
@@ -909,7 +909,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await prisma.challengeRoom.createMany({ data: rooms });
     await prisma.channelMessage.createMany({ data: messages });
 
-    // Moderation hold on a room inside the first 200 — evidence must survive.
+    // Moderation hold on a room inside the first 200 - evidence must survive.
     await prisma.roomDispute.create({
       data: { roomId: `zzpg${tag}r${String(HOLD_N).padStart(3, '0')}`, openedById: creator, reason: 'hold', status: 'OPEN' },
     });
@@ -919,14 +919,14 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const msgCount = (channelId: string) =>
       prisma.channelMessage.count({ where: { channelId } });
 
-    // Run 1: bounded to 120 rooms — covers part of the first batch only.
+    // Run 1: bounded to 120 rooms - covers part of the first batch only.
     const r1 = await service.purgeClosedRoomChat({ maxRooms: 120 });
     expect(r1.examined).toBe(120);
     expect(r1.purged).toBe(119);   // 120 examined − 1 held
     expect(r1.held).toBe(1);
     expect(r1.deletedMessages).toBe(119);
     expect(r1.hasMore).toBe(true);
-    // Cursor persisted — durable progress across invocations.
+    // Cursor persisted - durable progress across invocations.
     const cursorRow = await prisma.platformConfig.findUnique({ where: { key: 'room_chat_purge_cursor' } });
     expect(typeof cursorRow?.value).toBe('string');
     expect(cursorRow!.value).not.toBe('');
@@ -948,7 +948,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     // Empty channels were never examined: 120 + 85 = 205 = message-bearing rooms only.
     expect(r1.examined + r2.examined).toBe(TOTAL);
 
-    // Run 3: only the held room is still eligible — re-checked, still held.
+    // Run 3: only the held room is still eligible - re-checked, still held.
     const r3 = await service.purgeClosedRoomChat();
     expect(r3.examined).toBe(1);
     expect(r3.held).toBe(1);
@@ -1008,7 +1008,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     expect(flags[0][1]).toBe('room_same_ip_review');
     expect(flags[0][2]).toBe('low');
 
-    await service.cancel(c, room.id); // cleanup — refunds both sides
+    await service.cancel(c, room.id); // cleanup - refunds both sides
   });
 
   it('same-IP join flagged medium when one account is new', async () => {
@@ -1154,7 +1154,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
       ...base, deadline: 'not-a-date',
     })).rejects.toThrow(BadRequestException);
 
-    // naive datetime (no offset/Z) → 400 — server-TZ ambiguity is rejected
+    // naive datetime (no offset/Z) → 400 - server-TZ ambiguity is rejected
     await expect(service.upsertOffer(creatorId, room.id, {
       ...base, deadline: '2030-01-01T10:00',
     })).rejects.toThrow(BadRequestException);
@@ -1181,7 +1181,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     const offer = await service.upsertOffer(creatorId, room.id, {
       ...offerDto('TZ check'), deadline: offsetStr,
     });
-    // offset string carries second precision — compare at second granularity
+    // offset string carries second precision - compare at second granularity
     expect(Math.floor(offer.deadline.getTime() / 1000)).toBe(Math.floor(target.getTime() / 1000));
   });
 
@@ -1196,7 +1196,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
       data: { deadline: new Date(Date.now() - 1000) },
     });
 
-    // Approval is refused — expired terms cannot become binding.
+    // Approval is refused - expired terms cannot become binding.
     await expect(service.approve(creatorId, room.id, {}))
       .rejects.toThrow(ConflictException);
     const still = await prisma.challengeRoom.findUniqueOrThrow({ where: { id: room.id } });
@@ -1217,7 +1217,7 @@ run('mutual P2P rooms — real PostgreSQL', () => {
     await service.approve(creatorId, room.id, {});
     await service.approve(joinerId, room.id, {});
 
-    // Offer deadline lapses while the room is still active — proof remains
+    // Offer deadline lapses while the room is still active - proof remains
     // submittable because eligibility is room-level, matching proofWindowOpen
     // in the web client.
     await prisma.roomOffer.update({

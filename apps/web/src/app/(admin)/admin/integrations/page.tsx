@@ -194,7 +194,7 @@ export default function IntegrationsPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-sc-dim mb-1">
-                      Client Secret {cfg.clientSecretSet && <span className="text-green-400">(already set — leave blank to keep)</span>}
+                      Client Secret {cfg.clientSecretSet && <span className="text-green-400">(already set - leave blank to keep)</span>}
                     </label>
                     <div className="relative">
                       <input

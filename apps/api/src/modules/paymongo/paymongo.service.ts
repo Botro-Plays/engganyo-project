@@ -134,7 +134,7 @@ export class PayMongoService {
     if (!secret) throw new BadRequestException('PayMongo not configured');
 
     // ── Idempotency: reuse a payable checkout that already exists ──────────
-    // Retries/concurrent calls must never mint a second session — a payment
+    // Retries/concurrent calls must never mint a second session - a payment
     // made against the first intent would be unmatchable forever.
     const existing = await this.prisma.deposit.findUnique({
       where: { id: depositId },
@@ -143,14 +143,14 @@ export class PayMongoService {
     const existingGw = (existing?.gatewayData ?? {}) as Record<string, unknown>;
     const existingUrl = existingGw.checkoutUrl as string | undefined;
     if (existing?.paymentRef && existingUrl && !existing.paymentRef.startsWith('creating:')) {
-      this.logger.log(`Deposit ${depositId} already has payable checkout ${existing.paymentRef} — reusing`);
+      this.logger.log(`Deposit ${depositId} already has payable checkout ${existing.paymentRef} - reusing`);
       return { linkId: existing.paymentRef, checkoutUrl: existingUrl };
     }
 
     // ── Atomic claim: exactly one creator per deposit ──────────────────────
     // A claim is exclusive: the predicate only admits an unclaimed row or a
     // 'creating:' claim provably stale (> CLAIM_TTL). An active claim can
-    // never be overwritten — the timestamp is persisted in updatedAt so age
+    // never be overwritten - the timestamp is persisted in updatedAt so age
     // is evaluated by Postgres itself.
     const CLAIM_TTL_MS = 60_000;
     const claimTag = `creating:${crypto.randomUUID()}`;
@@ -171,7 +171,7 @@ export class PayMongoService {
       data: { paymentRef: claimTag, updatedAt: new Date() },
     });
     if (claimed.count === 0) {
-      // Another request prepared (or is preparing) the checkout — hand back
+      // Another request prepared (or is preparing) the checkout - hand back
       // the existing URL rather than create a second session.
       const fresh = await this.prisma.deposit.findUnique({
         where: { id: depositId },
@@ -179,10 +179,10 @@ export class PayMongoService {
       });
       const freshGw = (fresh?.gatewayData ?? {}) as Record<string, unknown>;
       if (fresh?.paymentRef && freshGw.checkoutUrl && !fresh.paymentRef.startsWith('creating:')) {
-        this.logger.log(`Claim lost for ${depositId} — returning existing checkout ${fresh.paymentRef}`);
+        this.logger.log(`Claim lost for ${depositId} - returning existing checkout ${fresh.paymentRef}`);
         return { linkId: fresh.paymentRef, checkoutUrl: freshGw.checkoutUrl as string };
       }
-      throw new BadRequestException('Checkout is being prepared — please retry in a moment');
+      throw new BadRequestException('Checkout is being prepared - please retry in a moment');
     }
     const releaseClaim = () =>
       this.prisma.deposit.updateMany({
@@ -260,7 +260,7 @@ export class PayMongoService {
     }
 
     // A session URL must never be handed to the browser without a verified
-    // pi_* intent — our subscribed payment.paid event correlates exclusively by
+    // pi_* intent - our subscribed payment.paid event correlates exclusively by
     // payment_intent_id, so a session without one could be paid but never
     // settle. If creation omits the intent (or returns a malformed one),
     // retrieve the session once to pick it up; if it is still absent or
@@ -271,20 +271,19 @@ export class PayMongoService {
       paymentIntentId = recovered?.startsWith('pi_') ? recovered : '';
     }
     if (!paymentIntentId.startsWith('pi_')) {
-      this.logger.error(`Checkout session ${sessionId} has no valid payment_intent even after retrieval — refusing handoff`);
+      this.logger.error(`Checkout session ${sessionId} has no valid payment_intent even after retrieval - refusing handoff`);
       Sentry.captureMessage('PayMongo checkout session missing payment_intent', {
         level: 'error',
         extra: { depositId, sessionId },
       });
       await releaseClaim();
-      throw new BadRequestException('PayMongo checkout session could not be initialized — please retry');
+      throw new BadRequestException('PayMongo checkout session could not be initialized - please retry');
     }
 
-    // checkout_session.payment.paid is not a subscribable event on our account —
-    // session payments settle via payment.paid, whose payment object carries
+    // checkout_session.payment.paid is not a subscribable event on our account - // session payments settle via payment.paid, whose payment object carries
     // attributes.payment_intent_id. Store the intent as paymentRef so the
     // existing payment.paid correlation matches (session id kept for tracing).
-    // Persistence is conditioned on still owning THIS exact claim — a stale
+    // Persistence is conditioned on still owning THIS exact claim - a stale
     // reclaim by another request must never let us overwrite the winner's ref
     // or hand out our URL.
     try {
@@ -296,7 +295,7 @@ export class PayMongoService {
         },
       });
       if (persisted.count === 0) {
-        this.logger.warn(`Deposit ${depositId}: claim lost before persist — returning owner state instead`);
+        this.logger.warn(`Deposit ${depositId}: claim lost before persist - returning owner state instead`);
         const fresh = await this.prisma.deposit.findUnique({
           where: { id: depositId },
           select: { paymentRef: true, gatewayData: true },
@@ -305,7 +304,7 @@ export class PayMongoService {
         if (fresh?.paymentRef && freshGw.checkoutUrl && !fresh.paymentRef.startsWith('creating:')) {
           return { linkId: fresh.paymentRef, checkoutUrl: freshGw.checkoutUrl as string };
         }
-        throw new BadRequestException('Checkout was replaced during preparation — please retry');
+        throw new BadRequestException('Checkout was replaced during preparation - please retry');
       }
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
@@ -343,12 +342,12 @@ export class PayMongoService {
           this.logger.log(`PayMongo link ${linkId} archived successfully`);
           return true;
         }
-        // 4xx client errors — don't retry, link may already be archived or invalid
+        // 4xx client errors - don't retry, link may already be archived or invalid
         if (res.status >= 400 && res.status < 500) {
           this.logger.warn(`Failed to archive PayMongo link ${linkId} (4xx): ${JSON.stringify(json)}`);
           return false;
         }
-        // 5xx server errors — retry with backoff
+        // 5xx server errors - retry with backoff
         this.logger.warn(`Archive attempt ${attempt}/${MAX_RETRIES} failed for ${linkId}: ${res.status} ${JSON.stringify(json)}`);
         if (attempt < MAX_RETRIES) {
           const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
@@ -371,7 +370,7 @@ export class PayMongoService {
   }
 
   verifyWebhookSignature(timestamp: string, testMode: boolean, rawBody: string, signatureHeader: string, secret: string): boolean {
-    // Validate secret format before passing to crypto — prevents runtime TypeError on malformed secrets
+    // Validate secret format before passing to crypto - prevents runtime TypeError on malformed secrets
     if (!secret || secret.length < 16) {
       this.logger.error('PayMongo webhook secret is missing or too short (< 16 chars)');
       return false;
@@ -441,7 +440,7 @@ export class PayMongoService {
     this.logger.log(`PayMongo webhook signature verified: ${eventType}`);
     this.logger.log(`Event data: ${JSON.stringify(eventData)}`);
 
-    // link.payment.paid — link object is eventData; external_reference_number/reference_number = our depositId
+    // link.payment.paid - link object is eventData; external_reference_number/reference_number = our depositId
     if (eventType === 'link.payment.paid') {
       const linkId = (eventData?.id as string | undefined) ?? undefined;
       const linkAttrs = eventData?.attributes as Record<string, unknown> | undefined;
@@ -485,7 +484,7 @@ export class PayMongoService {
       return this.settlePaidDeposit(deposit, paymentId, 'link.payment.paid', this.extractSettlement(payments?.[0]?.attributes as Record<string, unknown> | undefined));
     }
 
-    // checkout_session.payment.paid — Checkout Sessions (return-URL flow) emit
+    // checkout_session.payment.paid - Checkout Sessions (return-URL flow) emit
     // this event; the session object is eventData and metadata.depositId is ours.
     if (eventType === 'checkout_session.payment.paid') {
       const sessionId = (eventData?.id as string | undefined) ?? undefined;
@@ -506,7 +505,7 @@ export class PayMongoService {
 
       if (!deposit) {
         // paymentRef holds the payment intent id for sessions (cs_ kept in
-        // gatewayData) — match on either the intent or the raw session id.
+        // gatewayData) - match on either the intent or the raw session id.
         const refCandidates = [paymentIntent?.id, sessionId].filter(Boolean) as string[];
         for (const ref of refCandidates) {
           deposit = await this.prisma.deposit.findFirst({
@@ -527,7 +526,7 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
 
-      // Verified evidence — the session's payments[] carry the actual paid
+      // Verified evidence - the session's payments[] carry the actual paid
       // amount/currency; line_items only describe the request and are never
       // trusted. Missing fields fall back to a provider fetch.
       const paymentAttrs = payments?.[0]?.attributes as Record<string, unknown> | undefined;
@@ -551,7 +550,7 @@ export class PayMongoService {
       return this.settlePaidDeposit(deposit, paymentId, 'checkout_session.payment.paid', this.extractSettlement(paymentAttrs));
     }
 
-    // payment.paid — payment object is eventData. Sessions settle here: the
+    // payment.paid - payment object is eventData. Sessions settle here: the
     // payment's attributes.payment_intent_id matches the stored paymentRef.
     // depositId hints (metadata/external reference/reference_number) may
     // correlate legacy links but must NEVER override a conflicting intent match.
@@ -572,11 +571,11 @@ export class PayMongoService {
       );
 
       if (!paymentId) {
-        this.logger.warn('payment.paid: event has no provider payment id — cannot verify, ignoring');
+        this.logger.warn('payment.paid: event has no provider payment id - cannot verify, ignoring');
         return { received: true, action: 'ignored' };
       }
 
-      // 1) Intent-first correlation — authoritative for sessions.
+      // 1) Intent-first correlation - authoritative for sessions.
       let deposit = intentId
         ? await this.prisma.deposit.findFirst({
             where: { paymentRef: intentId, method: DepositMethod.PAYMONGO },
@@ -585,21 +584,21 @@ export class PayMongoService {
 
       if (deposit && candidateDepositId && candidateDepositId !== deposit.id) {
         this.logger.warn(
-          `payment.paid: reference hint ${candidateDepositId} conflicts with intent match ${deposit.id} — intent wins`,
+          `payment.paid: reference hint ${candidateDepositId} conflicts with intent match ${deposit.id} - intent wins`,
         );
       }
 
-      // 2) Legacy correlation — depositId hints may LOCATE a deposit but never
+      // 2) Legacy correlation - depositId hints may LOCATE a deposit but never
       // AUTHORIZE a session deposit (pi_* paymentRef). For those, settlement
       // still requires the verified intent to equal the stored reference
-      // (enforced in verifyPaidEvidence — event intent, else provider fetch).
+      // (enforced in verifyPaidEvidence - event intent, else provider fetch).
       if (!deposit && candidateDepositId) {
         const byId = await this.prisma.deposit.findUnique({ where: { id: candidateDepositId } });
         if (byId && byId.method === DepositMethod.PAYMONGO) {
           deposit = byId;
           if (byId.paymentRef?.startsWith('pi_')) {
             this.logger.warn(
-              `payment.paid: hint located session deposit ${byId.id} — verified intent still required (intent=${intentId ?? 'none'})`,
+              `payment.paid: hint located session deposit ${byId.id} - verified intent still required (intent=${intentId ?? 'none'})`,
             );
           } else {
             this.logger.log(`payment.paid: matched link deposit ${byId.id} via reference`);
@@ -614,7 +613,7 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
 
-      // 3) Verified evidence — event fields, provider fetch for what it omits.
+      // 3) Verified evidence - event fields, provider fetch for what it omits.
       const verdict = await this.verifyPaidEvidence(
         deposit,
         { paymentId, intentId, amountCents: paidAmountCents, currency: paidCurrency },
@@ -624,7 +623,7 @@ export class PayMongoService {
         return { received: true, action: 'ignored' };
       }
       if (verdict === 'unverified') {
-        // Leave wallet/ledger untouched; retryable — PayMongo redelivers on 5xx.
+        // Leave wallet/ledger untouched; retryable - PayMongo redelivers on 5xx.
         throw new InternalServerErrorException(`payment ${paymentId} could not be verified for deposit ${deposit.id}`);
       }
 
@@ -644,7 +643,7 @@ export class PayMongoService {
           return { received: true, action: 'failed', depositId: externalRef };
         }
         if (deposit && deposit.status === DepositStatus.COMPLETED) {
-          this.logger.warn(`payment.failed: deposit ${externalRef} already completed — possible duplicate webhook`);
+          this.logger.warn(`payment.failed: deposit ${externalRef} already completed - possible duplicate webhook`);
           Sentry.captureMessage('PayMongo payment.failed for already-completed deposit', {
             level: 'warning',
             extra: { depositId: externalRef, paymentId: eventData?.id },
@@ -659,7 +658,7 @@ export class PayMongoService {
       });
     }
 
-    // link.payment.failed — a payment attempt on a link failed (declined card, etc.).
+    // link.payment.failed - a payment attempt on a link failed (declined card, etc.).
     // The link is still active; notify user to retry. Deposit stays PENDING until link expires.
     if (eventType === 'link.payment.failed') {
       const lfLinkId = (eventData?.id as string | undefined) ?? undefined;
@@ -704,12 +703,12 @@ export class PayMongoService {
       return { received: true, action: 'notified', depositId: failedDeposit.id };
     }
 
-    // qrph.expired — QR expiry auto-refreshes on PayMongo's checkout page.
+    // qrph.expired - QR expiry auto-refreshes on PayMongo's checkout page.
     // The payment link itself is still valid; do NOT cancel the deposit here.
     if (eventType === 'qrph.expired') {
       const qrAttrs = eventData?.attributes as Record<string, unknown> | undefined;
       const referenceNumber = qrAttrs?.reference_number as string | undefined;
-      this.logger.log(`qrph.expired: reference_number=${referenceNumber} — QR auto-refreshed, payment link still valid`);
+      this.logger.log(`qrph.expired: reference_number=${referenceNumber} - QR auto-refreshed, payment link still valid`);
       return { received: true, action: 'ignored', reason: 'qr_auto_refresh' };
     }
 
@@ -782,13 +781,13 @@ export class PayMongoService {
     let { amountCents, currency, intentId } = evidence;
     const intentBound = Boolean(deposit.paymentRef?.startsWith('pi_'));
 
-    // A session deposit REQUIRES verified intent equality — fetch the payment
+    // A session deposit REQUIRES verified intent equality - fetch the payment
     // when the event omits it (or when amount/currency are missing anyway).
     if (amountCents == null || !currency || (intentBound && !intentId)) {
       if (!evidence.paymentId) return 'unverified';
       const fetched = await this.fetchProviderPayment(evidence.paymentId);
       if (!fetched) {
-        this.logger.error(`${tag}: could not retrieve payment ${evidence.paymentId} for deposit ${deposit.id} — not crediting`);
+        this.logger.error(`${tag}: could not retrieve payment ${evidence.paymentId} for deposit ${deposit.id} - not crediting`);
         return 'unverified';
       }
       amountCents = amountCents ?? fetched.amount;
@@ -796,12 +795,12 @@ export class PayMongoService {
       intentId = intentId ?? fetched.paymentIntentId;
     }
 
-    // Session deposits are bound to a specific payment intent — the verified
+    // Session deposits are bound to a specific payment intent - the verified
     // intent must equal the stored reference. Absent (even after a provider
     // fetch) or different intent means no settlement.
     if (intentBound) {
       if (!intentId) {
-        this.logger.warn(`${tag}: no payment intent available for session deposit ${deposit.id} — not crediting`);
+        this.logger.warn(`${tag}: no payment intent available for session deposit ${deposit.id} - not crediting`);
         return 'unverified';
       }
       if (intentId !== deposit.paymentRef) {
@@ -823,7 +822,7 @@ export class PayMongoService {
     return 'ok';
   }
 
-  // Read-only settlement lookup for backfill — GET /payments/{id}.
+  // Read-only settlement lookup for backfill - GET /payments/{id}.
   async getPaymentSettlement(paymentId: string) {
     const secret = await this.getSecretKey();
     if (!secret) return undefined;
@@ -839,11 +838,11 @@ export class PayMongoService {
   /**
    * Shared settle path for paid events (Payment Links + Checkout Sessions).
    * Terminal COMPLETED stays ignored; CANCELLED deposits may still be
-   * reconciled when verified payment evidence arrives late — the payer's
+   * reconciled when verified payment evidence arrives late - the payer's
    * money must never be discarded because of a local cancel/age cutoff.
    */
   // Provider-reported settlement figures from a payment's attributes
-  // (centavos → pesos). Absent values stay null — never estimated.
+  // (centavos → pesos). Absent values stay null - never estimated.
   private extractSettlement(attrs: Record<string, unknown> | undefined) {
     if (!attrs) return undefined;
     const fee = attrs['fee'];
@@ -863,10 +862,10 @@ export class PayMongoService {
       return { received: true, action: 'ignored' };
     }
     if (deposit.status === DepositStatus.CANCELLED) {
-      this.logger.warn(`${tag}: deposit ${deposit.id} was locally cancelled — reconciling verified paid event`);
+      this.logger.warn(`${tag}: deposit ${deposit.id} was locally cancelled - reconciling verified paid event`);
     }
 
-    // Atomic claim — prevents double-processing on concurrent webhook deliveries
+    // Atomic claim - prevents double-processing on concurrent webhook deliveries
     const claimed = await this.prisma.deposit.updateMany({
       where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING, DepositStatus.CANCELLED] } },
       data: { status: DepositStatus.PROCESSING },
@@ -897,7 +896,7 @@ export class PayMongoService {
   /**
    * Every 5 minutes: find PENDING/PROCESSING PayMongo deposits whose link
    * has actually expired (gatewayData.expiredAt passed) and cancel them.
-   * QR expiry (qrph.expired) auto-refreshes — we only cancel when the link itself is dead.
+   * QR expiry (qrph.expired) auto-refreshes - we only cancel when the link itself is dead.
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async cancelExpiredPayMongoDeposits() {
@@ -914,7 +913,7 @@ export class PayMongoService {
       select: { id: true, paymentRef: true, gatewayData: true },
     });
 
-    // 2. Old deposits without expiredAt (created before this feature) — fallback to createdAt + 30min
+    // 2. Old deposits without expiredAt (created before this feature) - fallback to createdAt + 30min
     const expiredOld = await this.prisma.deposit.findMany({
       where: {
         method: DepositMethod.PAYMONGO,
@@ -925,7 +924,7 @@ export class PayMongoService {
       select: { id: true, paymentRef: true, gatewayData: true },
     });
 
-    // Checkout Sessions are excluded from legacy link cleanup — local age
+    // Checkout Sessions are excluded from legacy link cleanup - local age
     // alone must not discard a session deposit whose paid event may arrive
     // late. Sessions expire via provider-confirmed state instead.
     const allExpired = [...expiredWithData, ...expiredOld].filter(
@@ -933,21 +932,21 @@ export class PayMongoService {
     );
 
     if (allExpired.length === 0) {
-      // Still check sessions — this cron also owns provider-confirmed
+      // Still check sessions - this cron also owns provider-confirmed
       // session expiry and must run even when no legacy links are due.
       await this.expireProviderDeadSessions();
       return;
     }
 
-    this.logger.log(`Found ${allExpired.length} PayMongo link deposit(s) with expired links — cancelling`);
+    this.logger.log(`Found ${allExpired.length} PayMongo link deposit(s) with expired links - cancelling`);
 
     for (const deposit of allExpired) {
       try {
-        // Only Payment Links can be archived — session/intent refs can't.
+        // Only Payment Links can be archived - session/intent refs can't.
         if (deposit.paymentRef?.startsWith('link_')) {
           await this.archiveLink(deposit.paymentRef);
         }
-        // Atomic status update — skip if a webhook completed this deposit after our findMany
+        // Atomic status update - skip if a webhook completed this deposit after our findMany
         const cancelled = await this.prisma.deposit.updateMany({
           where: {
             id: deposit.id,
@@ -956,9 +955,9 @@ export class PayMongoService {
           data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayMongo link expired' },
         });
         if (cancelled.count === 0) {
-          this.logger.log(`Deposit ${deposit.id} already processed — skipping auto-cancel`);
+          this.logger.log(`Deposit ${deposit.id} already processed - skipping auto-cancel`);
         } else {
-          this.logger.log(`Deposit ${deposit.id} auto-cancelled — PayMongo link expired`);
+          this.logger.log(`Deposit ${deposit.id} auto-cancelled - PayMongo link expired`);
         }
       } catch (err) {
         this.logger.error(`Failed to auto-cancel deposit ${deposit.id}: ${String(err)}`);
@@ -972,7 +971,7 @@ export class PayMongoService {
   }
 
   /**
-   * Checkout Sessions can't be archived and have no local expiry — ask the
+   * Checkout Sessions can't be archived and have no local expiry - ask the
    * provider whether each stale session deposit is still payable. Only a
    * provider-confirmed dead session cancels the deposit; a live or unknown
    * session is left alone so a late payment.paid can still settle it.
@@ -1001,19 +1000,19 @@ export class PayMongoService {
         const res = await fetch(`${this.baseUrl}/checkout_sessions/${sessionId}`, {
           headers: { Authorization: this.authHeader(secret) },
         });
-        if (!res.ok) continue; // can't confirm — leave it
+        if (!res.ok) continue; // can't confirm - leave it
         const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
         const attrs = ((json.data as Record<string, unknown> | undefined)?.attributes ?? {}) as Record<string, unknown>;
         const payments = attrs.payments as unknown[] | undefined;
         const isDead = Boolean(attrs.expired_at) || attrs.status === 'expired' || attrs.status === 'cancelled';
-        if (payments?.length || !isDead) continue; // paid or still payable — never touch
+        if (payments?.length || !isDead) continue; // paid or still payable - never touch
 
         const cancelled = await this.prisma.deposit.updateMany({
           where: { id: deposit.id, status: { in: [DepositStatus.PENDING, DepositStatus.PROCESSING] } },
           data: { status: DepositStatus.CANCELLED, adminNotes: 'Auto-cancelled: PayMongo checkout session expired' },
         });
         if (cancelled.count) {
-          this.logger.log(`Session deposit ${deposit.id} auto-cancelled — provider confirms session ${sessionId} dead`);
+          this.logger.log(`Session deposit ${deposit.id} auto-cancelled - provider confirms session ${sessionId} dead`);
         }
       } catch (err) {
         this.logger.warn(`Session expiry check failed for deposit ${deposit.id}: ${String(err)}`);

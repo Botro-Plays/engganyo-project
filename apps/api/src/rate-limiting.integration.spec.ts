@@ -29,7 +29,7 @@ class InMemoryRedis {
       this.store.set(key, { count: 1, expiresAt: now + ttlSeconds * 1000 });
       return 1;
     }
-    entry.count += 1; // expiry untouched — fixed window
+    entry.count += 1; // expiry untouched - fixed window
     return entry.count;
   }
 
@@ -47,7 +47,7 @@ class InMemoryRedis {
   }
 }
 
-/* ── Simulates an authenticated request — stands in for JwtAuthGuard ── */
+/* ── Simulates an authenticated request - stands in for JwtAuthGuard ── */
 @Injectable()
 class FakeAuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
@@ -79,7 +79,7 @@ class RLTestController {
     return { ok: true };
   }
 
-  // Public auth-style route — rate-limited by client IP only.
+  // Public auth-style route - rate-limited by client IP only.
   @Post('authish')
   @UseGuards(UserRateLimitGuard)
   @UserRateLimit({ limit: 2, ttl: 3600, scope: 'login' })
@@ -87,7 +87,7 @@ class RLTestController {
     return { ok: true };
   }
 
-  // Authenticated route — rate-limited per user id.
+  // Authenticated route - rate-limited per user id.
   @Get('authed')
   @UseGuards(FakeAuthGuard, UserRateLimitGuard)
   @UserRateLimit({ limit: 2, ttl: 3600, scope: 'authed' })
@@ -101,7 +101,7 @@ class RLTestController {
  * X-Forwarded-For $remote_addr`, it OVERWRITES the incoming XFF with the
  * verified client address (simulated per-request by X-Sim-Client, standing
  * in for the socket address nginx sees). Client-supplied XFF never reaches
- * the app — the same guarantee nginx's overwrite provides.
+ * the app - the same guarantee nginx's overwrite provides.
  */
 function createNginxSim(nestPort: number): { app: Express } {
   const app = express();
@@ -136,7 +136,7 @@ function createNginxSim(nestPort: number): { app: Express } {
   return { app };
 }
 
-describe('A08 — rate-limit wiring + proxy boundary (integration)', () => {
+describe('A08 - rate-limit wiring + proxy boundary (integration)', () => {
   let app: NestExpressApplication;
   let proxyServer: http.Server;
   let base: string;
@@ -190,7 +190,7 @@ describe('A08 — rate-limit wiring + proxy boundary (integration)', () => {
     });
 
   it('rotating spoofed X-Forwarded-For cannot reset the bucket', async () => {
-    // Global default limit is 3 — four requests, each with a DIFFERENT
+    // Global default limit is 3 - four requests, each with a DIFFERENT
     // attacker-controlled XFF but the same verified source, must share one
     // bucket and 429 on the fourth.
     const statuses: number[] = [];
@@ -205,7 +205,7 @@ describe('A08 — rate-limit wiring + proxy boundary (integration)', () => {
     for (let i = 0; i < 3; i++) {
       expect((await req('/t/default', { ip: '198.51.100.10' })).status).toBe(200);
     }
-    // Same path, different verified client — untouched bucket.
+    // Same path, different verified client - untouched bucket.
     expect((await req('/t/default', { ip: '198.51.100.11' })).status).toBe(200);
   });
 
@@ -217,35 +217,35 @@ describe('A08 — rate-limit wiring + proxy boundary (integration)', () => {
     expect(third.status).toBe(429);
     const body = (await third.json()) as { statusCode: number; retryAfter?: number };
     expect(body.statusCode).toBe(429);
-    // retryAfter is the remaining fixed-window time — useful and bounded.
+    // retryAfter is the remaining fixed-window time - useful and bounded.
     expect(typeof body.retryAfter).toBe('number');
     expect(body.retryAfter).toBeGreaterThan(0);
     expect(body.retryAfter).toBeLessThanOrEqual(3600);
   });
 
   it('keys authenticated routes on the user id, not the IP', async () => {
-    // Same IP, two users — separate buckets.
+    // Same IP, two users - separate buckets.
     expect((await req('/t/authed', { ip: '10.0.0.1', user: 'u-a' })).status).toBe(200);
     expect((await req('/t/authed', { ip: '10.0.0.1', user: 'u-a' })).status).toBe(200);
     expect((await req('/t/authed', { ip: '10.0.0.1', user: 'u-b' })).status).toBe(200);
-    // Same user from a different IP — still the user's bucket (third hit 429s).
+    // Same user from a different IP - still the user's bucket (third hit 429s).
     expect((await req('/t/authed', { ip: '10.9.9.9', user: 'u-a' })).status).toBe(429);
   });
 
   it('runs the global limiter, honors route overrides, and exempts health', async () => {
-    // Route override limit 2 — beats the global 3.
+    // Route override limit 2 - beats the global 3.
     expect((await req('/t/tight', { ip: '172.16.0.1' })).status).toBe(200);
     expect((await req('/t/tight', { ip: '172.16.0.1' })).status).toBe(200);
     expect((await req('/t/tight', { ip: '172.16.0.1' })).status).toBe(429);
 
-    // @SkipThrottle — unlimited.
+    // @SkipThrottle - unlimited.
     for (let i = 0; i < 10; i++) {
       expect((await req('/t/health', { ip: '172.16.0.1' })).status).toBe(200);
     }
   });
 
   it('fixed-window counters do not extend on blocked requests', async () => {
-    // Hit the limit, keep hammering — the bucket key must expire on the
+    // Hit the limit, keep hammering - the bucket key must expire on the
     // ORIGINAL schedule, i.e. ttl() decreases and is bounded by the window.
     const ip = '203.0.113.99';
     await req('/t/authed', { ip, user: 'u-block' });
@@ -254,7 +254,7 @@ describe('A08 — rate-limit wiring + proxy boundary (integration)', () => {
     const afterBlocked = await redis.ttl('ratelimit:user:u-block:authed');
     expect(afterBlocked).toBeGreaterThan(0);
     expect(afterBlocked).toBeLessThanOrEqual(3600);
-    // More blocked requests — expiry still bounded (never re-armed to 3600).
+    // More blocked requests - expiry still bounded (never re-armed to 3600).
     await req('/t/authed', { ip, user: 'u-block' });
     await req('/t/authed', { ip, user: 'u-block' });
     const later = await redis.ttl('ratelimit:user:u-block:authed');
@@ -262,8 +262,8 @@ describe('A08 — rate-limit wiring + proxy boundary (integration)', () => {
   });
 });
 
-/* ── RedisService pipeline shape — pins the fixed-window implementation ── */
-describe('A08 — RedisService.incrWithExpiry fixed-window pipeline', () => {
+/* ── RedisService pipeline shape - pins the fixed-window implementation ── */
+describe('A08 - RedisService.incrWithExpiry fixed-window pipeline', () => {
   it('issues EXPIRE with NX so the window is set only once', async () => {
     const pipeline = {
       incr: jest.fn().mockReturnThis(),

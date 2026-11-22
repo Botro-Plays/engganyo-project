@@ -61,7 +61,7 @@ export class PayMongoController {
     if (amountCents < 100) {
       amountCents = 100;
     }
-    const description = `Engganyo credits — ${deposit.creditsToAward} credits`;
+    const description = `Engganyo credits - ${deposit.creditsToAward} credits`;
 
     return this.paymongoService.createCheckoutSession(deposit.id, amountCents, description, deposit.currency ?? 'PHP');
   }

@@ -383,7 +383,7 @@ export function useEvmWallet() {
       } catch {
         // balance pre-check unreachable â€” let the transfer attempt classify the real error
       }
-      // 3) gas estimation — a revert here is provably pre-broadcast, so its
+      // 3) gas estimation - a revert here is provably pre-broadcast, so its
       //    classification stays 'preflight' regardless of the error text.
       try {
         await (contract as unknown as { transfer: { estimateGas: (to: string, a: bigint) => Promise<bigint> } }).transfer.estimateGas(toAddr, amountBN);
@@ -396,7 +396,7 @@ export function useEvmWallet() {
         return { hash: null, outcome: 'preflight' };
       }
 
-      // 4) broadcast — a structured 4001/ACTION_REJECTED is explicit user
+      // 4) broadcast - a structured 4001/ACTION_REJECTED is explicit user
       //    cancellation (no dispatch). Anything else may have broadcast.
       let txHash: string;
       try {

@@ -37,7 +37,7 @@ export class PayPalController {
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Receive PayPal webhook events (public — no auth)' })
+  @ApiOperation({ summary: 'Receive PayPal webhook events (public - no auth)' })
   async handleWebhook(
     @Req() req: Request,
     @Headers('paypal-auth-algo') authAlgo: string,

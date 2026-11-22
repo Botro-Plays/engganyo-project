@@ -9,7 +9,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 // HTTP-boundary coverage for POST /gamification/wheel/spin header validation.
 // The controller must reject missing/malformed Idempotency-Key and
 // X-Expected-Cost BEFORE the service (and therefore settlement) is invoked.
-describe('GamificationController — wheel/spin header boundary', () => {
+describe('GamificationController - wheel/spin header boundary', () => {
   let controller: GamificationController;
   const spinWheelMock = jest.fn();
 
@@ -42,7 +42,7 @@ describe('GamificationController — wheel/spin header boundary', () => {
     ['dots', 'key.with.dots'],
     ['symbols', 'key+plus/slash='],
   ])('rejects %s Idempotency-Key with 400 before settlement', (_label, key) => {
-    // spinWheel throws synchronously at the boundary — settlement never starts.
+    // spinWheel throws synchronously at the boundary - settlement never starts.
     expect(() => controller.spinWheel(user, key, VALID_COST)).toThrow(BadRequestException);
     expect(spinWheelMock).not.toHaveBeenCalled();
   });

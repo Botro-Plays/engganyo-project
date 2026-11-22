@@ -34,7 +34,7 @@ function PaymentReturnContent() {
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  // The ?status= value is a navigation hint from PayMongo only — it never
+  // The ?status= value is a navigation hint from PayMongo only - it never
   // decides what we show. The deposit id survives sign-in via sessionStorage.
   const hint = params.get('status');
   const paramDeposit = params.get('deposit');
@@ -61,7 +61,7 @@ function PaymentReturnContent() {
     }
   }, [paramDeposit]);
 
-  // Ownership-checked fetch of this one deposit — no list scanning.
+  // Ownership-checked fetch of this one deposit - no list scanning.
   const fetchDeposit = useCallback(async (): Promise<DepositRecord | null> => {
     if (!depositId) return null;
     try {
@@ -89,8 +89,8 @@ function PaymentReturnContent() {
         if (found) {
           setDeposit(found);
           // PayPal: the browser return triggers the capture on the order
-          // stored in paymentRef — but only on a success return; an explicit
-          // cancel return never initiates capture. Best-effort — settlement
+          // stored in paymentRef - but only on a success return; an explicit
+          // cancel return never initiates capture. Best-effort - settlement
           // is server-verified and polling continues either way.
           if (found.method === 'PAYPAL' && found.status === 'PENDING' && found.paymentRef && hint === 'success') {
             apiClient.post(`paypal/capture/${found.paymentRef}`).catch(() => {});
@@ -107,7 +107,7 @@ function PaymentReturnContent() {
           return;
         }
         if (Date.now() >= deadline.current) {
-          // API unreachable or webhook still in flight — honest pending state.
+          // API unreachable or webhook still in flight - honest pending state.
           setView('pending');
           stopped = true;
           return;
@@ -164,15 +164,15 @@ function PaymentReturnContent() {
     loading: {
       iconEl: icon(<Loader2 className="h-7 w-7 animate-spin text-brand-400" />, 'border-brand-500/40'),
       title: 'Checking your payment',
-      copy: 'One moment — we’re confirming the result with the server.',
+      copy: 'One moment - we’re confirming the result with the server.',
     },
     checking: {
       iconEl: icon(<Loader2 className="h-7 w-7 animate-spin text-brand-400" />, 'border-brand-500/40'),
       title: hint === 'cancelled' ? 'You left checkout' : 'Checking your payment',
       copy:
         hint === 'cancelled'
-          ? 'You left checkout. We’re checking the payment status — if you paid, your credits will appear shortly.'
-          : 'PayMongo accepted your checkout — we’re waiting for final confirmation. This takes a few seconds.',
+          ? 'You left checkout. We’re checking the payment status - if you paid, your credits will appear shortly.'
+          : 'PayMongo accepted your checkout - we’re waiting for final confirmation. This takes a few seconds.',
     },
     success: {
       iconEl: icon(<CheckCircle2 className="h-7 w-7 text-emerald-400" />, 'border-emerald-500/60 bg-emerald-500/10'),
@@ -180,7 +180,7 @@ function PaymentReturnContent() {
       copy: (
         <>
           {currencySymbol}
-          {deposit?.amountFiat.toLocaleString()} paid —{' '}
+          {deposit?.amountFiat.toLocaleString()} paid - {' '}
           <span className="font-semibold text-white">{creditCount.toLocaleString()} credits</span> added to your wallet.
         </>
       ),
@@ -189,13 +189,13 @@ function PaymentReturnContent() {
       iconEl: icon(<Clock className="h-7 w-7 text-yellow-400" />, 'border-yellow-500/50 bg-yellow-500/10'),
       title: 'Payment status pending',
       copy:
-        'We couldn’t confirm the result yet — if you completed payment, credits appear once the provider notifies us. Check your Wallet or try again.',
+        'We couldn’t confirm the result yet - if you completed payment, credits appear once the provider notifies us. Check your Wallet or try again.',
     },
     inactive: {
       iconEl: icon(<XCircle className="h-7 w-7 text-zinc-400" />, 'border-zinc-600 bg-zinc-800/50'),
       title: 'Deposit no longer active',
       copy:
-        'This deposit is no longer payable. If you completed a payment, its status updates automatically — check your Wallet history.',
+        'This deposit is no longer payable. If you completed a payment, its status updates automatically - check your Wallet history.',
     },
     'signed-out': {
       iconEl: icon(<Clock className="h-7 w-7 text-zinc-400" />, 'border-zinc-600 bg-zinc-800/50'),

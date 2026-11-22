@@ -3,7 +3,7 @@
  * state: in-progress resume, terminal-state protection, the
  * automatic-tours preference, and cross-device state reads.
  * Requires TEST_DATABASE_URL pointing at a disposable, migrated
- * database — skipped automatically when unset.
+ * database - skipped automatically when unset.
  *
  * Proves:
  * - progress creates IN_PROGRESS rows with a resumable step index;
@@ -30,7 +30,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `tour_${Date.now().toString(36)}_`;
 
-run('tour server state — real PostgreSQL', () => {
+run('tour server state - real PostgreSQL', () => {
   jest.setTimeout(90000);
 
   let prisma: PrismaClient;
@@ -125,7 +125,7 @@ run('tour server state — real PostgreSQL', () => {
     expect(r?.stepIndex).toBe(0);
   });
 
-  it('first terminal write wins — a late duplicate cannot flip the outcome', async () => {
+  it('first terminal write wins - a late duplicate cannot flip the outcome', async () => {
     const u = await mkUser();
     await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION);
     await tours.dismiss(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION);
@@ -189,7 +189,7 @@ run('tour server state — real PostgreSQL', () => {
 
     expect((await tours.getState(u.id)).autoTours).toBe(false);
     expect((await tours.getState(v.id)).autoTours).toBe(true);
-    // History untouched — disabling automatic tours erases nothing.
+    // History untouched - disabling automatic tours erases nothing.
     expect((await tours.getState(u.id)).beginner?.status).toBe('COMPLETED');
   });
 
@@ -274,7 +274,7 @@ run('tour server state — real PostgreSQL', () => {
     const cat = await tours.getCatalog(u.id);
     const ach = cat.tours.find((t) => t.key === 'feature-achievements');
     expect(ach?.seen).toBe(true);
-    expect(ach?.status).toBe('COMPLETED'); // latest known status — Replay stays visible
+    expect(ach?.status).toBe('COMPLETED'); // latest known status - Replay stays visible
   });
 
   // ─── Replay generation fencing (atomic reset conflicts) ──────────
@@ -367,11 +367,11 @@ run('tour server state — real PostgreSQL', () => {
     });
     expect(r1.generation).toBe(1);
     // Simulate "committed but response lost": a NEW completion commits at
-    // the new generation, then the SAME resetId is retried — the server
+    // the new generation, then the SAME resetId is retried - the server
     // must replay it idempotently and NOT re-delete the newer completion.
     await tours.complete(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 1);
     const r2 = await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, {
-      generation: 0, // stale — it was issued before the first ack
+      generation: 0, // stale - it was issued before the first ack
       resetId: 'r-1',
     });
     expect(r2.idempotent).toBe(true);
@@ -398,7 +398,7 @@ run('tour server state — real PostgreSQL', () => {
     let s = await tours.getState(u.id);
     expect(s.lastResetIds?.[BEGINNER_TOUR_KEY]).toBe('r-1');
     expect(s.generations?.[BEGINNER_TOUR_KEY]).toBe(1);
-    // R1's replay progresses, then another device performs R2 — the
+    // R1's replay progresses, then another device performs R2 - the
     // identity binding moves to R2.
     await tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 3, 1);
     await tours.resetForReplay(u.id, BEGINNER_TOUR_KEY, { generation: 1, resetId: 'r-2' });
@@ -406,7 +406,7 @@ run('tour server state — real PostgreSQL', () => {
     expect(s.lastResetIds?.[BEGINNER_TOUR_KEY]).toBe('r-2');
     expect(s.generations?.[BEGINNER_TOUR_KEY]).toBe(2);
     // A delayed R1-group write retried at ITS acknowledged generation is
-    // fenced — it must not land inside R2's replay.
+    // fenced - it must not land inside R2's replay.
     await expect(
       tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 5, 1),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -419,7 +419,7 @@ run('tour server state — real PostgreSQL', () => {
     // gen is now 1.
     await expect(
       tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 9, 5),
-    ).rejects.toBeInstanceOf(ConflictException); // future value — never equal
+    ).rejects.toBeInstanceOf(ConflictException); // future value - never equal
     await expect(
       tours.recordProgress(u.id, BEGINNER_TOUR_KEY, BEGINNER_TOUR_VERSION, 9),
     ).rejects.toBeInstanceOf(ConflictException); // missing → fail-closed as 0

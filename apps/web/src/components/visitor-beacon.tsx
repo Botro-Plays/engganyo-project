@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { API_BASE_URL } from '@/lib/api';
 
 // First-party visitor beacon. Fires once per route load (initial load + SPA
-// navigations). Sends ONLY the path — never query strings or fragments, so
+// navigations). Sends ONLY the path - never query strings or fragments, so
 // links containing tokens/passwords cannot leak into analytics. IP, country,
 // UA and device class are derived server-side from trusted proxy data.
 // Fire-and-forget: failures are swallowed and can never interrupt navigation.
@@ -34,8 +34,8 @@ function shouldTrack(pathname: string | null): boolean {
 }
 
 // Dynamic routes carry identifiers (private challenge ids, usernames,
-// campaign ids). The wire payload sends the canonical route LABEL — never
-// the raw identifier — and the server re-validates everything anyway.
+// campaign ids). The wire payload sends the canonical route LABEL - never
+// the raw identifier - and the server re-validates everything anyway.
 const DYNAMIC_ROUTE_LABELS: [RegExp, string][] = [
   [/^\/campaigns\/[^/]+\/analytics$/, '/campaigns/[id]/analytics'],
   [/^\/campaigns\/[^/]+$/, '/campaigns/[id]'],
@@ -69,7 +69,7 @@ export function VisitorBeacon() {
       eventId: crypto.randomUUID(),
       visitId: getOrCreateVisitId(),
       path: safeRouteLabel(pathname),
-      // document.referrer persists across SPA navigations — the server only
+      // document.referrer persists across SPA navigations - the server only
       // uses it when a new visit starts, so the entry referrer is captured.
       referrer: document.referrer || undefined,
     };

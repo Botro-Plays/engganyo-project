@@ -225,7 +225,7 @@ function ConnectedAccountsPageInner() {
         type: 'success',
         msg:
           when && !Number.isNaN(when.getTime())
-            ? `Account disconnected. This identity is reserved for 24 hours — available to link again at ${when.toLocaleString()}.`
+            ? `Account disconnected. This identity is reserved for 24 hours - available to link again at ${when.toLocaleString()}.`
             : 'Account disconnected.',
       });
       setPendingDisconnect(null);
@@ -256,7 +256,7 @@ function ConnectedAccountsPageInner() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-sc-text">Connected Accounts</h1>
         <p className="text-sc-muted text-sm mt-1">
-          Link your social accounts to enable API-verified task completions — no screenshots needed.
+          Link your social accounts to enable API-verified task completions - no screenshots needed.
         </p>
       </div>
 
@@ -276,7 +276,7 @@ function ConnectedAccountsPageInner() {
 
       <div className="mb-4 p-4 rounded-xl bg-brand-500/5 border border-brand-500/20 text-sm text-sc-muted">
         <strong className="text-sc-text">Why connect?</strong> When you link a supported account,
-        task completions are verified instantly via the platform&apos;s official API — no screenshot required.
+        task completions are verified instantly via the platform&apos;s official API - no screenshot required.
         Credits are paid immediately on verified success. If an account isn&apos;t linked, the campaign&apos;s
         default verification mode (auto or manual review) applies instead.
       </div>

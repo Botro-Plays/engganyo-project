@@ -191,7 +191,7 @@ export class GamificationController {
     @Headers('idempotency-key') idempotencyKey?: string,
     @Headers('x-expected-cost') expectedCostHeader?: string,
   ) {
-    // Idempotency-Key is required for every spin — it is embedded in the
+    // Idempotency-Key is required for every spin - it is embedded in the
     // attempt record's unique(userId, key) constraint, so a missing or
     // malformed key would bypass durable replay protection. Reject at the
     // HTTP boundary before any settlement work.
@@ -201,9 +201,9 @@ export class GamificationController {
     const key = idempotencyKey;
     // The client must confirm the price it displayed (0 = free spin,
     // 20 = paid). Required for every new spin: the only supported caller is
-    // the web dashboard, which always sends it — a missing or malformed
+    // the web dashboard, which always sends it - a missing or malformed
     // value is rejected rather than silently falling through to a paid
-    // charge (e.g. a stale bundle showing "Spin — Free" after the free
+    // charge (e.g. a stale bundle showing "Spin - Free" after the free
     // entitlement was taken elsewhere).
     const parsed = expectedCostHeader !== undefined ? Number.parseInt(expectedCostHeader, 10) : NaN;
     if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100000 || String(parsed) !== expectedCostHeader?.trim()) {

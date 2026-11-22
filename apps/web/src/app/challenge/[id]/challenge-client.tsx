@@ -37,7 +37,7 @@ export function ChallengeClient({ id }: { id: string }) {
   const [unlockedPassword, setUnlockedPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Minimal probe — reveals only that the challenge exists and is private.
+  // Minimal probe - reveals only that the challenge exists and is private.
   const { data: preview, isLoading: previewLoading } = useQuery({
     queryKey: ['challenge-preview', id],
     queryFn: async () => {
@@ -53,7 +53,7 @@ export function ChallengeClient({ id }: { id: string }) {
 
   const isPrivate = preview?.visibility === 'PRIVATE';
 
-  // Full detail — participants (creator/claimant) can always GET it; other
+  // Full detail - participants (creator/claimant) can always GET it; other
   // viewers of a private challenge get 403 and see the password gate instead.
   const { data: challenge, isLoading: detailLoading, error: detailError } = useQuery({
     queryKey: ['challenge', id],
@@ -222,7 +222,7 @@ export function ChallengeClient({ id }: { id: string }) {
                 className="w-full py-3 min-h-12 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {claimMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
-                Claim challenge — {formatCredits(ch.rewardCredits)} {creditLabel(ch.rewardCredits)}
+                Claim challenge - {formatCredits(ch.rewardCredits)} {creditLabel(ch.rewardCredits)}
               </button>
             ) : isOwn ? (
               <div className="w-full py-3 rounded-lg bg-surface-hover border border-surface-border text-zinc-400 text-sm text-center">

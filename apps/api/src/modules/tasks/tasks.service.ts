@@ -370,7 +370,7 @@ export class TasksService {
       },
     });
 
-    // The :id param is an offer id — campaign completions resolve above;
+    // The :id param is an offer id - campaign completions resolve above;
     // challenge completions (1v1) resolve here and take the challenge path.
     if (!completion) {
       const challengeCompletion = await this.prisma.taskCompletion.findFirst({
@@ -533,7 +533,7 @@ export class TasksService {
           referenceType: 'campaign',
         }, tx);
 
-        // Durable reward outcome — commits atomically with VERIFIED.
+        // Durable reward outcome - commits atomically with VERIFIED.
         await this.gamificationService.recordTaskCompletionOutcome(tx, userId, completion.id);
       });
 
@@ -676,7 +676,7 @@ export class TasksService {
     const reviewDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
     // Guarded transition: if the expiry sweep closed the challenge and
     // expired this completion between our read and this write, the update
-    // matches zero rows — proof can never attach to a refunded challenge.
+    // matches zero rows - proof can never attach to a refunded challenge.
     const submitted = await this.prisma.taskCompletion.updateMany({
       where: { id: completion.id, status: { in: submittable } },
       data: {
@@ -691,7 +691,7 @@ export class TasksService {
       },
     });
     if (submitted.count !== 1) {
-      throw new ConflictException('This task is no longer active — it may have expired.');
+      throw new ConflictException('This task is no longer active - it may have expired.');
     }
 
     this.eventsService.emitToUser(userId, 'task:completed', { challengeId, completionId: completion.id, status: 'SUBMITTED' });
@@ -786,7 +786,7 @@ export class TasksService {
           referenceType: 'campaign',
         }, tx);
 
-        // Durable reward outcome — commits atomically with VERIFIED.
+        // Durable reward outcome - commits atomically with VERIFIED.
         await this.gamificationService.recordTaskCompletionOutcome(tx, userId, completion.id);
       });
 
@@ -871,7 +871,7 @@ export class TasksService {
     // deterministic tie-breaker so tied timestamps can't reorder across pages.
     // expires_at is `timestamp without time zone` holding UTC, so it is
     // converted with AT TIME ZONE 'UTC' before comparing to the timestamptz
-    // parameter — a bare comparison would shift by the session time zone.
+    // parameter - a bare comparison would shift by the session time zone.
     const statusClause = dto.status
       ? Prisma.sql`AND status::text = ${dto.status}`
       : Prisma.empty;

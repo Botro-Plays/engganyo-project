@@ -157,7 +157,7 @@ export default function AdminOverviewPage() {
           { href: '/admin/users', label: 'Manage Users', desc: 'Search, ban, suspend, grant credits' },
           { href: '/admin/campaigns', label: 'Review Campaigns', desc: 'Approve or reject pending campaigns' },
           { href: '/admin/reports', label: 'Resolve Reports', desc: 'Handle open user reports' },
-          { href: '/admin/finances', label: 'Review Deposits', desc: `${stats?.deposits?.pending ?? 0} pending — approve or fail user deposits` },
+          { href: '/admin/finances', label: 'Review Deposits', desc: `${stats?.deposits?.pending ?? 0} pending - approve or fail user deposits` },
         ].map((a) => (
           <Link key={a.href} href={a.href} className="card-glass rounded-xl p-4 hover:bg-surface-hover transition-colors">
             <p className="text-sm font-semibold text-sc-text mb-0.5">{a.label}</p>
@@ -166,13 +166,13 @@ export default function AdminOverviewPage() {
         ))}
       </div>
 
-      {/* System stats — SUPER_ADMIN only */}
+      {/* System stats - SUPER_ADMIN only */}
       {isSuperAdmin && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-base font-semibold text-sc-text">System</h2>
-              <p className="text-xs text-sc-dim mt-0.5">Database, server and storage vitals — refreshes every 60s</p>
+              <p className="text-xs text-sc-dim mt-0.5">Database, server and storage vitals - refreshes every 60s</p>
             </div>
             <button
               onClick={() => void refetchSys()}

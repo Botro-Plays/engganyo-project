@@ -2,7 +2,7 @@
  * PostgreSQL-backed ordering test for GET /tasks/my.
  *
  * Requires TEST_DATABASE_URL pointing at a disposable, migrated database
- * (never production). Skipped automatically when unset — CI's api job runs
+ * (never production). Skipped automatically when unset - CI's api job runs
  * it because migrate deploy precedes npm test there.
  *
  * Asserts actionable → awaiting-review → finished ordering happens before
@@ -21,7 +21,7 @@ const PREFIX = `ord_${Date.now().toString(36)}_`;
 const MIN = 60_000;
 const T = (mins: number) => new Date(Date.now() + mins * MIN);
 
-run('GET /tasks/my ordering — real PostgreSQL', () => {
+run('GET /tasks/my ordering - real PostgreSQL', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -52,7 +52,7 @@ run('GET /tasks/my ordering — real PostgreSQL', () => {
     // One campaign per completion (@@unique([campaignId, userId])).
     // assignedAt values are chosen so the newest rows overall are NOT the
     // first rows returned: a SUBMITTED and an expired ASSIGNED outrank
-    // nothing — only unexpired ASSIGNED/IN_PROGRESS lead.
+    // nothing - only unexpired ASSIGNED/IN_PROGRESS lead.
     const specs: Array<{
       key: string; status: CompletionStatus;
       assignedAt: Date; expiresAt: Date | null;

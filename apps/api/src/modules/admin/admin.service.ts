@@ -364,7 +364,7 @@ export class AdminService {
     let actualRefund = 0;
     let refundableSlots = 0;
     await this.prisma.$transaction(async (tx) => {
-      // Lock the campaign row — serializes against assignments claiming slots.
+      // Lock the campaign row - serializes against assignments claiming slots.
       const [row] = await tx.$queryRaw<Array<{
         status: string; total_slots: number; completed_slots: number;
         pending_slots: number; credit_per_task: number;
@@ -392,8 +392,7 @@ export class AdminService {
         throw new BadRequestException(`Cannot cancel a campaign with status ${row.status}`);
       }
 
-      // Funding provenance: refund only against a verified funding debit —
-      // campaigns created outside the funded create() flow (e.g. seeds or
+      // Funding provenance: refund only against a verified funding debit - // campaigns created outside the funded create() flow (e.g. seeds or
       // platform tasks) have no pool to refund.
       actualRefund = await resolveFundedRefund(tx, campaign, refundAmount);
 
@@ -718,11 +717,11 @@ export class AdminService {
           },
         });
 
-        // Durable reward outcome — commits atomically with VERIFIED.
+        // Durable reward outcome - commits atomically with VERIFIED.
         await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completionId);
       });
 
-      // Full gamification outcome — same path as auto-verify (parity)
+      // Full gamification outcome - same path as auto-verify (parity)
       await this.gamificationService.awardTaskCompletionOutcome(completion.userId, completionId);
 
       void this.notificationsService.createNotification(
@@ -809,7 +808,7 @@ export class AdminService {
           },
         });
         if (claim.count !== 1) {
-          throw new BadRequestException('Submission is not pending review — already processed.');
+          throw new BadRequestException('Submission is not pending review - already processed.');
         }
         const closed = await tx.challenge.updateMany({
           where: { id: challenge.id, status: ChallengeStatus.CLAIMED },
@@ -839,7 +838,7 @@ export class AdminService {
           },
         });
 
-        // Durable reward outcome — commits atomically with VERIFIED.
+        // Durable reward outcome - commits atomically with VERIFIED.
         await this.gamificationService.recordTaskCompletionOutcome(tx, completion.userId, completion.id);
       });
 
@@ -866,7 +865,7 @@ export class AdminService {
         },
       });
       if (claim.count !== 1) {
-        throw new BadRequestException('Submission is not pending review — already processed.');
+        throw new BadRequestException('Submission is not pending review - already processed.');
       }
       const closed = await tx.challenge.updateMany({
         where: { id: challenge.id, status: ChallengeStatus.CLAIMED },
@@ -1076,7 +1075,7 @@ export class AdminService {
         },
       );
     } else if (report.targetUserId) {
-      // No action taken (e.g. dismissed) — notify reported user that no action was taken
+      // No action taken (e.g. dismissed) - notify reported user that no action was taken
       await this.notificationsService.createNotification(
         report.targetUserId,
         'REPORT_RESOLVED',
@@ -1400,7 +1399,7 @@ export class AdminService {
       // Step 5: Delete reports where user is the submitter or target
       await tx.$executeRawUnsafe(`DELETE FROM "reports" WHERE "target_user_id" = $1 OR "submitted_by_id" = $1`, userId, userId);
 
-      // Step 6: Delete this user's campaigns (now safe — completions and reports removed)
+      // Step 6: Delete this user's campaigns (now safe - completions and reports removed)
       await tx.$executeRawUnsafe(`DELETE FROM "campaigns" WHERE "user_id" = $1`, userId);
 
       // Step 7: Delete referrals (referrer or referee)
@@ -1418,7 +1417,7 @@ export class AdminService {
       await tx.$executeRawUnsafe(`DELETE FROM "audit_logs" WHERE "user_id" = $1`, userId);
 
       // Step 9b: Reserve the deleted user's VERIFIED social identities for
-      // 24h — account deletion must not release an exclusive identity
+      // 24h - account deletion must not release an exclusive identity
       // early. Unverified declarations reserve nothing.
       // Lock all of the user's social slot rows first so a concurrent
       // link/unlink on any of them serializes with this transaction;
@@ -1438,7 +1437,7 @@ export class AdminService {
         });
       }
 
-      // Step 10: Delete the user — DB cascade handles:
+      // Step 10: Delete the user - DB cascade handles:
       // user_profiles, user_sessions, email_verifications, password_resets,
       // social_accounts, wallets (+ transactions already gone), user_achievements,
       // user_mission_progress, trust_scores, notifications
@@ -1589,7 +1588,7 @@ export class AdminService {
       await this.notificationsService.createNotification(
         campaign.userId,
         'SYSTEM_ANNOUNCEMENT',
-        'Campaign Paused — Platform Disabled',
+        'Campaign Paused - Platform Disabled',
         `Your campaign "${campaign.title}" was paused because the ${platform} platform has been disabled by an administrator. You may resume it once the platform is re-enabled or change the task type.`,
         { campaignId: campaign.id, platform, reason: 'PLATFORM_DISABLED' },
       );
@@ -1844,7 +1843,7 @@ export class AdminService {
     const creditRow = await this.prisma.platformConfig.findUnique({ where: { key: 'initial_credits' } });
     const initialCredits: number = typeof creditRow?.value === 'number' ? creditRow.value : 200;
 
-    // Only the two seeded owner accounts are preserved — everyone else is wiped
+    // Only the two seeded owner accounts are preserved - everyone else is wiped
     const keptUsers = await this.prisma.user.findMany({
       where: { username: { in: ['admin', 'botro'] } },
       select: { id: true, username: true },
@@ -1889,7 +1888,7 @@ export class AdminService {
         // trust_scores, profiles, two_factor_codes, two_factor_backup_codes
         await tx.user.deleteMany({ where: { id: { notIn: keptIds } } });
 
-        // ── Reset kept accounts (stats only — credentials and 2FA are preserved) ──
+        // ── Reset kept accounts (stats only - credentials and 2FA are preserved) ──
         await tx.notification.deleteMany({ where: { userId: { in: keptIds } } });
         await tx.userAchievement.deleteMany({ where: { userId: { in: keptIds } } });
         await tx.userMissionProgress.deleteMany({ where: { userId: { in: keptIds } } });
@@ -1917,7 +1916,7 @@ export class AdminService {
               amount: initialCredits,
               balanceBefore: 0,
               balanceAfter: initialCredits,
-              description: 'Database reset — initial credits restored',
+              description: 'Database reset - initial credits restored',
             },
           });
 
@@ -2181,7 +2180,7 @@ export class AdminService {
   // Bounded, cursor-paginated backfill: fills missing settlement figures on
   // COMPLETED deposits from read-only provider records. Each figure's write is
   // conditioned on that field still being NULL at write time (+ COMPLETED and
-  // unchanged paymentRef) — an overlapping run's data is preserved, never
+  // unchanged paymentRef) - an overlapping run's data is preserved, never
   // overwritten. Amount and currency are written together per figure. Status,
   // wallet, and ledger are untouched. Pages through candidates with a
   // continuation cursor (completedAt,id) so unavailable records can never
@@ -2225,8 +2224,7 @@ export class AdminService {
       });
       if (rows.length === 0) { nextCursor = null; break; }
 
-      // The continuation cursor tracks the last deposit actually EXAMINED —
-      // never the last fetched row — so rows fetched but never looked at
+      // The continuation cursor tracks the last deposit actually EXAMINED - // never the last fetched row - so rows fetched but never looked at
       // (limit reached mid-page) stay reachable on the next call.
       let lastExamined: { completedAt: Date | null; id: string } | null = null;
       for (const d of rows) {
@@ -2250,7 +2248,7 @@ export class AdminService {
         } catch { failed.push(d.id); }
       }
       // Advance cursor to the last examined row; a full page where every row
-      // was examined ends on the page's last row — equivalent, and correct.
+      // was examined ends on the page's last row - equivalent, and correct.
       if (lastExamined) {
         nextCursor = encode(lastExamined.completedAt, lastExamined.id);
         cursorCond = { OR: [{ completedAt: { lt: lastExamined.completedAt! } }, { completedAt: lastExamined.completedAt!, id: { lt: lastExamined.id } }] };
@@ -2273,16 +2271,16 @@ export class AdminService {
         try {
           await this.payMongoService.archiveLink(deposit.paymentRef);
         } catch (err) {
-          /* ignore archive errors — link may already be expired */
+          /* ignore archive errors - link may already be expired */
         }
       }
       // Crypto approvals need evidence tying the transfer to this account:
       // the claim hash (exclusive paymentRef or review evidence submittedHash).
-      // completeDeposit writes paymentRef atomically — the unique constraint
+      // completeDeposit writes paymentRef atomically - the unique constraint
       // stops a manual approval and automated settlement crediting the same
       // transfer twice.
       // Crypto approvals must follow the same verified on-chain path as
-      // automatic settlement — a hash alone never authorizes credit. The
+      // automatic settlement - a hash alone never authorizes credit. The
       // deposit needs wallet-ownership proof (signature challenge), and
       // verifyCryptoDeposit re-checks chain, token, recipient, amount,
       // sender, timing, and confirmations before the atomic exclusive settle.
@@ -2295,13 +2293,13 @@ export class AdminService {
           throw new BadRequestException('Provided transaction reference conflicts with the submitted evidence on this deposit');
         }
         if (!deposit.walletVerified) {
-          throw new BadRequestException('Sending-wallet ownership is not proven — the payer must complete wallet verification before credit can be approved');
+          throw new BadRequestException('Sending-wallet ownership is not proven - the payer must complete wallet verification before credit can be approved');
         }
         const outcome = await this.walletService.verifyCryptoDeposit(deposit.userId, depositId);
         if (outcome.status !== 'COMPLETED') {
           return { status: outcome.status, needsReview: outcome.needsReview ?? false, message: outcome.message ?? 'On-chain verification did not confirm the transfer' };
         }
-        // Credit landed through the verified path — annotate the review.
+        // Credit landed through the verified path - annotate the review.
         await this.prisma.deposit.updateMany({
           where: { id: depositId, status: DepositStatus.COMPLETED },
           data: {
@@ -2322,7 +2320,7 @@ export class AdminService {
         try {
           await this.payMongoService.archiveLink(deposit.paymentRef);
         } catch (err) {
-          /* ignore archive errors — link may already be dead */
+          /* ignore archive errors - link may already be dead */
         }
       }
 
@@ -2369,7 +2367,7 @@ export class AdminService {
 
   private validatePackageMethods(dto: { usdAmount: number; methods?: string[] }, minDepositUsd: number) {
     // Packages restricted to PAYMONGO may go below the USD minimum down to
-    // PayMongo's ₱1 provider floor (~$0.02) — used for the internal test round.
+    // PayMongo's ₱1 provider floor (~$0.02) - used for the internal test round.
     const paymongoOnly = (dto.methods?.length ?? 0) > 0 && dto.methods!.every((m) => m === 'PAYMONGO');
     const floor = paymongoOnly ? 0.01 : minDepositUsd;
     if (dto.usdAmount < floor) {
@@ -3162,7 +3160,7 @@ export class AdminService {
     if (dto.quantity < 1 || dto.quantity > 999) throw new BadRequestException('Quantity must be 1–999');
 
     // Single transaction: the (userId,itemId,provenance) unique index makes
-    // the upsert race-safe — concurrent grants/purchases can never fragment
+    // the upsert race-safe - concurrent grants/purchases can never fragment
     // a stack, and ADMIN_GRANT provenance keeps granted units bound (never
     // interchangeable with credit-purchased stock). Audit log + movement
     // row commit with the grant; the notification stays outside so a

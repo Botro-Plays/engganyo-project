@@ -7,7 +7,7 @@
  * Proves the invariants that must hold at the database level:
  * - updateMissionProgress pays exactly once under concurrent qualifying
  *   events (advisory-serialized progress + payout in one transaction).
- * - awardXp / awardVp serialize the user-row read-modify-write — no lost
+ * - awardXp / awardVp serialize the user-row read-modify-write - no lost
  *   updates under concurrent awards.
  * - unlockAchievement settles row + credit + XP atomically; concurrent
  *   unlocks pay exactly once via the unique constraint.
@@ -21,7 +21,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `rw_${Date.now().toString(36)}_`;
 
-run('reward atomicity — real PostgreSQL', () => {
+run('reward atomicity - real PostgreSQL', () => {
   jest.setTimeout(60000);
 
   let prisma: PrismaClient;
@@ -86,7 +86,7 @@ run('reward atomicity — real PostgreSQL', () => {
   let savedEffective: string | undefined;
 
   // The period catalog is keyed by real UTC day and shared across the
-  // suite — reset it so each period-catalog test freezes a fresh
+  // suite - reset it so each period-catalog test freezes a fresh
   // catalog containing exactly the missions it created.
   const resetPeriodCatalog = async () => {
     await prisma.missionPeriodTerm.deleteMany({});
@@ -340,8 +340,8 @@ run('reward atomicity — real PostgreSQL', () => {
 
   it('duplicate source delivery pays once; concurrent distinct rewards each pay', async () => {
     const u = await mkUser();
-    // Same (source, referenceId) delivered twice — sequentially and
-    // concurrently — must settle exactly once.
+    // Same (source, referenceId) delivered twice - sequentially and
+    // concurrently - must settle exactly once.
     await Promise.all([
       service.awardXp(u.id, 10, 'dup_test', 'dup-ref'),
       service.awardXp(u.id, 10, 'dup_test', 'dup-ref'),
@@ -357,7 +357,7 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'dup_test' } })).toBe(1);
     expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'dup_test' } })).toBe(1);
 
-    // Distinct references are distinct rewards — both pay.
+    // Distinct references are distinct rewards - both pay.
     await Promise.all([
       service.awardXp(u.id, 10, 'dup_test', 'dup-ref-A'),
       service.awardXp(u.id, 10, 'dup_test', 'dup-ref-B'),
@@ -369,7 +369,7 @@ run('reward atomicity — real PostgreSQL', () => {
   // ─── Durable task-completion outcomes ─────────────────────
 
   // task_completions_single_offer requires exactly one of
-  // campaign_id/challenge_id — completions need a campaign parent.
+  // campaign_id/challenge_id - completions need a campaign parent.
   // One shared campaign per variant is fine: (campaignId, userId) is
   // unique and every test uses a fresh user (variant allows a second
   // completion per user for period-term tests).
@@ -419,7 +419,7 @@ run('reward atomicity — real PostgreSQL', () => {
       await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
     });
     await service.awardTaskCompletionOutcome(u.id, completion.id);
-    // Replay — recovery/sweeper/duplicate call must not double-settle.
+    // Replay - recovery/sweeper/duplicate call must not double-settle.
     await service.awardTaskCompletionOutcome(u.id, completion.id);
     await service.processPendingTaskOutcomes();
 
@@ -433,7 +433,7 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(outcome.achievementsSettled).toBe(true);
     expect(outcome.referralSettled).toBe(true);
 
-    // XP 50 + VP 1 for the task completion — exactly one event each.
+    // XP 50 + VP 1 for the task completion - exactly one event each.
     expect(await prisma.xpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
     expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
     expect(referralsStub.qualifyReferral).toHaveBeenCalledWith(u.id);
@@ -447,7 +447,7 @@ run('reward atomicity — real PostgreSQL', () => {
       await service.recordTaskCompletionOutcome(tx as never, u.id, completion.id);
     });
 
-    // First pass: VP award throws — other effects still settle.
+    // First pass: VP award throws - other effects still settle.
     const vpSpy = jest.spyOn(service, 'awardVp').mockRejectedValueOnce(new Error('vp transient'));
     await service.awardTaskCompletionOutcome(u.id, completion.id);
     vpSpy.mockRestore();
@@ -496,7 +496,7 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(await prisma.vpEvent.count({ where: { userId: { in: [u.id, other.id] }, source: 'task_completion' } })).toBe(0);
   });
 
-  it('mission progress dedupes on sourceId — outcome replay cannot count a task twice', async () => {
+  it('mission progress dedupes on sourceId - outcome replay cannot count a task twice', async () => {
     const u = await mkUser();
     const mission = await prisma.dailyMission.create({
       data: {
@@ -522,7 +522,7 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(progress.progress).toBe(1);
     expect(await prisma.missionProgressEvent.count({ where: { missionId: mission.id, sourceId: 'completion-X' } })).toBe(1);
 
-    // A distinct completion is a distinct event — counts again.
+    // A distinct completion is a distinct event - counts again.
     await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-Y' });
     const after = await prisma.userMissionProgress.findUniqueOrThrow({
       where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
@@ -553,7 +553,7 @@ run('reward atomicity — real PostgreSQL', () => {
 
     try {
       await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-Z' });
-      // Replay the same event — early return, no new outbox rows.
+      // Replay the same event - early return, no new outbox rows.
       await service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'completion-Z' });
     } finally {
       (service as any).notificationsService.createNotification = origCreate;
@@ -565,7 +565,7 @@ run('reward atomicity — real PostgreSQL', () => {
     const missionRows = rows.filter((r) => (r.data as any)?.missionId === mission.id);
     expect(missionRows).toHaveLength(1);
     expect(missionRows[0].status).toBe('DELIVERED');
-    // Exactly one persisted notification for THIS mission — other active
+    // Exactly one persisted notification for THIS mission - other active
     // missions may also complete for the user, so match on the payload.
     const missionNotes = notes.filter((n) => (n[4] as any)?.missionId === mission.id);
     expect(missionNotes).toHaveLength(1);
@@ -616,7 +616,7 @@ run('reward atomicity — real PostgreSQL', () => {
     });
     await service.flushRewardOutbox();
 
-    // The retry found the existing dedupeKey row — no second notification.
+    // The retry found the existing dedupeKey row - no second notification.
     expect(notes).toHaveLength(1);
     expect(await prisma.notification.count({ where: { userId: u.id, dedupeKey: ev.id } })).toBe(1);
     expect((await prisma.rewardOutboxEvent.findUniqueOrThrow({ where: { id: ev.id } })).status).toBe('DELIVERED');
@@ -624,7 +624,7 @@ run('reward atomicity — real PostgreSQL', () => {
 
   // ─── Outcome claim/lease + mission-date binding ──────────
 
-  it('concurrent processors claim the outcome once — no duplicate effects', async () => {
+  it('concurrent processors claim the outcome once - no duplicate effects', async () => {
     const u = await mkUser();
     const completion = await mkVerifiedCompletion(u.id);
     await prisma.$transaction(async (tx) => {
@@ -708,7 +708,7 @@ run('reward atomicity — real PostgreSQL', () => {
     expect(await prisma.vpEvent.count({ where: { userId: u.id, source: 'task_completion', referenceId: completion.id } })).toBe(1);
   });
 
-  it('mission progress binds to the VERIFIED date — recovery after midnight cannot advance today', async () => {
+  it('mission progress binds to the VERIFIED date - recovery after midnight cannot advance today', async () => {
     const u = await mkUser();
     const mission = await prisma.dailyMission.create({
       data: {
@@ -778,7 +778,7 @@ run('reward atomicity — real PostgreSQL', () => {
       },
     });
 
-    // Same sourceId delivered concurrently — ON CONFLICT DO NOTHING
+    // Same sourceId delivered concurrently - ON CONFLICT DO NOTHING
     // keeps the tx valid and exactly one delivery counts.
     await Promise.all([
       service.updateMissionProgress(u.id, MissionType.COMPLETE_N_TASKS, 1, { sourceId: 'dup-concurrent-1' }),
@@ -870,7 +870,7 @@ run('reward atomicity — real PostgreSQL', () => {
 
   it('XP boost frozen at VERIFIED: expiry before recovery cannot change the award; later activation cannot add one', async () => {
     // Boost eligibility is read from user_active_effects inside the
-    // VERIFIED tx — create/delete rows to move the boost across the
+    // VERIFIED tx - create/delete rows to move the boost across the
     // completion→recovery boundary.
     const mkBoost = (userId: string, multiplier: number, ttlMs: number) =>
       prisma.userActiveEffect.create({
@@ -911,14 +911,13 @@ run('reward atomicity — real PostgreSQL', () => {
     const xp2 = await prisma.xpEvent.findFirstOrThrow({
       where: { userId: u2.id, source: 'task_completion', referenceId: c2.id },
     });
-    expect(xp2.amount).toBe(50); // frozen "no boost" — later activation irrelevant
+    expect(xp2.amount).toBe(50); // frozen "no boost" - later activation irrelevant
     expect(xp2.boostMultiplier).toBeNull();
   });
 
-  it('recovery scan skips live leases before the batch limit — later claimable rows are not starved', async () => {
+  it('recovery scan skips live leases before the batch limit - later claimable rows are not starved', async () => {
     const base = Date.now();
-    // 50 oldest outcomes held under live leases (synthetic completionIds —
-    // they are never reached because the scan excludes them).
+    // 50 oldest outcomes held under live leases (synthetic completionIds - // they are never reached because the scan excludes them).
     for (let i = 0; i < 50; i += 1) {
       await prisma.taskCompletionOutcome.create({
         data: {
@@ -963,7 +962,7 @@ run('reward atomicity — real PostgreSQL', () => {
     for (const o of leased) {
       expect(o.status).toBe('PENDING');
       expect(o.claimToken).toMatch(/^held-/);
-      expect(o.attempts).toBe(0); // never claimed — filtered before the limit
+      expect(o.attempts).toBe(0); // never claimed - filtered before the limit
     }
   });
 
@@ -1023,7 +1022,7 @@ run('reward atomicity — real PostgreSQL', () => {
     ).toBe(1);
   });
 
-  it('boost snapshot reads authoritative DB inside VERIFIED tx — Redis failure cannot corrupt it', async () => {
+  it('boost snapshot reads authoritative DB inside VERIFIED tx - Redis failure cannot corrupt it', async () => {
     const boostMock = (service as any).storeService.getActiveXpBoost as jest.Mock;
     boostMock.mockRejectedValue(new Error('redis down')); // cache path dead
 
@@ -1056,7 +1055,7 @@ run('reward atomicity — real PostgreSQL', () => {
       where: { completionId: completion.id },
     });
     const snap = outcome.rewardSnapshot as { xpBoostMultiplier?: number | null };
-    // Explicitly recorded from DB — not absent (no live-state fallback).
+    // Explicitly recorded from DB - not absent (no live-state fallback).
     expect(snap.xpBoostMultiplier).toBe(2);
 
     // Recovery pays the frozen multiplier even though Redis is still down.
@@ -1089,11 +1088,11 @@ run('reward atomicity — real PostgreSQL', () => {
     boostMock.mockResolvedValue(null);
   });
 
-  it('mission period terms freeze once — completions spanning an edit pay identical terms in either processing order', () =>
+  it('mission period terms freeze once - completions spanning an edit pay identical terms in either processing order', () =>
     withPeriodCatalog(async () => {
     // Scenario A: sequential recovery, later completion processed FIRST.
     const runScenario = async (order: 'early-first' | 'late-first' | 'concurrent') => {
-      // The catalog freezes once per UTC day — reset so this scenario's
+      // The catalog freezes once per UTC day - reset so this scenario's
       // mission is inside today's frozen set.
       await resetPeriodCatalog();
       const u = await mkUser();
@@ -1146,7 +1145,7 @@ run('reward atomicity — real PostgreSQL', () => {
       }
 
       // Both completions counted (progress 2/2) but exactly ONE payout,
-      // at the period-frozen terms — never the edited 999.
+      // at the period-frozen terms - never the edited 999.
       const progress = await prisma.userMissionProgress.findUniqueOrThrow({
         where: { userId_missionId_date: { userId: u.id, missionId: mission.id, date: today } },
       });
@@ -1199,7 +1198,7 @@ run('reward atomicity — real PostgreSQL', () => {
       // Mid-period edit via the admin path.
       await service.adminUpdateMission(mission.id, { creditReward: 999, xpReward: 999 });
 
-      // Display still shows the frozen terms — not the live edit.
+      // Display still shows the frozen terms - not the live edit.
       const after = await service.getDailyMissions(u.id);
       const shownAfter = after.find((m: any) => m.id === mission.id);
       expect(shownAfter!.creditReward).toBe(50);
@@ -1345,7 +1344,7 @@ run('reward atomicity — real PostgreSQL', () => {
       expect(progress).toBeNull();
     }));
 
-  it('deletion retires missions and preserves frozen terms — in-flight progress still settles', () =>
+  it('deletion retires missions and preserves frozen terms - in-flight progress still settles', () =>
     withPeriodCatalog(async () => {
       const u = await mkUser();
       const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -1373,7 +1372,7 @@ run('reward atomicity — real PostgreSQL', () => {
           isActive: true,
         },
       });
-      await service.getDailyMissions(u.id); // freeze today — both inside
+      await service.getDailyMissions(u.id); // freeze today - both inside
 
       // Case A: mission WITH progress → retired, not deleted.
       const cA = await mkVerifiedCompletion(u.id, 'VERIFIED', 'a');
@@ -1472,7 +1471,7 @@ run('reward atomicity — real PostgreSQL', () => {
       const today = new Date(new Date().setUTCHours(0, 0, 0, 0));
 
       // Simulate a crash after the freeze helper ran inside a
-      // transaction: the whole tx — marker AND term rows — must roll
+      // transaction: the whole tx - marker AND term rows - must roll
       // back, leaving no partially built catalog behind.
       await expect(
         prisma.$transaction(async (tx) => {

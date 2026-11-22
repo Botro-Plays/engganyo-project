@@ -2,7 +2,7 @@
  * PostgreSQL-backed integration tests for 1v1 challenges.
  *
  * Requires TEST_DATABASE_URL pointing at a disposable, migrated database
- * (never production). Skipped automatically when unset — CI's api job runs
+ * (never production). Skipped automatically when unset - CI's api job runs
  * it because migrate deploy precedes npm test there.
  *
  * Covers the invariants that must hold at the database + ledger level:
@@ -19,7 +19,7 @@ const run = TEST_DB ? describe : describe.skip;
 
 const PREFIX = `ch_${Date.now().toString(36)}_`;
 
-run('1v1 challenges — real PostgreSQL', () => {
+run('1v1 challenges - real PostgreSQL', () => {
   jest.setTimeout(60000);
 
   let prisma: PrismaClient;
@@ -184,7 +184,7 @@ run('1v1 challenges — real PostgreSQL', () => {
     expect(spend!.balanceAfter).toBe(before - 50);
   });
 
-  it('rejects publication when balance is insufficient — nothing persists', async () => {
+  it('rejects publication when balance is insufficient - nothing persists', async () => {
     const poor = await prisma.user.create({
       data: {
         email: `${PREFIX}poor@itest.local`, username: `${PREFIX}poor`,
@@ -199,7 +199,7 @@ run('1v1 challenges — real PostgreSQL', () => {
     expect(await balanceOf(poor.id)).toBe(10);
   });
 
-  it('two concurrent claimants — exactly one wins', async () => {
+  it('two concurrent claimants - exactly one wins', async () => {
     const ch = await service.create(creatorId, 'USER', { ...baseDto, title: 'Race test' });
     const results = await Promise.allSettled([
       service.claim(playerA, ch.id, {} as never, '10.0.0.1'),
@@ -234,12 +234,12 @@ run('1v1 challenges — real PostgreSQL', () => {
     const list = await service.listPublic(playerA, 1, 50);
     expect(list.items.map((i: any) => i.id)).not.toContain(ch.id);
 
-    // Throttle is per challenge+IP — all five failures from one address
+    // Throttle is per challenge+IP - all five failures from one address
     for (let i = 0; i < 5; i++) {
       await expect(service.claim(playerB, ch.id, { password: 'wrong' } as never, '10.1.0.7'))
         .rejects.toThrow(ForbiddenException);
     }
-    // Locked out now — even the right password is refused until the window resets
+    // Locked out now - even the right password is refused until the window resets
     await expect(service.claim(playerB, ch.id, { password: 'gate-pass-1' } as never, '10.1.0.7'))
       .rejects.toThrow(BadRequestException);
 
@@ -277,7 +277,7 @@ run('1v1 challenges — real PostgreSQL', () => {
 
       const creatorBefore = await balanceOf(creatorId);
       const claim = await service.claim(playerA, ch.id, {} as never, '10.3.0.1');
-      // Submit proof directly (bypasses HTTP layer — same row the API writes)
+      // Submit proof directly (bypasses HTTP layer - same row the API writes)
       await prisma.taskCompletion.update({
         where: { id: claim.completionId },
         data: { status: CompletionStatus.SUBMITTED, submittedAt: new Date(), proofUrl: 'https://proof/img.png' },
@@ -368,7 +368,7 @@ run('1v1 challenges — real PostgreSQL', () => {
   it('stale open-offer sweep candidate: claimed challenge is untouched, reserve held, no refund', async () => {
     // Simulate the race: the sweep selected this row as OPEN+expired, but a
     // claimant won the slot before the close write landed. (In practice the
-    // claim's expires_at guard makes this nearly impossible — the guarded
+    // claim's expires_at guard makes this nearly impossible - the guarded
     // close is defense-in-depth and must still write zero rows.)
     const ch = await service.create(creatorId, 'USER', { ...baseDto, title: 'Stale sweep race' });
     const claim = await service.claim(playerA, ch.id, {} as never, '10.7.0.1');
@@ -384,7 +384,7 @@ run('1v1 challenges — real PostgreSQL', () => {
     await (service as any).closeWithoutAward(ch.id, ChallengeStatus.EXPIRED, 'Challenge offer expired', ChallengeStatus.OPEN);
 
     const stored = await prisma.challenge.findUniqueOrThrow({ where: { id: ch.id } });
-    expect(stored.status).toBe(ChallengeStatus.CLAIMED); // NOT expired — claim won
+    expect(stored.status).toBe(ChallengeStatus.CLAIMED); // NOT expired - claim won
     const completion = await prisma.taskCompletion.findUniqueOrThrow({ where: { id: claim.completionId } });
     expect(completion.status).toBe(CompletionStatus.ASSIGNED); // live assignment survives
     expect(await balanceOf(creatorId)).toBe(creatorBefore); // reserve still held

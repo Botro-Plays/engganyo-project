@@ -41,7 +41,7 @@ export default function MarketplacePage() {
     placeholderData: (prev) => prev,
   });
 
-  // Proposed internal-test rules — displayed verbatim from the API so the
+  // Proposed internal-test rules - displayed verbatim from the API so the
   // copy can never drift from what the backend actually enforces.
   const { data: config } = useQuery({
     queryKey: ['marketplace', 'config'],
@@ -84,7 +84,7 @@ export default function MarketplacePage() {
         </Link>
       </div>
 
-      {/* Emergency resale suspension — purchases blocked, everything else lives */}
+      {/* Emergency resale suspension - purchases blocked, everything else lives */}
       {config?.resaleSuspended && (
         <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
           <p className="text-sm font-semibold text-red-300">Purchases temporarily suspended</p>
@@ -95,13 +95,13 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* Internal-test rules — owner-approved settings stay visible */}
+      {/* Internal-test rules - owner-approved settings stay visible */}
       {config && (
         <div className="mb-6 rounded-xl border border-brand-500/25 bg-brand-500/5 px-4 py-3">
           <p className="text-xs font-semibold text-brand-300 uppercase tracking-wide mb-1">
             {config.awaitingOwnerConfirmation
-              ? 'Internal test — settings awaiting owner confirmation'
-              : 'Internal test — marketplace rules'}
+              ? 'Internal test - settings awaiting owner confirmation'
+              : 'Internal test - marketplace rules'}
           </p>
           <ul className="text-xs text-sc-text/80 space-y-0.5 list-disc list-inside">
             {config.notes.map((n) => (

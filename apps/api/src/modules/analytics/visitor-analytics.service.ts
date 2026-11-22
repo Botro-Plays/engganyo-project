@@ -36,7 +36,7 @@ const MOBILE_UA = /android|iphone|ipod|windows phone|blackberry|mobile/i;
 const TABLET_UA = /ipad|tablet|playbook|silk|kindle/i;
 
 // Canonical dynamic routes → Next.js-style labels. The beacon stores labels
-// like `/challenge/[id]`, never the raw identifier — a private challenge id,
+// like `/challenge/[id]`, never the raw identifier - a private challenge id,
 // username, or campaign id cannot persist in analytics even via a crafted
 // beacon. Server-side enforcement is authoritative; the web beacon sends
 // pre-labeled paths but this function re-validates everything.
@@ -49,8 +49,7 @@ const DYNAMIC_ROUTE_PATTERNS: { re: RegExp; label: string }[] = [
 ];
 
 // Every literal page route in apps/web/src/app (route groups don't appear in
-// URLs). Anything not in this set or a dynamic pattern above is EXCLUDED —
-// unknown deep paths could carry identifiers and must never be stored.
+// URLs). Anything not in this set or a dynamic pattern above is EXCLUDED - // unknown deep paths could carry identifiers and must never be stored.
 const STATIC_ROUTES = new Set([
   '/',
   '/about', '/achievements', '/campaigns', '/chat', '/check-email', '/contact',
@@ -80,7 +79,7 @@ const FILE_LIKE_SEGMENT = /\.[a-z0-9]{1,6}$/i;
  * - Query strings and fragments are dropped entirely (tokens/passwords in
  *   URLs can never reach analytics).
  * - Dynamic routes collapse to canonical labels (`/challenge/[id]`) so raw
- *   identifiers — including private challenge ids — are never stored.
+ *   identifiers - including private challenge ids - are never stored.
  * - Static routes must match the known page inventory exactly; anything
  *   else is excluded rather than stored, because an unrecognized path may
  *   carry an identifier we don't know about.
@@ -227,7 +226,7 @@ export class VisitorAnalyticsService {
         });
       });
     } catch (err) {
-      // Concurrent duplicate delivery — the unique eventId backstop rolled
+      // Concurrent duplicate delivery - the unique eventId backstop rolled
       // back the whole transaction including the visit update.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         return { recorded: false, deduped: true as const };
@@ -278,7 +277,7 @@ export class VisitorAnalyticsService {
         totals: {
           pageViews: totals.pageViews,
           visits: totals.visits,
-          estimatedUniqueVisitors: totals.uniqueVisitors, // day-level distinct summed — estimate
+          estimatedUniqueVisitors: totals.uniqueVisitors, // day-level distinct summed - estimate
           bounceRate: totals.visits ? Math.round((bounces / totals.visits) * 1000) / 10 : null,
         },
         trend,
@@ -318,7 +317,7 @@ export class VisitorAnalyticsService {
     };
   }
 
-  // Per-UTC-day trend from raw rows — bounded by the clamped range.
+  // Per-UTC-day trend from raw rows - bounded by the clamped range.
   private async trendFromRaw(from: Date, to: Date, includeBots: boolean) {
     const bot = includeBots ? Prisma.sql`` : Prisma.sql`AND NOT is_bot`;
     const f = naiveTs(from);
@@ -511,7 +510,7 @@ export class VisitorAnalyticsService {
 
   private async rollupOneDay(day: Date) {
     const next = new Date(day.getTime() + DAY_MS);
-    const dateOnly = day; // @db.Date — UTC midnight
+    const dateOnly = day; // @db.Date - UTC midnight
     const d = naiveTs(day);
     const n = naiveTs(next);
     await this.prisma.$transaction(async (tx) => {

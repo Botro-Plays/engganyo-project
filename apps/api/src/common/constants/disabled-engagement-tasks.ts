@@ -8,8 +8,7 @@ import { TaskType } from '@prisma/client';
  * assignments, and no reward-producing completion path (auto-verify,
  * owner review, or admin review) may run for these task types.
  *
- * Existing campaigns, submissions, balances, and history are preserved —
- * this only blocks new reward-issuing activity.
+ * Existing campaigns, submissions, balances, and history are preserved - * this only blocks new reward-issuing activity.
  */
 export const DISABLED_ENGAGEMENT_TASK_TYPES: ReadonlySet<TaskType> = new Set([
   TaskType.YOUTUBE_SUBSCRIBE,

@@ -11,13 +11,13 @@ import { useTourStore } from '@/store/tour.store';
 import type { ApiResponse } from '@/types';
 
 /**
- * Milestone onboarding tours — level-gated, short, skippable, replayable
+ * Milestone onboarding tours - level-gated, short, skippable, replayable
  * introductions to features. Server-persisted per (user, tour, version)
  * so state follows the account across devices. Grants nothing.
  *
  * Deferral: never shows while a dialog/modal is open (payments, proof
  * submission, confirmations), inside a room workspace, or while the
- * beginner tour is active. One tour at a time — the first due tour in
+ * beginner tour is active. One tour at a time - the first due tour in
  * catalog order is shown; multi-level jumps surface sequentially.
  */
 
@@ -38,7 +38,7 @@ interface DueTour {
   title: string;
   teaser: string;
   steps: TourStep[];
-  /** Set when resuming an IN_PROGRESS tour — start at this step. */
+  /** Set when resuming an IN_PROGRESS tour - start at this step. */
   resumeStep?: number;
 }
 
@@ -48,10 +48,9 @@ const POLL_MS = 400;
 const POLL_TRIES = 25;
 
 function isDeferred(pathname: string): boolean {
-  // Room workspaces are live interactions — never interrupt them.
+  // Room workspaces are live interactions - never interrupt them.
   if (/^\/rooms\/[^/]+/.test(pathname)) return true;
-  // Any open dialog covers payments, proof submission, confirmations —
-  // excluding this component's own cards via data-milestone-tour.
+  // Any open dialog covers payments, proof submission, confirmations - // excluding this component's own cards via data-milestone-tour.
   if (
     typeof document !== 'undefined' &&
     document.querySelector('[role="dialog"]:not([data-milestone-tour]), [data-tour-defer]')
@@ -98,7 +97,7 @@ export function MilestoneTour() {
   }, [authUserId, syncWithUser]);
 
   /** Fetches due tours and shows the first eligible one. `manual` bypasses
-   *  the automatic-tours preference — used for Settings replay requests. */
+   *  the automatic-tours preference - used for Settings replay requests. */
   const showDue = useCallback(
     async (opts?: { manual?: boolean; onlyKey?: string }) => {
       const uid = authUserId;
@@ -111,7 +110,7 @@ export function MilestoneTour() {
         });
         // Post-resolve fences: the account, the automatic-tours preference
         // (auto path only), and the deferral conditions are all rechecked
-        // against CURRENT state — a lookup that resolves late must not
+        // against CURRENT state - a lookup that resolves late must not
         // announce a tour the user has since disabled or navigated away from.
         if (useAuthStore.getState().user?.id !== uid) return;
         if (!opts?.manual && !useTourStore.getState().autoTours) return;
@@ -119,7 +118,7 @@ export function MilestoneTour() {
         const tours = res.data?.data?.tours ?? [];
         const due = opts?.onlyKey ? tours.find((t) => t.key === opts.onlyKey) : tours[0];
         // Manual replay bypasses the auto-tours preference but NEVER the
-        // deferral rules — payments, proof submission, rooms, and dialogs
+        // deferral rules - payments, proof submission, rooms, and dialogs
         // are never interrupted, automatic or manual.
         if (due) {
           dismissedRef.current = false;
@@ -134,7 +133,7 @@ export function MilestoneTour() {
           }
         }
       } catch {
-        /* offline / optional call failed — silent, never blocks UX */
+        /* offline / optional call failed - silent, never blocks UX */
       } finally {
         fetchingRef.current = false;
       }
@@ -147,7 +146,7 @@ export function MilestoneTour() {
     void showDue();
   }, [hydrated, autoTours, showDue]);
 
-  // Manual replay from Settings — works even when automatic tours are
+  // Manual replay from Settings - works even when automatic tours are
   // disabled because replay is an explicit user action.
   useEffect(() => {
     if (!replayRequest || !user) return;
@@ -158,7 +157,7 @@ export function MilestoneTour() {
   }, [replayRequest, user, clearReplayRequest, showDue]);
 
   // Disabling automatic tours suppresses an outstanding AUTOMATIC
-  // announcement/step — the user just opted out of interruptions.
+  // announcement/step - the user just opted out of interruptions.
   // Manual replays (origin 'manual') are explicit actions and stay.
   // Nothing is recorded server-side: the tour stays eligible and may
   // re-announce on a later session once auto tours are re-enabled.
@@ -185,7 +184,7 @@ export function MilestoneTour() {
       setPhase('announce');
       setStepIndex(0);
       if (action === 'complete') {
-        // Completed tours don't block the next due one — it surfaces
+        // Completed tours don't block the next due one - it surfaces
         // after a short delay, still one popup at a time.
         dismissedRef.current = false;
         setTimeout(() => void fetchPending(), 150);
@@ -225,7 +224,7 @@ export function MilestoneTour() {
     return () => clearTimeout(t);
   }, [tour, phase, stepIndex, authUserId]);
 
-  // Spotlight positioning — poll for the target like the beginner tour.
+  // Spotlight positioning - poll for the target like the beginner tour.
   useEffect(() => {
     if (!step?.selector || phase !== 'step') {
       setRect(null);
@@ -257,7 +256,7 @@ export function MilestoneTour() {
     return () => clearInterval(id);
   }, [tour, phase, pathname, record]);
 
-  // Consent gate: the tour overlays sit above the cookie banner — never
+  // Consent gate: the tour overlays sit above the cookie banner - never
   // render them while consent is unresolved or "Accept All" is unclickable.
   if (!user || !tour || !consentOk) return null;
 

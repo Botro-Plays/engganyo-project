@@ -115,7 +115,7 @@ async function main(): Promise<void> {
   // Achievements, daily missions, and VIP tiers are seeded by
   // GamificationService.onModuleInit (DEFAULT_ACHIEVEMENTS / DEFAULT_MISSIONS /
   // DEFAULT_VIP_TIERS in apps/api/src/modules/gamification/gamification.service.ts)
-  // at every API boot. Do not duplicate them here — divergent copies caused
+  // at every API boot. Do not duplicate them here - divergent copies caused
   // double-reward rows (overlapping requirements awarding twice).
 
   // ─── Platform Configs ────────────────────────────────────────
@@ -198,7 +198,7 @@ async function main(): Promise<void> {
 
   // ─── Sample Platform Campaigns ──────────────────────────────
   // NOTE: rewarded YouTube engagement tasks are disabled for platform-policy
-  // compliance — no YOUTUBE_* campaigns may be seeded.
+  // compliance - no YOUTUBE_* campaigns may be seeded.
   const sampleCampaigns = [
     {
       title: 'Follow Engganyo on TikTok',
@@ -267,7 +267,7 @@ async function main(): Promise<void> {
   // ─── E2E P2P room players (test envs only) ────────────────────────────
   // Two funded, ordinary accounts used by apps/web/e2e/rooms.spec.ts to drive
   // the real browser creation→join→agreement→proof→completion journey.
-  // NODE_ENV=test is set only by the CI e2e job — production seeds must
+  // NODE_ENV=test is set only by the CI e2e job - production seeds must
   // never create known-password funded accounts.
   if (process.env.NODE_ENV === 'test') {
     const e2ePassword = await argon2.hash('E2eRoom@123');
@@ -285,7 +285,7 @@ async function main(): Promise<void> {
             displayName: p.displayName,
             role: UserRole.USER,
             status: UserStatus.ACTIVE,
-            // These accounts exist to drive room/chat e2e specs — automatic
+            // These accounts exist to drive room/chat e2e specs - automatic
             // tours would overlay the cookie-consent banner and hang them.
             autoToursEnabled: false,
             referralCode: `E2E${p.username.slice(-1).toUpperCase()}0001`,

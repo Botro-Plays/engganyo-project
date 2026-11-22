@@ -91,9 +91,9 @@ function RoomCard({ room, onJoin, activeRoomId }: { room: RoomSummary; onJoin: (
           <Link
             href={`/rooms/${activeRoomId}`}
             className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-300 transition-colors hover:border-amber-400"
-            title="You already have an active room — finish or cancel it first"
+            title="You already have an active room - finish or cancel it first"
           >
-            Active room — resume
+            Active room - resume
           </Link>
         ) : joinable ? (
           <button
@@ -166,7 +166,7 @@ function CreateRoomModal({ quote, onClose, onCreated }: {
           </button>
         </div>
         <p className="mt-1 text-xs text-sc-text">
-          Equal contributions, no credit reward — you both do the work and review each other.{' '}
+          Equal contributions, no credit reward - you both do the work and review each other.{' '}
           {quote && <>Default {formatCredits(quote.contributionCredits)} each · {quote.activeMinutes} min once joined.</>}
         </p>
 
@@ -232,7 +232,7 @@ function CreateRoomModal({ quote, onClose, onCreated }: {
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-sc-text transition-colors hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Publish room — reserve {formatCredits(x)}
+            Publish room - reserve {formatCredits(x)}
           </button>
         </div>
       </div>
@@ -251,10 +251,10 @@ export default function RoomsPage() {
   const [joinPassword, setJoinPassword] = useState('');
   const [joinError, setJoinError] = useState('');
 
-  // Quote is only displayed inside the create modal — fetch lazily so
+  // Quote is only displayed inside the create modal - fetch lazily so
   // routine marketplace loads don't spend a request on it.
   const quoteQuery = useQuery({ queryKey: ['rooms', 'quote'], queryFn: () => roomsApi.quote(), enabled: isAuthenticated && showCreate });
-  // The marketplace list is required content — keep a slow poll so a
+  // The marketplace list is required content - keep a slow poll so a
   // transient failure (e.g. a 429 during a cold-load burst) recovers
   // without requiring the user to hit Retry or reload.
   const browseQuery = useQuery({
@@ -300,8 +300,8 @@ export default function RoomsPage() {
             <Swords className="h-6 w-6 text-brand-400" /> P2P Rooms
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-sc-text">
-            Mutual rooms — you and a partner each contribute credits, do each other&apos;s tasks, and review the proof.
-            Contributions are reserved up front and only collected if you both agree on the tasks; anything unfinished by the deadline is refunded. Each completed room earns a P2P point — never wallet credits.
+            Mutual rooms - you and a partner each contribute credits, do each other&apos;s tasks, and review the proof.
+            Contributions are reserved up front and only collected if you both agree on the tasks; anything unfinished by the deadline is refunded. Each completed room earns a P2P point - never wallet credits.
             Looking for reward-paying challenges?{' '}
             <Link href="/tasks" className="text-brand-400 hover:underline">Find tasks</Link>.
           </p>
@@ -321,7 +321,7 @@ export default function RoomsPage() {
           className="mt-4 flex items-center justify-between rounded-xl border border-brand-500/40 bg-brand-500/10 px-4 py-3 transition-colors hover:border-brand-400"
         >
           <span className="flex items-center gap-2 text-sm font-medium text-brand-200">
-            <ShieldCheck className="h-4 w-4" /> You have an active room — resume it here
+            <ShieldCheck className="h-4 w-4" /> You have an active room - resume it here
           </span>
           <ArrowRight className="h-4 w-4 text-brand-300" />
         </Link>
@@ -353,7 +353,7 @@ export default function RoomsPage() {
             <div className="rounded-xl border border-dashed border-sc-line py-16 text-center">
               <Users className="mx-auto h-8 w-8 text-sc-dim" />
               <p className="mt-3 text-sm text-sc-text">No open rooms right now.</p>
-              <p className="mt-1 text-xs text-sc-dim">Create one and a partner can join you — or check back soon.</p>
+              <p className="mt-1 text-xs text-sc-dim">Create one and a partner can join you - or check back soon.</p>
             </div>
           ) : (
             <>
@@ -433,7 +433,7 @@ export default function RoomsPage() {
               <Trophy className="h-4 w-4 text-amber-400" /> P2P completion points
             </h2>
             <p className="mt-0.5 text-xs text-sc-text">
-              One point per completed mutual room — separate from wallet credits, XP, and VP.
+              One point per completed mutual room - separate from wallet credits, XP, and VP.
             </p>
           </div>
           {boardQuery.isLoading ? (
@@ -476,12 +476,12 @@ export default function RoomsPage() {
           <div className="max-h-[90vh] overflow-y-auto w-full max-w-sm rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-sc-text">Join room</h2>
             <p className="mt-1 text-sm text-sc-muted">
-              <span className="font-medium text-sc-text">{joinTarget.title}</span> — your contribution:{' '}
+              <span className="font-medium text-sc-text">{joinTarget.title}</span> - your contribution:{' '}
               <span className="font-semibold text-brand-300">{formatCredits(joinTarget.contributionCredits)}</span>
             </p>
             <p className="mt-1 text-xs text-sc-text">
               Your {formatCredits(joinTarget.contributionCredits)} is reserved now and refunded in full if the room doesn&apos;t complete.
-              If you both agree on tasks, the room collects {formatCredits(joinTarget.roomCharge)} once — no extra debit.
+              If you both agree on tasks, the room collects {formatCredits(joinTarget.roomCharge)} once - no extra debit.
               The {quoteQuery.data?.activeMinutes ?? 30}-minute clock starts the moment you join.
             </p>
             {joinTarget.visibility === 'PRIVATE' && (

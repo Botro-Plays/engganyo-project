@@ -5,7 +5,7 @@ import { CampaignStatus, CompletionStatus, Prisma } from '@prisma/client';
  * Campaign states from which a completion may transition the campaign to
  * COMPLETED. A CANCELLED (or REJECTED/EXPIRED/already-COMPLETED) campaign
  * keeps its status even when an already-reserved in-flight task fills the
- * last slot — cancellation is never silently undone by a payout.
+ * last slot - cancellation is never silently undone by a payout.
  */
 const COMPLETION_TRANSITION_STATUSES: CampaignStatus[] = [
   CampaignStatus.ACTIVE,
@@ -17,13 +17,13 @@ const COMPLETION_TRANSITION_STATUSES: CampaignStatus[] = [
  * campaign slot, inside the caller's transaction.
  *
  * Two guarded writes:
- * 1. The completion is claimed with a status predicate — a concurrent
+ * 1. The completion is claimed with a status predicate - a concurrent
  *    verify/review on the same completion loses with count 0, so a
  *    completion can never pay out twice.
  * 2. The campaign counters move via a conditional UPDATE under the row
- *    lock. The full invariant is checked at write time — non-negative
+ *    lock. The full invariant is checked at write time - non-negative
  *    counters, completed + pending <= total, and a genuinely available
- *    pending slot — so a malformed campaign row matches no row and the
+ *    pending slot - so a malformed campaign row matches no row and the
  *    whole transaction aborts: the completion claim and any payout roll
  *    back with it. Status only flips to COMPLETED from an eligible state
  *    (ACTIVE/PAUSED); CANCELLED and other terminal states are preserved.
@@ -49,7 +49,7 @@ export async function claimCompletionForVerification(
     data: opts.setData,
   });
   if (claim.count !== 1) {
-    throw new BadRequestException('Task is not pending verification — already processed.');
+    throw new BadRequestException('Task is not pending verification - already processed.');
   }
 
   const eligible = COMPLETION_TRANSITION_STATUSES.map((s) => s.toString());
@@ -78,7 +78,7 @@ export async function claimCompletionForVerification(
 
   if (!row) {
     throw new BadRequestException(
-      'Inconsistent campaign counters — the claimed slot is not available. Manual review required.',
+      'Inconsistent campaign counters - the claimed slot is not available. Manual review required.',
     );
   }
 
@@ -94,8 +94,8 @@ export async function claimCompletionForVerification(
 /**
  * Atomically claim a completion for rejection and release its pending
  * slot, inside the caller's transaction. The same counter invariant is
- * enforced — non-negative counters, completed + pending <= total, and an
- * available pending slot — so a reject can never drive the counter
+ * enforced - non-negative counters, completed + pending <= total, and an
+ * available pending slot - so a reject can never drive the counter
  * negative and a malformed row fails closed for manual review.
  */
 export async function rejectCompletionAndReleaseSlot(
@@ -112,7 +112,7 @@ export async function rejectCompletionAndReleaseSlot(
     data: opts.setData,
   });
   if (claim.count !== 1) {
-    throw new BadRequestException('Task is not pending review — already processed.');
+    throw new BadRequestException('Task is not pending review - already processed.');
   }
 
   const released = await tx.$executeRaw`
@@ -125,7 +125,7 @@ export async function rejectCompletionAndReleaseSlot(
       AND completed_slots + pending_slots <= total_slots`;
   if (released !== 1) {
     throw new BadRequestException(
-      'Inconsistent campaign counters — no pending slot to release. Manual review required.',
+      'Inconsistent campaign counters - no pending slot to release. Manual review required.',
     );
   }
 }

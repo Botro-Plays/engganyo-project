@@ -18,7 +18,7 @@ const ADMIN_TRAFFIC_ROLES = [UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPER_
 export class VisitorAnalyticsController {
   constructor(private readonly visitorAnalytics: VisitorAnalyticsService) {}
 
-  // First-party beacon — public, IP-rate-limited. Tracking failures must
+  // First-party beacon - public, IP-rate-limited. Tracking failures must
   // never interrupt navigation, so the client treats this as fire-and-forget.
   @Public()
   @Post('visit')
@@ -28,7 +28,7 @@ export class VisitorAnalyticsController {
   ingestBeacon(@Body() dto: VisitorBeaconDto, @Req() req: Request) {
     // IP comes from the trusted proxy chain (trust proxy=1 + nginx realip).
     // Country comes ONLY from the nginx-set X-Visitor-Country header, which
-    // is populated solely when the direct peer is a Cloudflare IP — a
+    // is populated solely when the direct peer is a Cloudflare IP - a
     // browser-supplied value can never reach this header.
     const country = req.headers['x-visitor-country'];
     return this.visitorAnalytics.ingestBeacon(dto, {
@@ -42,7 +42,7 @@ export class VisitorAnalyticsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...ADMIN_TRAFFIC_ROLES)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Visitor traffic overview — visits, uniques, page views, daily trend' })
+  @ApiOperation({ summary: 'Visitor traffic overview - visits, uniques, page views, daily trend' })
   getOverview(
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -88,13 +88,13 @@ export class VisitorAnalyticsController {
     });
   }
 
-  // IP-level drill-down — SUPER_ADMIN only. Lower admin roles must not be
+  // IP-level drill-down - SUPER_ADMIN only. Lower admin roles must not be
   // able to retrieve raw IPs through any endpoint.
   @Get('traffic/recent')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Recent raw beacon events with IP — SUPER_ADMIN only' })
+  @ApiOperation({ summary: 'Recent raw beacon events with IP - SUPER_ADMIN only' })
   getRecent(
     @Query('page') page?: string,
     @Query('size') size?: string,

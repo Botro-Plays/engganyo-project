@@ -128,7 +128,7 @@ export class ChannelsGateway
 
     try {
       // sendMessage() emits channel.message.created, which this gateway
-      // broadcasts below — covers REST and socket sends uniformly.
+      // broadcasts below - covers REST and socket sends uniformly.
       await this.channelsService.sendMessage(userId, payload.channelId, payload.content, role as UserRole);
     } catch (err) {
       client.emit('chat:error', { message: (err as Error).message });
@@ -136,7 +136,7 @@ export class ChannelsGateway
   }
 
   // ChannelsService emits this for every persisted message (REST POST and
-  // socket chat:send alike) — broadcast it to the channel room so members
+  // socket chat:send alike) - broadcast it to the channel room so members
   // receive messages live instead of only on refetch.
   @OnEvent('channel.message.created')
   handleMessageCreated(payload: { channelId: string; message: unknown }) {

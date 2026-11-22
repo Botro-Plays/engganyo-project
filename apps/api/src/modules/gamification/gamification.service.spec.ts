@@ -27,7 +27,7 @@ const makeUser = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe('GamificationService — claimDailyReward (24h cooldown / 45h streak grace)', () => {
+describe('GamificationService - claimDailyReward (24h cooldown / 45h streak grace)', () => {
   let service: GamificationService;
   let wallet: { credit: jest.Mock; debit: jest.Mock };
   let notifications: { createNotification: jest.Mock };
@@ -223,7 +223,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     await service.claimDailyReward('u1', '5.6.7.8');
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    // wallet.credit(userId, amount, opts, tx) — tx is the prisma tx client
+    // wallet.credit(userId, amount, opts, tx) - tx is the prisma tx client
     expect(wallet.credit).toHaveBeenCalledWith(
       'u1', 80, expect.objectContaining({ type: 'EARN_DAILY_REWARD' }), prisma,
     );
@@ -239,14 +239,14 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     ['streak achievements', (w: typeof wallet, p: typeof prisma, s: GamificationService) => {
       jest.spyOn(s as never as Record<string, jest.Mock>, 'checkStreakAchievements').mockRejectedValueOnce(new Error('achievements down'));
     }],
-  ])('fails atomically when %s throws — the whole claim rolls back and a retry pays once', async (_label, inject) => {
+  ])('fails atomically when %s throws - the whole claim rolls back and a retry pays once', async (_label, inject) => {
     prisma.user.findUnique.mockResolvedValue(eligibleUser(30));
     prisma.user.updateMany.mockResolvedValue({ count: 1 });
     inject(wallet, prisma, service);
 
     await expect(service.claimDailyReward('u1', '5.6.7.8')).rejects.toThrow();
 
-    // No compensating restore write — the tx itself rolls back every effect,
+    // No compensating restore write - the tx itself rolls back every effect,
     // including the claim marker and any wallet/XP/VP writes already issued.
     const restoreCalls = prisma.user.update.mock.calls.filter(
       ([args]) => args?.data && 'lastDailyRewardAt' in (args.data as object),
@@ -254,7 +254,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     expect(restoreCalls).toHaveLength(0);
 
     // Retry after the transient failure: the rolled-back claim is re-attempted
-    // exactly once — second wallet.credit call = the retry's single payout.
+    // exactly once - second wallet.credit call = the retry's single payout.
     wallet.credit.mockClear();
     const retry = await service.claimDailyReward('u1', '5.6.7.8');
     expect(retry.newStreak).toBe(4);
@@ -262,7 +262,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
   });
 
-  it('uses only the server clock — client time hints cannot affect eligibility or streak', async () => {
+  it('uses only the server clock - client time hints cannot affect eligibility or streak', async () => {
     // The service signature accepts (userId, clientIp) only; there is no
     // timezone parameter. Whatever the client sends elsewhere, the where
     // clause is derived purely from the server `now`.
@@ -288,7 +288,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
     const streak = await service.getStreak('u1');
     expect(streak?.dailyRewardAvailable).toBe(false);
     expect(streak?.nextClaimAt).toEqual(new Date(hoursAgo(20).getTime() + DAILY_REWARD_COOLDOWN_MS));
-    expect(streak?.currentStreak).toBe(5); // within grace — still alive
+    expect(streak?.currentStreak).toBe(5); // within grace - still alive
   });
 
   it('reads an expired streak as 0 on stats endpoints (backend-enforced reset)', async () => {
@@ -314,21 +314,21 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
 
     await service.claimDailyReward('u1', '5.6.7.8');
 
-    // wallet.credit called exactly once — the daily reward itself, never an achievement
+    // wallet.credit called exactly once - the daily reward itself, never an achievement
     expect(wallet.credit).toHaveBeenCalledTimes(1);
     expect(prisma.userAchievement.create).not.toHaveBeenCalled();
   });
 
   it('keeps the original same-IP policy: one claim per IP per UTC calendar day', async () => {
     prisma.user.findUnique.mockResolvedValue(eligibleUser(30));
-    // Another user claimed from this IP earlier TODAY (UTC) — must block
+    // Another user claimed from this IP earlier TODAY (UTC) - must block
     prisma.user.findFirst.mockResolvedValue({ id: 'other-user' });
 
     await expect(service.claimDailyReward('u1', '9.9.9.9')).rejects.toThrow('this network today');
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(wallet.credit).not.toHaveBeenCalled();
 
-    // The IP window bound is UTC midnight — the original policy, unchanged
+    // The IP window bound is UTC midnight - the original policy, unchanged
     const where = prisma.user.findFirst.mock.calls[0][0].where;
     const utcMidnight = new Date(NOW);
     utcMidnight.setUTCHours(0, 0, 0, 0);
@@ -348,7 +348,7 @@ describe('GamificationService — claimDailyReward (24h cooldown / 45h streak gr
   });
 });
 
-describe('GamificationService — spinWheel idempotency + daily allowance (DB-enforced)', () => {
+describe('GamificationService - spinWheel idempotency + daily allowance (DB-enforced)', () => {
   let service: GamificationService;
   let wallet: { credit: jest.Mock; debit: jest.Mock };
   let prisma: {
@@ -488,13 +488,13 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('replays the stored result on retry — one charge, one reward, one spin row, one allowance slot', async () => {
+  it('replays the stored result on retry - one charge, one reward, one spin row, one allowance slot', async () => {
     // Free spin already consumed today → this is a paid spin (20cr charge).
     redisStore.set(`wheel:free:u1`, today());
     redisStore.set(`wheel:paid:u1`, '3');
 
     const first = await service.spinWheel('u1', 'attempt-key-1');
-    // Simulate the axios retry after a lost response — same idempotency key.
+    // Simulate the axios retry after a lost response - same idempotency key.
     const second = await service.spinWheel('u1', 'attempt-key-1');
 
     expect(second).toEqual(first);
@@ -516,7 +516,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
 
     const first = await service.spinWheel('u1', 'attempt-key-1');
 
-    // Every Redis call now fails — settlement must be unaffected because the
+    // Every Redis call now fails - settlement must be unaffected because the
     // idempotency record and the allowance live in Postgres, not the cache.
     redis.get.mockRejectedValue(new Error('redis down'));
     redis.set.mockRejectedValue(new Error('redis down'));
@@ -529,7 +529,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
     expect(prisma.wheelSpin.create).toHaveBeenCalledTimes(1);
   });
 
-  it('Redis down during the attempt cannot block or double a spin — DB is authoritative', async () => {
+  it('Redis down during the attempt cannot block or double a spin - DB is authoritative', async () => {
     redisStore.set(`wheel:free:u1`, today());
     redis.get.mockRejectedValue(new Error('redis down'));
 
@@ -579,7 +579,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
     expect(wallet.credit).not.toHaveBeenCalled();
     expect(prisma.wheelSpin.create).not.toHaveBeenCalled();
     expect(attempts.size).toBe(0);
-    expect(allowances.size).toBe(0); // allowance row rolled back — no slot consumed
+    expect(allowances.size).toBe(0); // allowance row rolled back - no slot consumed
 
     // Same key + confirmed paid price → executes and commits normally.
     const result = await service.spinWheel('u1', 'key-price-1', 20);
@@ -597,7 +597,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
     expect(wallet.debit).not.toHaveBeenCalled();
     expect(spins.length).toBe(0);
     expect(attempts.size).toBe(0);
-    expect(allowances.size).toBe(0); // free claim rolled back — still available
+    expect(allowances.size).toBe(0); // free claim rolled back - still available
 
     const result = await service.spinWheel('u1', 'key-price-2', 0);
     expect(result).toMatchObject({ isFree: true, cost: 0 });
@@ -609,7 +609,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
     const free = await service.spinWheel('u1', 'key-price-3', 0);
     expect(free).toMatchObject({ isFree: true, cost: 0 });
 
-    // Legacy caller (no expected cost) falls through to paid — same rules.
+    // Legacy caller (no expected cost) falls through to paid - same rules.
     const paid = await service.spinWheel('u1', 'key-price-4');
     expect(paid).toMatchObject({ isFree: false, cost: 20 });
     expect(allowances.get(allowanceKey('u1', today()))).toMatchObject({ freeUsed: true, paidUsed: 1 });
@@ -624,7 +624,7 @@ describe('GamificationService — spinWheel idempotency + daily allowance (DB-en
     expect(allowances.size).toBe(0); // allowance row rolled back too
     expect(spins.length).toBe(0);
 
-    // Retry with the same key executes normally — one successful settlement.
+    // Retry with the same key executes normally - one successful settlement.
     const result = await service.spinWheel('u1', 'attempt-key-1');
     expect(result).toMatchObject({ credits: 5 });
     expect(wallet.debit).toHaveBeenCalledTimes(2); // 1 failed + 1 success

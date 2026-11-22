@@ -34,7 +34,7 @@ const mockService = () =>
     },
   });
 
-run('Campaign cancellation — real PostgreSQL integration', () => {
+run('Campaign cancellation - real PostgreSQL integration', () => {
   jest.setTimeout(30000);
 
   let prisma: PrismaClient;
@@ -251,7 +251,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.audits).toHaveLength(1);
   });
 
-  it('ordered outcome — assignment first: owner cancel refuses (active completion)', async () => {
+  it('ordered outcome - assignment first: owner cancel refuses (active completion)', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeFundedCampaign(owner.id);
@@ -268,7 +268,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.user.creditBalance).toBe(475);
   });
 
-  it('ordered outcome — assignment first: admin cancel keeps the pending slot consumed and refunds only the free pool', async () => {
+  it('ordered outcome - assignment first: admin cancel keeps the pending slot consumed and refunds only the free pool', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const adminUser = await makeUser('SUPER_ADMIN');
@@ -277,7 +277,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     await tasks.assignTask(worker.id, campaign.id, 'ADMIN');
     const result = await admin.cancelUserCampaign(adminUser.id, campaign.id, 'review');
 
-    // Defined behavior: the in-flight assignment remains the worker's — its
+    // Defined behavior: the in-flight assignment remains the worker's - its
     // slot is NOT refunded. Refund = (10 − 0 − 1) × 50 = 450.
     const s = await state(campaign.id, owner.id);
     expect(result.refunded).toBe(450);
@@ -290,7 +290,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
     expect(s.user.creditBalance).toBe(925);
   });
 
-  it('ordered outcome — cancellation first: assignment cannot claim a refunded slot', async () => {
+  it('ordered outcome - cancellation first: assignment cannot claim a refunded slot', async () => {
     const owner = await makeUser();
     const worker = await makeUser();
     const campaign = await makeFundedCampaign(owner.id);
@@ -341,7 +341,7 @@ run('Campaign cancellation — real PostgreSQL integration', () => {
 
   it('genuinely unfunded campaign: audited no-refund cancel preserved on real DB', async () => {
     const owner = await makeUser();
-    const campaign = await makeCampaignRow(owner.id); // no funding debit — like the seed artifacts
+    const campaign = await makeCampaignRow(owner.id); // no funding debit - like the seed artifacts
 
     const result = await campaigns.cancel(owner.id, campaign.id);
 

@@ -45,7 +45,7 @@ describe('settlement summary + backfill', () => {
 
   it('backfill writes only missing figures, each conditioned on still-null + status + ref', async () => {
     prisma.deposit.findMany.mockResolvedValue([
-      row({ id: 'd1', providerFee: 0.34 }),               // fee already set — only net/converted missing
+      row({ id: 'd1', providerFee: 0.34 }),               // fee already set - only net/converted missing
       row({ id: 'd2', paymentRef: 'ORD2' }),              // provider unavailable → skip
       row({ id: 'd3', method: DepositMethod.PAYMONGO, paymentRef: 'pay_x' }),
     ]);
@@ -106,7 +106,7 @@ describe('settlement summary + backfill', () => {
     expect(JSON.stringify(prisma.deposit.findMany.mock.calls[0][0].where)).toContain('completedAt');
   });
 
-  it('unavailable records cannot starve older deposits — cursor continues past the scan cap', async () => {
+  it('unavailable records cannot starve older deposits - cursor continues past the scan cap', async () => {
     const mkPage = (n: number, tag: string) => Array.from({ length: n }, (_, i) =>
       row({ id: `${tag}${i}`, paymentRef: `ORD${tag}${i}` }));
     prisma.deposit.findMany
@@ -128,7 +128,7 @@ describe('settlement summary + backfill', () => {
     prisma.deposit.updateMany.mockResolvedValue({ count: 1 });
     const second = await svc.backfillSettlement(25, first.nextCursor!);
     expect(second.updated).toBe(1);
-    // cursor applied — the query carried a completedAt condition
+    // cursor applied - the query carried a completedAt condition
     const secondCallWhere = prisma.deposit.findMany.mock.calls[0][0].where;
     expect(JSON.stringify(secondCallWhere)).toContain('completedAt');
     const eligibleCalls = prisma.deposit.updateMany.mock.calls.map((c) => c[0]).filter((c) => c.where.id === 'old');
@@ -137,7 +137,7 @@ describe('settlement summary + backfill', () => {
 });
 
 
-describe('crypto approval gate — evidence before credit', () => {
+describe('crypto approval gate - evidence before credit', () => {
   const prisma = { deposit: { findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() } };
   const walletSvc = { verifyCryptoDeposit: jest.fn(), completeDeposit: jest.fn() };
   const paypal = { getOrderSettlement: jest.fn() };

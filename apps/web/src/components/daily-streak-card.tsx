@@ -66,7 +66,7 @@ export function DailyStreakCard({
             <h2 className="font-semibold text-sc-text">Daily streak</h2>
             <p className="text-xs text-sc-dim truncate">
               {streakEnded
-                ? `Streak ended — longest was ${longestStreak} days`
+                ? `Streak ended - longest was ${longestStreak} days`
                 : currentStreak > 0
                   ? `Day ${currentStreak} · longest ${longestStreak}`
                   : 'Start your streak today'}
@@ -74,7 +74,7 @@ export function DailyStreakCard({
           </div>
         </div>
 
-        {/* Status chip — today's claim state at a glance */}
+        {/* Status chip - today's claim state at a glance */}
         <div className="shrink-0 text-right">
           {rewardResult ? (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/30">
@@ -92,7 +92,7 @@ export function DailyStreakCard({
         </div>
       </div>
 
-      {/* Milestone ladder — labeled states for completed days, today, upcoming */}
+      {/* Milestone ladder - labeled states for completed days, today, upcoming */}
       <div className="mt-5">
         <div className="relative h-2 rounded-full bg-sc-panel-2 overflow-visible">
           {/* completed fill */}
@@ -111,7 +111,7 @@ export function DailyStreakCard({
                 key={day}
                 className="absolute -top-[5px] flex flex-col items-center"
                 style={{ left: `${pos}%`, transform: 'translateX(-50%)' }}
-                title={`Day ${day}${isMilestone ? ' — milestone' : ''}`}
+                title={`Day ${day}${isMilestone ? ' - milestone' : ''}`}
               >
                 <div
                   className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
@@ -157,14 +157,14 @@ export function DailyStreakCard({
           <p className="text-sc-muted">
             Next milestone <span className="text-sc-text font-medium">Day {nextMilestone}</span>
             {daysToMilestone > 0 && <span className="text-sc-dim"> in {daysToMilestone} day{daysToMilestone === 1 ? '' : 's'}</span>}
-            {' '}— Mystery Gift Box{nextMilestone === 30 ? ' + 50 VP bonus' : ''}
+            {' '} - Mystery Gift Box{nextMilestone === 30 ? ' + 50 VP bonus' : ''}
           </p>
         </div>
       )}
       {nextMilestone === null && currentStreak >= 30 && (
         <div className="mt-3 flex items-center gap-2 text-xs">
           <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <p className="text-sc-muted">All milestones reached — max rewards every day.</p>
+          <p className="text-sc-muted">All milestones reached - max rewards every day.</p>
         </div>
       )}
 
@@ -200,12 +200,12 @@ export function DailyStreakCard({
           </button>
           {rewardError && (
             <p className="text-xs text-red-400 mt-2" role="alert">
-              {rewardError} — your streak is safe; try again.
+              {rewardError} - your streak is safe; try again.
             </p>
           )}
           {!dailyRewardAvailable && !rewardResult && !rewardError && nextClaimAt && (
             <p className="text-[11px] text-sc-dim mt-2">
-              Streaks reset if you miss a day — claim within 24h to keep Day {currentStreak} alive.
+              Streaks reset if you miss a day - claim within 24h to keep Day {currentStreak} alive.
             </p>
           )}
         </div>
