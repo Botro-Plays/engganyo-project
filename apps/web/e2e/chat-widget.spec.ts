@@ -582,8 +582,9 @@ test.describe('mobile launcher drag @390px', () => {
   });
 
   test('rotation re-clamps a saved spot inside the new viewport', async ({ page }) => {
-    await page.addInitScript(() =>
-      localStorage.setItem(LAUNCHER_POS_KEY, JSON.stringify({ x: 340, y: 600 })),
+    await page.addInitScript(
+      ([key]) => localStorage.setItem(key as string, JSON.stringify({ x: 340, y: 600 })),
+      [LAUNCHER_POS_KEY],
     );
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
@@ -597,8 +598,9 @@ test.describe('mobile launcher drag @390px', () => {
 
   test('keyboard-open shrink re-clamps the saved spot (simulated)', async ({ page }) => {
     await installFakeVisualViewport(page);
-    await page.addInitScript(() =>
-      localStorage.setItem(LAUNCHER_POS_KEY, JSON.stringify({ x: 300, y: 720 })),
+    await page.addInitScript(
+      ([key]) => localStorage.setItem(key as string, JSON.stringify({ x: 300, y: 720 })),
+      [LAUNCHER_POS_KEY],
     );
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});

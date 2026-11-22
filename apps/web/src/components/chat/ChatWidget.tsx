@@ -122,6 +122,7 @@ export function ChatWidget() {
   const [mPos, setMPos] = useState<Pos | null>(null);
   const mPosRef = useRef<Pos | null>(null);
   const mDragGrab = useRef<Pos>({ x: 0, y: 0 });
+  const mDragLast = useRef<Pos | null>(null);
   const mDragging = useRef(false);
   // Set once a gesture travels past the tap threshold; the trailing
   // click is then swallowed so a drag never opens chat. Keyboard Enter
@@ -454,6 +455,7 @@ export function ChatWidget() {
     const r = e.currentTarget.getBoundingClientRect();
     mDragGrab.current = { x: e.clientX - r.left, y: e.clientY - r.top };
     mDragging.current = true;
+    mDragLast.current = null;
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     // Synthetic pointer events in tests have no active pointer to
     // capture; real touches always do.
@@ -469,13 +471,19 @@ export function ChatWidget() {
       movedRef.current = true;
     }
     const spot = { x: e.clientX - mDragGrab.current.x, y: e.clientY - mDragGrab.current.y };
-    setMPos(clampMobileSpot(spot));
+    const clamped = clampMobileSpot(spot);
+    mDragLast.current = clamped;
+    setMPos(clamped);
   };
 
   const onLauncherPointerEnd = () => {
     if (!mDragging.current) return;
     mDragging.current = false;
-    saveMobilePos(mPosRef.current);
+    // Save the ref-tracked last spot, not mPosRef: the final setMPos from
+    // pointermove may not have committed its sync effect before pointerup.
+    const last = mDragLast.current;
+    mDragLast.current = null;
+    if (last) saveMobilePos(last);
   };
 
   const resetMobilePos = () => {
