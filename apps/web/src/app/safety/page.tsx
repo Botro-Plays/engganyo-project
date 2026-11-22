@@ -114,7 +114,7 @@ export default function SafetyPage() {
             <p className="text-sm text-zinc-400 mt-4">
               For account issues, include your username in the message. More answers are in the{' '}
               <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>, and{' '}
-              <Link href="/how-it-works" className="text-brand-400 hover:underline">How it works</Link>{' '}
+              <Link href="/howitworks" className="text-brand-400 hover:underline">How it works</Link>{' '}
               explains the task loop.
             </p>
           </section>
