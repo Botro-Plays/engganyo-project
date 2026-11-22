@@ -97,6 +97,14 @@ const SEED_POSTS = [
  * and publishes them through the admin UI.
  */
 export async function seedBlogPosts(prisma: PrismaClient): Promise<void> {
+  // First-boot import only: once any post exists, admins own the
+  // catalog. Without this guard a redeploy would resurrect posts an
+  // admin intentionally deleted.
+  const existing = await prisma.blogPost.count();
+  if (existing > 0) {
+    console.log(`   Blog posts already present (${existing}); skipping import`);
+    return;
+  }
   for (const post of SEED_POSTS) {
     await prisma.blogPost.upsert({
       where: { slug: post.slug },
