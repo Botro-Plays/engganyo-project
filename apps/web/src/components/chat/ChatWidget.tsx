@@ -124,6 +124,9 @@ export function ChatWidget() {
   const mDragGrab = useRef<Pos>({ x: 0, y: 0 });
   const mDragLast = useRef<Pos | null>(null);
   const mDragging = useRef(false);
+  // The one pointer id driving the current mobile gesture; move/end
+  // events from any other pointer are ignored so they cannot interfere.
+  const mPointerId = useRef<number | null>(null);
   // Set once a gesture travels past the tap threshold; the trailing
   // click is then swallowed so a drag never opens chat. Keyboard Enter
   // clicks (clientX/Y 0) are unaffected because this stays false.
@@ -392,6 +395,9 @@ export function ChatWidget() {
     if (!isDesktop) return;
     setIsDragging(true);
     dragOffset.current = { x: clientX - posRef.current.x, y: clientY - posRef.current.y };
+    // New gesture boundary: a stale flag from a cancelled earlier drag
+    // must not swallow this gesture's click.
+    movedRef.current = false;
     dragStartPos.current = { x: clientX, y: clientY };
   };
 
@@ -451,7 +457,12 @@ export function ChatWidget() {
   // chat (isClick distance check); a real drag repositions instead.
   const onLauncherPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (isDesktop || e.pointerType === 'mouse') return;
+    // One gesture at a time; a second pointer cannot hijack the drag.
+    if (mPointerId.current !== null) return;
     e.preventDefault();
+    mPointerId.current = e.pointerId;
+    // Gesture boundary: movedRef only describes THIS gesture's travel.
+    movedRef.current = false;
     const r = e.currentTarget.getBoundingClientRect();
     mDragGrab.current = { x: e.clientX - r.left, y: e.clientY - r.top };
     mDragging.current = true;
@@ -465,7 +476,7 @@ export function ChatWidget() {
   };
 
   const onLauncherPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!mDragging.current) return;
+    if (e.pointerId !== mPointerId.current || !mDragging.current) return;
     const start = dragStartPos.current;
     if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) >= 5) {
       movedRef.current = true;
@@ -476,9 +487,12 @@ export function ChatWidget() {
     setMPos(clamped);
   };
 
-  const onLauncherPointerEnd = () => {
-    if (!mDragging.current) return;
+  // Shared by pointerup, pointercancel and lostpointercapture: each is a
+  // real browser boundary at which the gesture ends.
+  const onLauncherPointerEnd = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerId !== mPointerId.current || !mDragging.current) return;
     mDragging.current = false;
+    mPointerId.current = null;
     // Save the ref-tracked last spot, not mPosRef: the final setMPos from
     // pointermove may not have committed its sync effect before pointerup.
     const last = mDragLast.current;
@@ -504,6 +518,12 @@ export function ChatWidget() {
             launcherRef.current = el;
           }}
           onClick={(e) => {
+            // Keyboard/screen-reader activation fires click with detail 0
+            // and stays independent of pointer-drag suppression.
+            if (e.detail === 0) {
+              setIsOpen(true);
+              return;
+            }
             if (movedRef.current) {
               movedRef.current = false;
               return;
@@ -519,14 +539,17 @@ export function ChatWidget() {
           onPointerMove={onLauncherPointerMove}
           onPointerUp={onLauncherPointerEnd}
           onPointerCancel={onLauncherPointerEnd}
+          onLostPointerCapture={onLauncherPointerEnd}
           style={
             mPos && !isDesktop
               ? { left: mPos.x, top: mPos.y, bottom: 'auto', right: 'auto' }
-              : dragStyle
+              : { ...dragStyle, transition: isDragging ? 'none' : undefined }
           }
           // touch-none lets pointermove drive the drag without the page
-          // scrolling the gesture away.
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-40 touch-none rounded-full bg-brand-500 p-4 text-sc-text shadow-lg shadow-brand-500/30 transition-all hover:scale-105 hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-sc-bg motion-reduce:transition-none sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-6 sm:touch-auto"
+          // scrolling the gesture away. The transition list excludes
+          // left/top so a mobile drag follows the pointer instantly;
+          // the desktop transform-drag disables transitions while active.
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-40 touch-none rounded-full bg-brand-500 p-4 text-sc-text shadow-lg shadow-brand-500/30 transition-[transform,background-color,box-shadow] hover:scale-105 hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-sc-bg motion-reduce:transition-none sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-6 sm:touch-auto"
           aria-label="Open support chat"
         >
           <MessageSquare className="h-6 w-6" />

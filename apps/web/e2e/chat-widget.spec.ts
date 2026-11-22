@@ -453,6 +453,7 @@ async function pointerDrag(
 }
 
 test.describe('mobile launcher drag @390px', () => {
+  test.use({ hasTouch: true });
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoDashboard(page);
@@ -475,10 +476,12 @@ test.describe('mobile launcher drag @390px', () => {
       bubbles: true,
     });
     // Trailing click after the drag must NOT open the sheet.
+    // detail: 1 = pointer-origin click (detail 0 is the keyboard path).
     await launcher.dispatchEvent('click', {
       clientX: before.x + 150,
       clientY: before.y - 160,
       bubbles: true,
+      detail: 1,
     });
     await expect(page.locator(DIALOG)).toHaveCount(0);
     // transition-all animates left/top - let it settle before measuring.
@@ -517,6 +520,7 @@ test.describe('mobile launcher drag @390px', () => {
       clientX: cx,
       clientY: cy,
       bubbles: true,
+      detail: 1,
     });
     await expect(page.locator(DIALOG)).toBeVisible();
   });
@@ -534,11 +538,138 @@ test.describe('mobile launcher drag @390px', () => {
       clientY: before.y - 80,
       bubbles: true,
     });
-    await launcher.dispatchEvent('click', { bubbles: true });
+    // pointercancel produces no click - nothing arrives to consume the
+    // suppression flag, which is exactly the stale-state case under test.
     await expect(page.locator(DIALOG)).toHaveCount(0);
-    await page.waitForTimeout(400); // transition-all animates left/top
+    await page.waitForTimeout(400); // position prop transitions settle
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(after.y - before.y)).toBeGreaterThan(30);
+    // A genuine next tap must open chat: a cancelled drag leaves no
+    // stale suppression behind.
+    await page.touchscreen.tap(after.x + after.width / 2, after.y + after.height / 2);
+    await expect(page.locator(DIALOG)).toBeVisible();
+  });
+
+  test('keyboard activation opens chat after a cancelled drag', async ({
+    page,
+  }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 90, y: before.y - 60 },
+    ]);
+    await launcher.dispatchEvent('pointercancel', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: before.x + 90,
+      clientY: before.y - 60,
+      bubbles: true,
+    });
+    // Enter fires a click with detail 0 - independent of suppression.
+    await launcher.press('Enter');
+    await expect(page.locator(DIALOG)).toBeVisible();
+  });
+
+  test('lost pointer capture ends the gesture; next tap opens', async ({
+    page,
+  }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 90, y: before.y - 60 },
+    ]);
+    // lostpointercapture is a real boundary: the browser can drop
+    // capture on interrupted gestures with no pointerup/cancel.
+    await launcher.dispatchEvent('lostpointercapture', {
+      pointerId: 7,
+      pointerType: 'touch',
+      bubbles: true,
+    });
+    await expect(page.locator(DIALOG)).toHaveCount(0);
+    const after = (await page.locator(LAUNCHER).boundingBox())!;
+    await page.touchscreen.tap(after.x + after.width / 2, after.y + after.height / 2);
+    await expect(page.locator(DIALOG)).toBeVisible();
+  });
+
+  test('a second pointer cannot hijack the active gesture', async ({
+    page,
+  }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 90, y: before.y - 60 },
+    ]);
+    const mid = (await page.locator(LAUNCHER).boundingBox())!;
+    // An unrelated pointer id must be ignored by the move/end handlers.
+    await launcher.dispatchEvent('pointermove', {
+      pointerId: 9,
+      pointerType: 'touch',
+      clientX: before.x + 300,
+      clientY: before.y - 300,
+      bubbles: true,
+    });
+    const after9 = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(after9.x - mid.x)).toBeLessThanOrEqual(6);
+    expect(Math.abs(after9.y - mid.y)).toBeLessThanOrEqual(6);
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 9,
+      pointerType: 'touch',
+      bubbles: true,
+    });
+    // Pointer 7 still owns the gesture: it ends normally and its
+    // trailing click is suppressed like any real drag click.
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: before.x + 90,
+      clientY: before.y - 60,
+      bubbles: true,
+    });
+    await launcher.dispatchEvent('click', { bubbles: true, detail: 1 });
+    await expect(page.locator(DIALOG)).toHaveCount(0);
+  });
+
+  test('launcher position tracks the pointer during the move itself', async ({
+    page,
+  }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = page.locator(LAUNCHER);
+    await launcher.dispatchEvent('pointerdown', {
+      pointerId: 7,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: before.x + 24,
+      clientY: before.y + 24,
+      bubbles: true,
+    });
+    // Continuous movement asserted mid-gesture, not after a settle:
+    // left/top sit outside the transition list so each move must land
+    // immediately at the clamped spot.
+    const targetX = before.x + 100;
+    const targetY = before.y - 120;
+    await launcher.dispatchEvent('pointermove', {
+      pointerId: 7,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: targetX + 24,
+      clientY: targetY + 24,
+      bubbles: true,
+    });
+    const mid = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(mid.x - targetX)).toBeLessThanOrEqual(12);
+    expect(Math.abs(mid.y - targetY)).toBeLessThanOrEqual(12);
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: targetX + 24,
+      clientY: targetY + 24,
+      bubbles: true,
+    });
+    await launcher.dispatchEvent('click', { bubbles: true, detail: 1 });
+    await expect(page.locator(DIALOG)).toHaveCount(0);
+  });
+
+  test('genuine touchscreen tap opens chat', async ({ page }) => {
+    const box = (await page.locator(LAUNCHER).boundingBox())!;
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator(DIALOG)).toBeVisible();
   });
 
   test('drag clamps at viewport edges and stays off the nav', async ({ page }) => {
