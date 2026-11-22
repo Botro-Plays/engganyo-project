@@ -156,26 +156,30 @@ export default async function LandingPage() {
         <LandingNavbar />
 
         {/* ── Hero ─────────────────────────────────────────────── */}
-        <section className="relative z-10 pt-12 pb-20 sm:pt-16 sm:pb-28 px-4 sm:px-6 max-w-6xl mx-auto">
+        <section className="relative z-10 pt-8 pb-16 sm:pt-16 sm:pb-28 px-4 sm:px-6 max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: headline + CTA */}
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 text-xs font-medium mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 text-xs font-medium mb-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
                 Community-powered · Real humans only
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-5">
-                Small Taps.
+              <p className="text-gradient text-sm font-bold tracking-[0.2em] uppercase mb-2">
+                Small Taps. Big Crowds.
+              </p>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-4">
+                Engganyo: a creator
                 <br />
-                <span className="text-gradient">Big Crowds.</span>
+                <span className="text-gradient">engagement exchange.</span>
               </h1>
 
-              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-8 max-w-lg">
-                Complete small tasks for other creators, earn credits, and spend them on your own campaigns.
+              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-5 max-w-lg">
+                Complete small tasks for other creators, earn credits, and spend them on
+                campaigns for your own accounts.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-3 mb-8">
+              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 mb-5 sm:mb-8">
                 <Link
                   href="/register"
                   className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-sc-text px-7 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-sm sm:text-base"

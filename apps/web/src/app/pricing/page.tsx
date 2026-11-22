@@ -75,6 +75,15 @@ export default function PricingPage() {
             </p>
           </section>
 
+        <section className="card-glass rounded-xl p-6 mt-6">
+          <h2 className="text-xl font-semibold text-white mb-3">Free rewards</h2>
+          <p className="text-zinc-300 leading-relaxed">
+            The dashboard also shows a daily streak reward and a free daily spin, so active members
+            can keep earning credits without buying anything. Credits for a 1v1 challenge are
+            reserved up front when you create it, so you always know what is on the line.
+          </p>
+        </section>
+
           <section className="card-glass rounded-xl p-6">
             <h2 className="text-xl font-semibold text-white mb-3">Buy credits to move faster</h2>
             <p className="text-zinc-300 leading-relaxed mb-4">
