@@ -25,7 +25,8 @@ test.describe('admin blog management', () => {
     await page.waitForURL(/\/admin\/blog\//);
     await expect(page.locator('textarea').first()).toBeVisible();
     // Slug field carries the migrated slug.
-    await expect(page.locator('input[value="yourfirstweekonengganyo"]')).toBeVisible();
+    const slugInput = page.locator('label', { hasText: 'Slug' }).locator('input');
+    await expect(slugInput).toHaveValue('yourfirstweekonengganyo');
 
     await page.getByRole('button', { name: /preview/i }).click();
     const preview = page.locator('.blog-body');
