@@ -9,6 +9,6 @@
     "strictNullChecks": true,
     "noImplicitAny": true
   },
-  "include": ["prisma/seed.ts"],
+  "include": ["prisma/seed.ts", "prisma/seed-blog.ts"],
   "exclude": ["node_modules", "dist", "src"]
 }
