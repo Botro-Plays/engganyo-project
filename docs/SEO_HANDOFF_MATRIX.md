@@ -33,3 +33,23 @@ Each task mapped to current evidence, action, and acceptance. Owner rules overri
 3. Cache rules: optional page rule for public HTML TTL 1h + purge on deploy (app already emits `s-maxage=3600` — rule is additive, not required).
 4. robots.txt managed block stays as-is (its own `User-agent: *` group is acceptable per handoff note).
 5. CSP enforcement: only after report-only violation data is reviewed and auth/reCAPTCHA/payments/uploads/sockets regression-tested.
+
+## Delivery record (2026-11-22)
+
+| # | Task | Result | Evidence |
+|---|------|--------|----------|
+| 1 | Route rename | Shipped — PR #133 → `4eb44fd` | Live: `GET /how-it-works` → 301 `/howitworks`; canonical, og:url, JSON-LD path, sitemap, llms.txt, chrome links all `/howitworks`; `#how-it-works` fragment anchors unchanged |
+| 2 | CLS | Shipped — PR #134 → `02fc1c9` | `next/font/local` WOFF2 subsets; intrinsic `width`/`height` on logo/brand img usage. Lab CLS measurement is CI's Lighthouse — field data remains a separate CrUX/GSC question |
+| 3 | Fonts | Shipped — PR #134 | DotGothic16 2.0 MB→~16 KB, VT323 153 KB→~18 KB WOFF2 subsets; ₱ (U+20B1), €, £, smart punctuation, ellipsis retained; OFL license files kept in `public/fonts/`; system-monospace fallback covers international names |
+| 4 | og images + logo dims | Shipped — PR #134 | explicit `openGraph.images`/`twitter` + `og:url` on every public page; logo `width`/`height` set, header logo `loading="eager"` |
+| 5 | Email obfuscation | Owner action — see Cloudflare plan above | not code |
+| 6 | PerplexityBot | Owner action — see Cloudflare plan above | not code |
+| 7 | Sitemap dates | Shipped — PR #136 (`d3d8327`) + earlier | per-page real dates; `/blog` + post carry `2026-11-22` |
+| 8 | Hero structure | Shipped — PR #135 → `11444f0` | H1 "Engganyo: a creator engagement exchange", eyebrow tagline; CTA kept above the 320×640 fold (shorter definition line + tighter mobile spacing) |
+| 9 | Descriptions/sections/links | Shipped — PR #135 | new meta descriptions on /contact + /howitworks; "Before you start" (howitworks), Free rewards + "If something goes wrong" (pricing), safety risk/contact sections; ≥3 descriptive internal links each on the three pages + /about |
+| 10 | Blog | Shipped — PR #136 → `d3d8327` | `/blog` 200, `/blog/yourfirstweekonengganyo` 200, `/blog/rss.xml` 200 (live); BlogPosting + BreadcrumbList JSON-LD; author "Engganyo"; real publish date; auto-verification clause added to the review sentence |
+| 11 | Technical | Mostly shipped — PR #134/#136 + matrix notes | `_next/static` immutable already; CSP stays report-only pending owner review; `/search` had a title already via PageTitle; robots origin group unchanged (CF managed block separate) |
+
+Extra work delivered in the same round: Telegram CTA corner geometry fixed (PR #131 → `2d737f6`, one `--tg-hero-radius` token across button/outline/shimmer/all states) and mobile chat launcher touch-drag (PR #132 → `3d9f1f3`, Pointer Events + capture, tap/drag separation, viewport/nav clamping, separate mobile storage key, reset control, re-clamp on viewport/rotation changes).
+
+CI notes: GitHub dropped `pull_request` synchronize events for PR #135's pushes twice; validated by `workflow_dispatch` runs (44989550620 on f06a7e3, 44990721430/44990722989 on rebased 2aac0c3) — all green before merge.

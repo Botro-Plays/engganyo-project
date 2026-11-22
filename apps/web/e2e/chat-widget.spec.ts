@@ -486,11 +486,6 @@ test.describe('mobile launcher drag @390px', () => {
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBeGreaterThan(40);
     await insideViewport(page, LAUNCHER);
-    // DIAG: verify the drag actually persisted.
-    console.log(
-      'LAUNCHER_SAVE',
-      await page.evaluate(() => localStorage.getItem('chat-widget-pos-mobile')),
-    );
     // Above the nav, not over it.
     const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
     expect(nav).not.toBeNull();
@@ -500,20 +495,6 @@ test.describe('mobile launcher drag @390px', () => {
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
     await expect(page.locator(LAUNCHER)).toBeVisible();
-    // DIAG: storage + applied position after reload.
-    console.log(
-      'RELOAD_STATE',
-      JSON.stringify(
-        await page.locator(LAUNCHER).evaluate((el) => ({
-          ls: localStorage.getItem('chat-widget-pos-mobile'),
-          inline: { left: el.style.left, top: el.style.top },
-          comp: {
-            left: getComputedStyle(el).left,
-            top: getComputedStyle(el).top,
-          },
-        })),
-      ),
-    );
     await page.waitForTimeout(400); // mPos applies post-mount; transition-all animates it
     const reloaded = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(reloaded.x - after.x)).toBeLessThanOrEqual(4);
@@ -636,16 +617,6 @@ test.describe('mobile launcher drag @390px', () => {
     await setVisibleViewport(page, 420, 0);
     await page.waitForTimeout(400); // re-clamp + transition-all settle
     await expect(page.locator(LAUNCHER)).toBeVisible();
-    console.log(
-      'KB_STATE',
-      JSON.stringify(
-        await page.locator(LAUNCHER).evaluate((el) => ({
-          ls: localStorage.getItem('chat-widget-pos-mobile'),
-          inline: { left: el.style.left, top: el.style.top },
-          vv: window.visualViewport?.height,
-        })),
-      ),
-    );
     const box = (await page.locator(LAUNCHER).boundingBox())!;
     expect(box.y + box.height).toBeLessThanOrEqual(420 + 1);
   });
