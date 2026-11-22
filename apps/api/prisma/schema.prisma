@@ -2364,3 +2364,37 @@ model Friendship {
   @@index([requesterId, status])
   @@map("friendships")
 }
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+  DELETED
+}
+
+model BlogPost {
+  id             String         @id @default(cuid())
+  slug           String         @unique
+  title          String
+  excerpt        String         @default("")
+  body           String         @default("")
+  coverImageUrl  String?        @map("cover_image_url")
+  coverImageAlt  String?        @map("cover_image_alt")
+  authorName     String         @default("Engganyo") @map("author_name")
+  seoTitle       String?        @map("seo_title")
+  seoDescription String?        @map("seo_description")
+  ogImageUrl     String?        @map("og_image_url")
+  status         BlogPostStatus @default(DRAFT)
+  publishedAt    DateTime?      @map("published_at")
+  unpublishedAt  DateTime?      @map("unpublished_at")
+  deletedAt      DateTime?      @map("deleted_at")
+  version        Int            @default(1)
+  createdBy      String?        @map("created_by")
+  updatedBy      String?        @map("updated_by")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([status, publishedAt])
+  @@map("blog_posts")
+}

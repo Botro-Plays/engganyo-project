@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, UserStatus, CampaignStatus, TaskType, NotificationType } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { seedBlogPosts } from './blog-seed';
 
 const prisma = new PrismaClient();
 
@@ -298,6 +299,8 @@ async function main(): Promise<void> {
       }
     }
   }
+
+  await seedBlogPosts(prisma);
 
   console.log('✅ Database seeded successfully!');
 }

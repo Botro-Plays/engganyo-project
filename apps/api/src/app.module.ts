@@ -40,6 +40,7 @@ import { SearchModule } from './modules/search/search.module';
 import { EventsModule } from './modules/events/events.module';
 import { StoreModule } from './modules/store/store.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { BlogModule } from './modules/blog/blog.module';
 
 @Module({
   imports: [
@@ -121,6 +122,7 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
     EventsModule,
     StoreModule,
     MarketplaceModule,
+    BlogModule,
   ],
   providers: [
     // A08: ThrottlerModule was configured but no guard was registered, so

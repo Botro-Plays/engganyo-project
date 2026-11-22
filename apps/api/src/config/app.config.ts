@@ -7,6 +7,8 @@ export default registerAs('app', () => ({
   frontendUrl: process.env['FRONTEND_URL'] ?? 'http://localhost:3000',
   cookieSecret: process.env['COOKIE_SECRET'] ?? 'dev-cookie-secret',
   encryptionKey: process.env['ENCRYPTION_KEY'] ?? '',
+  revalidateSecret: process.env['INTERNAL_REVALIDATE_SECRET'] ?? '',
+  webInternalUrl: process.env['WEB_INTERNAL_URL'] ?? '',
   throttle: {
     ttl: parseInt(process.env['THROTTLE_TTL'] ?? '60', 10),
     limit: parseInt(process.env['THROTTLE_LIMIT'] ?? '100', 10),
