@@ -8,7 +8,7 @@ export const revalidate = 3600;
 export const metadata: Metadata = {
   title: 'How It Works',
   description:
-    'Join free, earn credits by completing tasks for other creators, get approved, and spend credits on campaigns for your own accounts.',
+    'Join free, do small tasks for other creators, earn credits when the campaign owner approves your proof, then spend credits on campaigns for your own accounts.',
   alternates: { canonical: 'https://engganyo.com/howitworks' },
   robots: { index: true, follow: true },
   openGraph: {
@@ -95,6 +95,26 @@ export default function HowItWorksPage() {
             </section>
           ))}
         </div>
+
+        <section className="card-glass rounded-xl p-6 mt-6">
+          <h2 className="text-xl font-semibold text-white mb-3">Before you start</h2>
+          <p className="text-zinc-300 leading-relaxed">
+            Pick the platforms you already use, so you do not have to create new accounts just to
+            earn credits. Read the rules of each platform before you do any task, because every
+            platform decides what is allowed. Start with one small task to see how proof and
+            approval work. You can see your balance in the Wallet and your daily rewards on your
+            dashboard. If you get stuck, ask on Telegram at{' '}
+            <a
+              href="https://t.me/Engganyo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-400 hover:underline"
+            >
+              t.me/Engganyo
+            </a>{' '}
+            or read the <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>.
+          </p>
+        </section>
 
         <section className="card-glass rounded-xl p-6 mt-6">
           <h2 className="text-xl font-semibold text-white mb-3">Good to know</h2>

@@ -9,7 +9,8 @@ export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: 'Contact Us',
-  description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
+  description:
+    'Contact Engganyo by email or on Telegram. Ask about your account, report a problem or send feedback. We usually reply within 24 to 48 hours.',
   alternates: { canonical: 'https://engganyo.com/contact' },
   robots: { index: true, follow: true },
   openGraph: {

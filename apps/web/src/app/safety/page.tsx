@@ -128,6 +128,25 @@ export default function SafetyPage() {
               explains the task loop.
             </p>
           </section>
+
+          <section className="card-glass rounded-xl p-6 mt-6">
+            <h2 className="text-xl font-semibold text-white mb-3">If something goes wrong</h2>
+            <p className="text-zinc-300 leading-relaxed">
+              If a platform warns or restricts an account, Engganyo cannot reverse that, because the
+              platform makes that decision alone. If a task was approved or rejected by mistake,
+              write to us with your username and the task, by{' '}
+              <Link href="/contact" className="text-brand-400 hover:underline">email</Link> or on{' '}
+              <a
+                href="https://t.me/Engganyo"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand-400 hover:underline"
+              >
+                Telegram
+              </a>
+              . Never send your password to anyone, including us.
+            </p>
+          </section>
         </div>
       </div>
 

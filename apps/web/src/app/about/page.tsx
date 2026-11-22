@@ -208,6 +208,29 @@ export default function AboutPage() {
             </p>
           </section>
 
+          <section className="card-glass rounded-xl p-6">
+            <h2 className="text-xl font-semibold text-white mb-3">Learn more</h2>
+            <p className="text-zinc-300 leading-relaxed">
+              Read{' '}
+              <Link href="/howitworks" className="text-brand-400 hover:underline">
+                how Engganyo works
+              </Link>{' '}
+              step by step, see{' '}
+              <Link href="/pricing" className="text-brand-400 hover:underline">
+                pricing and credit packages
+              </Link>
+              , check the{' '}
+              <Link href="/safety" className="text-brand-400 hover:underline">
+                safety rules
+              </Link>
+              , or browse the{' '}
+              <Link href="/faq" className="text-brand-400 hover:underline">
+                FAQ
+              </Link>
+              .
+            </p>
+          </section>
+
           <section className="text-center">
             <Link
               href="/register"
