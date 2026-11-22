@@ -481,6 +481,8 @@ test.describe('mobile launcher drag @390px', () => {
       bubbles: true,
     });
     await expect(page.locator(DIALOG)).toHaveCount(0);
+    // transition-all animates left/top — let it settle before measuring.
+    await page.waitForTimeout(400);
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBeGreaterThan(40);
     await insideViewport(page, LAUNCHER);
@@ -512,6 +514,7 @@ test.describe('mobile launcher drag @390px', () => {
         })),
       ),
     );
+    await page.waitForTimeout(400); // mPos applies post-mount; transition-all animates it
     const reloaded = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(reloaded.x - after.x)).toBeLessThanOrEqual(4);
     expect(Math.abs(reloaded.y - after.y)).toBeLessThanOrEqual(4);
@@ -552,6 +555,7 @@ test.describe('mobile launcher drag @390px', () => {
     });
     await launcher.dispatchEvent('click', { bubbles: true });
     await expect(page.locator(DIALOG)).toHaveCount(0);
+    await page.waitForTimeout(400); // transition-all animates left/top
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(after.y - before.y)).toBeGreaterThan(30);
   });
@@ -569,6 +573,7 @@ test.describe('mobile launcher drag @390px', () => {
       clientY: 999,
       bubbles: true,
     });
+    await page.waitForTimeout(400); // transition-all animates left/top
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
     expect(after.x + after.width).toBeLessThanOrEqual(390);
@@ -608,10 +613,12 @@ test.describe('mobile launcher drag @390px', () => {
     );
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(400); // transition-all animates left/top
     await expect(page.locator(LAUNCHER)).toBeVisible();
     await insideViewport(page, LAUNCHER);
     // Rotate: 844x390 landscape — the saved 600px-tall spot is out of range.
     await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForTimeout(400); // re-clamp + transition settle
     await expect(page.locator(LAUNCHER)).toBeVisible();
     await insideViewport(page, LAUNCHER);
   });
@@ -627,6 +634,7 @@ test.describe('mobile launcher drag @390px', () => {
     await expect(page.locator(LAUNCHER)).toBeVisible();
     // Keyboard opens: visible region drops to 420px tall.
     await setVisibleViewport(page, 420, 0);
+    await page.waitForTimeout(400); // re-clamp + transition-all settle
     await expect(page.locator(LAUNCHER)).toBeVisible();
     console.log(
       'KB_STATE',
