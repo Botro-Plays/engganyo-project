@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import { Mail, Menu, X } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { TelegramIcon } from '@/components/telegram-icon';
 
@@ -24,7 +24,7 @@ export function PublicHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="relative z-10 px-4 sm:px-6 max-w-7xl mx-auto">
+    <nav aria-label="Primary navigation" className="relative z-10 px-4 sm:px-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between py-4 sm:py-5">
         <Link
           href="/"
@@ -106,42 +106,59 @@ export function PublicHeader() {
 }
 
 /** Shared footer: identical links on every public page so crawlers and
- *  visitors see one consistent public navigation. */
+ *  visitors see one consistent public navigation. Three grid groups
+ *  (brand, community, nav) stack cleanly at narrow widths instead of
+ *  squeezing into one desktop row. */
+const FOOTER_LINK_CLS =
+  'inline-flex items-center min-h-11 px-3 text-sm leading-5 text-sc-dim hover:text-sc-text transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500';
+
 export function PublicFooter() {
   return (
     <footer className="relative z-10 border-t border-surface-border py-10 sm:py-12 px-4 sm:px-6">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <BrandLogo wordmark={false} className="w-6 h-6" size={24} />
-          <span className="font-semibold text-sm text-sc-text">Engganyo</span>
+      <div className="max-w-7xl mx-auto grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-10 items-start">
+        <div className="flex flex-col items-center gap-2 sm:items-start">
+          <div className="flex items-center gap-2 min-h-11">
+            <BrandLogo wordmark={false} className="w-6 h-6" size={24} />
+            <span className="font-semibold text-sm leading-5 text-sc-text">Engganyo</span>
+          </div>
+          <p className="text-sc-dim text-sm leading-5 text-center sm:text-left">
+            © {new Date().getFullYear()} Engganyo. All rights reserved.
+          </p>
         </div>
-        <p className="text-sc-dim text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>
-        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 sm:gap-6 text-sc-dim text-sm">
-          <a
-            href="https://t.me/Engganyo"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 py-2 hover:text-accent-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-300 rounded"
-          >
-            <TelegramIcon className="h-4 w-4" />
-            Telegram
-          </a>
-          <a
-            href="mailto:contact@engganyo.com"
-            className="hover:text-sc-text transition-colors"
-          >
-            contact@engganyo.com
-          </a>
-          <Link href="/howitworks" className="hover:text-sc-text transition-colors">How It Works</Link>
-          <Link href="/pricing" className="hover:text-sc-text transition-colors">Pricing</Link>
-          <Link href="/safety" className="hover:text-sc-text transition-colors">Safety</Link>
-          <Link href="/blog" className="hover:text-sc-text transition-colors">Blog</Link>
-          <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
-          <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>
-          <Link href="/contact" className="hover:text-sc-text transition-colors">Contact</Link>
-          <Link href="/privacy" className="hover:text-sc-text transition-colors">Privacy Policy</Link>
-          <Link href="/terms" className="hover:text-sc-text transition-colors">Terms of Service</Link>
-        </div>
+        <nav aria-label="Community and contact" className="sm:justify-self-center lg:justify-self-start">
+          <ul className="flex flex-wrap justify-center sm:justify-start items-center gap-x-1 gap-y-1">
+            <li>
+              <a
+                href="https://t.me/Engganyo"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${FOOTER_LINK_CLS} gap-1.5 hover:text-accent-300 focus-visible:ring-accent-300`}
+              >
+                <TelegramIcon className="h-4 w-4 shrink-0" />
+                Telegram
+              </a>
+            </li>
+            <li>
+              <a href="mailto:contact@engganyo.com" className={`${FOOTER_LINK_CLS} gap-1.5`}>
+                <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="break-all">contact@engganyo.com</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+        <nav aria-label="Footer navigation" className="sm:col-span-2 lg:col-span-1 sm:justify-self-center lg:justify-self-end">
+          <ul className="flex flex-wrap justify-center lg:justify-end items-center gap-x-1 gap-y-1">
+            <li><Link href="/howitworks" className={FOOTER_LINK_CLS}>How It Works</Link></li>
+            <li><Link href="/pricing" className={FOOTER_LINK_CLS}>Pricing</Link></li>
+            <li><Link href="/safety" className={FOOTER_LINK_CLS}>Safety</Link></li>
+            <li><Link href="/blog" className={FOOTER_LINK_CLS}>Blog</Link></li>
+            <li><Link href="/about" className={FOOTER_LINK_CLS}>About</Link></li>
+            <li><Link href="/faq" className={FOOTER_LINK_CLS}>FAQ</Link></li>
+            <li><Link href="/contact" className={FOOTER_LINK_CLS}>Contact</Link></li>
+            <li><Link href="/privacy" className={FOOTER_LINK_CLS}>Privacy Policy</Link></li>
+            <li><Link href="/terms" className={FOOTER_LINK_CLS}>Terms of Service</Link></li>
+          </ul>
+        </nav>
       </div>
     </footer>
   );

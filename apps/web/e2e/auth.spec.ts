@@ -7,7 +7,9 @@ test.describe('Authentication', () => {
     await page.goto('/');
     await expect(page).toHaveTitle(/Engganyo/i);
     // Two "Sign in" links exist (header nav + hero/footer) - target the header one
-    await expect(page.getByRole('navigation').getByRole('link', { name: /sign in/i })).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: /sign in/i }),
+    ).toBeVisible();
     await expect(page.getByRole('link', { name: /get started free|start growing for free|create free account|start engaging/i }).first()).toBeVisible();
   });
 

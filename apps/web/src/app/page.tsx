@@ -16,6 +16,9 @@ import { PlatformIcon } from '@/components/platform-icon';
 import { BrandLogo } from '@/components/brand-logo';
 import { TelegramIcon } from '@/components/telegram-icon';
 import { PublicFooter } from '@/components/public-chrome';
+import { BlogRail } from '@/components/blog-rail';
+import { BlogPostCard } from '@/components/blog-post-card';
+import { POSTS } from './blog/posts';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -459,6 +462,27 @@ export default async function LandingPage() {
               </Link>
             </p>
           </div>
+        </section>
+
+        {/* ── Blog previews ─────────────────────────────────────────── */}
+        <section aria-labelledby="landing-blog-heading" className="relative z-10 pb-16 sm:pb-20 px-4 sm:px-6 max-w-5xl mx-auto">
+          <div className="flex items-end justify-between gap-4 mb-6">
+            <h2 id="landing-blog-heading" className="text-2xl sm:text-3xl font-bold">
+              From the blog
+            </h2>
+            <Link
+              href="/blog"
+              className="inline-flex items-center gap-1.5 shrink-0 text-sm font-medium text-brand-400 hover:text-brand-300 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 px-2 py-2 -mr-2"
+            >
+              View all articles
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <BlogRail count={POSTS.length}>
+            {POSTS.map((post) => (
+              <BlogPostCard key={post.slug} post={post} />
+            ))}
+          </BlogRail>
         </section>
 
         {/* ── Footer ───────────────────────────────────────────── */}

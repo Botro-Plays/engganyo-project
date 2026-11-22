@@ -168,9 +168,14 @@ export function ChatWidget() {
     const top = r.top - posRef.current.y;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    // Footer stays clickable: a visible page footer bounds the widget's
+    // bottom edge the same way the mobile nav does.
+    const footer = document.querySelector('footer');
+    const footerTop = footer ? footer.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
+    const bottomBound = Math.min(vh, footerTop) - EDGE_MARGIN;
     return {
       x: clamp(candidate.x, EDGE_MARGIN - left, vw - EDGE_MARGIN - r.width - left),
-      y: clamp(candidate.y, EDGE_MARGIN - top, vh - EDGE_MARGIN - r.height - top),
+      y: clamp(candidate.y, EDGE_MARGIN - top, bottomBound - r.height - top),
     };
   }, []);
 
@@ -188,7 +193,15 @@ export function ChatWidget() {
     const safe = measureSafeAreaInsetBottom();
     const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
     const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
-    const bottomEdge = Math.min(navTop - SHEET_GAP, vvBottom - safe - EDGE_MARGIN);
+    // A visible footer bounds the launcher the same way the nav does so
+    // footer links are never covered - including mid-drag.
+    const footer = document.querySelector('footer');
+    const footerTop = footer ? footer.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
+    const bottomEdge = Math.min(
+      navTop - SHEET_GAP,
+      footerTop - SHEET_GAP,
+      vvBottom - safe - EDGE_MARGIN,
+    );
     return {
       x: clamp(candidate.x, EDGE_MARGIN, vvW - EDGE_MARGIN - r.width),
       y: clamp(candidate.y, vvTop + EDGE_MARGIN, bottomEdge - r.height),
@@ -213,14 +226,30 @@ export function ChatWidget() {
   const [vvTick, setVvTick] = useState(0);
   useEffect(() => {
     const el = window.visualViewport;
-    if (!el) return;
     const update = () => setVvTick((t) => t + 1);
     update();
-    el.addEventListener('resize', update);
-    el.addEventListener('scroll', update);
+    if (el) {
+      el.addEventListener('resize', update);
+      el.addEventListener('scroll', update);
+    }
+    // Page scroll also moves occupied regions (the footer) in and out of
+    // the viewport - re-run clamping so the launcher keeps clear.
+    let raf = 0;
+    const onPageScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
+      });
+    };
+    window.addEventListener('scroll', onPageScroll, { passive: true });
     return () => {
-      el.removeEventListener('resize', update);
-      el.removeEventListener('scroll', update);
+      if (el) {
+        el.removeEventListener('resize', update);
+        el.removeEventListener('scroll', update);
+      }
+      window.removeEventListener('scroll', onPageScroll);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 
@@ -308,6 +337,35 @@ export function ChatWidget() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDesktop, vvTick, clampMobileSpot]);
+
+  // Desktop: re-clamp a dragged offset when the viewport/occupied
+  // regions move (scroll reveals the footer, resizes, rotation).
+  useEffect(() => {
+    if (!isDesktop) return;
+    setPos((current) => {
+      if (!current.x && !current.y) return current;
+      const next = clampToViewport(current);
+      return next.x === current.x && next.y === current.y ? current : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDesktop, vvTick, clampToViewport]);
+
+  // How far the visible footer intrudes into the launcher's bottom dock
+  // region (0 when off-screen or no footer). Applied as extra bottom
+  // offset for the unmoved default position - dragged positions are
+  // kept clear through the clamp functions instead.
+  const [footerLift, setFooterLift] = useState(0);
+  useEffect(() => {
+    const footer = document.querySelector('footer');
+    if (!footer) {
+      setFooterLift(0);
+      return;
+    }
+    const vvEl = window.visualViewport;
+    const vvBottom = (vvEl?.offsetTop ?? 0) + (vvEl?.height ?? window.innerHeight);
+    const top = footer.getBoundingClientRect().top;
+    setFooterLift(Math.max(0, vvBottom - top + SHEET_GAP));
+  }, [vvTick, pathname]);
 
   const scrollToBottom = () => {
     // Scroll the message container directly - scrollIntoView could also
@@ -543,7 +601,17 @@ export function ChatWidget() {
           style={
             mPos && !isDesktop
               ? { left: mPos.x, top: mPos.y, bottom: 'auto', right: 'auto' }
-              : { ...dragStyle, transition: isDragging ? 'none' : undefined }
+              : {
+                  ...dragStyle,
+                  transition: isDragging ? 'none' : undefined,
+                  // Lift the docked launcher above a visible footer so it
+                  // never covers footer links. Only for the unmoved
+                  // position - dragged offsets keep clear via the clamps.
+                  bottom:
+                    footerLift > 0 && !pos.x && !pos.y
+                      ? `calc(${isDesktop ? '1.5rem' : '5rem'} + env(safe-area-inset-bottom) + ${footerLift}px)`
+                      : undefined,
+                }
           }
           // touch-none lets pointermove drive the drag without the page
           // scrolling the gesture away. The transition list excludes

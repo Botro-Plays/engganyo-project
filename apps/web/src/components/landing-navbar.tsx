@@ -9,7 +9,7 @@ export function LandingNavbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="relative z-10 px-4 sm:px-6 max-w-7xl mx-auto">
+    <nav aria-label="Primary navigation" className="relative z-10 px-4 sm:px-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between py-4 sm:py-5">
         {/* Logo */}
         <Link
