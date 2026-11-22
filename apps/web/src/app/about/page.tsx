@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
+import { EmailOff } from '@/components/email-off';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -191,9 +192,11 @@ export default function AboutPage() {
             <p className="text-zinc-300 leading-relaxed">
               Write to{' '}
               <address className="not-italic inline">
-                <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
-                contact@engganyo.com
-              </a>
+                <EmailOff>
+                  <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                  contact@engganyo.com
+                  </a>
+                </EmailOff>
               </address>{' '}
               or join our community on{' '}
               <a

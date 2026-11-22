@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
+import { EmailOff } from '@/components/email-off';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -62,9 +63,11 @@ export default function ContactPage() {
               <div>
                 <h3 className="text-sm font-medium text-zinc-400 mb-1">Email</h3>
                 <address className="not-italic">
-                  <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
-                    contact@engganyo.com
-                  </a>
+                  <EmailOff>
+                    <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                      contact@engganyo.com
+                    </a>
+                  </EmailOff>
                 </address>
               </div>
 
@@ -92,12 +95,14 @@ export default function ContactPage() {
             <p className="text-zinc-300 mb-4">
               Found a bug or have a feature request? Let us know!
             </p>
-            <a
-              href="mailto:contact@engganyo.com?subject=Bug Report or Feature Request"
-              className="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
-            >
-              Report Issue
-            </a>
+            <EmailOff>
+              <a
+                href="mailto:contact@engganyo.com?subject=Bug Report or Feature Request"
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
+              >
+                Report Issue
+              </a>
+            </EmailOff>
           </section>
 
           <section className="card-glass rounded-xl p-6 text-center">

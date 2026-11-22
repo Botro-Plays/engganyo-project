@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { POSTS } from '../posts';
+import { EmailOff } from '@/components/email-off';
 
 export const revalidate = 3600;
 
@@ -123,9 +124,11 @@ export default function FirstWeekPost() {
           <p>
             Never share your social media password with anyone. Engganyo never asks for it. If you
             have a question, write to{' '}
-            <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
-              contact@engganyo.com
-            </a>{' '}
+            <EmailOff>
+              <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                contact@engganyo.com
+              </a>
+            </EmailOff>{' '}
             or join our community on Telegram at{' '}
             <a
               href="https://t.me/Engganyo"
