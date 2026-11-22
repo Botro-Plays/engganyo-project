@@ -106,3 +106,45 @@ Open owner items unchanged: Cloudflare dashboard actions, CSP enforcement review
 Deployed re-measurement (post-landing pipeline, run `45015706391`, deployed SHA `2f8c034`, Lighthouse 12.8.2, median of 3, https://engganyo.com, no fixture): `/` 92 / a11y 92 / BP 79 / CLS 0.000 / LCP 3226 / TBT 137 / 324 KiB; `/about` 94 / 96 / 75 / 0 / 2908 / 122 / 326; `/faq` 94 / 100 / 79 / 0 / 2950 / 67 / 328; `/howitworks` 93 / 96 / 79 / 0 / 3076 / 105 / 325. **No CLS/TBT/LCP regression from the rail.** Two rail a11y regressions caught by this run (`/` 100->92): `role="group"` on the `ul` orphaned its `li` children, and `zinc-500` dates failed contrast - fixed in PR #148 (implicit list role + aria-label, zinc-400, spec selectors updated). Re-verified on the next prod run (`45020659545`, SHA `f549e7d`, median of 3): `/` 92 / a11y **100** / CLS 0.000 / LCP 3327 / TBT 75; `/about` 94 / 96 / 0 / 3006 / 17; `/faq` 95 / 100 / 0 / 2846 / 58; `/howitworks` 95 / 96 / 0 / 2825 / 43. The earlier live check confirmed CF Email Obfuscation rewriting `mailto:` into `cfemail` spans; `<!--email_off-->` markers now wrap the footer link (PR #148) and every in-body contact link on /about, /contact, /safety, and the blog post (PR #150). Live-verified at `7acfd1d`: zero `cfemail`/`email-protection` markers and the plain mailto visible on all eight public pages - matrix item 5 is resolved code-side; the owner dashboard disable is now optional belt-and-braces.
 
 Real-device/cross-browser and Cloudflare-token items remain owner-pending.
+
+## Handoff v2 reconciliation (1-READ-ME-FIRST-FINAL-COMPLETE-FIX + 2-final-check.sh)
+
+Live baseline captured 2026-11-23 before implementation: PerplexityBot UA probe -> 403 (CF edge block, owner item), ClaudeBot -> 403 (intended), OAI/Google/Bing -> 200; homepage served og:title/description only (no og:image, no twitter card override at page level); `/privacy` served 1 email-protection marker; `/pricing` ~293 words; `/blog` ~97 words; robots.txt already one origin wildcard group + separate Cloudflare managed block; `polyfills-*.js` served with `nomodule` (modern browsers neither fetch nor execute it).
+
+Check-script corrections applied rather than code changes:
+- The script asserts an alternate homepage `<title>` ("Engganyo: Creator Engagement Exchange - Earn Credits"). Owner instruction pins `Engganyo | Small Taps. Big Crowds.` - the script check is wrong, code keeps the approved title.
+- The script's PerplexityBot remediation proposes a UA-based Skip/Allow bypass. Rejected per owner rule; the real blocking mechanism must be diagnosed in CF (awaiting token/dash access).
+- Polyfill task is a no-op in practice (nomodule). Deferring removal rather than chasing a non-issue.
+- The two supplied posts enter as DRAFTS for owner factual review (not auto-published); wording corrected where it conflicted with verified behavior ("credits are the money inside Engganyo" -> credits are the balance inside Engganyo; "cannot be withdrawn as money" -> not cash, cannot be taken out or converted back). Feature claims verified: 200 welcome credits, daily streak, free daily spin (SpinWheelModal), USD packages, store, 1v1 challenges, proof review, linked-account auto-verify all exist.
+
+| # | Handoff task | Status | Evidence / notes |
+|---|--------------|--------|------------------|
+| 1 | Homepage og:image + summary_large_image | Implemented - PR #152 | page.tsx `openGraph.images` + `twitter.card`/`images` added explicitly (page-level openGraph replaces layout's block, which is why tags were absent); new supplied cover art deployed as `/brand/social-1200x630.png` (1200x630 PNG verified) |
+| 2 | Homepage title | Corrected check | stays `Engganyo | Small Taps. Big Crowds.` per owner rule |
+| 3 | Privacy email | Implemented - PR #152 | in-body `<address>` now normal mailto wrapped in `<!--email_off-->` markers (same mechanism that measured 0 cfemail on other pages); CF dashboard disable remains optional |
+| 4 | PerplexityBot | Awaiting owner | live-probed 403 at CF edge; actual rule must be identified first - no UA bypass |
+| 5 | /pricing >=300 words | Implemented - PR #152 | supplied paragraph added verbatim under "Where credits go" |
+| 6 | /blog intro >=150 words | Implemented - PR #152 | supplied copy added with EmailOff mailto + Telegram link |
+| 7 | Two more posts | Implemented as drafts - PR #151 | seeded as DRAFT (`howcreditsworkonengganyo`, `stayingsafewithtaskexchanges`); publish via admin triggers landing/index/RSS/sitemap/revalidate |
+| 8 | Real screenshots | Intentionally deferred | requires signed-in product screenshots on real devices - owner-assisted; old SEO-folder screenshots forbidden by the handoff itself |
+| 9 | CSP enforcement | Awaiting owner | report-only remains; CF-injected beacon.min.js is the first documented violation source - decision is owner/CF-side |
+| 10 | Polyfill defer | Deferred (check inaccurate) | `noModule` attribute already prevents modern-browser fetch+exec; measured payload unaffected |
+| 11 | Font TTF cleanup | Implemented - PR #152 | VT323 + DotGothic16 TTFs removed; WOFF2 subsets + OFL licenses retained |
+| 12 | robots.txt grouping | Already satisfied | one origin `User-agent: *` group + Content-Signal block; CF managed block counted separately per owner rules |
+| 13 | Final Lighthouse | Implemented via perf jobs | lab medians + post-deploy prod runs already in place; rerun after this batch |
+
+### Blog publishing system (new workstream)
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| Prisma BlogPost + migration | Implemented - PR #151 | status enum DRAFT/PUBLISHED/UNPUBLISHED/ARCHIVED/DELETED, unique slug, version column, timestamps; migration `20261123000000_blog_posts` |
+| Public published-only reads | Implemented - PR #151 | `/api/blog/posts` + `/api/blog/posts/:slug`; projection excludes version/updatedBy/deletedAt/body source |
+| Admin API + guards | Implemented - PR #151 | JWT + Roles(ADMIN,SUPER_ADMIN) + 2FA + PIN; MODERATOR excluded per request |
+| Lifecycle + conflict protection | Implemented - PR #151 | expectedVersion optimistic locking -> 409; idempotent publish; restore->UNPUBLISHED; soft delete; AuditLog `blog.post.*` |
+| Markdown sanitization | Implemented - PR #151 | marked@15 + sanitize-html@2.17 (last CJS-compatible); tag/scheme allowlists; javascript:/data: neutralized; email_off markers on mailto links; 9 unit specs |
+| Integration tests | Implemented - PR #151 | 11 real-PostgreSQL specs (uniqueness, conflicts, publish idempotency, draft privacy, transitions, delete, stored XSS, audit ordering) |
+| Public surfaces | Implemented - PR #152 | index/[slug]/landing rail/RSS/sitemap all read one published projection; drafts cannot leak |
+| Cache invalidation | Implemented - PRs #151+#152 | internal webhook (INTERNAL_REVALIDATE_SECRET + WEB_INTERNAL_URL); bounded paths; failure surfaces in mutation responses; 60s ISR floor |
+| Admin UI | Implemented - PR #153 | list/search/filter/paginate, full editor, authed preview via server sanitizer, dirty guard, conflict display, confirm delete |
+| Idempotent import | Implemented - PR #151 | `yourfirstweekonengganyo` PUBLISHED 2026-11-22; two supplied posts DRAFT; re-seed never overwrites edits |
+| VPS env | Awaiting owner | add `INTERNAL_REVALIDATE_SECRET` to the VPS `.env` (both api+web read it via env_file) |
