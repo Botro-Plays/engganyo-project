@@ -148,3 +148,15 @@ Check-script corrections applied rather than code changes:
 | Admin UI | Implemented - PR #153 | list/search/filter/paginate, full editor, authed preview via server sanitizer, dirty guard, conflict display, confirm delete |
 | Idempotent import | Implemented - PR #151 | `yourfirstweekonengganyo` PUBLISHED 2026-11-22; two supplied posts DRAFT; re-seed never overwrites edits |
 | VPS env | Awaiting owner | add `INTERNAL_REVALIDATE_SECRET` to the VPS `.env` (both api+web read it via env_file) |
+
+### Blog publishing system - CI + live verification (2026-11-23)
+
+E2E hardening landed through four review cycles: API-before-web-build ordering for prerendered pages (commit `dff870e`), real admin 2FA login for e2e via a dedicated TOTP-enabled `e2eblogadmin` user created by `scripts/e2e-admin-2fa.mjs` (no guard bypass; the seeded admin stays 2FA-less to keep the ADMIN_2FA_REQUIRED gate coverage), an `engganyo-auth` persisted-store injection fix for the admin UI spec, a launcher footerLift cap (unbounded lift pushed the docked launcher off-screen, -36px, caught by the rotation spec), and dynamic RSS/sitemap rendering so the tagged `blog` data cache is the only invalidation layer (route-handler output caching was not reliably busted by revalidatePath).
+
+Final green runs: `feat/blog-public` `45042183093`, `feat/blog-admin` `45044660585`, seed-entrypoint fix `45047529551`. Merges: #151 `d033c38`, #152 `58ada5e`, #153 `258927b`, #154 `9e174d4`.
+
+Deployment catch fixed by PR #154: the API entrypoint ran `prisma migrate deploy` but never the seed, so the first production deploy served an empty blog (article 404, empty RSS verified live). The entrypoint now runs `prisma/seed-blog.ts` after migrations; `seedBlogPosts` imports only into an empty table so admin edits/deletes survive redeploys.
+
+Live-verified at deployed SHA `9e174d4` (https://engganyo.com, plain curl): `/blog/yourfirstweekonengganyo` 200 with canonical URL + BlogPosting JSON-LD + published_time; both supplied drafts 404 (draft privacy); RSS contains the post item with real pubDate; sitemap lists the post URL; landing rail renders "Read more: Your first week on Engganyo"; homepage serves `og:image` `/brand/social-1200x630.png` + `twitter:card summary_large_image`; `/privacy` 0 cfemail markers, plain mailto.
+
+Still open: VPS `.env` needs `INTERNAL_REVALIDATE_SECRET` + `WEB_INTERNAL_URL` for live publish-time revalidation (until set, publish propagation relies on the 60s ISR window and surfaces as revalidation.failed in admin mutation responses); owner-assisted admin acceptance incl. PIN/2FA in real UI; real-device/cross-browser pass; Cloudflare PerplexityBot decision; CSP enforcement review.
