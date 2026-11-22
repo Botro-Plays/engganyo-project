@@ -134,6 +134,7 @@ export function PublicFooter() {
           <Link href="/how-it-works" className="hover:text-sc-text transition-colors">How It Works</Link>
           <Link href="/pricing" className="hover:text-sc-text transition-colors">Pricing</Link>
           <Link href="/safety" className="hover:text-sc-text transition-colors">Safety</Link>
+          <Link href="/blog" className="hover:text-sc-text transition-colors">Blog</Link>
           <Link href="/about" className="hover:text-sc-text transition-colors">About</Link>
           <Link href="/faq" className="hover:text-sc-text transition-colors">FAQ</Link>
           <Link href="/contact" className="hover:text-sc-text transition-colors">Contact</Link>
