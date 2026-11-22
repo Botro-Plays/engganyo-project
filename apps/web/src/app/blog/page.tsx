@@ -43,7 +43,7 @@ const jsonLd = innerPageJsonLd({
   breadcrumb: 'Blog',
 });
 
-export const POSTS = [
+const POSTS = [
   {
     slug: 'yourfirstweekonengganyo',
     title: 'Your first week on Engganyo: a simple plan',
