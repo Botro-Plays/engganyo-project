@@ -160,7 +160,7 @@ export default async function LandingPage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left: headline + CTA */}
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 text-xs font-medium mb-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 text-xs font-medium mb-3">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
                 Community-powered · Real humans only
               </div>
@@ -174,12 +174,12 @@ export default async function LandingPage() {
                 <span className="text-gradient">engagement exchange.</span>
               </h1>
 
-              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-6 max-w-lg">
-                Engganyo is a web platform where creators complete small tasks for each other,
-                earn credits, and spend them on campaigns for their own accounts.
+              <p className="text-base sm:text-lg text-sc-muted leading-relaxed mb-5 max-w-lg">
+                Complete small tasks for other creators, earn credits, and spend them on
+                campaigns for your own accounts.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-3 mb-8">
+              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 mb-5 sm:mb-8">
                 <Link
                   href="/register"
                   className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-sc-text px-7 py-3.5 rounded-xl font-semibold transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25 text-sm sm:text-base"
