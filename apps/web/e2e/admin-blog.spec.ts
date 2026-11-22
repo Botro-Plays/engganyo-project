@@ -35,7 +35,27 @@ test.describe('admin blog management', () => {
     }
     const token = body.data?.accessToken ?? body.accessToken;
     expect(token).toBeTruthy();
-    await page.addInitScript((t) => localStorage.setItem('access_token', t), token);
+    const me = await request.get(`${API}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(me.ok()).toBeTruthy();
+    const user = (await me.json()).data;
+    // The persisted zustand store ('engganyo-auth') is what AuthGuard
+    // reads - injecting only access_token leaves isAuthenticated false
+    // and the guard bounces to /dashboard before auth/me reconciles.
+    await page.addInitScript(
+      ([t, u]) => {
+        localStorage.setItem('access_token', t);
+        localStorage.setItem(
+          'engganyo-auth',
+          JSON.stringify({
+            state: { accessToken: t, isAuthenticated: true, adminPin: null, user: u },
+            version: 0,
+          }),
+        );
+      },
+      [token, user],
+    );
   });
 
   test('list page shows posts with status badges', async ({ page }) => {
