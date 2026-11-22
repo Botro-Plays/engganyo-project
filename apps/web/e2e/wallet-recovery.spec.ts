@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// Inline session — the shared user.json is only valid against the real CI API;
+// Inline session - the shared user.json is only valid against the real CI API;
 // the mocked routes below satisfy auth/me, so a self-contained state is enough.
 const AUTH_LS = JSON.stringify({
   state: {
@@ -33,7 +33,7 @@ function apiResponse<T>(data: T) {
   return JSON.stringify({ success: true, data, timestamp: new Date().toISOString() });
 }
 
-// Wallet that returns a hash on send — the transfer "sent" but registration
+// Wallet that returns a hash on send - the transfer "sent" but registration
 // will fail server-side. Counts send attempts to prove no resend happens.
 async function injectSendWallet(page: import('@playwright/test').Page, chainIdHex: string) {
   await page.addInitScript((chain) => {
@@ -70,7 +70,7 @@ async function injectSendWallet(page: import('@playwright/test').Page, chainIdHe
         }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234', transactionHash: HASH };
-        return '0x0'; // unhandled — valid zero
+        return '0x0'; // unhandled - valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -117,7 +117,7 @@ async function mockApis(page: import('@playwright/test').Page, chainId: number, 
   await page.route('**/api/wallet/deposit/initiate', (route) => route.fulfill({
     status: 200, headers: CORS_HEADERS, contentType: 'application/json',
     body: apiResponse({ deposit: { id: 'dep-reg-1', method: `USDT_${network === 'BSC' ? 'BEP20' : 'BASE'}`, status: 'PENDING', paymentRef: null, amountFiat: 1, currency: 'USD', creditsToAward: 100, createdAt: new Date().toISOString() }, instructions: {} }) }));
-  // The hash attach is what fails in the outage — the deposit itself exists.
+  // The hash attach is what fails in the outage - the deposit itself exists.
   await page.route(/.*\/api\/wallet\/deposit\/.*\/tx-hash/, async (route) => {
     if (failInitiate.fail) {
       await route.fulfill({ status: 503, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'Service temporarily unavailable' }) });
@@ -145,7 +145,7 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
     await page.getByRole('button', { name: /verify wallet ownership/i }).click();
     await page.getByRole('button', { name: /^2\. Send / }).click();
 
-    // Recovery block: submitted notice + hash + binding + retry — no second send
+    // Recovery block: submitted notice + hash + binding + retry - no second send
     const card = page.locator('#deposit-card');
     await expect(card.getByText(/Transfer submitted on/)).toBeVisible({ timeout: 10_000 });
     await expect(card.getByText(HASH.slice(0, 20))).toBeVisible();
@@ -154,7 +154,7 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
     await expect(card.getByText(/Do not send again/i)).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
 
-    // Recovery succeeds after the transient failure — still no resend
+    // Recovery succeeds after the transient failure - still no resend
     failState.fail = false;
     await card.getByRole('button', { name: /retry registration/i }).click();
     await expect(card.getByText(/Transfer submitted on/)).toHaveCount(0, { timeout: 10_000 });
@@ -162,7 +162,7 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
   });
 }
 
-// Wallet that throws an RPC error on send — the request reached the wallet but
+// Wallet that throws an RPC error on send - the request reached the wallet but
 // no hash was returned. Outcome is uncertain: may or may not have broadcast.
 async function injectUncertainWallet(page: import('@playwright/test').Page, chainIdHex: string) {
   await page.addInitScript((chain) => {
@@ -191,7 +191,7 @@ async function injectUncertainWallet(page: import('@playwright/test').Page, chai
           (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
           throw Object.assign(new Error('Internal JSON-RPC error.'), { code: -32603, data: { message: 'transport error' } });
         }
-        return '0x0'; // unhandled — valid zero
+        return '0x0'; // unhandled - valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -200,7 +200,7 @@ async function injectUncertainWallet(page: import('@playwright/test').Page, chai
 }
 
 for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base']] as const) {
-  test(`uncertain send on ${label} is recovery-only — no resend before or after refresh`, async ({ page }) => {
+  test(`uncertain send on ${label} is recovery-only - no resend before or after refresh`, async ({ page }) => {
     const failState = { fail: false };
     await injectUncertainWallet(page, hex);
     await mockApis(page, chainId, failState);
@@ -213,14 +213,14 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
     await page.getByRole('button', { name: /^2\. Send / }).click();
 
     const card = page.locator('#deposit-card');
-    // Uncertain: recovery-only — hash input + attach, NO Resume send / Abandon / resend
+    // Uncertain: recovery-only - hash input + attach, NO Resume send / Abandon / resend
     await expect(card.getByText(/Check your wallet activity/i).first()).toBeVisible({ timeout: 10_000 });
     await expect(card.getByPlaceholder(/transaction hash/i)).toBeVisible();
     await expect(card.getByRole('button', { name: /resume send/i })).toHaveCount(0);
     await expect(card.getByRole('button', { name: /abandon deposit/i })).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
 
-    // Survives refresh — still recovery-only, still no resend
+    // Survives refresh - still recovery-only, still no resend
     await page.reload();
     await page.getByRole('button', { name: /deposit credits/i }).click();
     await page.locator('#deposit-card button').filter({ hasText: '$1' }).first().click();
@@ -239,7 +239,7 @@ for (const [chainId, hex, label] of [[56, '0x38', 'BSC'], [8453, '0x2105', 'Base
   });
 }
 
-// Wallet whose sendTransaction never resolves on the first call — simulates the
+// Wallet whose sendTransaction never resolves on the first call - simulates the
 // wallet request sitting in flight while the user clicks Send again.
 async function injectPausedWallet(page: import('@playwright/test').Page, chainIdHex: string) {
   await page.addInitScript((chain) => {
@@ -268,7 +268,7 @@ async function injectPausedWallet(page: import('@playwright/test').Page, chainId
           (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1;
           return new Promise((resolve) => { (window as unknown as { __resolveSend?: (v: string) => void }).__resolveSend = resolve; });
         }
-        return '0x0'; // unhandled — valid zero
+        return '0x0'; // unhandled - valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -276,7 +276,7 @@ async function injectPausedWallet(page: import('@playwright/test').Page, chainId
   }, chainIdHex);
 }
 
-test('in-flight wallet request blocks a second send — one sendTransaction total', async ({ page }) => {
+test('in-flight wallet request blocks a second send - one sendTransaction total', async ({ page }) => {
   const failState = { fail: false };
   await injectPausedWallet(page, '0x38');
   await mockApis(page, 56, failState);
@@ -288,7 +288,7 @@ test('in-flight wallet request blocks a second send — one sendTransaction tota
   await page.getByRole('button', { name: /verify wallet ownership/i }).click();
   await page.getByRole('button', { name: /^2\. Send / }).click();
 
-  // Wallet request is in flight — repeated interaction cannot issue another send
+  // Wallet request is in flight - repeated interaction cannot issue another send
   await page.waitForTimeout(800);
   const card = page.locator('#deposit-card');
   const sendBtn = card.getByRole('button', { name: /^2\. Send / });
@@ -299,7 +299,7 @@ test('in-flight wallet request blocks a second send — one sendTransaction tota
   expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
 });
 
-test('re-proof in retry does not send — explicit Resume send required', async ({ page }) => {
+test('re-proof in retry does not send - explicit Resume send required', async ({ page }) => {
   // Wallet rejects the FIRST send (confirmed failure → retry phase), then succeeds.
   await page.addInitScript(() => {
     const ADDR = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
@@ -332,7 +332,7 @@ test('re-proof in retry does not send — explicit Resume send required', async 
         }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234' };
-        return '0x0'; // unhandled — valid zero
+        return '0x0'; // unhandled - valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
@@ -360,13 +360,13 @@ test('re-proof in retry does not send — explicit Resume send required', async 
   await page.waitForTimeout(1200);
   expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(1);
 
-  // Only the explicit Resume send click broadcasts — second wallet call
+  // Only the explicit Resume send click broadcasts - second wallet call
   await card.getByRole('button', { name: /resume send/i }).click();
   await page.waitForTimeout(1500);
   expect(await page.evaluate(() => (window as unknown as { __sendCount: number }).__sendCount)).toBe(2);
 });
 
-test('deposit-creation failure before wallet call — retry succeeds without reload', async ({ page }) => {
+test('deposit-creation failure before wallet call - retry succeeds without reload', async ({ page }) => {
   const ADDR = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
   await page.addInitScript(() => {
     const A = '0xCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC';
@@ -393,13 +393,13 @@ test('deposit-creation failure before wallet call — retry succeeds without rel
         if (method === 'eth_sendTransaction') { (window as unknown as { __sendCount: number }).__sendCount = ((window as unknown as { __sendCount: number }).__sendCount ?? 0) + 1; return '0x' + 'cd'.repeat(32); }
         if (method === 'eth_blockNumber') return '0x1234';
         if (method === 'eth_getTransactionReceipt') return { status: '0x1', blockNumber: '0x1234' };
-        return '0x0'; // unhandled — valid zero
+        return '0x0'; // unhandled - valid zero
       },
       on: () => undefined,
       removeListener: () => undefined,
     };
   });
-  // initiate fails once (deposit creation), then succeeds — no wallet call until it does
+  // initiate fails once (deposit creation), then succeeds - no wallet call until it does
   let initiated = 0;
   await page.route('**/api/**', (r) => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS_HEADERS }) : r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
   await page.route('**/api/auth/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 }) }));
@@ -436,7 +436,7 @@ test('deposit-creation failure before wallet call — retry succeeds without rel
   expect(await page.evaluate(() => (window as unknown as { __sendCount?: number }).__sendCount ?? 0)).toBe(1);
 });
 
-// Wallet that reverts at eth_estimateGas with the screenshot's exact revert —
+// Wallet that reverts at eth_estimateGas with the screenshot's exact revert -
 // provably pre-broadcast → friendly error + retry on the same deposit.
 async function injectGasRevertWallet(page: import('@playwright/test').Page, chainIdHex: string) {
   await page.addInitScript((chain) => {
@@ -464,7 +464,7 @@ async function injectGasRevertWallet(page: import('@playwright/test').Page, chai
   }, chainIdHex);
 }
 
-test('gas-estimation revert is pre-broadcast — friendly error + retry on same deposit (BSC)', async ({ page }) => {
+test('gas-estimation revert is pre-broadcast - friendly error + retry on same deposit (BSC)', async ({ page }) => {
   const failState = { fail: false };
   await injectGasRevertWallet(page, '0x38');
   await mockApis(page, 56, failState);

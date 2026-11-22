@@ -160,7 +160,7 @@ async function mockSubmitTxHash(page: import('@playwright/test').Page) {
 
 async function waitForPackageButton(page: import('@playwright/test').Page, amountPattern: RegExp) {
   // Wait until a package button with the matching dollar amount is visible
-  // inside #deposit-card.  This is a positive existence check — far more
+  // inside #deposit-card.  This is a positive existence check - far more
   // robust than waiting for skeleton *absence* which also resolves when the
   // component has crashed or rendered an empty state.
   await expect(
@@ -197,7 +197,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await expect(paymongoMethod).toBeVisible({ timeout: 5_000 });
     await paymongoMethod.click();
 
-    // Step 3: proceed to PayMongo — Checkout Sessions hand off in the SAME tab.
+    // Step 3: proceed to PayMongo - Checkout Sessions hand off in the SAME tab.
     // Stub the provider domain so the navigation can complete inside the test.
     await page.route('**/checkout.paymongo.com/**', (route) =>
       route.fulfill({ status: 200, contentType: 'text/html', body: '<html><title>PayMongo Checkout</title></html>' }),
@@ -267,7 +267,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     await expect(paypalMethod).toBeVisible({ timeout: 5_000 });
     await paypalMethod.click();
 
-    // Step 3: proceed to PayPal — same-tab handoff like PayMongo.
+    // Step 3: proceed to PayPal - same-tab handoff like PayMongo.
     // Stub the provider domain so the navigation can complete inside the test.
     await page.route('**/www.paypal.com/**', (route) =>
       route.fulfill({ status: 200, contentType: 'text/html', body: '<html><title>PayPal Checkout</title></html>' }),
@@ -359,7 +359,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
     // PayMongo should show "Min ₱600" (disabled)
     await expect(page.getByText(/min ₱600/i)).toBeVisible({ timeout: 5_000 });
 
-    // PayPal should show "Min $10" (disabled) — all non-PHP methods show the same min label
+    // PayPal should show "Min $10" (disabled) - all non-PHP methods show the same min label
     await expect(page.getByText(/min \$10/i).first()).toBeVisible({ timeout: 5_000 });
   });
 
@@ -397,7 +397,7 @@ test.describe('Wallet Deposit Flow (mocked APIs)', () => {
       });
     });
 
-    // Mock cancel endpoint — flip the flag so subsequent history queries return empty
+    // Mock cancel endpoint - flip the flag so subsequent history queries return empty
     await page.route(/.*\/api\/wallet\/deposit\/.*\/cancel/, async (route) => {
       cancelled = true;
       await route.fulfill({

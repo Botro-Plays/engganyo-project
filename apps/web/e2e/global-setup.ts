@@ -35,7 +35,7 @@ async function globalSetup(config: FullConfig) {
   // Tour state is server-authoritative: default the seeded user to
   // automatic-tours OFF and clear any beginner row so non-tour specs
   // never see tour overlays. Tour specs re-enable via their prepare()
-  // helpers and reset again in afterAll. 404s are fine — branches
+  // helpers and reset again in afterAll. 404s are fine - branches
   // without the tours endpoints simply skip this.
   await page.evaluate(async () => {
     try {

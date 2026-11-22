@@ -1,9 +1,9 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 
 /**
- * Mutual P2P rooms — real-browser acceptance spec.
+ * Mutual P2P rooms - real-browser acceptance spec.
  *
- * Drives two ordinary seeded accounts (e2e_room_a / e2e_room_b, 500 cr each —
+ * Drives two ordinary seeded accounts (e2e_room_a / e2e_room_b, 500 cr each -
  * see apps/api/prisma/seed.ts) through the deployed UI: marketplace contract
  * (Join renders), public preview + contribution confirm, join, workspace,
  * chat, dual offers + versioned agreement, proof + peer review, completion,
@@ -39,7 +39,7 @@ const API_ORIGIN = new URL(API).origin;
 // The API's same-IP self-farm guard rejects a join when the joiner's IP
 // matches any of the creator's session IPs. Both browsers share the CI
 // runner's loopback address, so each context gets a distinct documentation-
-// range client IP — the same situation as two real users on different
+// range client IP - the same situation as two real users on different
 // networks. X-Forwarded-For is injected at the network layer because the
 // browser cannot send it (not in the API's CORS allowedHeaders).
 const USER_IPS = { a: '203.0.113.10', b: '203.0.113.11' } as const;
@@ -48,7 +48,7 @@ async function apiToken(page: Page) {
   return page.evaluate(() => localStorage.getItem('access_token'));
 }
 
-/** Cancel any leftover pre-agreement rooms so retries start clean —
+/** Cancel any leftover pre-agreement rooms so retries start clean -
  * an unclaimed OPEN room still holds the one-active-room slot. */
 async function cancelActiveRooms(page: Page, ip: string) {
   const token = await apiToken(page);
@@ -78,13 +78,13 @@ async function proposeOffer(page: Page, actionText: string, targetUrl: string) {
   const modal = page.locator('div.fixed.inset-0').last();
   await modal.getByPlaceholder(/follow my tiktok/i).fill(actionText);
   await modal.getByPlaceholder(/https/).fill(targetUrl);
-  // No per-offer deadline picker — terms inherit the shared room deadline.
+  // No per-offer deadline picker - terms inherit the shared room deadline.
   await expect(modal.getByText(/share the room deadline/i)).toBeVisible();
   await modal.getByRole('button', { name: /publish offer|save offer/i }).click();
   await expect(modal).toBeHidden({ timeout: 15_000 });
 }
 
-test.describe.serial('P2P rooms — browser acceptance', () => {
+test.describe.serial('P2P rooms - browser acceptance', () => {
   test('public browse → preview → join → offers → proof → completion → ratings', async ({ browser }) => {
     test.setTimeout(240_000);
     const a = await newUserPage(browser, USER_IPS.a);
@@ -138,14 +138,14 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       // ── Chat both directions ───────────────────────────────
       const chatInputA = a.page.getByPlaceholder(/message your partner/i);
       const chatInputB = b.page.getByPlaceholder(/message your partner/i);
-      await chatInputA.fill('hey — ready when you are');
+      await chatInputA.fill('hey - ready when you are');
       await chatInputA.press('Enter');
       await chatInputB.fill('ready! sending proof soon');
       await chatInputB.press('Enter');
-      // Socket delivery to A — REST sends must broadcast chat:message to
+      // Socket delivery to A - REST sends must broadcast chat:message to
       // channel members; a reload fallback would mask a broken push path.
       await expect(a.page.getByText('ready! sending proof soon')).toBeVisible({ timeout: 15_000 });
-      await expect(b.page.getByText('hey — ready when you are')).toBeVisible({ timeout: 15_000 });
+      await expect(b.page.getByText('hey - ready when you are')).toBeVisible({ timeout: 15_000 });
 
       // ── Dual offers → versioned agreement ──────────────────
       await proposeOffer(a.page, 'Follow @e2e_room_b on TikTok and screenshot it', 'https://www.tiktok.com/@e2e_room_b');
@@ -153,7 +153,7 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
 
       await a.page.getByRole('button', { name: /approve offers/i }).click();
       await b.page.getByRole('button', { name: /approve offers/i }).click();
-      // Second approval collects the room charge and locks AGREED — the
+      // Second approval collects the room charge and locks AGREED - the
       // post-agreement work section only renders once status leaves
       // NEGOTIATING, on both clients.
       await expect(a.page.getByText(/do the tasks, then submit proof/i)).toBeVisible({ timeout: 20_000 });
@@ -250,10 +250,10 @@ test.describe.serial('P2P rooms — browser acceptance', () => {
       await expect(b.page.getByPlaceholder(/message your partner/i)).toBeVisible({ timeout: 20_000 });
       await expect(b.page.getByText(/negotiat/i).first()).toBeVisible();
 
-      // Either participant can cancel while NEGOTIATING — success routes
+      // Either participant can cancel while NEGOTIATING - success routes
       // back to the marketplace and "My rooms" keeps the CLOSED history.
       await a.page.reload();
-      await a.page.getByRole('button', { name: /cancel room — refunds both/i }).click();
+      await a.page.getByRole('button', { name: /cancel room - refunds both/i }).click();
       await a.page.waitForURL(/\/rooms$/, { timeout: 20_000 });
       await a.page.getByRole('button', { name: /my rooms/i }).click();
       await expect(a.page.getByText('E2E private room')).toBeVisible({ timeout: 15_000 });

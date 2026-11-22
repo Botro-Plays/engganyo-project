@@ -57,7 +57,7 @@ function DeadlineClock({ seconds, deadlineUtc }: { seconds: number | null; deadl
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  OPEN: 'Waiting for a partner', NEGOTIATING: 'Negotiating', AGREED: 'Agreed — do the work',
+  OPEN: 'Waiting for a partner', NEGOTIATING: 'Negotiating', AGREED: 'Agreed - do the work',
   IN_PROGRESS: 'In progress', SUBMITTED: 'Proof submitted', DISPUTED: 'Disputed',
   COMPLETED: 'Completed', CLOSED: 'Closed', EXPIRED: 'Expired',
 };
@@ -74,7 +74,7 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
   const room = state.room;
   const postAgreement = ['AGREED', 'IN_PROGRESS', 'SUBMITTED'].includes(room.status);
   const mySubmission = offer.latestSubmission;
-  // The offer proposer reviews the performer's proof — the API rejects
+  // The offer proposer reviews the performer's proof - the API rejects
   // self-review, so the button must live on MY offer once a submission is
   // pending, not on the partner's offer carrying my own submission.
   const isPendingReview = mySubmission && ['SUBMITTED', 'DISPUTED'].includes(mySubmission.status) && offer.isMine;
@@ -123,9 +123,9 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
           {mySubmission.status === 'DISPUTED' && <AlertTriangle className="h-3.5 w-3.5" />}
           <span>
             {mySubmission.status === 'APPROVED' ? 'Proof approved'
-              : mySubmission.status === 'REJECTED' ? `Proof rejected${mySubmission.reviewNote ? `: ${mySubmission.reviewNote}` : ' — resubmit before the deadline'}`
+              : mySubmission.status === 'REJECTED' ? `Proof rejected${mySubmission.reviewNote ? `: ${mySubmission.reviewNote}` : ' - resubmit before the deadline'}`
               : mySubmission.status === 'DISPUTED' ? 'Under moderator review'
-              : 'Proof submitted — awaiting partner review'}
+              : 'Proof submitted - awaiting partner review'}
           </span>
           {mySubmission.proofUrl && (
             <a href={mySubmission.proofUrl} target="_blank" rel="noreferrer" className="ml-auto underline">view</a>
@@ -152,7 +152,7 @@ function OfferCard({ offer, state, onEdit, onSubmitProof, onReview }: {
         )}
         {proofBlockedByDeadline && (
           <p className="w-full text-xs text-amber-400">
-            The room deadline has passed — proof can no longer be submitted. The room will expire
+            The room deadline has passed - proof can no longer be submitted. The room will expire
             shortly and both contributions will be refunded automatically.
           </p>
         )}
@@ -219,7 +219,7 @@ function OfferEditor({ roomId, roomDeadline, existing, onClose }: {
             </select>
           </div>
           <p className="rounded-lg border border-sc-line bg-sc-panel/60 px-3 py-2 text-xs text-sc-muted">
-            Both tasks share the room deadline{roomDeadline ? ` — ${new Date(roomDeadline).toLocaleString()}` : ''}.
+            Both tasks share the room deadline{roomDeadline ? ` - ${new Date(roomDeadline).toLocaleString()}` : ''}.
             Proof stays open until then; if it passes, both contributions are refunded.
           </p>
           <div>
@@ -482,7 +482,7 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
       if (p?.channelId !== channelId) return;
       clearJoinTimer();
       setStatus('ready');
-      // Membership (re)established — pull anything missed while
+      // Membership (re)established - pull anything missed while
       // unsubscribed; mergeMessages dedupes the overlap with live events.
       void loadHistory().catch(() => null);
     };
@@ -528,7 +528,7 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
     const socket = socketRef.current;
     if (!socket) return;
     if (socket.connected) {
-      // Transport is fine — the join itself failed or timed out.
+      // Transport is fine - the join itself failed or timed out.
       joinRef.current?.();
     } else {
       // Resume (or restart after reconnect_failed) the transport; the
@@ -560,7 +560,7 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
         </span>
         <span className="flex items-center gap-2">
           {status !== 'ready' && (
-            <span className="text-[10px] text-sc-dim">live updates paused — sends still save</span>
+            <span className="text-[10px] text-sc-dim">live updates paused - sends still save</span>
           )}
           <span className={`text-[10px] ${meta.className}`} data-testid="chat-status">{meta.label}</span>
           {(status === 'failed' || status === 'reconnecting') && (
@@ -572,7 +572,7 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: 380 }}>
         {messages.length === 0 && (
-          <p className="py-8 text-center text-xs text-sc-dim">No messages yet — coordinate with your partner here.</p>
+          <p className="py-8 text-center text-xs text-sc-dim">No messages yet - coordinate with your partner here.</p>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.userId === user?.id ? 'justify-end' : 'justify-start'}`}>
@@ -616,13 +616,13 @@ function stageIndex(status: string): number {
     case 'IN_PROGRESS': return 2;
     case 'SUBMITTED': return 3;
     case 'COMPLETED': return 4;
-    default: return -1; // DISPUTED / CLOSED / EXPIRED — no linear progress
+    default: return -1; // DISPUTED / CLOSED / EXPIRED - no linear progress
   }
 }
 
 function nextActionHint(room: NonNullable<RoomState['room']>, state: RoomState): string {
   const status = room.status;
-  if (status === 'OPEN') return 'Share this room — waiting for a partner to join. Your contribution stays reserved until then.';
+  if (status === 'OPEN') return 'Share this room - waiting for a partner to join. Your contribution stays reserved until then.';
   if (status === 'NEGOTIATING') {
     const myOffer = state.offers.find((o) => o.isMine);
     if (!myOffer) return 'Propose the task you want your partner to do.';
@@ -630,21 +630,21 @@ function nextActionHint(room: NonNullable<RoomState['room']>, state: RoomState):
     const myApproved = room.myRole === 'CREATOR' ? !!state.approvals.creator : !!state.approvals.claimer;
     return myApproved ? 'Waiting for your partner to approve both offers.' : 'Review both offers, then approve to lock the agreement.';
   }
-  if (status === 'DISPUTED') return 'Frozen pending moderator review — the original deadline still applies.';
-  if (status === 'EXPIRED' || status === 'CLOSED') return 'This room is finished — contributions were refunded.';
-  if (status === 'COMPLETED') return state.myRating ? 'Room complete — thanks for playing.' : 'Rate your partner to finish up.';
+  if (status === 'DISPUTED') return 'Frozen pending moderator review - the original deadline still applies.';
+  if (status === 'EXPIRED' || status === 'CLOSED') return 'This room is finished - contributions were refunded.';
+  if (status === 'COMPLETED') return state.myRating ? 'Room complete - thanks for playing.' : 'Rate your partner to finish up.';
   // AGREED / IN_PROGRESS / SUBMITTED
   // I review proofs on offers I proposed; the partner performs them.
   const awaitingMyReview = state.offers.find((o) => o.isMine && o.latestSubmission && ['SUBMITTED', 'DISPUTED'].includes(o.latestSubmission.status));
-  if (awaitingMyReview) return 'Your partner submitted proof — review it to keep things moving.';
+  if (awaitingMyReview) return 'Your partner submitted proof - review it to keep things moving.';
   const myTask = state.offers.find((o) => !o.isMine); // partner's offer = my task
   if (myTask) {
     const sub = myTask.latestSubmission;
     if (!sub || sub.status === 'REJECTED') {
       return `Do your partner's task and submit proof${myTask.requiresProof ? ' (image required)' : ''} before the deadline.`;
     }
-    if (sub.status === 'SUBMITTED' || sub.status === 'DISPUTED') return 'Proof submitted — waiting for your partner to review.';
-    if (sub.status === 'APPROVED') return 'Your proof was approved — waiting on your partner\'s task.';
+    if (sub.status === 'SUBMITTED' || sub.status === 'DISPUTED') return 'Proof submitted - waiting for your partner to review.';
+    if (sub.status === 'APPROVED') return 'Your proof was approved - waiting on your partner\'s task.';
   }
   return 'Coordinate with your partner in chat while you work.';
 }
@@ -681,7 +681,7 @@ function RoomWorkspace() {
     // during a session was a measurable burst source).
     refetchOnWindowFocus: false,
     refetchInterval: (q) => {
-      // Keep polling through transient failures (429/5xx/network) — a
+      // Keep polling through transient failures (429/5xx/network) - a
       // cold-load burst must self-recover; there is no data yet, so the
       // active-status check below can't apply. Permanent denials
       // (403/404) stay manual via the Retry button.
@@ -702,7 +702,7 @@ function RoomWorkspace() {
   const negotiating = room?.status === 'NEGOTIATING';
   const terminal = room && ['COMPLETED', 'CLOSED', 'EXPIRED'].includes(room.status);
 
-  // Friend status with counterparty — React Query gives explicit
+  // Friend status with counterparty - React Query gives explicit
   // loading/error states; no polling, manual refetch only. Actions must
   // never run on an assumed status (the old catch(()=>null) silently
   // stayed 'NONE' and offered "Add friend" on any failure).
@@ -715,7 +715,7 @@ function RoomWorkspace() {
   });
   const friendInfo = friendQuery.data ?? { status: 'NONE' };
 
-  // Socket events for live updates — room:* events are emitted on the
+  // Socket events for live updates - room:* events are emitted on the
   // notifications namespace (per-user rooms), NOT the channels namespace
   // the chat socket uses. Listen on the shared notifications socket.
   const { socket: eventsSocket } = useSocketContext();
@@ -795,7 +795,7 @@ function RoomWorkspace() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <p className="text-sm text-sc-text">
-          {stateQuery.isError ? 'Couldn\'t load this room — check your connection and try again.' : 'Loading…'}
+          {stateQuery.isError ? 'Couldn\'t load this room - check your connection and try again.' : 'Loading…'}
         </p>
         {stateQuery.isError && (
           <button
@@ -823,11 +823,11 @@ function RoomWorkspace() {
       if (['COMPLETED'].includes(room.status)) return 'charged';
       return 'refunded';
     }
-    if (!room.claimerId) return '—';
+    if (!room.claimerId) return '-';
     if (room.chargeCollectedAt) return 'charged';
     if (['NEGOTIATING', 'AGREED', 'IN_PROGRESS', 'SUBMITTED', 'DISPUTED'].includes(room.status)) return 'reserved';
     if (room.status === 'COMPLETED') return 'charged';
-    return room.status === 'OPEN' ? '—' : 'refunded';
+    return room.status === 'OPEN' ? '-' : 'refunded';
   };
 
   const stage = stageIndex(room.status);
@@ -835,7 +835,7 @@ function RoomWorkspace() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      {/* Header — partner, room id, stage, deadline */}
+      {/* Header - partner, room id, stage, deadline */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link href="/rooms" className="rounded-lg p-1.5 text-sc-text hover:bg-sc-panel-2 hover:text-sc-text" aria-label="Back">
@@ -923,7 +923,7 @@ function RoomWorkspace() {
         </div>
         <div>
           <div className="text-sc-text">{room.claimer?.username ?? 'Joiner'}</div>
-          <div className="mt-0.5 font-semibold text-sc-text">{room.claimer ? formatCredits(room.contributionCredits) : '—'}</div>
+          <div className="mt-0.5 font-semibold text-sc-text">{room.claimer ? formatCredits(room.contributionCredits) : '-'}</div>
           <div className={`mt-0.5 text-[10px] uppercase ${contributionState('claimer') === 'refunded' ? 'text-sc-text' : contributionState('claimer') === 'charged' ? 'text-emerald-400' : 'text-amber-400'}`}>
             {room.claimer ? contributionState('claimer') : 'waiting'}
           </div>
@@ -944,7 +944,7 @@ function RoomWorkspace() {
                 {room.counterparty.avatarUrl && <img src={room.counterparty.avatarUrl} alt="" className="h-10 w-10 rounded-full" />}
                 <div className="min-w-0 flex-1">
                   <UserLink user={{ username: room.counterparty.username }} className="block truncate text-sm font-medium text-sc-text hover:text-brand-300" />
-                  <div className="text-[10px] text-sc-text">rep {room.counterparty.reputationScore ?? '—'}</div>
+                  <div className="text-[10px] text-sc-text">rep {room.counterparty.reputationScore ?? '-'}</div>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1026,7 +1026,7 @@ function RoomWorkspace() {
               <h2 className="text-sm font-semibold text-sc-text">Waiting for a partner</h2>
               <p className="mt-1 text-xs text-sc-text">
                 Your {formatCredits(room.contributionCredits)} contribution is reserved. Anyone can join from the marketplace
-                {room.visibility === 'PRIVATE' ? ' with the password' : ''} — the 30-minute clock starts the moment they do.
+                {room.visibility === 'PRIVATE' ? ' with the password' : ''} - the 30-minute clock starts the moment they do.
               </p>
               <div className="mt-3 flex gap-2">
                 <button
@@ -1061,7 +1061,7 @@ function RoomWorkspace() {
                 ))}
                 {state.offers.length === 0 && (
                   <p className="rounded-lg border border-dashed border-sc-line py-6 text-center text-xs text-sc-dim">
-                    No offers yet — propose what you want your partner to do.
+                    No offers yet - propose what you want your partner to do.
                   </p>
                 )}
               </div>
@@ -1089,7 +1089,7 @@ function RoomWorkspace() {
                 disabled={cancelMutation.isPending}
                 className="mt-3 w-full rounded-lg border border-sc-line px-3 py-2 text-xs text-sc-text hover:border-red-500/40 hover:text-red-300"
               >
-                Cancel room — refunds both contributions
+                Cancel room - refunds both contributions
               </button>
             </div>
           )}
@@ -1098,7 +1098,7 @@ function RoomWorkspace() {
           {postAgreement && (
             <div className="rounded-xl border border-sc-line bg-sc-panel/60 p-4">
               <h2 className="text-sm font-semibold text-sc-text">
-                {room.status === 'AGREED' ? 'Do the tasks, then submit proof' : room.status === 'IN_PROGRESS' ? 'Work in progress' : 'Proof submitted — awaiting reviews'}
+                {room.status === 'AGREED' ? 'Do the tasks, then submit proof' : room.status === 'IN_PROGRESS' ? 'Work in progress' : 'Proof submitted - awaiting reviews'}
               </h2>
               <p className="mt-1 text-xs text-sc-text">
                 Room charge {formatCredits(room.roomCharge)} collected. Finish both directions before the deadline or everything is refunded.
@@ -1121,7 +1121,7 @@ function RoomWorkspace() {
               </h2>
               <p className="mt-1 text-xs text-sc-text">
                 {room.status === 'COMPLETED'
-                  ? 'Both proofs verified — you each earned +1 P2P point. Contributions were charged as the room fee.'
+                  ? 'Both proofs verified - you each earned +1 P2P point. Contributions were charged as the room fee.'
                   : 'All reserved contributions were refunded to their original payers.'}
               </p>
               {room.status === 'COMPLETED' && !state.myRating && (
@@ -1145,7 +1145,7 @@ function RoomWorkspace() {
                 <ShieldAlert className="h-4 w-4" /> Under moderator review
               </h2>
               <p className="mt-1 text-xs text-amber-200/70">
-                Actions are frozen while a moderator reviews. A moderator&apos;s decision is recorded for the record — it does not resume the room or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
+                Actions are frozen while a moderator reviews. A moderator&apos;s decision is recorded for the record - it does not resume the room or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
               </p>
             </div>
           )}
@@ -1199,7 +1199,7 @@ function RoomWorkspace() {
           <div className="max-h-[90vh] overflow-y-auto w-full max-w-md rounded-2xl border border-sc-line bg-sc-bg p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-sc-text">Open a dispute</h2>
             <p className="mt-1 text-xs text-sc-text">
-              Freezes room actions while a moderator reviews. A moderator&apos;s decision is recorded for the record — it does not resume the room, complete it, or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
+              Freezes room actions while a moderator reviews. A moderator&apos;s decision is recorded for the record - it does not resume the room, complete it, or pick a winner. The original deadline still applies: if it passes, both contributions are refunded.
             </p>
             <textarea
               value={disputeReason}
@@ -1353,7 +1353,7 @@ function RoomPreview({ detail, password }: {
     mutationFn: () => roomsApi.join(detail.id, password || undefined),
     onSuccess: () => {
       // Refresh membership, marketplace availability, wallet, and the
-      // active-room pointer — then the gate refetches and swaps to the
+      // active-room pointer - then the gate refetches and swaps to the
       // participant workspace automatically.
       void queryClient.invalidateQueries({ queryKey: ['rooms'] });
       void queryClient.invalidateQueries({ queryKey: ['room-detail', detail.id] });
@@ -1368,7 +1368,7 @@ function RoomPreview({ detail, password }: {
       <GateError title={detail.status === 'OPEN' ? 'This listing has expired' : 'This room is no longer available'}>
         {detail.status === 'OPEN'
           ? 'The claim window closed before anyone joined. The creator\'s contribution was refunded.'
-          : 'This room was already joined or closed — only participants can view it.'}
+          : 'This room was already joined or closed - only participants can view it.'}
       </GateError>
     );
   }
@@ -1396,7 +1396,7 @@ function RoomPreview({ detail, password }: {
           </div>
         </div>
 
-        {/* Terms — what joining actually commits */}
+        {/* Terms - what joining actually commits */}
         <div className="space-y-3 p-5 text-sm">
           <div className="grid grid-cols-2 gap-3 rounded-lg bg-sc-bg/60 p-3 text-center">
             <div>
@@ -1409,10 +1409,10 @@ function RoomPreview({ detail, password }: {
             </div>
           </div>
           <ul className="space-y-1.5 text-xs leading-relaxed text-sc-muted">
-            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> Reserved on join — <span className="text-sc-text">refunded in full</span> if the room doesn&apos;t complete.</li>
-            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> If you both agree on tasks, the room collects <span className="text-sc-text">{formatCredits(detail.roomCharge)}</span> once — no extra debit.</li>
-            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> A <span className="text-sc-text">30-minute clock</span> starts the moment you join — shared by negotiation, work, and proof.</li>
-            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> Finish both directions and you each earn <span className="text-sc-text">+1 P2P point</span> — never wallet credits.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> Reserved on join - <span className="text-sc-text">refunded in full</span> if the room doesn&apos;t complete.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> If you both agree on tasks, the room collects <span className="text-sc-text">{formatCredits(detail.roomCharge)}</span> once - no extra debit.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> A <span className="text-sc-text">30-minute clock</span> starts the moment you join - shared by negotiation, work, and proof.</li>
+            <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" /> Finish both directions and you each earn <span className="text-sc-text">+1 P2P point</span> - never wallet credits.</li>
           </ul>
 
           {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
@@ -1422,7 +1422,7 @@ function RoomPreview({ detail, password }: {
               onClick={() => setConfirming(true)}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-sc-text transition-colors hover:bg-brand-500"
             >
-              Review &amp; join — reserve {formatCredits(detail.contributionCredits)}
+              Review &amp; join - reserve {formatCredits(detail.contributionCredits)}
             </button>
           ) : (
             <div className="rounded-lg border border-brand-500/40 bg-brand-500/5 p-4">
@@ -1453,7 +1453,7 @@ function RoomPreview({ detail, password }: {
         </div>
       </div>
       <p className="mt-3 text-center text-[11px] text-sc-dim">
-        Room #{detail.id.slice(-8)} · only join rooms you trust — chat and proof stay private to both players.
+        Room #{detail.id.slice(-8)} · only join rooms you trust - chat and proof stay private to both players.
       </p>
     </GateShell>
   );
@@ -1523,7 +1523,7 @@ export default function RoomPage() {
     queryFn: () => roomsApi.get(id),
     retry: (count, err) => {
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      // 404 means "probe the preview endpoint" — every other 4xx (incl. 429)
+      // 404 means "probe the preview endpoint" - every other 4xx (incl. 429)
       // is definitive; only network/5xx get the single shared retry.
       return status !== 404 && shouldRetryQuery(count, err);
     },
@@ -1562,18 +1562,18 @@ export default function RoomPage() {
       <GateError title={preview.status === 'OPEN' ? 'This listing has expired' : 'This room is no longer available'}>
         {preview.status === 'OPEN'
           ? 'The claim window closed before anyone joined.'
-          : 'This room was already joined or closed — only participants can view it.'}
+          : 'This room was already joined or closed - only participants can view it.'}
       </GateError>
     );
   }
 
-  // Network / server / unexpected failure — never pretend the room is empty.
+  // Network / server / unexpected failure - never pretend the room is empty.
   return (
     <GateError
       title="Couldn't load this room"
       onRetry={() => { void detailQuery.refetch(); void previewQuery.refetch(); void queryClient.invalidateQueries({ queryKey: ['room-detail', id] }); }}
     >
-      The request failed — check your connection and try again.
+      The request failed - check your connection and try again.
     </GateError>
   );
 }

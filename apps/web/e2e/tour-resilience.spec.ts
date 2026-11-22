@@ -2,12 +2,12 @@ import { test, expect, type Page } from '@playwright/test';
 import { restoreTourDefaults } from './tour-server-reset';
 
 /**
- * Optional-tour failure isolation — regression coverage for the
+ * Optional-tour failure isolation - regression coverage for the
  * distinction between background tour/prefs calls and real session
  * expiry:
  *
  * - A 401 on gamification/tours/* (with refresh also failing) must NOT
- *   clear auth or redirect — the user stays on the page.
+ *   clear auth or redirect - the user stays on the page.
  * - A failed tours/state lookup must show NO automatic onboarding and
  *   must not even fetch pending tours.
  * - automatic tours disabled → no auto onboarding, but manual replay
@@ -15,7 +15,7 @@ import { restoreTourDefaults } from './tour-server-reset';
  * - Genuine session expiry (auth/me + refresh both 401) still follows
  *   the normal logout → /login path.
  *
- * Tests 1–3 use the REAL seeded user and real API — only the specific
+ * Tests 1–3 use the REAL seeded user and real API - only the specific
  * tour endpoints under test are intercepted, so the dashboard renders
  * exactly as in production. Mocking the whole API surface proved too
  * fragile (empty payloads crash data-hungry components).
@@ -51,7 +51,7 @@ function jwtExp(token: string): number {
 }
 
 /** The seeded access token lives 15m; the suite can outlive it. The app
- *  refreshes transparently on the first 401 — reload until the stored
+ *  refreshes transparently on the first 401 - reload until the stored
  *  token has >2min left so test-time 401 mocks cannot be triggered by
  *  ordinary app calls. */
 async function ensureFreshToken(page: Page) {
@@ -93,7 +93,7 @@ test.describe('optional tour failure isolation', () => {
     await page.route('**/api/auth/refresh', (r) => r.fulfill(fulfill(401, { message: 'expired' })));
 
     await page.reload();
-    // Resumed IN_PROGRESS tour appears — proves hydration + resume worked.
+    // Resumed IN_PROGRESS tour appears - proves hydration + resume worked.
     await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
 
     // Advance → progress POST 401 → refresh 401 → optionalAuth must swallow it.
@@ -114,7 +114,7 @@ test.describe('optional tour failure isolation', () => {
     });
 
     await page.reload();
-    // 5xx is retried by the client (1s/2s/4s backoff) before giving up —
+    // 5xx is retried by the client (1s/2s/4s backoff) before giving up -
     // wait past that window, then assert nothing auto-showed.
     await page.waitForTimeout(12_000);
 
@@ -134,7 +134,7 @@ test.describe('optional tour failure isolation', () => {
       r.fulfill(apiOk({ interval: 5, version: 1, autoTours: false, beginner: null, tours: [] })),
     );
     // Hermetic reset: an unmocked DELETE would hit the real server whose
-    // generation may already be > 0 — the fail-closed contract would
+    // generation may already be > 0 - the fail-closed contract would
     // then (correctly) 409 it and the replay would fail for the wrong
     // reason.
     await page.route('**/api/gamification/tours/beginner/state', (r) => {
@@ -149,7 +149,7 @@ test.describe('optional tour failure isolation', () => {
     await expect(tourDialog(page)).toHaveCount(0);
     await expect(milestoneCard(page)).toHaveCount(0);
 
-    // Manual replay is an explicit user action — must work with auto off.
+    // Manual replay is an explicit user action - must work with auto off.
     await page.goto('/settings');
     await page.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
@@ -157,7 +157,7 @@ test.describe('optional tour failure isolation', () => {
   });
 
   test('genuine session expiry still follows normal logout handling', async ({ page }) => {
-    // Everything 401s — including refresh — so the first ordinary app
+    // Everything 401s - including refresh - so the first ordinary app
     // call must clear auth and land on /login exactly as before.
     await page.route('**/api/**', (r) => {
       if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS_HEADERS });

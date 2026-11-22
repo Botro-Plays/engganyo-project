@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Mobile layout acceptance — 390px viewport checks across the main
+ * Mobile layout acceptance - 390px viewport checks across the main
  * authenticated surfaces. Asserts no horizontal overflow, visible
  * bottom navigation, and that primary content renders.
  * Runs in CI against the full stack with the seeded e2e user.
@@ -61,7 +61,7 @@ test.describe('Mobile layout @390px', () => {
   test('mobile bottom nav is visible and More drawer opens', async ({ page }) => {
     await page.goto('/dashboard');
     // Onboarding tour renders a full-screen overlay that blocks pointer
-    // events — dismiss it if the seeded user hasn't completed it.
+    // events - dismiss it if the seeded user hasn't completed it.
     const skipTour = page.locator('[data-tour-action="skip"]');
     try {
       await skipTour.waitFor({ state: 'visible', timeout: 4000 });
@@ -84,7 +84,7 @@ test.describe('Mobile layout @390px', () => {
   });
 
   test('login page fits 390px without overflow', async ({ page }) => {
-    // Auth tokens live in localStorage — clearing cookies alone keeps the
+    // Auth tokens live in localStorage - clearing cookies alone keeps the
     // session and /login redirects to /dashboard. addInitScript runs before
     // page scripts on every navigation (evaluate on about:blank throws).
     await page.context().clearCookies();

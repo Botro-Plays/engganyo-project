@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 // Marketplace purchase-recovery regression: a committed purchase whose
-// response is lost must be recoverable after reload — even when the debit
+// response is lost must be recoverable after reload - even when the debit
 // leaves zero balance and the listing is sold out. The server-side
 // purchaseKey lookup (GET marketplace/orders/lookup/:key) is what lets the
 // UI distinguish "already committed" from "unconfirmed attempt".
@@ -92,7 +92,7 @@ interface MockState {
   committed: Record<string, unknown> | null;
   postCount: number;
   lookupCount: number;
-  /** Server-side wallet balance — wallet/me + auth/me echo it, and the
+  /** Server-side wallet balance - wallet/me + auth/me echo it, and the
    *  dashboard syncs it into the auth store (canAfford source). */
   balance: number;
 }
@@ -108,7 +108,7 @@ async function mockMarketplace(
     orderFor?: (key: string) => Record<string, unknown> | null;
     /** First N lookup calls fail (status check unavailable). */
     lookupFailures?: number;
-    /** HTTP status for lookup failures — 429 exercises the no-auto-retry path. */
+    /** HTTP status for lookup failures - 429 exercises the no-auto-retry path. */
     lookupFailureStatus?: number;
     /** First N lookup calls abort at the network layer (no HTTP response). */
     lookupNetworkFailures?: number;
@@ -185,30 +185,30 @@ async function mockMarketplace(
   });
 }
 
-test.describe('purchase recovery — committed order survives lost response', () => {
+test.describe('purchase recovery - committed order survives lost response', () => {
   test.use({ storageState: authState(120) });
 
   test('zero balance + sold out: reload shows committed order, no second purchase', async ({ page }) => {
     const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 120 };
     // Buyer can afford exactly one unit; after it commits the listing is
-    // sold out — the harshest case for recovery.
+    // sold out - the harshest case for recovery.
     await mockMarketplace(page, state, {
       detailFor: () => detail(state.committed ? { ...SOLD_OUT, id: 'L1' } : {}),
     });
 
     await page.goto('/marketplace/L1');
     // Cold route compile on first hit can exceed the default 5s expect
-    // timeout — wait for the listing itself before touching controls.
+    // timeout - wait for the listing itself before touching controls.
     await expect(page.getByRole('heading', { name: 'Streak Freeze (3 days)' })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: 'Buy now' })).toBeEnabled({ timeout: 10_000 });
     await page.getByRole('button', { name: 'Buy now' }).click();
 
-    // Every POST response is "lost" — wait for the full retry loop
+    // Every POST response is "lost" - wait for the full retry loop
     // (initial + 3 backoff retries ≈ 7s). The pending intent is persisted
     // before the first request regardless of which UI state renders: the
     // lookup may already resolve the committed order (showing
     // 'Purchase completed'), or the 'Unconfirmed purchase attempt' banner
-    // may appear first — both are valid recovery states.
+    // may appear first - both are valid recovery states.
     await expect
       .poll(() => state.postCount, { timeout: 30_000 })
       .toBeGreaterThanOrEqual(4);
@@ -218,7 +218,7 @@ test.describe('purchase recovery — committed order survives lost response', ()
     );
     expect(persisted).not.toBeNull();
 
-    // The debit leaves zero balance — update persisted auth AND the
+    // The debit leaves zero balance - update persisted auth AND the
     // mocked server balance, then reload.
     state.balance = 0;
     await page.evaluate(() => {
@@ -246,7 +246,7 @@ test.describe('purchase recovery — committed order survives lost response', ()
   });
 });
 
-test.describe('purchase recovery — pre-seeded intent on sold-out listing', () => {
+test.describe('purchase recovery - pre-seeded intent on sold-out listing', () => {
   const pending: PendingIntent = {
     purchaseKey: 'e2e-pending-key-0001',
     quantity: 1,
@@ -287,7 +287,7 @@ test.describe('purchase recovery — pre-seeded intent on sold-out listing', () 
     expect(state.postCount).toBe(0);
   });
 
-  test('uncommitted attempt on sold-out listing cannot be retried — discard only', async ({ page }) => {
+  test('uncommitted attempt on sold-out listing cannot be retried - discard only', async ({ page }) => {
     const state: MockState = { committed: null, postCount: 0, lookupCount: 0, balance: 0 };
     await mockMarketplace(page, state, {
       listingId: 'L2',
@@ -308,7 +308,7 @@ test.describe('purchase recovery — pre-seeded intent on sold-out listing', () 
   });
 });
 
-test.describe('purchase recovery — lookup failure then retry', () => {
+test.describe('purchase recovery - lookup failure then retry', () => {
   const pending: PendingIntent = {
     purchaseKey: 'e2e-lookup-fail-key-01',
     quantity: 1,
@@ -341,7 +341,7 @@ test.describe('purchase recovery — lookup failure then retry', () => {
       detailFor: () => detail({ ...SOLD_OUT, id: 'L3' }),
       orderFor: () => committedOrder,
       // 429: axios interceptor does not retry 4xx and the global query
-      // policy does not either — the error state surfaces immediately.
+      // policy does not either - the error state surfaces immediately.
       lookupFailures: 1,
       lookupFailureStatus: 429,
     });
@@ -359,7 +359,7 @@ test.describe('purchase recovery — lookup failure then retry', () => {
   });
 });
 
-test.describe('purchase recovery — null lookup keeps funds gate on new purchase', () => {
+test.describe('purchase recovery - null lookup keeps funds gate on new purchase', () => {
   const pending: PendingIntent = {
     purchaseKey: 'e2e-null-lookup-key-1',
     quantity: 1,
@@ -436,7 +436,7 @@ async function expectBoundedLookupRecovery(
   expect(state.postCount).toBe(0);
 }
 
-test.describe('purchase recovery — bounded retry on repeated 500s', () => {
+test.describe('purchase recovery - bounded retry on repeated 500s', () => {
   const pending: PendingIntent = {
     purchaseKey: 'e2e-500-retry-key-0001',
     quantity: 1,
@@ -462,7 +462,7 @@ test.describe('purchase recovery — bounded retry on repeated 500s', () => {
   });
 });
 
-test.describe('purchase recovery — bounded retry on network failures', () => {
+test.describe('purchase recovery - bounded retry on network failures', () => {
   const pending: PendingIntent = {
     purchaseKey: 'e2e-net-retry-key-0001',
     quantity: 1,

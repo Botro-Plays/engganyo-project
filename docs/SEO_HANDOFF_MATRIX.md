@@ -53,3 +53,9 @@ Each task mapped to current evidence, action, and acceptance. Owner rules overri
 Extra work delivered in the same round: Telegram CTA corner geometry fixed (PR #131 → `2d737f6`, one `--tg-hero-radius` token across button/outline/shimmer/all states) and mobile chat launcher touch-drag (PR #132 → `3d9f1f3`, Pointer Events + capture, tap/drag separation, viewport/nav clamping, separate mobile storage key, reset control, re-clamp on viewport/rotation changes).
 
 CI notes: GitHub dropped `pull_request` synchronize events for PR #135's pushes twice; validated by `workflow_dispatch` runs (44989550620 on f06a7e3, 44990721430/44990722989 on rebased 2aac0c3) - all green before merge.
+
+## Em-dash inventory status (AGENTS.md writing rule)
+
+Swept this round: all files authored/touched by this round's PRs, all `apps/web/e2e` spec comments and test-coupled strings, and the two app-side copy strings the specs assert (`Cancel room - refunds both contributions`, tour teasers in `tours.service.ts`).
+
+Remaining inventory for a separate reviewed batch: ~795 pure-comment lines and ~458 mixed lines across `apps/web/src` and `apps/api/src`. The mixed lines include intentional semantic em-dash placeholders in admin UI (`'—'` no-value glyphs), error messages, and seeded fixture strings that must not be mechanically rewritten without checking render/test coupling.

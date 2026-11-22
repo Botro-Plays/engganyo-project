@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { restoreTourDefaults } from './tour-server-reset';
 
 /**
- * Tour state-hardening regressions — all async tour work is fenced to the
+ * Tour state-hardening regressions - all async tour work is fenced to the
  * authenticated account, failed writes are durably queued per user,
  * preference saves are awaited/serialized with Retry, replay resets are
  * ordered before new progress, and late-resolving lookups re-check the
@@ -40,7 +40,7 @@ async function settleOnDashboard(page: Page) {
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 }
 
-/** Simulate an account switch. The persisted auth blob carries no user —
+/** Simulate an account switch. The persisted auth blob carries no user -
  *  AuthInitializer re-fetches GET /auth/me with the real JWT on every
  *  load and setUser()s whatever it returns, so the switch must mock that
  *  endpoint; rewriting the persisted id alone is overwritten immediately. */
@@ -106,7 +106,7 @@ test.describe('tour state hardening', () => {
     await switchAuthUser(page, 'account-b-test-id');
     await page.waitForTimeout(1500); // B's hydrate resolves immediately
 
-    // Now release A's stale response — it must be discarded.
+    // Now release A's stale response - it must be discarded.
     releaseA!();
     await page.waitForTimeout(2000);
 
@@ -134,7 +134,7 @@ test.describe('tour state hardening', () => {
     await page.route('**/api/gamification/tours/beginner/dismiss', (r) => {
       dismissCalls += 1;
       // First TWO attempts fail: the initial write AND the automatic
-      // ~400ms queue retry — proving the op is retained, not dropped.
+      // ~400ms queue retry - proving the op is retained, not dropped.
       return dismissCalls <= 2 ? r.fulfill(fulfill(500, { message: 'boom' })) : r.fulfill(apiOk({ recorded: true }));
     });
     await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
@@ -152,7 +152,7 @@ test.describe('tour state hardening', () => {
     });
     expect(queued.some((o) => o.op === 'dismiss')).toBe(true);
 
-    // Next session: hydrate applies server state, then the queue drains —
+    // Next session: hydrate applies server state, then the queue drains -
     // the retried dismiss reaches the server exactly once more.
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
@@ -172,7 +172,7 @@ test.describe('tour state hardening', () => {
 
     let patchCalls: boolean[] = [];
     // apiClient auto-retries 5xx (initial + 3 backoff retries ≈ 7s), so a
-    // single mocked failure self-heals — the preference must keep failing
+    // single mocked failure self-heals - the preference must keep failing
     // until the test releases it, otherwise the error/Retry UI never shows.
     let failPrefs = true;
     await page.route('**/api/gamification/tours/preferences', (r) => {
@@ -216,7 +216,7 @@ test.describe('tour state hardening', () => {
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
     await expect(page.getByText(/Couldn.t save the tour preference/i)).toHaveCount(0);
 
-    // Overlapping toggles: two rapid clicks must serialize — the server
+    // Overlapping toggles: two rapid clicks must serialize - the server
     // sees requests in order and the final value matches the last click.
     patchCalls = [];
     await toggle.click(); // → on
@@ -283,7 +283,7 @@ test.describe('tour state hardening', () => {
     await replayBtn.click();
 
     // While DELETE is gated, no progress write may be sent. Poll for the
-    // gated request instead of a fixed sleep — CI runners can be slow.
+    // gated request instead of a fixed sleep - CI runners can be slow.
     const deleteStarted = await expect
       .poll(() => order.length, { timeout: 10_000 })
       .toBe(1)
@@ -316,7 +316,7 @@ test.describe('tour state hardening', () => {
       milestone: 1,
       minLevel: 5,
       title: 'Inventory & Store items',
-      teaser: 'You reached a new level — here is where your earned items live.',
+      teaser: 'You reached a new level - here is where your earned items live.',
       steps: [{ page: '/store/inventory', title: 'Your Inventory', description: 'Rewards collect here.' }],
     };
     await page.route('**/api/gamification/tours/state', (r) => r.fulfill(apiOk(BEGINNER_DONE)));
@@ -328,7 +328,7 @@ test.describe('tour state hardening', () => {
     await page.reload();
     await page.waitForTimeout(1500); // pending fetch is in flight (gated)
 
-    // A second tab writes the preference-sync marker — the storage event
+    // A second tab writes the preference-sync marker - the storage event
     // flips this tab's authoritative autoTours to false mid-lookup.
     const uid = await page.evaluate(() => {
       const raw = localStorage.getItem('engganyo-auth');
@@ -343,7 +343,7 @@ test.describe('tour state hardening', () => {
     await page2.close();
     await page.waitForTimeout(800); // storage event applied on page1
 
-    // Release the stale lookup — the post-resolve recheck must drop it.
+    // Release the stale lookup - the post-resolve recheck must drop it.
     releasePending!();
     await page.waitForTimeout(2500);
     await expect(milestoneCard(page)).toHaveCount(0);
@@ -372,7 +372,7 @@ test.describe('tour state hardening', () => {
       if (r.request().method() === 'DELETE') {
         deleteCalls += 1;
         order.push(`delete-${deleteCalls}`);
-        // First attempt fails — the replay's progress MUST NOT overtake it.
+        // First attempt fails - the replay's progress MUST NOT overtake it.
         if (deleteCalls === 1) return r.fulfill(fulfill(500, { message: 'boom' }));
         const body = r.request().postDataJSON() as { expectedGeneration?: number } | null;
         if (body?.expectedGeneration !== gen) {
@@ -415,7 +415,7 @@ test.describe('tour state hardening', () => {
     let progressCalls = 0;
     // Fresh user (no beginner row): auto-start runs startTour → progress(0).
     // An IN_PROGRESS resume would display 'active' without re-sending
-    // progress — the server already knows the step — so no op would exist.
+    // progress - the server already knows the step - so no op would exist.
     await page.route('**/api/gamification/tours/state', (r) =>
       r.fulfill(apiOk({ autoTours: true, beginner: null, beginnerTerminal: null, completions: [] })),
     );
@@ -454,7 +454,7 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(1500);
     expect(dismissCalls).toBeGreaterThanOrEqual(1);
 
-    // Switch to a different account — its hydrate must NOT drain the
+    // Switch to a different account - its hydrate must NOT drain the
     // previous user's queue (different per-user storage key + fence).
     await switchAuthUser(page, 'account-b-test-id');
     await page.waitForTimeout(3000);
@@ -498,7 +498,7 @@ test.describe('tour state hardening', () => {
 
     // Server-issued contract, deterministically modeled: the request
     // snapshots terminal T0; another device's completion T0+1s lands
-    // between that snapshot and the DELETE — it must survive.
+    // between that snapshot and the DELETE - it must survive.
     let gen = 0;
     const t0 = Date.now() - 120_000;
     const rows: { tourKey: string; status: string; updatedAt: string }[] = [
@@ -563,7 +563,7 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(4000);
 
     // The DELETE carries the request-time snapshot (T0), the server
-    // refuses it — the +1s completion AND the original row survive,
+    // refuses it - the +1s completion AND the original row survive,
     // and the whole replay group drops with the reset.
     expect(deleteCalls).toBe(1);
     expect(deleteBodies[0]?.expectedTerminalUpdatedAt).toBe(new Date(t0).toISOString());
@@ -581,7 +581,7 @@ test.describe('tour state hardening', () => {
 
     // First /state stays in flight across a full A → B → A cycle; every
     // later session gets autoTours:false. The stale response carries a
-    // live tour — if applied, the dialog appears.
+    // live tour - if applied, the dialog appears.
     let releaseA: (() => void) | null = null;
     const gateA = new Promise<void>((r) => (releaseA = r));
     let calls = 0;
@@ -605,7 +605,7 @@ test.describe('tour state hardening', () => {
     await switchAuthUser(page, 'account-b-test-id');
     await page.waitForTimeout(1500); // session-2 hydrate applied (off)
 
-    // Back to the SAME original account — a third session epoch.
+    // Back to the SAME original account - a third session epoch.
     await switchAuthUser(page, realId!);
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
@@ -618,7 +618,7 @@ test.describe('tour state hardening', () => {
     await expect(tourDialog(page)).toHaveCount(0);
   });
 
-  test('two tabs share one drain — no double send, no lost writes', async ({ page, context }) => {
+  test('two tabs share one drain - no double send, no lost writes', async ({ page, context }) => {
     await settleOnDashboard(page);
     // Routes are registered at CONTEXT level: page.route would only
     // intercept tab 1, leaving tab 2's sends unmocked and the counters
@@ -679,7 +679,7 @@ test.describe('tour state hardening', () => {
       await tab2.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
       await tab2.waitForTimeout(800);
 
-      // While tab 1 still owns the drain, tab 2's own send must not run —
+      // While tab 1 still owns the drain, tab 2's own send must not run -
       // no concurrent owner, no duplicate dismiss.
       expect(dismissCalls).toBe(1);
       expect(completeCalls).toBe(0);
@@ -705,7 +705,7 @@ test.describe('tour state hardening', () => {
     await page.route('**/api/gamification/tours/pending', (r) =>
       r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
     );
-    // Writes are unavailable — everything must be RETAINED for retry.
+    // Writes are unavailable - everything must be RETAINED for retry.
     await page.route('**/api/gamification/tours/*/*', (r) => {
       if (r.request().method() === 'POST' || r.request().method() === 'DELETE') {
         return r.fulfill(fulfill(503, { success: false, error: 'unavailable' }));
@@ -713,7 +713,7 @@ test.describe('tour state hardening', () => {
       return r.fallback();
     });
 
-    // Seed 55 terminal/reset ops (never evictable) across tour keys —
+    // Seed 55 terminal/reset ops (never evictable) across tour keys -
     // beyond the old silent slice(-50) cap.
     await page.evaluate(() => {
       const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
@@ -735,7 +735,7 @@ test.describe('tour state hardening', () => {
     await page.reload();
     await page.waitForTimeout(3000); // drains run, all blocked → retained
 
-    // One more real write — enqueue must surface overflow, not truncate.
+    // One more real write - enqueue must surface overflow, not truncate.
     const skip = tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first();
     await expect(skip).toBeVisible({ timeout: 15_000 });
     await skip.click();
@@ -748,7 +748,7 @@ test.describe('tour state hardening', () => {
       const uid = auth.state?.user?.id;
       return Object.keys(localStorage).filter((k) => k.startsWith(`engganyo-tour-writes-${uid}-`)).length;
     });
-    // Old code sliced the pool to 50 — the oldest six user choices would
+    // Old code sliced the pool to 50 - the oldest six user choices would
     // be gone. Now every op survives (56 ≥ cap → surfaced, not dropped).
     expect(count).toBeGreaterThan(50);
   });
@@ -758,7 +758,7 @@ test.describe('tour state hardening', () => {
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 
     // The client-side veto sees an OLDER terminal row (passes), but the
-    // DELETE itself is fenced by the server — a completion committed
+    // DELETE itself is fenced by the server - a completion committed
     // between the lookup and the delete must surface, not erase.
     const seenTerminal = {
       autoTours: true,
@@ -800,10 +800,10 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(4000);
 
     // The fenced reset must NOT let its replay group's progress through,
-    // and the failure is surfaced to the user — never a silent success.
+    // and the failure is surfaced to the user - never a silent success.
     expect(deleteCalls).toBe(1);
     expect(progressCalls).toBe(0);
-    // The DELETE carried the atomic expectations — generation, observed
+    // The DELETE carried the atomic expectations - generation, observed
     // terminal timestamp, and the idempotency resetId.
     expect(deleteInfo.body?.resetId).toBeTruthy();
     expect(deleteInfo.body).toHaveProperty('expectedTerminalUpdatedAt');
@@ -811,7 +811,7 @@ test.describe('tour state hardening', () => {
   });
 
   test('real API: beginner replay → progress → completion bumps generation', async ({ page }) => {
-    // NO tour-endpoint mocks — the real API + Postgres enforce the
+    // NO tour-endpoint mocks - the real API + Postgres enforce the
     // generation contract end to end.
     const readState = () =>
       page.evaluate(async () => {
@@ -846,7 +846,7 @@ test.describe('tour state hardening', () => {
     await page.waitForURL(/\/dashboard/, { timeout: 15_000 }).catch(() => {});
     await expect(tourDialog(page)).toBeVisible({ timeout: 20_000 });
 
-    // Walk the tour to completion using the REAL highlighted elements —
+    // Walk the tour to completion using the REAL highlighted elements -
     // navigate steps only advance when the user activates the step's
     // target (URL-only navigation is intentionally not an advance).
     const visNav = (sel: string) => page.locator(`[data-tour="${sel}"]:visible`);
@@ -878,7 +878,7 @@ test.describe('tour state hardening', () => {
     await expect(page).toHaveURL(/\/dashboard$/, SLOW);
     await expect(tourDialog(page)).toHaveCount(0);
 
-    // Wait for the queued writes to drain rather than a fixed delay —
+    // Wait for the queued writes to drain rather than a fixed delay -
     // group ops recover their generation through an extra state fetch,
     // which can outlast a short sleep on a loaded runner.
     let after = await readState();
@@ -919,7 +919,7 @@ test.describe('tour state hardening', () => {
     );
 
     // The R1-group write as the drain left it durably stamped after R1's
-    // ack — resetAckedGen is the binding that must survive the reload.
+    // ack - resetAckedGen is the binding that must survive the reload.
     await page.evaluate(() => {
       const auth = JSON.parse(localStorage.getItem('engganyo-auth') ?? '{}') as {
         state?: { user?: { id?: string } };
@@ -936,8 +936,8 @@ test.describe('tour state hardening', () => {
     await page.reload();
     await page.waitForTimeout(3500); // drain runs
 
-    // The write retried at ITS OWN reset's generation (1) — never the
-    // current 2 — so R2's server state could not be modified by it.
+    // The write retried at ITS OWN reset's generation (1) - never the
+    // current 2 - so R2's server state could not be modified by it.
     expect(progressBodies.length).toBe(1);
     expect(progressBodies[0]?.expectedGeneration).toBe(1);
     const remaining = await page.evaluate(() =>
@@ -946,12 +946,12 @@ test.describe('tour state hardening', () => {
     expect(remaining).toHaveLength(0); // 409 → dropped, not resurrected
   });
 
-  test('an unstamped group op recovers via reset identity or drops — never borrows the current generation', async ({
+  test('an unstamped group op recovers via reset identity or drops - never borrows the current generation', async ({
     page,
   }) => {
     await settleOnDashboard(page);
     // Only reset R2's identity is on the server now; R1 never committed
-    // (or was superseded). generations says 2 — an unrelated current gen.
+    // (or was superseded). generations says 2 - an unrelated current gen.
     const progressBodies: { expectedGeneration?: number }[] = [];
     // Stateful mock: reflect the landed progress row so post-drain
     // hydrates see a real server row (a permanently-null mock loops the
@@ -994,13 +994,13 @@ test.describe('tour state hardening', () => {
       };
       const uid = auth.state?.user?.id;
       if (!uid) throw new Error('no user id');
-      // No local tour state — the hydrate migration path must not add
+      // No local tour state - the hydrate migration path must not add
       // ops of its own.
       localStorage.removeItem(`engganyo-tour-v1-${uid}`);
       const put = (id: string, op: object) =>
         localStorage.setItem(`engganyo-tour-writes-${uid}-${id}`, JSON.stringify(op));
       // Orphaned: its reset is not the server's lastResetId → drop before
-      // any send (complete, not progress — progress ops would be
+      // any send (complete, not progress - progress ops would be
       // compacted away by the later write first).
       put('p-stale', { op: 'complete', key: 'beginner', version: 2, epoch: 1, ts: 1000, seq: 1, id: 'p-stale', gen: 0, afterReset: 'r1' });
       // Recoverable: bound to the reset the server still reports → its
@@ -1011,7 +1011,7 @@ test.describe('tour state hardening', () => {
     await page.reload();
     await page.waitForTimeout(3500);
 
-    // Exactly one send — the recoverable op stamped with gen 2 through its
+    // Exactly one send - the recoverable op stamped with gen 2 through its
     // reset's identity. The orphan dropped without ever borrowing gen 2.
     expect(progressBodies.length).toBe(1);
     expect(progressBodies[0]?.expectedGeneration).toBe(2);
@@ -1050,7 +1050,7 @@ test.describe('tour state hardening', () => {
         expectedTerminalUpdatedAt?: string | null;
         resetId?: string;
       } | null;
-      // Idempotent replay FIRST — a committed resetId is an ack, not a
+      // Idempotent replay FIRST - a committed resetId is an ack, not a
       // re-delete, no matter what newer terminal state exists. Until
       // respondNow, every attempt is aborted (the lost response), which
       // includes the apiClient's own internal retries.
@@ -1074,7 +1074,7 @@ test.describe('tour state hardening', () => {
         deleteOrder.push('delete-409');
         return r.fulfill(fulfill(409, { success: false }));
       }
-      // The reset COMMITS but its response is lost — and stays lost for
+      // The reset COMMITS but its response is lost - and stays lost for
       // every retry until the test injects newer completion state.
       rows.length = 0;
       gen += 1;
@@ -1103,7 +1103,7 @@ test.describe('tour state hardening', () => {
       const put = (id: string, op: object) =>
         localStorage.setItem(`engganyo-tour-writes-${uid}-${id}`, JSON.stringify(op));
       // The reset's terminal expectation is bound at request time from
-      // a server snapshot — a seeded op carries it explicitly (T1 ISO).
+      // a server snapshot - a seeded op carries it explicitly (T1 ISO).
       put('r1', {
         op: 'reset', key: 'beginner', epoch: 1, ts: Date.now(), seq: 1, id: 'r1', gen: 0,
         expectedTerminalUpdatedAt: t1Iso,
@@ -1111,7 +1111,7 @@ test.describe('tour state hardening', () => {
       put('p1', { op: 'progress', key: 'beginner', version: 2, step: 3, epoch: 1, ts: Date.now() + 1, seq: 2, id: 'p1', gen: 0, afterReset: 'r1' });
     }, new Date(t1).toISOString());
 
-    // Drain 1: the reset commits server-side but the response is lost —
+    // Drain 1: the reset commits server-side but the response is lost -
     // every attempt (internal retries included) aborts while the client
     // sees only failure. Under the old timestamp veto, a retried reset
     // would be dropped once terminal state moved past the client's view.
@@ -1122,12 +1122,12 @@ test.describe('tour state hardening', () => {
       })
       .toBe(true);
 
-    // Meanwhile another device completes the tour inside R1's replay —
+    // Meanwhile another device completes the tour inside R1's replay -
     // terminal state is now NEWER than anything the client saw.
     rows.push({ tourKey: 'beginner', status: 'COMPLETED', updatedAt: new Date().toISOString() });
     respondNow = true;
 
-    // The retry must be recognized as R1's idempotent ack — NOT vetoed
+    // The retry must be recognized as R1's idempotent ack - NOT vetoed
     // by the newer terminal state and NOT re-deleting it.
     await expect
       .poll(() => deleteOrder.includes('delete-idempotent'), { timeout: 35_000 })
@@ -1183,18 +1183,18 @@ test.describe('tour state hardening', () => {
 
     await page.goto('/settings');
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
-    // Scope to the FeatureToursCard row — a floating "Replay onboarding
+    // Scope to the FeatureToursCard row - a floating "Replay onboarding
     // tour" FAB also matches the plain name lookup.
     const replayBtn = page
       .locator('li', { hasText: 'Getting started tour' })
       .getByRole('button', { name: 'Replay' });
     await expect(replayBtn).toBeVisible();
 
-    // Account A starts a replay — its snapshot request is held.
+    // Account A starts a replay - its snapshot request is held.
     await replayBtn.click();
     await expect(replayBtn).toBeDisabled();
 
-    // Switch to account B IN-SESSION via the store's identity seam — no
+    // Switch to account B IN-SESSION via the store's identity seam - no
     // reload, so A's pending snapshot stays alive and resolves into a
     // session it no longer owns. The seam exists only in builds with
     // NEXT_PUBLIC_TOUR_E2E_HOOK=1 (CI e2e); skip otherwise.
@@ -1225,7 +1225,7 @@ test.describe('tour state hardening', () => {
     });
     await expect(replayBtn).toBeDisabled();
 
-    // A's delayed snapshot resolves into B's session — it must neither
+    // A's delayed snapshot resolves into B's session - it must neither
     // clear B's busy state nor raise an error for B.
     releaseA();
     await page.waitForTimeout(1500);

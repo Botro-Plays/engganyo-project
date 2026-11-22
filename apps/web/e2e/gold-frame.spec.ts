@@ -12,7 +12,7 @@ const ADMIN_USERNAME = 'admin';
 const FRAME_RING = '[class*="ring-amber-400"]';
 
 // The fixture writes ONLY to databases whose name proves they are test/dev
-// targets. Anything else fails loudly — never write to a production database.
+// targets. Anything else fails loudly - never write to a production database.
 const ALLOWED_DB_NAMES = new Set(['engganyo_test', 'engganyo_db']);
 // Redis targets must be loopback (CI service or local dev instance).
 // Containerized CI reaches the service by its Docker label hostname, so
@@ -28,7 +28,7 @@ const ALLOWED_REDIS_HOSTS = new Set([
 ]);
 
 let fixtureOk = true;
-// Minimal shapes — clients are lazy-required in beforeAll so that a missing
+// Minimal shapes - clients are lazy-required in beforeAll so that a missing
 // generated Prisma client degrades to a skip instead of a spec-load crash.
 let prisma: {
   $queryRaw: (q: TemplateStringsArray | string, ...v: unknown[]) => Promise<unknown>;
@@ -40,12 +40,12 @@ let redis: {
   quit: () => Promise<unknown>;
 } | null = null;
 
-/** Backend genuinely unreachable — acceptable to skip (local dev services down). */
+/** Backend genuinely unreachable - acceptable to skip (local dev services down). */
 class Unavailable extends Error {}
-/** Fixture assertion / unsafe target — must always fail loudly, never skip. */
+/** Fixture assertion / unsafe target - must always fail loudly, never skip. */
 class FixtureError extends Error {}
 
-/** Read-only parse of apps/api/.env — local dev fallback for DB/Redis URLs. */
+/** Read-only parse of apps/api/.env - local dev fallback for DB/Redis URLs. */
 function apiEnv(): Record<string, string> {
   try {
     const envPath = path.resolve(__dirname, '../../api/.env');
@@ -60,7 +60,7 @@ function apiEnv(): Record<string, string> {
   }
 }
 
-/** Never print credentials or connection strings — strip user:pass@ from messages. */
+/** Never print credentials or connection strings - strip user:pass@ from messages. */
 function sanitize(err: unknown): string {
   return String((err as Error)?.message ?? err).replace(/:\/\/[^@/\s]+@/g, '://<redacted>@');
 }
@@ -93,12 +93,12 @@ test.beforeAll(async () => {
     const dbName = dbNameOf(dbUrl);
     if (!ALLOWED_DB_NAMES.has(dbName)) {
       throw new FixtureError(
-        `refusing writes against database "${dbName}" — allowed: ${[...ALLOWED_DB_NAMES].join(', ')}`,
+        `refusing writes against database "${dbName}" - allowed: ${[...ALLOWED_DB_NAMES].join(', ')}`,
       );
     }
     const redisHost = new URL(redisUrl).hostname;
     if (!ALLOWED_REDIS_HOSTS.has(redisHost)) {
-      throw new FixtureError(`refusing Redis target "${redisHost}" — loopback only`);
+      throw new FixtureError(`refusing Redis target "${redisHost}" - loopback only`);
     }
 
     // ── Connect lazily; availability failures skip locally, fail in CI ──
@@ -107,7 +107,7 @@ test.beforeAll(async () => {
       const IORedis = require('ioredis');
       const RedisCtor = IORedis.default ?? IORedis;
 
-      // Local consts (narrowed) — module vars only get them for afterAll cleanup.
+      // Local consts (narrowed) - module vars only get them for afterAll cleanup.
       const client = new PrismaClient({ datasources: { db: { url: dbUrl } } }) as NonNullable<typeof prisma>;
       const rdb = new RedisCtor(redisUrl, { maxRetriesPerRequest: 1, retryStrategy: () => null }) as NonNullable<typeof redis>;
       prisma = client;
@@ -115,21 +115,21 @@ test.beforeAll(async () => {
 
       const items = (await client.$queryRaw`SELECT id FROM store_items WHERE name = ${FRAME_NAME} LIMIT 1`) as Array<{ id: string }>;
       const itemId = items[0]?.id;
-      if (!itemId) throw new FixtureError(`store item "${FRAME_NAME}" not found — seed missing?`);
+      if (!itemId) throw new FixtureError(`store item "${FRAME_NAME}" not found - seed missing?`);
 
       const uidRows = (await client.$queryRaw`SELECT id FROM users WHERE username = ${ADMIN_USERNAME} LIMIT 1`) as Array<{ id: string }>;
       const uid = uidRows[0]?.id;
-      if (!uid) throw new FixtureError(`user "${ADMIN_USERNAME}" not found — seed missing?`);
+      if (!uid) throw new FixtureError(`user "${ADMIN_USERNAME}" not found - seed missing?`);
 
       // Idempotent run: drop only this user's Gold Frame rows so the purchase
       // flow is real, then top up the wallet (UI reads users.credit_balance,
-      // the actual debit hits wallets.balance — keep both in sync).
+      // the actual debit hits wallets.balance - keep both in sync).
       await client.$executeRaw`DELETE FROM user_inventory WHERE item_id = ${itemId} AND user_id = ${uid}`;
       await client.$executeRaw`DELETE FROM store_purchases WHERE item_id = ${itemId} AND user_id = ${uid}`;
       await client.$executeRaw`UPDATE wallets SET balance = GREATEST(balance, 1000) WHERE user_id = ${uid}`;
       await client.$executeRaw`UPDATE users SET credit_balance = GREATEST(credit_balance, 1000) WHERE username = ${ADMIN_USERNAME}`;
 
-      // auth/me + profile are Redis-cached — delete only this user's keys so the
+      // auth/me + profile are Redis-cached - delete only this user's keys so the
       // new balance/equipment shows. Never flush the database or other keys.
       await rdb.del(
         `engganyo:auth:me:${uid}`,
@@ -166,7 +166,7 @@ test('purchase equips Gold Frame; ring renders on profile + header avatar; unequ
   await buyBtn.click();
   await expect(card.getByText('Owned').first()).toBeVisible({ timeout: SLOW });
 
-  // ── 2. Auto-equipped — header avatar (non-profile surface) shows the ring ──
+  // ── 2. Auto-equipped - header avatar (non-profile surface) shows the ring ──
   await expect(page.locator(`header ${FRAME_RING}`).first()).toBeVisible({ timeout: SLOW });
 
   // ── 3. Equipped state visible in inventory ──

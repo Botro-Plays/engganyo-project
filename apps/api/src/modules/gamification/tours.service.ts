@@ -8,19 +8,19 @@ import { Prisma, TourCompletionStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
 /**
- * Milestone onboarding tours — short, skippable, replayable introductions
+ * Milestone onboarding tours - short, skippable, replayable introductions
  * to features that unlock as the user levels. The beginner tour
  * (apps/web onboarding-tour) is separate and unchanged.
  *
  * Rules:
  * - Catalog is versioned (MILESTONE_TOURS_VERSION); completion rows are
  *   keyed (userId, tourKey, version), so a version bump replays every
- *   tour once per user — across devices.
+ *   tour once per user - across devices.
  * - Tours grant NOTHING: no credits, XP, items, or task-completion
  *   proof. Completion is pure UI state.
  * - The level interval N is configurable via platformConfig
  *   `milestone_tour_interval` (default 5). Tour i targets level
- *   (i+1)*N — e.g. N=5 → levels 5, 10, 15, 20, 25.
+ *   (i+1)*N - e.g. N=5 → levels 5, 10, 15, 20, 25.
  * - Due ordering is catalog order; the client shows ONE tour at a time
  *   so multi-level jumps never stack popups.
  */
@@ -32,14 +32,14 @@ export interface MilestoneTourStep {
   selector?: string;
   title: string;
   description: string;
-  /** Optional CTA — a link the user may follow; never forced navigation. */
+  /** Optional CTA - a link the user may follow; never forced navigation. */
   ctaLabel?: string;
   ctaHref?: string;
 }
 
 export interface MilestoneTour {
   key: string;
-  /** 1-based milestone index — effective level = index * interval. */
+  /** 1-based milestone index - effective level = index * interval. */
   milestone: number;
   title: string;
   /** Short card shown before entering the feature page. */
@@ -47,7 +47,7 @@ export interface MilestoneTour {
   steps: MilestoneTourStep[];
 }
 
-/** Bump when tour content/structure changes — replays for all users. */
+/** Bump when tour content/structure changes - replays for all users. */
 export const MILESTONE_TOURS_VERSION = 1;
 export const MILESTONE_TOUR_INTERVAL_DEFAULT = 5;
 
@@ -65,7 +65,7 @@ export const MILESTONE_TOURS: MilestoneTour[] = [
     key: 'feature-inventory',
     milestone: 1,
     title: 'Inventory & Store items',
-    teaser: 'You reached a new level — here is where your earned items live.',
+    teaser: 'You reached a new level - here is where your earned items live.',
     steps: [
       {
         page: '/store/inventory',
@@ -82,7 +82,7 @@ export const MILESTONE_TOURS: MilestoneTour[] = [
     key: 'feature-marketplace',
     milestone: 2,
     title: 'Player Marketplace',
-    teaser: 'Level up — you can now browse player listings.',
+    teaser: 'Level up - you can now browse player listings.',
     steps: [
       {
         page: '/marketplace',
@@ -99,7 +99,7 @@ export const MILESTONE_TOURS: MilestoneTour[] = [
     key: 'feature-rooms',
     milestone: 3,
     title: 'P2P Rooms',
-    teaser: 'Level up — join real-time partner work rooms.',
+    teaser: 'Level up - join real-time partner work rooms.',
     steps: [
       {
         page: '/rooms',
@@ -116,7 +116,7 @@ export const MILESTONE_TOURS: MilestoneTour[] = [
     key: 'feature-wallet',
     milestone: 4,
     title: 'Wallet & VIP Points',
-    teaser: 'Level up — your wallet and VIP status are worth a look.',
+    teaser: 'Level up - your wallet and VIP status are worth a look.',
     steps: [
       {
         page: '/wallet',
@@ -133,7 +133,7 @@ export const MILESTONE_TOURS: MilestoneTour[] = [
     key: 'feature-achievements',
     milestone: 5,
     title: 'Achievements & Leaderboards',
-    teaser: 'Level up — see what you have earned and how you rank.',
+    teaser: 'Level up - see what you have earned and how you rank.',
     steps: [
       {
         page: '/achievements',
@@ -164,7 +164,7 @@ export interface DueTour {
   title: string;
   teaser: string;
   steps: MilestoneTourStep[];
-  /** Set when resuming an IN_PROGRESS tour — client starts at this step. */
+  /** Set when resuming an IN_PROGRESS tour - client starts at this step. */
   resumeStep?: number;
 }
 
@@ -229,7 +229,7 @@ export class ToursService {
     const beginnerRows = rows.filter((r) => r.tourKey === BEGINNER_TOUR_KEY);
     const beginner = beginnerRows.find((r) => r.version === BEGINNER_TOUR_VERSION) ?? null;
     // Terminal history at ANY version suppresses auto-start when content
-    // is versioned up — a user who completed/dismissed an older beginner
+    // is versioned up - a user who completed/dismissed an older beginner
     // tour is never restarted automatically (manual replay still works).
     const beginnerTerminal =
       beginnerRows
@@ -250,7 +250,7 @@ export class ToursService {
         // would erase newer terminal state written on another device.
         updatedAt: r.updatedAt.toISOString(),
       })),
-      // Replay-generation counters — explicit 0 for untouched keys so
+      // Replay-generation counters - explicit 0 for untouched keys so
       // clients always have an authoritative expectation to attach.
       generations: Object.fromEntries(
         [BEGINNER_TOUR_KEY, ...MILESTONE_TOURS.map((t) => t.key)].map((k) => [
@@ -258,7 +258,7 @@ export class ToursService {
           gens.find((g) => g.tourKey === k)?.generation ?? 0,
         ]),
       ),
-      // Identity of the reset that produced each generation — lets a
+      // Identity of the reset that produced each generation - lets a
       // client recover an orphaned replay group's acknowledged
       // generation by reset identity instead of borrowing the current
       // generation (which could belong to a NEWER replay's reset).
@@ -279,7 +279,7 @@ export class ToursService {
    *  and its delete.
    *
    *  Generation contract (authoritative, see assertGeneration):
-   *  expectations must EQUAL the current generation — older AND future
+   *  expectations must EQUAL the current generation - older AND future
    *  values conflict (409). A missing expectation means an older
    *  client did not send one; the fail-closed policy treats it as 0,
    *  so such writes still work on untouched keys but are fenced the
@@ -305,15 +305,15 @@ export class ToursService {
   }
 
   /** Authoritative expectation check: the expected generation must
-   *  EQUAL the current one — older and future values conflict (409).
+   *  EQUAL the current one - older and future values conflict (409).
    *  Missing expectation is treated as 0 (fail-closed, see above). */
   private assertGeneration(generation: number, expectedGeneration?: number): void {
     if (generation !== (expectedGeneration ?? 0)) {
-      throw new ConflictException('Tour state changed on the server — refresh and try again');
+      throw new ConflictException('Tour state changed on the server - refresh and try again');
     }
   }
 
-  /** Automatic-tours preference — applies to BOTH beginner and
+  /** Automatic-tours preference - applies to BOTH beginner and
    *  milestone tours, persists per account, never rewrites history. */
   async setAutoTours(userId: string, enabled: boolean) {
     await this.prisma.user.update({ where: { id: userId }, data: { autoToursEnabled: enabled } });
@@ -333,7 +333,7 @@ export class ToursService {
     if (eligible.length === 0) return { interval, version: MILESTONE_TOURS_VERSION, tours: [] };
 
     // Rows across ALL versions: a terminal state at any version means the
-    // user has already seen this guidance — a content-version bump must
+    // user has already seen this guidance - a content-version bump must
     // not automatically re-offer it. Only the current version's
     // IN_PROGRESS row resumes at its saved step.
     const rows = await this.prisma.tourCompletion.findMany({
@@ -366,7 +366,7 @@ export class ToursService {
     };
   }
 
-  /** Full catalog + per-user state — powers the replay/settings UI.
+  /** Full catalog + per-user state - powers the replay/settings UI.
    *  Includes the automatic-tours preference and beginner-tour state so
    *  one call hydrates the whole tours settings surface. */
   async getCatalog(userId: string) {
@@ -415,7 +415,7 @@ export class ToursService {
   }
 
   /** Persists in-progress step position. Never resurrects a terminal
-   *  (COMPLETED/DISMISSED) row — first terminal write wins. */
+   *  (COMPLETED/DISMISSED) row - first terminal write wins. */
   async recordProgress(
     userId: string,
     tourKey: string,
@@ -426,7 +426,7 @@ export class ToursService {
     const resolved = this.resolveKey(tourKey);
     if (!resolved) throw new NotFoundException('Unknown tour');
     if (version !== resolved.version) {
-      throw new BadRequestException('Stale tour version — refresh and try again');
+      throw new BadRequestException('Stale tour version - refresh and try again');
     }
     const stepIndex = Math.max(0, Math.min(Math.floor(step), resolved.maxStep));
     const where = {
@@ -463,7 +463,7 @@ export class ToursService {
     const resolved = this.resolveKey(tourKey);
     if (!resolved) throw new NotFoundException('Unknown tour');
     if (version !== resolved.version) {
-      throw new BadRequestException('Stale tour version — refresh and try again');
+      throw new BadRequestException('Stale tour version - refresh and try again');
     }
     const key = resolved.tourKey;
     // IN_PROGRESS → terminal is the normal finish path. A missing row
@@ -516,7 +516,7 @@ export class ToursService {
     return this.prisma.$transaction(async (tx) => {
       const row = await this.lockGeneration(tx, userId, resolved.tourKey);
       // Idempotent replay: a retried reset carrying the id of the reset
-      // that already committed returns success WITHOUT deleting again —
+      // that already committed returns success WITHOUT deleting again -
       // a completion that committed since would otherwise be erased by
       // the re-run. An unrelated reset at a stale generation still 409s,
       // and "committed but response lost" recovery is thereby
@@ -533,7 +533,7 @@ export class ToursService {
       this.assertGeneration(row.generation, expected?.generation);
       if (expected?.terminalUpdatedAt !== undefined) {
         // Under the lock: no terminal write can interleave between this
-        // aggregate and the delete — the check is atomic.
+        // aggregate and the delete - the check is atomic.
         const latest = await tx.tourCompletion.aggregate({
           _max: { updatedAt: true },
           where: { userId, tourKey: resolved.tourKey, status: { not: 'IN_PROGRESS' } },
@@ -546,7 +546,7 @@ export class ToursService {
           (expectedMs === null || !Number.isFinite(expectedMs) || maxT.getTime() > expectedMs)
         ) {
           throw new ConflictException(
-            'A newer completion exists on the server — refresh and replay again',
+            'A newer completion exists on the server - refresh and replay again',
           );
         }
       }

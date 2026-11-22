@@ -35,13 +35,13 @@ async function prepare(page: Page, opts: { consent?: boolean } = {}) {
     else localStorage.removeItem('cookie-consent');
   }, consent);
 
-  // Tour state is server-authoritative — clearing localStorage is not
+  // Tour state is server-authoritative - clearing localStorage is not
   // enough. Reset the beginner row + auto-tours preference so every
   // test starts from a clean server state.
   await resetServerTourState(page, true);
   // The strict-contract reset is a two-round-trip call (state GET →
   // DELETE), so the /settings hydrate settles first and keeps a stale
-  // snapshot in the SPA store — later gotos are client-side navigations
+  // snapshot in the SPA store - later gotos are client-side navigations
   // that never re-hydrate. Reload so the store re-reads the reset state.
   await page.reload();
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});

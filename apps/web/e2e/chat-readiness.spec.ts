@@ -17,7 +17,7 @@ const API_ORIGIN = new URL(API).origin;
 const USER_A = { email: 'e2e-room-a@engganyo.test', password: 'E2eRoom@123' };
 const USER_B = { email: 'e2e-room-b@engganyo.test', password: 'E2eRoom@123' };
 
-// Distinct client IPs per context — same reason as rooms.spec.ts: the
+// Distinct client IPs per context - same reason as rooms.spec.ts: the
 // same-IP self-farm guard would otherwise reject the join.
 const USER_IPS = { a: '203.0.113.20', b: '203.0.113.21' } as const;
 
@@ -132,7 +132,7 @@ test.describe.serial('Room chat readiness', () => {
       const inputA = a.page.getByPlaceholder(/message your partner/i);
       const inputB = b.page.getByPlaceholder(/message your partner/i);
 
-      // "ready" means the channel:join ack arrived — transport alone is
+      // "ready" means the channel:join ack arrived - transport alone is
       // not enough.
       await expect(statusA).toHaveText('ready', { timeout: 30_000 });
       await expect(statusB).toHaveText('ready', { timeout: 30_000 });
@@ -206,14 +206,14 @@ test.describe.serial('Room chat readiness', () => {
       });
       roomId = (await createRes.json())?.data?.id;
       expect(roomId).toBeTruthy();
-      // Join so the room reaches NEGOTIATING — the workspace with chat.
+      // Join so the room reaches NEGOTIATING - the workspace with chat.
       const joinRes = await apiPost(b.page, b.ip, tokenB!, `/rooms/${roomId}/join`, {});
       expect(joinRes.ok()).toBeTruthy();
 
-      // Fail the room-state endpoint briefly — like a 429 during a
+      // Fail the room-state endpoint briefly - like a 429 during a
       // cold-load burst. Fulfill (not abort) so the client sees a real
       // 429 response: 4xx is not retried, so the error poll is the only
-      // recovery path — exactly the production failure mode.
+      // recovery path - exactly the production failure mode.
       let blockState = true;
       await a.page.route('**/rooms/*/state', async (route) => {
         if (blockState) return route.fulfill({ status: 429, contentType: 'application/json', body: '{}' });
@@ -230,7 +230,7 @@ test.describe.serial('Room chat readiness', () => {
       console.log(`[state-recovery] error state visible: ${sawError}`);
 
       // However the failure surfaced, the workspace must appear on its
-      // own once the endpoint recovers — no reload, no manual retry.
+      // own once the endpoint recovers - no reload, no manual retry.
       await expect(a.page.getByPlaceholder(/message your partner/i)).toBeVisible({ timeout: 60_000 });
       await expect(a.page.getByTestId('chat-status')).toHaveText('ready', { timeout: 30_000 });
     } finally {
@@ -263,7 +263,7 @@ test.describe.serial('Room chat readiness', () => {
       const joinRes = await apiPost(b.page, b.ip, tokenB!, `/rooms/${roomId}/join`, {});
       expect(joinRes.ok()).toBeTruthy();
 
-      // Fail the friend-status endpoint — previously this silently stayed
+      // Fail the friend-status endpoint - previously this silently stayed
       // 'NONE' and rendered "Add friend" on an assumed state.
       await a.page.route('**/friends/status*', (route) =>
         route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }),
@@ -275,7 +275,7 @@ test.describe.serial('Room chat readiness', () => {
       await expect(a.page.getByRole('button', { name: /add friend/i })).toHaveCount(0);
       await expect(a.page.getByRole('button', { name: /^accept$/i })).toHaveCount(0);
 
-      // Manual retry recovers — no polling required.
+      // Manual retry recovers - no polling required.
       await a.page.unroute('**/friends/status*');
       await a.page.getByTestId('friend-status-retry').click();
       await expect(a.page.getByRole('button', { name: /add friend/i })).toBeVisible({ timeout: 15_000 });
