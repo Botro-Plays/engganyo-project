@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { totpCode } from './totp';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
 const API = process.env.E2E_API_URL ?? 'http://localhost:3001/api';
@@ -29,7 +30,20 @@ test.describe('blog publishing lifecycle', () => {
       data: { emailOrUsername: EMAIL, password: PASSWORD },
     });
     expect(res.ok()).toBeTruthy();
-    const body = await res.json();
+    let body = await res.json();
+    // The e2e admin has TOTP enabled; complete the real second step.
+    const twoFactorToken = body.data?.twoFactorToken ?? body.twoFactorToken;
+    if ((body.data?.requiresTwoFactor ?? body.requiresTwoFactor) && twoFactorToken) {
+      const verify = await request.post(`${API}/auth/2fa/verify`, {
+        data: {
+          twoFactorToken,
+          code: totpCode(process.env.E2E_ADMIN_TOTP_SECRET ?? ''),
+          method: 'totp',
+        },
+      });
+      expect(verify.ok()).toBeTruthy();
+      body = await verify.json();
+    }
     token = body.data?.accessToken ?? body.accessToken;
     expect(token).toBeTruthy();
   });
@@ -45,9 +59,7 @@ test.describe('blog publishing lifecycle', () => {
     version = created.version;
     expect(created.status).toBe('DRAFT');
 
-    for (const path of [
-      `/blog/${SLUG}`, '/blog', '/blog/rss.xml', '/sitemap.xml', '/',
-    ]) {
+    for (const path of [`/blog/${SLUG}`, '/blog', '/blog/rss.xml', '/sitemap.xml', '/']) {
       const pub = await request.get(`${BASE}${path}`);
       expect(await pub.text()).not.toContain(SLUG);
     }
@@ -67,10 +79,15 @@ test.describe('blog publishing lifecycle', () => {
 
     // The revalidate call is internal; the page caches also carry a
     // short ISR window. Poll rather than asserting a fixed sleep.
-    await expect.poll(async () => {
-      const r = await request.get(`${BASE}/blog/${SLUG}`);
-      return r.status();
-    }, { timeout: 30_000, intervals: [500, 1500, 3000] }).toBe(200);
+    await expect
+      .poll(
+        async () => {
+          const r = await request.get(`${BASE}/blog/${SLUG}`);
+          return r.status();
+        },
+        { timeout: 30_000, intervals: [500, 1500, 3000] },
+      )
+      .toBe(200);
 
     const article = await request.get(`${BASE}/blog/${SLUG}`);
     const html = await article.text();
@@ -95,19 +112,26 @@ test.describe('blog publishing lifecycle', () => {
     expect(res.ok()).toBeTruthy();
     version = (await res.json()).data.post.version;
 
-    await expect.poll(async () => {
-      const r = await request.get(`${BASE}/blog/${SLUG}`);
-      return r.status();
-    }, { timeout: 30_000, intervals: [500, 1500, 3000] }).toBe(404);
+    await expect
+      .poll(
+        async () => {
+          const r = await request.get(`${BASE}/blog/${SLUG}`);
+          return r.status();
+        },
+        { timeout: 30_000, intervals: [500, 1500, 3000] },
+      )
+      .toBe(404);
   });
 
   test('delete requires confirmation and removes the record', async ({ request }) => {
     const bad = await request.delete(`${API}/admin/blog/posts/${postId}`, {
-      headers: headers(), data: { confirm: false, expectedVersion: version },
+      headers: headers(),
+      data: { confirm: false, expectedVersion: version },
     });
     expect(bad.status()).toBe(400);
     const ok = await request.delete(`${API}/admin/blog/posts/${postId}`, {
-      headers: headers(), data: { confirm: true, expectedVersion: version },
+      headers: headers(),
+      data: { confirm: true, expectedVersion: version },
     });
     expect(ok.ok()).toBeTruthy();
     const listed = await request.get(`${API}/blog/posts?page=1&limit=50`);

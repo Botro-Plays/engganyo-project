@@ -1,6 +1,7 @@
 import { chromium, type FullConfig } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
+import { totpCode } from './totp';
 
 async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3000';
@@ -15,18 +16,31 @@ async function globalSetup(config: FullConfig) {
   const page = await context.newPage();
 
   await page.goto(`${baseURL}/login`);
-  await page.getByLabel(/email or username/i).fill(
-    process.env['E2E_TEST_EMAIL'] ?? 'admin@engganyo.com',
-  );
-  await page.getByLabel(/password/i).fill(
-    process.env['E2E_TEST_PASSWORD'] ?? 'Admin@123456',
-  );
+  await page
+    .getByLabel(/email or username/i)
+    .fill(process.env['E2E_TEST_EMAIL'] ?? 'admin@engganyo.com');
+  await page.getByLabel(/password/i).fill(process.env['E2E_TEST_PASSWORD'] ?? 'Admin@123456');
   await page.getByRole('button', { name: /login|sign in/i }).click();
-  await page.waitForURL(/dashboard/, { timeout: 30_000 });
+
+  // The e2e admin has TOTP enabled (see api/scripts/e2e-admin-2fa.mjs),
+  // so the login can branch into the real 2FA step. Complete it with a
+  // locally generated code rather than bypassing the flow.
+  const codeInput = page.locator('input[placeholder="000000"]');
+  const totpSecret = process.env['E2E_ADMIN_TOTP_SECRET'];
+  const reachedDashboard = await Promise.race([
+    page.waitForURL(/dashboard/, { timeout: 30_000 }).then(() => true),
+    codeInput.waitFor({ state: 'visible', timeout: 30_000 }).then(() => false),
+  ]).catch(() => true);
+  if (!reachedDashboard && totpSecret) {
+    await codeInput.fill(totpCode(totpSecret));
+    await page.getByRole('button', { name: /verify/i }).click();
+    await page.waitForURL(/dashboard/, { timeout: 30_000 });
+  }
+  await page.waitForURL(/dashboard/, { timeout: 10_000 });
 
   // Dismiss cookie consent banner so it doesn't block subsequent tests
   const acceptAll = page.getByRole('button', { name: /accept all/i });
-  if (await acceptAll.count() > 0) {
+  if ((await acceptAll.count()) > 0) {
     await acceptAll.click();
   }
 
@@ -52,7 +66,10 @@ async function globalSetup(config: FullConfig) {
         headers,
         body: JSON.stringify({ autoTours: false }),
       }).catch(() => {});
-      await fetch(`${apiBase}/gamification/tours/beginner/state`, { method: 'DELETE', headers }).catch(() => {});
+      await fetch(`${apiBase}/gamification/tours/beginner/state`, {
+        method: 'DELETE',
+        headers,
+      }).catch(() => {});
     } catch {
       /* best effort */
     }

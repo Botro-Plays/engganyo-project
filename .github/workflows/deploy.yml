@@ -227,6 +227,17 @@ jobs:
           npm run db:seed
         working-directory: apps/api
 
+      # The admin guards require 2FA for admin roles. Enable a fixed
+      # test-only TOTP secret on the seeded admin so e2e completes the
+      # real login flow instead of bypassing the guard. The script is a
+      # no-op without E2E_ADMIN_TOTP_SECRET.
+      - name: Enable e2e admin TOTP
+        working-directory: apps/api
+        env:
+          E2E_ADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXP
+          ADMIN_EMAIL: admin@engganyo.com
+        run: node scripts/e2e-admin-2fa.mjs
+
       - name: Build API
         run: npm run build
         working-directory: apps/api
@@ -280,6 +291,7 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
           E2E_TEST_EMAIL: admin@engganyo.com
           E2E_TEST_PASSWORD: Admin@123456
+          E2E_ADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXP
           # Containerized job reaches the redis service container by its
           # Docker label hostname; the spec's fixture allowlist is loopback
           # by default and only accepts this explicit opt-in.
