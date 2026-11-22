@@ -39,7 +39,7 @@ Each task mapped to current evidence, action, and acceptance. Owner rules overri
 | # | Task | Result | Evidence |
 |---|------|--------|----------|
 | 1 | Route rename | Shipped - PR #133 → `4eb44fd` | Live: `GET /how-it-works` → 301 `/howitworks`; canonical, og:url, JSON-LD path, sitemap, llms.txt, chrome links all `/howitworks`; `#how-it-works` fragment anchors unchanged |
-| 2 | CLS | Shipped - PR #134 → `02fc1c9` | `next/font/local` WOFF2 subsets; intrinsic `width`/`height` on logo/brand img usage. Lab CLS measurement is CI's Lighthouse - field data remains a separate CrUX/GSC question |
+| 2 | CLS | Shipped - PR #134 → `02fc1c9`; **measured** via new perf job PR #139 → `3e5dcca` | `next/font/local` WOFF2 subsets; intrinsic `width`/`height` on logo/brand img usage. Lab CLS measured 0.000 on /, /about, /faq, /howitworks (Lighthouse default mobile sim, run `44997766803`, artifact `lighthouse-reports`). Lab measurement only - field CLS/INP via CrUX remains unmeasured |
 | 3 | Fonts | Shipped - PR #134 | DotGothic16 2.0 MB→~16 KB, VT323 153 KB→~18 KB WOFF2 subsets; ₱ (U+20B1), €, £, smart punctuation, ellipsis retained; OFL license files kept in `public/fonts/`; system-monospace fallback covers international names |
 | 4 | og images + logo dims | Shipped - PR #134 | explicit `openGraph.images`/`twitter` + `og:url` on every public page; logo `width`/`height` set, header logo `loading="eager"` |
 | 5 | Email obfuscation | Owner action - see Cloudflare plan above | not code |
@@ -58,4 +58,16 @@ CI notes: GitHub dropped `pull_request` synchronize events for PR #135's pushes 
 
 Swept this round: all files authored/touched by this round's PRs, all `apps/web/e2e` spec comments and test-coupled strings, and the two app-side copy strings the specs assert (`Cancel room - refunds both contributions`, tour teasers in `tours.service.ts`).
 
-Remaining inventory for a separate reviewed batch: ~795 pure-comment lines and ~458 mixed lines across `apps/web/src` and `apps/api/src`. The mixed lines include intentional semantic em-dash placeholders in admin UI (`'None'` no-value glyphs), error messages, and seeded fixture strings that must not be mechanically rewritten without checking render/test coupling.
+Remaining inventory resolved - PR #140 → `1415d9a` swept all first-party source, specs, seed, and living docs (158 files): prose to ` - `, 31 bare em-dash no-value placeholders to `'None'` (`'unranked'` for ranks), 4 bare JSX glyph cells to `>None<`, test expectations swept with asserted strings. `dist/`, `prisma/migrations/`, `docs/handoff*` untouched.
+
+## Correction round (gesture, RSS, perf evidence, writing rule)
+
+| Task | Result | Evidence |
+|------|--------|----------|
+| Chat gesture cancellation | Shipped - PR #137 → `0c47c90` | pointerId tracking (unrelated pointers ignored); `movedRef` resets at each pointerdown boundary; pointerup/cancel/lostpointercapture all end the gesture; keyboard clicks (`detail 0`) bypass drag suppression. Regressions: cancel-then-real-tap, keyboard-after-cancel, lostpointercapture, second-pointer hijack, mid-move tracking, genuine `page.touchscreen` tap |
+| Instant drag tracking | Shipped - PR #137 | `left`/`top` removed from the launcher transition list (`transition-[transform,background-color,box-shadow]`); e2e asserts position mid-gesture, not after a settle. Safe-area/nav clamping, persistence, reset, sheet geometry unchanged |
+| Lighthouse measurement | Shipped - PR #139 → `3e5dcca` | No prior run existed. New report-only `perf` job measures the four public routes on every PR/push; full JSON + summary uploaded as `lighthouse-reports` artifact. First numbers (run `44997766803`, Lighthouse default mobile sim + headless Chrome on `ubuntu-latest`): `/` perf 74 / CLS 0.000 / LCP 2773 ms / TBT 1061 ms / 285 KiB; `/about` 97 / 0.000 / 2632 / 12 / 305 KiB; `/faq` 98 / 0.000 / 2491 / 27 / 286 KiB; `/howitworks` 98 / 0.000 / 2483 / 10 / 285 KiB. Lab data only - not real-user INP/CrUX |
+| RSS pubDate | Shipped - PR #138 → `4640886` | Feed hardcoded `Sat, 22 Nov 2026` (a Sunday). Post data moved to shared `blog/posts.ts`; `pubDate` derives via `toUTCString`. `blog.spec.ts` validates feed parse, weekday correctness, and linked-post availability |
+| Em-dash scoped batch | Shipped - PR #140 → `1415d9a` | See "Em-dash inventory status" above - full sweep complete |
+
+Open owner items unchanged: Cloudflare dashboard actions, CSP enforcement review, real-device/cross-browser acceptance (chat keyboard, touch drag, Telegram hover).
