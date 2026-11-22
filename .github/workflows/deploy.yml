@@ -118,6 +118,9 @@ jobs:
       - name: Lint Web
         run: npm run lint --workspace=apps/web
 
+      - name: Unit tests (web)
+        run: npm run test:unit --workspace=apps/web
+
       - name: Build Web
         run: npm run build --workspace=apps/web
 

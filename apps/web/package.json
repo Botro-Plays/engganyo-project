@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:unit": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",
@@ -59,6 +60,7 @@
     "ioredis": "^5.3.2",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5",
     "wait-on": "^9.0.10"
   }
