@@ -8,7 +8,7 @@ Credits are used inside Engganyo and cannot be withdrawn as money.
 
 ## Public pages
 - https://engganyo.com/
-- https://engganyo.com/how-it-works
+- https://engganyo.com/howitworks
 - https://engganyo.com/pricing
 - https://engganyo.com/safety
 - https://engganyo.com/about

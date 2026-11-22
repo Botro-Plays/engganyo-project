@@ -9,13 +9,13 @@ export const metadata: Metadata = {
   title: 'How It Works',
   description:
     'Join free, earn credits by completing tasks for other creators, get approved, and spend credits on campaigns for your own accounts.',
-  alternates: { canonical: 'https://engganyo.com/how-it-works' },
+  alternates: { canonical: 'https://engganyo.com/howitworks' },
   robots: { index: true, follow: true },
   openGraph: {
     title: 'How It Works | Engganyo',
     description:
       'Join free, earn credits by completing tasks for other creators, get approved, and spend credits on campaigns for your own accounts.',
-    url: 'https://engganyo.com/how-it-works',
+    url: 'https://engganyo.com/howitworks',
   },
   twitter: {
     title: 'How It Works | Engganyo',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 
 const jsonLd = innerPageJsonLd({
   type: 'WebPage',
-  path: '/how-it-works',
+  path: '/howitworks',
   name: 'How Engganyo works',
   description:
     'How Engganyo works: join free with 200 credits, earn credits by completing tasks for other creators, and spend credits on campaigns for your own accounts.',

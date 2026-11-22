@@ -106,7 +106,7 @@ export default function PricingPage() {
             </ul>
             <p className="text-zinc-300 leading-relaxed mt-4">
               New here? Read{' '}
-              <Link href="/how-it-works" className="text-brand-400 hover:underline">how Engganyo
+              <Link href="/howitworks" className="text-brand-400 hover:underline">how Engganyo
               works</Link>, check the{' '}
               <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>, or{' '}
               <Link href="/register" className="text-brand-400 hover:underline">create a free
