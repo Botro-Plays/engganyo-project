@@ -30,7 +30,7 @@ export function PublicHeader() {
           href="/"
           className="flex items-center shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-sc"
         >
-          <BrandLogo className="h-8 w-8 sm:h-9 sm:w-9" wordmarkClassName="text-xl sm:text-2xl" />
+          <BrandLogo className="h-8 w-8 sm:h-9 sm:w-9" wordmarkClassName="text-xl sm:text-2xl" size={32} eager />
         </Link>
 
         <div className="hidden md:flex items-center gap-8 text-sm text-sc-dim">
@@ -111,7 +111,7 @@ export function PublicFooter() {
     <footer className="relative z-10 border-t border-surface-border py-10 sm:py-12 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <BrandLogo wordmark={false} className="w-6 h-6" />
+          <BrandLogo wordmark={false} className="w-6 h-6" size={24} />
           <span className="font-semibold text-sm text-sc-text">Engganyo</span>
         </div>
         <p className="text-sc-dim text-sm">© {new Date().getFullYear()} Engganyo. All rights reserved.</p>

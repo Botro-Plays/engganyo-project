@@ -16,6 +16,22 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Versioned font files: content-addressed by build, safe to pin.
+        // _next/static gets its own immutable header from Next already.
+        source: '/fonts/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // Brand assets are NOT name-versioned (files can change in
+        // place), so caching stays bounded — one day, not immutable.
+        source: '/brand/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400' },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },

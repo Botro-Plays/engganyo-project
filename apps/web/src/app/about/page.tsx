@@ -18,8 +18,18 @@ export const metadata: Metadata = {
     description:
       'A creator engagement exchange: complete small tasks for other creators, earn credits, and spend them on campaigns for your own accounts.',
     url: 'https://engganyo.com/about',
+      images: [
+        {
+          url: '/brand/social-1200x630.png',
+          width: 1200,
+          height: 630,
+          alt: 'Engganyo: Small Taps. Big Crowds.',
+        },
+      ],
   },
   twitter: {
+      card: 'summary_large_image',
+      images: ['/brand/social-1200x630.png'],
     title: 'About | Engganyo',
     description:
       'A creator engagement exchange: complete small tasks for other creators, earn credits, and spend them on campaigns for your own accounts.',

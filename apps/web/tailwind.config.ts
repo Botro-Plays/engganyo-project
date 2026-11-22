@@ -80,9 +80,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["'DotGothic16'", "'VT323'", 'ui-monospace', 'monospace'],
-        mono: ["'VT323'", 'ui-monospace', 'monospace'],
-        pixel: ["'DotGothic16'", "'VT323'", 'ui-monospace', 'monospace'],
+        sans: ['var(--font-dotgothic)', 'var(--font-vt323)', 'ui-monospace', 'monospace'],
+        mono: ['var(--font-vt323)', 'ui-monospace', 'monospace'],
+        pixel: ['var(--font-dotgothic)', 'var(--font-vt323)', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         // Square pixel panels — SeeCareer uses radius 0 with 2px borders

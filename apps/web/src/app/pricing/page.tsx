@@ -16,8 +16,18 @@ export const metadata: Metadata = {
     description:
       'Engganyo is free to start: every member gets 200 credits. Buy credit packages in USD in the wallet if you want to move faster.',
     url: 'https://engganyo.com/pricing',
+      images: [
+        {
+          url: '/brand/social-1200x630.png',
+          width: 1200,
+          height: 630,
+          alt: 'Engganyo: Small Taps. Big Crowds.',
+        },
+      ],
   },
   twitter: {
+      card: 'summary_large_image',
+      images: ['/brand/social-1200x630.png'],
     title: 'Pricing | Engganyo',
     description:
       'Engganyo is free to start: every member gets 200 credits. Buy credit packages in USD in the wallet if you want to move faster.',

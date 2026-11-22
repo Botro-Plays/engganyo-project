@@ -16,8 +16,18 @@ export const metadata: Metadata = {
     title: 'Contact | Engganyo',
     description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
     url: 'https://engganyo.com/contact',
+      images: [
+        {
+          url: '/brand/social-1200x630.png',
+          width: 1200,
+          height: 630,
+          alt: 'Engganyo: Small Taps. Big Crowds.',
+        },
+      ],
   },
   twitter: {
+      card: 'summary_large_image',
+      images: ['/brand/social-1200x630.png'],
     title: 'Contact | Engganyo',
     description: 'Get in touch with the Engganyo team: questions, feedback, or support.',
   },

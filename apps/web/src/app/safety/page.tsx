@@ -17,8 +17,18 @@ export const metadata: Metadata = {
     description:
       'Safety and rules on Engganyo: account basics, third-party platform rules, how proof review works, and how to report a problem.',
     url: 'https://engganyo.com/safety',
+      images: [
+        {
+          url: '/brand/social-1200x630.png',
+          width: 1200,
+          height: 630,
+          alt: 'Engganyo: Small Taps. Big Crowds.',
+        },
+      ],
   },
   twitter: {
+      card: 'summary_large_image',
+      images: ['/brand/social-1200x630.png'],
     title: 'Safety | Engganyo',
     description:
       'Safety and rules on Engganyo: account basics, third-party platform rules, how proof review works, and how to report a problem.',

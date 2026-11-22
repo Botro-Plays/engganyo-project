@@ -134,7 +134,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside className="w-60 flex-shrink-0 border-r border-surface-border flex flex-col hidden md:flex">
         <div className="p-5 border-b border-surface-border">
           <Link href="/admin" className="flex items-center gap-2" aria-label="Engganyo admin">
-            <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" />
+            <BrandLogo className="h-7 w-7" wordmarkClassName="text-base" size={28} />
             <span className="px-1.5 py-0.5 bg-red-500/15 text-red-300 border border-red-500/30 text-[10px] font-bold uppercase tracking-wider">Admin</span>
           </Link>
         </div>
@@ -215,7 +215,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <Menu className="w-5 h-5" />
             </button>
             <Link href="/admin" className="flex items-center" aria-label="Engganyo admin">
-              <BrandLogo className="h-6 w-6" wordmarkClassName="text-sm" />
+              <BrandLogo className="h-6 w-6" wordmarkClassName="text-sm" size={24} />
             </Link>
           </div>
           <div className="flex items-center gap-2 text-xs text-sc-dim">

@@ -16,8 +16,18 @@ export const metadata: Metadata = {
     description:
       'Join free, earn credits by completing tasks for other creators, get approved, and spend credits on campaigns for your own accounts.',
     url: 'https://engganyo.com/howitworks',
+    images: [
+      {
+        url: '/brand/social-1200x630.png',
+        width: 1200,
+        height: 630,
+        alt: 'Engganyo: Small Taps. Big Crowds.',
+      },
+    ],
   },
   twitter: {
+      card: 'summary_large_image',
+      images: ['/brand/social-1200x630.png'],
     title: 'How It Works | Engganyo',
     description:
       'Join free, earn credits by completing tasks for other creators, get approved, and spend credits on campaigns for your own accounts.',
