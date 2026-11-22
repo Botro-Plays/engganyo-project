@@ -403,7 +403,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             {/* Logo */}
             <div className="px-5 py-5 border-b border-sc-border">
               <Link href="/dashboard" className="flex items-center" aria-label="Engganyo dashboard">
-                <BrandLogo className="h-8 w-8" wordmarkClassName="text-xl" />
+                <BrandLogo className="h-8 w-8" wordmarkClassName="text-xl" size={32} eager />
               </Link>
             </div>
 
@@ -468,7 +468,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <header className="h-16 border-b border-sc-border flex items-center justify-between px-4 sm:px-6 shrink-0 bg-sc-bg/80 backdrop-blur-sm">
               <div className="flex items-center gap-3 md:hidden">
                 <Link href="/dashboard" className="flex items-center" aria-label="Engganyo dashboard">
-                  <BrandLogo className="h-7 w-7" wordmarkClassName="text-base hidden min-[380px]:inline" />
+                  <BrandLogo className="h-7 w-7" wordmarkClassName="text-base hidden min-[380px]:inline" size={28} />
                 </Link>
               </div>
               <div className="flex items-center gap-2 sm:gap-3 ml-auto">

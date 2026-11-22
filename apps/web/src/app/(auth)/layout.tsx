@@ -29,7 +29,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Header */}
       <header className="relative z-10 p-6">
         <Link href="/" className="inline-flex items-center" aria-label="Engganyo home">
-          <BrandLogo className="h-9 w-9" wordmarkClassName="text-2xl" />
+          <BrandLogo className="h-9 w-9" wordmarkClassName="text-2xl" size={36} />
         </Link>
       </header>
 

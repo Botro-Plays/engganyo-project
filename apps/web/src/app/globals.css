@@ -2,22 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Self-hosted pixel fonts (SIL OFL 1.1 — see public/fonts/*-OFL.txt) ── */
-@font-face {
-  font-family: 'DotGothic16';
-  src: url('/fonts/DotGothic16-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'VT323';
-  src: url('/fonts/VT323-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+/* Self-hosted pixel fonts load via next/font/local (subset WOFF2 in
+   src/fonts/, SIL OFL 1.1 — see public/fonts/*-OFL.txt). The CSS vars
+   below carry metric-compatible fallbacks so font swap does not shift
+   layout; non-subset glyphs (e.g. CJK names) fall back to the system
+   monospace stack. */
 
 @layer base {
   :root {
@@ -99,7 +88,7 @@
 
   body {
     @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
-    font-family: 'DotGothic16', 'VT323', ui-monospace, monospace;
+    font-family: var(--font-dotgothic), var(--font-vt323), ui-monospace, monospace;
     /* Pixel fonts read best slightly larger with a touch of tracking */
     font-size: 16px;
     letter-spacing: 0.01em;
@@ -112,7 +101,7 @@
   pre,
   samp,
   .tabular-nums {
-    font-family: 'VT323', ui-monospace, monospace;
+    font-family: var(--font-vt323), ui-monospace, monospace;
   }
 
   ::selection {

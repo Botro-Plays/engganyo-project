@@ -16,8 +16,18 @@ export const metadata: Metadata = {
     title: 'Privacy Policy | Engganyo',
     description: 'Learn how Engganyo collects, uses, and protects your personal information.',
     url: 'https://engganyo.com/privacy',
+      images: [
+        {
+          url: '/brand/social-1200x630.png',
+          width: 1200,
+          height: 630,
+          alt: 'Engganyo: Small Taps. Big Crowds.',
+        },
+      ],
   },
   twitter: {
+      card: 'summary_large_image',
+      images: ['/brand/social-1200x630.png'],
     title: 'Privacy Policy | Engganyo',
     description: 'Learn how Engganyo collects, uses, and protects your personal information.',
   },

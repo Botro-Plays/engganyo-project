@@ -1,8 +1,27 @@
 import type { Metadata, Viewport } from 'next';
+import localFont from 'next/font/local';
 import { Providers } from './providers';
 import { CookieConsentBanner } from '@/components/cookie-consent';
 import { VisitorBeacon } from '@/components/visitor-beacon';
 import './globals.css';
+
+// Self-hosted pixel fonts as subset WOFF2 via next/font/local: metric-
+// compatible fallback (adjustFontFallback, default on) keeps swap-era
+// layout shift down, and _next/static/media serving is immutable by
+// default. Only the body/heading face is preloaded (above the fold);
+// VT323 is an accent face and loads lazily. Full TTFs + OFL licenses
+// remain in public/fonts/.
+const dotGothic = localFont({
+  src: '../fonts/DotGothic16-subset.woff2',
+  variable: '--font-dotgothic',
+  display: 'swap',
+});
+const vt323 = localFont({
+  src: '../fonts/VT323-subset.woff2',
+  variable: '--font-vt323',
+  display: 'swap',
+  preload: false,
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://engganyo.com'),
@@ -62,7 +81,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className={`dark ${dotGothic.variable} ${vt323.variable}`} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <Providers>
           {children}

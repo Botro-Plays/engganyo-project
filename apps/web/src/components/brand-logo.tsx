@@ -8,6 +8,11 @@ interface BrandLogoProps {
   wordmarkClassName?: string;
   /** When false the glyph is decorative and the wordmark carries the alt text. */
   alt?: string;
+  /** Explicit pixel size (width and height attributes) — required for
+      layout stability, defaults to the common 32px header size. */
+  size?: number;
+  /** Eager + high-priority loading for the above-the-fold header glyph. */
+  eager?: boolean;
 }
 
 /**
@@ -19,12 +24,19 @@ export function BrandLogo({
   wordmark = true,
   wordmarkClassName = 'text-lg',
   alt = 'Engganyo',
+  size = 32,
+  eager = false,
 }: BrandLogoProps) {
   return (
     <span className="inline-flex items-center gap-2 select-none">
       <img
         src="/brand/web-logo-transparent.svg"
         alt={wordmark ? '' : alt}
+        width={size}
+        height={size}
+        loading={eager ? 'eager' : 'lazy'}
+        fetchPriority={eager ? 'high' : 'auto'}
+        decoding="async"
         className={cn('object-contain', className)}
         draggable={false}
       />
