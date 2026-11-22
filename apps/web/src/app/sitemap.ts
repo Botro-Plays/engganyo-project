@@ -18,6 +18,8 @@ const PAGES: Array<{ path: string; lastModified: string }> = [
   { path: '/howitworks', lastModified: '2026-11-21' },
   { path: '/pricing', lastModified: '2026-11-21' },
   { path: '/safety', lastModified: '2026-11-21' },
+  { path: '/blog', lastModified: '2026-11-22' },
+  { path: '/blog/yourfirstweekonengganyo', lastModified: '2026-11-22' },
   // /blog stays out until the first real post exists (no empty index).
 ];
 
