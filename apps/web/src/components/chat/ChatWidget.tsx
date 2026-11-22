@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageSquare, X, Send, Minimize2, Maximize2, RefreshCw, GripVertical } from 'lucide-react';
+import {
+  MessageSquare,
+  X,
+  Send,
+  Minimize2,
+  Maximize2,
+  RefreshCw,
+  GripVertical,
+} from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient } from '@/lib/api';
@@ -55,12 +63,18 @@ function loadPos(): Pos {
         return { x: parsed.x as number, y: parsed.y as number };
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { x: 0, y: 0 };
 }
 
 function savePos(pos: Pos) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+  } catch {
+    /* ignore */
+  }
 }
 
 function loadMobilePos(): Pos | null {
@@ -76,7 +90,9 @@ function loadMobilePos(): Pos | null {
     ) {
       return { x: parsed.x as number, y: parsed.y as number };
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null;
 }
 
@@ -84,7 +100,9 @@ function saveMobilePos(pos: Pos | null) {
   try {
     if (pos === null) localStorage.removeItem(MOBILE_STORAGE_KEY);
     else localStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify(pos));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // env(safe-area-inset-bottom) can't be read from JS directly; measure a
@@ -172,7 +190,10 @@ export function ChatWidget() {
     // bottom edge the same way the mobile nav does.
     const footer = document.querySelector('footer');
     const footerTop = footer ? footer.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
-    const bottomBound = Math.min(vh, footerTop) - EDGE_MARGIN;
+    // When the footer fills nearly the whole viewport there is no free
+    // spot below it; floor the bound at the minimum position so the
+    // widget can never be clamped off-screen.
+    const bottomBound = Math.max(Math.min(vh, footerTop) - EDGE_MARGIN, EDGE_MARGIN + r.height);
     return {
       x: clamp(candidate.x, EDGE_MARGIN - left, vw - EDGE_MARGIN - r.width - left),
       y: clamp(candidate.y, EDGE_MARGIN - top, bottomBound - r.height - top),
@@ -197,10 +218,11 @@ export function ChatWidget() {
     // footer links are never covered - including mid-drag.
     const footer = document.querySelector('footer');
     const footerTop = footer ? footer.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
-    const bottomEdge = Math.min(
-      navTop - SHEET_GAP,
-      footerTop - SHEET_GAP,
-      vvBottom - safe - EDGE_MARGIN,
+    const bottomEdge = Math.max(
+      Math.min(navTop - SHEET_GAP, footerTop - SHEET_GAP, vvBottom - safe - EDGE_MARGIN),
+      // Degenerate case (footer or nav fills the viewport): keep the
+      // launcher inside the viewport rather than clamping off-screen.
+      vvTop + EDGE_MARGIN + r.height,
     );
     return {
       x: clamp(candidate.x, EDGE_MARGIN, vvW - EDGE_MARGIN - r.width),
@@ -530,7 +552,9 @@ export function ChatWidget() {
     // capture; real touches always do.
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch { /* synthetic pointer in e2e */ }
+    } catch {
+      /* synthetic pointer in e2e */
+    }
   };
 
   const onLauncherPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -673,9 +697,7 @@ export function ChatWidget() {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-sc-text">Engganyo Support</h3>
-            <p className="text-xs text-sc-dim">
-              {isAuthenticated ? 'Online' : 'Guest'}
-            </p>
+            <p className="text-xs text-sc-dim">{isAuthenticated ? 'Online' : 'Guest'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -694,11 +716,7 @@ export function ChatWidget() {
             className="rounded-lg p-1.5 text-sc-muted transition-colors hover:bg-surface-border hover:text-sc-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
             aria-label={isMinimized ? 'Maximize chat' : 'Minimize chat'}
           >
-            {isMinimized ? (
-              <Maximize2 className="h-4 w-4" />
-            ) : (
-              <Minimize2 className="h-4 w-4" />
-            )}
+            {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
           </button>
           <button
             onClick={close}
@@ -724,9 +742,7 @@ export function ChatWidget() {
                   <MessageSquare className="h-6 w-6 text-brand-400" />
                 </div>
                 <p className="mb-1 text-sm text-sc-muted">Hi there! 👋</p>
-                <p className="mb-4 text-xs text-sc-dim">
-                  How can I help you with Engganyo today?
-                </p>
+                <p className="mb-4 text-xs text-sc-dim">How can I help you with Engganyo today?</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {quickActions.map((action) => (
                     <button
@@ -754,9 +770,7 @@ export function ChatWidget() {
                   }`}
                 >
                   {msg.isHuman && (
-                    <p className="mb-1 text-xs font-medium text-brand-400">
-                      Support Agent
-                    </p>
+                    <p className="mb-1 text-xs font-medium text-brand-400">Support Agent</p>
                   )}
                   <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                 </div>

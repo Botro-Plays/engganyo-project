@@ -3,8 +3,8 @@ import { totpCode } from './totp';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
 const API = process.env.E2E_API_URL ?? 'http://localhost:3001/api';
-const EMAIL = process.env.E2E_TEST_EMAIL ?? 'admin@engganyo.com';
-const PASSWORD = process.env.E2E_TEST_PASSWORD ?? 'Admin@123456';
+const EMAIL = process.env.E2E_BLOG_ADMIN_EMAIL ?? 'e2eblogadmin@engganyo.com';
+const PASSWORD = process.env.E2E_BLOG_ADMIN_PASSWORD ?? 'E2eBlogAdmin@123';
 
 const SLUG = `e2eblog${Date.now().toString(36)}`;
 const TITLE = 'E2E post with & <angle> chars';
@@ -59,7 +59,12 @@ test.describe('blog publishing lifecycle', () => {
     version = created.version;
     expect(created.status).toBe('DRAFT');
 
-    for (const path of [`/blog/${SLUG}`, '/blog', '/blog/rss.xml', '/sitemap.xml', '/']) {
+    // The article route 404s for drafts; the RSC payload echoes the
+    // requested slug as a route param, so assert the status rather
+    // than string absence there.
+    const draftArticle = await request.get(`${BASE}/blog/${SLUG}`);
+    expect(draftArticle.status()).toBe(404);
+    for (const path of ['/blog', '/blog/rss.xml', '/sitemap.xml', '/']) {
       const pub = await request.get(`${BASE}${path}`);
       expect(await pub.text()).not.toContain(SLUG);
     }
