@@ -139,10 +139,15 @@ export function PublicFooter() {
               </a>
             </li>
             <li>
+              {/* email_off markers are emitted as literal comments so
+                  Cloudflare Email Address Obfuscation skips this public
+                  contact link - the narrowest scope, no zone change. */}
+              <span dangerouslySetInnerHTML={{ __html: '<!--email_off-->' }} />
               <a href="mailto:contact@engganyo.com" className={`${FOOTER_LINK_CLS} gap-1.5`}>
                 <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="break-all">contact@engganyo.com</span>
               </a>
+              <span dangerouslySetInnerHTML={{ __html: '<!--/email_off-->' }} />
             </li>
           </ul>
         </nav>
