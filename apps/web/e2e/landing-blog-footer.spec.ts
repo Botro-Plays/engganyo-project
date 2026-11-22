@@ -24,7 +24,7 @@ test.describe('landing blog rail (single published post)', () => {
   test('renders a static card with descriptive links, no controls', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'From the blog' })).toBeVisible();
-    const rail = page.getByRole('group', { name: 'Published articles' });
+    const rail = page.getByRole('list', { name: 'Published articles' });
     await expect(rail).toBeVisible();
     const readMore = rail.getByRole('link', { name: /Read more: Your first week on Engganyo/ });
     await expect(readMore).toHaveAttribute('href', '/blog/yourfirstweekonengganyo');
@@ -40,7 +40,7 @@ test.describe('landing blog rail (single published post)', () => {
   test('read-more link navigates to the post', async ({ page }) => {
     await page.goto('/');
     await page
-      .getByRole('group', { name: 'Published articles' })
+      .getByRole('list', { name: 'Published articles' })
       .getByRole('link', { name: /Read more:/ })
       .click();
     await expect(page).toHaveURL(/\/blog\/yourfirstweekonengganyo$/);

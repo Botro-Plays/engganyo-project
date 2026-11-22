@@ -14,7 +14,7 @@ export function BlogPostCard({ post }: { post: BlogPostSummary }) {
   return (
     <li className="snap-start shrink-0 w-[19rem] sm:w-[22rem] list-none">
       <article className="card-glass rounded-xl p-6 min-h-[11.5rem] h-full flex flex-col">
-        <time dateTime={post.date} className="text-xs text-zinc-500 mb-2 block">
+        <time dateTime={post.date} className="text-xs text-zinc-400 mb-2 block">
           {new Date(`${post.date}T00:00:00Z`).toLocaleDateString('en-GB', {
             day: 'numeric',
             month: 'long',
