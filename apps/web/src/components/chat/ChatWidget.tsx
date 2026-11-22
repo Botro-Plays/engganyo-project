@@ -21,6 +21,9 @@ interface ChatResponse {
 }
 
 const STORAGE_KEY = 'chat-widget-pos';
+// Mobile keeps its own saved launcher spot, separate from the desktop
+// dock offset so neither layout disturbs the other.
+const MOBILE_STORAGE_KEY = 'chat-widget-pos-mobile';
 const EDGE_MARGIN = 8;
 const DESKTOP_QUERY = '(min-width: 640px)';
 // Sheet geometry (mobile): the sheet's bottom edge anchors to the lower of
@@ -60,6 +63,30 @@ function savePos(pos: Pos) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
 }
 
+function loadMobilePos(): Pos | null {
+  try {
+    const raw = localStorage.getItem(MOBILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Pos>;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      Number.isFinite(parsed.x) &&
+      Number.isFinite(parsed.y)
+    ) {
+      return { x: parsed.x as number, y: parsed.y as number };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveMobilePos(pos: Pos | null) {
+  try {
+    if (pos === null) localStorage.removeItem(MOBILE_STORAGE_KEY);
+    else localStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify(pos));
+  } catch { /* ignore */ }
+}
+
 // env(safe-area-inset-bottom) can't be read from JS directly; measure a
 // fixed probe with the same bottom value.
 function measureSafeAreaInsetBottom(): number {
@@ -90,6 +117,16 @@ export function ChatWidget() {
 
   // ── Draggable dock offset (desktop only); mobile ignores pos and uses a sheet ──
   const [pos, setPos] = useState<Pos>({ x: 0, y: 0 });
+  // Mobile launcher position: {x,y} = fixed left/top in layout-viewport
+  // px. null = the default docked corner (classes place it).
+  const [mPos, setMPos] = useState<Pos | null>(null);
+  const mPosRef = useRef<Pos | null>(null);
+  const mDragGrab = useRef<Pos>({ x: 0, y: 0 });
+  const mDragging = useRef(false);
+  // Set once a gesture travels past the tap threshold; the trailing
+  // click is then swallowed so a drag never opens chat. Keyboard Enter
+  // clicks (clientX/Y 0) are unaffected because this stays false.
+  const movedRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const widgetRef = useRef<HTMLElement | null>(null);
   const posRef = useRef<Pos>({ x: 0, y: 0 });
@@ -112,6 +149,9 @@ export function ChatWidget() {
   useEffect(() => {
     posRef.current = pos;
   }, [pos]);
+  useEffect(() => {
+    mPosRef.current = mPos;
+  }, [mPos]);
 
   // Clamp an offset so the widget's rect stays fully inside the viewport
   // (minus EDGE_MARGIN). The base rect is the docked rect with the current
@@ -127,6 +167,27 @@ export function ChatWidget() {
     return {
       x: clamp(candidate.x, EDGE_MARGIN - left, vw - EDGE_MARGIN - r.width - left),
       y: clamp(candidate.y, EDGE_MARGIN - top, vh - EDGE_MARGIN - r.height - top),
+    };
+  }, []);
+
+  // Clamp an absolute {left,top} launcher spot: fully inside the visual
+  // viewport minus margins, and always above the mobile nav's top edge
+  // (or the safe-area-adjusted viewport bottom when no nav is present).
+  const clampMobileSpot = useCallback((candidate: Pos): Pos => {
+    const el = launcherRef.current;
+    if (!el) return candidate;
+    const r = el.getBoundingClientRect();
+    const vvEl = window.visualViewport;
+    const vvW = vvEl?.width ?? window.innerWidth;
+    const vvTop = vvEl?.offsetTop ?? 0;
+    const vvBottom = vvTop + (vvEl?.height ?? window.innerHeight);
+    const safe = measureSafeAreaInsetBottom();
+    const nav = document.querySelector('nav[aria-label="Mobile navigation"]');
+    const navTop = nav ? nav.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
+    const bottomEdge = Math.min(navTop - SHEET_GAP, vvBottom - safe - EDGE_MARGIN);
+    return {
+      x: clamp(candidate.x, EDGE_MARGIN, vvW - EDGE_MARGIN - r.width),
+      y: clamp(candidate.y, vvTop + EDGE_MARGIN, bottomEdge - r.height),
     };
   }, []);
 
@@ -229,6 +290,21 @@ export function ChatWidget() {
     };
   }, [clampToViewport, isOpen]);
 
+  // Load + re-clamp the mobile launcher spot on mount, on breakpoint
+  // change, and whenever the visible viewport moves (keyboard opening
+  // can push a saved spot out of view).
+  useEffect(() => {
+    if (isDesktop) return;
+    setMPos((current) => {
+      const candidate = current ?? loadMobilePos();
+      if (!candidate) return null;
+      const next = clampMobileSpot(candidate);
+      if (next.x !== candidate.x || next.y !== candidate.y) saveMobilePos(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDesktop, vvTick, clampMobileSpot]);
+
   const scrollToBottom = () => {
     // Scroll the message container directly — scrollIntoView could also
     // pull the underlying page when the sheet opens mid-document.
@@ -320,6 +396,10 @@ export function ChatWidget() {
 
   const onDrag = useCallback(
     (clientX: number, clientY: number) => {
+      const start = dragStartPos.current;
+      if (start && Math.hypot(clientX - start.x, clientY - start.y) >= 5) {
+        movedRef.current = true;
+      }
       const raw = { x: clientX - dragOffset.current.x, y: clientY - dragOffset.current.y };
       setPos(clampToViewport(raw));
     },
@@ -366,11 +446,41 @@ export function ChatWidget() {
     return !!target.closest('button, input, textarea, a, select, [data-no-drag]');
   };
 
-  const isClick = (clientX: number, clientY: number) => {
-    if (!dragStartPos.current) return true;
-    const dx = clientX - dragStartPos.current.x;
-    const dy = clientY - dragStartPos.current.y;
-    return Math.sqrt(dx * dx + dy * dy) < 5;
+  // Mobile launcher drag: Pointer Events + capture. A tap still opens
+  // chat (isClick distance check); a real drag repositions instead.
+  const onLauncherPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (isDesktop || e.pointerType === 'mouse') return;
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    mDragGrab.current = { x: e.clientX - r.left, y: e.clientY - r.top };
+    mDragging.current = true;
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    // Synthetic pointer events in tests have no active pointer to
+    // capture; real touches always do.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch { /* synthetic pointer in e2e */ }
+  };
+
+  const onLauncherPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!mDragging.current) return;
+    const start = dragStartPos.current;
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) >= 5) {
+      movedRef.current = true;
+    }
+    const spot = { x: e.clientX - mDragGrab.current.x, y: e.clientY - mDragGrab.current.y };
+    setMPos(clampMobileSpot(spot));
+  };
+
+  const onLauncherPointerEnd = () => {
+    if (!mDragging.current) return;
+    mDragging.current = false;
+    saveMobilePos(mPosRef.current);
+  };
+
+  const resetMobilePos = () => {
+    setMPos(null);
+    saveMobilePos(null);
   };
 
   // z-40 keeps the widget under dialogs/room modals (z-50), the mobile nav,
@@ -379,25 +489,51 @@ export function ChatWidget() {
   // nav can't intercept composer taps.
   if (!isOpen) {
     return (
-      <button
-        ref={(el) => {
-          widgetRef.current = el;
-          launcherRef.current = el;
-        }}
-        onClick={(e) => {
-          if (isClick(e.clientX, e.clientY)) setIsOpen(true);
-        }}
-        onMouseDown={(e) => {
-          if (!isDesktop) return;
-          e.preventDefault();
-          startDrag(e.clientX, e.clientY);
-        }}
-        style={dragStyle}
-        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-40 rounded-full bg-brand-500 p-4 text-sc-text shadow-lg shadow-brand-500/30 transition-all hover:scale-105 hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-sc-bg motion-reduce:transition-none sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-6"
-        aria-label="Open support chat"
-      >
-        <MessageSquare className="h-6 w-6" />
-      </button>
+      <>
+        <button
+          ref={(el) => {
+            widgetRef.current = el;
+            launcherRef.current = el;
+          }}
+          onClick={(e) => {
+            if (movedRef.current) {
+              movedRef.current = false;
+              return;
+            }
+            setIsOpen(true);
+          }}
+          onMouseDown={(e) => {
+            if (!isDesktop) return;
+            e.preventDefault();
+            startDrag(e.clientX, e.clientY);
+          }}
+          onPointerDown={onLauncherPointerDown}
+          onPointerMove={onLauncherPointerMove}
+          onPointerUp={onLauncherPointerEnd}
+          onPointerCancel={onLauncherPointerEnd}
+          style={
+            mPos && !isDesktop
+              ? { left: mPos.x, top: mPos.y, bottom: 'auto', right: 'auto' }
+              : dragStyle
+          }
+          // touch-none lets pointermove drive the drag without the page
+          // scrolling the gesture away.
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-40 touch-none rounded-full bg-brand-500 p-4 text-sc-text shadow-lg shadow-brand-500/30 transition-all hover:scale-105 hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-sc-bg motion-reduce:transition-none sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-6 sm:touch-auto"
+          aria-label="Open support chat"
+        >
+          <MessageSquare className="h-6 w-6" />
+        </button>
+        {mPos && !isDesktop && (
+          <button
+            onClick={resetMobilePos}
+            style={{ left: mPos.x, top: Math.max(EDGE_MARGIN, mPos.y - 36) }}
+            className="fixed z-40 rounded-full border border-surface-border bg-surface px-2.5 py-1 text-[10px] text-sc-muted shadow-md"
+            aria-label="Reset chat button position"
+          >
+            Reset
+          </button>
+        )}
+      </>
     );
   }
 
