@@ -48,6 +48,18 @@ test.describe('blog publishing lifecycle', () => {
     expect(token).toBeTruthy();
   });
 
+  test.afterAll(async ({ request }) => {
+    // Best-effort cleanup: a mid-serial failure must not leave a
+    // published e2e post polluting the landing/index specs.
+    if (!postId) return;
+    await request
+      .delete(`${API}/admin/blog/posts/${postId}`, {
+        headers: headers(),
+        data: { confirm: true, expectedVersion: version ?? 0 },
+      })
+      .catch(() => {});
+  });
+
   test('create draft: hidden from every public surface', async ({ request }) => {
     const res = await request.post(`${API}/admin/blog/posts`, {
       headers: headers(),
@@ -100,13 +112,32 @@ test.describe('blog publishing lifecycle', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('href="/faq"');
 
+    // RSS, sitemap, and the landing rail all read the same tagged data
+    // cache; poll so the assertion covers revalidation convergence.
+    await expect
+      .poll(async () => (await request.get(`${BASE}/blog/rss.xml`)).text(), {
+        timeout: 30_000,
+        intervals: [500, 1500, 3000],
+      })
+      .toContain(SLUG);
     const rss = await (await request.get(`${BASE}/blog/rss.xml`)).text();
-    expect(rss).toContain(SLUG);
     // XML escaping: the literal <angle> in the title must be escaped.
     expect(rss).toContain('&lt;angle&gt;');
     expect(rss).not.toContain('<angle>');
-    const sitemap = await (await request.get(`${BASE}/sitemap.xml`)).text();
-    expect(sitemap).toContain(SLUG);
+    await expect
+      .poll(async () => (await request.get(`${BASE}/sitemap.xml`)).text(), {
+        timeout: 30_000,
+        intervals: [500, 1500, 3000],
+      })
+      .toContain(SLUG);
+    await expect
+      .poll(async () => (await request.get(`${BASE}/`)).text(), {
+        timeout: 30_000,
+        intervals: [500, 1500, 3000],
+      })
+      .toContain(SLUG);
+    const index = await (await request.get(`${BASE}/blog`)).text();
+    expect(index).toContain(SLUG);
   });
 
   test('unpublish: removed from public surfaces', async ({ request }) => {

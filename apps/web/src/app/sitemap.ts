@@ -3,7 +3,10 @@ import { listPublishedPosts } from '@/lib/blog';
 
 const BASE_URL = 'https://engganyo.com';
 
-export const revalidate = 60;
+// Dynamic so publish/unpublish revalidation (tag 'blog' on the inner
+// fetch) is the only cache mechanism. The 60s data cache inside
+// listPublishedPosts still bounds upstream API load.
+export const dynamic = 'force-dynamic';
 
 // Real per-page content dates. Update when a page's substance changes.
 // Google ignores changefreq/priority, so they are omitted.

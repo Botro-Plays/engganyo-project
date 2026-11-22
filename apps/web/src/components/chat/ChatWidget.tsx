@@ -384,10 +384,17 @@ export function ChatWidget() {
       return;
     }
     const vvEl = window.visualViewport;
-    const vvBottom = (vvEl?.offsetTop ?? 0) + (vvEl?.height ?? window.innerHeight);
+    const vvTop = vvEl?.offsetTop ?? 0;
+    const vvBottom = vvTop + (vvEl?.height ?? window.innerHeight);
     const top = footer.getBoundingClientRect().top;
-    setFooterLift(Math.max(0, vvBottom - top + SHEET_GAP));
-  }, [vvTick, pathname]);
+    // Cap the lift so the launcher's top edge never leaves the viewport:
+    // when the footer fills the whole viewport there is no free spot
+    // above it, and staying on-screen wins over clearing the footer.
+    const launcherH = launcherRef.current?.getBoundingClientRect().height ?? 64;
+    const baseDock = (isDesktop ? 24 : 80) + measureSafeAreaInsetBottom();
+    const maxLift = Math.max(0, vvBottom - baseDock - launcherH - EDGE_MARGIN - vvTop);
+    setFooterLift(Math.min(Math.max(0, vvBottom - top + SHEET_GAP), maxLift));
+  }, [vvTick, pathname, isDesktop]);
 
   const scrollToBottom = () => {
     // Scroll the message container directly - scrollIntoView could also
