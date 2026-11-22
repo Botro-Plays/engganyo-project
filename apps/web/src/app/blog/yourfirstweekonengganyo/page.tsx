@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
+import { POSTS } from '../posts';
 
 export const revalidate = 3600;
 
 const TITLE = 'Your first week on Engganyo: a simple plan';
 const DESCRIPTION =
   'A plain guide to your first week on Engganyo: join free, do a few small tasks, earn credits, then try your first campaign.';
-const PUBLISHED = '2026-11-22';
+const PUBLISHED = POSTS.find((p) => p.slug === 'yourfirstweekonengganyo')!.date;
 
 export const metadata: Metadata = {
   title: TITLE,

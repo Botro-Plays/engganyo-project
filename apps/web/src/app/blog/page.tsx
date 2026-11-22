@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
+import { POSTS } from './posts';
 
 export const revalidate = 3600;
 
@@ -42,16 +43,6 @@ const jsonLd = innerPageJsonLd({
     'Plain guides and updates for creators who want to grow their pages.',
   breadcrumb: 'Blog',
 });
-
-const POSTS = [
-  {
-    slug: 'yourfirstweekonengganyo',
-    title: 'Your first week on Engganyo: a simple plan',
-    description:
-      'A plain guide to your first week on Engganyo: join free, do a few small tasks, earn credits, then try your first campaign.',
-    date: '2026-11-22',
-  },
-];
 
 export default function BlogIndex() {
   return (
