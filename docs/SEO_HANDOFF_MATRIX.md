@@ -26,13 +26,29 @@ Each task mapped to current evidence, action, and acceptance. Owner rules overri
 - CSP: stays report-only until violation reports are reviewed and auth/reCAPTCHA/payments/uploads/sockets are regression-tested - a separate staged change, not bundled silently.
 - Lighthouse is lab data; reported separately from CrUX/GSC field data. No 100/100, ranking, indexing, or traffic promises.
 
-## Cloudflare plan (separate, owner-executed)
+## Cloudflare plan (API-assisted; read-only prepared, writes await owner approval)
 
-1. Scrape Shield → Email Address Obfuscation: OFF (Task 5).
-2. Security → Bots → AI Crawl Control: allow PerplexityBot; keep training crawlers blocked (GPTBot, CCBot, Google-Extended, ClaudeBot…); keep OAI-SearchBot, ChatGPT-User, Googlebot, bingbot allowed (Task 6).
-3. Cache rules: optional page rule for public HTML TTL 1h + purge on deploy (app already emits `s-maxage=3600` - rule is additive, not required).
-4. robots.txt managed block stays as-is (its own `User-agent: *` group is acceptable per handoff note).
-5. CSP enforcement: only after report-only violation data is reviewed and auth/reCAPTCHA/payments/uploads/sockets regression-tested.
+Prepared: `infra/scripts/cf-inspect.sh` - read-only snapshot tool using a zone-scoped
+`CLOUDFLARE_API_TOKEN`. Required minimum scopes (all zone-locked to engganyo.com,
+all Read): Zone, Zone Settings, Firewall Services/WAF, Transform Rules, Page Rules,
+Workers Routes. No DNS, billing, account, or any write scope requested for this phase.
+The script exports a sanitized JSON snapshot (settings, WAF/rulesets, header transforms,
+page rules, workers routes, live headers/robots/contact-page checks, PerplexityBot UA probe)
+and never prints or stores the token.
+
+Diagnosis-first order once the token is supplied:
+1. Verify token + zone identity/plan; inventory which controls are API-manageable vs dashboard-only.
+2. Identify the actual PerplexityBot blocking mechanism (AI Crawl Control vs WAF custom/managed rule) BEFORE touching it - a user-agent probe result is not crawler-identity evidence.
+3. Find the CSP header source (origin Next headers vs CF transform/worker) and any collected violation evidence.
+4. Export sanitized snapshot + rollback instructions; then present exact proposed changes for approval.
+
+Proposed corrections (pending owner approval - no writes performed yet):
+1. Email obfuscation: two options. (a) Preferred, zero-API-write: wrap the contact email in `<!--email_off-->`/`<!--/email_off-->` in page source - narrowest possible scope, one address only. (b) `PATCH /zones/{id}/settings/email_obfuscation` = `off` zone-wide if (a) is rejected. Verify: `mailto:contact@engganyo.com` + visible address in public HTML with zero `cfemail`/`email-protection` markup.
+2. PerplexityBot: allowlist via the mechanism identified in step 2 (AI Crawl Control toggle or targeted WAF skip with CF-verified crawler fields where available - never a bare UA bypass). Keep training crawlers (GPTBot, CCBot, Google-Extended, ClaudeBot) blocked; keep search agents allowed; preserve auth, rate limits, private-route protection.
+3. CSP: keep single source of truth (origin headers) - do NOT add a competing CF transform. Enforcement stays deferred until violation evidence is reviewed and auth/reCAPTCHA/payments/proof-uploads/fonts/analytics/chat/sockets regression-tested.
+4. Cache rule: optional, additive only (origin already emits `s-maxage=3600`).
+
+If any needed control is dashboard-only on the zone's plan, the smallest specific owner action gets reported instead of a workaround.
 
 ## Delivery record (2026-11-22)
 
