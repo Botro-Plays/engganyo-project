@@ -484,6 +484,11 @@ test.describe('mobile launcher drag @390px', () => {
     const after = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBeGreaterThan(40);
     await insideViewport(page, LAUNCHER);
+    // DIAG: verify the drag actually persisted.
+    console.log(
+      'LAUNCHER_SAVE',
+      await page.evaluate(() => localStorage.getItem('chat-widget-pos-mobile')),
+    );
     // Above the nav, not over it.
     const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
     expect(nav).not.toBeNull();
@@ -493,6 +498,20 @@ test.describe('mobile launcher drag @390px', () => {
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
     await expect(page.locator(LAUNCHER)).toBeVisible();
+    // DIAG: storage + applied position after reload.
+    console.log(
+      'RELOAD_STATE',
+      JSON.stringify(
+        await page.locator(LAUNCHER).evaluate((el) => ({
+          ls: localStorage.getItem('chat-widget-pos-mobile'),
+          inline: { left: el.style.left, top: el.style.top },
+          comp: {
+            left: getComputedStyle(el).left,
+            top: getComputedStyle(el).top,
+          },
+        })),
+      ),
+    );
     const reloaded = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(reloaded.x - after.x)).toBeLessThanOrEqual(4);
     expect(Math.abs(reloaded.y - after.y)).toBeLessThanOrEqual(4);
@@ -571,6 +590,7 @@ test.describe('mobile launcher drag @390px', () => {
     const reset = page.locator('button[aria-label="Reset chat button position"]');
     await expect(reset).toBeVisible();
     await reset.click();
+    await page.waitForTimeout(400); // transition-all animates left/top
     const restored = (await page.locator(LAUNCHER).boundingBox())!;
     expect(Math.abs(restored.x - before.x)).toBeLessThanOrEqual(4);
     expect(Math.abs(restored.y - before.y)).toBeLessThanOrEqual(4);
@@ -608,6 +628,16 @@ test.describe('mobile launcher drag @390px', () => {
     // Keyboard opens: visible region drops to 420px tall.
     await setVisibleViewport(page, 420, 0);
     await expect(page.locator(LAUNCHER)).toBeVisible();
+    console.log(
+      'KB_STATE',
+      JSON.stringify(
+        await page.locator(LAUNCHER).evaluate((el) => ({
+          ls: localStorage.getItem('chat-widget-pos-mobile'),
+          inline: { left: el.style.left, top: el.style.top },
+          vv: window.visualViewport?.height,
+        })),
+      ),
+    );
     const box = (await page.locator(LAUNCHER).boundingBox())!;
     expect(box.y + box.height).toBeLessThanOrEqual(420 + 1);
   });
