@@ -454,7 +454,7 @@ export default async function LandingPage() {
             </Link>
             <p className="mt-4 text-xs text-sc-dim">
               Already have an account?{' '}
-              <Link href="/login" className="text-sc-muted hover:text-sc-text transition-colors">
+              <Link href="/login" className="text-sc-muted hover:text-sc-text transition-colors underline underline-offset-2">
                 Sign in
               </Link>
             </p>
