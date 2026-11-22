@@ -8,9 +8,9 @@ import './globals.css';
 // Self-hosted pixel fonts as subset WOFF2 via next/font/local: metric-
 // compatible fallback (adjustFontFallback, default on) keeps swap-era
 // layout shift down, and _next/static/media serving is immutable by
-// default. Only the body/heading face is preloaded (above the fold);
-// VT323 is an accent face and loads lazily. Full TTFs + OFL licenses
-// remain in public/fonts/.
+// default. Both faces are preloaded - DotGothic16 is the body/heading
+// face and VT323 renders the above-the-fold hero card. Full TTFs + OFL
+// licenses remain in public/fonts/.
 const dotGothic = localFont({
   src: '../fonts/DotGothic16-subset.woff2',
   variable: '--font-dotgothic',
@@ -20,7 +20,9 @@ const vt323 = localFont({
   src: '../fonts/VT323-subset.woff2',
   variable: '--font-vt323',
   display: 'swap',
-  preload: false,
+  // Used above the fold in the hero task card - a late swap measured
+  // 0.113 CLS on the deployed site, so the ~18 KB subset is preloaded.
+  preload: true,
 });
 
 export const metadata: Metadata = {
