@@ -73,6 +73,7 @@ services:
       DATABASE_URL: postgresql://${DATABASE_USER:-engganyo}:${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in the VPS .env}@postgres:5432/${DATABASE_NAME:-engganyo_db}
       REDIS_URL: redis://redis:6379
       REDIS_HOST: redis
+      WEB_INTERNAL_URL: http://web:3000
     ports:
       - '127.0.0.1:${APP_PORT:-3001}:3001'
     volumes:

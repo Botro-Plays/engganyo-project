@@ -89,6 +89,12 @@ async function bootstrap(): Promise<void> {
       res.setHeader('Cache-Control', 'public, max-age=86400');
     },
   });
+  app.useStaticAssets(path.resolve(process.cwd(), 'uploads', 'blog'), {
+    prefix: '/uploads/blog/',
+    setHeaders: (res: Response) => {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    },
+  });
 
   // ─── Global Prefix ────────────────────────────────────────
   app.setGlobalPrefix('api');
