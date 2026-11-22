@@ -227,13 +227,22 @@ jobs:
           npm run db:seed
         working-directory: apps/api
 
+      # The admin guards require 2FA for admin roles. Create a dedicated
+      # e2e admin with a fixed test-only TOTP secret so the suite
+      # completes the real login flow instead of bypassing the guard.
+      # The seeded admin stays without 2FA - other specs cover the
+      # ADMIN_2FA_REQUIRED gate. No-op without E2E_ADMIN_TOTP_SECRET.
+      - name: Create e2e blog admin (TOTP-enabled)
+        working-directory: apps/api
+        env:
+          E2E_ADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXP
+          E2E_BLOG_ADMIN_EMAIL: e2eblogadmin@engganyo.com
+          E2E_BLOG_ADMIN_PASSWORD: E2eBlogAdmin@123
+        run: node scripts/e2e-admin-2fa.mjs
+
       - name: Build API
         run: npm run build
         working-directory: apps/api
-
-      - name: Build web
-        run: npm run build
-        working-directory: apps/web
 
       - name: Create uploads directory
         run: mkdir -p uploads
@@ -262,6 +271,16 @@ jobs:
           node dist/main > /tmp/api.log 2>&1 &
         working-directory: apps/api
 
+      - name: Wait for API
+        run: npx wait-on http://localhost:3001/api/health --timeout 120000
+
+      # The web build prerenders public pages (landing rail, /blog
+      # index, sitemap, RSS) which fetch /api/blog/* server-side. The API
+      # must be up before `npm run build` or the pages bake empty lists.
+      - name: Build web
+        run: npm run build
+        working-directory: apps/web
+
       - name: Start web server
         run: |
           export INTERNAL_REVALIDATE_SECRET=e2e-revalidate-secret
@@ -274,6 +293,9 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
           E2E_TEST_EMAIL: admin@engganyo.com
           E2E_TEST_PASSWORD: Admin@123456
+          E2E_ADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXP
+          E2E_BLOG_ADMIN_EMAIL: e2eblogadmin@engganyo.com
+          E2E_BLOG_ADMIN_PASSWORD: E2eBlogAdmin@123
           # Containerized job reaches the redis service container by its
           # Docker label hostname; the spec's fixture allowlist is loopback
           # by default and only accepts this explicit opt-in.

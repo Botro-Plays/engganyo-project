@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
+import { EmailOff } from '@/components/email-off';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -193,7 +194,16 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Through our <Link href="/contact" className="text-brand-400 hover:underline">contact page</Link></li>
-              <li>By email at: <address className="not-italic inline">contact@engganyo.com</address></li>
+              <li>
+                By email at:{' '}
+                <address className="not-italic inline">
+                  <EmailOff>
+                    <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                      contact@engganyo.com
+                    </a>
+                  </EmailOff>
+                </address>
+              </li>
             </ul>
           </section>
         </div>

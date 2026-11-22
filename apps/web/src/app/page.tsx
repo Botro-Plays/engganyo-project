@@ -18,7 +18,7 @@ import { TelegramIcon } from '@/components/telegram-icon';
 import { PublicFooter } from '@/components/public-chrome';
 import { BlogRail } from '@/components/blog-rail';
 import { BlogPostCard } from '@/components/blog-post-card';
-import { POSTS } from './blog/posts';
+import { listPublishedPosts } from '@/lib/blog';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -97,10 +97,22 @@ export const metadata: Metadata = {
   openGraph: {
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
+    // Page-level openGraph replaces the layout block wholesale, so the
+    // social image must be declared here explicitly.
+    images: [
+      {
+        url: 'https://engganyo.com/brand/social-1200x630.png',
+        width: 1200,
+        height: 630,
+        alt: 'Engganyo - Small Taps. Big Crowds.',
+      },
+    ],
   },
   twitter: {
+    card: 'summary_large_image',
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
+    images: ['https://engganyo.com/brand/social-1200x630.png'],
   },
 };
 
@@ -144,6 +156,7 @@ async function getPublicStats(): Promise<PublicStats | null> {
 
 export default async function LandingPage() {
   const stats = await getPublicStats();
+  const { items: blogPosts } = await listPublishedPosts(1, 12);
   return (
     <>
       <script
@@ -465,6 +478,7 @@ export default async function LandingPage() {
         </section>
 
         {/* ── Blog previews ─────────────────────────────────────────── */}
+        {blogPosts.length > 0 && (
         <section aria-labelledby="landing-blog-heading" className="relative z-10 pb-16 sm:pb-20 px-4 sm:px-6 max-w-5xl mx-auto">
           <div className="flex items-end justify-between gap-4 mb-6">
             <h2 id="landing-blog-heading" className="text-2xl sm:text-3xl font-bold">
@@ -478,12 +492,21 @@ export default async function LandingPage() {
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          <BlogRail count={POSTS.length}>
-            {POSTS.map((post) => (
-              <BlogPostCard key={post.slug} post={post} />
+          <BlogRail count={blogPosts.length}>
+            {blogPosts.map((post) => (
+              <BlogPostCard
+                key={post.slug}
+                post={{
+                  slug: post.slug,
+                  title: post.title,
+                  description: post.excerpt,
+                  date: post.publishedAt.slice(0, 10),
+                }}
+              />
             ))}
           </BlogRail>
         </section>
+        )}
 
         {/* ── Footer ───────────────────────────────────────────── */}
         <PublicFooter />
