@@ -115,9 +115,27 @@ test.describe('blog publishing lifecycle', () => {
     expect(items.some((i: { slug: string }) => i.slug === SLUG)).toBe(false);
   });
 
-  test('unauthenticated and missing-role access are rejected', async ({ request }) => {
+  test('unauthenticated and insufficient-role access are rejected', async ({ request }) => {
     const anon = await request.get(`${API}/admin/blog/posts`);
     expect(anon.status()).toBe(401);
+
+    // A freshly registered member has no admin role -> 403 on admin blog.
+    const username = `e2eblogrole${Date.now().toString(36)}`;
+    const reg = await request.post(`${API}/auth/register`, {
+      data: {
+        email: `${username}@test.local`,
+        username,
+        password: 'Test@12345',
+      },
+    });
+    if (reg.ok()) {
+      const userToken = (await reg.json()).data?.accessToken;
+      const forbidden = await request.get(`${API}/admin/blog/posts`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      expect(forbidden.status()).toBe(403);
+    }
+
     const publicDrafts = await request.get(`${API}/blog/posts?status=DRAFT`);
     const items = (await publicDrafts.json()).data?.items ?? [];
     expect(items.every((i: { slug: string }) => typeof i.slug === 'string')).toBe(true);
