@@ -16,7 +16,7 @@ test.use({ viewport: { width: 1440, height: 900 }, video: 'on' });
 test('controls step and wrap, hover/focus/manual pause', async ({ page }, testInfo) => {
   const res = await page.goto('/rail-fixture');
   test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
-  const rail = page.getByRole('group', { name: 'Published articles' });
+  const rail = page.getByRole('list', { name: 'Published articles' });
   await expect(rail).toBeVisible();
   expect(await rail.locator('li').count()).toBe(4);
 
@@ -56,7 +56,7 @@ test('controls step and wrap, hover/focus/manual pause', async ({ page }, testIn
 test('autoplay advances roughly on interval and pauses on hover', async ({ page }) => {
   const res = await page.goto('/rail-fixture');
   test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
-  const rail = page.getByRole('group', { name: 'Published articles' });
+  const rail = page.getByRole('list', { name: 'Published articles' });
   const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
   // Hover suspends autoplay: scroll stays put well past one interval.
   await rail.hover();
@@ -72,7 +72,7 @@ test('reduced motion: autoplay disabled, controls instant-step', async ({ page }
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const res = await page.goto('/rail-fixture');
   test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
-  const rail = page.getByRole('group', { name: 'Published articles' });
+  const rail = page.getByRole('list', { name: 'Published articles' });
   const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
   const t0 = await scrollLeft();
   await page.waitForTimeout(7800);

@@ -88,7 +88,6 @@ export function BlogRail({ children, count }: { children: React.ReactNode; count
     <div className="relative">
       <ul
         ref={railRef}
-        role="group"
         aria-label="Published articles"
         onPointerEnter={() => (suspend.current.hover = true)}
         onPointerLeave={() => (suspend.current.hover = false)}
