@@ -17,6 +17,7 @@ const CTA = 'a.tg-hero-cta';
 
 const readStyles = (page: import('@playwright/test').Page) =>
   page.locator(CTA).evaluate((el) => ({
+    shadow: getComputedStyle(el).boxShadow,
     beforeAnim: getComputedStyle(el, '::before').animationName,
     beforeShadow: getComputedStyle(el, '::before').boxShadow,
     iconAnim: getComputedStyle(el.querySelector('.tg-hero-icon')!).animationName,
@@ -180,11 +181,11 @@ test.describe('reduced motion', () => {
     await expect(cta).toBeVisible();
     const r = await readRadii(page);
     expect(parseFloat(r.button)).toBe(14);
-    expect(parseFloat(r.outline)).toBe(15);
     const s = await readStyles(page);
-    // Static outline, no animation.
+    // In reduced motion the static emphasis is the button's own
+    // border + box-shadow ring; ::before is not used.
+    expect(s.shadow).not.toBe('none');
     expect(s.beforeAnim).toBe('none');
-    expect(s.beforeShadow).not.toBe('none');
     await cta.screenshot({ path: 'test-results/cta-reduced-motion.png' });
   });
 });
