@@ -260,6 +260,16 @@
    attention effect. Transform/opacity/box-shadow/border-color only:
    no layout shift, no rapid flashing, registration CTA stays primary.
    Reduced-motion users get a static emphasized outline instead. */
+/* Intentional explicit corner radius for the Telegram CTA: the theme
+   maps every rounded-* utility to 0px (square pixel panels), but this
+   one element carries a rounded treatment. One token drives the button,
+   the outline, and the shimmer clip so no square corner can leak
+   behind the rounded outline. */
+.tg-hero-cta {
+  --tg-hero-radius: 14px;
+  border-radius: var(--tg-hero-radius);
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Static emphasis: permanent blue+gold outline so the link still
      reads as the community call-out without any animation. */
@@ -349,7 +359,9 @@
     position: absolute;
     inset: -1px;
     border: 1px solid rgba(5, 9, 24, 0.35);
-    border-radius: 13px;
+    /* One ring sits 1px outside the button, so its radius is +1px to
+       stay concentric. */
+    border-radius: calc(var(--tg-hero-radius) + 1px);
     pointer-events: none;
     animation: tg-hero-glow 3.5s ease-in-out 1.6s infinite;
   }
@@ -361,7 +373,7 @@
     position: absolute;
     inset: 0;
     overflow: hidden;
-    border-radius: inherit;
+    border-radius: var(--tg-hero-radius);
     pointer-events: none;
   }
   .tg-hero-shine::after {
