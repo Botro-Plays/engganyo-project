@@ -45,20 +45,25 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     const onDisconnect = () => setConnected(false);
     const onConnectError = () => setConnected(false);
 
-    void connectSocket(token).then((created) => {
-      // The effect may have cleaned up while the lazy import resolved.
-      if (!active) return;
-      s = created;
-      s.on('connect', onConnect);
-      s.on('disconnect', onDisconnect);
-      s.on('connect_error', onConnectError);
+    void connectSocket(token)
+      .then((created) => {
+        // Effect cleaned up, or the attempt was superseded/disconnected
+        // while the lazy import resolved (connectSocket resolves null).
+        if (!active || !created) return;
+        s = created;
+        s.on('connect', onConnect);
+        s.on('disconnect', onDisconnect);
+        s.on('connect_error', onConnectError);
 
-      if (s.connected) {
-        setConnected(true);
-      }
+        if (s.connected) {
+          setConnected(true);
+        }
 
-      setSocket(s);
-    });
+        setSocket(s);
+      })
+      // Import/connect failure leaves no socket - handled here so the
+      // rejection is never unhandled; reconnect() retries on demand.
+      .catch(() => {});
 
     return () => {
       active = false;
