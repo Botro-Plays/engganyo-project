@@ -417,3 +417,267 @@ test.describe('sheet height budget vs visible viewport (simulated keyboard)', ()
     await expect(page.locator(DIALOG).getByText('Cramped')).toBeVisible();
   });
 });
+
+// ── Mobile launcher touch dragging ─────────────────────────────────────
+// Synthetic PointerEvents drive the pointer-capture drag path. Real
+// device acceptance (finger feel, capture edge cases) stays
+// owner-assisted.
+
+const LAUNCHER_POS_KEY = 'chat-widget-pos-mobile';
+
+async function pointerDrag(
+  page: Page,
+  from: { x: number; y: number },
+  steps: { x: number; y: number }[],
+) {
+  const launcher = page.locator(LAUNCHER);
+  await launcher.dispatchEvent('pointerdown', {
+    pointerId: 7,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: from.x,
+    clientY: from.y,
+    bubbles: true,
+  });
+  for (const pt of steps) {
+    await launcher.dispatchEvent('pointermove', {
+      pointerId: 7,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: pt.x,
+      clientY: pt.y,
+      bubbles: true,
+    });
+  }
+  return launcher;
+}
+
+test.describe('mobile launcher drag @390px', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoDashboard(page);
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+  });
+
+  test('touch drag repositions without opening chat; persists across reload', async ({
+    page,
+  }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 100, y: before.y - 100 },
+      { x: before.x + 150, y: before.y - 160 },
+    ]);
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: before.x + 150,
+      clientY: before.y - 160,
+      bubbles: true,
+    });
+    // Trailing click after the drag must NOT open the sheet.
+    await launcher.dispatchEvent('click', {
+      clientX: before.x + 150,
+      clientY: before.y - 160,
+      bubbles: true,
+    });
+    await expect(page.locator(DIALOG)).toHaveCount(0);
+    // transition-all animates left/top — let it settle before measuring.
+    await page.waitForTimeout(400);
+    const after = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(after.x - before.x) + Math.abs(after.y - before.y)).toBeGreaterThan(40);
+    await insideViewport(page, LAUNCHER);
+    // DIAG: verify the drag actually persisted.
+    console.log(
+      'LAUNCHER_SAVE',
+      await page.evaluate(() => localStorage.getItem('chat-widget-pos-mobile')),
+    );
+    // Above the nav, not over it.
+    const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
+    expect(nav).not.toBeNull();
+    expect(after.y + after.height).toBeLessThanOrEqual(nav!.y);
+
+    // Position survives a reload.
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+    // DIAG: storage + applied position after reload.
+    console.log(
+      'RELOAD_STATE',
+      JSON.stringify(
+        await page.locator(LAUNCHER).evaluate((el) => ({
+          ls: localStorage.getItem('chat-widget-pos-mobile'),
+          inline: { left: el.style.left, top: el.style.top },
+          comp: {
+            left: getComputedStyle(el).left,
+            top: getComputedStyle(el).top,
+          },
+        })),
+      ),
+    );
+    await page.waitForTimeout(400); // mPos applies post-mount; transition-all animates it
+    const reloaded = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(reloaded.x - after.x)).toBeLessThanOrEqual(4);
+    expect(Math.abs(reloaded.y - after.y)).toBeLessThanOrEqual(4);
+  });
+
+  test('plain tap still opens the sheet', async ({ page }) => {
+    const box = (await page.locator(LAUNCHER).boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await pointerDrag(page, { x: cx, y: cy }, []);
+    await page.locator(LAUNCHER).dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: cx,
+      clientY: cy,
+      bubbles: true,
+    });
+    await page.locator(LAUNCHER).dispatchEvent('click', {
+      clientX: cx,
+      clientY: cy,
+      bubbles: true,
+    });
+    await expect(page.locator(DIALOG)).toBeVisible();
+  });
+
+  test('interrupted drag (pointercancel) keeps last point, no open', async ({ page }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 90, y: before.y - 60 },
+      { x: before.x + 120, y: before.y - 80 },
+    ]);
+    await launcher.dispatchEvent('pointercancel', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: before.x + 120,
+      clientY: before.y - 80,
+      bubbles: true,
+    });
+    await launcher.dispatchEvent('click', { bubbles: true });
+    await expect(page.locator(DIALOG)).toHaveCount(0);
+    await page.waitForTimeout(400); // transition-all animates left/top
+    const after = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(after.y - before.y)).toBeGreaterThan(30);
+  });
+
+  test('drag clamps at viewport edges and stays off the nav', async ({ page }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    // Fling hard to the bottom-right — past the nav.
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: 999, y: 999 },
+    ]);
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: 999,
+      clientY: 999,
+      bubbles: true,
+    });
+    await page.waitForTimeout(400); // transition-all animates left/top
+    const after = (await page.locator(LAUNCHER).boundingBox())!;
+    const nav = await page.locator('nav[aria-label="Mobile navigation"]').boundingBox();
+    expect(after.x + after.width).toBeLessThanOrEqual(390);
+    expect(after.y + after.height).toBeLessThanOrEqual(nav!.y);
+  });
+
+  test('reset control restores the default position', async ({ page }) => {
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 120, y: before.y - 120 },
+    ]);
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: before.x + 120,
+      clientY: before.y - 120,
+      bubbles: true,
+    });
+    const reset = page.locator('button[aria-label="Reset chat button position"]');
+    await expect(reset).toBeVisible();
+    await reset.click();
+    await page.waitForTimeout(400); // transition-all animates left/top
+    const restored = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(restored.x - before.x)).toBeLessThanOrEqual(4);
+    expect(Math.abs(restored.y - before.y)).toBeLessThanOrEqual(4);
+    // Stored spot is cleared too — a reload must not resurrect it.
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    const reloaded = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(Math.abs(reloaded.x - before.x)).toBeLessThanOrEqual(4);
+  });
+
+  test('rotation re-clamps a saved spot inside the new viewport', async ({ page }) => {
+    await page.addInitScript(
+      ([key]) => localStorage.setItem(key as string, JSON.stringify({ x: 340, y: 600 })),
+      [LAUNCHER_POS_KEY],
+    );
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(400); // transition-all animates left/top
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+    await insideViewport(page, LAUNCHER);
+    // Rotate: 844x390 landscape — the saved 600px-tall spot is out of range.
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForTimeout(400); // re-clamp + transition settle
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+    await insideViewport(page, LAUNCHER);
+  });
+
+  test('keyboard-open shrink re-clamps the saved spot (simulated)', async ({ page }) => {
+    await installFakeVisualViewport(page);
+    await page.addInitScript(
+      ([key]) => localStorage.setItem(key as string, JSON.stringify({ x: 300, y: 720 })),
+      [LAUNCHER_POS_KEY],
+    );
+    await page.reload();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+    // Keyboard opens: visible region drops to 420px tall.
+    await setVisibleViewport(page, 420, 0);
+    await page.waitForTimeout(400); // re-clamp + transition-all settle
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+    console.log(
+      'KB_STATE',
+      JSON.stringify(
+        await page.locator(LAUNCHER).evaluate((el) => ({
+          ls: localStorage.getItem('chat-widget-pos-mobile'),
+          inline: { left: el.style.left, top: el.style.top },
+          vv: window.visualViewport?.height,
+        })),
+      ),
+    );
+    const box = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(420 + 1);
+  });
+});
+
+
+test.describe('mobile and desktop spots are independent', () => {
+  test('mobile drag does not disturb the desktop dock offset', async ({ page }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem('chat-widget-pos', JSON.stringify({ x: -120, y: -60 })),
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoDashboard(page);
+    const before = (await page.locator(LAUNCHER).boundingBox())!;
+    const launcher = await pointerDrag(page, { x: before.x + 24, y: before.y + 24 }, [
+      { x: before.x + 140, y: before.y - 100 },
+    ]);
+    await launcher.dispatchEvent('pointerup', {
+      pointerId: 7,
+      pointerType: 'touch',
+      clientX: before.x + 140,
+      clientY: before.y - 100,
+      bubbles: true,
+    });
+    const mobileBox = (await page.locator(LAUNCHER).boundingBox())!;
+    // Widen to desktop: the dock offset (-120,-60) applies, not the mobile spot.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.locator(LAUNCHER)).toBeVisible();
+    const desktopBox = (await page.locator(LAUNCHER).boundingBox())!;
+    expect(desktopBox).not.toEqual(mobileBox);
+    // Desktop dock: right-aligned at right-6 minus the -120 x offset.
+    expect(desktopBox.x + desktopBox.width).toBeLessThanOrEqual(1440 - 24 + 1);
+    await insideViewport(page, LAUNCHER);
+  });
+});
