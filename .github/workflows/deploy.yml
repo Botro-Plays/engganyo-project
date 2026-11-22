@@ -231,10 +231,6 @@ jobs:
         run: npm run build
         working-directory: apps/api
 
-      - name: Build web
-        run: npm run build
-        working-directory: apps/web
-
       - name: Create uploads directory
         run: mkdir -p uploads
         working-directory: apps/api
@@ -261,6 +257,16 @@ jobs:
           export INTERNAL_REVALIDATE_SECRET=e2e-revalidate-secret
           node dist/main > /tmp/api.log 2>&1 &
         working-directory: apps/api
+
+      - name: Wait for API
+        run: npx wait-on http://localhost:3001/api/health --timeout 120000
+
+      # The web build prerenders public pages (landing rail, /blog
+      # index, sitemap, RSS) which fetch /api/blog/* server-side. The API
+      # must be up before `npm run build` or the pages bake empty lists.
+      - name: Build web
+        run: npm run build
+        working-directory: apps/web
 
       - name: Start web server
         run: |
