@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { innerPageJsonLd } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { TelegramIcon } from '@/components/telegram-icon';
+import { EmailOff } from '@/components/email-off';
 
 export const revalidate = 3600;
 
@@ -104,12 +105,14 @@ export default function SafetyPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <address className="not-italic">
-                <a
-                  href="mailto:contact@engganyo.com"
-                  className="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
-                >
-                  contact@engganyo.com
-                </a>
+                <EmailOff>
+                  <a
+                    href="mailto:contact@engganyo.com"
+                    className="inline-flex items-center px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors"
+                  >
+                    contact@engganyo.com
+                  </a>
+                </EmailOff>
               </address>
               <a
                 href="https://t.me/Engganyo"
