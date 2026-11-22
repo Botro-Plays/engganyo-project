@@ -297,7 +297,14 @@ jobs:
   # ─── Perf: focused Lighthouse lab measurement ────────────────────────────
   # Report-only: records CLS/LCP/TBT, category scores, and transfer sizes for
   # the key public routes and uploads the full reports. Not in the deploy
-  # chain — lab numbers inform, they do not gate release.
+  # chain - lab numbers inform, they do not gate release.
+  #
+  # Environment note: a controlled API fixture (apps/web/scripts/
+  # perf-api-stub.mjs) serves the public read endpoints the measured pages
+  # hit server-side, so the lab DOM matches production shape (e.g. the
+  # homepage stats block). Fixture values are NOT production data. Each
+  # route is sampled 3x and medians are reported - a single run is not
+  # treated as definitive.
   perf:
     name: Perf — Lighthouse lab measurement
     runs-on: ubuntu-latest
@@ -317,6 +324,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Start API fixture
+        run: node apps/web/scripts/perf-api-stub.mjs > /tmp/stub.log 2>&1 &
+
       - name: Build web
         run: npm run build
         working-directory: apps/web
@@ -328,51 +338,28 @@ jobs:
       - name: Wait for web server
         run: npx wait-on http://localhost:3000 --timeout 120000
 
-      - name: Run Lighthouse on public routes
+      - name: Run Lighthouse on public routes (3 samples each)
         # Lab conditions: Lighthouse default mobile preset (simulated
-        # throttling, Moto G-class CPU), headless Chrome on the runner.
-        # These are lab measurements only - real-user INP/CrUX is a
-        # separate signal and is not reported by this job.
+        # throttling, Moto G-class CPU), headless Chrome on the runner,
+        # cold storage per run. Lab measurements only - real-user
+        # INP/CrUX is a separate signal and is not reported by this job.
         run: |
           set -e
+          echo "lighthouse: $(npx -y lighthouse@12 --version)"
+          echo "chrome: $(google-chrome --version 2>/dev/null || chromium --version)"
           mkdir -p /tmp/lh
           for route in / /about /faq /howitworks; do
             name=$(echo "$route" | sed 's|^/$|home|; s|^/||')
-            npx -y lighthouse@12 "http://localhost:3000${route}" \
-              --output=json --output-path="/tmp/lh/${name}.json" \
-              --chrome-flags="--headless --no-sandbox --disable-gpu" \
-              --quiet
+            for i in 1 2 3; do
+              npx -y lighthouse@12 "http://localhost:3000${route}" \
+                --output=json --output-path="/tmp/lh/${name}-${i}.json" \
+                --chrome-flags="--headless --no-sandbox --disable-gpu" \
+                --quiet
+            done
           done
 
       - name: Summarize measured metrics
-        run: |
-          node -e '
-            const fs = require("fs");
-            const rows = [];
-            for (const f of fs.readdirSync("/tmp/lh")) {
-              const r = JSON.parse(fs.readFileSync("/tmp/lh/" + f, "utf8"));
-              const a = r.audits, c = r.categories;
-              rows.push({
-                url: r.finalDisplayedUrl,
-                perf: Math.round(c.performance.score * 100),
-                a11y: Math.round(c.accessibility.score * 100),
-                bp: Math.round(c["best-practices"].score * 100),
-                seo: Math.round(c.seo.score * 100),
-                cls: a["cumulative-layout-shift"].numericValue.toFixed(3),
-                lcp: Math.round(a["largest-contentful-paint"].numericValue),
-                tbt: Math.round(a["total-blocking-time"].numericValue),
-                bytes: Math.round(a["total-byte-weight"].numericValue / 1024) + " KiB",
-              });
-            }
-            let md = "### Lighthouse lab results (simulated mobile, headless Chrome)\n\n" +
-              "| URL | Perf | A11y | BP | SEO | CLS | LCP ms | TBT ms | Transfer |\n" +
-              "|---|---|---|---|---|---|---|---|---|\n" +
-              rows.map(r => `| ${r.url} | ${r.perf} | ${r.a11y} | ${r.bp} | ${r.seo} | ${r.cls} | ${r.lcp} | ${r.tbt} | ${r.bytes} |`).join("\n") +
-              "\n\nLab measurements only - real-user INP/CrUX is not captured here.\n";
-            fs.writeFileSync("/tmp/lh/summary.md", md);
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
-            fs.writeFileSync("/tmp/lh/metrics.json", JSON.stringify(rows, null, 2));
-          '
+        run: node apps/web/scripts/perf-summarize.mjs /tmp/lh localhost-lab
 
       - name: Upload Lighthouse reports
         if: always()
@@ -380,6 +367,58 @@ jobs:
         with:
           name: lighthouse-reports
           path: /tmp/lh/
+          retention-days: 14
+
+  # ─── Perf-prod: bounded read-only Lighthouse against deployed pages ──────
+  # Runs only after a successful deploy on main. Read-only GETs of the
+  # public routes on https://engganyo.com, 3 samples each, medians
+  # reported. Reports the deployed SHA, Lighthouse/Chrome versions,
+  # throttling, cache conditions, and failed resources.
+  perf-prod:
+    name: Perf — deployed Lighthouse measurement
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Record conditions
+        run: |
+          echo "deployed sha: ${{ github.sha }}"
+          echo "lighthouse: $(npx -y lighthouse@12 --version)"
+          echo "chrome: $(google-chrome --version 2>/dev/null || chromium --version)"
+          echo "throttling: Lighthouse default simulated mobile"
+          echo "cache: cold storage per run (Lighthouse default)"
+
+      - name: Run Lighthouse on deployed public routes (3 samples each)
+        run: |
+          set -e
+          mkdir -p /tmp/lhp
+          for route in / /about /faq /howitworks; do
+            name=$(echo "$route" | sed 's|^/$|home|; s|^/||')
+            for i in 1 2 3; do
+              npx -y lighthouse@12 "https://engganyo.com${route}" \
+                --output=json --output-path="/tmp/lhp/${name}-${i}.json" \
+                --chrome-flags="--headless --no-sandbox --disable-gpu" \
+                --quiet
+            done
+          done
+
+      - name: Summarize measured metrics
+        env:
+          DEPLOYED_SHA: ${{ github.sha }}
+        run: node apps/web/scripts/perf-summarize.mjs /tmp/lhp prod-deployed
+
+      - name: Upload deployed Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports-prod
+          path: /tmp/lhp/
           retention-days: 14
 
   # ─── Build & push Docker images to GHCR ───────────────────────────────────

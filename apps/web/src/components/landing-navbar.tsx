@@ -14,6 +14,7 @@ export function LandingNavbar() {
         {/* Logo */}
         <Link
           href="/"
+          aria-label="Engganyo home"
           className="flex items-center shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-warm"
         >
           <BrandLogo className="h-8 w-8 sm:h-9 sm:w-9" wordmarkClassName="text-xl sm:text-2xl" size={32} eager />

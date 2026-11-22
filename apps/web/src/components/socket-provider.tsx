@@ -38,26 +38,33 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const s = connectSocket(token);
+    let s: Socket | null = null;
+    let active = true;
 
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
     const onConnectError = () => setConnected(false);
 
-    s.on('connect', onConnect);
-    s.on('disconnect', onDisconnect);
-    s.on('connect_error', onConnectError);
+    void connectSocket(token).then((created) => {
+      // The effect may have cleaned up while the lazy import resolved.
+      if (!active) return;
+      s = created;
+      s.on('connect', onConnect);
+      s.on('disconnect', onDisconnect);
+      s.on('connect_error', onConnectError);
 
-    if (s.connected) {
-      setConnected(true);
-    }
+      if (s.connected) {
+        setConnected(true);
+      }
 
-    setSocket(s);
+      setSocket(s);
+    });
 
     return () => {
-      s.off('connect', onConnect);
-      s.off('disconnect', onDisconnect);
-      s.off('connect_error', onConnectError);
+      active = false;
+      s?.off('connect', onConnect);
+      s?.off('disconnect', onDisconnect);
+      s?.off('connect_error', onConnectError);
     };
   }, []);
 

@@ -1,16 +1,33 @@
 'use client';
 
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
+import dynamic from 'next/dynamic';
 import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
 import { apiClient, shouldRetryQuery } from '@/lib/api';
 import type { ApiResponse } from '@/types';
-import { ChatWidget } from '@/components/chat/ChatWidget';
 import { SocketProvider } from '@/components/socket-provider';
 import { ToastProvider } from '@/components/toast-provider';
 import { useAuthStore } from '@/store/auth.store';
 import { usePathname } from 'next/navigation';
+
+// Off-critical-path payloads: the support widget hydrates after idle,
+// reCAPTCHA only loads where AuthenticatedProviders mounts it, and the
+// devtools bundle is dev-only. Keeps anonymous first-load JS small.
+const ChatWidget = dynamic(
+  () => import('@/components/chat/ChatWidget').then((m) => m.ChatWidget),
+  { ssr: false },
+);
+const GoogleReCaptchaProvider = dynamic(
+  () => import('react-google-recaptcha-v3').then((m) => m.GoogleReCaptchaProvider),
+  { ssr: false },
+);
+const ReactQueryDevtools =
+  process.env.NODE_ENV === 'development'
+    ? dynamic(
+        () => import('@tanstack/react-query-devtools').then((m) => m.ReactQueryDevtools),
+        { ssr: false },
+      )
+    : () => null;
 
 interface PublicConfig {
   recaptchaEnabled: boolean;
@@ -60,12 +77,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SocketProvider>
         <ToastProvider>
           {children}
-          <ChatWidget />
+          <DeferredChatWidget />
         </ToastProvider>
       </SocketProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
+}
+
+// Mounts the support launcher once the browser is idle so its hydration
+// and listeners stay out of the first-load main-thread window. The
+// launcher still renders for everyone a moment later.
+function DeferredChatWidget() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(() => setShow(true), { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(() => setShow(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
+  return show ? <ChatWidget /> : null;
 }
 
 function AdminPinRouteGuard() {
