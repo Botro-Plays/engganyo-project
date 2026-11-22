@@ -294,6 +294,94 @@ jobs:
             apps/web/playwright-report/
           retention-days: 7
 
+  # ─── Perf: focused Lighthouse lab measurement ────────────────────────────
+  # Report-only: records CLS/LCP/TBT, category scores, and transfer sizes for
+  # the key public routes and uploads the full reports. Not in the deploy
+  # chain — lab numbers inform, they do not gate release.
+  perf:
+    name: Perf — Lighthouse lab measurement
+    runs-on: ubuntu-latest
+    needs: [ci-web]
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web
+        run: npm run build
+        working-directory: apps/web
+
+      - name: Start web server
+        run: npm run start > /tmp/web.log 2>&1 &
+        working-directory: apps/web
+
+      - name: Wait for web server
+        run: npx wait-on http://localhost:3000 --timeout 120000
+
+      - name: Run Lighthouse on public routes
+        # Lab conditions: Lighthouse default mobile preset (simulated
+        # throttling, Moto G-class CPU), headless Chrome on the runner.
+        # These are lab measurements only - real-user INP/CrUX is a
+        # separate signal and is not reported by this job.
+        run: |
+          set -e
+          mkdir -p /tmp/lh
+          for route in / /about /faq /howitworks; do
+            name=$(echo "$route" | sed 's|^/$|home|; s|^/||')
+            npx -y lighthouse@12 "http://localhost:3000${route}" \
+              --output=json --output-path="/tmp/lh/${name}.json" \
+              --chrome-flags="--headless --no-sandbox --disable-gpu" \
+              --quiet
+          done
+
+      - name: Summarize measured metrics
+        run: |
+          node -e '
+            const fs = require("fs");
+            const rows = [];
+            for (const f of fs.readdirSync("/tmp/lh")) {
+              const r = JSON.parse(fs.readFileSync("/tmp/lh/" + f, "utf8"));
+              const a = r.audits, c = r.categories;
+              rows.push({
+                url: r.finalDisplayedUrl,
+                perf: Math.round(c.performance.score * 100),
+                a11y: Math.round(c.accessibility.score * 100),
+                bp: Math.round(c["best-practices"].score * 100),
+                seo: Math.round(c.seo.score * 100),
+                cls: a["cumulative-layout-shift"].numericValue.toFixed(3),
+                lcp: Math.round(a["largest-contentful-paint"].numericValue),
+                tbt: Math.round(a["total-blocking-time"].numericValue),
+                bytes: Math.round(a["total-byte-weight"].numericValue / 1024) + " KiB",
+              });
+            }
+            let md = "### Lighthouse lab results (simulated mobile, headless Chrome)\n\n" +
+              "| URL | Perf | A11y | BP | SEO | CLS | LCP ms | TBT ms | Transfer |\n" +
+              "|---|---|---|---|---|---|---|---|---|\n" +
+              rows.map(r => `| ${r.url} | ${r.perf} | ${r.a11y} | ${r.bp} | ${r.seo} | ${r.cls} | ${r.lcp} | ${r.tbt} | ${r.bytes} |`).join("\n") +
+              "\n\nLab measurements only - real-user INP/CrUX is not captured here.\n";
+            fs.writeFileSync("/tmp/lh/summary.md", md);
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+            fs.writeFileSync("/tmp/lh/metrics.json", JSON.stringify(rows, null, 2));
+          '
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: /tmp/lh/
+          retention-days: 14
+
   # ─── Build & push Docker images to GHCR ───────────────────────────────────
   build:
     name: Build & push images
