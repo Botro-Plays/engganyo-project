@@ -131,6 +131,14 @@ export default function PricingPage() {
               <Link href="/register" className="text-brand-400 hover:underline">create a free
               account</Link> to start with 200 credits.
             </p>
+            <p className="text-zinc-300 leading-relaxed mt-4">
+              If you are not sure how much to buy, start with the free 200 credits, do a few
+              tasks, and see how approval works before you decide. You can read how the whole
+              loop works on the{' '}
+              <Link href="/howitworks" className="text-brand-400 hover:underline">how Engganyo
+              works</Link> page, and you can find answers to common questions in the{' '}
+              <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>.
+            </p>
           </section>
         </div>
       </div>

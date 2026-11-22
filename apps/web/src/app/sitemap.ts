@@ -1,6 +1,9 @@
 import type { MetadataRoute } from 'next';
+import { listPublishedPosts } from '@/lib/blog';
 
 const BASE_URL = 'https://engganyo.com';
+
+export const revalidate = 60;
 
 // Real per-page content dates. Update when a page's substance changes.
 // Google ignores changefreq/priority, so they are omitted.
@@ -19,13 +22,19 @@ const PAGES: Array<{ path: string; lastModified: string }> = [
   { path: '/pricing', lastModified: '2026-11-21' },
   { path: '/safety', lastModified: '2026-11-21' },
   { path: '/blog', lastModified: '2026-11-22' },
-  { path: '/blog/yourfirstweekonengganyo', lastModified: '2026-11-22' },
-  // /blog stays out until the first real post exists (no empty index).
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  return PAGES.map(({ path, lastModified }) => ({
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const staticEntries: MetadataRoute.Sitemap = PAGES.map(({ path, lastModified }) => ({
     url: `${BASE_URL}${path}`,
     lastModified: new Date(lastModified),
   }));
+
+  const { items } = await listPublishedPosts(1, 50);
+  const postEntries: MetadataRoute.Sitemap = items.map((post) => ({
+    url: `${BASE_URL}/blog/${post.slug}`,
+    lastModified: new Date(post.publishedAt),
+  }));
+
+  return [...staticEntries, ...postEntries];
 }

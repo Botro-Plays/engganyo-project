@@ -14,7 +14,7 @@ export function BlogRail({ children, count }: { children: React.ReactNode; count
   const railRef = useRef<HTMLUListElement>(null);
   const [playing, setPlaying] = useState(false); // user-visible state
   const [reducedMotion, setReducedMotion] = useState(false);
-  const suspend = useRef({ hover: false, focus: false, hidden: false, manual: false });
+  const suspend = useRef({ hover: false, focus: false, hidden: false, offscreen: false, manual: false });
   const single = count <= 1;
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export function BlogRail({ children, count }: { children: React.ReactNode; count
     setPlaying(true);
     const s = suspend.current;
     const id = window.setInterval(() => {
-      if (s.hover || s.focus || s.hidden || s.manual) return;
+      if (s.hover || s.focus || s.hidden || s.offscreen || s.manual) return;
       const rail = railRef.current;
       if (!rail) return;
       const atEnd = rail.scrollLeft + rail.clientWidth >= rail.scrollWidth - EDGE_EPS;
@@ -49,17 +49,20 @@ export function BlogRail({ children, count }: { children: React.ReactNode; count
     return () => window.clearInterval(id);
   }, [single, reducedMotion]);
 
-  // Pause while off-screen or the tab is hidden.
+  // Pause while off-screen or the tab is hidden. The two flags stay
+  // separate: visibilitychange fires again on tab return, so hidden
+  // must track document.hidden exactly instead of latching.
   useEffect(() => {
     const rail = railRef.current;
     const s = suspend.current;
     const io = new IntersectionObserver(([entry]) => {
-      s.hidden = !entry.isIntersecting;
+      s.offscreen = !entry.isIntersecting;
     });
     if (rail) io.observe(rail);
     const onVis = () => {
-      s.hidden = document.hidden || s.hidden;
+      s.hidden = document.hidden;
     };
+    onVis();
     document.addEventListener('visibilitychange', onVis);
     return () => {
       io.disconnect();
@@ -98,7 +101,7 @@ export function BlogRail({ children, count }: { children: React.ReactNode; count
         onPointerDown={() => (suspend.current.manual = true)}
         onWheel={() => (suspend.current.manual = true)}
         onTouchStart={() => (suspend.current.manual = true)}
-        className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 [touch-action:pan-y] [scrollbar-width:thin]"
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 [touch-action:pan-x_pan-y] [scrollbar-width:thin]"
       >
         {children}
       </ul>
