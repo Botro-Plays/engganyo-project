@@ -38,13 +38,17 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-          // Report-only first: observe violations (reCAPTCHA frames,
-          // third-party scripts) before any enforcement is considered.
+          // Enforced after live violation review: the only observed
+          // report-only violation was the Cloudflare Insights beacon,
+          // which the owner retains, so it is allowlisted in script-src.
+          // unsafe-inline stays: Next.js injects inline bootstrap/inline
+          // JSON payloads. unsafe-eval stays: retained for libraries that
+          // still use new Function/eval paths in production bundles.
           {
-            key: 'Content-Security-Policy-Report-Only',
+            key: 'Content-Security-Policy',
             value:
               "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com; " +
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://static.cloudflareinsights.com; " +
               "frame-src https://www.google.com https://recaptcha.google.com; " +
               "connect-src 'self' https: wss:; " +
               "img-src 'self' data: https:; " +
