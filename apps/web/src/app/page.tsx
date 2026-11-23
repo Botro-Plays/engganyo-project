@@ -174,12 +174,14 @@ export default async function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
-      <main className="relative min-h-screen bg-sc text-sc-text overflow-x-hidden">
+      <div className="relative min-h-screen bg-sc text-sc-text overflow-x-hidden">
         {/* Hero gradient */}
         <div className="absolute inset-0 bg-gradient-hero pointer-events-none" />
 
         {/* Navbar */}
         <LandingNavbar />
+
+        <main className="relative">
 
         {/* ── Hero ─────────────────────────────────────────────── */}
         <section className="relative z-10 pt-8 pb-16 sm:pt-16 sm:pb-28 px-4 sm:px-6 max-w-6xl mx-auto">
@@ -518,9 +520,11 @@ export default async function LandingPage() {
         </section>
         )}
 
+        </main>
+
         {/* ── Footer ───────────────────────────────────────────── */}
         <PublicFooter />
-      </main>
+      </div>
     </>
   );
 }

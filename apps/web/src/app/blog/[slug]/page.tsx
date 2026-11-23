@@ -100,6 +100,7 @@ export default async function BlogPostPage({
         dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <PublicHeader />
+      <main id="main-content">
 
       <article className="max-w-3xl mx-auto px-4 py-12">
         <p className="text-xs text-zinc-500 mb-4">
@@ -130,13 +131,14 @@ export default async function BlogPostPage({
         <nav className="mt-10 card-glass rounded-xl p-6" aria-label="Related pages">
           <p className="text-sm text-zinc-300">
             Keep reading: the{' '}
-            <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>, the{' '}
-            <Link href="/safety" className="text-brand-400 hover:underline">safety rules</Link>,
+            <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">FAQ</Link>, the{' '}
+            <Link href="/safety" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">safety rules</Link>,
             and{' '}
-            <Link href="/pricing" className="text-brand-400 hover:underline">pricing</Link>.
+            <Link href="/pricing" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">pricing</Link>.
           </p>
         </nav>
       </article>
+      </main>
 
       <PublicFooter />
     </div>

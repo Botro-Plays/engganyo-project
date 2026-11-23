@@ -48,6 +48,7 @@ export default function ContactPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-8">Contact Us</h1>
@@ -64,7 +65,7 @@ export default function ContactPage() {
                 <h3 className="text-sm font-medium text-zinc-400 mb-1">Email</h3>
                 <address className="not-italic">
                   <EmailOff>
-                    <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                    <a href="mailto:contact@engganyo.com" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
                       contact@engganyo.com
                     </a>
                   </EmailOff>
@@ -77,7 +78,7 @@ export default function ContactPage() {
                   href="https://t.me/Engganyo"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-brand-400 hover:underline"
+                  className="text-brand-400 underline underline-offset-2 hover:text-brand-300"
                 >
                   t.me/Engganyo
                 </a>
@@ -108,7 +109,7 @@ export default function ContactPage() {
           <section className="card-glass rounded-xl p-6 text-center">
             <p className="text-zinc-300">
               Looking for quick answers? Check our{' '}
-              <Link href="/faq" className="text-brand-400 hover:underline">
+              <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
                 FAQ
               </Link>
               .
@@ -122,6 +123,7 @@ export default function ContactPage() {
           </section>
         </div>
       </div>
+      </main>
 
       <PublicFooter />
     </div>

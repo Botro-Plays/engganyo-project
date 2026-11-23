@@ -50,6 +50,7 @@ export default function SafetyPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-10">Safety and rules</h1>
@@ -126,8 +127,8 @@ export default function SafetyPage() {
             </div>
             <p className="text-sm text-zinc-400 mt-4">
               For account issues, include your username in the message. More answers are in the{' '}
-              <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>, and{' '}
-              <Link href="/howitworks" className="text-brand-400 hover:underline">How it works</Link>{' '}
+              <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">FAQ</Link>, and{' '}
+              <Link href="/howitworks" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">How it works</Link>{' '}
               explains the task loop.
             </p>
           </section>
@@ -138,12 +139,12 @@ export default function SafetyPage() {
               If a platform warns or restricts an account, Engganyo cannot reverse that, because the
               platform makes that decision alone. If a task was approved or rejected by mistake,
               write to us with your username and the task, by{' '}
-              <Link href="/contact" className="text-brand-400 hover:underline">email</Link> or on{' '}
+              <Link href="/contact" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">email</Link> or on{' '}
               <a
                 href="https://t.me/Engganyo"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-brand-400 hover:underline"
+                className="text-brand-400 underline underline-offset-2 hover:text-brand-300"
               >
                 Telegram
               </a>
@@ -152,6 +153,7 @@ export default function SafetyPage() {
           </section>
         </div>
       </div>
+      </main>
 
       <PublicFooter />
     </div>

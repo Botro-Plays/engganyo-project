@@ -62,6 +62,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-10">Pricing</h1>
@@ -140,23 +141,24 @@ export default function PricingPage() {
             </ul>
             <p className="text-zinc-300 leading-relaxed mt-4">
               New here? Read{' '}
-              <Link href="/howitworks" className="text-brand-400 hover:underline">how Engganyo
+              <Link href="/howitworks" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">how Engganyo
               works</Link>, check the{' '}
-              <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>, or{' '}
-              <Link href="/register" className="text-brand-400 hover:underline">create a free
+              <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">FAQ</Link>, or{' '}
+              <Link href="/register" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">create a free
               account</Link> to start with 200 credits.
             </p>
             <p className="text-zinc-300 leading-relaxed mt-4">
               If you are not sure how much to buy, start with the free 200 credits, do a few
               tasks, and see how approval works before you decide. You can read how the whole
               loop works on the{' '}
-              <Link href="/howitworks" className="text-brand-400 hover:underline">how Engganyo
+              <Link href="/howitworks" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">how Engganyo
               works</Link> page, and you can find answers to common questions in the{' '}
-              <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>.
+              <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">FAQ</Link>.
             </p>
           </section>
         </div>
       </div>
+      </main>
 
       <PublicFooter />
     </div>

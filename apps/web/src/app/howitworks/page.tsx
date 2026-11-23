@@ -82,6 +82,7 @@ export default function HowItWorksPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-4">How Engganyo works</h1>
@@ -133,11 +134,11 @@ export default function HowItWorksPage() {
               href="https://t.me/Engganyo"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-brand-400 hover:underline"
+              className="text-brand-400 underline underline-offset-2 hover:text-brand-300"
             >
               t.me/Engganyo
             </a>{' '}
-            or read the <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link>.
+            or read the <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">FAQ</Link>.
           </p>
         </section>
 
@@ -146,7 +147,7 @@ export default function HowItWorksPage() {
           <ul className="list-disc list-inside space-y-2 text-zinc-300">
             <li>
               Credits are used inside Engganyo and cannot be withdrawn as money. See{' '}
-              <Link href="/pricing" className="text-brand-400 hover:underline">Pricing</Link> for how
+              <Link href="/pricing" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">Pricing</Link> for how
               credits work and how to buy more.
             </li>
             <li>
@@ -158,14 +159,15 @@ export default function HowItWorksPage() {
               restrictions, or permanent bans on those platforms. Participate at your own risk.
             </li>
             <li>
-              Our <Link href="/safety" className="text-brand-400 hover:underline">Safety</Link> page
+              Our <Link href="/safety" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">Safety</Link> page
               covers account rules, and the{' '}
-              <Link href="/faq" className="text-brand-400 hover:underline">FAQ</Link> answers common
+              <Link href="/faq" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">FAQ</Link> answers common
               questions about credits and review timing.
             </li>
           </ul>
         </section>
       </div>
+      </main>
 
       <PublicFooter />
     </div>
