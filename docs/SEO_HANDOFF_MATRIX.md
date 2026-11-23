@@ -237,3 +237,19 @@ The supplied script passed every substantive check. Three FAILs were artifacts o
 - `/faq` metadata checks and `robots ai-input=yes` failed on transient slow fetches during the deployed-Lighthouse window; direct rechecks return 200 with all metadata and the `ai-input=yes` Content-Signal intact.
 - `CSP enforced` fails by design: PR #157 remains a draft pending owner sign-off.
 - **Flagged edge change**: `ClaudeBot` now returns 200 (script expected the documented 403) and `PerplexityBot` returns 200 (previously 403). Cloudflare's managed AI-crawler block no longer denies either bot - this is an owner Cloudflare dashboard setting (Security > Bots > AI Crawl Control) or a managed-rules change. Origin `robots.txt` still serves `Content-Signal: ai-train=no`. Owner decision needed on whether to re-block.
+
+### Enforced CSP + republish UI (deployed batch)
+
+Two changes shipped as separate PRs, both deployed through the normal pipeline.
+
+| Item | State | Evidence |
+|------|-------|----------|
+| CSP enforcement | Implemented + tested + deployed + live-verified | PR #157 merged `65b18d0`. Header `Content-Security-Policy` (not report-only) live on `/` and `/login`: `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://static.cloudflareinsights.com; frame-src https://www.google.com https://recaptcha.google.com; connect-src 'self' https: wss:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://www.gstatic.com; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'`. Web container confirmed running image `web:65b18d0` with no `CSP_TEST_CONNECT_SRC` and no `CSP_REPORT_ONLY` in env. `CSP_REPORT_ONLY=true` remains as a documented emergency escape hatch. `csp.spec.ts` runs in CI under the enforced header with the only broadening being `connect-src http://localhost:3001 ws://localhost:3001` for the same-machine e2e API |
+| Authenticated sweep under enforcement | Live-verified | Zero CSP violations and zero failed requests across `/dashboard`, `/tasks`, `/campaigns`, `/wallet`, `/chat`, `/rooms`, `/admin`, `/admin/blog`, `/login` in the owner's real admin session. Login + 2FA + admin PIN all completed under enforcement, proving reCAPTCHA v3 (gstatic styles + fonts.gstatic.com Roboto) works. CF beacon fully verified: `beacon.min.js` 200 AND the telemetry `POST /cdn-cgi/rum` returned 204 |
+| Publish changes UI | Implemented + tested + deployed + live-verified | PR #160 merged `8cd70ce`. Editor computes `draftDiffers` from published fields vs `post.draft` and offers "Publish changes" on published posts with pending edits. API already allowed `publish` from PUBLISHED with `promoteDraft:true` (no availability gap). Live-verified in the owner's admin session: create -> publish -> edit -> Save draft leaves public at v1 -> "Publish changes" button appears -> v2 goes live -> delete -> public 404 |
+
+Earlier stale statements in this matrix about "CSP stays report-only" and "republish requires Unpublish->Publish" are superseded by the entries above.
+
+### Crawler observation (resolved: no origin change needed)
+
+Synthetic AI-bot UA probes (ClaudeBot, GPTBot, ChatGPT-User, OAI-SearchBot, PerplexityBot, Perplexity-User, Bytespider, CCBot, meta-externalagent, Google-Extended, Amazonbot, Applebot-Extended, cohere-ai) all receive HTTP 200 with the real ~100 KB homepage, `x-nextjs-cache` present. Earlier documented 403s came from a Cloudflare managed AI-crawler block that is no longer active at the edge. VPS nginx access logs over the last 7 days contain no AI-bot UAs other than the manual probes, so real-crawler treatment cannot be confirmed from origin logs. Origin `robots.txt` still signals `ai-train=no`. No origin or Cloudflare change was made; whether the Cloudflare AI-block feature should be re-enabled is an owner dashboard decision, not a code gap.
