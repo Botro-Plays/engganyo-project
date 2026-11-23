@@ -46,6 +46,7 @@ export default function TermsPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-2">Terms of Service</h1>
@@ -228,11 +229,12 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold text-white mb-3">13. Contact Us</h2>
             <p>
               For questions about these terms, please{' '}
-              <Link href="/contact" className="text-brand-400 hover:underline">contact us</Link>.
+              <Link href="/contact" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">contact us</Link>.
             </p>
           </section>
         </div>
       </div>
+      </main>
 
       <PublicFooter />
     </div>

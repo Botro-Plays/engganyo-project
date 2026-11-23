@@ -80,6 +80,7 @@ export default async function BlogIndex({
         dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-3">Engganyo Blog</h1>
@@ -93,7 +94,7 @@ export default async function BlogIndex({
           posts are added as we learn what members ask for. Have a topic you want covered?
           Write to{' '}
           <EmailOff>
-            <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+            <a href="mailto:contact@engganyo.com" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
               contact@engganyo.com
             </a>
           </EmailOff>{' '}
@@ -102,7 +103,7 @@ export default async function BlogIndex({
             href="https://t.me/Engganyo"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-brand-400 hover:underline"
+            className="text-brand-400 underline underline-offset-2 hover:text-brand-300"
           >
             t.me/Engganyo
           </a>
@@ -148,6 +149,7 @@ export default async function BlogIndex({
           </nav>
         )}
       </div>
+      </main>
 
       <PublicFooter />
     </div>

@@ -47,6 +47,7 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-4xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-2">Privacy Policy</h1>
@@ -193,12 +194,12 @@ export default function PrivacyPage() {
               If you have questions, concerns, or requests regarding this Privacy Policy or your personal data, please contact us:
             </p>
             <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>Through our <Link href="/contact" className="text-brand-400 hover:underline">contact page</Link></li>
+              <li>Through our <Link href="/contact" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">contact page</Link></li>
               <li>
                 By email at:{' '}
                 <address className="not-italic inline">
                   <EmailOff>
-                    <a href="mailto:contact@engganyo.com" className="text-brand-400 hover:underline">
+                    <a href="mailto:contact@engganyo.com" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
                       contact@engganyo.com
                     </a>
                   </EmailOff>
@@ -208,6 +209,7 @@ export default function PrivacyPage() {
           </section>
         </div>
       </div>
+      </main>
 
       <PublicFooter />
     </div>

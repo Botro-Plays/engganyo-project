@@ -148,6 +148,7 @@ export default function FAQPage() {
     <div className="min-h-screen bg-sc text-sc-text">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
+      <main id="main-content">
 
       <div className="max-w-3xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-white mb-2">Frequently Asked Questions</h1>
@@ -182,6 +183,7 @@ export default function FAQPage() {
           </section>
         </div>
       </div>
+      </main>
 
       <PublicFooter />
     </div>
