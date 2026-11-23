@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { innerPageJsonLd, jsonLdScript } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
@@ -53,6 +54,11 @@ const STEPS = [
     n: '2',
     title: 'Earn credits',
     body: 'Open the task list and pick a task on a platform you use, such as following an account or joining a channel. Do the action on that platform, then upload a screenshot as proof of the completion.',
+    img: {
+      src: '/brand/product-tasks.webp',
+      alt: 'Engganyo Tasks page showing open tasks and the credit reward for each one',
+      caption: 'The Tasks page lists open tasks with the credit reward for each one.',
+    },
   },
   {
     n: '3',
@@ -63,6 +69,11 @@ const STEPS = [
     n: '4',
     title: 'Spend credits',
     body: 'Create a campaign for your own accounts: choose a platform, add your link, set the reward for each task, and set how many completions you want. Other members then complete your tasks the same way.',
+    img: {
+      src: '/brand/product-campaigns.webp',
+      alt: 'Engganyo Campaigns page with the form for creating a campaign',
+      caption: 'The campaign creation form in Campaigns.',
+    },
   },
 ];
 
@@ -90,6 +101,20 @@ export default function HowItWorksPage() {
                 <div>
                   <h2 className="text-xl font-semibold text-white mb-2">{step.title}</h2>
                   <p className="text-zinc-300 leading-relaxed">{step.body}</p>
+                  {step.img && (
+                    <figure className="mt-4 rounded-lg border border-surface-border bg-surface-card overflow-hidden">
+                      <Image
+                        src={step.img.src}
+                        alt={step.img.alt}
+                        width={1200}
+                        height={750}
+                        loading="lazy"
+                        sizes="(max-width: 768px) 100vw, 720px"
+                        className="w-full h-auto"
+                      />
+                      <figcaption className="px-3 py-2 text-xs text-zinc-400">{step.img.caption}</figcaption>
+                    </figure>
+                  )}
                 </div>
               </div>
             </section>
