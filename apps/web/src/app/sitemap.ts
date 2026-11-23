@@ -35,8 +35,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   // Pages through every published post; a >50-post catalog is never
-  // silently truncated out of the sitemap.
-  const items = await listAllPublishedPosts();
+  // silently truncated out of the sitemap. At request time a fetch
+  // failure throws (better a 500 than a partial sitemap); a build-time
+  // prerender without the API emits the static routes only.
+  let items: Awaited<ReturnType<typeof listAllPublishedPosts>> = [];
+  try {
+    items = await listAllPublishedPosts();
+  } catch (err) {
+    if (process.env.NEXT_PHASE !== 'phase-production-build') throw err;
+  }
   const postEntries: MetadataRoute.Sitemap = items.map((post) => ({
     url: `${BASE_URL}/blog/${post.slug}`,
     // Real content modification time, not the immutable publish date.

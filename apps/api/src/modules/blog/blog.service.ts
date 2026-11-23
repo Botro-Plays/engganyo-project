@@ -88,6 +88,25 @@ export class BlogService {
   }
 
   /**
+   * True when the draft working copy differs from the published
+   * snapshot. Drives the republish path: pending edits promote on the
+   * next Publish; a clean draft makes a repeated publish idempotent.
+   */
+  private draftDiffers(post: BlogPost): boolean {
+    return (
+      (post.draftTitle ?? post.title) !== post.title ||
+      (post.draftExcerpt ?? post.excerpt) !== post.excerpt ||
+      (post.draftBody ?? post.body) !== post.body ||
+      (post.draftCoverImageUrl ?? post.coverImageUrl) !== post.coverImageUrl ||
+      (post.draftCoverImageAlt ?? post.coverImageAlt) !== post.coverImageAlt ||
+      (post.draftAuthorName ?? post.authorName) !== post.authorName ||
+      (post.draftSeoTitle ?? post.seoTitle) !== post.seoTitle ||
+      (post.draftSeoDescription ?? post.seoDescription) !== post.seoDescription ||
+      (post.draftOgImageUrl ?? post.ogImageUrl) !== post.ogImageUrl
+    );
+  }
+
+  /**
    * The admin working copy. Draft columns hold edits; published columns
    * hold the live version. The `??` fallbacks keep pre-snapshot rows
    * readable even if a draft field was never populated.
@@ -425,18 +444,22 @@ export class BlogService {
     if (!opts.from.includes(post.status)) {
       throw new BadRequestException(`Cannot ${opts.to.toLowerCase()} a post in status ${post.status}`);
     }
-    // Idempotent retry of an already-applied transition: the write is
-    // skipped, but a failed cache invalidation is still retried and its
-    // real result reported rather than faked as synced.
-    if (post.status === opts.to) {
+    // Draft promotion for publish: the draft columns become the public
+    // columns in the same write as the status/version transition, so the
+    // promotion is atomic. Fallbacks cover rows missing draft fields.
+    const hasPendingEdits =
+      opts.promoteDraft === true && this.draftDiffers(post);
+    // Idempotent retry of an already-applied transition with no pending
+    // draft edits: the write is skipped, but a failed cache invalidation
+    // is still retried and its real result reported rather than faked
+    // as synced. Publishing a live post WITH pending edits falls through
+    // to the promotion write below.
+    if (post.status === opts.to && !(opts.promoteDraft && hasPendingEdits)) {
       const revalidation = opts.revalidate
         ? await this.revalidate(post.slug)
         : { attempted: false, ok: true };
       return { post, revalidation };
     }
-    // Draft promotion for publish: the draft columns become the public
-    // columns in the same write as the status/version transition, so the
-    // promotion is atomic. Fallbacks cover rows missing draft fields.
     const promote: Prisma.BlogPostUpdateManyMutationInput = opts.promoteDraft
       ? {
           title: post.draftTitle ?? post.title,

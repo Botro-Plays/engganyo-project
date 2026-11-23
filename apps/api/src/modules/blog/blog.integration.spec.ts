@@ -179,14 +179,15 @@ run('blog service - real PostgreSQL', () => {
         slug: slug('other'), expectedVersion: pub.post.version,
       }),
     ).rejects.toThrow(BadRequestException);
+    // A rejected update does not bump the version.
+    const unpub = await service.unpublish(adminId, post.id, pub.post.version);
     // Unpublish and delete do not unlock the URL history either.
-    await service.unpublish(adminId, post.id, pub.post.version + 1);
     await expect(
       service.update(adminId, post.id, {
-        slug: slug('other'), expectedVersion: pub.post.version + 2,
+        slug: slug('other'), expectedVersion: unpub.post.version,
       }),
     ).rejects.toThrow(BadRequestException);
-    const del = await service.remove(adminId, post.id, true, pub.post.version + 2);
+    const del = await service.remove(adminId, post.id, true, unpub.post.version);
     expect(del.post.status).toBe(BlogPostStatus.DELETED);
   });
 
