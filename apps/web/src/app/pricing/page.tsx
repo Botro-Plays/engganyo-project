@@ -49,6 +49,7 @@ const jsonLd = innerPageJsonLd({
 // Example packages seen in the wallet on 2026-11-21. The table is
 // labeled as an example because packages and rates can change.
 const EXAMPLE_PACKAGES: [string, string][] = [
+  ['$0.01', '40 credits (PayMongo, Philippines)'],
   ['$1', '5,000 credits'],
   ['$5', '25,500 credits (+500 bonus)'],
   ['$10', '51,500 credits (+1,500 bonus)'],
@@ -90,7 +91,8 @@ export default function PricingPage() {
             <p className="text-zinc-300 leading-relaxed mb-4">
               Credits can be bought in the Wallet. Packages are priced in USD from $1 to $100, larger
               packages include bonus credits, and a peso equivalent is shown at a live rate where
-              supported. See the Wallet for current packages and payment options.
+              supported. A ₱1 Starter option is also available for PayMongo users. See the Wallet for
+              current packages and payment options.
             </p>
             <div className="rounded-lg border border-surface-border overflow-hidden mb-4">
               <table className="w-full text-sm">
@@ -117,7 +119,7 @@ export default function PricingPage() {
             </p>
             <figure className="mt-4 rounded-lg border border-surface-border bg-surface-card overflow-hidden">
               <Image
-                src="/brand/product-wallet.webp"
+                src="/brand/product-wallet-v2.webp"
                 alt="Engganyo Wallet page showing credit packages"
                 width={1200}
                 height={750}

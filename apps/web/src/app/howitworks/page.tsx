@@ -55,7 +55,7 @@ const STEPS = [
     title: 'Earn credits',
     body: 'Open the task list and pick a task on a platform you use, such as following an account or joining a channel. Do the action on that platform, then upload a screenshot as proof of the completion.',
     img: {
-      src: '/brand/product-tasks.webp',
+      src: '/brand/product-tasks-v2.webp',
       alt: 'Engganyo Tasks page showing open tasks and the credit reward for each one',
       caption: 'The Tasks page lists open tasks with the credit reward for each one.',
     },
