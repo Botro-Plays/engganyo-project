@@ -1,5 +1,5 @@
 // =============================================================
-// ENGGANYO — Prisma Database Schema
+// ENGGANYO - Prisma Database Schema
 // PostgreSQL · Prisma ORM
 // =============================================================
 
@@ -65,7 +65,7 @@ enum TransactionType {
   SPEND_CHALLENGE_CREATE
   REFUND_CHALLENGE_CLOSE
   PLATFORM_FEE_CHALLENGE
-  // Mutual P2P rooms (no wallet reward — equal contributions + room charge)
+  // Mutual P2P rooms (no wallet reward - equal contributions + room charge)
   SPEND_ROOM_CREATE
   SPEND_ROOM_CLAIM
   REFUND_ROOM_CLOSE
@@ -156,22 +156,22 @@ enum ChallengeVisibility {
 enum ChallengeStatus {
   OPEN // published, slot unclaimed
   CLAIMED // slot taken, awaiting proof/review
-  COMPLETED // terminal — awarded or closed without award
-  EXPIRED // terminal — offer window or abandoned claim elapsed
-  CANCELLED // terminal — creator cancelled before claim
+  COMPLETED // terminal - awarded or closed without award
+  EXPIRED // terminal - offer window or abandoned claim elapsed
+  CANCELLED // terminal - creator cancelled before claim
 }
 
-// Mutual P2P rooms — equal contributions, peer-reviewed work, no credit reward
+// Mutual P2P rooms - equal contributions, peer-reviewed work, no credit reward
 enum RoomStatus {
   OPEN // published, awaiting joiner; creator's X reserved
   NEGOTIATING // joiner claimed + reserved; single expiresAt deadline runs
   AGREED // both approved the same offer state; 2X room charge collected
   IN_PROGRESS // at least one submission made
   SUBMITTED // both directions have submissions (derived state kept for queries)
-  DISPUTED // frozen pending admin — still expires at expiresAt (V3.1a)
-  COMPLETED // terminal — both directions verified, +1 P2P point each
-  CLOSED // terminal — closed pre-agreement, each own X refunded
-  EXPIRED // terminal — deadline elapsed in any active state, unwind applied
+  DISPUTED // frozen pending admin - still expires at expiresAt (V3.1a)
+  COMPLETED // terminal - both directions verified, +1 P2P point each
+  CLOSED // terminal - closed pre-agreement, each own X refunded
+  EXPIRED // terminal - deadline elapsed in any active state, unwind applied
 }
 
 enum RoomOfferStatus {
@@ -294,11 +294,11 @@ enum StoreCategory {
 }
 
 enum TrustLevel {
-  NEW // 0-20  — new account, limited access
-  LOW // 21-40 — some concerns
-  MEDIUM // 41-60 — average user
-  HIGH // 61-80 — trusted user
-  VERIFIED // 81-100 — fully trusted creator
+  NEW // 0-20  - new account, limited access
+  LOW // 21-40 - some concerns
+  MEDIUM // 41-60 - average user
+  HIGH // 61-80 - trusted user
+  VERIFIED // 81-100 - fully trusted creator
 }
 
 enum ForumTopicStatus {
@@ -366,7 +366,7 @@ model User {
   // Email preferences
   weeklyDigestEnabled Boolean @default(true) @map("weekly_digest_enabled")
 
-  // Onboarding/feature tour preferences — server-authoritative so they
+  // Onboarding/feature tour preferences - server-authoritative so they
   // follow the account across devices and browsers.
   autoToursEnabled Boolean @default(true) @map("auto_tours_enabled")
 
@@ -612,7 +612,7 @@ model TourCompletion {
   tourKey   String                @map("tour_key")
   version   Int
   status    TourCompletionStatus  @default(COMPLETED)
-  // In-progress step index — lets an interrupted tour resume where the
+  // In-progress step index - lets an interrupted tour resume where the
   // user left off instead of restarting. Terminal statuses ignore it.
   stepIndex Int                   @default(0) @map("step_index")
   createdAt DateTime              @default(now()) @map("created_at")
@@ -635,7 +635,7 @@ model TourGeneration {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tourKey     String   @map("tour_key")
   generation  Int      @default(0)
-  // Id of the most recently applied reset — makes replay DELETEs
+  // Id of the most recently applied reset - makes replay DELETEs
   // idempotent: a retried reset carrying the same id returns success
   // without re-deleting, while an unrelated reset at a stale generation
   // still conflicts (409).
@@ -654,7 +654,7 @@ enum TourCompletionStatus {
 
 // 24-hour reservation on a released VERIFIED social identity.
 // Keyed by platform + stable platform user id (never the mutable handle).
-// Survives user deletion on purpose — releasedByUserId is a plain string
+// Survives user deletion on purpose - releasedByUserId is a plain string
 // with no FK so account deletion cannot bypass an active reservation.
 model SocialIdentityReservation {
   id               String         @id @default(cuid())
@@ -886,12 +886,12 @@ model Challenge {
 
   status ChallengeStatus @default(OPEN)
 
-  // Economics — snapshotted at publish; fee collected only on settlement
+  // Economics - snapshotted at publish; fee collected only on settlement
   feeRateSnapshot Float @map("fee_rate_snapshot")
   feeAmount       Int   @map("fee_amount")
   reservedCredits Int   @map("reserved_credits") // reward + fee held from creator
 
-  // The single claim — canonical link is TaskCompletion.challengeId (@unique)
+  // The single claim - canonical link is TaskCompletion.challengeId (@unique)
   claim       TaskCompletion?
   claimedById String?         @map("claimed_by_id")
   claimedBy   User?           @relation("ChallengeClaimant", fields: [claimedById], references: [id])
@@ -1023,7 +1023,7 @@ model UserMissionProgress {
 // flags so a crash mid-processing resumes instead of losing rewards.
 // Exactly-once per effect is enforced by each effect's own dedupe
 // (xp/vp events, mission progress events, achievement unique row,
-// referral milestone map) — flags only track progress.
+// referral milestone map) - flags only track progress.
 model TaskCompletionOutcome {
   id                  String    @id @default(cuid())
   completionId        String    @unique @map("completion_id")
@@ -1046,7 +1046,7 @@ model TaskCompletionOutcome {
   claimToken          String?   @map("claim_token")
   // Reward terms frozen at the qualifying VERIFIED event: eligible
   // mission IDs + requirement/credit/xp terms and the XP boost
-  // multiplier observed at that instant. NULL = legacy/defensive row —
+  // multiplier observed at that instant. NULL = legacy/defensive row -
   // processing falls back to live configuration (documented policy for
   // outcomes recorded before this column existed).
   rewardSnapshot      Json?     @map("reward_snapshot")
@@ -1059,7 +1059,7 @@ model TaskCompletionOutcome {
 }
 
 // Weekly earned-item entitlement for verified-activity rewards. One row
-// per (user, item, ISO week) — the unique key is the replay identity that
+// per (user, item, ISO week) - the unique key is the replay identity that
 // makes grant settlement exactly-once even under concurrent qualifying
 // completions or outcome recovery. isoWeek uses ISO week-year+week
 // ('2026-W47'), Monday 00:00 UTC based.
@@ -1074,7 +1074,7 @@ model ActivityRewardEntitlement {
   grantedAt          DateTime  @default(now()) @map("granted_at")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  // One grant per user per program(=activity_reward) per ISO week —
+  // One grant per user per program(=activity_reward) per ISO week -
   // independent of which itemId the config points at. itemId records
   // the item actually awarded for audit.
   @@unique([userId, isoWeek])
@@ -1085,7 +1085,7 @@ model ActivityRewardEntitlement {
 // Freeze marker for one UTC period's mission catalog. Inserted once by
 // the first touch of the period (missions read, VERIFIED outcome, or
 // admin mutation); only the winner writes mission_period_terms, so the
-// catalog is all-or-nothing — missions created mid-period can never
+// catalog is all-or-nothing - missions created mid-period can never
 // acquire a term row for the current period.
 model MissionPeriodCatalog {
   periodDate DateTime @id @map("period_date") @db.Date
@@ -1100,7 +1100,7 @@ model MissionPeriodCatalog {
 // terms (ON CONFLICT DO NOTHING); later config edits are scheduled into
 // the next period by the admin mutations, so mid-period changes cannot
 // alter today's eligibility and every worker pays identical terms.
-// Rows survive daily_missions deletion — they ARE the referenced
+// Rows survive daily_missions deletion - they ARE the referenced
 // historical definition for in-flight progress and payouts.
 model MissionPeriodTerm {
   id           String   @id @default(cuid())
@@ -1184,7 +1184,7 @@ model RewardOutboxEvent {
   @@map("reward_outbox_events")
 }
 
-// Durable reward entitlement — written inside the settlement
+// Durable reward entitlement - written inside the settlement
 // transaction so a reward obligation survives crashes. PENDING rows are
 // processed idempotently; UNRESOLVED rows retain the entitlement until
 // the missing input (e.g. a USD valuation) is backfilled and the row is
@@ -1548,7 +1548,7 @@ model Deposit {
   userWalletAddress    String?         @map("user_wallet_address") // EVM wallet address used for crypto payment
   paymentRef           String?         @unique @map("payment_ref") // Gateway ref / TX hash
   gatewayData          Json?           @map("gateway_data") // Raw webhook / gateway payload
-  // Provider-reported settlement figures (null until reported — never estimated)
+  // Provider-reported settlement figures (null until reported - never estimated)
   providerFee          Float?          @map("provider_fee")
   providerFeeCurrency  String?         @map("provider_fee_currency")
   providerNet          Float?          @map("provider_net")
@@ -1922,16 +1922,16 @@ model UserActiveEffect {
 }
 
 // =============================================================
-// PLAYER ITEM MARKETPLACE — credits-only, consumables v1
+// PLAYER ITEM MARKETPLACE - credits-only, consumables v1
 // =============================================================
 
 // A listing escrows `quantity` units out of the seller's inventory at
 // creation (the inventory row is decremented in the same transaction).
 // remainingQuantity decrements per completed order; at 0 the listing is
-// SOLD_OUT. Listings are never deleted — terminal states keep history.
+// SOLD_OUT. Listings are never deleted - terminal states keep history.
 enum MarketplaceListingStatus {
   ACTIVE
-  PAUSED // catalog drift detected — escrow held until seller cancels/expires
+  PAUSED // catalog drift detected - escrow held until seller cancels/expires
   SOLD_OUT
   CANCELLED
   EXPIRED
@@ -1965,7 +1965,7 @@ model MarketplaceListing {
 }
 
 // One row per completed purchase. purchaseKey is the buyer-supplied
-// idempotency key — unique per buyer so retries/double-submits replay the
+// idempotency key - unique per buyer so retries/double-submits replay the
 // committed order instead of double-charging.
 model MarketplaceOrder {
   id                   String   @id @default(cuid())
@@ -1992,7 +1992,7 @@ model MarketplaceOrder {
 }
 
 // =============================================================
-// GAMIFICATION — Sprint 3 (Wheel + Daily Reward Log)
+// GAMIFICATION - Sprint 3 (Wheel + Daily Reward Log)
 // =============================================================
 
 model WheelSpin {
@@ -2093,7 +2093,7 @@ model WalletChallenge {
 // AnalyticsDailyVisit for VISITOR_AGGREGATE_RETENTION_MONTHS (24).
 model VisitorEvent {
   id             String        @id @default(cuid())
-  eventId        String        @unique @map("event_id") // client nonce — dedupes retries
+  eventId        String        @unique @map("event_id") // client nonce - dedupes retries
   visitId        String        @map("visit_id") // engganyo_vid cookie value
   visitDbId      String?       @map("visit_db_id")
   visit          VisitorVisit? @relation(fields: [visitDbId], references: [id])
@@ -2154,7 +2154,7 @@ model AnalyticsDailyVisit {
   visits         Int      @default(0)
   pageViews      Int      @default(0) @map("page_views")
   bounces        Int      @default(0) // visits with exactly one page view
-  uniqueVisitors Int      @default(0) @map("unique_visitors") // day-level distinct visitIds — sums over ranges are an estimate
+  uniqueVisitors Int      @default(0) @map("unique_visitors") // day-level distinct visitIds - sums over ranges are an estimate
 
   @@unique([date, dimension, value])
   @@index([date])
@@ -2163,7 +2163,7 @@ model AnalyticsDailyVisit {
 
 // =============================================================
 // =============================================================
-// MUTUAL P2P ROOMS — equal contributions, peer review, no credit reward
+// MUTUAL P2P ROOMS - equal contributions, peer review, no credit reward
 // =============================================================
 
 model ChallengeRoom {
@@ -2262,7 +2262,7 @@ model RoomSubmission {
   @@map("room_submissions")
 }
 
-// Active-room slot — one non-terminal room per user across both roles.
+// Active-room slot - one non-terminal room per user across both roles.
 // Partial unique index (user_id WHERE released_at IS NULL) is created by
 // the migration SQL; Prisma cannot express partial indexes in schema.
 model RoomParticipation {
