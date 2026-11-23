@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { innerPageJsonLd, jsonLdScript } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
@@ -114,6 +115,20 @@ export default function PricingPage() {
               credits and earned credits are used the same way. Credits are used inside Engganyo and
               cannot be withdrawn as money.
             </p>
+            <figure className="mt-4 rounded-lg border border-surface-border bg-surface-card overflow-hidden">
+              <Image
+                src="/brand/product-wallet.webp"
+                alt="Engganyo Wallet page showing credit packages"
+                width={1200}
+                height={750}
+                loading="lazy"
+                sizes="(max-width: 768px) 100vw, 720px"
+                className="w-full h-auto"
+              />
+              <figcaption className="px-3 py-2 text-xs text-zinc-400">
+                Credit packages in the Wallet deposit flow.
+              </figcaption>
+            </figure>
           </section>
 
           <section className="card-glass rounded-xl p-6">
