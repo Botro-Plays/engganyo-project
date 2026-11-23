@@ -2398,6 +2398,9 @@ model BlogPost {
   draftSeoTitle       String?        @map("draft_seo_title")
   draftSeoDescription String?        @map("draft_seo_description")
   draftOgImageUrl     String?        @map("draft_og_image_url")
+  // Once set, the draft columns are the authoritative working copy and a
+  // null optional field means "cleared", not "fall back to published".
+  draftInitializedAt  DateTime?      @map("draft_initialized_at")
   status              BlogPostStatus @default(DRAFT)
   publishedAt         DateTime?      @map("published_at")
   contentModifiedAt   DateTime?      @map("content_modified_at")

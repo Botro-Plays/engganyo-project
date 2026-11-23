@@ -154,6 +154,61 @@ run('blog service - real PostgreSQL', () => {
     expect(live.excerpt).toBe('v2');
   });
 
+  it('clearing optional draft fields removes them on publish', async () => {
+    const post = await service.create(adminId, {
+      title: 'Opt', slug: slug('opt'),
+      coverImageUrl: '/cover.png', coverImageAlt: 'alt text',
+      seoTitle: 'seo t', seoDescription: 'seo d', ogImageUrl: '/og.png',
+    });
+    let v = (await service.publish(adminId, post.id, post.version)).post.version;
+    const before = await service.getPublished(slug('opt'));
+    expect(before.coverImageUrl).toBe('/cover.png');
+    expect(before.seoTitle).toBe('seo t');
+
+    // Clear every optional field in the draft.
+    const saved = await service.update(adminId, post.id, {
+      coverImageUrl: null, coverImageAlt: null, seoTitle: null,
+      seoDescription: null, ogImageUrl: null,
+      expectedVersion: v,
+    });
+    v = saved.post.version;
+
+    // Public content is unchanged until publish.
+    const still = await service.getPublished(slug('opt'));
+    expect(still.coverImageUrl).toBe('/cover.png');
+    expect(still.seoTitle).toBe('seo t');
+    expect(still.ogImageUrl).toBe('/og.png');
+
+    // Admin preview reflects the cleared draft values.
+    const preview = await service.getAdminPreview(post.id);
+    expect(preview.coverImageUrl).toBeNull();
+    expect(preview.seoTitle).toBeNull();
+    expect(preview.ogImageUrl).toBeNull();
+
+    // Publish promotes the clears; callers fall back to defaults.
+    const repub = await service.publish(adminId, post.id, v);
+    expect(repub.post.coverImageUrl).toBeNull();
+    expect(repub.post.seoTitle).toBeNull();
+    expect(repub.post.seoDescription).toBeNull();
+    expect(repub.post.ogImageUrl).toBeNull();
+    const after = await service.getPublished(slug('opt'));
+    expect(after.coverImageUrl).toBeNull();
+    expect(after.coverImageAlt).toBeNull();
+    expect(after.seoTitle).toBeNull();
+    expect(after.ogImageUrl).toBeNull();
+  });
+
+  it('required fields cannot be cleared to null', async () => {
+    const post = await service.create(adminId, { title: 'Req', slug: slug('req') });
+    for (const key of ['title', 'excerpt', 'body', 'authorName'] as const) {
+      await expect(
+        service.update(adminId, post.id, {
+          [key]: null, expectedVersion: post.version,
+        } as never),
+      ).rejects.toThrow(BadRequestException);
+    }
+  });
+
   it('admin preview reads the draft while the public page reads the snapshot', async () => {
     const post = await service.create(adminId, { title: 'P1', slug: slug('prev') });
     const published = (await service.publish(adminId, post.id, post.version)).post;
