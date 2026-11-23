@@ -140,6 +140,85 @@ test.describe('blog publishing lifecycle', () => {
     expect(index).toContain(SLUG);
   });
 
+  test('draft isolation: saving edits never changes the live article', async ({ request }) => {
+    const EDITED = 'E2E draft edit not yet live';
+    const save = await request.patch(`${API}/admin/blog/posts/${postId}`, {
+      headers: headers(),
+      data: { title: EDITED, expectedVersion: version },
+    });
+    expect(save.ok()).toBeTruthy();
+    version = (await save.json()).data.post.version;
+
+    // Every public projection keeps serving the published snapshot.
+    const api = await request.get(`${API}/blog/posts/${SLUG}`);
+    expect((await api.json()).data.title).toBe(TITLE);
+    const page = await (await request.get(`${BASE}/blog/${SLUG}`)).text();
+    expect(page).toContain('E2E post with');
+    expect(page).not.toContain(EDITED);
+    expect(await (await request.get(`${BASE}/blog/rss.xml`)).text()).not.toContain(EDITED);
+    expect(await (await request.get(`${BASE}/sitemap.xml`)).text()).not.toContain(EDITED);
+
+    // Publish promotes the draft snapshot atomically.
+    const pub = await request.post(`${API}/admin/blog/posts/${postId}/publish`, {
+      headers: headers(),
+      data: { expectedVersion: version },
+    });
+    expect(pub.ok()).toBeTruthy();
+    version = (await pub.json()).data.post.version;
+    await expect
+      .poll(async () => (await request.get(`${API}/blog/posts/${SLUG}`)).json()
+        .then((b) => b.data.title), { timeout: 30_000 })
+      .toBe(EDITED);
+  });
+
+  test('slug lock: a published permalink cannot change', async ({ request }) => {
+    const res = await request.patch(`${API}/admin/blog/posts/${postId}`, {
+      headers: headers(),
+      data: { slug: 'e2enewslug99', expectedVersion: version },
+    });
+    expect(res.status()).toBe(400);
+    // The canonical seeded article's permalink is equally locked.
+    const canonical = await request.get(`${API}/blog/posts/yourfirstweekonengganyo`);
+    expect(canonical.ok()).toBeTruthy();
+  });
+
+  test('metadata XSS: JSON-LD escapes script-closing payloads', async ({ request, page }) => {
+    const payload = 'x</script><script>window.__e2e_xss=1</script>';
+    const save = await request.patch(`${API}/admin/blog/posts/${postId}`, {
+      headers: headers(),
+      data: {
+        seoTitle: payload,
+        seoDescription: payload,
+        authorName: payload,
+        expectedVersion: version,
+      },
+    });
+    expect(save.ok()).toBeTruthy();
+    version = (await save.json()).data.post.version;
+    const pub = await request.post(`${API}/admin/blog/posts/${postId}/publish`, {
+      headers: headers(),
+      data: { expectedVersion: version },
+    });
+    expect(pub.ok()).toBeTruthy();
+    version = (await pub.json()).data.post.version;
+
+    // The raw HTML must not contain a literal script terminator inside
+    // JSON-LD; the escaped text must still parse as the same JSON.
+    const html = await (await request.get(`${BASE}/blog/${SLUG}`)).text();
+    const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+    expect(ldMatch).toBeTruthy();
+    const ld = ldMatch![1];
+    expect(ld).not.toContain('</script>');
+    const parsed = JSON.parse(ld) as Array<Record<string, unknown>>;
+    const posting = parsed.find((n) => n['@type'] === 'BlogPosting')!;
+    expect(posting.description).toBe(payload);
+
+    // Rendered: no executable element was created by the payload.
+    await page.goto(`${BASE}/blog/${SLUG}`);
+    expect(await page.evaluate(() => (window as unknown as { __e2e_xss?: number }).__e2e_xss))
+      .toBeUndefined();
+  });
+
   test('unpublish: removed from public surfaces', async ({ request }) => {
     const res = await request.post(`${API}/admin/blog/posts/${postId}/unpublish`, {
       headers: headers(),

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { innerPageJsonLd } from '@/lib/jsonld';
+import { innerPageJsonLd, jsonLdScript } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { EmailOff } from '@/components/email-off';
 import { listPublishedPosts } from '@/lib/blog';
@@ -64,7 +64,7 @@ export default async function BlogIndex({
     <div className="min-h-screen bg-sc text-sc-text">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <PublicHeader />
 

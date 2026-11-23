@@ -13,9 +13,7 @@ import type { ApiResponse } from '@/types';
 
 type PostStatus = 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED' | 'ARCHIVED' | 'DELETED';
 
-interface PostRecord {
-  id: string;
-  slug: string;
+interface DraftFields {
   title: string;
   excerpt: string;
   body: string;
@@ -25,9 +23,18 @@ interface PostRecord {
   seoTitle: string | null;
   seoDescription: string | null;
   ogImageUrl: string | null;
+}
+
+interface PostRecord extends DraftFields {
+  id: string;
+  slug: string;
   status: PostStatus;
   publishedAt: string | null;
   version: number;
+  // The admin working copy; the top-level fields are the published
+  // snapshot and must not be loaded into the editor.
+  draft: DraftFields;
+  slugLocked: boolean;
 }
 
 interface MutationResult {
@@ -64,6 +71,10 @@ export default function AdminBlogEditorPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [slugLocked, setSlugLocked] = useState(false);
+  // Set when a mutation reported revalidation.ok === false: the DB
+  // write committed but public caches have not converged.
+  const [unsynced, setUnsynced] = useState(false);
   const versionRef = useRef(version);
   versionRef.current = version;
 
@@ -75,17 +86,33 @@ export default function AdminBlogEditorPage() {
     },
   });
 
+  // Deployment wiring check: warns early when cache invalidation cannot
+  // run at all. Booleans only, no secret values cross the wire.
+  const revalStatusQuery = useQuery({
+    queryKey: ['admin-blog-reval-status'],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ secretConfigured: boolean; webUrlConfigured: boolean }>>(
+        'admin/blog/revalidation/status',
+      );
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     const p = postQuery.data;
     if (!p) return;
+    // The editor loads the draft working copy, not the published row.
+    const d = p.draft ?? p;
     setForm({
-      title: p.title, slug: p.slug, excerpt: p.excerpt, body: p.body,
-      coverImageUrl: p.coverImageUrl ?? '', coverImageAlt: p.coverImageAlt ?? '',
-      authorName: p.authorName, seoTitle: p.seoTitle ?? '',
-      seoDescription: p.seoDescription ?? '', ogImageUrl: p.ogImageUrl ?? '',
+      title: d.title, slug: p.slug, excerpt: d.excerpt, body: d.body,
+      coverImageUrl: d.coverImageUrl ?? '', coverImageAlt: d.coverImageAlt ?? '',
+      authorName: d.authorName, seoTitle: d.seoTitle ?? '',
+      seoDescription: d.seoDescription ?? '', ogImageUrl: d.ogImageUrl ?? '',
     });
     setVersion(p.version);
     setStatus(p.status);
+    setSlugLocked(p.slugLocked);
     setDirty(false);
   }, [postQuery.data]);
 
@@ -105,12 +132,18 @@ export default function AdminBlogEditorPage() {
 
   const showResult = (result: MutationResult | undefined, action: string) => {
     const rv = result?.revalidation;
-    if (rv && rv.attempted && !rv.ok) {
+    // Any ok:false outcome is an unsynced publication state: the DB
+    // write committed but public caches have not converged yet.
+    if (rv && !rv.ok) {
+      setUnsynced(true);
       setNotice({
         kind: 'warn',
-        text: `${action} saved, but the public cache refresh failed. The change is stored; it may take up to a minute to appear on all public pages, or retry the action.`,
+        text: rv.attempted
+          ? `${action} saved, but the public cache refresh failed. The change is stored; use Retry refresh or wait for the next revalidation window.`
+          : `${action} saved, but public cache refresh is not configured on this deployment. The change is stored; it will appear after the next scheduled revalidation.`,
       });
     } else {
+      setUnsynced(false);
       setNotice({ kind: 'ok', text: `${action} succeeded.` });
     }
   };
@@ -176,6 +209,25 @@ export default function AdminBlogEditorPage() {
     onError: (e) => setNotice({ kind: 'err', text: getApiErrorMessage(e) }),
   });
 
+  // Explicit retry for a committed mutation whose invalidation failed.
+  const retryMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post<ApiResponse<{ attempted: boolean; ok: boolean }>>(
+        `admin/blog/posts/${id}/revalidate`,
+      );
+      return res.data.data;
+    },
+    onSuccess: (rv) => {
+      setUnsynced(!rv.ok);
+      setNotice(
+        rv.ok
+          ? { kind: 'ok', text: 'Public cache refresh succeeded. The change is now converging to public pages.' }
+          : { kind: 'err', text: 'Cache refresh still failing. Check the deployment configuration.' },
+      );
+    },
+    onError: (e) => setNotice({ kind: 'err', text: getApiErrorMessage(e) }),
+  });
+
   const uploadMut = useMutation({
     mutationFn: async (file: File) => {
       const fd = new FormData();
@@ -230,6 +282,31 @@ export default function AdminBlogEditorPage() {
         </span>
       </div>
 
+      {revalStatusQuery.data && (!revalStatusQuery.data.secretConfigured || !revalStatusQuery.data.webUrlConfigured) && (
+        <p role="alert" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          Public cache refresh is not fully configured on this deployment
+          {!revalStatusQuery.data.secretConfigured ? ' (revalidation secret missing)' : ''}
+          {!revalStatusQuery.data.webUrlConfigured ? ' (web URL missing)' : ''}
+          . Changes are stored now and appear on public pages after the
+          next scheduled revalidation instead of immediately.
+        </p>
+      )}
+
+      {unsynced && (
+        <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          <span>Published change is stored but public caches are not yet synced.</span>
+          <button
+            type="button"
+            className={`${btnCls} shrink-0`}
+            disabled={retryMut.isPending}
+            onClick={() => retryMut.mutate()}
+          >
+            {retryMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            Retry refresh
+          </button>
+        </div>
+      )}
+
       {notice && (
         <p
           role="alert"
@@ -251,7 +328,12 @@ export default function AdminBlogEditorPage() {
           </label>
           <label className="block">
             <span className="block text-xs text-sc-muted mb-1">Slug (lowercase letters and digits only)</span>
-            <input className={inputCls} value={form.slug} onChange={(e) => set('slug')(e.target.value)} disabled={deleted} />
+            <input className={inputCls} value={form.slug} onChange={(e) => set('slug')(e.target.value)} disabled={deleted || slugLocked} />
+            {slugLocked && (
+              <span className="mt-1 block text-[11px] text-sc-muted">
+                Locked: this post has been published, so its public URL cannot change.
+              </span>
+            )}
           </label>
         </div>
         <label className="block">
@@ -378,6 +460,12 @@ export default function AdminBlogEditorPage() {
         {status === 'DRAFT' && (
           <p className="text-xs text-sc-muted">
             Saving keeps this post as a draft. Nothing goes live until you use Publish.
+          </p>
+        )}
+        {status === 'PUBLISHED' && (
+          <p className="text-xs text-sc-muted">
+            This post is live. Edits you save stay private as a draft and
+            do not change the public page until you use Publish again.
           </p>
         )}
 

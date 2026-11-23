@@ -2374,27 +2374,51 @@ enum BlogPostStatus {
 }
 
 model BlogPost {
-  id             String         @id @default(cuid())
-  slug           String         @unique
-  title          String
-  excerpt        String         @default("")
-  body           String         @default("")
-  coverImageUrl  String?        @map("cover_image_url")
-  coverImageAlt  String?        @map("cover_image_alt")
-  authorName     String         @default("Engganyo") @map("author_name")
-  seoTitle       String?        @map("seo_title")
-  seoDescription String?        @map("seo_description")
-  ogImageUrl     String?        @map("og_image_url")
-  status         BlogPostStatus @default(DRAFT)
-  publishedAt    DateTime?      @map("published_at")
-  unpublishedAt  DateTime?      @map("unpublished_at")
-  deletedAt      DateTime?      @map("deleted_at")
-  version        Int            @default(1)
-  createdBy      String?        @map("created_by")
-  updatedBy      String?        @map("updated_by")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  id                  String         @id @default(cuid())
+  // Published columns: the public projection. Only a publish transition
+  // promotes draft fields into these, so edits never leak to readers.
+  slug                String         @unique
+  title               String
+  excerpt             String         @default("")
+  body                String         @default("")
+  coverImageUrl       String?        @map("cover_image_url")
+  coverImageAlt       String?        @map("cover_image_alt")
+  authorName          String         @default("Engganyo") @map("author_name")
+  seoTitle            String?        @map("seo_title")
+  seoDescription      String?        @map("seo_description")
+  ogImageUrl          String?        @map("og_image_url")
+  // Draft columns: the admin working copy. Save/Preview touches only
+  // these; Publish copies them into the published columns atomically.
+  draftTitle          String?        @map("draft_title")
+  draftExcerpt        String?        @map("draft_excerpt")
+  draftBody           String?        @map("draft_body")
+  draftCoverImageUrl  String?        @map("draft_cover_image_url")
+  draftCoverImageAlt  String?        @map("draft_cover_image_alt")
+  draftAuthorName     String?        @map("draft_author_name")
+  draftSeoTitle       String?        @map("draft_seo_title")
+  draftSeoDescription String?        @map("draft_seo_description")
+  draftOgImageUrl     String?        @map("draft_og_image_url")
+  status              BlogPostStatus @default(DRAFT)
+  publishedAt         DateTime?      @map("published_at")
+  contentModifiedAt   DateTime?      @map("content_modified_at")
+  unpublishedAt       DateTime?      @map("unpublished_at")
+  deletedAt           DateTime?      @map("deleted_at")
+  version             Int            @default(1)
+  createdBy           String?        @map("created_by")
+  updatedBy           String?        @map("updated_by")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
 
   @@index([status, publishedAt])
   @@map("blog_posts")
+}
+
+// Per-slug markers for the canonical seed import. A marker exists once
+// its post was imported, so a crashed seed resumes the remaining slugs
+// while an intentionally deleted post is never resurrected.
+model BlogSeedMarker {
+  slug      String   @id
+  importedAt DateTime @default(now()) @map("imported_at")
+
+  @@map("blog_seed_markers")
 }

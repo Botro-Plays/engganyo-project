@@ -19,6 +19,7 @@ import { PublicFooter } from '@/components/public-chrome';
 import { BlogRail } from '@/components/blog-rail';
 import { BlogPostCard } from '@/components/blog-post-card';
 import { listPublishedPosts } from '@/lib/blog';
+import { jsonLdScript } from '@/lib/jsonld';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -162,7 +163,7 @@ export default async function LandingPage() {
       <script
         id="json-ld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <main className="relative min-h-screen bg-sc text-sc-text overflow-x-hidden">
         {/* Hero gradient */}

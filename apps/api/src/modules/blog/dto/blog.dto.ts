@@ -39,7 +39,9 @@ export class UpdatePostDto {
 }
 
 export class MutationDto {
-  @IsOptional() @IsInt() @Min(1) expectedVersion?: number;
+  // Required for every state-changing action so the server can tell a
+  // stale/conflicting request apart from a legitimate idempotent retry.
+  @IsInt() @Min(1) expectedVersion!: number;
 }
 
 export class DeletePostDto extends MutationDto {
