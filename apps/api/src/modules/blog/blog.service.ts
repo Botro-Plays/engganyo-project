@@ -91,37 +91,49 @@ export class BlogService {
    * True when the draft working copy differs from the published
    * snapshot. Drives the republish path: pending edits promote on the
    * next Publish; a clean draft makes a repeated publish idempotent.
+   *
+   * Once a draft is initialized, a null optional draft field means
+   * "cleared" and counts as a difference. Required text fields keep a
+   * fallback because they can never legitimately be null (update()
+   * rejects clearing them). Uninitialized drafts mirror the published
+   * row, so they can never differ.
    */
   private draftDiffers(post: BlogPost): boolean {
+    if (!post.draftInitializedAt) return false;
+    const clearedOrChanged = (draft: string | null, live: string | null) =>
+      draft !== live;
     return (
       (post.draftTitle ?? post.title) !== post.title ||
       (post.draftExcerpt ?? post.excerpt) !== post.excerpt ||
       (post.draftBody ?? post.body) !== post.body ||
-      (post.draftCoverImageUrl ?? post.coverImageUrl) !== post.coverImageUrl ||
-      (post.draftCoverImageAlt ?? post.coverImageAlt) !== post.coverImageAlt ||
       (post.draftAuthorName ?? post.authorName) !== post.authorName ||
-      (post.draftSeoTitle ?? post.seoTitle) !== post.seoTitle ||
-      (post.draftSeoDescription ?? post.seoDescription) !== post.seoDescription ||
-      (post.draftOgImageUrl ?? post.ogImageUrl) !== post.ogImageUrl
+      clearedOrChanged(post.draftCoverImageUrl, post.coverImageUrl) ||
+      clearedOrChanged(post.draftCoverImageAlt, post.coverImageAlt) ||
+      clearedOrChanged(post.draftSeoTitle, post.seoTitle) ||
+      clearedOrChanged(post.draftSeoDescription, post.seoDescription) ||
+      clearedOrChanged(post.draftOgImageUrl, post.ogImageUrl)
     );
   }
 
   /**
    * The admin working copy. Draft columns hold edits; published columns
-   * hold the live version. The `??` fallbacks keep pre-snapshot rows
-   * readable even if a draft field was never populated.
+   * hold the live version. Once the draft is initialized, null optional
+   * fields are intentional clears and are returned verbatim so the
+   * editor and preview show them empty. Uninitialized rows (written
+   * before drafts existed) fall back to the published values.
    */
   toDraftPost(post: BlogPost) {
+    const init = post.draftInitializedAt != null;
     return {
       title: post.draftTitle ?? post.title,
       excerpt: post.draftExcerpt ?? post.excerpt,
       body: post.draftBody ?? post.body,
-      coverImageUrl: post.draftCoverImageUrl ?? post.coverImageUrl,
-      coverImageAlt: post.draftCoverImageAlt ?? post.coverImageAlt,
       authorName: post.draftAuthorName ?? post.authorName,
-      seoTitle: post.draftSeoTitle ?? post.seoTitle,
-      seoDescription: post.draftSeoDescription ?? post.seoDescription,
-      ogImageUrl: post.draftOgImageUrl ?? post.ogImageUrl,
+      coverImageUrl: init ? post.draftCoverImageUrl : post.draftCoverImageUrl ?? post.coverImageUrl,
+      coverImageAlt: init ? post.draftCoverImageAlt : post.draftCoverImageAlt ?? post.coverImageAlt,
+      seoTitle: init ? post.draftSeoTitle : post.draftSeoTitle ?? post.seoTitle,
+      seoDescription: init ? post.draftSeoDescription : post.draftSeoDescription ?? post.seoDescription,
+      ogImageUrl: init ? post.draftOgImageUrl : post.draftOgImageUrl ?? post.ogImageUrl,
     };
   }
 
@@ -222,6 +234,7 @@ export class BlogService {
             draftSeoTitle: dto.seoTitle,
             draftSeoDescription: dto.seoDescription,
             draftOgImageUrl: dto.ogImageUrl,
+            draftInitializedAt: new Date(),
             createdBy: adminId,
             updatedBy: adminId,
           },
@@ -258,21 +271,52 @@ export class BlogService {
         'Published permalinks cannot change. Create a new post instead.',
       );
     }
+    // Required text fields cannot be cleared to null; optional fields
+    // (cover, SEO, social image) accept null as an intentional clear.
+    for (const key of ['title', 'excerpt', 'body', 'authorName'] as const) {
+      if ((fields as Record<string, unknown>)[key] === null) {
+        throw new BadRequestException(`${key} is required and cannot be cleared`);
+      }
+    }
     // Edits land in the draft columns only. Public readers keep seeing
     // the published columns until an explicit Publish promotes them.
+    const init = current.draftInitializedAt != null;
     const data: Prisma.BlogPostUpdateManyMutationInput = {
       version: { increment: 1 },
       updatedBy: adminId,
       ...(newSlug && !current.publishedAt ? { slug: newSlug } : {}),
-      ...(fields.title !== undefined ? { draftTitle: fields.title } : {}),
-      ...(fields.excerpt !== undefined ? { draftExcerpt: fields.excerpt } : {}),
-      ...(fields.body !== undefined ? { draftBody: fields.body } : {}),
-      ...(fields.coverImageUrl !== undefined ? { draftCoverImageUrl: fields.coverImageUrl } : {}),
-      ...(fields.coverImageAlt !== undefined ? { draftCoverImageAlt: fields.coverImageAlt } : {}),
-      ...(fields.authorName !== undefined ? { draftAuthorName: fields.authorName } : {}),
-      ...(fields.seoTitle !== undefined ? { draftSeoTitle: fields.seoTitle } : {}),
-      ...(fields.seoDescription !== undefined ? { draftSeoDescription: fields.seoDescription } : {}),
-      ...(fields.ogImageUrl !== undefined ? { draftOgImageUrl: fields.ogImageUrl } : {}),
+      ...(!init
+        ? {
+            // First save on a pre-draft row: materialize the draft as a
+            // copy of the published row before applying this update, so
+            // nulls written below mean "clear", never "inherit".
+            draftInitializedAt: new Date(),
+            draftTitle: fields.title ?? current.title,
+            draftExcerpt: fields.excerpt ?? current.excerpt,
+            draftBody: fields.body ?? current.body,
+            draftCoverImageUrl:
+              fields.coverImageUrl !== undefined ? fields.coverImageUrl : current.coverImageUrl,
+            draftCoverImageAlt:
+              fields.coverImageAlt !== undefined ? fields.coverImageAlt : current.coverImageAlt,
+            draftAuthorName: fields.authorName ?? current.authorName,
+            draftSeoTitle:
+              fields.seoTitle !== undefined ? fields.seoTitle : current.seoTitle,
+            draftSeoDescription:
+              fields.seoDescription !== undefined ? fields.seoDescription : current.seoDescription,
+            draftOgImageUrl:
+              fields.ogImageUrl !== undefined ? fields.ogImageUrl : current.ogImageUrl,
+          }
+        : {
+            ...(fields.title !== undefined ? { draftTitle: fields.title } : {}),
+            ...(fields.excerpt !== undefined ? { draftExcerpt: fields.excerpt } : {}),
+            ...(fields.body !== undefined ? { draftBody: fields.body } : {}),
+            ...(fields.coverImageUrl !== undefined ? { draftCoverImageUrl: fields.coverImageUrl } : {}),
+            ...(fields.coverImageAlt !== undefined ? { draftCoverImageAlt: fields.coverImageAlt } : {}),
+            ...(fields.authorName !== undefined ? { draftAuthorName: fields.authorName } : {}),
+            ...(fields.seoTitle !== undefined ? { draftSeoTitle: fields.seoTitle } : {}),
+            ...(fields.seoDescription !== undefined ? { draftSeoDescription: fields.seoDescription } : {}),
+            ...(fields.ogImageUrl !== undefined ? { draftOgImageUrl: fields.ogImageUrl } : {}),
+          }),
     };
     const post = await this.prisma.$transaction(async (tx) => {
       // Optimistic locking: the version check lands in the same write so
@@ -415,14 +459,21 @@ export class BlogService {
    * Deployment wiring status, booleans only - secrets are never read
    * into the response. The admin UI can warn when invalidation is
    * unconfigured instead of silently marking changes as synced.
+   * webUrlSource reports which URL the API will actually call:
+   * 'internal' (container-to-container via WEB_INTERNAL_URL, set by
+   * compose), 'public' (FRONTEND_URL fallback), or 'missing'.
    */
   revalidationStatus() {
+    // WEB_INTERNAL_URL (compose: http://web:3000) is the only URL that
+    // reaches the web app's /api/internal/revalidate route. FRONTEND_URL
+    // is the public origin; nginx sends public /api/* to the API itself,
+    // so a public fallback would always miss the web route and look
+    // falsely "configured".
+    const internal = this.config.get<string>('app.webInternalUrl') ?? '';
     return {
       secretConfigured: !!(this.config.get<string>('app.revalidateSecret') ?? ''),
-      webUrlConfigured: !!(
-        this.config.get<string>('app.webInternalUrl') ||
-        this.config.get<string>('app.frontendUrl')
-      ),
+      webUrlConfigured: !!internal,
+      webUrlSource: internal ? 'internal' : 'missing',
     };
   }
 
@@ -446,7 +497,9 @@ export class BlogService {
     }
     // Draft promotion for publish: the draft columns become the public
     // columns in the same write as the status/version transition, so the
-    // promotion is atomic. Fallbacks cover rows missing draft fields.
+    // promotion is atomic. Required fields keep a coalesce (a guarded
+    // draft can never carry null there); optional fields promote
+    // verbatim once the draft is initialized so cleared stays cleared.
     const hasPendingEdits =
       opts.promoteDraft === true && this.draftDiffers(post);
     // Idempotent retry of an already-applied transition with no pending
@@ -460,17 +513,18 @@ export class BlogService {
         : { attempted: false, ok: true };
       return { post, revalidation };
     }
+    const init = post.draftInitializedAt != null;
     const promote: Prisma.BlogPostUpdateManyMutationInput = opts.promoteDraft
       ? {
           title: post.draftTitle ?? post.title,
           excerpt: post.draftExcerpt ?? post.excerpt,
           body: post.draftBody ?? post.body,
-          coverImageUrl: post.draftCoverImageUrl ?? post.coverImageUrl,
-          coverImageAlt: post.draftCoverImageAlt ?? post.coverImageAlt,
           authorName: post.draftAuthorName ?? post.authorName,
-          seoTitle: post.draftSeoTitle ?? post.seoTitle,
-          seoDescription: post.draftSeoDescription ?? post.seoDescription,
-          ogImageUrl: post.draftOgImageUrl ?? post.ogImageUrl,
+          coverImageUrl: init ? post.draftCoverImageUrl : post.draftCoverImageUrl ?? post.coverImageUrl,
+          coverImageAlt: init ? post.draftCoverImageAlt : post.draftCoverImageAlt ?? post.coverImageAlt,
+          seoTitle: init ? post.draftSeoTitle : post.draftSeoTitle ?? post.seoTitle,
+          seoDescription: init ? post.draftSeoDescription : post.draftSeoDescription ?? post.seoDescription,
+          ogImageUrl: init ? post.draftOgImageUrl : post.draftOgImageUrl ?? post.ogImageUrl,
           contentModifiedAt: new Date(),
         }
       : {};
@@ -531,12 +585,11 @@ export class BlogService {
    */
   private async revalidate(slug: string): Promise<RevalidationResult> {
     const secret = this.config.get<string>('app.revalidateSecret') ?? '';
-    const frontend = (
-      this.config.get<string>('app.webInternalUrl') ||
-      this.config.get<string>('app.frontendUrl') || ''
-    ).replace(/\/+$/, '');
+    // Only the container-internal web URL reaches the revalidate route;
+    // the public FRONTEND_URL proxies /api/* back to this service.
+    const frontend = (this.config.get<string>('app.webInternalUrl') ?? '').replace(/\/+$/, '');
     if (!secret || !frontend) {
-      this.logger.warn('Revalidation skipped: INTERNAL_REVALIDATE_SECRET or FRONTEND_URL not configured');
+      this.logger.warn('Revalidation skipped: INTERNAL_REVALIDATE_SECRET or WEB_INTERNAL_URL not configured');
       return { attempted: false, ok: false, paths: [] };
     }
     const paths = ['/', '/blog', `/blog/${slug}`, '/blog/rss.xml', '/sitemap.xml'];

@@ -25,16 +25,18 @@ export class CreatePostDto {
 }
 
 export class UpdatePostDto {
+  // Required text fields reject null in the service; the five optional
+  // fields below accept null as an intentional "clear this value".
   @IsOptional() @IsString() @MaxLength(200) title?: string;
   @IsOptional() @IsString() @Matches(SLUG_RE, { message: 'Slug must be lowercase letters and digits only (no hyphens), 2-64 chars' }) slug?: string;
   @IsOptional() @IsString() @MaxLength(400) excerpt?: string;
   @IsOptional() @IsString() body?: string;
-  @IsOptional() @IsString() @MaxLength(500) coverImageUrl?: string;
-  @IsOptional() @IsString() @MaxLength(300) coverImageAlt?: string;
+  @IsOptional() @IsString() @MaxLength(500) coverImageUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(300) coverImageAlt?: string | null;
   @IsOptional() @IsString() @MaxLength(120) authorName?: string;
-  @IsOptional() @IsString() @MaxLength(200) seoTitle?: string;
-  @IsOptional() @IsString() @MaxLength(300) seoDescription?: string;
-  @IsOptional() @IsString() @MaxLength(500) ogImageUrl?: string;
+  @IsOptional() @IsString() @MaxLength(200) seoTitle?: string | null;
+  @IsOptional() @IsString() @MaxLength(300) seoDescription?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) ogImageUrl?: string | null;
   @IsInt() @Min(1) expectedVersion!: number;
 }
 
