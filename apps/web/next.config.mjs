@@ -38,18 +38,40 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-          // Report-only first: observe violations (reCAPTCHA frames,
-          // third-party scripts) before any enforcement is considered.
+          // Enforced after live violation review on public AND
+          // authenticated pages (simulated enforcement via response
+          // rewriting). Two legitimate origins were observed blocked:
+          //   - static.cloudflareinsights.com: Cloudflare Web Analytics
+          //     beacon, owner retains -> added to script-src.
+          //   - reCAPTCHA v3 runtime resources: it injects a
+          //     www.gstatic.com stylesheet and fonts.gstatic.com Roboto
+          //     woff2 on authenticated pages -> added to style-src and
+          //     font-src. Without these, enforcing the policy breaks
+          //     reCAPTCHA rendering on login, register and every
+          //     authenticated page.
+          // unsafe-inline stays: Next.js injects inline bootstrap/inline
+          // JSON payloads. unsafe-eval stays: retained for libraries that
+          // still use new Function/eval paths in production bundles.
+          // CSP_REPORT_ONLY stays available for environments where the
+          // enforced policy cannot apply (emergency diagnostic escape
+          // hatch only). CSP_TEST_CONNECT_SRC narrows the opposite
+          // direction: the e2e job sets it to the test API origin so the
+          // suite runs under the ENFORCED policy while still reaching
+          // http://localhost:3001 cross-origin over plain HTTP, which
+          // connect-src 'self' https: wss: would otherwise block.
+          // Production never sets either variable.
           {
-            key: 'Content-Security-Policy-Report-Only',
+            key: process.env['CSP_REPORT_ONLY'] === 'true'
+              ? 'Content-Security-Policy-Report-Only'
+              : 'Content-Security-Policy',
             value:
               "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com; " +
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://static.cloudflareinsights.com; " +
               "frame-src https://www.google.com https://recaptcha.google.com; " +
-              "connect-src 'self' https: wss:; " +
+              `connect-src 'self' https: wss:${process.env['CSP_TEST_CONNECT_SRC'] ? ' ' + process.env['CSP_TEST_CONNECT_SRC'] : ''}; ` +
               "img-src 'self' data: https:; " +
-              "style-src 'self' 'unsafe-inline'; " +
-              "font-src 'self' data:; " +
+              "style-src 'self' 'unsafe-inline' https://www.gstatic.com; " +
+              "font-src 'self' data: https://fonts.gstatic.com; " +
               "object-src 'none'; base-uri 'self'; form-action 'self'",
           },
         ],
