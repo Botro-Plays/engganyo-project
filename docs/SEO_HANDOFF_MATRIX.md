@@ -160,3 +160,21 @@ Deployment catch fixed by PR #154: the API entrypoint ran `prisma migrate deploy
 Live-verified at deployed SHA `9e174d4` (https://engganyo.com, plain curl): `/blog/yourfirstweekonengganyo` 200 with canonical URL + BlogPosting JSON-LD + published_time; both supplied drafts 404 (draft privacy); RSS contains the post item with real pubDate; sitemap lists the post URL; landing rail renders "Read more: Your first week on Engganyo"; homepage serves `og:image` `/brand/social-1200x630.png` + `twitter:card summary_large_image`; `/privacy` 0 cfemail markers, plain mailto.
 
 Still open: VPS `.env` needs `INTERNAL_REVALIDATE_SECRET` + `WEB_INTERNAL_URL` for live publish-time revalidation (until set, publish propagation relies on the 60s ISR window and surfaces as revalidation.failed in admin mutation responses); owner-assisted admin acceptance incl. PIN/2FA in real UI; real-device/cross-browser pass; Cloudflare PerplexityBot decision; CSP enforcement review.
+
+### Blog hardening round (post-`997fc86` source review)
+
+The 997fc86 review found release-blocking issues in the first CMS pass. All seven were corrected in PR #155 (`b22c0cc`, merged `1e220e0`), every check green on the merge pipeline (API/Web lint+build, Playwright e2e, images, VPS deploy, deployed Lighthouse).
+
+| # | Item | State | Evidence |
+|---|------|-------|----------|
+| 1 | Safe JSON-LD | Implemented + tested + deployed | `lib/jsonld.ts` `jsonLdScript()` escapes `<`/`>`/`&`/U+2028/29 and stays valid JSON; applied to all 11 `ld+json` emitters. node:test units + a Playwright test publish a `</script><script>` payload through metadata and assert the rendered block parses, never terminates the element, and executes nothing |
+| 2 | Draft isolation | Implemented + tested + deployed | `draft_*` columns (migration `20261124000000_blog_draft_snapshot`, backfilled); Save/Preview touch only drafts; publish promotes atomically in the same tx as status + audit. Real-PostgreSQL + e2e tests prove a published post's page/RSS/sitemap/index stay unchanged until Publish |
+| 3 | Cache propagation | Implemented + tested + deployed | every `ok:false` surfaces as an unsynced banner; `POST /admin/blog/posts/:id/revalidate` + `GET /admin/blog/revalidation/status` (booleans only, no secrets); idempotent transition repeats still re-attempt invalidation; `.env.production.example` documents the two vars concretely |
+| 4 | Published URLs | Implemented + tested + deployed | permalinks locked once `publishedAt` is set (400 on rename); rename allowed only pre-publish; covered by API + e2e tests; canonical slug unchanged live |
+| 5 | 404 vs outage | Implemented + tested + deployed | `BlogFetchError` thrown on 5xx/429/timeouts; only authoritative 404 notFounds. ISR keeps last good render at request time; `NEXT_PHASE` build fallback prevents baking fake-empty pages (CI build failure proved and fixed); sitemap pages through all posts; RSS capped at 50 documented |
+| 6 | Lifecycle consistency | Implemented + tested + deployed | `expectedVersion` required on every mutation; audits commit inside the mutation tx; `contentModifiedAt` feeds `dateModified` + sitemap `lastModified`; per-slug `blog_seed_markers` make the import crash-recoverable and never resurrect deletes |
+| 7 | Acceptance coverage | Implemented + tested | unit (serializer, fetcher semantics, >50-post pagination), real-PostgreSQL (isolation, lock, conflicts, retry, audit order, seed interruption), e2e (rendered XSS, full draft flow). Owner-assisted admin acceptance remains open |
+
+Live-verified at deployed SHA `1e220e0` (plain curl): article 200 with valid escaped JSON-LD, `datePublished`/`dateModified` `2026-11-22`; drafts 404; landing/index/RSS/sitemap all carry the canonical post; `/privacy` 0 cfemail + plain mailto. Admin-authenticated paths (draft isolation, slug lock, retry, unsynced state, wiring status) are covered by CI/e2e only - they are not claimed live-verified until owner-assisted acceptance runs the real workflow.
+
+Owner-pending (unchanged): `INTERNAL_REVALIDATE_SECRET` + `WEB_INTERNAL_URL` in the VPS `.env`; owner-assisted admin acceptance; real-device/cross-browser pass; PerplexityBot decision; CSP review.
