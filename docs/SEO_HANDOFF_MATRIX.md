@@ -192,3 +192,48 @@ Follow-up review found three remaining gaps, corrected in PR #156 (`6bc70df`, me
 Live-verified at deployed SHA `fbb9a28` (plain curl): `/api/blog/posts` envelope `{data:{items,total,page,limit}}` valid, article exposes `contentModifiedAt`; `/blog/yourfirstweekonengganyo` 200 with valid escaped JSON-LD (dates `2026-11-22` preserved); drafts 404; sitemap + RSS contain the slug; `lastmod` present.
 
 Still configuration-pending for cache propagation (unchanged): owner must set one shared `INTERNAL_REVALIDATE_SECRET` in the VPS `.env` (both api and web read it via env_file; `WEB_INTERNAL_URL` is already correct via compose). After that, owner-assisted admin login verifies publish/update propagation, unpublish/delete removal, landing/index/article/RSS/sitemap convergence, the unsynced banner on failed invalidation, and Retry refresh repair. Not claimed until then. Other owner items unchanged: admin UI acceptance, real-device pass, PerplexityBot, CSP.
+
+### Cache propagation + content publication - owner-assisted acceptance (2026-11-23)
+
+Owner-assisted acceptance ran on dedicated temporary Edge profiles (admin on CDP 9223, labeled test account `jamai` on CDP 9222). The owner completed login, 2FA, and admin PIN personally; no credentials, sessions, or tokens were read or exported. Both profiles were discarded after the session.
+
+| Item | State | Evidence |
+|------|-------|----------|
+| Revalidation secret configured | Done (VPS) | Shared `INTERNAL_REVALIDATE_SECRET` generated on the VPS (64-char hex, never printed or committed; `.env` backed up first), both api+web read it via `env_file`, containers recreated and healthy |
+| Status endpoint | Verified (authenticated) | `GET /admin/blog/revalidation/status` returned `secretConfigured:true`, `webUrlConfigured:true`, `webUrlSource:"internal"` |
+| Internal invalidation | Verified (functional) | From inside the api container: `POST /api/internal/revalidate` returned `200 {ok:true}` for both `tag:blog` and explicit paths; wrong secret returned `401`. `WEB_INTERNAL_URL=http://web:3000` effective via compose |
+| Publish propagation | Verified (real timings) | Disposable post publish: article 200 at ~1.1s, index ~1.1s, landing rail ~0.4s, RSS ~0.3s, sitemap ~0.3s after mutation. These are observed timings, not a guaranteed bound |
+| Edit propagation | Verified | Republish after edits: article 200 at ~1.1s, edited marker visible ~1.3s |
+| Unpublish + delete removal | Verified | Unpublish removed the post from all public surfaces (article 404, absent from index/landing/RSS/sitemap); delete completed the lifecycle |
+| Invalidation failure + Retry | Verified | Narrow fault injection (`web -> 127.0.0.1` in the api container's `/etc/hosts`, restored afterward; no other users or config touched): mutation returned `ok:false`, the unsynced banner with "Retry refresh" rendered, and the stale article kept serving 200. After restore, Retry returned `ok:true`, banner cleared, and the updated content propagated in ~1.1s |
+| Supplied drafts published | Done | `howcreditsworkonengganyo` (published `2026-11-23T07:19:48.973Z`) and `stayingsafewithtaskexchanges` (`2026-11-23T07:20:01.849Z`) published through the admin UI; wording reviewed against live code before publish (200 welcome credits, live daily reward + free spin, USD packages with `bonusCredits`, P2P upfront reserve, store, Twitch/Spotify auto-verify, credits are not cash and cannot be withdrawn). Both verified live: 200, one H1, canonical, valid BlogPosting JSON-LD with `author: Engganyo`, real datePublished/dateModified, og image + `twitter:card summary_large_image`, present on index, landing rail, RSS, and sitemap |
+
+Admin-UI gap flagged for Jomar (not a regression, pre-existing): a PUBLISHED post with pending draft edits shows no "Publish" action (`STATUS_ACTIONS[PUBLISHED]` omits it), so pushing edits live requires Unpublish then Publish - a visible gap in public availability. Left unchanged as out of scope.
+
+### Product screenshots (PR #159)
+
+- Fresh captures from the labeled test account on the live site: Tasks with open tasks + rewards, campaign-create form, Wallet credit packages. Usernames blurred; no invented activity.
+- Optimized WebP assets in `apps/web/public/brand/` (1200x750): `product-tasks.webp` ~65KB, `product-campaigns.webp` ~26KB, `product-wallet.webp` ~36KB.
+- `/howitworks` shows the tasks and campaigns shots next to their matching steps; `/pricing` shows the wallet shot beside the credit packages. `next/image` with explicit width/height, lazy loading, accurate alt text, muted captions, card styling.
+
+### CSP enforcement review (draft PR #157)
+
+Simulated enforcement (Playwright response rewriting, not deployed) across public pages plus authenticated acceptance on the two owner-controlled sessions:
+
+- Public pages: the only violation was the Cloudflare Insights beacon script (`static.cloudflareinsights.com`), which the owner retains - added to `script-src`.
+- Authenticated pages (the public-only review missed this): reCAPTCHA v3 injects a `www.gstatic.com` stylesheet and `fonts.gstatic.com` Roboto woff2 - added narrowly to `style-src` and `font-src`. Enforcing the earlier draft policy would have broken reCAPTCHA on login, register, and every authenticated page.
+- Corrected policy then showed **zero violations** on `/login`, `/admin`, `/admin/blog` editor, `/tasks`, `/campaigns`, `/wallet` (deposit flow, no real payment), `/chat` (websocket connected under `connect-src wss:`), and `/rooms` (proof-upload area).
+- The Insights beacon script loads; its telemetry connections run over HTTPS and are covered by `connect-src 'self' https: wss:`.
+- `unsafe-inline` stays because Next.js injects inline bootstrap/JSON payloads; `unsafe-eval` stays for libraries still using `new Function`/eval paths in production bundles.
+- CI fix found during review: enforced `connect-src 'self' https: wss:` blocks the e2e browser's cross-origin calls to `http://localhost:3001`, breaking global-setup login. `deploy.yml` now sets `CSP_REPORT_ONLY=true` in the e2e job so the suite runs under the observational header; every other environment still enforces.
+- Rollback: revert the header name to `Content-Security-Policy-Report-Only` (one-line change in `apps/web/next.config.mjs`); the exact policy diff is in PR #157.
+- PR #157 stays a draft pending owner sign-off to merge; the policy is validated but not yet deployed.
+
+### final-check.sh results (2026-11-23, deployed `14e6818`)
+
+The supplied script passed every substantive check. Three FAILs were artifacts or pending-state, one flagged edge change:
+
+- `rss lists both new posts` reported 4 vs 2 because `grep -c` counts lines; each post's slug appears in both `link` and `guid`. Both posts are listed exactly once - verified directly.
+- `/faq` metadata checks and `robots ai-input=yes` failed on transient slow fetches during the deployed-Lighthouse window; direct rechecks return 200 with all metadata and the `ai-input=yes` Content-Signal intact.
+- `CSP enforced` fails by design: PR #157 remains a draft pending owner sign-off.
+- **Flagged edge change**: `ClaudeBot` now returns 200 (script expected the documented 403) and `PerplexityBot` returns 200 (previously 403). Cloudflare's managed AI-crawler block no longer denies either bot - this is an owner Cloudflare dashboard setting (Security > Bots > AI Crawl Control) or a managed-rules change. Origin `robots.txt` still serves `Content-Signal: ai-train=no`. Owner decision needed on whether to re-block.

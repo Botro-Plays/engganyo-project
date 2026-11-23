@@ -147,3 +147,13 @@ For web design and implementation, follow `AGENTS.md`, read the repository's UI 
 The instructed `.agents/skills/ui-ux-pro-max/SKILL.md` path was absent from this checkout when this document was created. Locate or restore the repository-pinned skill before the UI implementation, and record the actual skill location and search used.
 
 Immediate flow and visual changes should be delivered in focused PRs with exact tested SHAs, mobile/desktop evidence, real-API verification where behavior changes, and request-count impact. Credit marketplace and ads require their own reviewed proposals. Mutual rooms in PR #45, email-logo verification, and deferred payment tests retain their existing review records.
+
+## Status update - 2026-11-23 (blog publication, screenshots, CSP)
+
+Blog follow-through from the Drive review completed under owner-assisted acceptance:
+
+- The two supplied drafts are live: `/blog/howcreditsworkonengganyo` and `/blog/stayingsafewithtaskexchanges`, published through the admin UI with verified metadata, JSON-LD, index/landing/RSS/sitemap presence. Wording was reviewed against live code before publish; credits are described as platform credits, not withdrawable cash.
+- Cache propagation is verified end to end: shared `INTERNAL_REVALIDATE_SECRET` set on the VPS, status endpoint reports both booleans true, and a disposable post exercised publish/edit/unpublish/delete propagation with real timings plus a fault-injection Retry-repair cycle. Details in `docs/SEO_HANDOFF_MATRIX.md`.
+- Fresh product screenshots landed in PR #159: tasks, campaign-create form, and wallet packages on `/howitworks` and `/pricing` (optimized WebP, lazy loaded, explicit dimensions, captions).
+- CSP: validated enforced policy in draft PR #157 (Cloudflare Insights + reCAPTCHA style/font origins added after authenticated violation review; zero remaining violations across all required surfaces). Held as draft pending owner sign-off to merge and deploy.
+- Flagged gap: a published post with pending draft edits has no Publish action in the admin editor; getting edits live currently requires Unpublish then Publish (a public-availability gap). Recommend a follow-up fix.
