@@ -428,8 +428,8 @@ jobs:
         run: |
           set -e
           mkdir -p /tmp/lhp
-          for route in / /about /faq /howitworks; do
-            name=$(echo "$route" | sed 's|^/$|home|; s|^/||')
+          for route in / /about /faq /howitworks /pricing /blog /blog/howcreditsworkonengganyo; do
+            name=$(echo "$route" | sed 's|^/$|home|; s|^/||; s|/|-|g')
             for i in 1 2 3; do
               npx -y lighthouse@12 "https://engganyo.com${route}" \
                 --output=json --output-path="/tmp/lhp/${name}-${i}.json" \
