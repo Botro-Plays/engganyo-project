@@ -178,3 +178,17 @@ The 997fc86 review found release-blocking issues in the first CMS pass. All seve
 Live-verified at deployed SHA `1e220e0` (plain curl): article 200 with valid escaped JSON-LD, `datePublished`/`dateModified` `2026-11-22`; drafts 404; landing/index/RSS/sitemap all carry the canonical post; `/privacy` 0 cfemail + plain mailto. Admin-authenticated paths (draft isolation, slug lock, retry, unsynced state, wiring status) are covered by CI/e2e only - they are not claimed live-verified until owner-assisted acceptance runs the real workflow.
 
 Owner-pending (unchanged): `INTERNAL_REVALIDATE_SECRET` + `WEB_INTERNAL_URL` in the VPS `.env`; owner-assisted admin acceptance; real-device/cross-browser pass; PerplexityBot decision; CSP review.
+
+### Blog hardening round 2 (post-`1e220e0` source review)
+
+Follow-up review found three remaining gaps, corrected in PR #156 (`6bc70df`, merged `fbb9a28`). Full pipeline green on the merge commit (API/Web lint+build, Lighthouse lab, Playwright e2e, images, VPS deploy, deployed Lighthouse).
+
+| # | Item | State | Evidence |
+|---|------|-------|----------|
+| 1 | Intentional null vs uninitialized draft | Implemented + tested + deployed | `draft_initialized_at` column (migration `20261125000000_blog_draft_init`); `draftDiffers`/`toDraftPost`/promote all gate on init state so post-init `null` means "clear", never "inherit published". `UpdatePostDto` accepts `null` on the five clearable fields. First save on a pre-draft row materializes published values once so later nulls are real clears. Real-PostgreSQL spec: publish with populated optionals -> clear in draft -> public unchanged -> publish -> fields removed, metadata falls to defaults, admin preview shows cleared values |
+| 2 | Strict API response validation | Implemented + tested + deployed | `lib/blog.ts` validates the `{data}` envelope, collection `items`/`total`/`page`/`limit`, required article fields, and valid timestamps. Malformed 200s, missing envelopes, collection 404s, and 401/429/5xx/timeouts throw `BlogFetchError`; only authoritative article 404 -> null. Valid empty collection (`items:[], total:0`) is a real success. 18 node:test units cover each case |
+| 3 | Revalidation wiring | Implemented + deployed; live acceptance configuration-pending | `FRONTEND_URL` fallback removed (nginx routes `/api/` to the API container, so it could never reach the web's internal route - it looked configured but always failed). Status endpoint now reports the effective `WEB_INTERNAL_URL` source; compose supplies `WEB_INTERNAL_URL=http://web:3000` |
+
+Live-verified at deployed SHA `fbb9a28` (plain curl): `/api/blog/posts` envelope `{data:{items,total,page,limit}}` valid, article exposes `contentModifiedAt`; `/blog/yourfirstweekonengganyo` 200 with valid escaped JSON-LD (dates `2026-11-22` preserved); drafts 404; sitemap + RSS contain the slug; `lastmod` present.
+
+Still configuration-pending for cache propagation (unchanged): owner must set one shared `INTERNAL_REVALIDATE_SECRET` in the VPS `.env` (both api and web read it via env_file; `WEB_INTERNAL_URL` is already correct via compose). After that, owner-assisted admin login verifies publish/update propagation, unpublish/delete removal, landing/index/article/RSS/sitemap convergence, the unsynced banner on failed invalidation, and Retry refresh repair. Not claimed until then. Other owner items unchanged: admin UI acceptance, real-device pass, PerplexityBot, CSP.
