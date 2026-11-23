@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { innerPageJsonLd } from '@/lib/jsonld';
+import { innerPageJsonLd, jsonLdScript } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { EmailOff } from '@/components/email-off';
 import { listPublishedPosts } from '@/lib/blog';
+import type { BlogListItem } from '@/lib/blog';
 
 export const revalidate = 60;
 
@@ -57,14 +58,26 @@ export default async function BlogIndex({
 }) {
   const pageParam = searchParams.page;
   const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1);
-  const { items, total, limit } = await listPublishedPosts(page, 12);
+  // At request time a fetch failure throws so ISR keeps serving the
+  // last good render. Only a build-time prerender (no API yet) falls
+  // back to an explicit unavailable state - never a fake empty index.
+  let items: BlogListItem[] = [];
+  let total = 0;
+  let limit = 12;
+  let loadFailed = false;
+  try {
+    ({ items, total, limit } = await listPublishedPosts(page, 12));
+  } catch (err) {
+    if (process.env.NEXT_PHASE !== 'phase-production-build') throw err;
+    loadFailed = true;
+  }
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <div className="min-h-screen bg-sc text-sc-text">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <PublicHeader />
 
@@ -96,7 +109,11 @@ export default async function BlogIndex({
           .
         </p>
 
-        {items.length === 0 ? (
+        {loadFailed ? (
+          <p className="text-zinc-400">
+            Articles could not be loaded right now. Please check back shortly.
+          </p>
+        ) : items.length === 0 ? (
           <p className="text-zinc-400">No articles yet. Check back soon.</p>
         ) : (
           <div className="space-y-4">

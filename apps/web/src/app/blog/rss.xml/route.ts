@@ -16,7 +16,9 @@ const esc = (s: string) =>
 
 // RSS 2.0 for the Engganyo blog. Absolute URLs throughout. pubDate is
 // derived from each post's stored publication timestamp so the weekday
-// always matches the real calendar.
+// always matches the real calendar. Intentionally capped at the 50 most
+// recent posts, matching common feed-reader convention; the full
+// catalog is always in the sitemap.
 export async function GET() {
   const { items } = await listPublishedPosts(1, 50);
   const body = items

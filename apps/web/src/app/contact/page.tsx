@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { innerPageJsonLd } from '@/lib/jsonld';
+import { innerPageJsonLd, jsonLdScript } from '@/lib/jsonld';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { EmailOff } from '@/components/email-off';
 
@@ -46,7 +46,7 @@ const jsonLd = innerPageJsonLd({
 export default function ContactPage() {
   return (
     <div className="min-h-screen bg-sc text-sc-text">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }} />
       <PublicHeader />
 
       <div className="max-w-3xl mx-auto px-4 py-12">

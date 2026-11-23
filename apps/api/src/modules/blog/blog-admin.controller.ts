@@ -124,6 +124,20 @@ export class BlogAdminController {
     return this.blogService.remove(user.sub, id, dto.confirm, dto.expectedVersion);
   }
 
+  // Deployment wiring check, booleans only - never returns secret
+  // values. Lets the UI warn when invalidation cannot run.
+  @Get('revalidation/status')
+  async revalidationStatus() {
+    return this.blogService.revalidationStatus();
+  }
+
+  // Authenticated retry for a mutation whose cache invalidation failed.
+  @Post('posts/:id/revalidate')
+  @HttpCode(HttpStatus.OK)
+  async revalidate(@Param('id') id: string) {
+    return this.blogService.revalidatePost(id);
+  }
+
   @Post('cover')
   @UseInterceptors(imageInterceptor())
   async uploadCover(@UploadedFile() file: Express.Multer.File | undefined) {

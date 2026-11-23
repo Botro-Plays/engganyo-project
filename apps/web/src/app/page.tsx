@@ -19,6 +19,8 @@ import { PublicFooter } from '@/components/public-chrome';
 import { BlogRail } from '@/components/blog-rail';
 import { BlogPostCard } from '@/components/blog-post-card';
 import { listPublishedPosts } from '@/lib/blog';
+import type { BlogListItem } from '@/lib/blog';
+import { jsonLdScript } from '@/lib/jsonld';
 
 // Uniform public-page caching: one hour shared cache with
 // stale-while-revalidate (emits s-maxage=3600).
@@ -156,13 +158,21 @@ async function getPublicStats(): Promise<PublicStats | null> {
 
 export default async function LandingPage() {
   const stats = await getPublicStats();
-  const { items: blogPosts } = await listPublishedPosts(1, 12);
+  // Same split as /blog: at request time a fetch failure throws so ISR
+  // keeps the last good render; only a build-time prerender (no API
+  // yet) degrades to a rail-less landing.
+  let blogPosts: BlogListItem[] = [];
+  try {
+    ({ items: blogPosts } = await listPublishedPosts(1, 12));
+  } catch (err) {
+    if (process.env.NEXT_PHASE !== 'phase-production-build') throw err;
+  }
   return (
     <>
       <script
         id="json-ld"
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <main className="relative min-h-screen bg-sc text-sc-text overflow-x-hidden">
         {/* Hero gradient */}

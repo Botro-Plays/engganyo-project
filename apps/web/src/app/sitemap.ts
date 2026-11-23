@@ -1,11 +1,12 @@
 import type { MetadataRoute } from 'next';
-import { listPublishedPosts } from '@/lib/blog';
+import { listAllPublishedPosts } from '@/lib/blog';
 
 const BASE_URL = 'https://engganyo.com';
 
 // Dynamic so publish/unpublish revalidation (tag 'blog' on the inner
-// fetch) is the only cache mechanism. The 60s data cache inside
-// listPublishedPosts still bounds upstream API load.
+// fetch) is the only cache mechanism. The 60s data cache inside the
+// paged fetch still bounds upstream API load. A fetch failure throws:
+// better a sitemap 500 than silently omitting posts.
 export const dynamic = 'force-dynamic';
 
 // Real per-page content dates. Update when a page's substance changes.
@@ -33,10 +34,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: new Date(lastModified),
   }));
 
-  const { items } = await listPublishedPosts(1, 50);
+  // Pages through every published post; a >50-post catalog is never
+  // silently truncated out of the sitemap. At request time a fetch
+  // failure throws (better a 500 than a partial sitemap); a build-time
+  // prerender without the API emits the static routes only.
+  let items: Awaited<ReturnType<typeof listAllPublishedPosts>> = [];
+  try {
+    items = await listAllPublishedPosts();
+  } catch (err) {
+    if (process.env.NEXT_PHASE !== 'phase-production-build') throw err;
+  }
   const postEntries: MetadataRoute.Sitemap = items.map((post) => ({
     url: `${BASE_URL}/blog/${post.slug}`,
-    lastModified: new Date(post.publishedAt),
+    // Real content modification time, not the immutable publish date.
+    lastModified: new Date(post.contentModifiedAt ?? post.publishedAt),
   }));
 
   return [...staticEntries, ...postEntries];

@@ -97,20 +97,34 @@ const SEED_POSTS = [
  * and publishes them through the admin UI.
  */
 export async function seedBlogPosts(prisma: PrismaClient): Promise<void> {
-  // First-boot import only: once any post exists, admins own the
-  // catalog. Without this guard a redeploy would resurrect posts an
-  // admin intentionally deleted.
-  const existing = await prisma.blogPost.count();
-  if (existing > 0) {
-    console.log(`   Blog posts already present (${existing}); skipping import`);
-    return;
-  }
+  // Per-slug markers: each post is imported inside the same transaction
+  // as its marker, so a crashed run resumes only the slugs without one.
+  // A post an admin deleted keeps its marker and is never resurrected.
+  const markers = await prisma.blogSeedMarker.findMany({ select: { slug: true } });
+  const done = new Set(markers.map((m) => m.slug));
+  let imported = 0;
   for (const post of SEED_POSTS) {
-    await prisma.blogPost.upsert({
-      where: { slug: post.slug },
-      update: {},
-      create: post,
+    if (done.has(post.slug)) continue;
+    await prisma.$transaction(async (tx) => {
+      await tx.blogPost.upsert({
+        where: { slug: post.slug },
+        update: {},
+        create: {
+          ...post,
+          // The working copy mirrors the imported content.
+          draftTitle: post.title,
+          draftExcerpt: post.excerpt,
+          draftBody: post.body,
+          draftAuthorName: post.authorName,
+          draftOgImageUrl: post.ogImageUrl,
+          ...(post.status === BlogPostStatus.PUBLISHED
+            ? { contentModifiedAt: post.publishedAt }
+            : {}),
+        },
+      });
+      await tx.blogSeedMarker.create({ data: { slug: post.slug } });
     });
+    imported++;
   }
-  console.log(`   Blog posts seeded (${SEED_POSTS.length} slugs, idempotent)`);
+  console.log(`   Blog posts seeded (${imported} new, ${done.size} already imported)`);
 }

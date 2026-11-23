@@ -38,3 +38,20 @@ export function innerPageJsonLd(opts: {
     ],
   };
 }
+
+const SCRIPT_SENSITIVE = /[<>&\u2028\u2029]/g;
+
+/**
+ * Serialize an object for safe embedding in a <script type="application/ld+json">
+ * element. JSON.stringify alone lets a payload containing "</script>" break out
+ * of the script tag and inject markup. Escaping the script-sensitive
+ * characters (<, >, &, U+2028, U+2029) as unicode escapes keeps the output
+ * valid JSON while making it impossible to terminate the element or open a
+ * comment/CDATA escape. Every JSON-LD emitter must go through this.
+ */
+export function jsonLdScript(data: unknown): string {
+  return JSON.stringify(data).replace(SCRIPT_SENSITIVE, (c) => {
+    const hex = c.charCodeAt(0).toString(16).padStart(4, '0');
+    return `\\u${hex}`;
+  });
+}

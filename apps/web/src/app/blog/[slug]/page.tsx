@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PublicFooter, PublicHeader } from '@/components/public-chrome';
 import { getPublishedPost } from '@/lib/blog';
+import { jsonLdScript } from '@/lib/jsonld';
 
 export const revalidate = 60;
 
@@ -74,7 +75,7 @@ export default async function BlogPostPage({
       headline: post.title,
       description: post.seoDescription ?? post.excerpt,
       datePublished: post.publishedAt,
-      dateModified: post.publishedAt,
+      dateModified: post.contentModifiedAt ?? post.publishedAt,
       author: { '@type': 'Organization', name: post.authorName, url: 'https://engganyo.com' },
       publisher: { '@type': 'Organization', name: 'Engganyo', url: 'https://engganyo.com' },
       image: absoluteOg,
@@ -96,7 +97,7 @@ export default async function BlogPostPage({
     <div className="min-h-screen bg-sc text-sc-text">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <PublicHeader />
 

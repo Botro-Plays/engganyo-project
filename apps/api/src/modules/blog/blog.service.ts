@@ -19,7 +19,11 @@ const ADMIN_SELECT = {
   id: true, slug: true, title: true, excerpt: true, body: true,
   coverImageUrl: true, coverImageAlt: true, authorName: true,
   seoTitle: true, seoDescription: true, ogImageUrl: true,
-  status: true, publishedAt: true, unpublishedAt: true, deletedAt: true,
+  draftTitle: true, draftExcerpt: true, draftBody: true,
+  draftCoverImageUrl: true, draftCoverImageAlt: true, draftAuthorName: true,
+  draftSeoTitle: true, draftSeoDescription: true, draftOgImageUrl: true,
+  status: true, publishedAt: true, contentModifiedAt: true,
+  unpublishedAt: true, deletedAt: true,
   version: true, createdBy: true, updatedBy: true,
   createdAt: true, updatedAt: true,
 } satisfies Prisma.BlogPostSelect;
@@ -50,6 +54,7 @@ export class BlogService {
         select: {
           slug: true, title: true, excerpt: true, authorName: true,
           coverImageUrl: true, coverImageAlt: true, publishedAt: true,
+          contentModifiedAt: true,
         },
       }),
       this.prisma.blogPost.count({ where }),
@@ -74,10 +79,49 @@ export class BlogService {
       coverImageUrl: post.coverImageUrl,
       coverImageAlt: post.coverImageAlt,
       publishedAt: post.publishedAt,
+      contentModifiedAt: post.contentModifiedAt ?? post.publishedAt,
       seoTitle: post.seoTitle,
       seoDescription: post.seoDescription,
       ogImageUrl: post.ogImageUrl,
       bodyHtml: renderPostBody(post.body),
+    };
+  }
+
+  /**
+   * True when the draft working copy differs from the published
+   * snapshot. Drives the republish path: pending edits promote on the
+   * next Publish; a clean draft makes a repeated publish idempotent.
+   */
+  private draftDiffers(post: BlogPost): boolean {
+    return (
+      (post.draftTitle ?? post.title) !== post.title ||
+      (post.draftExcerpt ?? post.excerpt) !== post.excerpt ||
+      (post.draftBody ?? post.body) !== post.body ||
+      (post.draftCoverImageUrl ?? post.coverImageUrl) !== post.coverImageUrl ||
+      (post.draftCoverImageAlt ?? post.coverImageAlt) !== post.coverImageAlt ||
+      (post.draftAuthorName ?? post.authorName) !== post.authorName ||
+      (post.draftSeoTitle ?? post.seoTitle) !== post.seoTitle ||
+      (post.draftSeoDescription ?? post.seoDescription) !== post.seoDescription ||
+      (post.draftOgImageUrl ?? post.ogImageUrl) !== post.ogImageUrl
+    );
+  }
+
+  /**
+   * The admin working copy. Draft columns hold edits; published columns
+   * hold the live version. The `??` fallbacks keep pre-snapshot rows
+   * readable even if a draft field was never populated.
+   */
+  toDraftPost(post: BlogPost) {
+    return {
+      title: post.draftTitle ?? post.title,
+      excerpt: post.draftExcerpt ?? post.excerpt,
+      body: post.draftBody ?? post.body,
+      coverImageUrl: post.draftCoverImageUrl ?? post.coverImageUrl,
+      coverImageAlt: post.draftCoverImageAlt ?? post.coverImageAlt,
+      authorName: post.draftAuthorName ?? post.authorName,
+      seoTitle: post.draftSeoTitle ?? post.seoTitle,
+      seoDescription: post.draftSeoDescription ?? post.seoDescription,
+      ogImageUrl: post.draftOgImageUrl ?? post.ogImageUrl,
     };
   }
 
@@ -92,6 +136,9 @@ export class BlogService {
         { title: { contains: q, mode: 'insensitive' } },
         { slug: { contains: q, mode: 'insensitive' } },
         { excerpt: { contains: q, mode: 'insensitive' } },
+        // Draft columns too, so an unpublished edit is findable.
+        { draftTitle: { contains: q, mode: 'insensitive' } },
+        { draftExcerpt: { contains: q, mode: 'insensitive' } },
       ];
     }
     const [items, total] = await Promise.all([
@@ -100,17 +147,32 @@ export class BlogService {
         orderBy: [{ updatedAt: 'desc' }],
         skip: (page - 1) * limit,
         take: limit,
-        select: { ...ADMIN_SELECT, body: false },
+        select: { ...ADMIN_SELECT, body: false, draftBody: false },
       }),
       this.prisma.blogPost.count({ where }),
     ]);
-    return { items, total, page, limit };
+    // The list shows the working copy: draft title/excerpt when an
+    // unpublished edit exists, falling back to the published text.
+    const rows = items.map((p) => ({
+      ...p,
+      title: p.draftTitle ?? p.title,
+      excerpt: p.draftExcerpt ?? p.excerpt,
+    }));
+    return { items: rows, total, page, limit };
   }
 
   async getAdmin(id: string) {
     const post = await this.prisma.blogPost.findUnique({ where: { id } });
     if (!post) throw new NotFoundException('Post not found');
-    return { ...post, bodyHtml: renderPostBody(post.body) };
+    const draft = this.toDraftPost(post);
+    return {
+      ...post,
+      draft,
+      // Slug is locked once the post has ever been published so its
+      // permalink can never silently change under readers.
+      slugLocked: post.publishedAt != null,
+      bodyHtml: renderPostBody(draft.body),
+    };
   }
 
   async getAdminPreview(id: string) {
@@ -120,19 +182,20 @@ export class BlogService {
   }
 
   toAdminPreview(post: BlogPost) {
+    const draft = this.toDraftPost(post);
     return {
       slug: post.slug,
-      title: post.title,
-      excerpt: post.excerpt,
-      authorName: post.authorName,
-      coverImageUrl: post.coverImageUrl,
-      coverImageAlt: post.coverImageAlt,
+      title: draft.title,
+      excerpt: draft.excerpt,
+      authorName: draft.authorName,
+      coverImageUrl: draft.coverImageUrl,
+      coverImageAlt: draft.coverImageAlt,
       publishedAt: post.publishedAt,
       status: post.status,
-      seoTitle: post.seoTitle,
-      seoDescription: post.seoDescription,
-      ogImageUrl: post.ogImageUrl,
-      bodyHtml: renderPostBody(post.body),
+      seoTitle: draft.seoTitle,
+      seoDescription: draft.seoDescription,
+      ogImageUrl: draft.ogImageUrl,
+      bodyHtml: renderPostBody(draft.body),
       preview: true,
     };
   }
@@ -143,10 +206,36 @@ export class BlogService {
 
   async create(adminId: string, dto: CreatePostDto) {
     this.assertValidSlug(dto.slug);
-    let post: BlogPost;
     try {
-      post = await this.prisma.blogPost.create({
-        data: { ...dto, createdBy: adminId, updatedBy: adminId },
+      return await this.prisma.$transaction(async (tx) => {
+        const post = await tx.blogPost.create({
+          data: {
+            ...dto,
+            // Draft columns mirror the initial content so the working
+            // copy and the published copy start identical.
+            draftTitle: dto.title,
+            draftExcerpt: dto.excerpt,
+            draftBody: dto.body,
+            draftCoverImageUrl: dto.coverImageUrl,
+            draftCoverImageAlt: dto.coverImageAlt,
+            draftAuthorName: dto.authorName,
+            draftSeoTitle: dto.seoTitle,
+            draftSeoDescription: dto.seoDescription,
+            draftOgImageUrl: dto.ogImageUrl,
+            createdBy: adminId,
+            updatedBy: adminId,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            userId: adminId,
+            action: 'blog.post.create',
+            entityType: 'BlogPost',
+            entityId: post.id,
+            newValue: { slug: post.slug, title: post.title, status: post.status },
+          },
+        });
+        return post;
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -154,42 +243,68 @@ export class BlogService {
       }
       throw err;
     }
-    await this.audit(adminId, 'blog.post.create', post.id, null, {
-      slug: post.slug, title: post.title, status: post.status,
-    });
-    return post;
   }
 
   async update(adminId: string, id: string, dto: UpdatePostDto) {
-    const { expectedVersion, ...fields } = dto;
-    if (fields.slug) this.assertValidSlug(fields.slug);
+    const { expectedVersion, slug: newSlug, ...fields } = dto;
+    if (newSlug) this.assertValidSlug(newSlug);
     const current = await this.prisma.blogPost.findUnique({ where: { id } });
     if (!current) throw new NotFoundException('Post not found');
     if (current.status === BlogPostStatus.DELETED) {
       throw new ConflictException('Post is deleted and cannot be edited');
     }
-    // Optimistic locking: the version check lands in the same write so a
-    // concurrent editor cannot silently overwrite another admin's save.
-    const result = await this.prisma.blogPost.updateMany({
-      where: { id, version: expectedVersion },
-      data: { ...fields, version: { increment: 1 }, updatedBy: adminId },
-    });
-    if (result.count === 0) {
-      throw new ConflictException(
-        'This post was changed by someone else. Reload to see their version before saving.',
+    if (newSlug && newSlug !== current.slug && current.publishedAt) {
+      throw new BadRequestException(
+        'Published permalinks cannot change. Create a new post instead.',
       );
     }
-    const post = await this.prisma.blogPost.findUniqueOrThrow({ where: { id } });
-    await this.audit(adminId, 'blog.post.update', post.id,
-      { title: current.title, slug: current.slug },
-      { title: post.title, slug: post.slug });
-    const revalidation = current.status === BlogPostStatus.PUBLISHED
-      ? await this.revalidate(post.slug)
-      : { attempted: false, ok: true };
-    return { post, revalidation };
+    // Edits land in the draft columns only. Public readers keep seeing
+    // the published columns until an explicit Publish promotes them.
+    const data: Prisma.BlogPostUpdateManyMutationInput = {
+      version: { increment: 1 },
+      updatedBy: adminId,
+      ...(newSlug && !current.publishedAt ? { slug: newSlug } : {}),
+      ...(fields.title !== undefined ? { draftTitle: fields.title } : {}),
+      ...(fields.excerpt !== undefined ? { draftExcerpt: fields.excerpt } : {}),
+      ...(fields.body !== undefined ? { draftBody: fields.body } : {}),
+      ...(fields.coverImageUrl !== undefined ? { draftCoverImageUrl: fields.coverImageUrl } : {}),
+      ...(fields.coverImageAlt !== undefined ? { draftCoverImageAlt: fields.coverImageAlt } : {}),
+      ...(fields.authorName !== undefined ? { draftAuthorName: fields.authorName } : {}),
+      ...(fields.seoTitle !== undefined ? { draftSeoTitle: fields.seoTitle } : {}),
+      ...(fields.seoDescription !== undefined ? { draftSeoDescription: fields.seoDescription } : {}),
+      ...(fields.ogImageUrl !== undefined ? { draftOgImageUrl: fields.ogImageUrl } : {}),
+    };
+    const post = await this.prisma.$transaction(async (tx) => {
+      // Optimistic locking: the version check lands in the same write so
+      // a concurrent editor cannot silently overwrite another's save.
+      const result = await tx.blogPost.updateMany({
+        where: { id, version: expectedVersion },
+        data,
+      });
+      if (result.count === 0) {
+        throw new ConflictException(
+          'This post was changed by someone else. Reload to see their version before saving.',
+        );
+      }
+      const updated = await tx.blogPost.findUniqueOrThrow({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'blog.post.update',
+          entityType: 'BlogPost',
+          entityId: id,
+          oldValue: { title: current.draftTitle ?? current.title, slug: current.slug },
+          newValue: { title: updated.draftTitle ?? updated.title, slug: updated.slug },
+        },
+      });
+      return updated;
+    });
+    // Saving edits never changes the public article, so no public
+    // revalidation is needed here; Publish owns cache invalidation.
+    return { post, revalidation: { attempted: false, ok: true } };
   }
 
-  async publish(adminId: string, id: string, expectedVersion?: number) {
+  async publish(adminId: string, id: string, expectedVersion: number) {
     return this.transition(adminId, id, expectedVersion, {
       from: [
         BlogPostStatus.DRAFT, BlogPostStatus.UNPUBLISHED,
@@ -197,12 +312,13 @@ export class BlogService {
       ],
       to: BlogPostStatus.PUBLISHED,
       action: 'blog.post.publish',
+      promoteDraft: true,
       extra: {},
       revalidate: true,
     });
   }
 
-  async unpublish(adminId: string, id: string, expectedVersion?: number) {
+  async unpublish(adminId: string, id: string, expectedVersion: number) {
     return this.transition(adminId, id, expectedVersion, {
       from: [BlogPostStatus.PUBLISHED, BlogPostStatus.UNPUBLISHED],
       to: BlogPostStatus.UNPUBLISHED,
@@ -212,7 +328,7 @@ export class BlogService {
     });
   }
 
-  async archive(adminId: string, id: string, expectedVersion?: number) {
+  async archive(adminId: string, id: string, expectedVersion: number) {
     return this.transition(adminId, id, expectedVersion, {
       from: [
         BlogPostStatus.DRAFT, BlogPostStatus.PUBLISHED,
@@ -225,7 +341,7 @@ export class BlogService {
     });
   }
 
-  async restore(adminId: string, id: string, expectedVersion?: number) {
+  async restore(adminId: string, id: string, expectedVersion: number) {
     const post = await this.prisma.blogPost.findUnique({ where: { id } });
     if (!post) throw new NotFoundException('Post not found');
     // Restore keeps the explicit-publish requirement: a post that was
@@ -240,49 +356,87 @@ export class BlogService {
     });
   }
 
-  async remove(adminId: string, id: string, confirm: boolean, expectedVersion?: number) {
+  async remove(adminId: string, id: string, confirm: boolean, expectedVersion: number) {
     if (!confirm) {
       throw new BadRequestException('Deletion requires explicit confirmation');
     }
     const post = await this.prisma.blogPost.findUnique({ where: { id } });
     if (!post) throw new NotFoundException('Post not found');
     if (post.status === BlogPostStatus.DELETED) {
+      // Already deleted: report the persisted row; nothing to redo.
       return { post, revalidation: { attempted: false, ok: true } };
     }
     const wasPublished = post.status === BlogPostStatus.PUBLISHED;
-    const result = await this.prisma.blogPost.updateMany({
-      where: { id, ...(expectedVersion ? { version: expectedVersion } : {}) },
-      data: {
-        status: BlogPostStatus.DELETED,
-        deletedAt: new Date(),
-        unpublishedAt: new Date(),
-        version: { increment: 1 },
-        updatedBy: adminId,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.blogPost.updateMany({
+        where: { id, version: expectedVersion },
+        data: {
+          status: BlogPostStatus.DELETED,
+          deletedAt: new Date(),
+          unpublishedAt: new Date(),
+          version: { increment: 1 },
+          updatedBy: adminId,
+        },
+      });
+      if (result.count === 0) {
+        throw new ConflictException('This post was changed by someone else. Reload before deleting.');
+      }
+      const row = await tx.blogPost.findUniqueOrThrow({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: 'blog.post.delete',
+          entityType: 'BlogPost',
+          entityId: post.id,
+          oldValue: { status: post.status, slug: post.slug, title: post.title },
+          newValue: { status: BlogPostStatus.DELETED },
+        },
+      });
+      return row;
     });
-    if (result.count === 0) {
-      throw new ConflictException('This post was changed by someone else. Reload before deleting.');
-    }
-    const updated = await this.prisma.blogPost.findUniqueOrThrow({ where: { id } });
-    await this.audit(adminId, 'blog.post.delete', post.id,
-      { status: post.status, slug: post.slug, title: post.title },
-      { status: BlogPostStatus.DELETED });
     const revalidation = wasPublished
       ? await this.revalidate(post.slug)
       : { attempted: false, ok: true };
     return { post: updated, revalidation };
   }
 
+  /**
+   * Explicit cache-refresh retry for admins: re-runs invalidation for a
+   * post's public surfaces and reports the real outcome. Used when a
+   * mutation reported revalidation.ok === false.
+   */
+  async revalidatePost(id: string): Promise<RevalidationResult> {
+    const post = await this.prisma.blogPost.findUnique({ where: { id } });
+    if (!post) throw new NotFoundException('Post not found');
+    return this.revalidate(post.slug);
+  }
+
+  /**
+   * Deployment wiring status, booleans only - secrets are never read
+   * into the response. The admin UI can warn when invalidation is
+   * unconfigured instead of silently marking changes as synced.
+   */
+  revalidationStatus() {
+    return {
+      secretConfigured: !!(this.config.get<string>('app.revalidateSecret') ?? ''),
+      webUrlConfigured: !!(
+        this.config.get<string>('app.webInternalUrl') ||
+        this.config.get<string>('app.frontendUrl')
+      ),
+    };
+  }
+
   private async transition(
     adminId: string,
     id: string,
-    expectedVersion: number | undefined,
+    expectedVersion: number,
     opts: {
       from: BlogPostStatus[];
       to: BlogPostStatus;
       action: string;
       extra: Prisma.BlogPostUpdateManyMutationInput;
       revalidate: boolean;
+      promoteDraft?: boolean;
     },
   ): Promise<{ post: BlogPost; revalidation: RevalidationResult }> {
     const post = await this.prisma.blogPost.findUnique({ where: { id } });
@@ -290,35 +444,72 @@ export class BlogService {
     if (!opts.from.includes(post.status)) {
       throw new BadRequestException(`Cannot ${opts.to.toLowerCase()} a post in status ${post.status}`);
     }
-    // Idempotent: applying the same transition twice succeeds silently,
-    // so a retried publish request never double-writes state.
-    if (post.status === opts.to) {
-      return { post, revalidation: { attempted: false, ok: true } };
+    // Draft promotion for publish: the draft columns become the public
+    // columns in the same write as the status/version transition, so the
+    // promotion is atomic. Fallbacks cover rows missing draft fields.
+    const hasPendingEdits =
+      opts.promoteDraft === true && this.draftDiffers(post);
+    // Idempotent retry of an already-applied transition with no pending
+    // draft edits: the write is skipped, but a failed cache invalidation
+    // is still retried and its real result reported rather than faked
+    // as synced. Publishing a live post WITH pending edits falls through
+    // to the promotion write below.
+    if (post.status === opts.to && !(opts.promoteDraft && hasPendingEdits)) {
+      const revalidation = opts.revalidate
+        ? await this.revalidate(post.slug)
+        : { attempted: false, ok: true };
+      return { post, revalidation };
     }
-    const result = await this.prisma.blogPost.updateMany({
-      where: {
-        id,
-        status: { in: opts.from },
-        ...(expectedVersion !== undefined ? { version: expectedVersion } : {}),
-      },
-      data: {
-        status: opts.to,
-        ...opts.extra,
-        ...(opts.to === BlogPostStatus.PUBLISHED && !post.publishedAt
-          ? { publishedAt: new Date() }
-          : {}),
-        version: { increment: 1 },
-        updatedBy: adminId,
-      },
+    const promote: Prisma.BlogPostUpdateManyMutationInput = opts.promoteDraft
+      ? {
+          title: post.draftTitle ?? post.title,
+          excerpt: post.draftExcerpt ?? post.excerpt,
+          body: post.draftBody ?? post.body,
+          coverImageUrl: post.draftCoverImageUrl ?? post.coverImageUrl,
+          coverImageAlt: post.draftCoverImageAlt ?? post.coverImageAlt,
+          authorName: post.draftAuthorName ?? post.authorName,
+          seoTitle: post.draftSeoTitle ?? post.seoTitle,
+          seoDescription: post.draftSeoDescription ?? post.seoDescription,
+          ogImageUrl: post.draftOgImageUrl ?? post.ogImageUrl,
+          contentModifiedAt: new Date(),
+        }
+      : {};
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.blogPost.updateMany({
+        where: {
+          id,
+          status: { in: opts.from },
+          version: expectedVersion,
+        },
+        data: {
+          status: opts.to,
+          ...opts.extra,
+          ...promote,
+          ...(opts.to === BlogPostStatus.PUBLISHED && !post.publishedAt
+            ? { publishedAt: new Date() }
+            : {}),
+          version: { increment: 1 },
+          updatedBy: adminId,
+        },
+      });
+      if (result.count === 0) {
+        throw new ConflictException('This post was changed by someone else. Reload before retrying.');
+      }
+      const row = await tx.blogPost.findUniqueOrThrow({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          userId: adminId,
+          action: opts.action,
+          entityType: 'BlogPost',
+          entityId: post.id,
+          oldValue: { status: post.status },
+          newValue: { status: row.status },
+        },
+      });
+      return row;
     });
-    if (result.count === 0) {
-      throw new ConflictException('This post was changed by someone else. Reload before retrying.');
-    }
-    const updated = await this.prisma.blogPost.findUniqueOrThrow({ where: { id } });
-    await this.audit(adminId, opts.action, post.id,
-      { status: post.status }, { status: updated.status });
     const revalidation = opts.revalidate
-      ? await this.revalidate(post.slug)
+      ? await this.revalidate(updated.slug)
       : { attempted: false, ok: true };
     return { post: updated, revalidation };
   }
@@ -330,25 +521,6 @@ export class BlogService {
     if (RESERVED_SLUGS.has(slug)) {
       throw new BadRequestException(`"${slug}" is reserved and cannot be used as a post slug`);
     }
-  }
-
-  private async audit(
-    adminId: string,
-    action: string,
-    entityId: string,
-    oldValue: unknown,
-    newValue: unknown,
-  ) {
-    await this.prisma.auditLog.create({
-      data: {
-        userId: adminId,
-        action,
-        entityType: 'BlogPost',
-        entityId,
-        oldValue: (oldValue ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-        newValue: (newValue ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-      },
-    });
   }
 
   /**
