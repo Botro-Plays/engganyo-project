@@ -269,6 +269,20 @@ export default function AdminBlogEditorPage() {
 
   const actions = STATUS_ACTIONS[status];
   const deleted = status === 'DELETED';
+  // A live post whose saved draft differs needs an explicit republish
+  // path that promotes the pending edits; Unpublish->Publish is never
+  // required (that route briefly removes the public article). Comparing
+  // the draft copy to the published snapshot mirrors the server's
+  // draftDiffers check, including intentional null clears.
+  const post = postQuery.data;
+  const d = post?.draft ?? post;
+  const draftDiffers = !!post && !!d && (
+    d.title !== post.title || d.excerpt !== post.excerpt || d.body !== post.body ||
+    d.authorName !== post.authorName || d.coverImageUrl !== post.coverImageUrl ||
+    d.coverImageAlt !== post.coverImageAlt || d.seoTitle !== post.seoTitle ||
+    d.seoDescription !== post.seoDescription || d.ogImageUrl !== post.ogImageUrl
+  );
+  const showPublish = actions.includes('publish') || (status === 'PUBLISHED' && draftDiffers);
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
@@ -419,9 +433,9 @@ export default function AdminBlogEditorPage() {
             {showPreview ? <EyeOff className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
             {showPreview ? 'Hide preview' : 'Preview'}
           </button>
-          {actions.includes('publish') && (
+          {showPublish && (
             <button type="button" className={`${btnCls} border-emerald-500/40 text-emerald-300`} disabled={busy} onClick={() => transitionMut.mutate('publish')}>
-              <Globe className="w-4 h-4" /> Publish
+              <Globe className="w-4 h-4" /> {status === 'PUBLISHED' ? 'Publish changes' : 'Publish'}
             </button>
           )}
           {actions.includes('unpublish') && (
@@ -465,7 +479,7 @@ export default function AdminBlogEditorPage() {
         {status === 'PUBLISHED' && (
           <p className="text-xs text-sc-muted">
             This post is live. Edits you save stay private as a draft and
-            do not change the public page until you use Publish again.
+            do not change the public page until you use Publish changes.
           </p>
         )}
 
