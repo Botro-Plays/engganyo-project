@@ -38,9 +38,17 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-          // Enforced after live violation review: the only observed
-          // report-only violation was the Cloudflare Insights beacon,
-          // which the owner retains, so it is allowlisted in script-src.
+          // Enforced after live violation review on public AND
+          // authenticated pages (simulated enforcement via response
+          // rewriting). Two legitimate origins were observed blocked:
+          //   - static.cloudflareinsights.com: Cloudflare Web Analytics
+          //     beacon, owner retains -> added to script-src.
+          //   - reCAPTCHA v3 runtime resources: it injects a
+          //     www.gstatic.com stylesheet and fonts.gstatic.com Roboto
+          //     woff2 on authenticated pages -> added to style-src and
+          //     font-src. Without these, enforcing the policy breaks
+          //     reCAPTCHA rendering on login, register and every
+          //     authenticated page.
           // unsafe-inline stays: Next.js injects inline bootstrap/inline
           // JSON payloads. unsafe-eval stays: retained for libraries that
           // still use new Function/eval paths in production bundles.
@@ -52,8 +60,8 @@ const nextConfig = {
               "frame-src https://www.google.com https://recaptcha.google.com; " +
               "connect-src 'self' https: wss:; " +
               "img-src 'self' data: https:; " +
-              "style-src 'self' 'unsafe-inline'; " +
-              "font-src 'self' data:; " +
+              "style-src 'self' 'unsafe-inline' https://www.gstatic.com; " +
+              "font-src 'self' data: https://fonts.gstatic.com; " +
               "object-src 'none'; base-uri 'self'; form-action 'self'",
           },
         ],
