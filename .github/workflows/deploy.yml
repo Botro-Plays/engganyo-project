@@ -167,6 +167,10 @@ jobs:
 
     env:
       NODE_ENV: test
+      # The enforced CSP blocks the e2e web app's cross-origin API calls
+      # to http://localhost:3001 (connect-src 'self' https: wss:). The
+      # suite exercises behavior, not the header, so it gets report-only.
+      CSP_REPORT_ONLY: "true"
       DATABASE_URL: postgresql://engganyo:testpassword@postgres:5432/engganyo_test
       REDIS_URL: redis://redis:6379
       REDIS_HOST: redis
