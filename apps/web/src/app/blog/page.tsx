@@ -126,7 +126,7 @@ export default async function BlogIndex({
               >
                 <h2 className="text-xl font-semibold text-white mb-2">{post.title}</h2>
                 <p className="text-zinc-300 text-sm leading-relaxed mb-2">{post.excerpt}</p>
-                <time dateTime={post.publishedAt} className="text-xs text-zinc-500">
+                <time dateTime={post.publishedAt} className="text-xs text-zinc-400">
                   {formatDate(post.publishedAt)}
                 </time>
               </Link>

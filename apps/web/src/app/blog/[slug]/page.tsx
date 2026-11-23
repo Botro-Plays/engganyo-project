@@ -103,7 +103,7 @@ export default async function BlogPostPage({
       <main id="main-content">
 
       <article className="max-w-3xl mx-auto px-4 py-12">
-        <p className="text-xs text-zinc-500 mb-4">
+        <p className="text-xs text-zinc-400 mb-4">
           <Link href="/blog" className="text-brand-400 hover:underline">Engganyo Blog</Link>
           {post.publishedAt && (
             <>

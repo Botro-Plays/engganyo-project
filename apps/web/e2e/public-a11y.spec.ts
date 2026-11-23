@@ -59,4 +59,13 @@ test.describe('public page landmarks and prose links', () => {
       await expect(link).not.toHaveClass(/hover:underline/);
     }
   });
+
+  test('blog index dates use a contrast-passing muted tone', async ({ page }) => {
+    await page.goto('/blog', { waitUntil: 'domcontentloaded' });
+    const dates = page.locator('main time');
+    await expect(dates.first()).toBeVisible();
+    for (const el of await dates.all()) {
+      await expect(el).not.toHaveClass(/text-zinc-500/);
+    }
+  });
 });
