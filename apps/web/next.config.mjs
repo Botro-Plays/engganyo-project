@@ -53,11 +53,13 @@ const nextConfig = {
           // JSON payloads. unsafe-eval stays: retained for libraries that
           // still use new Function/eval paths in production bundles.
           // CSP_REPORT_ONLY stays available for environments where the
-          // enforced policy cannot apply, e.g. the e2e job where the web
-          // at http://localhost:3000 calls the API at http://localhost:3001
-          // cross-origin over plain HTTP, which connect-src 'self' https:
-          // wss: would block. deploy.yml sets CSP_REPORT_ONLY=true there;
-          // every other environment emits the enforced header.
+          // enforced policy cannot apply (emergency diagnostic escape
+          // hatch only). CSP_TEST_CONNECT_SRC narrows the opposite
+          // direction: the e2e job sets it to the test API origin so the
+          // suite runs under the ENFORCED policy while still reaching
+          // http://localhost:3001 cross-origin over plain HTTP, which
+          // connect-src 'self' https: wss: would otherwise block.
+          // Production never sets either variable.
           {
             key: process.env['CSP_REPORT_ONLY'] === 'true'
               ? 'Content-Security-Policy-Report-Only'
@@ -66,7 +68,7 @@ const nextConfig = {
               "default-src 'self'; " +
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://static.cloudflareinsights.com; " +
               "frame-src https://www.google.com https://recaptcha.google.com; " +
-              "connect-src 'self' https: wss:; " +
+              `connect-src 'self' https: wss:${process.env['CSP_TEST_CONNECT_SRC'] ? ' ' + process.env['CSP_TEST_CONNECT_SRC'] : ''}; ` +
               "img-src 'self' data: https:; " +
               "style-src 'self' 'unsafe-inline' https://www.gstatic.com; " +
               "font-src 'self' data: https://fonts.gstatic.com; " +
