@@ -192,13 +192,11 @@ export default function AboutPage() {
             <h2 className="text-xl font-semibold text-white mb-4">Questions?</h2>
             <p className="text-zinc-300 leading-relaxed">
               Write to{' '}
-              <address className="not-italic inline">
-                <EmailOff>
-                  <a href="mailto:contact@engganyo.com" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
-                  contact@engganyo.com
-                  </a>
-                </EmailOff>
-              </address>{' '}
+              <EmailOff>
+                <a href="mailto:contact@engganyo.com" className="text-brand-400 underline underline-offset-2 hover:text-brand-300">
+                contact@engganyo.com
+                </a>
+              </EmailOff>{' '}
               or join our community on{' '}
               <a
                 href="https://t.me/Engganyo"
