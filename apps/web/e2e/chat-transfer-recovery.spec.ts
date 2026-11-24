@@ -6,7 +6,8 @@ import { pendingStorageKey, tipScope, messageScope, type PendingTransferIntent }
 // with exactly one settlement, the original allocation, and a single
 // financial message. Pending intents are persisted per account in
 // localStorage, fenced by userId, and replayed with the original key -
-// never silently rotated.
+// never silently rotated. Guard-level refusals (401/403/429) on a retry
+// are ambiguous and must never clear a pending intent on their own.
 
 const ORIGIN = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
 const CORS_HEADERS = {
@@ -20,6 +21,14 @@ function apiResponse<T>(data: T) {
 }
 function json<T>(data: T) {
   return { status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(data) };
+}
+function deny(status: number) {
+  return {
+    status,
+    headers: CORS_HEADERS,
+    contentType: 'application/json',
+    body: JSON.stringify({ success: false, message: `simulated ${status}` }),
+  };
 }
 
 const PAST = new Date(Date.now() - 86_400_000).toISOString();
@@ -100,6 +109,8 @@ function authState(userId: string, pending?: PendingTransferIntent[]) {
   return { cookies: [], origins: [{ origin: 'http://localhost:3000', localStorage: ls }] };
 }
 
+type TipMode = 'normal' | 'settle-lost' | 'deny';
+
 interface MockState {
   /** key -> settled result. Settling is deduplicated by request key:
    *  one debit per key no matter how many times the request repeats. */
@@ -109,32 +120,38 @@ interface MockState {
   messagePosts: number;
   /** Every messages POST body, in arrival order. */
   messageBodies: { content: string; idempotencyKey?: string }[];
+  /** Mutable behavior switches - tests flip these between phases. */
+  authedUserId: string;
+  tipMode: TipMode;
+  tipDenyStatus: number;
+  lookupAborts: number;
+  lostRainResponsePosts: number;
+  abortedMessagePosts: number;
+}
+
+function makeState(): MockState {
+  return {
+    settlements: new Map(),
+    tipPosts: 0,
+    messagePosts: 0,
+    messageBodies: [],
+    authedUserId: 'u1',
+    tipMode: 'normal',
+    tipDenyStatus: 403,
+    lookupAborts: 0,
+    lostRainResponsePosts: 0,
+    abortedMessagePosts: 0,
+  };
 }
 
 /** Routes every /api call the chat page can make. */
-async function mockChat(
-  page: Page,
-  state: MockState,
-  opts: {
-    /** Every tips POST commits once per key but always responds 500. */
-    lostTipResponses?: boolean;
-    /** First N /rain messages POSTs commit once per key but respond 500. */
-    lostRainResponsePosts?: number;
-    /** First N messages POSTs abort at the network layer (never settle). */
-    abortedMessagePosts?: number;
-    /** First N transfer lookups abort (commit status unknown). */
-    lookupAborts?: number;
-    /** Identity the mocked auth endpoints report - default u1. */
-    authedUserId?: string;
-  } = {},
-) {
-  const authedUserId = opts.authedUserId ?? 'u1';
+async function mockChat(page: Page, state: MockState) {
   await page.route('**/api/**', (r) =>
     r.request().method() === 'OPTIONS'
       ? r.fulfill({ status: 204, headers: CORS_HEADERS })
       : r.fulfill(json({})),
   );
-  await page.route('**/api/auth/me**', (r) => r.fulfill(json(mockUser(authedUserId))));
+  await page.route('**/api/auth/me**', (r) => r.fulfill(json(mockUser(state.authedUserId))));
   await page.route('**/api/wallet/**', (r) => r.fulfill(json({ balance: 5000, transactions: [] })));
   await page.route('**/api/notifications**', (r) => r.fulfill(json({ items: [], meta: { total: 0 } })));
   await page.route('**/api/store/active-effects**', (r) => r.fulfill(json([])));
@@ -142,8 +159,8 @@ async function mockChat(
   await page.route('**/api/auth/public-config**', (r) => r.fulfill(json({})));
 
   await page.route('**/api/channels/transfers/lookup/*', (route) => {
-    if ((opts.lookupAborts ?? 0) > 0) {
-      opts.lookupAborts!--;
+    if (state.lookupAborts > 0) {
+      state.lookupAborts--;
       return route.abort();
     }
     const key = decodeURIComponent(route.request().url().split('/lookup/')[1] ?? '');
@@ -158,13 +175,18 @@ async function mockChat(
     state.tipPosts += 1;
     const body = route.request().postDataJSON() as Record<string, unknown>;
     const key = String(body['idempotencyKey'] ?? '');
+    if (state.tipMode === 'deny') {
+      // Guard-level refusal BEFORE the replay check: proves nothing
+      // about whether an earlier attempt already settled.
+      return route.fulfill(deny(state.tipDenyStatus));
+    }
     if (!state.settlements.has(key)) {
       state.settlements.set(key, {
         body,
         message: { debitTx: { id: `debit-${key}`, amount: -(body['amount'] as number) }, creditTx: { id: `credit-${key}` }, replayed: false },
       });
     }
-    if (opts.lostTipResponses) {
+    if (state.tipMode === 'settle-lost') {
       return route.fulfill({
         status: 500,
         headers: CORS_HEADERS,
@@ -181,8 +203,8 @@ async function mockChat(
     state.messagePosts += 1;
     const body = route.request().postDataJSON() as { channelId: string; content: string; idempotencyKey?: string };
     state.messageBodies.push(body);
-    if ((opts.abortedMessagePosts ?? 0) > 0) {
-      opts.abortedMessagePosts!--;
+    if (state.abortedMessagePosts > 0) {
+      state.abortedMessagePosts--;
       return route.abort();
     }
     if (body.content.startsWith('/rain ')) {
@@ -193,8 +215,8 @@ async function mockChat(
           message: makeMessage(`announce-${key}`, 'u1', `You rained credits on the channel!`),
         });
       }
-      if ((opts.lostRainResponsePosts ?? 0) > 0) {
-        opts.lostRainResponsePosts!--;
+      if (state.lostRainResponsePosts > 0) {
+        state.lostRainResponsePosts--;
         return route.fulfill({
           status: 500,
           headers: CORS_HEADERS,
@@ -223,8 +245,9 @@ test.describe('chat transfer recovery - committed tip with lost response', () =>
   test.use({ storageState: authState('u1') });
 
   test('lost tip response resolves via lookup - exactly one settlement, no resend', async ({ page }) => {
-    const state: MockState = { settlements: new Map(), tipPosts: 0, messagePosts: 0, messageBodies: [] };
-    await mockChat(page, state, { lostTipResponses: true });
+    const state = makeState();
+    state.tipMode = 'settle-lost';
+    await mockChat(page, state);
 
     await openChannel(page);
     await page.getByText('hello all').hover();
@@ -254,18 +277,116 @@ test.describe('chat transfer recovery - committed tip with lost response', () =>
     const keys = [...state.settlements.keys()];
     expect(keys.length).toBe(1);
   });
+
+  test('401/403/429 on a retry never clears the intent - recovery settles once', async ({ page }) => {
+    const state = makeState();
+    state.tipMode = 'settle-lost';
+    state.lookupAborts = 99; // lookup never available - Resend is the path
+    await mockChat(page, state);
+
+    await openChannel(page);
+    await page.getByText('hello all').hover();
+    await page.getByRole('button', { name: 'Tip' }).first().click();
+    await page.getByRole('button', { name: /Tip 100/ }).click();
+
+    const slotKey = pendingStorageKey('u1', tipScope('u2', 100, 'm1'));
+    await expect
+      .poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey), { timeout: 15_000 })
+      .not.toBeNull();
+    const persisted = JSON.parse(
+      (await page.evaluate((k) => localStorage.getItem(k), slotKey))!,
+    ) as PendingTransferIntent;
+    // The settlement committed under the key even though all 4 axios
+    // attempts' responses were lost.
+    await expect.poll(() => state.settlements.size, { timeout: 15_000 }).toBe(1);
+
+    // The modal stays open after a failed send - dismiss it to reach
+    // the recovery banner.
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId('pending-transfers')).toBeVisible({ timeout: 20_000 });
+
+    // Retry 1: the server answers 403 (a guard-level refusal that never
+    // reached the replay check). The intent must NOT be treated as
+    // rejected - the earlier attempt may have committed (it did).
+    state.tipMode = 'deny';
+    state.tipDenyStatus = 403;
+    await page.getByRole('button', { name: 'Resend' }).click();
+    await page.waitForTimeout(800);
+    await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
+    await expect(page.getByTestId('pending-transfers')).toBeVisible();
+
+    // Retry 2: same for a 429 - still ambiguous, still kept.
+    state.tipDenyStatus = 429;
+    await page.getByRole('button', { name: 'Resend' }).click();
+    await page.waitForTimeout(800);
+    await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
+    await expect(page.getByTestId('pending-transfers')).toBeVisible();
+
+    // Recovery: the same key replays, the server returns the committed
+    // result - still exactly ONE settlement ever happened.
+    state.tipMode = 'normal';
+    await page.getByRole('button', { name: 'Resend' }).click();
+    await expect(page.getByTestId('pending-transfers')).toHaveCount(0, { timeout: 15_000 });
+    expect(state.settlements.size).toBe(1);
+    expect([...state.settlements.keys()][0]).toBe(persisted.key);
+  });
+});
+
+test.describe('chat transfer recovery - storage failure', () => {
+  test.use({ storageState: authState('u1') });
+
+  test('a failed durable write blocks the financial send - no unprotected POST', async ({ page }) => {
+    // Sabotage durable persistence for the pending-intent namespace:
+    // quota/security denials must stop the transfer, not send it naked.
+    await page.addInitScript(() => {
+      const orig = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k: string, v: string) {
+        if (k.includes('engganyo:chat:pending')) throw new DOMException('quota', 'QuotaExceededError');
+        return orig.call(this, k, v);
+      };
+    });
+    const state = makeState();
+    await mockChat(page, state);
+
+    await openChannel(page);
+
+    // Tip attempt: intent cannot be persisted, so the POST never fires.
+    await page.getByText('hello all').hover();
+    await page.getByRole('button', { name: 'Tip' }).first().click();
+    await page.getByRole('button', { name: /Tip 100/ }).click();
+    await expect(page.getByText(/Could not protect this tip/)).toBeVisible({ timeout: 10_000 });
+    expect(state.tipPosts).toBe(0);
+
+    // /rain attempt: same protection.
+    const input = page.getByPlaceholder(/Type a message/);
+    await input.fill('/rain 10 2');
+    await input.press('Enter');
+    await expect(page.getByText(/Could not protect this transfer/)).toBeVisible({ timeout: 10_000 });
+    expect(state.messagePosts).toBe(0);
+
+    // Reload behavior: the failure persists, sends stay blocked.
+    await page.reload();
+    await openChannel(page);
+    await page.getByPlaceholder(/Type a message/).fill('/rain 10 2');
+    await page.getByPlaceholder(/Type a message/).press('Enter');
+    await expect(page.getByText(/Could not protect this transfer/)).toBeVisible({ timeout: 10_000 });
+    expect(state.tipPosts).toBe(0);
+    expect(state.messagePosts).toBe(0);
+  });
 });
 
 test.describe('chat transfer recovery - committed rain with lost response', () => {
   test.use({ storageState: authState('u1') });
 
   test('reload then Resend replays the original allocation - one debit, one announcement', async ({ page }) => {
-    const state: MockState = { settlements: new Map(), tipPosts: 0, messagePosts: 0, messageBodies: [] };
+    const state = makeState();
     // Responses keep failing after settlement, and the status lookup is
     // unreachable too, so recovery must go through the explicit Resend.
     // First send's full axios retry loop (4 attempts) is lost; the
     // post-reload Resend reaches the server again.
-    await mockChat(page, state, { lostRainResponsePosts: 4, lookupAborts: 6 });
+    state.lostRainResponsePosts = 4;
+    state.lookupAborts = 6;
+    await mockChat(page, state);
 
     await openChannel(page);
     const input = page.getByPlaceholder(/Type a message/);
@@ -306,10 +427,11 @@ test.describe('chat transfer recovery - committed rain with lost response', () =
   });
 
   test('never-delivered rain resends the same key and settles once', async ({ page }) => {
-    const state: MockState = { settlements: new Map(), tipPosts: 0, messagePosts: 0, messageBodies: [] };
+    const state = makeState();
     // First send's full axios retry loop (4 attempts) aborts before
     // reaching the server - nothing settles.
-    await mockChat(page, state, { abortedMessagePosts: 4 });
+    state.abortedMessagePosts = 4;
+    await mockChat(page, state);
 
     await openChannel(page);
     const input = page.getByPlaceholder(/Type a message/);
@@ -355,7 +477,7 @@ test.describe('chat transfer recovery - intervening intent and account fencing',
   test.use({ storageState: authState('u1', [pendingRain]) });
 
   test('sending a different message does not clear an in-flight rain intent', async ({ page }) => {
-    const state: MockState = { settlements: new Map(), tipPosts: 0, messagePosts: 0, messageBodies: [] };
+    const state = makeState();
     await mockChat(page, state);
 
     await openChannel(page);
@@ -387,8 +509,9 @@ test.describe('chat transfer recovery - intervening intent and account fencing',
     const ctx2 = await browser.newContext({ storageState: authState('u2', [pendingRain]) });
     const page = await ctx2.newPage();
     try {
-      const state: MockState = { settlements: new Map(), tipPosts: 0, messagePosts: 0, messageBodies: [] };
-      await mockChat(page, state, { authedUserId: 'u2' });
+      const state = makeState();
+      state.authedUserId = 'u2';
+      await mockChat(page, state);
       await openChannel(page);
       await page.waitForTimeout(1000);
       // u1's intent is never surfaced or resolved under u2's session.
@@ -402,5 +525,57 @@ test.describe('chat transfer recovery - intervening intent and account fencing',
     } finally {
       await ctx2.close();
     }
+  });
+
+  test('account switch while an intent is pending fences recovery to the owner', async ({ page }) => {
+    const state = makeState();
+    state.lookupAborts = 99; // the pending check can never confirm
+    await mockChat(page, state);
+
+    await openChannel(page);
+    // u1's seeded intent shows under u1's session.
+    await expect(page.getByTestId('pending-transfers')).toBeVisible({ timeout: 20_000 });
+
+    // Switch accounts mid-recovery: u2's session takes over the browser.
+    state.authedUserId = 'u2';
+    await page.evaluate(() => {
+      localStorage.setItem(
+        'engganyo-auth',
+        JSON.stringify({
+          state: {
+            user: {
+              id: 'u2',
+              email: 'two@e2e.dev',
+              username: 'other',
+              displayName: 'Other',
+              role: 'USER',
+              status: 'ACTIVE',
+              twoFactorEnabled: false,
+              creditBalance: 500,
+              level: 1,
+              xp: 0,
+              vipTier: { name: 'GOLD', displayName: 'Gold', color: '#f5c542', badge: 'GOLD', perks: { canTip: true } },
+            },
+            accessToken: 'e2e-mock-token',
+            isAuthenticated: true,
+            adminPin: null,
+          },
+          version: 0,
+        }),
+      );
+    });
+    await page.reload();
+    await openChannel(page);
+    await page.waitForTimeout(1000);
+
+    // u1's intent is neither surfaced nor resolved under u2 - and it is
+    // still intact for u1's next session.
+    await expect(page.getByTestId('pending-transfers')).toHaveCount(0);
+    const kept = await page.evaluate(
+      (k) => localStorage.getItem(k),
+      pendingStorageKey('u1', pendingRain.scope),
+    );
+    expect(kept).not.toBeNull();
+    expect(state.settlements.size).toBe(0);
   });
 });

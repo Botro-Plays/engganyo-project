@@ -55,16 +55,38 @@ required in the DTOs (`@IsNotEmpty`), dropping the `undefined` branch.
 
 `apps/web/src/lib/idempotency.ts` persists one
 `PendingTransferIntent` per `(userId, scope)` in localStorage under
-`engganyo:chat:pending:<userId>:<scopeHash>`:
+`engganyo:chat:pending:<userId>:<encodedScope>`:
 
-- Persisted before the request fires; params frozen at creation.
-- `committed` and `rejected` (definitive 4xx) clear the slot;
-  `uncertain` (network error, 5xx, lost response) keeps it.
+- Persisted before the request fires; params frozen at creation. If the
+  durable write or its read-back verification fails
+  (`IntentPersistenceError`), the financial send is refused - no
+  unprotected transfer goes out.
+- Outcome classification: `committed` clears the slot, `uncertain`
+  keeps it. `rejected` is reserved for provably post-replay outcomes:
+  a 409 `IDEMPOTENCY_KEY_REUSED` (the key committed under different
+  params, produced only by the idempotency layer itself), or any
+  refusal of a first send, since a fresh key cannot have committed.
+  Guard/middleware statuses on a retry - 401, 403, 429, and other 4xx
+  that can fire before the replay check runs - never clear an intent;
+  the server-side lookup stays the authority on whether the key
+  settled.
+- Exact identity: the slot key embeds the URI-encoded scope verbatim
+  (no hashing, so no collisions), reads re-verify the stored scope, and
+  `resolve` only clears when the acknowledged request key matches the
+  stored one - a stale ack cannot clear a different in-flight request.
+- Account fencing: slots are namespaced per userId, the stored userId
+  is re-verified on read, and recovery actions recheck the currently
+  authenticated account immediately before resending or discarding.
 - Recovery banner lists unfinished intents, asks the lookup endpoint
-  whether the key committed, offers an explicit Resend that replays the
-  original key and params. Another account's intents are fenced off by
-  the per-user namespace and re-verified `userId` inside the payload.
+  whether the key committed (auto-resolving committed ones), and
+  offers an explicit Resend that replays the original key and params
+  plus a Discard for attempts the user abandons. Another account's
+  intents are fenced off by the per-user namespace and re-verified
+  `userId` inside the payload.
 
 Regression coverage: `apps/web/e2e/chat-transfer-recovery.spec.ts`
-(lost response, reload, intervening intent, account switch) and
-`apps/web/src/lib/idempotency.test.ts` (store semantics).
+(lost response, reload, 403/429 on retry, storage-failure blocking,
+intervening intent, account switch) and
+`apps/web/src/lib/idempotency.test.ts` (store semantics, exact
+identity, key-matched resolution, persistence failure,
+classification rules).

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import {
   PendingTransferStore,
+  isDefinitiveRejection,
   messageScope,
   tipScope,
   type PendingTransferIntent,
@@ -223,12 +224,25 @@ export default function ChatPage() {
 
   // ─── Send message mutation ────────────────────────────────
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ channelId, content, idempotencyKey }: { channelId: string; content: string; idempotencyKey?: string; scope?: string }) => {
+    mutationFn: async ({ channelId, content, idempotencyKey }: {
+      channelId: string;
+      content: string;
+      idempotencyKey?: string;
+      scope?: string;
+      intentKey?: string;
+      intentUserId?: string;
+      reused?: boolean;
+    }) => {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content, idempotencyKey });
       return res.data.data;
     },
     onSuccess: (msg, vars) => {
-      if (user?.id && vars.scope) transferStore.resolve(user.id, vars.scope, 'committed');
+      // Identity recheck: only resolve an intent for the account that is
+      // still signed in - a stale response must not touch another
+      // session's state.
+      if (vars.scope && vars.intentKey && vars.intentUserId && vars.intentUserId === useAuthStore.getState().user?.id) {
+        transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, 'committed');
+      }
       refreshPendingTransfers();
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
@@ -237,12 +251,14 @@ export default function ChatPage() {
       setInput('');
     },
     onError: (err, vars) => {
-      // 4xx means the server definitively refused before settlement, so
-      // the intent is released. Network errors and 5xx stay uncertain:
-      // the intent persists for recovery instead of rotating silently.
+      // Only provably post-replay refusals (and first-send refusals of a
+      // fresh key) clear the intent. Guard/middleware statuses like
+      // 401/403/429 on a retry say nothing about an earlier attempt, so
+      // the intent stays pending until the server lookup is authoritative.
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (user?.id && vars.scope) {
-        transferStore.resolve(user.id, vars.scope, status && status < 500 ? 'rejected' : 'uncertain');
+      if (vars.scope && vars.intentKey && vars.intentUserId && vars.intentUserId === useAuthStore.getState().user?.id) {
+        const outcome = isDefinitiveRejection({ reused: vars.reused ?? true, status }) ? 'rejected' : 'uncertain';
+        transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, outcome);
       }
       refreshPendingTransfers();
       addChatToast(getApiErrorMessage(err), 'error');
@@ -263,13 +279,24 @@ export default function ChatPage() {
 
   // ─── Send tip mutation ────────────────────────────────────
   const tipMutation = useMutation({
-    mutationFn: async (dto: { toUserId: string; amount: number; messageId?: string; idempotencyKey: string; scope: string }) => {
-      const { scope: _scope, ...body } = dto;
+    mutationFn: async (dto: {
+      toUserId: string;
+      amount: number;
+      messageId?: string;
+      idempotencyKey: string;
+      scope: string;
+      intentKey: string;
+      intentUserId: string;
+      reused: boolean;
+    }) => {
+      const { scope: _scope, intentKey: _k, intentUserId: _u, reused: _r, ...body } = dto;
       const res = await apiClient.post<ApiResponse<unknown>>('channels/tips', body);
       return res.data.data;
     },
     onSuccess: (_data, vars) => {
-      if (user?.id) transferStore.resolve(user.id, vars.scope, 'committed');
+      if (vars.intentUserId === useAuthStore.getState().user?.id) {
+        transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, 'committed');
+      }
       refreshPendingTransfers();
       addChatToast('Tip sent successfully!', 'success');
       setTipModal(null);
@@ -277,8 +304,9 @@ export default function ChatPage() {
     },
     onError: (err, vars) => {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (user?.id) {
-        transferStore.resolve(user.id, vars.scope, status && status < 500 ? 'rejected' : 'uncertain');
+      if (vars.intentUserId === useAuthStore.getState().user?.id) {
+        const outcome = isDefinitiveRejection({ reused: vars.reused, status }) ? 'rejected' : 'uncertain';
+        transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, outcome);
       }
       refreshPendingTransfers();
       addChatToast(getApiErrorMessage(err), 'error');
@@ -317,18 +345,32 @@ export default function ChatPage() {
     // the axios retry still replays one request config, but there is
     // nothing financial to recover.
     const scope = content.startsWith('/rain ') ? messageScope(activeChannelId, content) : undefined;
-    const intent = scope
-      ? transferStore.intentFor(user.id, {
+    let intent: PendingTransferIntent | undefined;
+    let reused = false;
+    if (scope) {
+      try {
+        const begun = transferStore.begin(user.id, {
           action: 'message',
           scope,
           params: { channelId: activeChannelId, content },
-        })
-      : undefined;
+        });
+        intent = begun.intent;
+        reused = begun.reused;
+      } catch {
+        // A financial send without durable recovery is refused rather
+        // than sent unprotected.
+        addChatToast('Could not protect this transfer for recovery - check your browser storage settings and try again.', 'error');
+        return;
+      }
+    }
     sendMessageMutation.mutate({
       channelId: activeChannelId,
       content,
       idempotencyKey: intent?.key,
       scope,
+      intentKey: intent?.key,
+      intentUserId: intent ? user.id : undefined,
+      reused,
     });
 
     // Emit typing stop
@@ -756,21 +798,30 @@ export default function ChatPage() {
                 onClick={() => {
                   if (!user?.id) return;
                   const scope = tipScope(tipModal.toUserId, tipAmount, tipModal.messageId);
-                  const intent = transferStore.intentFor(user.id, {
-                    action: 'tip',
-                    scope,
-                    params: {
-                      toUserId: tipModal.toUserId,
-                      amount: tipAmount,
-                      messageId: tipModal.messageId,
-                    },
-                  });
+                  let begun;
+                  try {
+                    begun = transferStore.begin(user.id, {
+                      action: 'tip',
+                      scope,
+                      params: {
+                        toUserId: tipModal.toUserId,
+                        amount: tipAmount,
+                        messageId: tipModal.messageId,
+                      },
+                    });
+                  } catch {
+                    addChatToast('Could not protect this tip for recovery - check your browser storage settings and try again.', 'error');
+                    return;
+                  }
                   tipMutation.mutate({
                     toUserId: tipModal.toUserId,
                     amount: tipAmount,
                     messageId: tipModal.messageId,
-                    idempotencyKey: intent.key,
+                    idempotencyKey: begun.intent.key,
                     scope,
+                    intentKey: begun.intent.key,
+                    intentUserId: user.id,
+                    reused: begun.reused,
                   });
                 }}
                 disabled={tipMutation.isPending || (user?.creditBalance ?? 0) < tipAmount}
