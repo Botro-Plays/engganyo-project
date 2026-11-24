@@ -333,10 +333,13 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     const c = await makeCampaign(owner.id, 1);
     await prisma.campaign.update({ where: { id: c.id }, data: { pendingSlots: 1 } });
     await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
-    const txBefore = await prisma.transaction.count();
+    const involvedTxs = () =>
+      prisma.transaction.count({ where: { wallet: { userId: { in: [owner.id, a.id] } } } });
+    const txBefore = await involvedTxs();
 
     await tasks.sweepExpiredCampaignAssignments();
-    expect(await prisma.transaction.count()).toBe(txBefore);
+    // Scoped to fixture wallets - other suites share this test database.
+    expect(await involvedTxs()).toBe(txBefore);
     const wallet = await prisma.wallet.findUnique({ where: { userId: a.id } });
     expect(wallet!.balance).toBe(10000);
   });
