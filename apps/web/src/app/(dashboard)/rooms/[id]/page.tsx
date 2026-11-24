@@ -14,7 +14,12 @@ import {
 import axios from 'axios';
 import { roomsApi, friendsApi, proofWindowOpen, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
 import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
-import { PendingTransferStore, messageScope, type PendingTransferIntent } from '@/lib/idempotency';
+import {
+  PendingTransferStore,
+  isDefinitiveRejection,
+  messageScope,
+  type PendingTransferIntent,
+} from '@/lib/idempotency';
 import PendingTransfersBanner from '@/components/chat/pending-transfers-banner';
 import { connectChannelSocket } from '@/lib/channel-socket';
 import { useSocketContext } from '@/components/socket-provider';
@@ -429,6 +434,7 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
   const { accessToken, user } = useAuthStore();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [sendError, setSendError] = useState('');
   const [status, setStatus] = useState<ChatStatus>('connecting');
   const endRef = useRef<HTMLDivElement>(null);
   // Persisted per-account pending intents for credit-moving sends
@@ -559,17 +565,28 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
   const send = async () => {
     const content = input.trim();
     if (!content) return;
+    setSendError('');
     // Only credit-moving sends (/rain) get a persisted intent; a plain
     // message has nothing financial to recover.
     const scope = content.startsWith('/rain ') && user?.id ? messageScope(channelId, content) : undefined;
-    const intent =
-      scope && user?.id
-        ? transferStore.intentFor(user.id, {
-            action: 'message',
-            scope,
-            params: { channelId, content },
-          })
-        : undefined;
+    let intent: PendingTransferIntent | undefined;
+    let reused = false;
+    if (scope && user?.id) {
+      try {
+        const begun = transferStore.begin(user.id, {
+          action: 'message',
+          scope,
+          params: { channelId, content },
+        });
+        intent = begun.intent;
+        reused = begun.reused;
+      } catch {
+        // A financial send without durable recovery is refused rather
+        // than sent unprotected.
+        setSendError('Could not protect this transfer for recovery - check your browser storage settings and try again.');
+        return;
+      }
+    }
     setInput('');
     try {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', {
@@ -578,15 +595,22 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
         idempotencyKey: intent?.key,
       });
       mergeMessages([res.data.data]);
-      if (scope && user?.id) transferStore.resolve(user.id, scope, 'committed');
+      // Identity recheck before resolving: the callback may land after
+      // an account switch and must not touch another session's state.
+      if (intent && scope && useAuthStore.getState().user?.id === intent.userId) {
+        transferStore.resolve(intent.userId, scope, intent.key, 'committed');
+      }
       refreshPendingTransfers();
     } catch (err) {
-      // Preserve the unsent draft so a failed send never loses text. A
-      // definitive 4xx releases the intent; network/5xx keeps it pending
-      // for recovery instead of silently rotating the key.
+      // Preserve the unsent draft so a failed send never loses text.
+      // Guard/middleware statuses (401/403/429 and other 4xx that can
+      // fire before the replay check) prove nothing about an earlier
+      // attempt on a retry, so only provably post-replay refusals clear
+      // the intent; the rest stay pending for recovery.
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (scope && user?.id) {
-        transferStore.resolve(user.id, scope, status && status < 500 ? 'rejected' : 'uncertain');
+      if (intent && scope && useAuthStore.getState().user?.id === intent.userId) {
+        const outcome = isDefinitiveRejection({ reused, status }) ? 'rejected' : 'uncertain';
+        transferStore.resolve(intent.userId, scope, intent.key, outcome);
       }
       refreshPendingTransfers();
       setInput(content);
@@ -647,10 +671,15 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
         ))}
         <div ref={endRef} />
       </div>
+      {sendError && (
+        <p className="border-t border-sc-line px-3 pt-1.5 text-[11px] text-red-400" data-testid="chat-send-error">
+          {sendError}
+        </p>
+      )}
       <div className="flex gap-2 border-t border-sc-line p-2">
         <input
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => { setInput(e.target.value); if (sendError) setSendError(''); }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
           placeholder="Message your partner…"
           maxLength={2000}
