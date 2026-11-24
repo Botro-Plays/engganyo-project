@@ -244,7 +244,7 @@ test.describe('chat transfer recovery - committed tip with lost response', () =>
 
     const postsBefore = state.tipPosts;
     await page.reload();
-    await expect(page.getByText('hello all')).toBeVisible({ timeout: 20_000 });
+    await openChannel(page);
     await page.waitForTimeout(800);
     // After reload the intent is already resolved: no banner, no new POSTs,
     // still exactly one debit.
