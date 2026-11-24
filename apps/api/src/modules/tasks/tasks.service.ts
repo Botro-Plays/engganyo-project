@@ -24,6 +24,7 @@ import {
   expireCompletionAndReleaseSlot,
   TaskNotExpirableError,
 } from './task-completion-verify';
+import { resolveFundedRefund } from '../campaigns/campaign-funding';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
@@ -1014,23 +1015,40 @@ export class TasksService {
   //
   // Deployment gating (no silent historical sweep):
   // - CAMPAIGN_ASSIGNMENT_SWEEP must equal 'true' for the cron to act;
-  //   default off. Enabling is a deliberate ops step paired with the
-  //   chosen historical-processing policy.
-  // - CAMPAIGN_ASSIGNMENT_SWEEP_SINCE (ISO date) optionally limits
-  //   eligibility to assigned_at >= since, e.g. "only new
-  //   assignments" until historical rows get an owner-approved policy.
+  //   default off.
+  // - Scope is mandatory. The sweep refuses to run unless either
+  //   CAMPAIGN_ASSIGNMENT_SWEEP_SINCE is a valid ISO date (eligibility
+  //   limited to assigned_at >= since - e.g. "only new assignments" by
+  //   dating it at activation) or CAMPAIGN_ASSIGNMENT_SWEEP_ALL_HISTORY
+  //   equals 'true' (explicit opt-in to process every past-due row,
+  //   which is the only way historical rows are touched). An unfiltered
+  //   run is therefore always a deliberate choice, never a default.
   // - CAMPAIGN_ASSIGNMENT_SWEEP_BATCH bounds rows per run (default 200).
   //
-  // Each completion expires in its own transaction: the completion CAS
-  // and the pending_slots decrement commit or roll back together, a
-  // failed row is retried next run, and one bad row cannot stall the
-  // batch.
+  // Each completion expires in its own transaction: the completion CAS,
+  // the pending_slots decrement, and any cancelled-campaign slot refund
+  // commit or roll back together; a failed row is retried next run, and
+  // one bad row cannot stall the batch.
   @Cron(CronExpression.EVERY_5_MINUTES)
   async sweepExpiredCampaignAssignments(): Promise<{ expired: number; skipped: number; failed: number }> {
     if (process.env.CAMPAIGN_ASSIGNMENT_SWEEP !== 'true') {
       return { expired: 0, skipped: 0, failed: 0 };
     }
-    const since = process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE;
+    const sinceRaw = process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE;
+    const allowAllHistory = process.env.CAMPAIGN_ASSIGNMENT_SWEEP_ALL_HISTORY === 'true';
+    const since = sinceRaw ? new Date(sinceRaw) : null;
+    if (sinceRaw && (!since || Number.isNaN(since.getTime()))) {
+      this.logger.error(
+        `CAMPAIGN_ASSIGNMENT_SWEEP_SINCE is not a valid date ("${sinceRaw}") - sweep disabled until scope is explicit`,
+      );
+      return { expired: 0, skipped: 0, failed: 0 };
+    }
+    if (!since && !allowAllHistory) {
+      this.logger.error(
+        'CAMPAIGN_ASSIGNMENT_SWEEP enabled without scope - set CAMPAIGN_ASSIGNMENT_SWEEP_SINCE (new assignments only) or CAMPAIGN_ASSIGNMENT_SWEEP_ALL_HISTORY=true (explicit historical opt-in). Refusing to run.',
+      );
+      return { expired: 0, skipped: 0, failed: 0 };
+    }
     const batch = Math.max(1, Math.min(1000, Number(process.env.CAMPAIGN_ASSIGNMENT_SWEEP_BATCH) || 200));
     const now = new Date();
     const rows = await this.prisma.taskCompletion.findMany({
@@ -1055,6 +1073,34 @@ export class TasksService {
             completionId: row.id,
             campaignId: row.campaignId!,
           });
+
+          // Reconcile the released reservation when the campaign is
+          // already CANCELLED. Status is re-read inside this tx: if the
+          // cancellation committed first, its refund excluded this
+          // still-pending slot, so the released value is refunded now
+          // (provenance-checked). If expiry commits first, the later
+          // cancellation sees pending already decremented and includes
+          // the slot in its own refund - either ordering settles the
+          // reservation exactly once.
+          const campaign = await tx.campaign.findUnique({
+            where: { id: row.campaignId! },
+            select: { status: true, userId: true, feeAmount: true, creditPerTask: true, title: true },
+          });
+          if (campaign?.status === CampaignStatus.CANCELLED) {
+            const refund = await resolveFundedRefund(
+              tx,
+              { id: row.campaignId!, userId: campaign.userId, feeAmount: campaign.feeAmount },
+              campaign.creditPerTask,
+            );
+            if (refund > 0) {
+              await this.walletService.credit(campaign.userId, refund, {
+                type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+                description: `Expired-assignment slot refund for cancelled campaign: ${campaign.title}`,
+                referenceId: row.campaignId!,
+                referenceType: 'campaign',
+              }, tx);
+            }
+          }
         });
         expired += 1;
         void this.notificationsService
