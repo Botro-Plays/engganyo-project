@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { TasksService } from './tasks.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { AdminService } from '../admin/admin.service';
 import { WalletService } from '../wallet/wallet.service';
 import { claimCompletionForVerification } from './task-completion-verify';
 
@@ -37,7 +38,8 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
 
   let prisma: PrismaClient;
   let tasks: TasksService;
-  let campaigns: CampaignsService;
+  let admin: AdminService;
+  let walletSvc: WalletService;
   let seq = 0;
 
   const buildServices = (client: PrismaClient) => {
@@ -70,7 +72,14 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
       social as never, notifications as never, events as never,
       mockService() as never, store as never,
     );
-    return { walletSvc, campaignsSvc, tasksSvc, notifications, events };
+    const adminSvc = new AdminService(
+      client as never, mockService() as never, walletSvc as never,
+      mockService() as never, events as never, gamification as never,
+      notifications as never, mockService() as never, mockService() as never,
+      mockService() as never, mockService() as never, mockService() as never,
+      mockService() as never,
+    );
+    return { walletSvc, campaignsSvc, tasksSvc, adminSvc, notifications, events };
   };
 
   const makeUser = async () => {
@@ -125,7 +134,8 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
     const built = buildServices(prisma);
     tasks = built.tasksSvc;
-    campaigns = built.campaignsSvc;
+    admin = built.adminSvc;
+    walletSvc = built.walletSvc;
   });
 
   afterAll(async () => {
@@ -274,16 +284,27 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     expect(row).toMatchObject({ completedSlots: 0, pendingSlots: 0 });
   });
 
-  it('cancel-then-sweep keeps refund accounting exact and never double-releases', async () => {
+  it('admin-cancel-then-sweep keeps refund accounting exact and never double-releases', async () => {
     const owner = await makeUser();
+    const adminUser = await makeUser();
     const a = await makeUser();
     const c = await makeCampaign(owner.id, 3);
+    // Funded provenance: a real funding debit so the refund resolves.
+    await walletSvc.debit(owner.id, 3 * 50, {
+      type: TransactionType.SPEND_CAMPAIGN_CREATE,
+      description: 'fixture campaign funding',
+      referenceId: c.id,
+      referenceType: 'campaign',
+    });
     // One claimed-but-expired assignment among unclaimed slots.
     await prisma.campaign.update({ where: { id: c.id }, data: { pendingSlots: 1 } });
     await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
 
-    const cancel = await campaigns.cancel(owner.id, c.id);
-    expect(cancel.refundAmount).toBe(2 * 50); // total 3 - pending 1
+    // User-facing cancel blocks campaigns with completions by design;
+    // admin cancel is the supported path here and refunds
+    // (total - completed - pending) = 2 slots worth.
+    const cancel = await admin.cancelUserCampaign(adminUser.id, c.id, 'test');
+    expect(cancel.refunded).toBe(2 * 50);
 
     const res = await tasks.sweepExpiredCampaignAssignments();
     expect(res.expired).toBe(1);
@@ -292,11 +313,13 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     expect(row.status).toBe('CANCELLED');
 
     // Expiry moves no wallet credits - the released slot's value was
-    // already excluded from the cancel refund (it was pending then).
+    // already excluded from the cancel refund (it was pending then) and
+    // stays in the platform pool, never refunded twice.
     const refunds = await prisma.transaction.findMany({
-      where: { type: TransactionType.REFUND_CAMPAIGN_CANCEL },
+      where: { type: TransactionType.REFUND_CAMPAIGN_CANCEL, referenceId: c.id },
     });
     expect(refunds.length).toBe(1);
+    expect(Math.abs(refunds[0].amount)).toBe(2 * 50);
   });
 
   it('moves no wallet funds on expiry (pool accounting only)', async () => {
