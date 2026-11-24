@@ -7,9 +7,9 @@
  *
  * Covers: expirable vs protected statuses, pending-slot release under
  * the counter invariant, duplicate-sweep idempotency, submit/expiry
- * race, verify-after-expiry, cancellation interaction, batch binding,
- * the SINCE cutoff, the env gate, and exact funding reconciliation
- * (expiry moves no wallet credits).
+ * race, verify-after-expiry, both cancellation/expiry orderings with
+ * exact once-only refund reconciliation, batch binding, the SINCE
+ * cutoff, the env and scope gates, and failure isolation.
  */
 import {
   PrismaClient, CampaignStatus, CompletionStatus, TransactionType, TaskType,
@@ -149,6 +149,9 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
 
   beforeEach(() => {
     process.env.CAMPAIGN_ASSIGNMENT_SWEEP = 'true';
+    // Tests exercise fixtures they create themselves, so the explicit
+    // all-history opt-in is the correct scope here.
+    process.env.CAMPAIGN_ASSIGNMENT_SWEEP_ALL_HISTORY = 'true';
     delete process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE;
     delete process.env.CAMPAIGN_ASSIGNMENT_SWEEP_BATCH;
   });
@@ -164,8 +167,11 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     const c1 = await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
     const c2 = await makeCompletion(c.id, b.id, 'IN_PROGRESS', past(2));
 
+    // Sweep counts can include other suites' rows on this shared test
+    // database - assert on this fixture's rows instead of global totals.
     const res = await tasks.sweepExpiredCampaignAssignments();
-    expect(res).toEqual({ expired: 2, skipped: 0, failed: 0 });
+    expect(res.expired).toBeGreaterThanOrEqual(2);
+    expect(res.failed).toBe(0);
 
     expect((await prisma.taskCompletion.findUnique({ where: { id: c1.id } }))!.status).toBe('EXPIRED');
     expect((await prisma.taskCompletion.findUnique({ where: { id: c2.id } }))!.status).toBe('EXPIRED');
@@ -183,7 +189,7 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
       await makeCompletion(c.id, users[i].id, statuses[i], past(5));
     }
     const res = await tasks.sweepExpiredCampaignAssignments();
-    expect(res.expired).toBe(0);
+    expect(res.failed).toBe(0);
     const rows = await prisma.taskCompletion.findMany({ where: { campaignId: c.id } });
     expect(new Set(rows.map((r) => r.status))).toEqual(new Set(statuses));
   });
@@ -197,8 +203,7 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     await makeCompletion(c.id, a.id, 'ASSIGNED', new Date(Date.now() + 3600_000));
     await makeCompletion(c.id, b.id, 'ASSIGNED', null);
 
-    const res = await tasks.sweepExpiredCampaignAssignments();
-    expect(res.expired).toBe(0);
+    await tasks.sweepExpiredCampaignAssignments();
     expect((await counters(c.id)).pendingSlots).toBe(2);
   });
 
@@ -209,9 +214,10 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     await prisma.campaign.update({ where: { id: c.id }, data: { pendingSlots: 1 } });
     const comp = await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
 
-    expect((await tasks.sweepExpiredCampaignAssignments()).expired).toBe(1);
-    const second = await tasks.sweepExpiredCampaignAssignments();
-    expect(second).toEqual({ expired: 0, skipped: 0, failed: 0 });
+    await tasks.sweepExpiredCampaignAssignments();
+    expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('EXPIRED');
+    // Repeated sweeps must not re-release the slot or move it again.
+    await tasks.sweepExpiredCampaignAssignments();
     expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('EXPIRED');
     expect((await counters(c.id)).pendingSlots).toBe(0);
   });
@@ -258,8 +264,7 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
 
     // Deadline now passes - the review clock owns the row, not the claim clock.
     await prisma.taskCompletion.update({ where: { id: comp.id }, data: { expiresAt: past(1) } });
-    const res = await tasks.sweepExpiredCampaignAssignments();
-    expect(res.expired).toBe(0);
+    await tasks.sweepExpiredCampaignAssignments();
     expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('SUBMITTED');
     expect((await counters(c.id)).pendingSlots).toBe(1);
   });
@@ -289,13 +294,13 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     expect(row).toMatchObject({ completedSlots: 0, pendingSlots: 0 });
   });
 
-  it('admin-cancel-then-sweep keeps refund accounting exact and never double-releases', async () => {
+  it('cancel-then-expire refunds the released slot value exactly once', async () => {
     const owner = await makeUser();
     const adminUser = await makeUser();
     const a = await makeUser();
     const c = await makeCampaign(owner.id, 3);
-    // Funded provenance: a real funding debit so the refund resolves.
-    await walletSvc.debit(owner.id, 3 * 50, {
+    // Funded provenance mirrors campaign create: slot value + fee.
+    await walletSvc.debit(owner.id, 3 * 50 + 5, {
       type: TransactionType.SPEND_CAMPAIGN_CREATE,
       description: 'fixture campaign funding',
       referenceId: c.id,
@@ -303,28 +308,85 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     });
     // One claimed-but-expired assignment among unclaimed slots.
     await prisma.campaign.update({ where: { id: c.id }, data: { pendingSlots: 1 } });
-    await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
+    const comp = await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
 
     // User-facing cancel blocks campaigns with completions by design;
     // admin cancel is the supported path here and refunds
-    // (total - completed - pending) = 2 slots worth.
+    // (total - completed - pending) = 2 slots worth. The pending slot's
+    // value stays reserved while the claim remains processable.
     const cancel = await admin.cancelUserCampaign(adminUser.id, c.id, 'test');
     expect(cancel.refunded).toBe(2 * 50);
 
-    const res = await tasks.sweepExpiredCampaignAssignments();
-    expect(res.expired).toBe(1);
+    await tasks.sweepExpiredCampaignAssignments();
+    expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('EXPIRED');
     const row = await counters(c.id);
     expect(row.pendingSlots).toBe(0);
     expect(row.status).toBe('CANCELLED');
 
-    // Expiry moves no wallet credits - the released slot's value was
-    // already excluded from the cancel refund (it was pending then) and
-    // stays in the platform pool, never refunded twice.
+    // The cancel refund excluded the still-pending slot; expiry now
+    // reconciles it to the owner in a second refund row. Total returned
+    // equals every unearned slot's value - once, never twice.
+    const refunds = await prisma.transaction.findMany({
+      where: { type: TransactionType.REFUND_CAMPAIGN_CANCEL, referenceId: c.id },
+    });
+    expect(refunds.length).toBe(2);
+    expect(refunds.reduce((s, r) => s + Math.abs(r.amount), 0)).toBe(3 * 50);
+
+    // Repeated processing cannot refund again: the row is EXPIRED.
+    await tasks.sweepExpiredCampaignAssignments();
+    const refundsAfter = await prisma.transaction.findMany({
+      where: { type: TransactionType.REFUND_CAMPAIGN_CANCEL, referenceId: c.id },
+    });
+    expect(refundsAfter.length).toBe(2);
+    expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('EXPIRED');
+  });
+
+  it('expire-then-cancel settles the slot value via the cancel refund', async () => {
+    const owner = await makeUser();
+    const adminUser = await makeUser();
+    const a = await makeUser();
+    const c = await makeCampaign(owner.id, 3);
+    await walletSvc.debit(owner.id, 3 * 50 + 5, {
+      type: TransactionType.SPEND_CAMPAIGN_CREATE,
+      description: 'fixture campaign funding',
+      referenceId: c.id,
+      referenceType: 'campaign',
+    });
+    await prisma.campaign.update({ where: { id: c.id }, data: { pendingSlots: 1 } });
+    await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
+
+    // Expire while ACTIVE: slot released into the pool, no wallet move.
+    await tasks.sweepExpiredCampaignAssignments();
+    expect((await counters(c.id)).pendingSlots).toBe(0);
+
+    // The later cancellation sees pending already released and includes
+    // the slot in its own refund: (total - completed - pending) = 3.
+    const cancel = await admin.cancelUserCampaign(adminUser.id, c.id, 'test');
+    expect(cancel.refunded).toBe(3 * 50);
     const refunds = await prisma.transaction.findMany({
       where: { type: TransactionType.REFUND_CAMPAIGN_CANCEL, referenceId: c.id },
     });
     expect(refunds.length).toBe(1);
-    expect(Math.abs(refunds[0].amount)).toBe(2 * 50);
+    expect(refunds.reduce((s, r) => s + Math.abs(r.amount), 0)).toBe(3 * 50);
+  });
+
+  it('expires a claim on a cancelled campaign without refund when unfunded', async () => {
+    const owner = await makeUser();
+    const a = await makeUser();
+    const c = await makeCampaign(owner.id, 2);
+    await prisma.campaign.update({
+      where: { id: c.id },
+      data: { pendingSlots: 1, status: CampaignStatus.CANCELLED },
+    });
+    await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
+
+    await tasks.sweepExpiredCampaignAssignments();
+    expect((await counters(c.id)).pendingSlots).toBe(0);
+    // No funding provenance exists - no refund rows may be created.
+    const refunds = await prisma.transaction.count({
+      where: { type: TransactionType.REFUND_CAMPAIGN_CANCEL, referenceId: c.id },
+    });
+    expect(refunds).toBe(0);
   });
 
   it('moves no wallet funds on expiry (pool accounting only)', async () => {
@@ -355,18 +417,24 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
 
     process.env.CAMPAIGN_ASSIGNMENT_SWEEP_BATCH = '2';
     const first = await tasks.sweepExpiredCampaignAssignments();
-    expect(first.expired).toBe(2);
+    // The bound is a ceiling; other suites share this test database and
+    // may contribute eligible rows, so assert the bound itself rather
+    // than an exact count.
+    expect(first.expired).toBeLessThanOrEqual(2);
     delete process.env.CAMPAIGN_ASSIGNMENT_SWEEP_BATCH;
 
-    // SINCE in the future - remaining expired rows predate it and stay.
+    // SINCE in the future - all past-due rows predate it and stay.
     process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE = new Date(Date.now() + 3600_000).toISOString();
     const gated = await tasks.sweepExpiredCampaignAssignments();
     expect(gated.expired).toBe(0);
     delete process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE;
+    process.env.CAMPAIGN_ASSIGNMENT_SWEEP_ALL_HISTORY = 'true';
 
-    const rest = await tasks.sweepExpiredCampaignAssignments();
-    expect(rest.expired).toBe(2);
+    // Sweep until this fixture's rows are all gone (bounded passes).
+    for (let i = 0; i < 3; i++) await tasks.sweepExpiredCampaignAssignments();
     expect((await counters(c.id)).pendingSlots).toBe(0);
+    const fixtureRows = await prisma.taskCompletion.findMany({ where: { campaignId: c.id } });
+    expect(fixtureRows.every((r) => r.status === 'EXPIRED')).toBe(true);
   });
 
   it('does nothing when the env gate is off', async () => {
@@ -383,6 +451,30 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     expect((await counters(c.id)).pendingSlots).toBe(1);
   });
 
+  it('refuses to run without explicit scope even when enabled', async () => {
+    delete process.env.CAMPAIGN_ASSIGNMENT_SWEEP_ALL_HISTORY;
+    const owner = await makeUser();
+    const a = await makeUser();
+    const c = await makeCampaign(owner.id, 1);
+    await prisma.campaign.update({ where: { id: c.id }, data: { pendingSlots: 1 } });
+    const comp = await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
+
+    // Enabled but scopeless - must not touch anything.
+    expect(await tasks.sweepExpiredCampaignAssignments()).toEqual({ expired: 0, skipped: 0, failed: 0 });
+    expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('ASSIGNED');
+
+    // An invalid SINCE is not a scope either.
+    process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE = 'not-a-date';
+    expect(await tasks.sweepExpiredCampaignAssignments()).toEqual({ expired: 0, skipped: 0, failed: 0 });
+    expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('ASSIGNED');
+
+    // Explicit scope unlocks the same row. Other suites share this test
+    // database, so assert on this fixture's row rather than a global count.
+    process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE = past(2).toISOString();
+    await tasks.sweepExpiredCampaignAssignments();
+    expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('EXPIRED');
+  });
+
   it('fails closed on inconsistent counters (row retried, not stuck)', async () => {
     const owner = await makeUser();
     const a = await makeUser();
@@ -391,7 +483,8 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
     const comp = await makeCompletion(c.id, a.id, 'ASSIGNED', past(1));
 
     const res = await tasks.sweepExpiredCampaignAssignments();
-    expect(res.failed).toBe(1);
+    // Other suites share this database; assert at least our row failed.
+    expect(res.failed).toBeGreaterThanOrEqual(1);
     // Completion untouched - eligible for a later pass once counters heal.
     expect((await prisma.taskCompletion.findUnique({ where: { id: comp.id } }))!.status).toBe('ASSIGNED');
   });
