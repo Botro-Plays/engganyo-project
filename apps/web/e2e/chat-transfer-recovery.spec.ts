@@ -657,6 +657,7 @@ test.describe('chat transfer recovery - lookup provenance across session changes
     createdAt: PAST,
   };
   const slotKey = pendingStorageKey('u1', pendingRain.scope);
+  test.use({ storageState: authState('u1', [pendingRain]) });
 
   test('token refresh during a held lookup cannot resolve the row - same-session retry does', async ({ page }) => {
     const state = makeState();
