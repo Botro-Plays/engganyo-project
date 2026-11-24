@@ -61,6 +61,22 @@ function makeMessage(id: string, userId: string, content: string) {
   };
 }
 
+function mockUser(userId: string) {
+  return {
+    id: userId,
+    email: 'tester@e2e.dev',
+    username: 'tester',
+    displayName: 'Tester',
+    role: 'USER',
+    status: 'ACTIVE',
+    twoFactorEnabled: false,
+    creditBalance: 5000,
+    level: 1,
+    xp: 0,
+    vipTier: { name: 'GOLD', displayName: 'Gold', color: '#f5c542', badge: 'GOLD', perks: { canTip: true } },
+  };
+}
+
 function authState(userId: string, pending?: PendingTransferIntent[]) {
   const ls: { name: string; value: string }[] = [
     { name: 'access_token', value: 'e2e-mock-token' },
@@ -68,19 +84,7 @@ function authState(userId: string, pending?: PendingTransferIntent[]) {
       name: 'engganyo-auth',
       value: JSON.stringify({
         state: {
-          user: {
-            id: userId,
-            email: 'tester@e2e.dev',
-            username: 'tester',
-            displayName: 'Tester',
-            role: 'USER',
-            status: 'ACTIVE',
-            twoFactorEnabled: false,
-            creditBalance: 5000,
-            level: 1,
-            xp: 0,
-            vipTier: { name: 'GOLD', displayName: 'Gold', color: '#f5c542', badge: 'GOLD', perks: { canTip: true } },
-          },
+          user: mockUser(userId),
           accessToken: 'e2e-mock-token',
           isAuthenticated: true,
           adminPin: null,
@@ -120,16 +124,17 @@ async function mockChat(
     abortedMessagePosts?: number;
     /** First N transfer lookups abort (commit status unknown). */
     lookupAborts?: number;
+    /** Identity the mocked auth endpoints report - default u1. */
+    authedUserId?: string;
   } = {},
 ) {
+  const authedUserId = opts.authedUserId ?? 'u1';
   await page.route('**/api/**', (r) =>
     r.request().method() === 'OPTIONS'
       ? r.fulfill({ status: 204, headers: CORS_HEADERS })
       : r.fulfill(json({})),
   );
-  await page.route('**/api/auth/me**', (r) =>
-    r.fulfill(json({ id: 'u1', username: 'tester', role: 'USER', status: 'ACTIVE', creditBalance: 5000 })),
-  );
+  await page.route('**/api/auth/me**', (r) => r.fulfill(json(mockUser(authedUserId))));
   await page.route('**/api/wallet/**', (r) => r.fulfill(json({ balance: 5000, transactions: [] })));
   await page.route('**/api/notifications**', (r) => r.fulfill(json({ items: [], meta: { total: 0 } })));
   await page.route('**/api/store/active-effects**', (r) => r.fulfill(json([])));
@@ -383,7 +388,7 @@ test.describe('chat transfer recovery - intervening intent and account fencing',
     const page = await ctx2.newPage();
     try {
       const state: MockState = { settlements: new Map(), tipPosts: 0, messagePosts: 0, messageBodies: [] };
-      await mockChat(page, state);
+      await mockChat(page, state, { authedUserId: 'u2' });
       await openChannel(page);
       await page.waitForTimeout(1000);
       // u1's intent is never surfaced or resolved under u2's session.
