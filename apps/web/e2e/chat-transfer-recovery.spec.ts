@@ -647,43 +647,160 @@ test.describe('chat transfer recovery - hide keeps the recoverable record', () =
   });
 });
 
-test.describe('chat transfer recovery - session change on the same account', () => {
+test.describe('chat transfer recovery - lookup provenance across session changes', () => {
   const pendingRain: PendingTransferIntent = {
     scope: messageScope('ch1', '/rain 30 2'),
     action: 'message',
-    key: 'e2e-rain-session-0001',
+    key: 'e2e-rain-prov-0001',
     userId: 'u1',
     params: { channelId: 'ch1', content: '/rain 30 2' },
     createdAt: PAST,
   };
+  const slotKey = pendingStorageKey('u1', pendingRain.scope);
   test.use({ storageState: authState('u1', [pendingRain]) });
 
-  test('logout and re-login as the same account keeps recovery legitimate', async ({ page }) => {
+  test('token refresh during a held lookup cannot resolve the row - same-session retry does', async ({ page }) => {
     const state = makeState();
-    state.lookupAborts = 99;
     await mockChat(page, state);
 
+    // Deterministic hold: the first lookup answers 401 (triggering the
+    // axios refresh, which rotates the session token), the retry is
+    // HELD until the test releases it, later lookups answer directly.
+    let lookupCalls = 0;
+    let releaseHeld: (() => void) | null = null;
+    let refreshes = 0;
+    await page.route('**/api/auth/refresh', (r) => {
+      if (r.request().method() !== 'POST') return r.fallback();
+      refreshes += 1;
+      return r.fulfill(json({ accessToken: 'e2e-mock-token-2' }));
+    });
+    await page.route('**/api/channels/transfers/lookup/*', async (route) => {
+      lookupCalls += 1;
+      if (lookupCalls === 1) {
+        // Force a token refresh before the retry.
+        return route.fulfill(deny(401));
+      }
+      if (lookupCalls === 2) {
+        await new Promise<void>((res) => {
+          releaseHeld = res;
+        });
+      }
+      return route.fulfill(
+        json({ transfer: { key: pendingRain.key, action: 'rain', result: {}, createdAt: PAST } }),
+      );
+    });
+
     await openChannel(page);
     await expect(page.getByTestId('pending-transfers')).toBeVisible({ timeout: 20_000 });
+    // The 401 triggered a refresh that rotated the session token while
+    // the lookup retry is held.
+    await expect.poll(() => refreshes).toBe(1);
+    await expect.poll(() => lookupCalls).toBe(2);
 
-    // A -> logout -> A: same account, NEW session generation (new token).
-    await page.evaluate(() => {
-      const raw = localStorage.getItem('engganyo-auth');
-      const auth = JSON.parse(raw!);
-      auth.state.accessToken = 'e2e-mock-token-session-2';
-      localStorage.setItem('engganyo-auth', JSON.stringify(auth));
-      localStorage.setItem('access_token', 'e2e-mock-token-session-2');
-    });
+    // Release the held retry with a COMMITTED result: its provenance is
+    // the pre-refresh session, so it must NOT resolve the durable
+    // record or hide the row.
+    releaseHeld!();
+    await page.waitForTimeout(800);
+    await expect(page.getByTestId('pending-transfers')).toBeVisible();
+    await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
+    await expect(page.getByText(/already went through/)).toHaveCount(0);
+
+    // A fresh lookup in the CURRENT session resolves cleanly.
     await page.reload();
     await openChannel(page);
+    await expect(page.getByTestId('pending-transfers')).toHaveCount(0, { timeout: 20_000 });
+    await expect
+      .poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey))
+      .toBeNull();
+    expect(state.settlements.size).toBe(0); // recovery never re-sent
+  });
 
-    // The same account still sees and can recover its own intent.
+  test('held lookup across logout and re-login resolves only in the new session', async ({ page }) => {
+    const state = makeState();
+    await mockChat(page, state);
+
+    // The first lookup dies with the logged-out session (held forever).
+    // The post-login lookup is ALSO held until the test releases it, so
+    // the visible-recovery assertions are deterministic rather than
+    // racing the auto-resolve.
+    let lookupCalls = 0;
+    let releaseSecond: (() => void) | null = null;
+    await page.route('**/api/channels/transfers/lookup/*', async (route) => {
+      lookupCalls += 1;
+      if (lookupCalls === 1) {
+        await new Promise<void>(() => {}); // held - the page navigates away
+      }
+      if (lookupCalls === 2) {
+        await new Promise<void>((res) => {
+          releaseSecond = res;
+        });
+      }
+      return route.fulfill(
+        json({ transfer: { key: pendingRain.key, action: 'rain', result: {}, createdAt: PAST } }),
+      );
+    });
+
+    await openChannel(page);
     await expect(page.getByTestId('pending-transfers')).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('button', { name: 'Resend' }).click();
+    await expect.poll(() => lookupCalls).toBe(1);
 
-    await expect.poll(() => state.settlements.size, { timeout: 15_000 }).toBe(1);
-    const [settledKey] = [...state.settlements.entries()][0];
-    expect(settledKey).toBe(pendingRain.key);
-    await expect(page.getByTestId('pending-transfers')).toHaveCount(0, { timeout: 15_000 });
+    // A -> logout: the real sign-out clears the session and redirects.
+    await page.getByRole('button', { name: 'Sign out' }).first().click();
+    await expect.poll(() => page.evaluate(() => window.location.pathname)).toBe('/login');
+    // The durable recovery record survives the logout untouched.
+    await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
+
+    // -> A again: same account, NEW session generation. Re-seed twice -
+    // once now and once after a beat - so any persist write the /login
+    // boot makes cannot leave a half-cleared auth state behind.
+    const seed = () => {
+      localStorage.setItem(
+        'engganyo-auth',
+        JSON.stringify({
+          state: {
+            user: {
+              id: 'u1',
+              email: 'tester@e2e.dev',
+              username: 'tester',
+              displayName: 'Tester',
+              role: 'USER',
+              status: 'ACTIVE',
+              twoFactorEnabled: false,
+              creditBalance: 5000,
+              level: 1,
+              xp: 0,
+              vipTier: { name: 'GOLD', displayName: 'Gold', color: '#f5c542', badge: 'GOLD', perks: { canTip: true } },
+            },
+            accessToken: 'e2e-mock-token-session-2',
+            isAuthenticated: true,
+            adminPin: null,
+          },
+          version: 0,
+        }),
+      );
+      localStorage.setItem('access_token', 'e2e-mock-token-session-2');
+    };
+    await page.evaluate(seed);
+    await page.waitForTimeout(500);
+    await page.evaluate(seed);
+
+    // The same account's intent resurfaces; its lookup stays held, so
+    // the banner is verifiably visible with the record unresolved.
+    await openChannel(page);
+    await expect(page.getByTestId('pending-transfers')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => lookupCalls).toBe(2);
+    await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
+
+    // Release the new session's lookup: it resolves the record.
+    releaseSecond!();
+    await expect(page.getByText(/already went through/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('pending-transfers')).toHaveCount(0, { timeout: 20_000 });
+    await expect
+      .poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey))
+      .toBeNull();
+    // Recovery was purely read-only: no transfer was ever re-sent.
+    expect(state.settlements.size).toBe(0);
+    expect(state.messagePosts).toBe(0);
   });
 });

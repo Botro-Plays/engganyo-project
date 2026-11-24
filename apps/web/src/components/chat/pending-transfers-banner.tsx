@@ -18,6 +18,16 @@ interface TransferLookup {
   createdAt: string;
 }
 
+/**
+ * A lookup result plus the session that requested it. Provenance is
+ * embedded per result - never shared mutable state - so a response can
+ * only ever be applied to the session that asked for it.
+ */
+interface LookupResult {
+  transfer: TransferLookup | null;
+  session: string | null;
+}
+
 interface Props {
   store: PendingTransferStore;
   userId: string;
@@ -64,41 +74,42 @@ function PendingTransferRow({
   // not the currently authenticated account.
   const fenced = intent.userId === currentUserId;
 
-  // Session generation captured when the lookup request fires. A stale
-  // lookup response landing after a session change (logout, account
-  // switch, A -> logout -> A) must not resolve work in the new session.
-  const lookupSessionRef = useRef<string | null>(null);
-
   // Read-only server check: did this request key already settle? Retry is
   // owned here (one bounded retry) so axios auto-retry does not stack.
+  // Each result carries the session that requested it (captured before
+  // the request fires), so a stale, cached, or mid-flight-rotated result
+  // can never be applied to a different session.
   const lookup = useQuery({
     queryKey: ['chat-transfer-lookup', intent.userId, intent.key],
     staleTime: 0,
     retry: 1,
     enabled: fenced,
-    queryFn: async () => {
-      lookupSessionRef.current = useAuthStore.getState().accessToken;
+    queryFn: async (): Promise<LookupResult> => {
+      const session = useAuthStore.getState().accessToken;
       const res = await apiClient.get<ApiResponse<{ transfer: TransferLookup | null }>>(
         `channels/transfers/lookup/${encodeURIComponent(intent.key)}`,
         { skipRetry: true },
       );
-      return res.data.data.transfer;
+      return { session, transfer: res.data.data.transfer };
     },
   });
 
-  const committed = lookup.data ?? null;
   const resolvedRef = useRef(false);
   useEffect(() => {
+    const committed = lookup.data?.transfer ?? null;
     if (!committed || !fenced || resolvedRef.current) return;
-    // Recheck session generation: the response must land in the same
-    // session that asked for it, for the account that owns the intent.
+    // Provenance recheck: the result's requesting session must still be
+    // the active session for the intent's account. A token refresh
+    // during the request, a logout, or an account switch invalidates
+    // the result's authority - the row stays visible and the durable
+    // record stays pending until a same-session lookup resolves it.
     const s = useAuthStore.getState();
-    if (s.user?.id !== intent.userId || s.accessToken !== lookupSessionRef.current) return;
+    if (s.user?.id !== intent.userId || s.accessToken !== lookup.data?.session) return;
     resolvedRef.current = true;
     store.resolve(intent.userId, intent.scope, intent.key, 'committed');
     onCommitted(intent, committed);
     onChanged();
-  }, [committed, fenced, intent, store, onCommitted, onChanged]);
+  }, [lookup.data, fenced, intent, store, onCommitted, onChanged]);
 
   const resend = async () => {
     // Identity + session recheck at action time: the authenticated
@@ -118,8 +129,8 @@ function PendingTransferRow({
         ...intent.params,
         idempotencyKey: intent.key,
       });
-      // The response arrived - but only resolve when the session that
-      // sent it is still the active one.
+      // The response arrived - but only resolve (and update the UI)
+      // when the session that sent it is still the active one.
       const now = useAuthStore.getState();
       if (now.user?.id === intent.userId && now.accessToken === tokenAtClick) {
         store.resolve(intent.userId, intent.scope, intent.key, 'committed');
@@ -132,8 +143,13 @@ function PendingTransferRow({
       // and surfaced a guard-level 401/403/429 (or any 4xx) from before
       // the replay check - none of it proves the transfer never settled.
       // The intent stays pending; only a success or the server lookup
-      // is authoritative.
-      addToast(getApiErrorMessage(err), 'error');
+      // is authoritative. Error notifications are fenced to the
+      // session that initiated the resend, so a stale response never
+      // surfaces a toast in an unrelated session.
+      const now = useAuthStore.getState();
+      if (now.user?.id === intent.userId && now.accessToken === tokenAtClick) {
+        addToast(getApiErrorMessage(err), 'error');
+      }
     } finally {
       setSending(false);
     }
@@ -149,7 +165,11 @@ function PendingTransferRow({
     onChanged();
   };
 
-  if (!fenced || committed) return null;
+  // The row is never hidden by an unprovenanced committed result: it
+  // leaves the banner only when the durable record actually resolves
+  // (the parent re-lists after onChanged), so a stale or cached
+  // response cannot conceal an unresolved recovery record.
+  if (!fenced) return null;
 
   return (
     <div className="flex items-center justify-between gap-3 text-xs" data-testid="pending-transfer">

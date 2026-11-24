@@ -298,26 +298,32 @@ export default function ChatPage() {
     },
     onSuccess: (_data, vars) => {
       const now = useAuthStore.getState();
+      // All delayed UI updates for a financial send are fenced to the
+      // session that initiated it - a stale success response must not
+      // toast, close the modal, or resolve work in a different session.
       if (vars.intentUserId === now.user?.id && vars.session === now.accessToken) {
         transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, 'committed');
+        addChatToast('Tip sent successfully!', 'success');
+        setTipModal(null);
+        void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       }
       refreshPendingTransfers();
-      addChatToast('Tip sent successfully!', 'success');
-      setTipModal(null);
-      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     },
-    onError: (err) => {
+    onError: (err, vars) => {
       // Same rule as messages: no error status is authoritative for a
       // pending transfer - keep the intent for recovery. The structured
       // conflict code means the key already committed under different
       // params - money moved - so the record stays for the lookup.
       refreshPendingTransfers();
-      addChatToast(
-        isIdempotencyKeyConflict(err)
-          ? 'That request key was already used for a different transfer - check the unfinished transfers notice.'
-          : getApiErrorMessage(err),
-        'error',
-      );
+      const now = useAuthStore.getState();
+      if (vars.intentUserId === now.user?.id && vars.session === now.accessToken) {
+        addChatToast(
+          isIdempotencyKeyConflict(err)
+            ? 'That request key was already used for a different transfer - check the unfinished transfers notice.'
+            : getApiErrorMessage(err),
+          'error',
+        );
+      }
     },
   });
 

@@ -85,7 +85,11 @@ required in the DTOs (`@IsNotEmpty`), dropping the `undefined` branch.
   token) captured at request time - so a stale response landing after
   logout, account switch, or logout->login-as-same-user cannot update
   or resolve work in the new session. A rotated token can only
-  false-fence (the intent stays pending), never false-resolve.
+  false-fence (the intent stays pending), never false-resolve. Each
+  lookup result embeds the session that requested it (provenance
+  travels with the result, never through shared mutable state), rows
+  are never hidden by an unprovenanced committed result, and resend
+  error notifications are fenced to the session that initiated them.
 - Recovery banner lists unfinished intents, asks the lookup endpoint
   whether the key committed (auto-resolving committed ones), and
   offers an explicit Resend that replays the original key and params
@@ -96,7 +100,8 @@ required in the DTOs (`@IsNotEmpty`), dropping the `undefined` branch.
 Regression coverage: `apps/web/e2e/chat-transfer-recovery.spec.ts`
 (lost response, reload, committed-then-guard-denied interceptor
 sequence, storage-failure blocking, hide-then-identical-resend key
-reuse, intervening intent, account switch, same-account session
-change) and `apps/web/src/lib/idempotency.test.ts` (store semantics,
-exact identity, key-matched resolution/hiding, persistence failure,
+reuse, intervening intent, account switch, held lookup across token
+refresh and across logout->relogin, same-account session change) and
+`apps/web/src/lib/idempotency.test.ts` (store semantics, exact
+identity, key-matched resolution/hiding, persistence failure,
 structured-conflict code recognition).
