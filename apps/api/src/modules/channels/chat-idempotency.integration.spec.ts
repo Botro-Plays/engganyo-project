@@ -347,4 +347,52 @@ run('Chat transfer idempotency - real PostgreSQL', () => {
     ).rejects.toThrow(/Rate limit/);
     redis.incrWithExpiry.mockResolvedValue(1);
   });
+
+  it('lookupTransfer reports committed keys and stays silent otherwise', async () => {
+    const sender = await makeUser(500);
+    const recipient = await makeUser(0);
+
+    expect(await channels.lookupTransfer(sender.id, key(30))).toEqual({ transfer: null });
+    expect(await channels.lookupTransfer(sender.id, '')).toEqual({ transfer: null });
+
+    const res = await channels.sendTip(sender.id, recipient.id, 100, undefined, undefined, key(30));
+    const lookup = await channels.lookupTransfer(sender.id, key(30));
+    expect(lookup.transfer).not.toBeNull();
+    expect(lookup.transfer!.action).toBe('tip');
+    const result = lookup.transfer!.result as { debitTxId: string; creditTxId: string };
+    expect(result.debitTxId).toBe(res.debitTx.id);
+    expect(result.creditTxId).toBe(res.creditTx.id);
+
+    // Sender-scoped: another user holding the same key sees nothing.
+    const other = await makeUser(0);
+    expect(await channels.lookupTransfer(other.id, key(30))).toEqual({ transfer: null });
+  });
+
+  it('CHAT_TRANSFER_REQUIRE_KEY rejects keyless financial transfers', async () => {
+    process.env.CHAT_TRANSFER_REQUIRE_KEY = 'true';
+    try {
+      const sender = await makeUser(500);
+      const recipient = await makeUser(0);
+      const member = await makeUser(0);
+      const channel = await makeChannel([sender.id, member.id]);
+
+      await expect(
+        channels.sendTip(sender.id, recipient.id, 100),
+      ).rejects.toThrow(/idempotencyKey/);
+      await expect(
+        channels.handleRainCommand(sender.id, channel.id, '/rain 10 1', UserRole.ADMIN),
+      ).rejects.toThrow(/idempotencyKey/);
+
+      // Keyed callers keep working under the same flag.
+      const res = await channels.sendTip(sender.id, recipient.id, 100, undefined, undefined, key(31));
+      const debit = await prisma.transaction.findUniqueOrThrow({ where: { id: res.debitTx.id } });
+      expect(debit.amount).toBe(-100);
+
+      // Balance untouched by the rejected keyless attempts.
+      const w = await prisma.wallet.findUnique({ where: { userId: sender.id } });
+      expect(w!.balance).toBe(400);
+    } finally {
+      delete process.env.CHAT_TRANSFER_REQUIRE_KEY;
+    }
+  });
 });

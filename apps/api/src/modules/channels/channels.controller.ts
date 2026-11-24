@@ -109,6 +109,13 @@ export class ChannelsController {
     return this.channelsService.sendTip(user.sub, dto.toUserId, dto.amount, dto.messageId, user.role, dto.idempotencyKey);
   }
 
+  @Get('transfers/lookup/:key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check whether a tip/rain request key already committed (recovery lookup)' })
+  lookupTransfer(@CurrentUser() user: JwtPayload, @Param('key') key: string) {
+    return this.channelsService.lookupTransfer(user.sub, key);
+  }
+
   @Get('users/search')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Search users by username for @mentions' })

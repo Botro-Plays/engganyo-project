@@ -4,7 +4,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
-import { IdempotencyKeyStore, messageScope, tipScope } from '@/lib/idempotency';
+import {
+  PendingTransferStore,
+  messageScope,
+  tipScope,
+  type PendingTransferIntent,
+} from '@/lib/idempotency';
+import PendingTransfersBanner from '@/components/chat/pending-transfers-banner';
 import { connectChannelSocket, disconnectChannelSocket } from '@/lib/channel-socket';
 import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { resolveCosmeticStyles } from '@/lib/cosmetics';
@@ -89,9 +95,24 @@ export default function ChatPage() {
   const [reportDescription, setReportDescription] = useState('');
   const [mobileShowList, setMobileShowList] = useState(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Retained across uncertain sends so retries replay one request identity.
-  const sendKeyStore = useRef(new IdempotencyKeyStore()).current;
-  const tipKeyStore = useRef(new IdempotencyKeyStore()).current;
+  // Persisted per-account pending intents: keys and frozen params survive
+  // reload/navigation so an uncertain send can be recovered, not duplicated.
+  const transferStore = useRef(new PendingTransferStore()).current;
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransferIntent[]>([]);
+
+  const refreshPendingTransfers = useCallback(() => {
+    if (!user?.id) {
+      setPendingTransfers([]);
+      return;
+    }
+    setPendingTransfers(transferStore.list(user.id));
+  }, [user?.id, transferStore]);
+
+  // Hydrate persisted intents once the session identity is known. The
+  // list is fenced to this account; another user's intents stay hidden.
+  useEffect(() => {
+    refreshPendingTransfers();
+  }, [refreshPendingTransfers]);
 
   const addChatToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     const id = Math.random().toString(36).slice(2);
@@ -202,22 +223,28 @@ export default function ChatPage() {
 
   // ─── Send message mutation ────────────────────────────────
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ channelId, content, idempotencyKey }: { channelId: string; content: string; idempotencyKey: string }) => {
+    mutationFn: async ({ channelId, content, idempotencyKey }: { channelId: string; content: string; idempotencyKey?: string; scope?: string }) => {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content, idempotencyKey });
       return res.data.data;
     },
-    onSuccess: (msg) => {
-      sendKeyStore.resolve('success');
+    onSuccess: (msg, vars) => {
+      if (user?.id && vars.scope) transferStore.resolve(user.id, vars.scope, 'committed');
+      refreshPendingTransfers();
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
       setInput('');
     },
-    onError: (err) => {
-      // Uncertain outcome: keep the key so a manual or axios-level retry
-      // replays the same request identity instead of re-sending.
-      sendKeyStore.resolve('uncertain');
+    onError: (err, vars) => {
+      // 4xx means the server definitively refused before settlement, so
+      // the intent is released. Network errors and 5xx stay uncertain:
+      // the intent persists for recovery instead of rotating silently.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (user?.id && vars.scope) {
+        transferStore.resolve(user.id, vars.scope, status && status < 500 ? 'rejected' : 'uncertain');
+      }
+      refreshPendingTransfers();
       addChatToast(getApiErrorMessage(err), 'error');
     },
   });
@@ -236,18 +263,24 @@ export default function ChatPage() {
 
   // ─── Send tip mutation ────────────────────────────────────
   const tipMutation = useMutation({
-    mutationFn: async (dto: { toUserId: string; amount: number; messageId?: string; idempotencyKey: string }) => {
-      const res = await apiClient.post<ApiResponse<unknown>>('channels/tips', dto);
+    mutationFn: async (dto: { toUserId: string; amount: number; messageId?: string; idempotencyKey: string; scope: string }) => {
+      const { scope: _scope, ...body } = dto;
+      const res = await apiClient.post<ApiResponse<unknown>>('channels/tips', body);
       return res.data.data;
     },
-    onSuccess: () => {
-      tipKeyStore.resolve('success');
+    onSuccess: (_data, vars) => {
+      if (user?.id) transferStore.resolve(user.id, vars.scope, 'committed');
+      refreshPendingTransfers();
       addChatToast('Tip sent successfully!', 'success');
       setTipModal(null);
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     },
-    onError: (err) => {
-      tipKeyStore.resolve('uncertain');
+    onError: (err, vars) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (user?.id) {
+        transferStore.resolve(user.id, vars.scope, status && status < 500 ? 'rejected' : 'uncertain');
+      }
+      refreshPendingTransfers();
       addChatToast(getApiErrorMessage(err), 'error');
     },
   });
@@ -273,22 +306,35 @@ export default function ChatPage() {
   // ─── Handlers ──────────────────────────────────────────────
 
   const handleSend = useCallback(() => {
-    if (!activeChannelId || !input.trim()) return;
+    if (!activeChannelId || !input.trim() || !user?.id) return;
     if (!activeChannel?.isMember) {
       addChatToast('Join the channel to send messages', 'error');
       return;
     }
     const content = input.trim();
+    // Only credit-moving sends get a persisted intent: a /rain transfer
+    // can debit the wallet, a plain message cannot. For plain messages
+    // the axios retry still replays one request config, but there is
+    // nothing financial to recover.
+    const scope = content.startsWith('/rain ') ? messageScope(activeChannelId, content) : undefined;
+    const intent = scope
+      ? transferStore.intentFor(user.id, {
+          action: 'message',
+          scope,
+          params: { channelId: activeChannelId, content },
+        })
+      : undefined;
     sendMessageMutation.mutate({
       channelId: activeChannelId,
       content,
-      idempotencyKey: sendKeyStore.keyFor(messageScope(activeChannelId, content)),
+      idempotencyKey: intent?.key,
+      scope,
     });
 
     // Emit typing stop
     const socket = connectChannelSocket(accessToken ?? '');
     socket.emit('chat:typing', { channelId: activeChannelId, isTyping: false });
-  }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addChatToast, sendKeyStore]);
+  }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addChatToast, transferStore, user?.id]);
 
   const handleInputChange = async (value: string) => {
     setInput(value);
@@ -440,6 +486,31 @@ export default function ChatPage() {
                 </p>
               </div>
             </div>
+
+            {/* Unfinished credit transfers awaiting recovery */}
+            {user?.id && pendingTransfers.length > 0 && (
+              <PendingTransfersBanner
+                store={transferStore}
+                userId={user.id}
+                intents={pendingTransfers}
+                onChanged={refreshPendingTransfers}
+                addToast={addChatToast}
+                onCommitted={(intent, result) => {
+                  if (intent.action === 'tip') {
+                    void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+                    addChatToast('Your earlier tip already went through.', 'success');
+                  } else {
+                    // Resend response is the persisted message; the lookup
+                    // path only proves settlement, so refetch to be safe.
+                    const msg = result as ChatMessage | undefined;
+                    if (msg && typeof msg.id === 'string' && msg.channelId === activeChannelId) {
+                      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+                    }
+                    addChatToast('Your earlier send already went through.', 'success');
+                  }
+                }}
+              />
+            )}
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -682,14 +753,26 @@ export default function ChatPage() {
                 Cancel
               </button>
               <button
-                onClick={() =>
+                onClick={() => {
+                  if (!user?.id) return;
+                  const scope = tipScope(tipModal.toUserId, tipAmount, tipModal.messageId);
+                  const intent = transferStore.intentFor(user.id, {
+                    action: 'tip',
+                    scope,
+                    params: {
+                      toUserId: tipModal.toUserId,
+                      amount: tipAmount,
+                      messageId: tipModal.messageId,
+                    },
+                  });
                   tipMutation.mutate({
                     toUserId: tipModal.toUserId,
                     amount: tipAmount,
                     messageId: tipModal.messageId,
-                    idempotencyKey: tipKeyStore.keyFor(tipScope(tipModal.toUserId, tipAmount, tipModal.messageId)),
-                  })
-                }
+                    idempotencyKey: intent.key,
+                    scope,
+                  });
+                }}
                 disabled={tipMutation.isPending || (user?.creditBalance ?? 0) < tipAmount}
                 className="flex-1 py-2.5 rounded-lg text-sm font-medium bg-brand-500 hover:bg-brand-400 disabled:opacity-40 text-sc-text transition-colors"
               >
