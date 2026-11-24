@@ -129,3 +129,74 @@ export async function rejectCompletionAndReleaseSlot(
     );
   }
 }
+
+/**
+ * Assignment-expiry semantics for campaign task completions:
+ *
+ * - Expirable statuses: ASSIGNED and IN_PROGRESS only. These are the two
+ *   pre-submission states whose completion still holds a pending slot.
+ * - Never expirable: SUBMITTED (work is awaiting review - the reviewer,
+ *   not the claimant, owns the remaining timeline), VERIFIED, REJECTED,
+ *   DISPUTED, EXPIRED, and CANCELLED (all terminal or post-submission).
+ * - Deadline: task_completions.expires_at, set to 48h after the claim.
+ *   Only rows with expires_at strictly in the past are eligible.
+ *
+ * Atomically expire one completion and release its pending slot, inside
+ * the caller's transaction. Two guarded writes mirror the reject path:
+ * the completion transitions only from a pre-submission status (a racing
+ * submitProof already moved it to SUBMITTED -> claim.count 0 -> abort),
+ * and pending_slots is released only when the campaign counters satisfy
+ * the shared invariant (non-negative, completed + pending <= total).
+ * No wallet movement: a pending slot's credits stay in the campaign pool
+ * exactly as they do on rejection - the creator is refunded for
+ * unclaimed slots only at campaign cancellation, and the same
+ * reservation can never be released twice because the second claimant
+ * sees status EXPIRED, not ASSIGNED/IN_PROGRESS.
+ */
+/**
+ * Thrown when a completion is no longer in an expirable state. Distinct
+ * from counter-invariant failures: a racing submission legitimately
+ * moved the row to SUBMITTED first, which is a skip for the sweep, not
+ * an anomaly requiring retry.
+ */
+export class TaskNotExpirableError extends Error {
+  constructor(message = 'Task is not expirable - already submitted or resolved.') {
+    super(message);
+    this.name = 'TaskNotExpirableError';
+  }
+}
+
+export async function expireCompletionAndReleaseSlot(
+  tx: Prisma.TransactionClient,
+  opts: {
+    completionId: string;
+    campaignId: string;
+  },
+): Promise<void> {
+  const claim = await tx.taskCompletion.updateMany({
+    where: {
+      id: opts.completionId,
+      status: { in: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS] },
+      campaignId: opts.campaignId,
+      expiresAt: { not: null, lt: new Date() },
+    },
+    data: { status: CompletionStatus.EXPIRED },
+  });
+  if (claim.count !== 1) {
+    throw new TaskNotExpirableError();
+  }
+
+  const released = await tx.$executeRaw`
+    UPDATE campaigns
+    SET pending_slots = pending_slots - 1, updated_at = NOW()
+    WHERE id = ${opts.campaignId}
+      AND total_slots > 0
+      AND completed_slots >= 0
+      AND pending_slots > 0
+      AND completed_slots + pending_slots <= total_slots`;
+  if (released !== 1) {
+    throw new BadRequestException(
+      'Inconsistent campaign counters - no pending slot to release. Manual review required.',
+    );
+  }
+}
