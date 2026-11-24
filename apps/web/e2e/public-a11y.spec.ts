@@ -60,6 +60,19 @@ test.describe('public page landmarks and prose links', () => {
     }
   });
 
+  test('public routes hydrate without React mismatches', async ({ page }) => {
+    const hydrationErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && /React error #41[38]|Hydration/i.test(msg.text())) {
+        hydrationErrors.push(msg.text());
+      }
+    });
+    for (const route of ['/about', '/blog', '/blog/yourfirstweekonengganyo', '/pricing']) {
+      await page.goto(route, { waitUntil: 'networkidle' });
+    }
+    expect(hydrationErrors).toEqual([]);
+  });
+
   test('blog index dates use a contrast-passing muted tone', async ({ page }) => {
     await page.goto('/blog', { waitUntil: 'domcontentloaded' });
     const dates = page.locator('main time');
