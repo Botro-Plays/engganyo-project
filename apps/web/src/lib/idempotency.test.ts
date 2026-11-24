@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   IntentPersistenceError,
   PendingTransferStore,
-  isDefinitiveRejection,
+  isIdempotencyKeyConflict,
   pendingStorageKey,
   tipScope,
   messageScope,
@@ -77,19 +77,6 @@ test('committed clears the slot - resending identical content is a new intent', 
   const second = store.begin(U, spec);
   assert.equal(second.reused, false);
   assert.notEqual(first.intent.key, second.intent.key);
-});
-
-test('rejected clears the slot but uncertain keeps it', () => {
-  const store = new PendingTransferStore(new FakeStorage());
-  const a = msg('chan_1', 'hello');
-  const first = store.begin(U, a);
-  store.resolve(U, a.scope, first.intent.key, 'rejected');
-  assert.equal(store.begin(U, a).reused, false);
-
-  const b = msg('chan_1', 'world');
-  const second = store.begin(U, b);
-  store.resolve(U, b.scope, second.intent.key, 'uncertain');
-  assert.equal(store.begin(U, b).intent.key, second.intent.key);
 });
 
 test('resolve only proceeds when the acknowledged key matches the stored key', () => {
@@ -188,21 +175,55 @@ test('begin verifies the write actually landed - a lying storage is not durable'
   assert.throws(() => new PendingTransferStore(lying).begin(U, tip('u', 1)), IntentPersistenceError);
 });
 
-test('isDefinitiveRejection - retries keep 401/403/429 and other 4xx uncertain', () => {
-  // First send of a fresh key: a refusal before the wire is definitive
-  // (the key was just minted - nothing could have committed under it).
-  assert.equal(isDefinitiveRejection({ reused: false, status: 400 }), true);
-  assert.equal(isDefinitiveRejection({ reused: false, status: 404 }), true);
-  // A 409 is definitive on any attempt - the key committed under other params.
-  assert.equal(isDefinitiveRejection({ reused: true, status: 409 }), true);
-  assert.equal(isDefinitiveRejection({ reused: false, status: 409 }), true);
-  // Retries: guard/middleware statuses prove nothing about an earlier attempt.
-  assert.equal(isDefinitiveRejection({ reused: true, status: 400 }), false);
-  assert.equal(isDefinitiveRejection({ reused: true, status: 401 }), false);
-  assert.equal(isDefinitiveRejection({ reused: true, status: 403 }), false);
-  assert.equal(isDefinitiveRejection({ reused: true, status: 429 }), false);
-  // 5xx / network errors are always uncertain.
-  assert.equal(isDefinitiveRejection({ reused: false, status: 500 }), false);
-  assert.equal(isDefinitiveRejection({ reused: false, status: 503 }), false);
-  assert.equal(isDefinitiveRejection({ reused: false, status: undefined }), false);
+test('hide retains the full recovery record and is key-matched', () => {
+  const store = new PendingTransferStore(new FakeStorage());
+  const spec = tip('user_b', 100);
+  const intent = store.begin(U, spec).intent;
+
+  // A mismatched key cannot hide this request's record.
+  store.hide(U, spec.scope, 'other-key');
+  assert.equal(store.list(U).length, 1);
+
+  store.hide(U, spec.scope, intent.key);
+  // Hidden: invisible to list() but the record is intact.
+  assert.equal(store.list(U).length, 0);
+  assert.equal(store.get(U, spec.scope)!.key, intent.key);
+  assert.equal(store.get(U, spec.scope)!.hidden, true);
+});
+
+test('an identical send after hiding reuses the same key - never a new keyed transfer', () => {
+  const store = new PendingTransferStore(new FakeStorage());
+  const spec = msg('chan_1', '/rain 30 2');
+  const intent = store.begin(U, spec).intent;
+  store.hide(U, spec.scope, intent.key);
+
+  const again = store.begin(U, spec);
+  // Same key AND the record resurfaces (the user re-engaged).
+  assert.equal(again.intent.key, intent.key);
+  assert.equal(again.reused, true);
+  assert.equal(store.list(U).length, 1);
+  assert.equal(store.get(U, spec.scope)!.hidden, false);
+});
+
+test('hiding one intent leaves other pending intents untouched', () => {
+  const store = new PendingTransferStore(new FakeStorage());
+  const a = store.begin(U, msg('c', 'a')).intent;
+  const b = store.begin(U, msg('c', 'b')).intent;
+  store.hide(U, a.scope, a.key);
+  const listed = store.list(U);
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].key, b.key);
+});
+
+test('isIdempotencyKeyConflict only accepts the documented structured code', () => {
+  assert.equal(
+    isIdempotencyKeyConflict({ response: { status: 409, data: { code: 'IDEMPOTENCY_KEY_REUSED' } } }),
+    true,
+  );
+  // A bare 409 without the code is NOT authoritative - the conflict
+  // could come from anywhere (or nowhere in the idempotency layer).
+  assert.equal(isIdempotencyKeyConflict({ response: { status: 409, data: {} } }), false);
+  assert.equal(isIdempotencyKeyConflict({ response: { status: 409, data: { code: 'OTHER' } } }), false);
+  assert.equal(isIdempotencyKeyConflict({ response: { status: 400 } }), false);
+  assert.equal(isIdempotencyKeyConflict(new Error('network')), false);
 });

@@ -10,7 +10,10 @@
  * Properties:
  * - Fenced by account identity: keys are namespaced per userId and the
  *   stored userId is re-verified on read, so a shared browser can never
- *   replay one account's intent under another's session.
+ *   replay one account's intent under another's session. Callers must
+ *   additionally fence in-flight callbacks by session generation (the
+ *   access token), since userId alone does not establish the same
+ *   session (A -> logout -> A).
  * - Exact identity: the storage key embeds the full canonical scope
  *   (URI-encoded), so distinct scopes can never collide on one slot.
  *   Reads re-verify the stored scope, and resolve() only clears when the
@@ -20,6 +23,13 @@
  * - Persistence is mandatory for financial sends: intentFor throws when
  *   durable storage is unavailable or a write cannot be verified, so
  *   callers must not send an unprotected transfer.
+ * - Outcomes are only cleared by authoritative signals: a successful
+ *   response, a committed lookup, or the user hiding the notice. No
+ *   HTTP error status clears an intent - a request can commit and lose
+ *   its response before a later retry is refused by a guard (401/403/
+ *   429 or other middleware 4xx), so no status proves non-settlement.
+ *   A hidden intent keeps its full recovery record and is reused by an
+ *   identical send rather than rotating into a new keyed transfer.
  */
 
 export type IdempotencyScope = string;
@@ -32,6 +42,8 @@ export interface PendingTransferIntent {
   userId: string;
   params: Record<string, unknown>;
   createdAt: string;
+  /** User hid the recovery notice; the record stays fully recoverable. */
+  hidden?: boolean;
 }
 
 export type IntentOutcome = 'committed' | 'rejected' | 'uncertain';
@@ -96,34 +108,18 @@ function defaultStorage(): StorageLike | null {
   }
 }
 
-export interface BeginResult {
-  intent: PendingTransferIntent;
-  /**
-   * True when a slot for this scope already existed - the send is a
-   * retry of an earlier uncertain attempt, so an ambiguous failure must
-   * not be treated as proof that nothing committed.
-   */
-  reused: boolean;
-}
-
 /**
- * Classify a failed send. Only a 409 is produced by the idempotency
- * layer itself, after the replay check: it means the key committed
- * under DIFFERENT parameters, so this intent can never settle and is
- * definitively dead. On a FIRST send (`reused` false) the key was just
- * minted, so any refusal before the wire is also definitive - nothing
- * could have committed under it.
- *
- * On a retry, every other status is ambiguous: 401/403/429 come from
- * auth/rate-limit guards and 400-level rejections can come from
- * validation or middleware, all BEFORE the replay check runs - none of
- * them proves an earlier attempt never settled. Network errors and 5xx
- * are inherently uncertain. Only the server-side transfer lookup is
- * authoritative for those.
+ * The documented structured code produced by the idempotency layer
+ * itself: the request reached the replay check and the key already
+ * committed under DIFFERENT parameters. This is not a rejection of the
+ * transfer - money moved under the key - so the recovery record must be
+ * kept for the server lookup to resolve, never silently deleted.
  */
-export function isDefinitiveRejection(opts: { reused: boolean; status?: number }): boolean {
-  if (opts.status === 409) return true;
-  return !opts.reused && typeof opts.status === 'number' && opts.status < 500;
+export const IDEMPOTENCY_KEY_REUSED = 'IDEMPOTENCY_KEY_REUSED';
+
+export function isIdempotencyKeyConflict(err: unknown): boolean {
+  const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+  return code === IDEMPOTENCY_KEY_REUSED;
 }
 
 export class PendingTransferStore {
@@ -133,15 +129,19 @@ export class PendingTransferStore {
    * Returns the intent for this user+scope, creating and durably
    * persisting a new one when none exists. An existing intent's key and
    * frozen params are returned unchanged - callers retry the SAME
-   * transfer, never a new one.
+   * transfer, never a new one. A hidden intent is un-hidden when the
+   * user re-attempts the identical transfer, since they re-engaged.
    * Throws IntentPersistenceError when the write cannot be verified.
    */
   begin(
     userId: string,
     spec: { action: TransferAction; scope: IdempotencyScope; params: Record<string, unknown> },
-  ): BeginResult {
+  ): { intent: PendingTransferIntent; reused: boolean } {
     const existing = this.get(userId, spec.scope);
-    if (existing) return { intent: existing, reused: true };
+    if (existing) {
+      if (existing.hidden) this.unhide(userId, existing);
+      return { intent: existing, reused: true };
+    }
     const intent: PendingTransferIntent = {
       scope: spec.scope,
       action: spec.action,
@@ -177,6 +177,16 @@ export class PendingTransferStore {
     }
   }
 
+  private unhide(userId: string, intent: PendingTransferIntent): void {
+    // Cosmetic flag flip on an already-durable record; a failed write
+    // just leaves the notice hidden, which is the safe direction.
+    try {
+      this.storage?.setItem(storageKey(userId, intent.scope), JSON.stringify({ ...intent, hidden: false }));
+    } catch {
+      // keep hidden
+    }
+  }
+
   get(userId: string, scope: IdempotencyScope): PendingTransferIntent | null {
     if (!this.storage) return null;
     let raw: string | null = null;
@@ -192,7 +202,7 @@ export class PendingTransferStore {
     return intent;
   }
 
-  /** All pending intents owned by this account (corrupted slots skipped). */
+  /** Visible pending intents owned by this account (hidden and corrupted slots skipped). */
   list(userId: string): PendingTransferIntent[] {
     const out: PendingTransferIntent[] = [];
     if (!this.storage) return out;
@@ -204,12 +214,31 @@ export class PendingTransferStore {
         const intent = parseIntent(this.storage.getItem(k), userId);
         // Integrity: the slot's name must be derivable from the stored
         // scope - a value parked under the wrong key is not trusted.
-        if (intent && k === storageKey(userId, intent.scope)) out.push(intent);
+        if (intent && !intent.hidden && k === storageKey(userId, intent.scope)) out.push(intent);
       }
     } catch {
       // storage read failed - return what was verified so far
     }
     return out;
+  }
+
+  /**
+   * Hide the recovery notice for an intent. The full recoverable record
+   * (key, params, scope) is retained - hiding never cancels a transfer
+   * and never frees the scope for a new key. An identical send reuses
+   * the same key, so a hidden intent can still only settle once.
+   * Key-matched like resolve(): a mismatched ack cannot hide another
+   * request's record.
+   */
+  hide(userId: string, scope: IdempotencyScope, key: string): void {
+    if (!this.storage) return;
+    const existing = this.get(userId, scope);
+    if (!existing || existing.key !== key) return;
+    try {
+      this.storage.setItem(storageKey(userId, scope), JSON.stringify({ ...existing, hidden: true }));
+    } catch {
+      // write failure leaves it visible - safe direction
+    }
   }
 
   /**

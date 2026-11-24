@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import {
   PendingTransferStore,
-  isDefinitiveRejection,
+  isIdempotencyKeyConflict,
   messageScope,
   tipScope,
   type PendingTransferIntent,
@@ -231,16 +231,18 @@ export default function ChatPage() {
       scope?: string;
       intentKey?: string;
       intentUserId?: string;
-      reused?: boolean;
+      session?: string;
     }) => {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content, idempotencyKey });
       return res.data.data;
     },
     onSuccess: (msg, vars) => {
-      // Identity recheck: only resolve an intent for the account that is
-      // still signed in - a stale response must not touch another
-      // session's state.
-      if (vars.scope && vars.intentKey && vars.intentUserId && vars.intentUserId === useAuthStore.getState().user?.id) {
+      // Identity + session recheck: only resolve an intent when the
+      // account AND session that sent it are still active - a stale
+      // response must not touch another session's state (A -> logout
+      // -> A produces a new token).
+      const now = useAuthStore.getState();
+      if (vars.scope && vars.intentKey && vars.intentUserId && vars.intentUserId === now.user?.id && vars.session === now.accessToken) {
         transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, 'committed');
       }
       refreshPendingTransfers();
@@ -250,18 +252,19 @@ export default function ChatPage() {
       });
       setInput('');
     },
-    onError: (err, vars) => {
-      // Only provably post-replay refusals (and first-send refusals of a
-      // fresh key) clear the intent. Guard/middleware statuses like
-      // 401/403/429 on a retry say nothing about an earlier attempt, so
-      // the intent stays pending until the server lookup is authoritative.
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (vars.scope && vars.intentKey && vars.intentUserId && vars.intentUserId === useAuthStore.getState().user?.id) {
-        const outcome = isDefinitiveRejection({ reused: vars.reused ?? true, status }) ? 'rejected' : 'uncertain';
-        transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, outcome);
-      }
+    onError: (err) => {
+      // No HTTP outcome clears a pending intent: the axios interceptor
+      // may have retried a committed-but-lost attempt and surfaced a
+      // guard-level 401/403/429 or any other refusal - none proves the
+      // transfer never settled. The intent stays for recovery; only a
+      // success or the server lookup is authoritative.
       refreshPendingTransfers();
-      addChatToast(getApiErrorMessage(err), 'error');
+      addChatToast(
+        isIdempotencyKeyConflict(err)
+          ? 'That request key was already used for a different transfer - check the unfinished transfers notice.'
+          : getApiErrorMessage(err),
+        'error',
+      );
     },
   });
 
@@ -287,14 +290,15 @@ export default function ChatPage() {
       scope: string;
       intentKey: string;
       intentUserId: string;
-      reused: boolean;
+      session: string;
     }) => {
-      const { scope: _scope, intentKey: _k, intentUserId: _u, reused: _r, ...body } = dto;
+      const { scope: _scope, intentKey: _k, intentUserId: _u, session: _s, ...body } = dto;
       const res = await apiClient.post<ApiResponse<unknown>>('channels/tips', body);
       return res.data.data;
     },
     onSuccess: (_data, vars) => {
-      if (vars.intentUserId === useAuthStore.getState().user?.id) {
+      const now = useAuthStore.getState();
+      if (vars.intentUserId === now.user?.id && vars.session === now.accessToken) {
         transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, 'committed');
       }
       refreshPendingTransfers();
@@ -302,14 +306,18 @@ export default function ChatPage() {
       setTipModal(null);
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     },
-    onError: (err, vars) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (vars.intentUserId === useAuthStore.getState().user?.id) {
-        const outcome = isDefinitiveRejection({ reused: vars.reused, status }) ? 'rejected' : 'uncertain';
-        transferStore.resolve(vars.intentUserId, vars.scope, vars.intentKey, outcome);
-      }
+    onError: (err) => {
+      // Same rule as messages: no error status is authoritative for a
+      // pending transfer - keep the intent for recovery. The structured
+      // conflict code means the key already committed under different
+      // params - money moved - so the record stays for the lookup.
       refreshPendingTransfers();
-      addChatToast(getApiErrorMessage(err), 'error');
+      addChatToast(
+        isIdempotencyKeyConflict(err)
+          ? 'That request key was already used for a different transfer - check the unfinished transfers notice.'
+          : getApiErrorMessage(err),
+        'error',
+      );
     },
   });
 
@@ -346,16 +354,13 @@ export default function ChatPage() {
     // nothing financial to recover.
     const scope = content.startsWith('/rain ') ? messageScope(activeChannelId, content) : undefined;
     let intent: PendingTransferIntent | undefined;
-    let reused = false;
     if (scope) {
       try {
-        const begun = transferStore.begin(user.id, {
+        intent = transferStore.begin(user.id, {
           action: 'message',
           scope,
           params: { channelId: activeChannelId, content },
-        });
-        intent = begun.intent;
-        reused = begun.reused;
+        }).intent;
       } catch {
         // A financial send without durable recovery is refused rather
         // than sent unprotected.
@@ -370,7 +375,7 @@ export default function ChatPage() {
       scope,
       intentKey: intent?.key,
       intentUserId: intent ? user.id : undefined,
-      reused,
+      session: intent ? useAuthStore.getState().accessToken ?? undefined : undefined,
     });
 
     // Emit typing stop
@@ -821,7 +826,7 @@ export default function ChatPage() {
                     scope,
                     intentKey: begun.intent.key,
                     intentUserId: user.id,
-                    reused: begun.reused,
+                    session: useAuthStore.getState().accessToken ?? '',
                   });
                 }}
                 disabled={tipMutation.isPending || (user?.creditBalance ?? 0) < tipAmount}
