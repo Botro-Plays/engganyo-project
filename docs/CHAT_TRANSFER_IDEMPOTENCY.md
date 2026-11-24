@@ -61,32 +61,42 @@ required in the DTOs (`@IsNotEmpty`), dropping the `undefined` branch.
   durable write or its read-back verification fails
   (`IntentPersistenceError`), the financial send is refused - no
   unprotected transfer goes out.
-- Outcome classification: `committed` clears the slot, `uncertain`
-  keeps it. `rejected` is reserved for provably post-replay outcomes:
-  a 409 `IDEMPOTENCY_KEY_REUSED` (the key committed under different
-  params, produced only by the idempotency layer itself), or any
-  refusal of a first send, since a fresh key cannot have committed.
-  Guard/middleware statuses on a retry - 401, 403, 429, and other 4xx
-  that can fire before the replay check runs - never clear an intent;
-  the server-side lookup stays the authority on whether the key
-  settled.
+- Outcome classification: only authoritative signals clear a slot - a
+  successful response, a committed lookup, or the user hiding the
+  notice. NO HTTP error status clears an intent: the axios interceptor
+  can retry a committed-but-lost request and surface a guard-level
+  401/403/429 (or any other refusal) that ran before the replay check,
+  so no status proves non-settlement. A 409 is only meaningful with the
+  structured `IDEMPOTENCY_KEY_REUSED` code - and it means the key
+  committed under different params, i.e. money moved, so the record is
+  kept for the lookup to resolve rather than treated as a rejection.
 - Exact identity: the slot key embeds the URI-encoded scope verbatim
   (no hashing, so no collisions), reads re-verify the stored scope, and
   `resolve` only clears when the acknowledged request key matches the
   stored one - a stale ack cannot clear a different in-flight request.
-- Account fencing: slots are namespaced per userId, the stored userId
-  is re-verified on read, and recovery actions recheck the currently
-  authenticated account immediately before resending or discarding.
+- Hide, never delete: hiding the notice sets a flag but keeps the full
+  recoverable record (key + params). It never cancels a transfer and
+  never frees the scope - an identical send reuses the stored key, so
+  an unresolved intent cannot silently rotate into a new keyed
+  transfer. A hidden intent un-hides when the user re-attempts it.
+- Account + session fencing: slots are namespaced per userId, the
+  stored userId is re-verified on read, and recovery actions recheck
+  both the authenticated account AND the session generation (access
+  token) captured at request time - so a stale response landing after
+  logout, account switch, or logout->login-as-same-user cannot update
+  or resolve work in the new session. A rotated token can only
+  false-fence (the intent stays pending), never false-resolve.
 - Recovery banner lists unfinished intents, asks the lookup endpoint
   whether the key committed (auto-resolving committed ones), and
   offers an explicit Resend that replays the original key and params
-  plus a Discard for attempts the user abandons. Another account's
-  intents are fenced off by the per-user namespace and re-verified
-  `userId` inside the payload.
+  plus a Hide for dismissing the notice. Another account's intents are
+  fenced off by the per-user namespace and re-verified `userId` inside
+  the payload.
 
 Regression coverage: `apps/web/e2e/chat-transfer-recovery.spec.ts`
-(lost response, reload, 403/429 on retry, storage-failure blocking,
-intervening intent, account switch) and
-`apps/web/src/lib/idempotency.test.ts` (store semantics, exact
-identity, key-matched resolution, persistence failure,
-classification rules).
+(lost response, reload, committed-then-guard-denied interceptor
+sequence, storage-failure blocking, hide-then-identical-resend key
+reuse, intervening intent, account switch, same-account session
+change) and `apps/web/src/lib/idempotency.test.ts` (store semantics,
+exact identity, key-matched resolution/hiding, persistence failure,
+structured-conflict code recognition).

@@ -16,7 +16,6 @@ import { roomsApi, friendsApi, proofWindowOpen, type RoomState, type RoomOffer, 
 import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
 import {
   PendingTransferStore,
-  isDefinitiveRejection,
   messageScope,
   type PendingTransferIntent,
 } from '@/lib/idempotency';
@@ -570,16 +569,13 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
     // message has nothing financial to recover.
     const scope = content.startsWith('/rain ') && user?.id ? messageScope(channelId, content) : undefined;
     let intent: PendingTransferIntent | undefined;
-    let reused = false;
     if (scope && user?.id) {
       try {
-        const begun = transferStore.begin(user.id, {
+        intent = transferStore.begin(user.id, {
           action: 'message',
           scope,
           params: { channelId, content },
-        });
-        intent = begun.intent;
-        reused = begun.reused;
+        }).intent;
       } catch {
         // A financial send without durable recovery is refused rather
         // than sent unprotected.
@@ -587,6 +583,9 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
         return;
       }
     }
+    // Session generation captured at send time: callbacks must verify
+    // the same session is still active before resolving the intent.
+    const tokenAtSend = useAuthStore.getState().accessToken;
     setInput('');
     try {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', {
@@ -595,23 +594,20 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
         idempotencyKey: intent?.key,
       });
       mergeMessages([res.data.data]);
-      // Identity recheck before resolving: the callback may land after
-      // an account switch and must not touch another session's state.
-      if (intent && scope && useAuthStore.getState().user?.id === intent.userId) {
+      // Identity + session recheck before resolving: the callback may
+      // land after an account switch or logout/login and must not
+      // touch another session's state.
+      const now = useAuthStore.getState();
+      if (intent && scope && now.user?.id === intent.userId && now.accessToken === tokenAtSend) {
         transferStore.resolve(intent.userId, scope, intent.key, 'committed');
       }
       refreshPendingTransfers();
-    } catch (err) {
+    } catch {
       // Preserve the unsent draft so a failed send never loses text.
-      // Guard/middleware statuses (401/403/429 and other 4xx that can
-      // fire before the replay check) prove nothing about an earlier
-      // attempt on a retry, so only provably post-replay refusals clear
-      // the intent; the rest stay pending for recovery.
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (intent && scope && useAuthStore.getState().user?.id === intent.userId) {
-        const outcome = isDefinitiveRejection({ reused, status }) ? 'rejected' : 'uncertain';
-        transferStore.resolve(intent.userId, scope, intent.key, outcome);
-      }
+      // No HTTP outcome clears a pending intent: the axios interceptor
+      // may have retried a committed-but-lost attempt and surfaced a
+      // guard-level 401/403/429 or any other refusal - none proves the
+      // transfer never settled. The intent stays for recovery.
       refreshPendingTransfers();
       setInput(content);
     }

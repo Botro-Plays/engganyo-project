@@ -2,14 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, RefreshCw, X } from 'lucide-react';
+import { Loader2, RefreshCw, EyeOff } from 'lucide-react';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import {
-  isDefinitiveRejection,
-  type PendingTransferIntent,
-  type PendingTransferStore,
-} from '@/lib/idempotency';
+import type { PendingTransferIntent, PendingTransferStore } from '@/lib/idempotency';
 
 interface ApiResponse<T> {
   data: T;
@@ -68,6 +64,11 @@ function PendingTransferRow({
   // not the currently authenticated account.
   const fenced = intent.userId === currentUserId;
 
+  // Session generation captured when the lookup request fires. A stale
+  // lookup response landing after a session change (logout, account
+  // switch, A -> logout -> A) must not resolve work in the new session.
+  const lookupSessionRef = useRef<string | null>(null);
+
   // Read-only server check: did this request key already settle? Retry is
   // owned here (one bounded retry) so axios auto-retry does not stack.
   const lookup = useQuery({
@@ -76,6 +77,7 @@ function PendingTransferRow({
     retry: 1,
     enabled: fenced,
     queryFn: async () => {
+      lookupSessionRef.current = useAuthStore.getState().accessToken;
       const res = await apiClient.get<ApiResponse<{ transfer: TransferLookup | null }>>(
         `channels/transfers/lookup/${encodeURIComponent(intent.key)}`,
         { skipRetry: true },
@@ -88,6 +90,10 @@ function PendingTransferRow({
   const resolvedRef = useRef(false);
   useEffect(() => {
     if (!committed || !fenced || resolvedRef.current) return;
+    // Recheck session generation: the response must land in the same
+    // session that asked for it, for the account that owns the intent.
+    const s = useAuthStore.getState();
+    if (s.user?.id !== intent.userId || s.accessToken !== lookupSessionRef.current) return;
     resolvedRef.current = true;
     store.resolve(intent.userId, intent.scope, intent.key, 'committed');
     onCommitted(intent, committed);
@@ -95,14 +101,16 @@ function PendingTransferRow({
   }, [committed, fenced, intent, store, onCommitted, onChanged]);
 
   const resend = async () => {
-    // Identity recheck at action time: the authenticated account may
-    // have changed since this row rendered. Never replay another
-    // account's intent under the current session.
-    if (useAuthStore.getState().user?.id !== intent.userId) {
+    // Identity + session recheck at action time: the authenticated
+    // account/session may have changed since this row rendered. Never
+    // replay another session's intent under the current one.
+    const sessionAtClick = useAuthStore.getState();
+    if (sessionAtClick.user?.id !== intent.userId || !sessionAtClick.accessToken) {
       addToast('Signed in as a different account - this transfer belongs to another session.', 'error');
       onChanged();
       return;
     }
+    const tokenAtClick = sessionAtClick.accessToken;
     setSending(true);
     try {
       const url = intent.action === 'tip' ? 'channels/tips' : 'channels/messages';
@@ -110,29 +118,34 @@ function PendingTransferRow({
         ...intent.params,
         idempotencyKey: intent.key,
       });
-      store.resolve(intent.userId, intent.scope, intent.key, 'committed');
-      onCommitted(intent, res.data.data);
-      onChanged();
-    } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      // A resend is always a retry: only the idempotency layer's own 409
-      // is definitive. 401/403/429 and other refusals can come from
-      // guards before the replay check and prove nothing about whether
-      // an earlier attempt settled, so the intent stays and the
-      // server-side lookup remains the authority.
-      if (isDefinitiveRejection({ reused: true, status })) {
-        store.resolve(intent.userId, intent.scope, intent.key, 'rejected');
+      // The response arrived - but only resolve when the session that
+      // sent it is still the active one.
+      const now = useAuthStore.getState();
+      if (now.user?.id === intent.userId && now.accessToken === tokenAtClick) {
+        store.resolve(intent.userId, intent.scope, intent.key, 'committed');
+        onCommitted(intent, res.data.data);
         onChanged();
       }
+    } catch (err) {
+      // NO HTTP status is treated as definitive here. The axios
+      // interceptor may have retried a committed-but-lost first attempt
+      // and surfaced a guard-level 401/403/429 (or any 4xx) from before
+      // the replay check - none of it proves the transfer never settled.
+      // The intent stays pending; only a success or the server lookup
+      // is authoritative.
       addToast(getApiErrorMessage(err), 'error');
     } finally {
       setSending(false);
     }
   };
 
-  const discard = () => {
-    if (useAuthStore.getState().user?.id !== intent.userId) return;
-    store.resolve(intent.userId, intent.scope, intent.key, 'rejected');
+  const hide = () => {
+    // Hide is a notice dismissal only: it never cancels the transfer
+    // and never deletes the recovery record. Disabled while a resend is
+    // in flight so the identity can never vanish mid-request.
+    const s = useAuthStore.getState();
+    if (s.user?.id !== intent.userId) return;
+    store.hide(intent.userId, intent.scope, intent.key);
     onChanged();
   };
 
@@ -156,11 +169,13 @@ function PendingTransferRow({
           Resend
         </button>
         <button
-          onClick={discard}
-          title="Discard this unconfirmed transfer attempt"
-          className="p-1 rounded-md text-sc-dim hover:text-sc-muted hover:bg-white/5 transition-colors"
+          onClick={hide}
+          disabled={sending}
+          aria-label="Hide transfer notice"
+          title="Hide this notice - does not cancel the transfer; the record stays recoverable"
+          className="p-1 rounded-md text-sc-dim hover:text-sc-muted hover:bg-white/5 disabled:opacity-40 transition-colors"
         >
-          <X className="w-3 h-3" />
+          <EyeOff className="w-3 h-3" />
         </button>
       </span>
     </div>
@@ -171,8 +186,8 @@ function PendingTransferRow({
  * Banner listing credit-moving sends whose outcome is still uncertain.
  * A row that the server reports as committed clears itself; an
  * unconfirmed row offers a Resend that replays the original key and
- * params, so it can never create a second transfer, plus a Discard for
- * attempts the user chooses to abandon.
+ * params, so it can never create a second transfer, plus a Hide that
+ * dismisses the notice while keeping the recoverable record.
  */
 export default function PendingTransfersBanner({
   store,
