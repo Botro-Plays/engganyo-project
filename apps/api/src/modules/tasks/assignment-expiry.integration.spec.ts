@@ -132,6 +132,11 @@ run('Campaign assignment expiry - real PostgreSQL integration', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
+    // PrismaService.withTransaction is just $transaction - attach the same
+    // surface so wallet/service calls behave identically on the raw client.
+    (prisma as never as Record<string, unknown>).withTransaction = (
+      fn: (tx: unknown) => Promise<unknown>,
+    ) => prisma.$transaction(fn as never);
     const built = buildServices(prisma);
     tasks = built.tasksSvc;
     admin = built.adminSvc;
