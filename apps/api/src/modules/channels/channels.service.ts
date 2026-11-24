@@ -14,6 +14,12 @@ import {
   NotificationType,
   UserRole,
 } from '@prisma/client';
+import {
+  assertValidRequestKey,
+  hashTransferParams,
+  isRequestKeyConflict,
+  assertReplayMatches,
+} from './chat-request-keys';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
@@ -310,7 +316,7 @@ export class ChannelsService implements OnModuleInit {
     return { muted: false };
   }
 
-  async sendMessage(userId: string, channelId: string, content: string, role?: UserRole) {
+  async sendMessage(userId: string, channelId: string, content: string, role?: UserRole, idempotencyKey?: string) {
     await this.enforceRateLimit(userId, CHAT_RATE_LIMITS.message, role);
 
     // Check mute status
@@ -321,10 +327,11 @@ export class ChannelsService implements OnModuleInit {
 
     const trimmed = content.trim();
 
-    // Handle /rain command
+    // Handle /rain command. The rain rate limit is enforced inside
+    // handleRainCommand AFTER the idempotent-replay check, so a retry of
+    // a committed rain replays its result instead of being rate-limited.
     if (trimmed.startsWith('/rain ')) {
-      await this.enforceRateLimit(userId, { limit: 1, ttl: 300, scope: 'chat_rain' }, role);
-      return this.handleRainCommand(userId, channelId, trimmed, role);
+      return this.handleRainCommand(userId, channelId, trimmed, role, idempotencyKey);
     }
 
     const channel = await this.prisma.channel.findUnique({
@@ -568,7 +575,23 @@ export class ChannelsService implements OnModuleInit {
     return { eligible: true };
   }
 
-  async sendTip(fromUserId: string, toUserId: string, amount: number, messageId?: string, role?: UserRole) {
+  async sendTip(fromUserId: string, toUserId: string, amount: number, messageId?: string, role?: UserRole, idempotencyKey?: string) {
+    // Idempotent replay short-circuit: a key that already committed for
+    // the same canonical request returns the stored result without
+    // consuming rate-limit or tip-window budget a second time.
+    const paramsHash = idempotencyKey
+      ? (assertValidRequestKey(idempotencyKey), hashTransferParams('tip', { toUserId, amount, messageId }))
+      : null;
+    if (idempotencyKey && paramsHash) {
+      const existing = await this.prisma.chatRequestKey.findUnique({
+        where: { senderId_key: { senderId: fromUserId, key: idempotencyKey } },
+      });
+      if (existing) {
+        assertReplayMatches(existing, paramsHash);
+        return this.replayTipResult(existing.result as { debitTxId: string; creditTxId: string });
+      }
+    }
+
     await this.enforceRateLimit(fromUserId, CHAT_RATE_LIMITS.tip, role);
 
     const validation = await this.validateTipEligibility(fromUserId, toUserId, amount, role);
@@ -576,33 +599,63 @@ export class ChannelsService implements OnModuleInit {
       throw new BadRequestException(validation.reason);
     }
 
-    // Debit + credit + message link in ONE transaction - a failure
-    // between them can no longer strand credits mid-transfer.
-    const { debitTx, creditTx } = await this.prisma.withTransaction(async (tx) => {
-      const d = await this.walletService.debit(fromUserId, amount, {
-        type: TransactionType.SPEND_TIP,
-        description: `Tip to user ${toUserId}`,
-        referenceId: messageId ?? undefined,
-        referenceType: 'tip',
-      }, tx);
+    // Debit + credit + message link + request key in ONE transaction - a
+    // failure between them can no longer strand credits mid-transfer, and
+    // a concurrent same-key retry loses the unique race and replays.
+    let settled: { debitTx: { id: string }; creditTx: { id: string } };
+    try {
+      settled = await this.prisma.withTransaction(async (tx) => {
+        const d = await this.walletService.debit(fromUserId, amount, {
+          type: TransactionType.SPEND_TIP,
+          description: `Tip to user ${toUserId}`,
+          referenceId: messageId ?? undefined,
+          referenceType: 'tip',
+        }, tx);
 
-      const c = await this.walletService.credit(toUserId, amount, {
-        type: TransactionType.EARN_TIP,
-        description: `Tip from user ${fromUserId}`,
-        referenceId: messageId ?? undefined,
-        referenceType: 'tip',
-      }, tx);
+        const c = await this.walletService.credit(toUserId, amount, {
+          type: TransactionType.EARN_TIP,
+          description: `Tip from user ${fromUserId}`,
+          referenceId: messageId ?? undefined,
+          referenceType: 'tip',
+        }, tx);
 
-      // Link tip to message if applicable
-      if (messageId) {
-        await tx.channelMessage.update({
-          where: { id: messageId },
-          data: { tipTransactionId: d.id },
+        // Link tip to message if applicable
+        if (messageId) {
+          await tx.channelMessage.update({
+            where: { id: messageId },
+            data: { tipTransactionId: d.id },
+          });
+        }
+
+        if (idempotencyKey) {
+          await tx.chatRequestKey.create({
+            data: {
+              senderId: fromUserId,
+              key: idempotencyKey,
+              action: 'tip',
+              paramsHash: paramsHash!,
+              result: { debitTxId: d.id, creditTxId: c.id, toUserId, amount, messageId: messageId ?? null },
+            },
+          });
+        }
+
+        return { debitTx: d, creditTx: c };
+      });
+    } catch (err) {
+      // Concurrent same-key request lost the unique race: its settlement
+      // rolled back, so replay the committed transfer if params match.
+      if (idempotencyKey && isRequestKeyConflict(err)) {
+        const committed = await this.prisma.chatRequestKey.findUnique({
+          where: { senderId_key: { senderId: fromUserId, key: idempotencyKey } },
         });
+        if (committed) {
+          assertReplayMatches(committed, paramsHash!);
+          return this.replayTipResult(committed.result as { debitTxId: string; creditTxId: string });
+        }
       }
-
-      return { debitTx: d, creditTx: c };
-    });
+      throw err;
+    }
+    const { debitTx, creditTx } = settled;
 
     // Record tip in 48h sliding window budget (Redis - non-transactional)
     await this.recordTipInWindow(fromUserId, amount);
@@ -630,6 +683,18 @@ export class ChannelsService implements OnModuleInit {
     );
 
     return { debitTx, creditTx };
+  }
+
+  /**
+   * Rebuild the sendTip return shape for an already-committed request
+   * key by re-fetching the ledger rows the settlement transaction wrote.
+   */
+  private async replayTipResult(result: { debitTxId: string; creditTxId: string }) {
+    const [debitTx, creditTx] = await Promise.all([
+      this.prisma.transaction.findUniqueOrThrow({ where: { id: result.debitTxId } }),
+      this.prisma.transaction.findUniqueOrThrow({ where: { id: result.creditTxId } }),
+    ]);
+    return { debitTx, creditTx, replayed: true };
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -706,7 +771,7 @@ export class ChannelsService implements OnModuleInit {
     return { total: parseInt(match[1], 10), count: parseInt(match[2], 10) };
   }
 
-  async handleRainCommand(userId: string, channelId: string, content: string, role?: UserRole) {
+  async handleRainCommand(userId: string, channelId: string, content: string, role?: UserRole, idempotencyKey?: string) {
     const parsed = this.parseRainCommand(content);
     if (!parsed) {
       throw new BadRequestException('Invalid /rain command. Usage: /rain <total_credits> <num_users>');
@@ -719,6 +784,26 @@ export class ChannelsService implements OnModuleInit {
     if (count > 100) {
       throw new BadRequestException('Cannot rain to more than 100 users at once');
     }
+
+    // Idempotent replay short-circuit. Runs BEFORE the rain rate limit:
+    // a retry of a committed rain replays the persisted allocation and
+    // announcement instead of being rejected by the 1-per-5min limit.
+    const paramsHash = idempotencyKey
+      ? (assertValidRequestKey(idempotencyKey), hashTransferParams('rain', { channelId, total, count }))
+      : null;
+    if (idempotencyKey && paramsHash) {
+      const existing = await this.prisma.chatRequestKey.findUnique({
+        where: { senderId_key: { senderId: userId, key: idempotencyKey } },
+      });
+      if (existing) {
+        assertReplayMatches(existing, paramsHash);
+        return this.replayRainResult(
+          existing.result as { announcementMessageId: string; recipients: Array<{ userId: string; username: string; amount: number }> },
+        );
+      }
+    }
+
+    await this.enforceRateLimit(userId, { limit: 1, ttl: 300, scope: 'chat_rain' }, role);
 
     // 1. Permission check: VIP or admin/superadmin
     const isAdmin = this.isAdminOrSuperAdmin(role);
@@ -781,66 +866,111 @@ export class ChannelsService implements OnModuleInit {
     });
     const senderName = sender?.displayName ?? sender?.username ?? 'Someone';
 
-    // All debits and credits in ONE transaction - a mid-loop failure can
-    // no longer distribute a partial rain.
-    await this.prisma.withTransaction(async (tx) => {
-      for (let i = 0; i < selected.length; i++) {
-        const recipient = selected[i];
-        const amount = baseAmount + (i === selected.length - 1 ? remainder : 0);
+    const recipients = selected.map((recipient, i) => ({
+      userId: recipient.user.id,
+      username: recipient.user.username,
+      amount: baseAmount + (i === selected.length - 1 ? remainder : 0),
+    }));
 
-        await this.walletService.debit(userId, amount, {
-          type: TransactionType.SPEND_TIP,
-          description: `Rain to ${recipient.user.username}`,
-          referenceType: 'rain',
-        }, tx);
+    const displayNames = recipients.slice(0, 5).map((r) => r.username).join(', ') +
+      (recipients.length > 5 ? ` and ${recipients.length - 5} others` : '');
+    const announcementContent = `🌧️ ${senderName} rained ${total} credits on ${count} users! ${displayNames} each received ${baseAmount}${remainder > 0 ? `-${baseAmount + remainder}` : ''} credits!`;
 
-        await this.walletService.credit(recipient.user.id, amount, {
-          type: TransactionType.EARN_TIP,
-          description: `Rain from ${senderName}`,
-          referenceType: 'rain',
-        }, tx);
+    // All debits and credits + the announcement message + the request
+    // key in ONE transaction - a mid-loop failure cannot distribute a
+    // partial rain, the financial message can never duplicate, and a
+    // concurrent same-key retry loses the unique race and replays the
+    // persisted allocation.
+    let announcementMessageId: string;
+    try {
+      announcementMessageId = await this.prisma.withTransaction(async (tx) => {
+        for (const recipient of recipients) {
+          await this.walletService.debit(userId, recipient.amount, {
+            type: TransactionType.SPEND_TIP,
+            description: `Rain to ${recipient.username}`,
+            referenceType: 'rain',
+          }, tx);
+
+          await this.walletService.credit(recipient.userId, recipient.amount, {
+            type: TransactionType.EARN_TIP,
+            description: `Rain from ${senderName}`,
+            referenceType: 'rain',
+          }, tx);
+        }
+
+        const announcement = await tx.channelMessage.create({
+          data: {
+            channelId,
+            userId,
+            content: announcementContent,
+          },
+        });
+
+        if (idempotencyKey) {
+          await tx.chatRequestKey.create({
+            data: {
+              senderId: userId,
+              key: idempotencyKey,
+              action: 'rain',
+              paramsHash: paramsHash!,
+              result: { announcementMessageId: announcement.id, channelId, total, count, recipients },
+            },
+          });
+        }
+
+        return announcement.id;
+      });
+    } catch (err) {
+      // Concurrent same-key request lost the unique race: its settlement
+      // rolled back, so replay the committed rain allocation.
+      if (idempotencyKey && isRequestKeyConflict(err)) {
+        const committed = await this.prisma.chatRequestKey.findUnique({
+          where: { senderId_key: { senderId: userId, key: idempotencyKey } },
+        });
+        if (committed) {
+          assertReplayMatches(committed, paramsHash!);
+          return this.replayRainResult(
+            committed.result as { announcementMessageId: string; recipients: Array<{ userId: string; username: string; amount: number }> },
+          );
+        }
       }
-    });
+      throw err;
+    }
 
-    const recipientNames: string[] = [];
-    for (let i = 0; i < selected.length; i++) {
-      const recipient = selected[i];
-      const amount = baseAmount + (i === selected.length - 1 ? remainder : 0);
-
-      // Emit rain received event
-      this.eventsService.emitToUser(recipient.user.id, 'rain:received', {
+    // Post-commit side effects (non-transactional, never replayed).
+    for (const recipient of recipients) {
+      this.eventsService.emitToUser(recipient.userId, 'rain:received', {
         fromUserId: userId,
         fromUsername: senderName,
-        amount,
+        amount: recipient.amount,
         channelId,
       });
 
-      // Notify recipient
       await this.notificationsService.createNotification(
-        recipient.user.id,
+        recipient.userId,
         NotificationType.TIP_RECEIVED,
         'You caught a rain!',
-        `${senderName} rained ${amount} credits on you!`,
-        { fromUserId: userId, amount, type: 'rain' },
+        `${senderName} rained ${recipient.amount} credits on you!`,
+        { fromUserId: userId, amount: recipient.amount, type: 'rain' },
       );
-
-      recipientNames.push(recipient.user.username);
     }
 
     // Record total rain in tip window
     await this.recordTipInWindow(userId, total);
 
-    // 8. Create announcement message
-    const displayNames = recipientNames.slice(0, 5).join(', ') +
-      (recipientNames.length > 5 ? ` and ${recipientNames.length - 5} others` : '');
-    const announcementContent = `🌧️ ${senderName} rained ${total} credits on ${count} users! ${displayNames} each received ${baseAmount}${remainder > 0 ? `–${baseAmount + remainder}` : ''} credits!`;
+    return this.buildRainAnnouncementDto(announcementMessageId);
+  }
 
-    const announcement = await this.prisma.channelMessage.create({
-      data: {
-        channelId,
-        userId,
-        content: announcementContent,
-      },
+  /**
+   * Rebuild the /rain announcement DTO from the persisted message row.
+   * Used on commit and on idempotent replay so both paths return the
+   * same shape. The channel.message.created emit is safe to repeat:
+   * clients dedupe by message id, and a lost-response replay may be the
+   * only delivery some clients get.
+   */
+  private async buildRainAnnouncementDto(announcementMessageId: string) {
+    const announcement = await this.prisma.channelMessage.findUniqueOrThrow({
+      where: { id: announcementMessageId },
       include: {
         user: {
           select: {
@@ -879,8 +1009,19 @@ export class ChannelsService implements OnModuleInit {
       },
       tip: null,
     };
-    this.eventEmitter.emit('channel.message.created', { channelId, message: dto });
+    this.eventEmitter.emit('channel.message.created', { channelId: dto.channelId, message: dto });
     return dto;
+  }
+
+  /**
+   * Replay a committed /rain: same recipients, same amounts, same
+   * announcement - never re-randomized or re-settled.
+   */
+  private async replayRainResult(result: {
+    announcementMessageId: string;
+    recipients: Array<{ userId: string; username: string; amount: number }>;
+  }) {
+    return this.buildRainAnnouncementDto(result.announcementMessageId);
   }
 
   private hashContent(content: string): string {

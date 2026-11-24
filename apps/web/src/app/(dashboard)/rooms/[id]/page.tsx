@@ -14,6 +14,7 @@ import {
 import axios from 'axios';
 import { roomsApi, friendsApi, proofWindowOpen, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
 import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
+import { IdempotencyKeyStore, messageScope } from '@/lib/idempotency';
 import { connectChannelSocket } from '@/lib/channel-socket';
 import { useSocketContext } from '@/components/socket-provider';
 import { useAuthStore } from '@/store/auth.store';
@@ -429,6 +430,8 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<ChatStatus>('connecting');
   const endRef = useRef<HTMLDivElement>(null);
+  // Retained across uncertain sends so retries replay one request identity.
+  const sendKeyStore = useRef(new IdempotencyKeyStore()).current;
   const onIncomingRef = useRef(onIncomingMessage);
   onIncomingRef.current = onIncomingMessage;
   const socketRef = useRef<ReturnType<typeof connectChannelSocket> | null>(null);
@@ -542,10 +545,17 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
     if (!content) return;
     setInput('');
     try {
-      const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content });
+      const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', {
+        channelId,
+        content,
+        idempotencyKey: sendKeyStore.keyFor(messageScope(channelId, content)),
+      });
       mergeMessages([res.data.data]);
+      sendKeyStore.resolve('success');
     } catch {
-      // Preserve the unsent draft so a failed send never loses text.
+      // Preserve the unsent draft so a failed send never loses text, and
+      // keep the key so the retry replays the same request identity.
+      sendKeyStore.resolve('uncertain');
       setInput(content);
     }
   };
