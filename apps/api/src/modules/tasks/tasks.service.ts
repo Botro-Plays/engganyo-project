@@ -19,7 +19,12 @@ import { EventsService } from '../events/events.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { StoreService } from '../store/store.service';
 import { assertEngagementTaskAllowed } from '../../common/constants/disabled-engagement-tasks';
-import { claimCompletionForVerification } from './task-completion-verify';
+import {
+  claimCompletionForVerification,
+  expireCompletionAndReleaseSlot,
+  TaskNotExpirableError,
+} from './task-completion-verify';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
@@ -557,9 +562,16 @@ export class TasksService {
       return { creditsEarned: campaign.creditPerTask, status: 'VERIFIED' };
     } else {
       // ── Manual review: hold proof, creator reviews first (48h), then admin ──
+      // Guarded write: the expiry sweep CASes the same pre-submission
+      // statuses. If expiry committed between the initial read and this
+      // write, count is 0 and the submit fails instead of resurrecting
+      // an EXPIRED row whose pending slot was already released.
       const reviewDeadline = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-      await this.prisma.taskCompletion.update({
-        where: { id: completion.id },
+      const submitted = await this.prisma.taskCompletion.updateMany({
+        where: {
+          id: completion.id,
+          status: { in: submittable },
+        },
         data: {
           status: CompletionStatus.SUBMITTED,
           proofUrl: dto.proofUrl,
@@ -571,6 +583,9 @@ export class TasksService {
           completionSeconds,
         },
       });
+      if (submitted.count !== 1) {
+        throw new BadRequestException('Task assignment has expired or is no longer submittable');
+      }
 
       this.eventsService.emitToUser(userId, 'task:completed', { campaignId, completionId: completion.id, status: 'SUBMITTED' });
       this.eventsService.emitToUser(campaign.userId, 'submission:new', { campaignId, completionId: completion.id });
@@ -978,5 +993,100 @@ export class TasksService {
           }
         : null,
     };
+  }
+
+  // ─── Campaign assignment expiry sweep ──────────────────────
+  //
+  // Which assignments may expire, and when:
+  // - Eligible rows: task_completions with a campaignId (campaign
+  //   tasks), status ASSIGNED or IN_PROGRESS, and expires_at < now.
+  //   expires_at is set to claim time + 48h at assignment.
+  // - Never expirable: SUBMITTED (proof is awaiting review and the
+  //   claim deadline no longer applies) and the terminal or
+  //   post-submission statuses VERIFIED, REJECTED, DISPUTED, EXPIRED,
+  //   CANCELLED.
+  // - Effect: the completion transitions to EXPIRED and the campaign's
+  //   pending_slots releases one, so another claimant can take the
+  //   slot. No wallet movement - pending-slot credits stay in the
+  //   campaign pool exactly as on rejection; cancellation still
+  //   refunds unclaimed (total - completed - pending) slots only, so
+  //   a released reservation can never be refunded twice.
+  //
+  // Deployment gating (no silent historical sweep):
+  // - CAMPAIGN_ASSIGNMENT_SWEEP must equal 'true' for the cron to act;
+  //   default off. Enabling is a deliberate ops step paired with the
+  //   chosen historical-processing policy.
+  // - CAMPAIGN_ASSIGNMENT_SWEEP_SINCE (ISO date) optionally limits
+  //   eligibility to assigned_at >= since, e.g. "only new
+  //   assignments" until historical rows get an owner-approved policy.
+  // - CAMPAIGN_ASSIGNMENT_SWEEP_BATCH bounds rows per run (default 200).
+  //
+  // Each completion expires in its own transaction: the completion CAS
+  // and the pending_slots decrement commit or roll back together, a
+  // failed row is retried next run, and one bad row cannot stall the
+  // batch.
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async sweepExpiredCampaignAssignments(): Promise<{ expired: number; skipped: number; failed: number }> {
+    if (process.env.CAMPAIGN_ASSIGNMENT_SWEEP !== 'true') {
+      return { expired: 0, skipped: 0, failed: 0 };
+    }
+    const since = process.env.CAMPAIGN_ASSIGNMENT_SWEEP_SINCE;
+    const batch = Math.max(1, Math.min(1000, Number(process.env.CAMPAIGN_ASSIGNMENT_SWEEP_BATCH) || 200));
+    const now = new Date();
+    const rows = await this.prisma.taskCompletion.findMany({
+      where: {
+        campaignId: { not: null },
+        status: { in: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS] },
+        expiresAt: { lt: now },
+        ...(since ? { assignedAt: { gte: new Date(since) } } : {}),
+      },
+      select: { id: true, campaignId: true, userId: true, campaign: { select: { title: true } } },
+      orderBy: { expiresAt: 'asc' },
+      take: batch,
+    });
+
+    let expired = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const row of rows) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await expireCompletionAndReleaseSlot(tx, {
+            completionId: row.id,
+            campaignId: row.campaignId!,
+          });
+        });
+        expired += 1;
+        void this.notificationsService
+          .createNotification(
+            row.userId,
+            NotificationType.SYSTEM_ANNOUNCEMENT,
+            'Task expired',
+            `Your claim on "${row.campaign?.title ?? 'a task'}" expired before proof was submitted.`,
+            { campaignId: row.campaignId, completionId: row.id },
+          )
+          .catch(() => null);
+        this.eventsService.emitToUser(row.userId, 'task:expired', {
+          campaignId: row.campaignId,
+          completionId: row.id,
+        });
+      } catch (err) {
+        if (err instanceof TaskNotExpirableError) {
+          // A concurrent submit/verify/resolve won the CAS - not an error.
+          skipped += 1;
+        } else {
+          failed += 1;
+          this.logger.warn(
+            `Assignment expiry failed for completion ${row.id}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+    }
+    if (expired || skipped || failed) {
+      this.logger.log(
+        `Assignment expiry sweep: ${expired} expired, ${skipped} raced, ${failed} failed (batch ${rows.length})`,
+      );
+    }
+    return { expired, skipped, failed };
   }
 }
