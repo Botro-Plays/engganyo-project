@@ -157,3 +157,29 @@ Blog follow-through from the Drive review completed under owner-assisted accepta
 - Fresh product screenshots landed in PR #159: tasks, campaign-create form, and wallet packages on `/howitworks` and `/pricing` (optimized WebP, lazy loaded, explicit dimensions, captions).
 - CSP: validated enforced policy in draft PR #157 (Cloudflare Insights + reCAPTCHA style/font origins added after authenticated violation review; zero remaining violations across all required surfaces). Held as draft pending owner sign-off to merge and deploy.
 - Flagged gap: a published post with pending draft edits has no Publish action in the admin editor; getting edits live currently requires Unpublish then Publish (a public-availability gap). Recommend a follow-up fix.
+
+## Reconciliation - 2026-11-23 (verified against current main)
+
+Status of each numbered item checked against source and deployed evidence; categories are completed work, pending proposals, and acceptance gaps. Items not listed under completed remain open.
+
+### Completed work
+
+- **1. Manageable task discovery** - delivered: platform filter chips (`(dashboard)/tasks/page.tsx`, short-label chips intersected with `enabledPlatforms` config), initial batch of 6 with accumulating "Show more" (per-page cached requests), responsive card grid. Platform picker is no longer missing.
+- **2. Hide self-owned work and simplify acceptance** - delivered: `campaignsService.browseActive` excludes the viewer's own campaigns (`{ userId: { not: excludeUserId } }` with the platform-task exception) verified in source; the accept flow pre-opens a blank window on click (`window.open('', '_blank')`) so the target opens after assignment without popup blocking, with the accepted-task panel retained as fallback.
+- **3. Optional account linking for manual tasks** - delivered: `SocialAuthService.requiresLinkedAccount` returns true only for `autoVerify && API_VERIFIED_TASK_TYPES` - manual-proof tasks across all platforms no longer require a linked account; automated-verification requirements remain explicit.
+- **5. Discoverable Top up** - delivered: sidebar "Top up" entry (`dashboard-shell.tsx:420`) and a mobile balance-chip entry point; both route into the existing Wallet deposit flow.
+- **9. Supported-platform logos on landing** - delivered: "Supported platforms" section in `page.tsx` reusing `PlatformIcon` (line ~324-338).
+- **Flagged gap closed** - "Publish changes" on published posts with pending draft edits shipped in PR #160 (`8cd70ce`); CSP draft PR #157 merged and deployed (`65b18d0`); product screenshots replaced with privacy-safe v2 captures in PR #162 (`0227249`).
+
+### Pending proposals (require owner review before implementation)
+
+- **4. User-to-user credit marketplace** - no reviewed proposal exists. `docs/proposals/` contains only `1v1-p2p-challenges.md`. The existing `marketplace` module is a different feature (store-style listings, credits-only, 0% fee) and does not implement Jomar's buy-credits-from-users model. Proposal still owed: tradable asset, atomic purchase/transfer, fees, disputes.
+- **8. Paid Discover ads** - no reviewed proposal exists. Placement/pricing/moderation/impression-analytics lifecycle still owed. Not started.
+- **Deferred economics** - `docs/GAMIFICATION_AUDIT_AND_PROPOSAL.md` remains an unapproved proposal; reward economics stay disabled per standing instruction.
+
+### Acceptance gaps and open items
+
+- **6. Distinct and usable visual design** - partially delivered: earlier redesign shipped; Jomar's further refinement feedback is open. No new design pass has run in this batch series. Any new visual work needs the UI UX Pro Max search first and owner-visible before/after evidence.
+- **7. Fewer avoidable prerequisites** - partially addressed as a side effect of items 2 and 3 (self-owned campaigns hidden, manual-task linking requirement removed). A fresh-account signup-to-first-submission audit has not been recorded; remaining blocking prerequisites are unlisted.
+- **Authenticated acceptance** - the 2026-11-23 owner session covered the blog/admin flows only. Jomar-facing flows (discovery, accept-and-open, top-up entry) have not had an owner-assisted mobile-width acceptance pass on production.
+- **No new work performed in this reconciliation** - statuses above reflect source inspection on current main; nothing was implemented.
