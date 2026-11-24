@@ -720,13 +720,21 @@ test.describe('chat transfer recovery - lookup provenance across session changes
     const state = makeState();
     await mockChat(page, state);
 
-    // First lookup is held forever (the session dies before it answers);
-    // the post-login lookup answers committed directly.
+    // The first lookup dies with the logged-out session (held forever).
+    // The post-login lookup is ALSO held until the test releases it, so
+    // the visible-recovery assertions are deterministic rather than
+    // racing the auto-resolve.
     let lookupCalls = 0;
+    let releaseSecond: (() => void) | null = null;
     await page.route('**/api/channels/transfers/lookup/*', async (route) => {
       lookupCalls += 1;
       if (lookupCalls === 1) {
         await new Promise<void>(() => {}); // held - the page navigates away
+      }
+      if (lookupCalls === 2) {
+        await new Promise<void>((res) => {
+          releaseSecond = res;
+        });
       }
       return route.fulfill(
         json({ transfer: { key: pendingRain.key, action: 'rain', result: {}, createdAt: PAST } }),
@@ -743,8 +751,10 @@ test.describe('chat transfer recovery - lookup provenance across session changes
     // The durable recovery record survives the logout untouched.
     await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
 
-    // -> A again: same account, NEW session generation.
-    await page.evaluate(() => {
+    // -> A again: same account, NEW session generation. Re-seed twice -
+    // once now and once after a beat - so any persist write the /login
+    // boot makes cannot leave a half-cleared auth state behind.
+    const seed = () => {
       localStorage.setItem(
         'engganyo-auth',
         JSON.stringify({
@@ -770,12 +780,20 @@ test.describe('chat transfer recovery - lookup provenance across session changes
         }),
       );
       localStorage.setItem('access_token', 'e2e-mock-token-session-2');
-    });
+    };
+    await page.evaluate(seed);
+    await page.waitForTimeout(500);
+    await page.evaluate(seed);
 
-    // The same account's intent resurfaces and resolves via a lookup
-    // requested by the NEW session.
+    // The same account's intent resurfaces; its lookup stays held, so
+    // the banner is verifiably visible with the record unresolved.
     await openChannel(page);
     await expect(page.getByTestId('pending-transfers')).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() => lookupCalls).toBe(2);
+    await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), slotKey)).not.toBeNull();
+
+    // Release the new session's lookup: it resolves the record.
+    releaseSecond!();
     await expect(page.getByText(/already went through/)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('pending-transfers')).toHaveCount(0, { timeout: 20_000 });
     await expect
