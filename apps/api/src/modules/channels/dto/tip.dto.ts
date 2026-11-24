@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, Min, Max } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, Max, Length } from 'class-validator';
 import { IsCuid } from '../../../common/validators/is-cuid.validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -17,4 +17,15 @@ export class SendTipDto {
   @IsOptional()
   @IsCuid()
   messageId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Client-generated idempotency key (8-128 chars). Identical retries must reuse the same key; reusing it for a different request is rejected with 409.',
+    minLength: 8,
+    maxLength: 128,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(8, 128)
+  idempotencyKey?: string;
 }

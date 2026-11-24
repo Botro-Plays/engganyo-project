@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { IdempotencyKeyStore, messageScope, tipScope } from '@/lib/idempotency';
 import { connectChannelSocket, disconnectChannelSocket } from '@/lib/channel-socket';
 import { useCosmeticsMap } from '@/hooks/use-cosmetics-map';
 import { resolveCosmeticStyles } from '@/lib/cosmetics';
@@ -88,6 +89,9 @@ export default function ChatPage() {
   const [reportDescription, setReportDescription] = useState('');
   const [mobileShowList, setMobileShowList] = useState(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Retained across uncertain sends so retries replay one request identity.
+  const sendKeyStore = useRef(new IdempotencyKeyStore()).current;
+  const tipKeyStore = useRef(new IdempotencyKeyStore()).current;
 
   const addChatToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     const id = Math.random().toString(36).slice(2);
@@ -198,18 +202,24 @@ export default function ChatPage() {
 
   // ─── Send message mutation ────────────────────────────────
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ channelId, content }: { channelId: string; content: string }) => {
-      const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content });
+    mutationFn: async ({ channelId, content, idempotencyKey }: { channelId: string; content: string; idempotencyKey: string }) => {
+      const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', { channelId, content, idempotencyKey });
       return res.data.data;
     },
     onSuccess: (msg) => {
+      sendKeyStore.resolve('success');
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
       setInput('');
     },
-    onError: (err) => addChatToast(getApiErrorMessage(err), 'error'),
+    onError: (err) => {
+      // Uncertain outcome: keep the key so a manual or axios-level retry
+      // replays the same request identity instead of re-sending.
+      sendKeyStore.resolve('uncertain');
+      addChatToast(getApiErrorMessage(err), 'error');
+    },
   });
 
   // ─── Join channel mutation ────────────────────────────────
@@ -226,16 +236,20 @@ export default function ChatPage() {
 
   // ─── Send tip mutation ────────────────────────────────────
   const tipMutation = useMutation({
-    mutationFn: async (dto: { toUserId: string; amount: number; messageId?: string }) => {
+    mutationFn: async (dto: { toUserId: string; amount: number; messageId?: string; idempotencyKey: string }) => {
       const res = await apiClient.post<ApiResponse<unknown>>('channels/tips', dto);
       return res.data.data;
     },
     onSuccess: () => {
+      tipKeyStore.resolve('success');
       addChatToast('Tip sent successfully!', 'success');
       setTipModal(null);
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     },
-    onError: (err) => addChatToast(getApiErrorMessage(err), 'error'),
+    onError: (err) => {
+      tipKeyStore.resolve('uncertain');
+      addChatToast(getApiErrorMessage(err), 'error');
+    },
   });
 
   // ─── Report mutation ───────────────────────────────────────
@@ -264,12 +278,17 @@ export default function ChatPage() {
       addChatToast('Join the channel to send messages', 'error');
       return;
     }
-    sendMessageMutation.mutate({ channelId: activeChannelId, content: input.trim() });
+    const content = input.trim();
+    sendMessageMutation.mutate({
+      channelId: activeChannelId,
+      content,
+      idempotencyKey: sendKeyStore.keyFor(messageScope(activeChannelId, content)),
+    });
 
     // Emit typing stop
     const socket = connectChannelSocket(accessToken ?? '');
     socket.emit('chat:typing', { channelId: activeChannelId, isTyping: false });
-  }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addChatToast]);
+  }, [activeChannelId, input, activeChannel, sendMessageMutation, accessToken, addChatToast, sendKeyStore]);
 
   const handleInputChange = async (value: string) => {
     setInput(value);
@@ -668,6 +687,7 @@ export default function ChatPage() {
                     toUserId: tipModal.toUserId,
                     amount: tipAmount,
                     messageId: tipModal.messageId,
+                    idempotencyKey: tipKeyStore.keyFor(tipScope(tipModal.toUserId, tipAmount, tipModal.messageId)),
                   })
                 }
                 disabled={tipMutation.isPending || (user?.creditBalance ?? 0) < tipAmount}

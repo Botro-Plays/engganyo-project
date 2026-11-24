@@ -382,61 +382,61 @@ model User {
   referredBy User?  @relation("UserReferrals", fields: [referredById], references: [id])
   referrals  User[] @relation("UserReferrals")
 
-  profile                UserProfile?
-  wallet                 Wallet?
-  sessions               UserSession[]
-  emailVerifications     EmailVerification[]
-  passwordResets         PasswordReset[]
-  socialAccounts         SocialAccount[]
-  campaigns              Campaign[]
-  challenges             Challenge[]             @relation("ChallengeCreator")
-  challengeClaims        Challenge[]             @relation("ChallengeClaimant")
-  completions            TaskCompletion[]
-  notifications          Notification[]
-  reportsSubmitted       Report[]                @relation("ReportSubmitter")
-  reportsReceived        Report[]                @relation("ReportTarget")
-  userAchievements       UserAchievement[]
-  missionProgress        UserMissionProgress[]
-  chats                  ChatConversation[]      @relation("UserChats")
-  assignedChats          ChatConversation[]      @relation("AgentChats")
-  trustScore             TrustScore?
-  abuseFlags             AbuseFlag[]
-  ipRecords              IpRecord[]
-  auditLogs              AuditLog[]
-  referralsGiven         Referral[]              @relation("ReferralReferrer")
-  referralReceived       Referral?               @relation("ReferralReferee")
-  forumTopics            ForumTopic[]            @relation("ForumTopics")
-  forumReplies           ForumReply[]            @relation("ForumReplies")
-  forumReactions         ForumReaction[]         @relation("ForumReactions")
-  twoFactorCodes         TwoFactorCode[]
-  twoFactorBackupCodes   TwoFactorBackupCode[]
-  deposits               Deposit[]
-  channelMemberships     ChannelMember[]
-  channelMessages        ChannelMessage[]
-  channelMessageMentions ChannelMessageMention[]
-  createdChannels        Channel[]               @relation("ChannelCreator")
-  storePurchases         StorePurchase[]
-  inventory              UserInventory[]
+  profile                    UserProfile?
+  wallet                     Wallet?
+  sessions                   UserSession[]
+  emailVerifications         EmailVerification[]
+  passwordResets             PasswordReset[]
+  socialAccounts             SocialAccount[]
+  campaigns                  Campaign[]
+  challenges                 Challenge[]                 @relation("ChallengeCreator")
+  challengeClaims            Challenge[]                 @relation("ChallengeClaimant")
+  completions                TaskCompletion[]
+  notifications              Notification[]
+  reportsSubmitted           Report[]                    @relation("ReportSubmitter")
+  reportsReceived            Report[]                    @relation("ReportTarget")
+  userAchievements           UserAchievement[]
+  missionProgress            UserMissionProgress[]
+  chats                      ChatConversation[]          @relation("UserChats")
+  assignedChats              ChatConversation[]          @relation("AgentChats")
+  trustScore                 TrustScore?
+  abuseFlags                 AbuseFlag[]
+  ipRecords                  IpRecord[]
+  auditLogs                  AuditLog[]
+  referralsGiven             Referral[]                  @relation("ReferralReferrer")
+  referralReceived           Referral?                   @relation("ReferralReferee")
+  forumTopics                ForumTopic[]                @relation("ForumTopics")
+  forumReplies               ForumReply[]                @relation("ForumReplies")
+  forumReactions             ForumReaction[]             @relation("ForumReactions")
+  twoFactorCodes             TwoFactorCode[]
+  twoFactorBackupCodes       TwoFactorBackupCode[]
+  deposits                   Deposit[]
+  channelMemberships         ChannelMember[]
+  channelMessages            ChannelMessage[]
+  channelMessageMentions     ChannelMessageMention[]
+  createdChannels            Channel[]                   @relation("ChannelCreator")
+  storePurchases             StorePurchase[]
+  inventory                  UserInventory[]
   activityRewardEntitlements ActivityRewardEntitlement[]
-  activeEffects          UserActiveEffect[]
-  wheelSpins             WheelSpin[]
-  wheelSpinAttempts      WheelSpinAttempt[]
-  wheelDailyAllowances   WheelDailyAllowance[]
-  dailyRewardLogs        DailyRewardLog[]
-  roomsCreated           ChallengeRoom[]         @relation("RoomCreator")
-  roomsJoined            ChallengeRoom[]         @relation("RoomClaimer")
-  roomOffers             RoomOffer[]
-  roomSubmissions        RoomSubmission[]
-  p2pPointEvents         P2pPointEvent[]
-  roomDisputesOpened     RoomDispute[]           @relation("DisputeOpener")
-  roomParticipations     RoomParticipation[]
-  roomNudgesSent         RoomNudge[]             @relation("NudgeSender")
-  roomRatingsGiven       RoomRating[]            @relation("RatingGiver")
-  roomRatingsReceived    RoomRating[]            @relation("RatingReceiver")
-  friendshipsRequested   Friendship[]            @relation("FriendshipRequester")
-  friendshipsReceived    Friendship[]            @relation("FriendshipAddressee")
-  tourCompletions        TourCompletion[]
-  tourGenerations        TourGeneration[]
+  activeEffects              UserActiveEffect[]
+  wheelSpins                 WheelSpin[]
+  wheelSpinAttempts          WheelSpinAttempt[]
+  wheelDailyAllowances       WheelDailyAllowance[]
+  dailyRewardLogs            DailyRewardLog[]
+  roomsCreated               ChallengeRoom[]             @relation("RoomCreator")
+  roomsJoined                ChallengeRoom[]             @relation("RoomClaimer")
+  roomOffers                 RoomOffer[]
+  roomSubmissions            RoomSubmission[]
+  p2pPointEvents             P2pPointEvent[]
+  roomDisputesOpened         RoomDispute[]               @relation("DisputeOpener")
+  roomParticipations         RoomParticipation[]
+  roomNudgesSent             RoomNudge[]                 @relation("NudgeSender")
+  roomRatingsGiven           RoomRating[]                @relation("RatingGiver")
+  roomRatingsReceived        RoomRating[]                @relation("RatingReceiver")
+  friendshipsRequested       Friendship[]                @relation("FriendshipRequester")
+  friendshipsReceived        Friendship[]                @relation("FriendshipAddressee")
+  tourCompletions            TourCompletion[]
+  tourGenerations            TourGeneration[]
 
   @@index([email])
   @@index([username])
@@ -606,17 +606,17 @@ model SocialAccount {
 // onboarding tours. Server-persisted so progress follows the account
 // across devices; version bumps replay tours for everyone.
 model TourCompletion {
-  id        String                @id @default(cuid())
-  userId    String                @map("user_id")
-  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tourKey   String                @map("tour_key")
+  id        String               @id @default(cuid())
+  userId    String               @map("user_id")
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tourKey   String               @map("tour_key")
   version   Int
-  status    TourCompletionStatus  @default(COMPLETED)
+  status    TourCompletionStatus @default(COMPLETED)
   // In-progress step index - lets an interrupted tour resume where the
   // user left off instead of restarting. Terminal statuses ignore it.
-  stepIndex Int                   @default(0) @map("step_index")
-  createdAt DateTime              @default(now()) @map("created_at")
-  updatedAt DateTime              @updatedAt @map("updated_at")
+  stepIndex Int                  @default(0) @map("step_index")
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
 
   @@unique([userId, tourKey, version])
   @@index([userId])
@@ -1025,34 +1025,34 @@ model UserMissionProgress {
 // (xp/vp events, mission progress events, achievement unique row,
 // referral milestone map) - flags only track progress.
 model TaskCompletionOutcome {
-  id                  String    @id @default(cuid())
-  completionId        String    @unique @map("completion_id")
-  userId              String    @map("user_id")
-  status              String    @default("PENDING") // PENDING | DONE | FAILED | CANCELLED
-  xpSettled           Boolean   @default(false) @map("xp_settled")
-  vpSettled           Boolean   @default(false) @map("vp_settled")
-  missionSettled      Boolean   @default(false) @map("mission_settled")
-  achievementsSettled Boolean   @default(false) @map("achievements_settled")
-  referralSettled     Boolean   @default(false) @map("referral_settled")
-  activityRewardSettled Boolean @default(false) @map("activity_reward_settled")
-  attempts            Int       @default(0)
-  lastError           String?   @map("last_error")
+  id                    String    @id @default(cuid())
+  completionId          String    @unique @map("completion_id")
+  userId                String    @map("user_id")
+  status                String    @default("PENDING") // PENDING | DONE | FAILED | CANCELLED
+  xpSettled             Boolean   @default(false) @map("xp_settled")
+  vpSettled             Boolean   @default(false) @map("vp_settled")
+  missionSettled        Boolean   @default(false) @map("mission_settled")
+  achievementsSettled   Boolean   @default(false) @map("achievements_settled")
+  referralSettled       Boolean   @default(false) @map("referral_settled")
+  activityRewardSettled Boolean   @default(false) @map("activity_reward_settled")
+  attempts              Int       @default(0)
+  lastError             String?   @map("last_error")
   // Processing lease: a worker claims the outcome with a unique token
   // before touching effects. All outcome writes are conditional on the
   // token, so a stale worker can never overwrite DONE/CANCELLED or
   // acknowledge another worker's claim. A crashed worker's claim goes
   // stale after the lease TTL and becomes re-claimable.
-  claimedAt           DateTime? @map("claimed_at")
-  claimToken          String?   @map("claim_token")
+  claimedAt             DateTime? @map("claimed_at")
+  claimToken            String?   @map("claim_token")
   // Reward terms frozen at the qualifying VERIFIED event: eligible
   // mission IDs + requirement/credit/xp terms and the XP boost
   // multiplier observed at that instant. NULL = legacy/defensive row -
   // processing falls back to live configuration (documented policy for
   // outcomes recorded before this column existed).
-  rewardSnapshot      Json?     @map("reward_snapshot")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  processedAt         DateTime? @map("processed_at")
+  rewardSnapshot        Json?     @map("reward_snapshot")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  processedAt           DateTime? @map("processed_at")
 
   @@index([status, createdAt])
   @@map("task_completion_outcomes")
@@ -1130,7 +1130,7 @@ model MissionProgressEvent {
   userId     String   @map("user_id")
   missionId  String   @map("mission_id")
   sourceType String   @map("source_type") // MissionType value
-  sourceId   String   @map("source_id")   // e.g. task completion id
+  sourceId   String   @map("source_id") // e.g. task completion id
   date       DateTime @db.Date
   createdAt  DateTime @default(now()) @map("created_at")
 
@@ -1140,14 +1140,14 @@ model MissionProgressEvent {
 }
 
 model XpEvent {
-  id          String  @id @default(cuid())
-  userId      String  @map("user_id")
-  amount      Int // applied delta actually added to user.xp (post-boost)
-  baseAmount  Int?    @map("base_amount") // pre-boost amount
-  boostMultiplier Float? @map("boost_multiplier")
-  source      String // 'task_completion' | 'campaign_create' | 'achievement' | 'daily_login'
-  referenceId String? @map("reference_id")
-  description String?
+  id              String  @id @default(cuid())
+  userId          String  @map("user_id")
+  amount          Int // applied delta actually added to user.xp (post-boost)
+  baseAmount      Int?    @map("base_amount") // pre-boost amount
+  boostMultiplier Float?  @map("boost_multiplier")
+  source          String // 'task_completion' | 'campaign_create' | 'achievement' | 'daily_login'
+  referenceId     String? @map("reference_id")
+  description     String?
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1166,7 +1166,7 @@ model XpEvent {
 model RewardOutboxEvent {
   id               String    @id @default(cuid())
   userId           String    @map("user_id")
-  kind             String    // 'notification' | 'socket'
+  kind             String // 'notification' | 'socket'
   notificationType String?   @map("notification_type")
   title            String?
   body             String?
@@ -1192,9 +1192,9 @@ model RewardOutboxEvent {
 model RewardEntitlement {
   id               String    @id @default(cuid())
   userId           String    @map("user_id")
-  kind             String    // 'vp'
+  kind             String // 'vp'
   amount           Int?
-  source           String    // 'deposit_completed' | ...
+  source           String // 'deposit_completed' | ...
   referenceId      String    @map("reference_id")
   referenceType    String?   @map("reference_type")
   description      String?
@@ -1822,10 +1822,10 @@ model StoreItem {
   requiredVipTierLevel Int?          @map("required_vip_tier_level") // NULL = no requirement
   metadata             Json // item-specific data (boost duration, cosmetic URL, etc.)
 
-  purchases          StorePurchase[]
-  inventory          UserInventory[]
+  purchases                  StorePurchase[]
+  inventory                  UserInventory[]
   activityRewardEntitlements ActivityRewardEntitlement[]
-  marketplaceListings MarketplaceListing[]
+  marketplaceListings        MarketplaceListing[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1849,16 +1849,16 @@ enum InventoryProvenance {
 }
 
 model UserInventory {
-  id          String              @id @default(cuid())
-  userId      String              @map("user_id")
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId      String              @map("item_id")
-  item        StoreItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  quantity    Int                 @default(1)
-  provenance  InventoryProvenance @default(LEGACY)
-  consumedAt  DateTime?           @map("consumed_at") // for consumables like boosts
-  equipped    Boolean             @default(false) @map("equipped") // for cosmetics: whether this item is currently active
-  acquiredAt  DateTime            @default(now()) @map("acquired_at")
+  id         String              @id @default(cuid())
+  userId     String              @map("user_id")
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId     String              @map("item_id")
+  item       StoreItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity   Int                 @default(1)
+  provenance InventoryProvenance @default(LEGACY)
+  consumedAt DateTime?           @map("consumed_at") // for consumables like boosts
+  equipped   Boolean             @default(false) @map("equipped") // for cosmetics: whether this item is currently active
+  acquiredAt DateTime            @default(now()) @map("acquired_at")
 
   @@unique([userId, itemId, provenance])
   @@index([userId])
@@ -1870,17 +1870,17 @@ model UserInventory {
 // Written inside the same transaction as the mutation so a committed
 // inventory change always has its movement row (and vice versa).
 model InventoryMovement {
-  id            String              @id @default(cuid())
-  userId        String              @map("user_id")
-  itemId        String              @map("item_id")
-  inventoryId   String?             @map("inventory_id")
+  id            String               @id @default(cuid())
+  userId        String               @map("user_id")
+  itemId        String               @map("item_id")
+  inventoryId   String?              @map("inventory_id")
   delta         Int
-  quantityAfter Int?                @map("quantity_after")
+  quantityAfter Int?                 @map("quantity_after")
   reason        String // purchase | use | grant | loot_box | wheel | daily_reward | marketplace_list | marketplace_return | marketplace_receive | admin_adjust
-  refType       String?             @map("ref_type")
-  refId         String?             @map("ref_id")
+  refType       String?              @map("ref_type")
+  refId         String?              @map("ref_id")
   provenance    InventoryProvenance?
-  createdAt     DateTime            @default(now()) @map("created_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
   @@index([itemId])
@@ -1939,22 +1939,22 @@ enum MarketplaceListingStatus {
 }
 
 model MarketplaceListing {
-  id               String                    @id @default(cuid())
-  sellerId         String                    @map("seller_id")
-  itemId           String                    @map("item_id")
-  item             StoreItem                 @relation(fields: [itemId], references: [id])
-  inventoryId      String                    @map("inventory_id") // provenance stack the escrow came from
-  provenance       InventoryProvenance // stack class the escrowed units belong to (for correct returns)
-  itemSnapshot     Json                      @map("item_snapshot") // immutable name/category/description at list time
-  originalQuantity Int                       @map("original_quantity")
+  id                String                   @id @default(cuid())
+  sellerId          String                   @map("seller_id")
+  itemId            String                   @map("item_id")
+  item              StoreItem                @relation(fields: [itemId], references: [id])
+  inventoryId       String                   @map("inventory_id") // provenance stack the escrow came from
+  provenance        InventoryProvenance // stack class the escrowed units belong to (for correct returns)
+  itemSnapshot      Json                     @map("item_snapshot") // immutable name/category/description at list time
+  originalQuantity  Int                      @map("original_quantity")
   remainingQuantity Int                      @map("remaining_quantity")
-  unitPrice        Int                       @map("unit_price") // credits per unit
-  status           MarketplaceListingStatus  @default(ACTIVE)
-  expiresAt        DateTime                  @map("expires_at")
-  removedReason    String?                   @map("removed_reason")
-  createdAt        DateTime                  @default(now()) @map("created_at")
-  updatedAt        DateTime                  @updatedAt @map("updated_at")
-  closedAt         DateTime?                 @map("closed_at")
+  unitPrice         Int                      @map("unit_price") // credits per unit
+  status            MarketplaceListingStatus @default(ACTIVE)
+  expiresAt         DateTime                 @map("expires_at")
+  removedReason     String?                  @map("removed_reason")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  closedAt          DateTime?                @map("closed_at")
 
   orders MarketplaceOrder[]
 
@@ -1968,27 +1968,47 @@ model MarketplaceListing {
 // idempotency key - unique per buyer so retries/double-submits replay the
 // committed order instead of double-charging.
 model MarketplaceOrder {
-  id                   String   @id @default(cuid())
-  listingId            String   @map("listing_id")
-  listing              MarketplaceListing @relation(fields: [listingId], references: [id])
-  buyerId              String   @map("buyer_id")
-  sellerId             String   @map("seller_id")
-  itemId               String   @map("item_id")
-  quantity             Int
-  unitPrice            Int      @map("unit_price")
-  totalPrice           Int      @map("total_price")
-  feeAmount            Int      @default(0) @map("fee_amount") // 0% during internal test; permanent fee disabled
-  status               String   @default("COMPLETED") // COMPLETED | REFUNDED
-  purchaseKey          String   @map("purchase_key")
-  buyerTransactionId   String?  @map("buyer_transaction_id")
-  sellerTransactionId  String?  @map("seller_transaction_id")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                  String             @id @default(cuid())
+  listingId           String             @map("listing_id")
+  listing             MarketplaceListing @relation(fields: [listingId], references: [id])
+  buyerId             String             @map("buyer_id")
+  sellerId            String             @map("seller_id")
+  itemId              String             @map("item_id")
+  quantity            Int
+  unitPrice           Int                @map("unit_price")
+  totalPrice          Int                @map("total_price")
+  feeAmount           Int                @default(0) @map("fee_amount") // 0% during internal test; permanent fee disabled
+  status              String             @default("COMPLETED") // COMPLETED | REFUNDED
+  purchaseKey         String             @map("purchase_key")
+  buyerTransactionId  String?            @map("buyer_transaction_id")
+  sellerTransactionId String?            @map("seller_transaction_id")
+  createdAt           DateTime           @default(now()) @map("created_at")
 
   @@unique([buyerId, purchaseKey])
   @@index([listingId])
   @@index([sellerId, createdAt])
   @@index([buyerId, createdAt])
   @@map("marketplace_orders")
+}
+
+// One row per committed chat credit transfer. A client-supplied key is
+// unique per sender so a retried tip/rain request replays the committed
+// result instead of settling twice. params_hash binds the key to the
+// canonical request (conflicting reuse is rejected with 409); result
+// stores enough of the committed outcome to replay the response,
+// including the persisted rain recipient allocation.
+model ChatRequestKey {
+  id         String   @id @default(cuid())
+  senderId   String   @map("sender_id")
+  key        String
+  action     String // 'tip' | 'rain'
+  paramsHash String   @map("params_hash")
+  result     Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([senderId, key])
+  @@index([senderId, createdAt])
+  @@map("chat_request_keys")
 }
 
 // =============================================================
@@ -2420,7 +2440,7 @@ model BlogPost {
 // its post was imported, so a crashed seed resumes the remaining slugs
 // while an intentionally deleted post is never resurrected.
 model BlogSeedMarker {
-  slug      String   @id
+  slug       String   @id
   importedAt DateTime @default(now()) @map("imported_at")
 
   @@map("blog_seed_markers")

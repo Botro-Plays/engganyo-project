@@ -79,7 +79,7 @@ export class ChannelsController {
   @UserRateLimit({ limit: 10, ttl: 60, scope: 'chat_message' })
   @ApiOperation({ summary: 'Send a message to a channel' })
   sendMessage(@CurrentUser() user: JwtPayload, @Body() dto: SendMessageDto) {
-    return this.channelsService.sendMessage(user.sub, dto.channelId, dto.content, user.role);
+    return this.channelsService.sendMessage(user.sub, dto.channelId, dto.content, user.role, dto.idempotencyKey);
   }
 
   @Delete('messages/:messageId')
@@ -106,7 +106,7 @@ export class ChannelsController {
   @UserRateLimit({ limit: 5, ttl: 60, scope: 'chat_tip' })
   @ApiOperation({ summary: 'Send credits tip to another user' })
   sendTip(@CurrentUser() user: JwtPayload, @Body() dto: SendTipDto) {
-    return this.channelsService.sendTip(user.sub, dto.toUserId, dto.amount, dto.messageId, user.role);
+    return this.channelsService.sendTip(user.sub, dto.toUserId, dto.amount, dto.messageId, user.role, dto.idempotencyKey);
   }
 
   @Get('users/search')
