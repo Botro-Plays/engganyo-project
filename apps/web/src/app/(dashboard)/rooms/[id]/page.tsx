@@ -14,7 +14,8 @@ import {
 import axios from 'axios';
 import { roomsApi, friendsApi, proofWindowOpen, type RoomState, type RoomOffer, type RoomSubmission, type RoomSummary, type RoomPreviewInfo } from '@/lib/rooms';
 import { apiClient, getApiErrorMessage, shouldRetryQuery } from '@/lib/api';
-import { IdempotencyKeyStore, messageScope } from '@/lib/idempotency';
+import { PendingTransferStore, messageScope, type PendingTransferIntent } from '@/lib/idempotency';
+import PendingTransfersBanner from '@/components/chat/pending-transfers-banner';
 import { connectChannelSocket } from '@/lib/channel-socket';
 import { useSocketContext } from '@/components/socket-provider';
 import { useAuthStore } from '@/store/auth.store';
@@ -430,8 +431,23 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
   const [input, setInput] = useState('');
   const [status, setStatus] = useState<ChatStatus>('connecting');
   const endRef = useRef<HTMLDivElement>(null);
-  // Retained across uncertain sends so retries replay one request identity.
-  const sendKeyStore = useRef(new IdempotencyKeyStore()).current;
+  // Persisted per-account pending intents for credit-moving sends
+  // (/rain). Survives reload/navigation so a lost response recovers
+  // instead of duplicating the transfer.
+  const transferStore = useRef(new PendingTransferStore()).current;
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransferIntent[]>([]);
+  const refreshPendingTransfers = useCallback(() => {
+    if (!user?.id) {
+      setPendingTransfers([]);
+      return;
+    }
+    setPendingTransfers(
+      transferStore.list(user.id).filter((i) => (i.params as { channelId?: string }).channelId === channelId),
+    );
+  }, [user?.id, transferStore, channelId]);
+  useEffect(() => {
+    refreshPendingTransfers();
+  }, [refreshPendingTransfers]);
   const onIncomingRef = useRef(onIncomingMessage);
   onIncomingRef.current = onIncomingMessage;
   const socketRef = useRef<ReturnType<typeof connectChannelSocket> | null>(null);
@@ -543,19 +559,36 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
   const send = async () => {
     const content = input.trim();
     if (!content) return;
+    // Only credit-moving sends (/rain) get a persisted intent; a plain
+    // message has nothing financial to recover.
+    const scope = content.startsWith('/rain ') && user?.id ? messageScope(channelId, content) : undefined;
+    const intent =
+      scope && user?.id
+        ? transferStore.intentFor(user.id, {
+            action: 'message',
+            scope,
+            params: { channelId, content },
+          })
+        : undefined;
     setInput('');
     try {
       const res = await apiClient.post<ApiResponse<ChatMessage>>('channels/messages', {
         channelId,
         content,
-        idempotencyKey: sendKeyStore.keyFor(messageScope(channelId, content)),
+        idempotencyKey: intent?.key,
       });
       mergeMessages([res.data.data]);
-      sendKeyStore.resolve('success');
-    } catch {
-      // Preserve the unsent draft so a failed send never loses text, and
-      // keep the key so the retry replays the same request identity.
-      sendKeyStore.resolve('uncertain');
+      if (scope && user?.id) transferStore.resolve(user.id, scope, 'committed');
+      refreshPendingTransfers();
+    } catch (err) {
+      // Preserve the unsent draft so a failed send never loses text. A
+      // definitive 4xx releases the intent; network/5xx keeps it pending
+      // for recovery instead of silently rotating the key.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (scope && user?.id) {
+        transferStore.resolve(user.id, scope, status && status < 500 ? 'rejected' : 'uncertain');
+      }
+      refreshPendingTransfers();
       setInput(content);
     }
   };
@@ -580,6 +613,23 @@ function RoomChat({ channelId, roomId, onIncomingMessage }: {
           )}
         </span>
       </div>
+      {user?.id && pendingTransfers.length > 0 && (
+        <PendingTransfersBanner
+          store={transferStore}
+          userId={user.id}
+          intents={pendingTransfers}
+          onChanged={refreshPendingTransfers}
+          addToast={(message, type) => {
+            if (type === 'error') console.warn('pending transfer resend failed:', message);
+          }}
+          onCommitted={(_intent, result) => {
+            const msg = result as ChatMessage | undefined;
+            if (msg && typeof msg.id === 'string') {
+              mergeMessages([msg]);
+            }
+          }}
+        />
+      )}
       <div className="flex-1 space-y-2 overflow-y-auto p-3" style={{ maxHeight: 380 }}>
         {messages.length === 0 && (
           <p className="py-8 text-center text-xs text-sc-dim">No messages yet - coordinate with your partner here.</p>

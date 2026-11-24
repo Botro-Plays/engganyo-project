@@ -575,11 +575,38 @@ export class ChannelsService implements OnModuleInit {
     return { eligible: true };
   }
 
+  /**
+   * Read-only recovery lookup: whether this sender's request key already
+   * committed a transfer. Lets a client holding a persisted intent
+   * distinguish "already settled" from "unconfirmed" without issuing a
+   * mutating replay - the financial state cannot change through this
+   * path. Returns null when nothing committed under the key.
+   */
+  async lookupTransfer(senderId: string, key: string) {
+    if (!key) return { transfer: null };
+    const record = await this.prisma.chatRequestKey.findUnique({
+      where: { senderId_key: { senderId, key } },
+      select: { key: true, action: true, result: true, createdAt: true },
+    });
+    if (!record) return { transfer: null };
+    return {
+      transfer: {
+        key: record.key,
+        action: record.action,
+        result: record.result,
+        createdAt: record.createdAt,
+      },
+    };
+  }
+
   async sendTip(fromUserId: string, toUserId: string, amount: number, messageId?: string, role?: UserRole, idempotencyKey?: string) {
     // Idempotent replay short-circuit: a key that already committed for
     // the same canonical request returns the stored result without
     // consuming rate-limit or tip-window budget a second time.
-    const paramsHash = idempotencyKey
+    // CHAT_TRANSFER_REQUIRE_KEY=true ends the keyless compatibility
+    // window: keyed and legacy callers share this validation, so a
+    // missing key becomes a 400 instead of a non-idempotent transfer.
+    const paramsHash = idempotencyKey || process.env.CHAT_TRANSFER_REQUIRE_KEY === 'true'
       ? (assertValidRequestKey(idempotencyKey), hashTransferParams('tip', { toUserId, amount, messageId }))
       : null;
     if (idempotencyKey && paramsHash) {
@@ -788,7 +815,10 @@ export class ChannelsService implements OnModuleInit {
     // Idempotent replay short-circuit. Runs BEFORE the rain rate limit:
     // a retry of a committed rain replays the persisted allocation and
     // announcement instead of being rejected by the 1-per-5min limit.
-    const paramsHash = idempotencyKey
+    // CHAT_TRANSFER_REQUIRE_KEY=true ends the keyless compatibility
+    // window: keyed and legacy callers share this validation, so a
+    // missing key becomes a 400 instead of a non-idempotent transfer.
+    const paramsHash = idempotencyKey || process.env.CHAT_TRANSFER_REQUIRE_KEY === 'true'
       ? (assertValidRequestKey(idempotencyKey), hashTransferParams('rain', { channelId, total, count }))
       : null;
     if (idempotencyKey && paramsHash) {

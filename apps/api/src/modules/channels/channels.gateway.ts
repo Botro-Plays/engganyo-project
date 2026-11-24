@@ -120,7 +120,7 @@ export class ChannelsGateway
   @SubscribeMessage('chat:send')
   async handleSend(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { channelId: string; content: string },
+    @MessageBody() payload: { channelId: string; content: string; idempotencyKey?: string },
   ) {
     const userId = client.data.userId as string;
     const role = client.data.role as string | undefined;
@@ -128,8 +128,16 @@ export class ChannelsGateway
 
     try {
       // sendMessage() emits channel.message.created, which this gateway
-      // broadcasts below - covers REST and socket sends uniformly.
-      await this.channelsService.sendMessage(userId, payload.channelId, payload.content, role as UserRole);
+      // broadcasts below - covers REST and socket sends uniformly. The
+      // optional idempotencyKey carries the same sender-scoped replay
+      // contract as the REST path (tips and /rain transfers).
+      await this.channelsService.sendMessage(
+        userId,
+        payload.channelId,
+        payload.content,
+        role as UserRole,
+        payload.idempotencyKey,
+      );
     } catch (err) {
       client.emit('chat:error', { message: (err as Error).message });
     }
