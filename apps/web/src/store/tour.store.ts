@@ -184,6 +184,44 @@ function writeUserTour(state: PersistedTourState): void {
   }
 }
 
+// ─── Same-session live marker ────────────────────────────────
+// sessionStorage survives a reload but dies with the tab session, so
+// it distinguishes "refresh while the tour was on-screen" (auto-resume
+// in place) from "later login" (nonblocking Continue card). Cleared on
+// terminal states and on every account/session change.
+const livePrefix = 'engganyo-tour-live-';
+const liveKey = (userId: string) => `${livePrefix}${userId}`;
+
+function liveTourStep(userId: string): number | null {
+  try {
+    const raw = sessionStorage.getItem(liveKey(userId));
+    const n = raw === null ? null : Number(raw);
+    return n !== null && Number.isInteger(n) && n >= 0 && n <= TOUR_STEPS.length ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLiveTour(userId: string, step: number | null): void {
+  try {
+    if (step === null) sessionStorage.removeItem(liveKey(userId));
+    else sessionStorage.setItem(liveKey(userId), String(step));
+  } catch {
+    /* sessionStorage unavailable: a refresh falls back to the card */
+  }
+}
+
+function clearLiveTours(): void {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith(livePrefix)) sessionStorage.removeItem(k);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 // ─── Pending write queue (per user, durable) ──────────────────
 // Every server write goes through this FIFO queue so ordering is
 // preserved (a replay reset always lands before the new replay's
@@ -312,6 +350,10 @@ interface ServerBeginnerTerminal {
 
 interface ServerTourState {
   autoTours?: boolean;
+  /** Server-computed new-user flag: absent history only auto-starts the
+   *  beginner tour while this is true. Missing (older API) counts as
+   *  eligible so a mixed deploy keeps legacy behavior. */
+  beginnerEligible?: boolean;
   beginner?: ServerBeginner | null;
   beginnerTerminal?: ServerBeginnerTerminal | null;
   completions?: { tourKey: string; version: number; status: string; step: number; updatedAt?: string }[];
@@ -322,8 +364,8 @@ interface ServerTourState {
 interface DerivedBeginner {
   status: TourStatus;
   step: number;
-  /** Set when an IN_PROGRESS tour is paused because automatic tours are
-   *  off - preserved so re-enabling resumes instead of restarting. */
+  /** Saved step of an unfinished tour - drives the nonblocking
+   *  "Continue tour" offer instead of an automatic modal resume. */
   pausedStep: number | null;
 }
 
@@ -339,14 +381,15 @@ function effectiveBeginner(
   return null;
 }
 
-function deriveBeginner(server: ServerBeginner | null, autoTours: boolean): DerivedBeginner {
+function deriveBeginner(server: ServerBeginner | null): DerivedBeginner {
   if (!server) return { status: 'idle', step: 0, pausedStep: null };
   if (server.status === 'COMPLETED') return { status: 'completed', step: server.step, pausedStep: null };
   if (server.status === 'DISMISSED') return { status: 'skipped', step: server.step, pausedStep: null };
-  // IN_PROGRESS: resume automatically only while automatic tours are on.
-  return autoTours
-    ? { status: 'active', step: server.step, pausedStep: null }
-    : { status: 'idle', step: 0, pausedStep: server.step };
+  // IN_PROGRESS never auto-opens the modal from a hydrate: an
+  // unfinished tour offers a nonblocking "Continue tour" card on the
+  // next login instead of force-opening on every login until a
+  // terminal write lands (the repeated-tour bug).
+  return { status: 'idle', step: 0, pausedStep: server.step };
 }
 
 /** Map legacy localStorage state to the server row shape for one-time
@@ -373,6 +416,9 @@ interface TourState {
   hydrated: boolean;
   /** Server automatic-tours preference (default true; gated by hydrated). */
   autoTours: boolean;
+  /** Server-computed new-user flag - the automatic beginner tour may
+   *  only start for accounts inside the new-user window. */
+  beginnerEligible: boolean;
   /** A preference PATCH is in flight - toggles are serialized through it. */
   autoToursSaving: boolean;
   /** The last preference save failed - surface Retry for `autoToursFailed`. */
@@ -387,7 +433,8 @@ interface TourState {
   unsyncedWrites: boolean;
   /** Raw server beginner row mirrored on every local transition - *  lets the auto-tours toggle re-derive pause/resume correctly. */
   serverBeginner: ServerBeginner | null;
-  /** Preserved step while automatic tours are off (IN_PROGRESS paused). */
+  /** Saved step of an unfinished tour - never auto-resumed as a modal;
+   *  the nonblocking Continue card offers resume/dismiss instead. */
   pausedStep: number | null;
   /** True once the user has acted on the tour this session - a late
    *  hydrate response must not clobber live local progress. */
@@ -421,6 +468,10 @@ interface TourState {
   /** Milestone terminal write - queued durably on failure. */
   recordMilestoneTerminal: (key: string, version: number, action: 'complete' | 'dismiss') => Promise<boolean>;
   startTour: () => void;
+  /** Resume an unfinished tour at its saved step (the Continue card). */
+  resumeTour: () => void;
+  /** Permanently dismiss an unfinished tour from the Continue card. */
+  dismissPausedTour: () => void;
   /** Advances only if the tour is active and still on `expectedStep` (exactly-once guard). */
   nextStep: (expectedStep: number) => void;
   /** Moves back only if the tour is active and still on `expectedStep` (exactly-once guard). */
@@ -1007,9 +1058,9 @@ export const useTourStore = create<TourState>()((set, get) => {
 
   /** Re-derive beginner display state from the mirrored server row - *  used when the automatic-tours preference flips. */
   const rederiveBeginner = () => {
-    const { serverBeginner, autoTours } = get();
+    const { serverBeginner } = get();
     if (!serverBeginner) return;
-    const d = deriveBeginner(serverBeginner, autoTours);
+    const d = deriveBeginner(serverBeginner);
     set({ status: d.status, step: d.step, pausedStep: d.pausedStep });
   };
 
@@ -1067,21 +1118,26 @@ export const useTourStore = create<TourState>()((set, get) => {
           }
         }
 
-        const derived = deriveBeginner(effective, autoTours);
+        const derived = deriveBeginner(effective);
         // If the user already acted this session (start/step/skip/replay),
         // their live state wins over the just-fetched snapshot - the
         // writes they triggered will reconcile server-side.
         const wasDirty = get().localDirty;
+        // Same-tab reload while the tour was on-screen: resume in place.
+        // A later login has no session marker and gets the card instead.
+        const resumed =
+          !wasDirty && effective?.status === 'IN_PROGRESS' && liveTourStep(userId) !== null;
         clearRetry();
         set({
           userId,
           hydrated: true,
           syncFailed: false,
           autoTours,
+          beginnerEligible: data.beginnerEligible !== false,
           serverBeginner: wasDirty ? get().serverBeginner : effective,
-          status: wasDirty ? get().status : derived.status,
-          step: wasDirty ? get().step : derived.step,
-          pausedStep: wasDirty ? get().pausedStep : derived.pausedStep,
+          status: wasDirty ? get().status : resumed ? 'active' : derived.status,
+          step: wasDirty ? get().step : resumed ? effective!.step : derived.step,
+          pausedStep: wasDirty ? get().pausedStep : resumed ? null : derived.pausedStep,
         });
         writePrefMarker(userId, autoTours);
         // Retry any writes that failed earlier - the queue is FIFO and
@@ -1117,6 +1173,7 @@ export const useTourStore = create<TourState>()((set, get) => {
             : null;
     set({ status, step, pausedStep: null, serverBeginner: mirror, localDirty: true });
     writeUserTour({ version: 2, userId, status, step });
+    writeLiveTour(userId, status === 'active' ? step : null);
   };
 
   /** Serialized preference save. Overlapping toggles chain so the last
@@ -1251,6 +1308,7 @@ export const useTourStore = create<TourState>()((set, get) => {
     step: 0,
     hydrated: false,
     autoTours: true,
+    beginnerEligible: false,
     autoToursSaving: false,
     autoToursError: false,
     autoToursFailed: null,
@@ -1277,6 +1335,7 @@ export const useTourStore = create<TourState>()((set, get) => {
       // Generations are per-account - a different user's map must not leak.
       sessionEpoch += 1;
       keyGens.clear();
+      clearLiveTours();
       cancelPendingProgress();
       clearRetry();
       if (flushTimer) {
@@ -1290,6 +1349,7 @@ export const useTourStore = create<TourState>()((set, get) => {
         hydrated: false,
         syncFailed: false,
         autoTours: true,
+        beginnerEligible: false,
         autoToursSaving: false,
         autoToursError: false,
         autoToursFailed: null,
@@ -1376,6 +1436,27 @@ export const useTourStore = create<TourState>()((set, get) => {
       scheduleProgress(0);
     },
 
+    resumeTour: () => {
+      const { userId, status, pausedStep } = get();
+      if (!userId || status !== 'idle' || pausedStep === null) return;
+      // The server row already holds this step - no write needed, just
+      // re-enter the tour where it left off.
+      commit('active', Math.max(0, Math.min(pausedStep, TOUR_STEPS.length - 1)));
+    },
+
+    dismissPausedTour: () => {
+      const { userId, status, pausedStep } = get();
+      if (!userId || status !== 'idle' || pausedStep === null) return;
+      commit('skipped', pausedStep);
+      enqueueOp(userId, {
+        op: 'dismiss',
+        key: BEGINNER_TOUR_KEY,
+        version: BEGINNER_TOUR_VERSION,
+        epoch: sessionEpoch,
+        ts: Date.now(),
+      });
+    },
+
     nextStep: (expectedStep) => {
       const { status, step, userId } = get();
       if (status !== 'active' || step !== expectedStep || !userId) return;
@@ -1459,7 +1540,7 @@ if (typeof window !== 'undefined') {
       // Re-derive pause/resume for an in-progress beginner tour.
       const sb = useTourStore.getState().serverBeginner;
       if (sb) {
-        const d = deriveBeginner(sb, p.autoTours);
+        const d = deriveBeginner(sb);
         useTourStore.setState({ status: d.status, step: d.step, pausedStep: d.pausedStep });
       }
     } catch {

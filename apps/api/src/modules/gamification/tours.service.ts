@@ -60,6 +60,12 @@ export const BEGINNER_TOUR_KEY = 'beginner';
 export const BEGINNER_TOUR_VERSION = 2;
 const BEGINNER_TOUR_MAX_STEP = 50;
 
+/** Accounts younger than this are "new" for the beginner tour. Older
+ *  accounts with no tour history are returning users - missing rows
+ *  must never establish newness (the repeated-tour bug). Configurable
+ *  via platformConfig `beginner_tour_new_user_days`. */
+export const BEGINNER_TOUR_NEW_USER_DAYS_DEFAULT = 14;
+
 export const MILESTONE_TOURS: MilestoneTour[] = [
   {
     key: 'feature-inventory',
@@ -184,6 +190,19 @@ export class ToursService {
       : MILESTONE_TOUR_INTERVAL_DEFAULT;
   }
 
+  /** New-user window (days) for the beginner tour - configurable via
+   *  platformConfig `beginner_tour_new_user_days`. */
+  private async getBeginnerNewUserDays(): Promise<number> {
+    const row = await this.prisma.platformConfig.findUnique({
+      where: { key: 'beginner_tour_new_user_days' },
+      select: { value: true },
+    });
+    const v = row?.value;
+    return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 3650
+      ? v
+      : BEGINNER_TOUR_NEW_USER_DAYS_DEFAULT;
+  }
+
   private serialize(tour: MilestoneTour, interval: number, resumeStep?: number): DueTour {
     return {
       key: tour.key,
@@ -214,8 +233,11 @@ export class ToursService {
    *  recorded (tour, version) row. Clients treat localStorage only as
    *  a cache and migrate local-only beginner state up once. */
   async getState(userId: string) {
-    const [user, rows, gens] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: userId }, select: { autoToursEnabled: true } }),
+    const [user, rows, gens, newUserDays] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { autoToursEnabled: true, createdAt: true },
+      }),
       this.prisma.tourCompletion.findMany({
         where: { userId },
         select: { tourKey: true, version: true, status: true, stepIndex: true, updatedAt: true },
@@ -224,6 +246,7 @@ export class ToursService {
         where: { userId },
         select: { tourKey: true, generation: true, lastResetId: true },
       }),
+      this.getBeginnerNewUserDays(),
     ]);
     if (!user) throw new NotFoundException('User not found');
     const beginnerRows = rows.filter((r) => r.tourKey === BEGINNER_TOUR_KEY);
@@ -237,6 +260,11 @@ export class ToursService {
         .sort((a, b) => b.version - a.version)[0] ?? null;
     return {
       autoTours: user.autoToursEnabled,
+      // Explicit new-user eligibility: only accounts inside the
+      // new-user window may auto-start the beginner tour. A returning
+      // user with no tour rows is NOT new - clients must not auto-show.
+      beginnerEligible:
+        Date.now() - user.createdAt.getTime() <= newUserDays * 86_400_000,
       beginner: beginner ? { status: beginner.status, step: beginner.stepIndex } : null,
       beginnerTerminal: beginnerTerminal
         ? { status: beginnerTerminal.status as 'COMPLETED' | 'DISMISSED', version: beginnerTerminal.version }

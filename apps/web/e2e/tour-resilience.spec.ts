@@ -40,6 +40,7 @@ const apiOk = <T,>(data: T) => fulfill(200, { success: true, data, timestamp: ne
 
 const tourDialog = (page: Page) => page.getByRole('dialog').filter({ hasText: /Step \d+ of 10/ });
 const milestoneCard = (page: Page) => page.locator('[data-milestone-tour]');
+const continueCard = (page: Page) => page.locator('[data-continue-tour]');
 
 function jwtExp(token: string): number {
   try {
@@ -93,7 +94,10 @@ test.describe('optional tour failure isolation', () => {
     await page.route('**/api/auth/refresh', (r) => r.fulfill(fulfill(401, { message: 'expired' })));
 
     await page.reload();
-    // Resumed IN_PROGRESS tour appears - proves hydration + resume worked.
+    // An unfinished tour offers a nonblocking Continue card on a later
+    // login - never a forced modal. Continuing resumes at the saved step.
+    await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
     await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
 
     // Advance → progress POST 401 → refresh 401 → optionalAuth must swallow it.

@@ -31,6 +31,7 @@ const apiOk = <T,>(data: T) => fulfill(200, { success: true, data, timestamp: ne
 
 const tourDialog = (page: Page) => page.getByRole('dialog').filter({ hasText: /Step \d+ of 10/ });
 const milestoneCard = (page: Page) => page.locator('[data-milestone-tour]');
+const continueCard = (page: Page) => page.locator('[data-continue-tour]');
 
 const BEGINNER_STATE = { autoTours: true, beginner: { status: 'IN_PROGRESS', step: 0 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } };
 const BEGINNER_DONE = { autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } };
@@ -113,6 +114,7 @@ test.describe('tour state hardening', () => {
     // B has autoTours=false and no beginner row: no automatic tour may
     // appear, and B's effective preference must remain off.
     await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toHaveCount(0);
     await expect(milestoneCard(page)).toHaveCount(0);
     const autoTours = await page.evaluate(() => {
       const raw = localStorage.getItem('engganyo-tour-pref-sync');
@@ -140,6 +142,9 @@ test.describe('tour state hardening', () => {
     await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
 
     await page.reload();
+    // IN_PROGRESS surfaces the Continue card, not a forced modal.
+    await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
     await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
 
     // Skip → terminal write fails once → must be retained in the queue.
@@ -449,6 +454,8 @@ test.describe('tour state hardening', () => {
     await page.route('**/api/gamification/tours/pending', (r) => r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })));
 
     await page.reload();
+    await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
     await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
     await tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first().click();
     await page.waitForTimeout(1500);
@@ -616,6 +623,7 @@ test.describe('tour state hardening', () => {
     releaseA!();
     await page.waitForTimeout(2000);
     await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toHaveCount(0);
   });
 
   test('two tabs share one drain - no double send, no lost writes', async ({ page, context }) => {
@@ -648,9 +656,12 @@ test.describe('tour state hardening', () => {
     await page.reload();
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
 
-    // Tab 1: Skip → dismiss op enqueued, drain acquires the lock and its
-    // request stays in flight (the old 15s stale lock would be stealable
-    // under a request like this; Web Locks hold until it finishes).
+    // Tab 1: Continue → Skip → dismiss op enqueued, drain acquires the
+    // lock and its request stays in flight (the old 15s stale lock would
+    // be stealable under a request like this; Web Locks hold until it
+    // finishes).
+    await expect(continueCard(page)).toBeVisible({ timeout: 15_000 });
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
     const skip = tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first();
     await expect(skip).toBeVisible({ timeout: 15_000 });
     await skip.click();
@@ -736,6 +747,8 @@ test.describe('tour state hardening', () => {
     await page.waitForTimeout(3000); // drains run, all blocked → retained
 
     // One more real write - enqueue must surface overflow, not truncate.
+    await expect(continueCard(page)).toBeVisible({ timeout: 15_000 });
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
     const skip = tourDialog(page).getByRole('button', { name: /skip|later|dismiss/i }).first();
     await expect(skip).toBeVisible({ timeout: 15_000 });
     await skip.click();
@@ -1237,5 +1250,186 @@ test.describe('tour state hardening', () => {
     releaseB();
     await expect(replayBtn).toBeEnabled({ timeout: 15_000 });
     await expect(page.getByText(/haven't synced/i)).toHaveCount(0);
+  });
+
+  test('a returning user with no tour history is never treated as new', async ({ page }) => {
+    await settleOnDashboard(page);
+    // Server-computed eligibility: the account predates the new-user
+    // window, so absent rows must NOT auto-start the beginner tour.
+    // This is the reported repeated-tour bug shape: a returning user
+    // on a fresh browser has no rows and no legacy localStorage.
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: true,
+          beginnerEligible: false,
+          beginner: null,
+          beginnerTerminal: null,
+          completions: [],
+          generations: { beginner: 0 },
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    await page.reload();
+    await page.waitForTimeout(4000);
+    await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toHaveCount(0);
+
+    // Manual replay remains available from Settings.
+    await page.goto('/settings');
+    await expect(
+      page.locator('li', { hasText: 'Getting started tour' }).getByRole('button', { name: /^(Start|Replay)$/ }),
+    ).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('an unfinished tour offers a nonblocking Continue card instead of a forced modal', async ({ page }) => {
+    await settleOnDashboard(page);
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: true,
+          beginner: { status: 'IN_PROGRESS', step: 3 },
+          beginnerTerminal: null,
+          completions: [
+            { tourKey: 'beginner', version: 2, status: 'IN_PROGRESS', step: 3, updatedAt: new Date().toISOString() },
+          ],
+          generations: { beginner: 0 },
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+    await page.route('**/api/gamification/tours/beginner/progress', (r) =>
+      r.fulfill(apiOk({ recorded: true })),
+    );
+
+    await page.reload();
+    await page.waitForTimeout(2500);
+
+    // No forced modal on this login - a small card offers the resume.
+    await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toBeVisible();
+
+    // "Not now" hides it for the session; a later login offers again
+    // without ever forcing the modal open.
+    await continueCard(page).getByRole('button', { name: /not now/i }).click();
+    await expect(continueCard(page)).toHaveCount(0);
+    await page.reload();
+    await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
+
+    // Continue resumes at the saved step (server step 3 -> step 4 of 10).
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
+    await expect(tourDialog(page)).toContainText('Step 4 of 10', { timeout: 20_000 });
+  });
+
+  test('a same-tab refresh mid-tour resumes in place - no card, no step loss', async ({ page }) => {
+    await settleOnDashboard(page);
+    let serverStep = 0;
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: true,
+          beginner: { status: 'IN_PROGRESS', step: serverStep },
+          beginnerTerminal: null,
+          completions: [
+            { tourKey: 'beginner', version: 2, status: 'IN_PROGRESS', step: serverStep, updatedAt: new Date().toISOString() },
+          ],
+          generations: { beginner: 0 },
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/beginner/progress', (r) => {
+      const body = r.request().postDataJSON() as { step?: number } | null;
+      serverStep = body?.step ?? serverStep;
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    await page.reload();
+    await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
+    await continueCard(page).getByRole('button', { name: /continue tour/i }).click();
+    await expect(tourDialog(page)).toContainText('Step 1 of 10', { timeout: 20_000 });
+    await tourDialog(page).getByRole('button', { name: 'Next' }).click();
+    await expect(tourDialog(page)).toContainText('Step 2 of 10', { timeout: 20_000 });
+    await expect.poll(() => serverStep, { timeout: 10_000 }).toBe(1); // debounced progress write lands
+
+    // A refresh inside the same browser session resumes the modal
+    // directly - the Continue card is for later logins only.
+    await page.reload();
+    await expect(continueCard(page)).toHaveCount(0);
+    await expect(tourDialog(page)).toContainText('Step 2 of 10', { timeout: 20_000 });
+  });
+
+  test('Skip tour on the card records a durable dismissal', async ({ page }) => {
+    await settleOnDashboard(page);
+    let dismissed = false;
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: true,
+          beginner: dismissed
+            ? { status: 'DISMISSED', step: 2 }
+            : { status: 'IN_PROGRESS', step: 2 },
+          beginnerTerminal: null,
+          completions: [
+            { tourKey: 'beginner', version: 2, status: dismissed ? 'DISMISSED' : 'IN_PROGRESS', step: 2, updatedAt: new Date().toISOString() },
+          ],
+          generations: { beginner: 0 },
+        }),
+      ),
+    );
+    let dismissCalls = 0;
+    await page.route('**/api/gamification/tours/beginner/dismiss', (r) => {
+      dismissCalls += 1;
+      dismissed = true;
+      return r.fulfill(apiOk({ recorded: true }));
+    });
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    await page.reload();
+    await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
+    await continueCard(page).getByRole('button', { name: /skip tour/i }).click();
+    await expect(continueCard(page)).toHaveCount(0);
+    await page.waitForTimeout(1500);
+    expect(dismissCalls).toBeGreaterThanOrEqual(1);
+
+    // Next login: DISMISSED is terminal - nothing offers itself again.
+    await page.reload();
+    await page.waitForTimeout(3000);
+    await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toHaveCount(0);
+  });
+
+  test('automatic tours disabled suppresses both modal and Continue card', async ({ page }) => {
+    await settleOnDashboard(page);
+    await page.route('**/api/gamification/tours/state', (r) =>
+      r.fulfill(
+        apiOk({
+          autoTours: false,
+          beginner: { status: 'IN_PROGRESS', step: 2 },
+          beginnerTerminal: null,
+          completions: [],
+          generations: { beginner: 0 },
+        }),
+      ),
+    );
+    await page.route('**/api/gamification/tours/pending', (r) =>
+      r.fulfill(apiOk({ interval: 5, version: 1, tours: [] })),
+    );
+
+    await page.reload();
+    await page.waitForTimeout(3000);
+    await expect(tourDialog(page)).toHaveCount(0);
+    await expect(continueCard(page)).toHaveCount(0);
   });
 });
