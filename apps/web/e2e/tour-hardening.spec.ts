@@ -36,9 +36,30 @@ const continueCard = (page: Page) => page.locator('[data-continue-tour]');
 const BEGINNER_STATE = { autoTours: true, beginner: { status: 'IN_PROGRESS', step: 0 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } };
 const BEGINNER_DONE = { autoTours: true, beginner: { status: 'COMPLETED', step: 10 }, beginnerTerminal: null, completions: [], generations: { beginner: 0 } };
 
+/** Drop every tour-related browser key. settleOnDashboard loads the app
+ *  with the REAL server state before each test registers its mocks, so
+ *  an eligible-user auto-start can fire and leave localStorage 'active'
+ *  plus the sessionStorage live marker behind - on the test's next
+ *  reload the migration path would derive a paused tour (Continue card)
+ *  instead of the state the test mocked. Clearing makes the reload
+ *  deterministic regardless of auto-start timing. */
+async function clearTourBrowserState(page: Page) {
+  await page.evaluate(() => {
+    for (const store of [localStorage, sessionStorage]) {
+      const keys: string[] = [];
+      for (let i = 0; i < store.length; i += 1) {
+        const k = store.key(i);
+        if (k?.startsWith('engganyo-tour')) keys.push(k);
+      }
+      keys.forEach((k) => store.removeItem(k));
+    }
+  });
+}
+
 async function settleOnDashboard(page: Page) {
   await page.goto('/dashboard');
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+  await clearTourBrowserState(page);
 }
 
 /** Simulate an account switch. The persisted auth blob carries no user -
@@ -1400,8 +1421,9 @@ test.describe('tour state hardening', () => {
     await expect(continueCard(page)).toBeVisible({ timeout: 20_000 });
     await continueCard(page).getByRole('button', { name: /skip tour/i }).click();
     await expect(continueCard(page)).toHaveCount(0);
-    await page.waitForTimeout(1500);
-    expect(dismissCalls).toBeGreaterThanOrEqual(1);
+    // The op drains on the serialized flush timer (>=400ms) behind the
+    // cross-tab queue lock - poll instead of racing a fixed sleep.
+    await expect.poll(() => dismissCalls, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
 
     // Next login: DISMISSED is terminal - nothing offers itself again.
     await page.reload();
