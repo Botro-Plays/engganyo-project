@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 
-const ADVANCE_MS = 7000; // gentle auto-advance, ~6-8s window
+const ADVANCE_MS = 5000; // auto-advance interval between cards (~5s)
 const EDGE_EPS = 8;
 
 const arrowButton =
@@ -159,27 +159,44 @@ export function BlogRail({ children, count }: { children: React.ReactNode; count
         {!single && nextButton('hidden sm:inline-flex')}
       </div>
       {!single && (
-        <div className="mt-3 flex items-center gap-2">
-          {prevButton('sm:hidden')}
-          <button
-            type="button"
-            onClick={togglePlay}
-            aria-label={playing ? 'Pause article rotation' : 'Play article rotation'}
-            aria-pressed={playing}
-            disabled={reducedMotion}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-surface-border bg-surface-card text-sc-text hover:border-brand-500/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40"
-          >
-            {playing ? (
-              <Pause className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <Play className="h-4 w-4" aria-hidden="true" />
+        <>
+          {/* Control area below the cards: the Play/Pause toggle is
+              horizontally centered on every width; on narrow screens the
+              Previous/Next arrows pin to the row edges so the centered
+              toggle never shifts. */}
+          <div className="relative mt-3 min-h-11">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 sm:hidden">
+              {prevButton('')}
+            </div>
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 sm:hidden">
+              {nextButton('')}
+            </div>
+            <button
+              type="button"
+              onClick={togglePlay}
+              aria-label={playing ? 'Pause article rotation' : 'Play article rotation'}
+              aria-pressed={playing}
+              disabled={reducedMotion}
+              className="absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-surface-border/60 bg-surface-card/40 text-sc-muted transition-colors hover:border-brand-500/70 hover:bg-surface-card/80 hover:text-accent-300 focus-visible:border-brand-500/70 focus-visible:text-accent-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40"
+            >
+              {playing ? (
+                <Pause className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Play className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+            {reducedMotion && (
+              <span className="absolute right-0 top-1/2 hidden -translate-y-1/2 text-xs text-sc-muted sm:block">
+                Auto-advance off (reduced motion)
+              </span>
             )}
-          </button>
-          {nextButton('sm:hidden')}
+          </div>
           {reducedMotion && (
-            <span className="text-xs text-sc-muted">Auto-advance off (reduced motion)</span>
+            <p className="mt-1 text-center text-xs text-sc-muted sm:hidden">
+              Auto-advance off (reduced motion)
+            </p>
           )}
-        </div>
+        </>
       )}
     </div>
   );
