@@ -1102,8 +1102,13 @@ export const useTourStore = create<TourState>()((set, get) => {
         // the server acknowledges the write, the mapped local state still
         // drives display (otherwise cached progress would look "new" and
         // the tour could restart at step 0).
+        const eligible = data.beginnerEligible !== false;
         let effective = effectiveBeginner(beginner, beginnerTerminal);
-        if (!beginner && !beginnerTerminal) {
+        // Local migration only runs for accounts inside the new-user
+        // window: pushing stale local history onto an ineligible
+        // returning account would manufacture the tour state the bug
+        // report is about.
+        if (!beginner && !beginnerTerminal && eligible) {
           const local = readUserTour(userId);
           const mapped = local ? localToServer(local) : null;
           if (mapped) {
@@ -1133,7 +1138,7 @@ export const useTourStore = create<TourState>()((set, get) => {
           hydrated: true,
           syncFailed: false,
           autoTours,
-          beginnerEligible: data.beginnerEligible !== false,
+          beginnerEligible: eligible,
           serverBeginner: wasDirty ? get().serverBeginner : effective,
           status: wasDirty ? get().status : resumed ? 'active' : derived.status,
           step: wasDirty ? get().step : resumed ? effective!.step : derived.step,

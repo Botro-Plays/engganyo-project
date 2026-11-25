@@ -29,8 +29,11 @@ async function prepare(page: Page, opts: { consent?: boolean } = {}) {
   await page.goto('/settings');
   await page.evaluate((withConsent) => {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith('engganyo-tour-v1-'))
+      .filter((k) => k.startsWith('engganyo-tour-'))
       .forEach((k) => localStorage.removeItem(k));
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith('engganyo-tour-'))
+      .forEach((k) => sessionStorage.removeItem(k));
     if (withConsent) localStorage.setItem('cookie-consent', 'all');
     else localStorage.removeItem('cookie-consent');
   }, consent);
@@ -363,13 +366,19 @@ test.describe('Onboarding tour', () => {
 
   test('step 9 hops through Settings to the Referrals tile, and Back returns to step 8', async ({ page }) => {
     // Seed the tour at step 9 (index 8) to exercise the two-hop step in isolation.
+    // The sessionStorage live marker marks this tab as mid-tour, so the
+    // goto below resumes in place instead of offering the Continue card.
     await prepare(page);
     const myId = await currentUserId(page);
     await page.evaluate(
-      ([k, v]) => localStorage.setItem(k, v),
+      ([k, v, lk]) => {
+        localStorage.setItem(k, v);
+        sessionStorage.setItem(lk, '8');
+      },
       [
         `engganyo-tour-v1-${myId}`,
         JSON.stringify({ version: 2, userId: myId, status: 'active', step: 8 }),
+        `engganyo-tour-live-${myId}`,
       ],
     );
 
@@ -396,10 +405,14 @@ test.describe('Onboarding tour', () => {
     await prepare(page);
     const myId = await currentUserId(page);
     await page.evaluate(
-      ([k, v]) => localStorage.setItem(k, v),
+      ([k, v, lk]) => {
+        localStorage.setItem(k, v);
+        sessionStorage.setItem(lk, '8');
+      },
       [
         `engganyo-tour-v1-${myId}`,
         JSON.stringify({ version: 2, userId: myId, status: 'active', step: 8 }),
+        `engganyo-tour-live-${myId}`,
       ],
     );
 
