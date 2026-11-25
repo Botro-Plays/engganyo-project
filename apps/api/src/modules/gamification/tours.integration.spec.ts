@@ -37,7 +37,7 @@ run('tour server state - real PostgreSQL', () => {
   let tours: ToursService;
   let seq = 0;
 
-  const mkUser = async (level = 1) => {
+  const mkUser = async (level = 1, createdAt?: Date) => {
     seq += 1;
     const tag = `${Date.now().toString(36)}_${seq}`;
     return prisma.user.create({
@@ -47,6 +47,7 @@ run('tour server state - real PostgreSQL', () => {
         passwordHash: 'x',
         referralCode: `${PREFIX}r${tag}`,
         level,
+        ...(createdAt ? { createdAt } : {}),
       },
     });
   };
@@ -191,6 +192,29 @@ run('tour server state - real PostgreSQL', () => {
     expect((await tours.getState(v.id)).autoTours).toBe(true);
     // History untouched - disabling automatic tours erases nothing.
     expect((await tours.getState(u.id)).beginner?.status).toBe('COMPLETED');
+  });
+
+  it('getState flags beginnerEligible only inside the new-user window', async () => {
+    const fresh = await mkUser();
+    const returning = await mkUser(1, new Date(Date.now() - 30 * 86_400_000));
+
+    expect((await tours.getState(fresh.id)).beginnerEligible).toBe(true);
+    expect((await tours.getState(returning.id)).beginnerEligible).toBe(false);
+  });
+
+  it('the new-user window is configurable via platformConfig', async () => {
+    const returning = await mkUser(1, new Date(Date.now() - 30 * 86_400_000));
+    await prisma.platformConfig.upsert({
+      where: { key: 'beginner_tour_new_user_days' },
+      create: { key: 'beginner_tour_new_user_days', value: 60 },
+      update: { value: 60 },
+    });
+    try {
+      expect((await tours.getState(returning.id)).beginnerEligible).toBe(true);
+    } finally {
+      await prisma.platformConfig.delete({ where: { key: 'beginner_tour_new_user_days' } });
+    }
+    expect((await tours.getState(returning.id)).beginnerEligible).toBe(false);
   });
 
   // ─── Validation + replay ────────────────────────────────────

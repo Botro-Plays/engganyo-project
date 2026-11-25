@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { useConsentResolved } from '@/hooks/use-cookie-consent-resolved';
 import { TOUR_STEPS, useTourStore, type TourStep } from '@/store/tour.store';
@@ -516,13 +516,17 @@ export function OnboardingTour() {
   const skipTour = useTourStore((s) => s.skipTour);
   const hydrated = useTourStore((s) => s.hydrated);
   const autoTours = useTourStore((s) => s.autoTours);
+  const beginnerEligible = useTourStore((s) => s.beginnerEligible);
   const pausedStep = useTourStore((s) => s.pausedStep);
+  const resumeTour = useTourStore((s) => s.resumeTour);
+  const dismissPausedTour = useTourStore((s) => s.dismissPausedTour);
   const consentOk = useConsentResolved();
 
   const [mounted, setMounted] = useState(false);
   const [ui, setUi] = useState<TargetState | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [showDone, setShowDone] = useState(false);
+  const [continueHidden, setContinueHidden] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<StepController | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -548,14 +552,31 @@ export function OnboardingTour() {
 
   // Auto-start only after the SERVER state has loaded (a failed lookup
   // shows nothing and retries later - we never assume the user is new),
-  // only while automatic tours are enabled, and never over a paused
-  // in-progress tour. Completed/skipped/dismissed state is server-side,
-  // so a new browser or cleared storage cannot restart the tour.
+  // only while automatic tours are enabled, only for accounts inside
+  // the server-computed new-user window (a returning user with no tour
+  // history is never treated as new), and never over a paused
+  // in-progress tour - that offers the Continue card instead.
+  // Completed/skipped/dismissed state is server-side, so a new browser
+  // or cleared storage cannot restart the tour.
   const synced = !!userId && tourUserId === userId && hydrated;
   useEffect(() => {
-    if (!synced || !autoTours || status !== 'idle' || pausedStep !== null || pathname !== TOUR_STEPS[0].requiredRoute) return;
+    if (
+      !synced ||
+      !autoTours ||
+      !beginnerEligible ||
+      status !== 'idle' ||
+      pausedStep !== null ||
+      pathname !== TOUR_STEPS[0].requiredRoute
+    ) {
+      return;
+    }
     return startWhenConsentResolved(startTour);
-  }, [synced, autoTours, status, pausedStep, pathname, startTour]);
+  }, [synced, autoTours, beginnerEligible, status, pausedStep, pathname, startTour]);
+
+  // A new paused step (or re-enabled preference) re-offers the card.
+  useEffect(() => {
+    setContinueHidden(false);
+  }, [pausedStep]);
 
   // Navigate steps: advance exactly once after the intended click reaches the expected route.
   useEffect(() => {
@@ -717,7 +738,87 @@ export function OnboardingTour() {
       )
     : null;
 
-  if (!shouldShow || !step || !ui) return doneToast;
+  // Unfinished tour on a later login: offer a nonblocking Continue
+  // card instead of force-opening the modal. "Not now" hides it for
+  // this session only; "Skip tour" records a durable dismissal.
+  const showContinue =
+    synced &&
+    consentOk &&
+    autoTours &&
+    status === 'idle' &&
+    pausedStep !== null &&
+    !continueHidden &&
+    !shouldShow;
+  const continueStep =
+    pausedStep !== null ? TOUR_STEPS[Math.max(0, Math.min(pausedStep, TOUR_STEPS.length - 1))] : null;
+  const handleContinue = () => {
+    if (pausedStep === null) return;
+    resumeTour();
+    if (continueStep && pathname !== continueStep.requiredRoute) {
+      router.push(continueStep.requiredRoute);
+    }
+  };
+  const continueCard = showContinue
+    ? createPortal(
+        <div
+          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[72] w-[calc(100vw-2rem)] max-w-md rounded-xl border border-brand-500/40 bg-[#121C38] p-4 shadow-2xl"
+          role="dialog"
+          data-continue-tour
+          aria-label="Continue your tour"
+        >
+          <div className="flex items-start gap-3">
+            <HelpCircle className="mt-0.5 h-5 w-5 shrink-0 text-accent-300" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-sc-text">Continue your tour?</p>
+              <p className="mt-1 text-sm text-sc-muted">
+                You left the intro tour unfinished. Pick up where you left off, any time.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleContinue}
+                  className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-sc-text hover:bg-brand-600 min-h-9"
+                >
+                  Continue tour
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContinueHidden(true)}
+                  className="rounded-lg border border-sc-border/40 px-3 py-1.5 text-xs text-sc-muted hover:text-sc-text min-h-9"
+                >
+                  Not now
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissPausedTour}
+                  className="rounded-lg px-3 py-1.5 text-xs text-sc-dim hover:text-sc-text min-h-9"
+                >
+                  Skip tour
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setContinueHidden(true)}
+              aria-label="Dismiss reminder"
+              className="rounded p-1 text-sc-dim hover:text-sc-text"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
+  if (!shouldShow || !step || !ui) {
+    return (
+      <>
+        {doneToast}
+        {continueCard}
+      </>
+    );
+  }
 
   const vw = typeof window === 'undefined' ? 0 : window.innerWidth;
   const vh = typeof window === 'undefined' ? 0 : window.innerHeight;
