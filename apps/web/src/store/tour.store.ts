@@ -1335,7 +1335,11 @@ export const useTourStore = create<TourState>()((set, get) => {
       // Generations are per-account - a different user's map must not leak.
       sessionEpoch += 1;
       keyGens.clear();
-      clearLiveTours();
+      // Clear the live-tour marker only on a real in-session identity change
+      // (user -> other user, or user -> logout). A fresh boot arrives here as
+      // null -> userId: same-tab reloads must keep the marker so an active
+      // tour resumes in place instead of surfacing the Continue card.
+      if (s.userId !== null) clearLiveTours();
       cancelPendingProgress();
       clearRetry();
       if (flushTimer) {
