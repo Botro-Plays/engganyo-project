@@ -45,14 +45,22 @@ const FIXTURE_POSTS: BlogPostSummary[] = [
   },
 ];
 
-export default function RailFixturePage() {
+export default function RailFixturePage({
+  searchParams,
+}: {
+  searchParams: { posts?: string };
+}) {
   if (!ENABLED) notFound();
+  // ?posts=N renders a subset so single-post and short rails can be
+  // exercised without extra fixture content.
+  const n = Math.max(1, Math.min(FIXTURE_POSTS.length, Number(searchParams.posts) || FIXTURE_POSTS.length));
+  const posts = FIXTURE_POSTS.slice(0, n);
   return (
     <main className="min-h-screen bg-sc text-sc-text px-4 sm:px-6 py-12">
       <div className="max-w-5xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">Blog rail fixture</h1>
-        <BlogRail count={FIXTURE_POSTS.length}>
-          {FIXTURE_POSTS.map((post) => (
+        <BlogRail count={posts.length}>
+          {posts.map((post) => (
             <BlogPostCard key={post.slug} post={post} />
           ))}
         </BlogRail>

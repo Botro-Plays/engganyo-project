@@ -51,6 +51,86 @@ test('controls step and wrap, hover/focus/manual pause', async ({ page }, testIn
   // Rail keeps vertical-page-scroll contract on touch devices.
   const touchAction = await rail.evaluate((el) => getComputedStyle(el).touchAction);
   expect(touchAction).toContain('pan-y');
+
+  // No visible scrollbar: engines report none and the scrollport gains
+  // no horizontal-scrollbar height.
+  const scrollbar = await rail.evaluate((el) => ({
+    width: getComputedStyle(el).scrollbarWidth,
+    heightDelta: (el as HTMLElement).offsetHeight - el.clientHeight,
+  }));
+  expect(scrollbar.heightDelta).toBe(0);
+  if (scrollbar.width !== 'auto' && scrollbar.width !== '') {
+    expect(scrollbar.width).toBe('none');
+  }
+});
+
+test('side arrows wrap at both ends (desktop)', async ({ page }) => {
+  const res = await page.goto('/rail-fixture');
+  test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
+  const rail = page.getByRole('list', { name: 'Published articles' });
+  const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
+  const maxScroll = () => rail.evaluate((el) => el.scrollWidth - el.clientWidth);
+
+  // At >=sm the side arrows are the accessible pair; the control-row
+  // arrows are display:none and never enter the a11y tree.
+  const next = page.getByRole('button', { name: 'Next article' });
+  const prev = page.getByRole('button', { name: 'Previous article' });
+  await expect(next).toHaveCount(1);
+  await expect(prev).toHaveCount(1);
+
+  // Pause autoplay so scroll assertions are deterministic.
+  await page.getByRole('button', { name: /article rotation/ }).click();
+
+  // Prev at the start wraps to the end; Next at the end wraps to start.
+  expect(await scrollLeft()).toBeLessThanOrEqual(8);
+  await prev.click();
+  await expect.poll(scrollLeft).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await scrollLeft()) >= (await maxScroll()) - 8)
+    .toBe(true);
+  await next.click();
+  await expect.poll(scrollLeft).toBeLessThanOrEqual(8);
+});
+
+test('mobile layout: arrows move to the control row, no page overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const res = await page.goto('/rail-fixture');
+  test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
+  const rail = page.getByRole('list', { name: 'Published articles' });
+  await expect(rail).toBeVisible();
+
+  // Exactly one accessible arrow pair (the control-row pair); the side
+  // pair is display:none on narrow screens.
+  const next = page.getByRole('button', { name: 'Next article' });
+  const prev = page.getByRole('button', { name: 'Previous article' });
+  await expect(next).toHaveCount(1);
+  await expect(prev).toHaveCount(1);
+  for (const b of [next, prev, page.getByRole('button', { name: /article rotation/ })]) {
+    const box = await b.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+  }
+
+  // Controls step the rail and never create horizontal page overflow.
+  await page.getByRole('button', { name: /article rotation/ }).click(); // pause autoplay for determinism
+  const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
+  const start = await scrollLeft();
+  await next.click();
+  await expect.poll(scrollLeft).toBeGreaterThan(start);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test('single-post rail: no controls, no overflow, article still linked', async ({ page }) => {
+  const res = await page.goto('/rail-fixture?posts=1');
+  test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
+  const rail = page.getByRole('list', { name: 'Published articles' });
+  await expect(rail).toBeVisible();
+  expect(await rail.locator('li').count()).toBe(1);
+  await expect(page.getByRole('button', { name: 'Next article' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Previous article' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /article rotation/ })).toHaveCount(0);
+  await expect(rail.getByRole('link', { name: /Read more/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
 test('autoplay advances roughly on interval and pauses on hover', async ({ page }) => {
