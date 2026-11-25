@@ -26,6 +26,16 @@ test('controls step and wrap, hover/focus/manual pause', async ({ page }, testIn
   await expect(next).toBeVisible();
   await expect(play).toHaveAttribute('aria-pressed', 'true');
 
+  // Play/Pause is horizontally centered in the control area below the
+  // cards (its absolutely-positioned row spans the rail width).
+  const playBox = await play.boundingBox();
+  const rowBox = await play.locator('xpath=..').boundingBox();
+  expect(playBox).not.toBeNull();
+  expect(rowBox).not.toBeNull();
+  const playCenter = playBox!.x + playBox!.width / 2;
+  const rowCenter = rowBox!.x + rowBox!.width / 2;
+  expect(Math.abs(playCenter - rowCenter)).toBeLessThanOrEqual(4);
+
   await page.screenshot({ path: testInfo.outputPath('rail-initial.png') });
 
   const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
@@ -92,7 +102,7 @@ test('side arrows wrap at both ends (desktop)', async ({ page }) => {
   await expect.poll(scrollLeft).toBeLessThanOrEqual(8);
 });
 
-test('mobile layout: arrows move to the control row, no page overflow', async ({ page }) => {
+test('mobile layout: arrows pin to control-row edges, no page overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const res = await page.goto('/rail-fixture');
   test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
@@ -103,16 +113,25 @@ test('mobile layout: arrows move to the control row, no page overflow', async ({
   // pair is display:none on narrow screens.
   const next = page.getByRole('button', { name: 'Next article' });
   const prev = page.getByRole('button', { name: 'Previous article' });
+  const play = page.getByRole('button', { name: /article rotation/ });
   await expect(next).toHaveCount(1);
   await expect(prev).toHaveCount(1);
-  for (const b of [next, prev, page.getByRole('button', { name: /article rotation/ })]) {
+  for (const b of [next, prev, play]) {
     const box = await b.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
     expect(box?.width).toBeGreaterThanOrEqual(44);
   }
 
+  // Arrows pin to the row edges; the toggle stays centered below cards.
+  const prevBox = await prev.boundingBox();
+  const nextBox = await next.boundingBox();
+  const playBox = await play.boundingBox();
+  expect(prevBox!.x).toBeLessThanOrEqual(16);
+  expect(nextBox!.x + nextBox!.width).toBeGreaterThanOrEqual(390 - 16);
+  expect(Math.abs(playBox!.x + playBox!.width / 2 - 195)).toBeLessThanOrEqual(8);
+
   // Controls step the rail and never create horizontal page overflow.
-  await page.getByRole('button', { name: /article rotation/ }).click(); // pause autoplay for determinism
+  await play.click(); // pause autoplay for determinism
   const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
   const start = await scrollLeft();
   await next.click();
@@ -138,14 +157,14 @@ test('autoplay advances roughly on interval and pauses on hover', async ({ page 
   test.skip(!res || res.status() === 404, 'fixture requires NEXT_PUBLIC_TOUR_E2E_HOOK=1 build');
   const rail = page.getByRole('list', { name: 'Published articles' });
   const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
-  // Hover suspends autoplay: scroll stays put well past one interval.
+  // Hover suspends autoplay: scroll stays put well past one ~5s interval.
   await rail.hover();
   const hovered0 = await scrollLeft();
-  await page.waitForTimeout(7800);
+  await page.waitForTimeout(5800);
   expect(await scrollLeft()).toBe(hovered0);
-  // Off hover, autoplay resumes and advances within ~1.5 intervals.
+  // Off hover, autoplay resumes and advances within ~2 intervals.
   await page.mouse.move(10, 10);
-  await expect.poll(scrollLeft, { timeout: 12000 }).toBeGreaterThan(hovered0);
+  await expect.poll(scrollLeft, { timeout: 11000 }).toBeGreaterThan(hovered0);
 });
 
 test('reduced motion: autoplay disabled, controls instant-step', async ({ page }) => {
@@ -155,9 +174,11 @@ test('reduced motion: autoplay disabled, controls instant-step', async ({ page }
   const rail = page.getByRole('list', { name: 'Published articles' });
   const scrollLeft = () => rail.evaluate((el) => el.scrollLeft);
   const t0 = await scrollLeft();
-  await page.waitForTimeout(7800);
+  await page.waitForTimeout(5800);
   expect(await scrollLeft()).toBe(t0); // no auto movement
-  await expect(page.getByText('Auto-advance off')).toBeVisible();
+  // Desktop note renders as a span in the control row (the narrow-screen
+  // variant is a separate <p>, also matched by text - scope to span).
+  await expect(page.locator('span', { hasText: 'Auto-advance off' })).toBeVisible();
   const start = await scrollLeft();
   await page.getByRole('button', { name: 'Next article' }).click();
   await expect.poll(scrollLeft).toBeGreaterThan(start);
