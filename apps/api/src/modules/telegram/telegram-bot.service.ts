@@ -361,28 +361,60 @@ export class TelegramBotService {
       const reserved = await this.reservationFor(telegramUserId);
       return { outcome: 'not_linked' as const, reservedUntil: reserved?.toISOString() ?? null };
     }
+    return this.executeBotUnlink(tx, telegramUserId, link);
+  }
 
+  // Post-read phase of a bot /disconnect, split so the lock ordering is
+  // deterministic-testable. The observed link is STALE the moment the read
+  // returns, so after locking the owner's social_accounts row we
+  // revalidate that the world did not move: the active link must still be
+  // the same row for the same user AND the verified identity must still
+  // belong to the requesting Telegram id. A disconnect delivered late must
+  // never detach a replacement link (e.g. the user unlinked A and already
+  // bound B through the website).
+  async executeBotUnlink(
+    tx: Tx,
+    telegramUserId: bigint,
+    observed: { id: string; user: { id: string; username: string } },
+  ): Promise<BotCommandOutcome> {
     const slot = await tx.$queryRaw<Array<{ id: string; platform_user_id: string; is_verified: boolean }>>`
       SELECT id, platform_user_id, is_verified
       FROM social_accounts
-      WHERE user_id = ${link.user.id} AND platform = 'TELEGRAM'::"SocialPlatform"
+      WHERE user_id = ${observed.user.id} AND platform = 'TELEGRAM'::"SocialPlatform"
       FOR UPDATE`;
     const account = slot[0];
+
+    // Revalidate under the lock: the active link must still be the row we
+    // observed for this Telegram id, and the verified identity must still
+    // be the requester's.
+    const fresh = await tx.telegramLink.findFirst({
+      where: { telegramUserId, unlinkedAt: null },
+      select: { id: true, userId: true },
+    });
+    const stale = !fresh
+      || fresh.id !== observed.id
+      || fresh.userId !== observed.user.id
+      || (account != null && account.platform_user_id !== telegramUserId.toString());
+    if (stale) {
+      const reserved = await this.reservationFor(telegramUserId);
+      return { outcome: 'not_linked' as const, reservedUntil: reserved?.toISOString() ?? null };
+    }
+
     let reservedUntil: Date | null = null;
     if (account?.is_verified) {
       reservedUntil = await this.socialIdentity.releaseVerifiedIdentity(tx, {
         platform: SocialPlatform.TELEGRAM,
         identityKey: account.platform_user_id,
-        releasedByUserId: link.user.id,
+        releasedByUserId: observed.user.id,
       });
     }
     if (account) {
       await tx.socialAccount.delete({ where: { id: account.id } });
     }
-    await this.socialIdentity.detachTelegramLinkState(tx, link.user.id);
+    await this.socialIdentity.detachTelegramLinkState(tx, observed.user.id);
     return {
       outcome: 'unlinked' as const,
-      engganyoUsername: link.user.username,
+      engganyoUsername: observed.user.username,
       reservedUntil: reservedUntil?.toISOString() ?? null,
     };
   }
