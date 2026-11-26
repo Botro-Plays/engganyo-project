@@ -48,6 +48,11 @@ run('Campaign ownership classification - real PostgreSQL integration', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasources: { db: { url: TEST_DB } } });
+    // PrismaService.withTransaction is a $transaction alias; replicate it on
+    // the raw client so real services (WalletService et al.) work unchanged.
+    (prisma as never as Record<string, unknown>).withTransaction = (
+      fn: (tx: never) => unknown,
+    ) => prisma.$transaction(fn as never);
     const gamification = mockService();
     gamification.getVipStatus = jest.fn().mockResolvedValue({ perks: {} });
     const social = mockService();
