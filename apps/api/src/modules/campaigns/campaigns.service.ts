@@ -220,7 +220,10 @@ export class CampaignsService {
           requiresProof: dto.requiresProof ?? true,
           proofInstructions: dto.proofInstructions,
           autoVerify: dto.autoVerify ?? OAUTH_PLATFORMS.has((dto.taskType as string).split('_')[0]),
-          isPlatformTask: isAdmin,
+          // Campaigns created through the user-facing flow are personal,
+          // regardless of the creator's role. Platform tasks are created
+          // only through the authorized admin path (AdminService.createPlatformTask).
+          isPlatformTask: false,
           status: CampaignStatus.ACTIVE,
         },
       });
@@ -269,7 +272,6 @@ export class CampaignsService {
 
     const where = {
       userId,
-      isPlatformTask: false,
       ...(dto.status && { status: dto.status }),
       ...(dto.taskType && { taskType: dto.taskType }),
     };
@@ -660,9 +662,9 @@ export class CampaignsService {
     // Geo filter: if country provided, show campaigns targeting that country OR unrestricted ones
     const andClauses: object[] = [
       // Hide the viewer's own campaigns from discovery - creators manage them
-      // via /campaigns. Platform tasks stay visible to everyone, including
-      // the admin who owns them.
-      { OR: [{ userId: { not: excludeUserId } }, { isPlatformTask: true }] },
+      // via /campaigns. This applies to platform tasks too: an owner never
+      // accepts their own campaign.
+      { userId: { not: excludeUserId } },
     ];
     if (filters.country) {
       andClauses.push({
