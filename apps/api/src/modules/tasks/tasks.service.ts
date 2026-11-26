@@ -121,7 +121,7 @@ export class TasksService {
 
     if (!campaign) throw new NotFoundException('Campaign not found');
     assertEngagementTaskAllowed(campaign.taskType);
-    if (campaign.userId === userId && !campaign.isPlatformTask) {
+    if (campaign.userId === userId) {
       throw new BadRequestException('Cannot assign your own campaign');
     }
 
@@ -752,8 +752,8 @@ export class TasksService {
     const campaign = completion.campaign;
     assertEngagementTaskAllowed(campaign.taskType);
 
-    // ── Ownership enforcement: campaign owners cannot complete their own tasks unless it's a platform task ──
-    if (campaign.userId === userId && !campaign.isPlatformTask) {
+    // ── Ownership enforcement: campaign owners cannot complete their own tasks ──
+    if (campaign.userId === userId) {
       throw new BadRequestException('Campaign owners cannot complete their own tasks');
     }
 

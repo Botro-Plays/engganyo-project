@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CampaignStatus, CompletionStatus, Prisma } from '@prisma/client';
 
 /**
@@ -50,6 +50,17 @@ export async function claimCompletionForVerification(
   });
   if (claim.count !== 1) {
     throw new BadRequestException('Task is not pending verification - already processed.');
+  }
+
+  // Self-completion can never pay out, even if an earlier guard let the
+  // completion row exist. campaign.user_id is immutable, so re-reading it
+  // inside this transaction makes the check race-free regardless of when
+  // the caller validated.
+  const [owner] = await tx.$queryRaw<Array<{ user_id: string }>>`
+    SELECT user_id FROM campaigns WHERE id = ${opts.campaignId}`;
+  if (!owner) throw new NotFoundException('Campaign not found');
+  if (owner.user_id === opts.completerUserId) {
+    throw new BadRequestException('Campaign owners cannot complete their own tasks');
   }
 
   const eligible = COMPLETION_TRANSITION_STATUSES.map((s) => s.toString());
