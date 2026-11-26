@@ -41,7 +41,7 @@ apps/api: /telegram/bot/* module (private, IP/secret restricted)
 ```
 
 - Phase 0 (this doc): audit + design. No code activation.
-- Phase 1: account linking (challenge flow, below) + minimal private-chat commands (`/connect <code>`, `/disconnect`, `/account`, plus `/start link_<code>` deep-link routing inside the existing `/start` dispatcher). `/link`, `/unlink`, and `/status` are intentionally NOT the command names: the moderation surface already owns `/link` (group invite link) and `/unlink` (revoke invite link). Balance/financial display stays out of Phase 1 entirely.
+- Phase 1: account linking (challenge flow, below) + minimal private-chat commands (`/connect <code>`, `/disconnect`, `/status`, plus `/start link_<code>` deep-link routing inside the existing `/start` dispatcher). `/link` and `/unlink` are intentionally NOT the command names: the moderation surface already owns `/link` (group invite link) and `/unlink` (revoke invite link). `/status` was unused and reports link state. Balance/financial display stays out of Phase 1 entirely.
 - Phase 2: notification delivery (platform -> bot -> user DM) with the notification contract in section 6.
 - Phase 3: group/channel features: admin-verified group linking, optional task feeds/announcements into owner-managed groups.
 - Phase 4 (separate approval): task verification via Telegram actions (section 9).
@@ -166,8 +166,8 @@ Deferred from all planned phases. If later proposed: every financial intent is c
 
 1. ~~`telegram_links`/`telegram_link_challenges`/`telegram_update_inbox` migration + user endpoints (`/telegram/linking/*`) + Settings UI~~ - implemented.
 2. ~~Bot channel (`/telegram/bot/*`, service-key guard) + durable inbox (claim/lease, idempotent effects, bounded attempts, DEAD health)~~ - implemented.
-3. ~~`connect`/`disconnect`/`account` effects wired through the verified-identity reservation~~ - implemented.
-4. ~~Bot-side handlers (`/start link_` routing, `/connect`, `/disconnect`, `/account`) in the EngganyoBot process + getMe identity check~~ - implemented as an EngganyoBot-repo change.
+3. ~~`connect`/`disconnect`/`status` effects wired through the verified-identity reservation~~ - implemented.
+4. ~~Bot-side handlers (`/start link_` routing, `/connect`, `/disconnect`, `/status`) in the EngganyoBot process + getMe identity check~~ - implemented as an EngganyoBot-repo change (`Jomstaid/EngganyoBot` PR #1).
 5. `telegram_outbox` + notification categories + opt-in UI (Settings + `/notifications`).
 6. Delivery worker honoring retry/dedup/dead-letter + admin visibility.
 7. Group linkage (admin verification + re-verification sweep) behind `TELEGRAM_GROUPS`.
