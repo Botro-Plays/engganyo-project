@@ -1,15 +1,22 @@
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, NotEquals,
+} from 'class-validator';
 
 export const BOT_COMMANDS = ['connect', 'disconnect', 'status'] as const;
 export type BotCommand = (typeof BOT_COMMANDS)[number];
 
 // Runtime-validated bodies for the bot channel. The scoped-secret guard
 // authenticates the caller; these DTOs constrain what authenticated input
-// may look like - ids as integers, commands from a fixed allowlist,
-// bounded lengths, and the per-attempt claim token on every mutation.
+// may look like - ids as integers inside JS-safe range, commands from a
+// fixed allowlist, bounded lengths, and the per-attempt claim token on
+// every mutation. Malformed bodies are rejected with 400 before a row is
+// ever persisted - a command that could only no-op never enters the inbox.
+const MAX_SAFE_ID = Number.MAX_SAFE_INTEGER;
 
 export class BotIngestDto {
   @IsInt()
+  @Min(0)
+  @Max(MAX_SAFE_ID)
   updateId!: number;
 
   @IsString()
@@ -17,9 +24,13 @@ export class BotIngestDto {
   @MaxLength(64)
   workerId!: string;
 
-  @IsOptional()
+  // Reply destination: every Phase-1 command replies, so it is required.
+  // Non-zero - private chats are positive, group ids may be negative.
   @IsInt()
-  chatId?: number;
+  @NotEquals(0)
+  @Min(-MAX_SAFE_ID)
+  @Max(MAX_SAFE_ID)
+  chatId!: number;
 
   @IsIn([...BOT_COMMANDS])
   command!: string;
@@ -29,9 +40,12 @@ export class BotIngestDto {
   @MaxLength(128)
   args?: string;
 
-  @IsOptional()
+  // Sender identity: all three commands need it. Telegram user ids are
+  // positive integers.
   @IsInt()
-  telegramUserId?: number;
+  @Min(1)
+  @Max(MAX_SAFE_ID)
+  telegramUserId!: number;
 
   @IsOptional()
   @IsString()
@@ -49,6 +63,8 @@ export class BotIngestDto {
 // ingest, so no replacement parameters exist to validate here.
 export class BotApplyDto {
   @IsInt()
+  @Min(0)
+  @Max(MAX_SAFE_ID)
   updateId!: number;
 
   @IsUUID()
@@ -57,6 +73,8 @@ export class BotApplyDto {
 
 export class BotAckDto {
   @IsInt()
+  @Min(0)
+  @Max(MAX_SAFE_ID)
   updateId!: number;
 
   @IsUUID()
@@ -65,6 +83,8 @@ export class BotAckDto {
 
 export class BotFailDto {
   @IsInt()
+  @Min(0)
+  @Max(MAX_SAFE_ID)
   updateId!: number;
 
   @IsUUID()
