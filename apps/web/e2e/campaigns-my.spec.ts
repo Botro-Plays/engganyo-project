@@ -47,11 +47,15 @@ async function stubShellApis(page: Page) {
   await page.route('**/api/**', (r) => r.request().method() === 'OPTIONS'
     ? r.fulfill({ status: 204, headers: CORS_HEADERS })
     : r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
-  await page.route('**/api/auth/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ id: 'u1' }) }));
+  const fullUser = { id: 'u1', email: 'tester@e2e.dev', username: 'tester', displayName: 'Tester', role: 'USER', status: 'ACTIVE', twoFactorEnabled: false, creditBalance: 1000, level: 1, xp: 0 };
+  await page.route('**/api/auth/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(fullUser) }));
   await page.route('**/api/auth/public-config', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ enabledPlatforms: [], campaignMinBudget: 100, feeBaseRate: 0.1 }) }));
   await page.route('**/api/notifications**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(empty) }));
   await page.route('**/api/gamification/tours/**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ tours: [] }) }));
   await page.route('**/api/challenges/**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(empty) }));
+  // Array-shaped endpoints: the catch-all returns {} which crashes .map/.filter consumers.
+  await page.route('**/api/store/active-effects', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
+  await page.route('**/api/users/cosmetics**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse([]) }));
 }
 
 test.describe('My Campaigns page', () => {
