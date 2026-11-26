@@ -41,6 +41,12 @@ const page1 = (items: unknown[]) => ({ items, meta: { total: items.length, page:
 
 async function stubShellApis(page: Page) {
   const empty = { items: [], meta: { total: 0, page: 1, limit: 20, totalPages: 0 } };
+  // Catch-all first: any unstubbed call must not hit the real API - a 401
+  // triggers the refresh interceptor, whose failure clears the session and
+  // redirects to /login. Specific routes registered below take precedence.
+  await page.route('**/api/**', (r) => r.request().method() === 'OPTIONS'
+    ? r.fulfill({ status: 204, headers: CORS_HEADERS })
+    : r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({}) }));
   await page.route('**/api/auth/me', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ id: 'u1' }) }));
   await page.route('**/api/auth/public-config', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ enabledPlatforms: [], campaignMinBudget: 100, feeBaseRate: 0.1 }) }));
   await page.route('**/api/notifications**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(empty) }));
