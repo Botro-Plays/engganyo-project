@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/auth.store';
 import Link from 'next/link';
 import {
   Plus, Loader2, Pause, Play, X, ExternalLink,
-  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp, BarChart2, Swords,
+  CheckCircle2, Clock, AlertCircle, Ban, Zap, Eye, Globe, AlertTriangle, ChevronDown, ChevronUp, BarChart2, Swords, Pencil,
 } from 'lucide-react';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
@@ -82,6 +82,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 interface Campaign {
   id: string;
   title: string;
+  description: string | null;
   taskType: string;
   targetUrl: string;
   totalSlots: number;
@@ -158,7 +159,16 @@ const createSchema = z.object({
   proofInstructions: z.string().max(500).optional().or(z.literal('')),
 });
 
+// Safe-field edit only: reward amounts, slots, destinations, and proof
+// requirements are not editable once a campaign is funded.
+const editSchema = z.object({
+  title: z.string().min(5).max(100),
+  description: z.string().max(500).optional().or(z.literal('')),
+  proofInstructions: z.string().max(500).optional().or(z.literal('')),
+});
+
 type CreateFormData = z.infer<typeof createSchema>;
+type EditFormData = z.infer<typeof editSchema>;
 
 export default function CampaignsPage() {
   const queryClient = useQueryClient();
@@ -187,6 +197,8 @@ export default function CampaignsPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'finished' | 'cancelled'>('all');
   const [reviewingCampaign, setReviewingCampaign] = useState<Campaign | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [viewingProof, setViewingProof] = useState<{ id: string; proofUrl: string; user: Submission['user']; submittedAt: string } | null>(null);
   const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
   const [proofLoading, setProofLoading] = useState(false);
@@ -224,14 +236,17 @@ export default function CampaignsPage() {
     return enabledPlatforms === null || enabledPlatforms.includes(platform);
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['campaigns', 'my', page],
+  const { data, isLoading, isError, refetch } = useQuery({
+    // Keyed by user id so an account switch can never show the previous
+    // user's cached campaign list.
+    queryKey: ['campaigns', 'my', authUser?.id, page],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CampaignsResponse>>(
         `campaigns?page=${page}&limit=50`,
       );
       return res.data.data;
     },
+    enabled: !!authUser?.id,
     refetchInterval: 60_000,
   });
 
@@ -325,6 +340,17 @@ export default function CampaignsPage() {
     onError: (err) => setReviewError(getApiErrorMessage(err)),
   });
 
+  const editMutation = useMutation({
+    mutationFn: ({ id, ...fields }: EditFormData & { id: string }) =>
+      apiClient.patch(`campaigns/${id}`, fields),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
+      setEditingCampaign(null);
+      setEditError(null);
+    },
+    onError: (err) => setEditError(getApiErrorMessage(err)),
+  });
+
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiClient.patch(`campaigns/${id}`, { status }),
@@ -345,12 +371,12 @@ export default function CampaignsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-sc-text">Campaigns</h1>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-8">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-sc-text">My Campaigns</h1>
           <p className="text-sc-muted text-sm mt-1">Promote your content by creating engagement campaigns.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowChallengeForm(true)}
             className="flex items-center gap-2 bg-surface-hover hover:bg-surface-border border border-brand-500/30 text-brand-300 text-sm font-medium px-4 py-2 rounded-lg transition-all"
@@ -691,6 +717,17 @@ export default function CampaignsPage() {
                   <div key={i} className="card-glass rounded-xl p-5 animate-pulse h-24" />
                 ))}
               </div>
+            ) : isError ? (
+              <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
+                <AlertTriangle className="w-6 h-6 text-red-400 mb-2" />
+                <p className="text-sc-muted text-sm">Couldn&apos;t load your campaigns.</p>
+                <button
+                  onClick={() => void refetch()}
+                  className="mt-3 px-4 py-2 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text text-sm font-medium transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
             ) : !filteredItems.length ? (
               <div className="card-glass rounded-2xl p-16 flex flex-col items-center justify-center text-center">
                 <p className="text-sc-dim text-sm">
@@ -781,6 +818,14 @@ export default function CampaignsPage() {
                       <Eye className="w-3 h-3" /> Review submissions
                     </button>
                   )}
+                  {(c.status === 'ACTIVE' || c.status === 'PAUSED' || c.status === 'DRAFT') && (
+                    <button
+                      onClick={() => { setEditingCampaign(c); setEditError(null); }}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-hover border border-surface-border text-sc-muted hover:text-sc-text transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                  )}
                   {(c.status === 'ACTIVE' || c.status === 'PAUSED') && (
                     <>
                       <button
@@ -817,6 +862,17 @@ export default function CampaignsPage() {
           </>
         );
       })()}
+
+      {/* ── Edit modal ── */}
+      {editingCampaign && (
+        <EditCampaignModal
+          campaign={editingCampaign}
+          error={editError}
+          pending={editMutation.isPending}
+          onSave={(d) => editMutation.mutate({ id: editingCampaign.id, ...d })}
+          onClose={() => { setEditingCampaign(null); setEditError(null); }}
+        />
+      )}
 
       {/* ── My 1v1 challenges (creator tracking + review) ── */}
       <MyChallenges />
@@ -980,6 +1036,104 @@ export default function CampaignsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Edit campaign modal (safe fields only) ───────────────────
+function EditCampaignModal({
+  campaign,
+  error,
+  pending,
+  onSave,
+  onClose,
+}: {
+  campaign: Campaign;
+  error: string | null;
+  pending: boolean;
+  onSave: (data: EditFormData) => void;
+  onClose: () => void;
+}) {
+  const editForm = useForm<EditFormData>({
+    resolver: zodResolver(editSchema),
+    defaultValues: {
+      title: campaign.title,
+      description: campaign.description ?? '',
+      proofInstructions: campaign.proofInstructions ?? '',
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-lg card-glass rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-sc-text">Edit Campaign</h2>
+          <button onClick={onClose} className="text-sc-dim hover:text-sc-text transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={editForm.handleSubmit(onSave)} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">Campaign title</label>
+            <input
+              {...editForm.register('title')}
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            {editForm.formState.errors.title && (
+              <p className="text-xs text-red-400 mt-1">{editForm.formState.errors.title.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">Description</label>
+            <textarea
+              {...editForm.register('description')}
+              rows={3}
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            {editForm.formState.errors.description && (
+              <p className="text-xs text-red-400 mt-1">{editForm.formState.errors.description.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-sc-muted mb-1.5">Proof instructions</label>
+            <textarea
+              {...editForm.register('proofInstructions')}
+              rows={3}
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            {editForm.formState.errors.proofInstructions && (
+              <p className="text-xs text-red-400 mt-1">{editForm.formState.errors.proofInstructions.message}</p>
+            )}
+          </div>
+          <p className="text-xs text-sc-dim">
+            Reward, slots, destination, and proof requirements cannot be changed after funding.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-all disabled:opacity-50"
+            >
+              {pending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save changes
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
