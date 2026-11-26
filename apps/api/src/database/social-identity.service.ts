@@ -109,6 +109,26 @@ export class SocialIdentityService {
     return reservedUntil;
   }
 
+  /**
+   * Detaches Telegram side state for an unlink, inside the SAME
+   * transaction that removes the social_accounts row. The social identity
+   * is the single authority - a telegram_links row must never stay active
+   * after its backing verified identity is gone (generic disconnect,
+   * profile remove, and the telegram unlink endpoints all converge here).
+   * Also expires open link challenges so a detached claim can never
+   * confirm against a relinked or unlinked identity.
+   */
+  async detachTelegramLinkState(tx: Tx, userId: string): Promise<void> {
+    await tx.telegramLink.updateMany({
+      where: { userId, unlinkedAt: null },
+      data: { unlinkedAt: new Date() },
+    });
+    await tx.telegramLinkChallenge.updateMany({
+      where: { userId, status: { in: ['PENDING', 'CLAIMED'] } },
+      data: { status: 'EXPIRED' },
+    });
+  }
+
   /** Active reservation lookup for status display - never exposes owner. */
   async getReservation(
     platform: SocialPlatform,

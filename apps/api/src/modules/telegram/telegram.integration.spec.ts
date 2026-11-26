@@ -3,18 +3,26 @@
  * the durable update inbox. Requires TEST_DATABASE_URL - skipped when unset.
  *
  * Proves:
- * - challenges are single-use, expiring, and supersede per user;
+ * - minting is serialized per user and a new challenge supersedes both
+ *   pending and claimed attempts;
+ * - confirmation is bound to the exact displayed claim (opaque id under
+ *   row locks) - stale screens, foreign claims, and superseded attempts
+ *   can never bind;
  * - bot claim stamps the Telegram identity; website confirm binds it via
  *   the shared verified-identity tx (single authority, no second record);
  * - taken (P2002) vs reserved (SOCIAL_IDENTITY_RESERVED) stay distinct;
  * - verified unlink creates the 24h reservation; owner reconnect consumes
  *   it; foreign claims during cooldown are refused;
- * - inbox: crash before effects, crash after effects before ack, duplicate
- *   delivery, concurrent workers, and out-of-order updates all recover -
- *   no update is ever silently skipped and effects never double-apply;
+ * - EVERY unlink path (telegram, bot, generic social disconnect) detaches
+ *   link/history/challenge state atomically with the identity;
+ * - inbox: every claim issues a fencing claim token - a stale attempt is
+ *   fenced even when the worker id is reused; effects are bound to the
+ *   immutable input persisted at ingest; crash before effects, crash
+ *   after effects, duplicate delivery, concurrent workers, out-of-order,
+ *   and process-restart sweeps all recover without Telegram redelivery;
  * - attempts are bounded: exhausted claims go DEAD for inspection.
  */
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient, Prisma, SocialPlatform, TelegramLinkChallengeStatus, TelegramUpdateInboxStatus } from '@prisma/client';
 
@@ -23,6 +31,7 @@ import { SocialIdentityService } from '../../database/social-identity.service';
 import { TelegramService } from './telegram.service';
 import { TelegramBotService } from './telegram-bot.service';
 import { TelegramFeatureGuard, TelegramBotKeyGuard } from './telegram.guards';
+import { SocialAuthService } from '../social-auth/social-auth.service';
 
 const TEST_DB = process.env.TEST_DATABASE_URL;
 const run = TEST_DB ? describe : describe.skip;
@@ -51,6 +60,7 @@ run('telegram phase 1 - real PostgreSQL', () => {
   let identity: SocialIdentityService;
   let telegram: TelegramService;
   let bot: TelegramBotService;
+  let socialAuth: SocialAuthService;
   let seq = 0;
 
   const mkUser = async () => {
@@ -72,22 +82,34 @@ run('telegram phase 1 - real PostgreSQL', () => {
     return BigInt(tgSeq);
   };
 
-  // Full bot round-trip: ingest (claim) -> apply command -> complete.
+  // The immutable command input the bot persists at ingest.
+  const ingestInput = (telegramUserId?: bigint, args?: string) => ({
+    args,
+    telegramUserId: telegramUserId != null ? Number(telegramUserId) : undefined,
+    telegramUsername: telegramUserId != null ? `tg${telegramUserId}` : undefined,
+    telegramFirstName: telegramUserId != null ? 'T' : undefined,
+    chatId: telegramUserId != null ? Number(telegramUserId) : undefined,
+  });
+
+  // Full bot round-trip: ingest (claim + fresh token) -> apply -> complete.
   const botRoundTrip = async (
     updateId: number,
-    command: 'connect' | 'disconnect' | 'account' | 'start' | 'help',
-    telegramUserId: bigint,
-    args = '',
+    command: 'connect' | 'disconnect' | 'status',
+    telegramUserId?: bigint,
+    args?: string,
     workerId = 'w1',
   ) => {
-    const ing = await bot.ingest({ updateId, workerId, command });
+    const ing = await bot.ingest({ updateId, workerId, command, ...ingestInput(telegramUserId, args) });
     if (ing.action !== 'process') return { ingest: ing, result: null };
-    const result = await bot.applyCommand({
-      updateId, workerId, command, args,
-      telegramUserId, telegramUsername: `tg${telegramUserId}`, telegramFirstName: 'T',
-    });
-    await bot.complete({ updateId, workerId });
+    const result = await bot.applyCommand({ updateId, claimToken: ing.claimToken });
+    await bot.complete({ updateId, claimToken: ing.claimToken });
     return { ingest: ing, result };
+  };
+
+  const confirmViaStatus = async (userId: string) => {
+    const status = await telegram.getStatus(userId);
+    expect(status.pendingClaim?.claimId).toBeTruthy();
+    return telegram.confirmClaim(userId, status.pendingClaim!.claimId);
   };
 
   const expireLease = (updateId: number) =>
@@ -103,6 +125,8 @@ run('telegram phase 1 - real PostgreSQL', () => {
     identity = new SocialIdentityService(prismaSvc);
     telegram = new TelegramService(prismaSvc, identity, cfg());
     bot = new TelegramBotService(prismaSvc, identity, telegram, cfg());
+    // disconnect() only touches prisma + socialIdentity; other deps unused.
+    socialAuth = new SocialAuthService(prismaSvc, cfg(), null as never, null as never, identity);
   });
 
   afterAll(async () => {
@@ -132,19 +156,60 @@ run('telegram phase 1 - real PostgreSQL', () => {
     expect(live?.status).toBe(TelegramLinkChallengeStatus.PENDING);
   });
 
-  it('claim stamps the Telegram identity and confirm binds via the verified-identity tx', async () => {
+  it('concurrent mints are serialized - exactly one usable code survives', async () => {
+    const user = await mkUser();
+    const [c1, c2] = await Promise.all([
+      telegram.mintChallenge(user.id),
+      telegram.mintChallenge(user.id),
+    ]);
+    const rows = await prisma.telegramLinkChallenge.findMany({
+      where: { userId: user.id, code: { in: [c1.code, c2.code] } },
+    });
+    const pending = rows.filter((r) => r.status === TelegramLinkChallengeStatus.PENDING);
+    const expired = rows.filter((r) => r.status === TelegramLinkChallengeStatus.EXPIRED);
+    expect(pending).toHaveLength(1);
+    expect(expired).toHaveLength(1);
+    // A bot claim against the superseded code can never proceed.
+    const dead = pending[0].code === c1.code ? c2 : c1;
+    const { result } = await botRoundTrip(105, 'connect', tgId(), dead.code);
+    expect(result?.outcome).toBe('code_used');
+  });
+
+  it('a new mint supersedes a CLAIMED attempt - the stale screen cannot confirm', async () => {
+    const user = await mkUser();
+    const c1 = await telegram.mintChallenge(user.id);
+    await botRoundTrip(106, 'connect', tgId(), c1.code);
+    const first = await telegram.getStatus(user.id);
+    expect(first.pendingClaim?.claimId).toBeTruthy();
+
+    // User re-mints (e.g. opened a second tab and started over).
+    await telegram.mintChallenge(user.id);
+
+    // The stale confirm on the superseded claim is refused.
+    await expect(telegram.confirmClaim(user.id, first.pendingClaim!.claimId)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    const old = await prisma.telegramLinkChallenge.findUnique({ where: { code: c1.code } });
+    expect(old?.status).toBe(TelegramLinkChallengeStatus.EXPIRED);
+    const status = await telegram.getStatus(user.id);
+    expect(status.pendingClaim).toBeNull();
+  });
+
+  it('claim stamps the Telegram identity; confirm binds exactly the displayed claim', async () => {
     const user = await mkUser();
     const { code } = await telegram.mintChallenge(user.id);
     const tg = tgId();
 
-    const { result } = await botRoundTrip(101, 'connect', tg, code);
+    const { result } = await botRoundTrip(107, 'connect', tg, code);
     expect(result?.outcome).toBe('claim_recorded');
     if (result?.outcome === 'claim_recorded') expect(result.engganyoUsername).toBe(user.username);
 
     const status = await telegram.getStatus(user.id);
     expect(status.pendingClaim?.telegramUsername).toBe(`tg${tg}`);
+    expect(status.pendingClaim?.telegramUserId).toBe(tg.toString());
+    expect(status.pendingClaim?.claimId).toBeTruthy();
 
-    const bound = await telegram.confirmClaim(user.id);
+    const bound = await telegram.confirmClaim(user.id, status.pendingClaim!.claimId);
     expect(bound.linked).toBe(true);
 
     const account = await prisma.socialAccount.findUnique({
@@ -157,6 +222,45 @@ run('telegram phase 1 - real PostgreSQL', () => {
     expect(link?.telegramUserId).toBe(tg);
     const ch = await prisma.telegramLinkChallenge.findUnique({ where: { code } });
     expect(ch?.status).toBe(TelegramLinkChallengeStatus.CONFIRMED);
+  });
+
+  it('confirm is bound to the exact claim: wrong id, foreign id, and double-confirm all refuse', async () => {
+    const a = await mkUser();
+    const b = await mkUser();
+    const c = await telegram.mintChallenge(a.id);
+    await botRoundTrip(108, 'connect', tgId(), c.code);
+    const statusA = await telegram.getStatus(a.id);
+    const claimId = statusA.pendingClaim!.claimId;
+
+    // Foreign user cannot confirm A's claim.
+    await expect(telegram.confirmClaim(b.id, claimId)).rejects.toBeInstanceOf(NotFoundException);
+    // A non-existent / unrelated id refuses the same way.
+    await expect(telegram.confirmClaim(a.id, 'clzzz_not_a_real_claim')).rejects.toBeInstanceOf(NotFoundException);
+
+    await telegram.confirmClaim(a.id, claimId);
+    // Second confirm of the same id can never re-bind.
+    await expect(telegram.confirmClaim(a.id, claimId)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('decline discards exactly the displayed claim; cancelling a minted challenge works too', async () => {
+    const user = await mkUser();
+    const c = await telegram.mintChallenge(user.id);
+    await botRoundTrip(109, 'connect', tgId(), c.code);
+    const claimed = await telegram.getStatus(user.id);
+
+    await telegram.declineClaim(user.id, claimed.pendingClaim!.claimId);
+    const ch = await prisma.telegramLinkChallenge.findUnique({ where: { code: c.code } });
+    expect(ch?.status).toBe(TelegramLinkChallengeStatus.DECLINED);
+    // Declining again or confirming after decline refuses.
+    await expect(telegram.declineClaim(user.id, claimed.pendingClaim!.claimId)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(telegram.confirmClaim(user.id, claimed.pendingClaim!.claimId)).rejects.toBeInstanceOf(BadRequestException);
+
+    // A fresh mint can be cancelled before any bot claim.
+    const c2 = await telegram.mintChallenge(user.id);
+    const st2 = await telegram.getStatus(user.id);
+    await telegram.declineClaim(user.id, st2.activeChallenge!.claimId);
+    const ch2 = await prisma.telegramLinkChallenge.findUnique({ where: { code: c2.code } });
+    expect(ch2?.status).toBe(TelegramLinkChallengeStatus.DECLINED);
   });
 
   it('concurrent claims of the same code resolve atomically - first wins', async () => {
@@ -183,11 +287,11 @@ run('telegram phase 1 - real PostgreSQL', () => {
     // A claims and confirms the same Telegram identity first.
     const c1 = await telegram.mintChallenge(a.id);
     await botRoundTrip(121, 'connect', tg, c1.code);
-    await telegram.confirmClaim(a.id);
+    await confirmViaStatus(a.id);
 
     // B's already-claimed challenge now collides with the verified
     // identity: the partial unique index refuses the bind (P2002).
-    await expect(telegram.confirmClaim(b.id)).rejects.toBeInstanceOf(
+    await expect(confirmViaStatus(b.id)).rejects.toBeInstanceOf(
       Prisma.PrismaClientKnownRequestError,
     );
     // B's challenge is still CLAIMED - the failed confirm never consumed it.
@@ -202,7 +306,7 @@ run('telegram phase 1 - real PostgreSQL', () => {
 
     const c = await telegram.mintChallenge(owner.id);
     await botRoundTrip(130, 'connect', tg, c.code);
-    await telegram.confirmClaim(owner.id);
+    await confirmViaStatus(owner.id);
 
     const un = await telegram.unlink(owner.id);
     expect(un.reservedUntil).toBeTruthy();
@@ -211,12 +315,12 @@ run('telegram phase 1 - real PostgreSQL', () => {
     // refuse with the reservation conflict, not bind.
     const fc = await telegram.mintChallenge(foreign.id);
     await botRoundTrip(131, 'connect', tg, fc.code);
-    await expect(telegram.confirmClaim(foreign.id)).rejects.toBeInstanceOf(ConflictException);
+    await expect(confirmViaStatus(foreign.id)).rejects.toBeInstanceOf(ConflictException);
 
     // Original owner re-verifies during the cooldown and consumes it.
     const rc = await telegram.mintChallenge(owner.id);
     await botRoundTrip(132, 'connect', tg, rc.code);
-    await telegram.confirmClaim(owner.id);
+    await confirmViaStatus(owner.id);
     const res = await prisma.socialIdentityReservation.findUnique({
       where: { platform_identityKey: { platform: SocialPlatform.TELEGRAM, identityKey: tg.toString() } },
     });
@@ -228,7 +332,7 @@ run('telegram phase 1 - real PostgreSQL', () => {
     const tg = tgId();
     const c = await telegram.mintChallenge(user.id);
     await botRoundTrip(140, 'connect', tg, c.code);
-    await telegram.confirmClaim(user.id);
+    await confirmViaStatus(user.id);
 
     const { result } = await botRoundTrip(141, 'disconnect', tg);
     expect(result?.outcome).toBe('unlinked');
@@ -240,19 +344,57 @@ run('telegram phase 1 - real PostgreSQL', () => {
     expect(link).toBeNull();
   });
 
+  it('generic social disconnect detaches the whole Telegram lifecycle atomically', async () => {
+    const user = await mkUser();
+    const tg = tgId();
+    const c = await telegram.mintChallenge(user.id);
+    await botRoundTrip(150, 'connect', tg, c.code);
+    await confirmViaStatus(user.id);
+
+    // Generic social unlink (Connected Accounts "Disconnect") - not the
+    // telegram endpoint - must still stop bot-linked status atomically.
+    await socialAuth.disconnect(user.id, SocialPlatform.TELEGRAM);
+
+    const link = await prisma.telegramLink.findFirst({ where: { userId: user.id, unlinkedAt: null } });
+    expect(link).toBeNull();
+    const st = await prisma.socialAccount.findUnique({
+      where: { userId_platform: { userId: user.id, platform: SocialPlatform.TELEGRAM } },
+    });
+    expect(st).toBeNull();
+
+    // Bot-visible status agrees: not linked, cooldown preserved.
+    const { result } = await botRoundTrip(151, 'status', tg);
+    expect(result?.outcome).toBe('not_linked');
+    if (result?.outcome === 'not_linked') expect(result.reservedUntil).toBeTruthy();
+
+    // A foreign account cannot bind during the reservation; the original
+    // owner reconnects legitimately and consumes it.
+    const foreign = await mkUser();
+    const fc = await telegram.mintChallenge(foreign.id);
+    await botRoundTrip(152, 'connect', tg, fc.code);
+    await expect(confirmViaStatus(foreign.id)).rejects.toBeInstanceOf(ConflictException);
+
+    const rc = await telegram.mintChallenge(user.id);
+    await botRoundTrip(153, 'connect', tg, rc.code);
+    await confirmViaStatus(user.id);
+    const relinked = await prisma.telegramLink.findFirst({ where: { userId: user.id, unlinkedAt: null } });
+    expect(relinked?.telegramUserId).toBe(tg);
+  });
+
   // ─── Durable inbox ──────────────────────────────────────────
 
   it('duplicate delivery of a claimed update is skipped, never re-processed', async () => {
-    const first = await bot.ingest({ updateId: 200, workerId: 'w1', command: 'account' });
+    const first = await bot.ingest({ updateId: 200, workerId: 'w1', command: 'status', ...ingestInput(tgId()) });
     expect(first.action).toBe('process');
-    const dup = await bot.ingest({ updateId: 200, workerId: 'w2', command: 'account' });
+    const dup = await bot.ingest({ updateId: 200, workerId: 'w2', command: 'status' });
     expect(dup.action).toBe('claimed');
   });
 
   it('crash before effects: expired lease makes the update reclaimable', async () => {
-    await bot.ingest({ updateId: 210, workerId: 'w1', command: 'account' });
+    const tg = tgId();
+    await bot.ingest({ updateId: 210, workerId: 'w1', command: 'status', ...ingestInput(tg) });
     await expireLease(210);
-    const retry = await bot.ingest({ updateId: 210, workerId: 'w2', command: 'account' });
+    const retry = await bot.ingest({ updateId: 210, workerId: 'w2', command: 'status' });
     expect(retry.action).toBe('process');
     if (retry.action === 'process') expect(retry.attempt).toBe(2);
   });
@@ -262,66 +404,132 @@ run('telegram phase 1 - real PostgreSQL', () => {
     const { code } = await telegram.mintChallenge(user.id);
     const tg = tgId();
 
-    const claim = await bot.ingest({ updateId: 220, workerId: 'w1', command: 'connect' });
+    const claim = await bot.ingest({ updateId: 220, workerId: 'w1', command: 'connect', ...ingestInput(tg, code) });
     expect(claim.action).toBe('process');
-    const r1 = await bot.applyCommand({
-      updateId: 220, workerId: 'w1', command: 'connect', args: code,
-      telegramUserId: tg, telegramUsername: 'x', telegramFirstName: 'T',
-    });
+    if (claim.action !== 'process') throw new Error('unreachable');
+    const r1 = await bot.applyCommand({ updateId: 220, claimToken: claim.claimToken });
     expect(r1.outcome).toBe('claim_recorded');
     // "crash": no complete() call.
 
     await expireLease(220);
     const retry = await bot.ingest({ updateId: 220, workerId: 'w2', command: 'connect' });
     expect(retry.action).toBe('process');
+    if (retry.action !== 'process') throw new Error('unreachable');
     // Redelivered effects replay the stored result - the challenge is NOT
     // re-claimed (still exactly one CLAIMED row).
-    const r2 = await bot.applyCommand({
-      updateId: 220, workerId: 'w2', command: 'connect', args: code,
-      telegramUserId: tg, telegramUsername: 'x', telegramFirstName: 'T',
-    });
+    const r2 = await bot.applyCommand({ updateId: 220, claimToken: retry.claimToken });
     expect(r2).toEqual(r1);
     const claimed = await prisma.telegramLinkChallenge.count({ where: { code, status: TelegramLinkChallengeStatus.CLAIMED } });
     expect(claimed).toBe(1);
-    await bot.complete({ updateId: 220, workerId: 'w2' });
+    await bot.complete({ updateId: 220, claimToken: retry.claimToken });
     const done = await bot.ingest({ updateId: 220, workerId: 'w3', command: 'connect' });
     expect(done.action).toBe('skip');
   });
 
-  it('concurrent workers: stale claim owner cannot apply effects or complete', async () => {
+  it('claim token fences attempts: a stale token cannot act even with a reused workerId', async () => {
+    const tg = tgId();
+    const first = await bot.ingest({ updateId: 230, workerId: 'w1', command: 'status', ...ingestInput(tg) });
+    expect(first.action).toBe('process');
+    if (first.action !== 'process') throw new Error('unreachable');
+
+    await expireLease(230);
+    // Same workerId reclaims the update - the old token is now stale.
+    const second = await bot.ingest({ updateId: 230, workerId: 'w1', command: 'status' });
+    expect(second.action).toBe('process');
+    if (second.action !== 'process') throw new Error('unreachable');
+
+    await expect(bot.applyCommand({ updateId: 230, claimToken: first.claimToken })).rejects.toBeInstanceOf(ConflictException);
+    await expect(bot.complete({ updateId: 230, claimToken: first.claimToken })).rejects.toBeInstanceOf(ConflictException);
+    await expect(bot.fail({ updateId: 230, claimToken: first.claimToken, error: 'stale' })).rejects.toBeInstanceOf(ConflictException);
+
+    const r = await bot.applyCommand({ updateId: 230, claimToken: second.claimToken });
+    expect(r.outcome).toBe('not_linked');
+    await bot.complete({ updateId: 230, claimToken: second.claimToken });
+  });
+
+  it('effects are bound to the immutable ingested input - replacement params cannot apply', async () => {
+    const user = await mkUser();
+    const real = await telegram.mintChallenge(user.id);
+    const decoy = await telegram.mintChallenge((await mkUser()).id);
+    const tg = tgId();
+
+    const claim = await bot.ingest({ updateId: 235, workerId: 'w1', command: 'connect', ...ingestInput(tg, real.code) });
+    expect(claim.action).toBe('process');
+    if (claim.action !== 'process') throw new Error('unreachable');
+    await expireLease(235);
+
+    // A redelivery carrying DIFFERENT params cannot substitute them: the
+    // row keeps the immutable input from first sight.
+    const retry = await bot.ingest({ updateId: 235, workerId: 'w2', command: 'disconnect', args: decoy.code, telegramUserId: 111 });
+    expect(retry.action).toBe('process');
+    if (retry.action !== 'process') throw new Error('unreachable');
+    const row = await prisma.telegramUpdateInbox.findFirst({ where: { updateId: 235n } });
+    expect(row?.command).toBe('connect');
+    expect(row?.commandArgs).toBe(real.code);
+
+    const r = await bot.applyCommand({ updateId: 235, claimToken: retry.claimToken });
+    expect(r.outcome).toBe('claim_recorded');
+    const decoyRow = await prisma.telegramLinkChallenge.findUnique({ where: { code: decoy.code } });
+    expect(decoyRow?.status).toBe(TelegramLinkChallengeStatus.PENDING);
+    await bot.complete({ updateId: 235, claimToken: retry.claimToken });
+  });
+
+  it('recovery sweep finishes a crash-abandoned update - no Telegram redelivery needed', async () => {
     const user = await mkUser();
     const { code } = await telegram.mintChallenge(user.id);
     const tg = tgId();
 
-    await bot.ingest({ updateId: 230, workerId: 'w1', command: 'connect' });
-    await expireLease(230);
-    await bot.ingest({ updateId: 230, workerId: 'w2', command: 'connect' });
-    // w1 is now stale: workerId mismatch fences it out.
-    await expect(
-      bot.applyCommand({
-        updateId: 230, workerId: 'w1', command: 'connect', args: code,
-        telegramUserId: tg, telegramUsername: 'x', telegramFirstName: 'T',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-    await expect(bot.complete({ updateId: 230, workerId: 'w1' })).rejects.toBeInstanceOf(ConflictException);
-    await bot.applyCommand({
-      updateId: 230, workerId: 'w2', command: 'connect', args: code,
-      telegramUserId: tg, telegramUsername: 'x', telegramFirstName: 'T',
-    });
-    await bot.complete({ updateId: 230, workerId: 'w2' });
+    // Worker process A claims the update, then "dies" (lease expiry) -
+    // Telegram already acknowledged this update and will never resend it.
+    const first = await bot.ingest({ updateId: 240, workerId: 'proc-a', command: 'connect', ...ingestInput(tg, code) });
+    expect(first.action).toBe('process');
+    await expireLease(240);
+
+    // Worker process B (post-restart) sweeps: the row is returned with
+    // its immutable input and a fresh fencing token.
+    const sweep = await bot.recover({ workerId: 'proc-b' });
+    const row = sweep.updates.find((u) => u.updateId === '240');
+    expect(row).toBeTruthy();
+    expect(row!.command).toBe('connect');
+    expect(row!.commandArgs).toBe(code);
+    expect(row!.telegramUserId).toBe(tg.toString());
+    expect(row!.chatId).toBe(tg.toString());
+    expect(row!.claimToken).toBeTruthy();
+
+    const r = await bot.applyCommand({ updateId: 240, claimToken: row!.claimToken });
+    expect(r.outcome).toBe('claim_recorded');
+    await bot.complete({ updateId: 240, claimToken: row!.claimToken });
+
+    const done = await prisma.telegramUpdateInbox.findFirst({ where: { updateId: 240n } });
+    expect(done?.status).toBe(TelegramUpdateInboxStatus.DONE);
+  });
+
+  it('recovery after effects replays the stored result - apply never double-runs', async () => {
+    const tg = tgId();
+    const first = await bot.ingest({ updateId: 242, workerId: 'proc-a', command: 'status', ...ingestInput(tg) });
+    expect(first.action).toBe('process');
+    if (first.action !== 'process') throw new Error('unreachable');
+    const r1 = await bot.applyCommand({ updateId: 242, claimToken: first.claimToken });
+    expect(r1.outcome).toBe('not_linked');
+    // Crash after effects, before ack.
+    await expireLease(242);
+
+    const sweep = await bot.recover({ workerId: 'proc-b' });
+    const row = sweep.updates.find((u) => u.updateId === '242');
+    expect(row).toBeTruthy();
+    // The stored result is on the sweep payload so the bot can re-reply.
+    expect(row!.result).toEqual(r1);
+
+    const r2 = await bot.applyCommand({ updateId: 242, claimToken: row!.claimToken });
+    expect(r2).toEqual(r1);
+    await bot.complete({ updateId: 242, claimToken: row!.claimToken });
   });
 
   it('out-of-order updates process independently - order is never assumed', async () => {
     const tg = tgId();
     for (const id of [245, 241, 243]) {
-      const ing = await bot.ingest({ updateId: id, workerId: 'w1', command: 'account' });
-      expect(ing.action).toBe('process');
-      const r = await bot.applyCommand({
-        updateId: id, workerId: 'w1', command: 'account',
-        telegramUserId: tg, telegramUsername: null, telegramFirstName: null,
-      });
-      expect(r.outcome).toBe('not_linked');
-      await bot.complete({ updateId: id, workerId: 'w1' });
+      const { result } = await botRoundTrip(id, 'status', tg);
+      expect(result?.outcome).toBe('not_linked');
     }
     const rows = await prisma.telegramUpdateInbox.findMany({
       where: { updateId: { in: [245n, 241n, 243n] } },
@@ -330,12 +538,14 @@ run('telegram phase 1 - real PostgreSQL', () => {
   });
 
   it('attempts are bounded: exhausted claims go DEAD with observable state', async () => {
+    const tg = tgId();
     for (let i = 0; i < 3; i += 1) {
-      const ing = await bot.ingest({ updateId: 250, workerId: 'w1', command: 'account' });
+      const ing = await bot.ingest({ updateId: 250, workerId: 'w1', command: 'status', ...ingestInput(tg) });
       expect(ing.action).toBe('process');
-      await bot.fail({ updateId: 250, workerId: 'w1', error: 'simulated' });
+      if (ing.action !== 'process') throw new Error('unreachable');
+      await bot.fail({ updateId: 250, claimToken: ing.claimToken, error: 'simulated' });
     }
-    const dead = await bot.ingest({ updateId: 250, workerId: 'w1', command: 'account' });
+    const dead = await bot.ingest({ updateId: 250, workerId: 'w1', command: 'status' });
     expect(dead.action).toBe('dead');
     const row = await prisma.telegramUpdateInbox.findFirst({ where: { updateId: 250n } });
     expect(row?.status).toBe(TelegramUpdateInboxStatus.DEAD);

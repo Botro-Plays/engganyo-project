@@ -739,11 +739,21 @@ model TelegramUpdateInbox {
   status      TelegramUpdateInboxStatus @default(PENDING)
   attempts    Int                       @default(0)
   workerId    String?                   @map("worker_id")
+  // Unique token issued at every lease acquisition. Effects, completion,
+  // and failure all require it - a stale attempt is fenced even when the
+  // worker id is reused across reclaims.
+  claimToken  String?                   @map("claim_token")
   leaseUntil  DateTime?                 @map("lease_until")
   lastError   String?                   @map("last_error")
-  // Bounded command-relevant fields only (never a raw update dump).
-  chatId      BigInt?                   @map("chat_id")
-  command     String?
+  // Immutable command input captured once at ingest. Command execution is
+  // bound to these stored fields - later calls may not substitute params.
+  // Bounded fields only (never a raw update dump).
+  chatId            BigInt? @map("chat_id")
+  command           String?
+  commandArgs       String? @map("command_args")
+  telegramUserId    BigInt? @map("telegram_user_id")
+  telegramUsername  String? @map("telegram_username")
+  telegramFirstName String? @map("telegram_first_name")
   payload     Json?
   // Idempotent side-effect result - replayed verbatim on redelivery.
   result      Json?

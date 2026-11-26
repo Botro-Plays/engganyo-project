@@ -3,30 +3,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, SocialPlatform, TelegramLinkChallengeStatus, TelegramUpdateInboxStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 import { PrismaService } from '../../database/prisma.service';
 import { SocialIdentityService } from '../../database/social-identity.service';
 import { TelegramService } from './telegram.service';
+import type { BotIngestDto, BotApplyDto, BotAckDto, BotFailDto, BotRecoverDto } from './telegram.dto';
 
 type Tx = Prisma.TransactionClient;
 
-export interface BotIngestBody {
-  updateId: number | string | bigint;
-  workerId: string;
-  chatId?: number | string | bigint | null;
-  command?: string | null;
-  payload?: Prisma.InputJsonValue;
-}
-
-export interface BotCommandBody {
-  updateId: number | string | bigint;
-  workerId: string;
-  command: 'start' | 'help' | 'link' | 'unlink' | 'status' | 'connect' | 'disconnect' | 'account';
-  args?: string;
-  telegramUserId: number | string | bigint;
-  telegramUsername?: string | null;
-  telegramFirstName?: string | null;
-}
+export type { BotCommand } from './telegram.dto';
 
 export type BotCommandOutcome =
   | { outcome: 'claim_recorded'; engganyoUsername: string | null; expiresAt: string }
@@ -35,6 +21,38 @@ export type BotCommandOutcome =
   | { outcome: 'unlinked'; engganyoUsername: string | null; reservedUntil: string | null }
   | { outcome: 'not_linked'; reservedUntil: string | null }
   | { outcome: 'info' };
+
+// Input captured once at ingest and never rewritten. Command execution is
+// bound to these stored fields - later calls may not substitute params.
+interface ImmutableInput {
+  command: string | null;
+  commandArgs: string | null;
+  telegramUserId: bigint | null;
+  telegramUsername: string | null;
+  telegramFirstName: string | null;
+}
+
+interface ClaimedUpdate extends ImmutableInput {
+  updateId: bigint;
+  chatId: bigint | null;
+  claimToken: string;
+  attempt: number;
+  result: Prisma.JsonValue | null;
+}
+
+// Serialized form returned to the bot (BigInt cannot cross JSON).
+export interface RecoveredUpdate {
+  updateId: string;
+  chatId: string | null;
+  command: string | null;
+  commandArgs: string | null;
+  telegramUserId: string | null;
+  telegramUsername: string | null;
+  telegramFirstName: string | null;
+  claimToken: string;
+  attempt: number;
+  result: Prisma.JsonValue | null;
+}
 
 @Injectable()
 export class TelegramBotService {
@@ -60,92 +78,181 @@ export class TelegramBotService {
   }
 
   // ─── Durable inbox: enqueue + atomic claim ──────────────────────────────────
-  // (botUsername, updateId) is the dedup identity. A row is claimable when
-  // PENDING or when a previous CLAIMED lease expired (worker crashed). A
-  // duplicate delivery of an unfinished update therefore recovers; a DONE
-  // update is skipped; a row that exhausts maxAttempts goes DEAD.
-  async ingest(body: BotIngestBody) {
-    // The dedup identity is (configured bot, update_id) - one bot per
-    // deployment; the bot verifies its own username via getMe at startup.
+  // (botUsername, updateId) is the dedup identity. The full immutable
+  // command input is persisted on first sight - a row can always be
+  // recovered without Telegram re-delivering the update. Each successful
+  // claim issues a fresh claimToken that fences effects/ack to exactly
+  // this attempt.
+  async ingest(body: BotIngestDto) {
     const botUsername = this.botUsername;
     const updateId = BigInt(body.updateId);
-    const chatId = body.chatId != null ? BigInt(body.chatId) : null;
-    const command = body.command ?? null;
     const now = Date.now();
-    const leaseUntil = new Date(now + this.leaseMs);
 
     return this.prisma.$transaction(async (tx) => {
       // Insert-first dedup via ON CONFLICT DO NOTHING: a thrown P2002
       // inside a transaction would abort it, so the insert must be
-      // conflict-safe instead of catch-based.
+      // conflict-safe instead of catch-based. The immutable input is
+      // written exactly here and never updated afterwards.
       await tx.telegramUpdateInbox.createMany({
         data: [{
           botUsername,
           updateId,
-          chatId,
-          command,
-          payload: body.payload ?? Prisma.JsonNull,
+          chatId: body.chatId != null ? BigInt(body.chatId) : null,
+          command: body.command,
+          commandArgs: body.args ?? null,
+          telegramUserId: body.telegramUserId != null ? BigInt(body.telegramUserId) : null,
+          telegramUsername: body.telegramUsername ?? null,
+          telegramFirstName: body.telegramFirstName ?? null,
           receivedAt: new Date(),
         }],
         skipDuplicates: true,
       });
 
       const rows = await tx.$queryRaw<Array<{
-        status: TelegramUpdateInboxStatus; attempts: number; lease_until: Date | null;
+        id: string; status: TelegramUpdateInboxStatus; attempts: number; lease_until: Date | null;
       }>>`
-        SELECT status, attempts, lease_until
+        SELECT id, status, attempts, lease_until
         FROM telegram_update_inbox
         WHERE bot_username = ${botUsername} AND update_id = ${updateId}
         FOR UPDATE`;
       const row = rows[0];
       if (!row) throw new NotFoundException('Inbox row missing after upsert');
 
-      if (row.status === TelegramUpdateInboxStatus.DONE) return { action: 'skip' as const };
-      if (row.status === TelegramUpdateInboxStatus.DEAD) return { action: 'dead' as const };
-      if (
-        row.status === TelegramUpdateInboxStatus.CLAIMED &&
-        row.lease_until &&
-        row.lease_until.getTime() > now
-      ) {
-        // Another live worker owns it - the duplicate stays recoverable.
-        return { action: 'claimed' as const };
-      }
+      const claimed = await this.claimRow(tx, row.id, row.status, row.attempts, row.lease_until, body.workerId, now);
+      if (claimed.action !== 'process') return claimed;
 
-      const attempts = row.attempts + 1;
-      if (attempts > this.maxAttempts) {
-        await tx.telegramUpdateInbox.updateMany({
-          where: { botUsername, updateId },
-          data: { status: TelegramUpdateInboxStatus.DEAD, lastError: 'max attempts reached' },
-        });
-        this.logger.warn(`Telegram inbox DEAD: bot=${botUsername} update=${updateId} after ${this.maxAttempts} attempts`);
-        return { action: 'dead' as const };
-      }
-
-      await tx.telegramUpdateInbox.updateMany({
-        where: { botUsername, updateId },
-        data: {
-          status: TelegramUpdateInboxStatus.CLAIMED,
-          attempts,
-          workerId: body.workerId,
-          leaseUntil,
-        },
-      });
-      return { action: 'process' as const, attempt: attempts };
+      return { action: 'process' as const, claimToken: claimed.claimToken, attempt: claimed.attempt };
     });
+  }
+
+  // Atomically transitions a row to CLAIMED with a fresh claim token.
+  // Claimable when PENDING or when a prior CLAIMED lease expired (worker
+  // crashed). A DONE update is skipped; a DEAD update is terminal.
+  private async claimRow(
+    tx: Tx,
+    rowId: string,
+    status: TelegramUpdateInboxStatus,
+    attempts: number,
+    leaseUntil: Date | null,
+    workerId: string,
+    now: number,
+  ): Promise<
+    | { action: 'skip' | 'claimed' | 'dead' }
+    | { action: 'process'; claimToken: string; attempt: number }
+  > {
+    if (status === TelegramUpdateInboxStatus.DONE) return { action: 'skip' };
+    if (status === TelegramUpdateInboxStatus.DEAD) return { action: 'dead' };
+    if (status === TelegramUpdateInboxStatus.CLAIMED && leaseUntil && leaseUntil.getTime() > now) {
+      // Another live worker owns it - the duplicate stays recoverable.
+      return { action: 'claimed' };
+    }
+
+    const attempt = attempts + 1;
+    if (attempt > this.maxAttempts) {
+      await tx.telegramUpdateInbox.updateMany({
+        where: { id: rowId },
+        data: { status: TelegramUpdateInboxStatus.DEAD, lastError: 'max attempts reached' },
+      });
+      this.logger.warn(`Telegram inbox DEAD: row=${rowId} after ${this.maxAttempts} attempts`);
+      return { action: 'dead' };
+    }
+
+    const claimToken = randomUUID();
+    await tx.telegramUpdateInbox.updateMany({
+      where: { id: rowId },
+      data: {
+        status: TelegramUpdateInboxStatus.CLAIMED,
+        attempts: attempt,
+        workerId,
+        claimToken,
+        leaseUntil: new Date(now + this.leaseMs),
+      },
+    });
+    return { action: 'process', claimToken, attempt };
+  }
+
+  // ─── Autonomous recovery sweep ──────────────────────────────────────────────
+  // Claims reclaimable rows without waiting for Telegram redelivery:
+  // polling acknowledges updates via its offset, so a worker that crashes
+  // after ack would never see the update again. The sweeper recovers it
+  // from persisted state instead. FOR UPDATE SKIP LOCKED lets multiple
+  // sweepers share the backlog.
+  async recover(body: BotRecoverDto): Promise<{ updates: RecoveredUpdate[] }> {
+    const botUsername = this.botUsername;
+    const limit = body.limit ?? 25;
+    const now = Date.now();
+
+    const updates = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{
+        id: string; update_id: bigint; status: TelegramUpdateInboxStatus; attempts: number;
+        lease_until: Date | null; command: string | null; command_args: string | null;
+        telegram_user_id: bigint | null; telegram_username: string | null;
+        telegram_first_name: string | null; chat_id: bigint | null; result: Prisma.JsonValue | null;
+      }>>`
+        SELECT id, update_id, status, attempts, lease_until, command, command_args,
+               telegram_user_id, telegram_username, telegram_first_name, chat_id, result
+        FROM telegram_update_inbox
+        WHERE bot_username = ${botUsername}
+          AND (status = 'PENDING'::"TelegramUpdateInboxStatus"
+               OR (status = 'CLAIMED'::"TelegramUpdateInboxStatus" AND lease_until <= now()))
+        ORDER BY received_at ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED`;
+
+      const out: ClaimedUpdate[] = [];
+      for (const row of rows) {
+        const claimed = await this.claimRow(tx, row.id, row.status, row.attempts, row.lease_until, body.workerId, now);
+        if (claimed.action !== 'process') continue;
+        out.push({
+          updateId: row.update_id,
+          chatId: row.chat_id,
+          command: row.command,
+          commandArgs: row.command_args,
+          telegramUserId: row.telegram_user_id,
+          telegramUsername: row.telegram_username,
+          telegramFirstName: row.telegram_first_name,
+          claimToken: claimed.claimToken,
+          attempt: claimed.attempt,
+          result: row.result,
+        });
+      }
+      return out;
+    });
+
+    // BigInt cannot serialize to JSON - normalize to strings at the edge.
+    return {
+      updates: updates.map((u) => ({
+        updateId: u.updateId.toString(),
+        chatId: u.chatId?.toString() ?? null,
+        command: u.command,
+        commandArgs: u.commandArgs,
+        telegramUserId: u.telegramUserId?.toString() ?? null,
+        telegramUsername: u.telegramUsername,
+        telegramFirstName: u.telegramFirstName,
+        claimToken: u.claimToken,
+        attempt: u.attempt,
+        result: u.result,
+      })),
+    };
   }
 
   // ─── Idempotent command effects ─────────────────────────────────────────────
   // Effects are keyed by the update itself: once applied, the result is
   // stored on the inbox row and replayed verbatim on redelivery, so a
   // crash between effects and acknowledgement can never double-apply.
-  async applyCommand(body: BotCommandBody): Promise<BotCommandOutcome> {
+  // Execution is bound to the immutable input persisted at ingest - the
+  // request carries only the update id and the fencing claim token.
+  async applyCommand(body: BotApplyDto): Promise<BotCommandOutcome> {
     const updateId = BigInt(body.updateId);
 
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{
-        id: string; status: TelegramUpdateInboxStatus; worker_id: string | null; result: Prisma.JsonValue | null;
+        id: string; status: TelegramUpdateInboxStatus; claim_token: string | null;
+        result: Prisma.JsonValue | null; command: string | null; command_args: string | null;
+        telegram_user_id: bigint | null; telegram_username: string | null; telegram_first_name: string | null;
       }>>`
-        SELECT id, status, worker_id, result
+        SELECT id, status, claim_token, result, command, command_args,
+               telegram_user_id, telegram_username, telegram_first_name
         FROM telegram_update_inbox
         WHERE bot_username = ${this.botUsername}
           AND update_id = ${updateId}
@@ -155,13 +262,20 @@ export class TelegramBotService {
       if (row.status !== TelegramUpdateInboxStatus.CLAIMED) {
         throw new ConflictException(`Update is ${row.status.toLowerCase()}, not claimed`);
       }
-      if (row.worker_id !== body.workerId) {
-        // Lease expired and another worker reclaimed it - this caller is stale.
-        throw new ConflictException('Update claimed by another worker');
+      if (!row.claim_token || row.claim_token !== body.claimToken) {
+        // Lease expired and another attempt reclaimed it - this caller is
+        // stale and must not observe or modify the update.
+        throw new ConflictException('Update claimed by another attempt');
       }
       if (row.result) return row.result as BotCommandOutcome;
 
-      const result = await this.dispatchCommand(tx, body);
+      const result = await this.dispatchCommand(tx, {
+        command: row.command,
+        commandArgs: row.command_args,
+        telegramUserId: row.telegram_user_id,
+        telegramUsername: row.telegram_username,
+        telegramFirstName: row.telegram_first_name,
+      });
       await tx.telegramUpdateInbox.update({
         where: { id: row.id },
         data: { result: result as unknown as Prisma.InputJsonValue },
@@ -170,31 +284,28 @@ export class TelegramBotService {
     });
   }
 
-  private async dispatchCommand(tx: Tx, body: BotCommandBody) {
-    const telegramUserId = BigInt(body.telegramUserId);
-    switch (body.command) {
-      case 'link':
+  private async dispatchCommand(tx: Tx, input: ImmutableInput): Promise<BotCommandOutcome> {
+    const telegramUserId = input.telegramUserId;
+    switch (input.command) {
       case 'connect':
-        return this.claimChallenge(tx, body);
-      case 'unlink':
+        if (telegramUserId == null) return { outcome: 'info' };
+        return this.claimChallenge(tx, input, telegramUserId);
       case 'disconnect':
+        if (telegramUserId == null) return { outcome: 'info' };
         return this.botUnlink(tx, telegramUserId);
       case 'status':
-      case 'account':
+        if (telegramUserId == null) return { outcome: 'info' };
         return this.botStatus(tx, telegramUserId);
-      case 'start':
-      case 'help':
       default:
-        return { outcome: 'info' as const };
+        return { outcome: 'info' };
     }
   }
 
   // /connect <code>: stamp the claiming Telegram identity onto the minted
   // challenge. CAS on status=PENDING so concurrent claims resolve
   // atomically - only the first succeeds.
-  private async claimChallenge(tx: Tx, body: BotCommandBody) {
-    const telegramUserId = BigInt(body.telegramUserId);
-    const code = (body.args ?? '').trim().toUpperCase();
+  private async claimChallenge(tx: Tx, input: ImmutableInput, telegramUserId: bigint): Promise<BotCommandOutcome> {
+    const code = (input.commandArgs ?? '').trim().toUpperCase();
     if (!code) return { outcome: 'code_invalid' as const };
 
     const already = await tx.telegramLink.findFirst({
@@ -219,8 +330,8 @@ export class TelegramBotService {
       data: {
         status: TelegramLinkChallengeStatus.CLAIMED,
         telegramUserId,
-        telegramUsername: body.telegramUsername ?? null,
-        telegramFirstName: body.telegramFirstName ?? null,
+        telegramUsername: input.telegramUsername ?? null,
+        telegramFirstName: input.telegramFirstName ?? null,
         claimedAt: new Date(),
       },
     });
@@ -238,8 +349,10 @@ export class TelegramBotService {
   }
 
   // /disconnect: the Telegram account's own unlink - same reservation
-  // semantics as the website path (verified release -> 24h cooldown).
-  private async botUnlink(tx: Tx, telegramUserId: bigint) {
+  // semantics as the website path (verified release -> 24h cooldown), and
+  // the same shared detach helper, so link/history/challenge side state
+  // can never outlive the identity.
+  private async botUnlink(tx: Tx, telegramUserId: bigint): Promise<BotCommandOutcome> {
     const link = await tx.telegramLink.findFirst({
       where: { telegramUserId, unlinkedAt: null },
       include: { user: { select: { id: true, username: true } } },
@@ -266,10 +379,7 @@ export class TelegramBotService {
     if (account) {
       await tx.socialAccount.delete({ where: { id: account.id } });
     }
-    await tx.telegramLink.update({
-      where: { id: link.id },
-      data: { unlinkedAt: new Date() },
-    });
+    await this.socialIdentity.detachTelegramLinkState(tx, link.user.id);
     return {
       outcome: 'unlinked' as const,
       engganyoUsername: link.user.username,
@@ -277,7 +387,7 @@ export class TelegramBotService {
     };
   }
 
-  private async botStatus(tx: Tx, telegramUserId: bigint) {
+  private async botStatus(tx: Tx, telegramUserId: bigint): Promise<BotCommandOutcome> {
     const link = await tx.telegramLink.findFirst({
       where: { telegramUserId, unlinkedAt: null },
       include: { user: { select: { username: true } } },
@@ -303,38 +413,41 @@ export class TelegramBotService {
   }
 
   // ─── Acknowledgement ────────────────────────────────────────────────────────
-  // complete marks DONE; fail releases the claim immediately so the update
-  // is reclaimable on the next delivery (bounded by maxAttempts at claim).
-  async complete(body: { updateId: number | string | bigint; workerId: string }) {
+  // Both ack paths fence on the per-attempt claim token, not the worker
+  // id - a stale attempt cannot acknowledge or modify a reclaimed update
+  // even when workerIds are reused. complete marks DONE atomically with
+  // the recorded result; fail releases the lease so the row is
+  // reclaimable on the next delivery or sweep (bounded by maxAttempts).
+  async complete(body: BotAckDto) {
     const updated = await this.prisma.telegramUpdateInbox.updateMany({
       where: {
         botUsername: this.botUsername,
         updateId: BigInt(body.updateId),
         status: TelegramUpdateInboxStatus.CLAIMED,
-        workerId: body.workerId,
+        claimToken: body.claimToken,
       },
       data: { status: TelegramUpdateInboxStatus.DONE, processedAt: new Date() },
     });
     if (updated.count === 0) {
-      throw new ConflictException('Update is not claimed by this worker');
+      throw new ConflictException('Update is not claimed by this attempt');
     }
     return { completed: true };
   }
 
-  async fail(body: { updateId: number | string | bigint; workerId: string; error?: string }) {
+  async fail(body: BotFailDto) {
     const updated = await this.prisma.telegramUpdateInbox.updateMany({
       where: {
         botUsername: this.botUsername,
         updateId: BigInt(body.updateId),
         status: TelegramUpdateInboxStatus.CLAIMED,
-        workerId: body.workerId,
+        claimToken: body.claimToken,
       },
       // Releasing the lease makes the update immediately reclaimable; the
       // attempt count already incremented at claim bounds the retries.
       data: { leaseUntil: new Date(), lastError: body.error?.slice(0, 500) ?? null },
     });
     if (updated.count === 0) {
-      throw new ConflictException('Update is not claimed by this worker');
+      throw new ConflictException('Update is not claimed by this attempt');
     }
     return { released: true };
   }

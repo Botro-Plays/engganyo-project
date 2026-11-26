@@ -469,6 +469,11 @@ export class SocialAuthService {
       }
 
       await tx.socialAccount.delete({ where: { id: account.id } });
+      if (platform === SocialPlatform.TELEGRAM) {
+        // Single authority: the link/history/challenge side state detaches
+        // in the same tx, so bot-visible status can never outlive identity.
+        await this.socialIdentity.detachTelegramLinkState(tx, userId);
+      }
 
       return { reservedUntil };
     });
