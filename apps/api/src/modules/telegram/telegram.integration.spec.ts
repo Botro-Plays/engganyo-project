@@ -176,12 +176,17 @@ run('telegram phase 1 - real PostgreSQL', () => {
     const b = await mkUser();
     const tg = tgId();
 
+    // B claims first while the identity is still unlinked.
+    const c2 = await telegram.mintChallenge(b.id);
+    await botRoundTrip(120, 'connect', tg, c2.code);
+
+    // A claims and confirms the same Telegram identity first.
     const c1 = await telegram.mintChallenge(a.id);
-    await botRoundTrip(120, 'connect', tg, c1.code);
+    await botRoundTrip(121, 'connect', tg, c1.code);
     await telegram.confirmClaim(a.id);
 
-    const c2 = await telegram.mintChallenge(b.id);
-    await botRoundTrip(121, 'connect', tg, c2.code);
+    // B's already-claimed challenge now collides with the verified
+    // identity: the partial unique index refuses the bind (P2002).
     await expect(telegram.confirmClaim(b.id)).rejects.toBeInstanceOf(
       Prisma.PrismaClientKnownRequestError,
     );

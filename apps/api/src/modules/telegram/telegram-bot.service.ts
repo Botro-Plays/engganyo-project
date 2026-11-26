@@ -75,22 +75,20 @@ export class TelegramBotService {
     const leaseUntil = new Date(now + this.leaseMs);
 
     return this.prisma.$transaction(async (tx) => {
-      // Insert-first dedup: the unique index maps every redelivery of the
-      // same update to the same row. create-then-catch keeps it simple.
-      try {
-        await tx.telegramUpdateInbox.create({
-          data: {
-            botUsername,
-            updateId,
-            chatId,
-            command,
-            payload: body.payload ?? Prisma.JsonNull,
-            receivedAt: new Date(),
-          },
-        });
-      } catch (err) {
-        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
-      }
+      // Insert-first dedup via ON CONFLICT DO NOTHING: a thrown P2002
+      // inside a transaction would abort it, so the insert must be
+      // conflict-safe instead of catch-based.
+      await tx.telegramUpdateInbox.createMany({
+        data: [{
+          botUsername,
+          updateId,
+          chatId,
+          command,
+          payload: body.payload ?? Prisma.JsonNull,
+          receivedAt: new Date(),
+        }],
+        skipDuplicates: true,
+      });
 
       const rows = await tx.$queryRaw<Array<{
         status: TelegramUpdateInboxStatus; attempts: number; lease_until: Date | null;
