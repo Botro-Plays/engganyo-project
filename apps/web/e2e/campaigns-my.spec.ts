@@ -10,6 +10,7 @@ const AUTH_LS = (userId: string) => JSON.stringify({
   version: 0,
 });
 
+<<<<<<< HEAD
 const authFor = (userId: string) => ({
   storageState: {
     cookies: [],
@@ -19,6 +20,15 @@ const authFor = (userId: string) => ({
       { name: 'cookie-consent', value: 'accepted' },
     ] }],
   },
+=======
+const authOrigins = (userId: string) => ({
+  cookies: [],
+  origins: [{ origin: 'http://localhost:3000', localStorage: [
+    { name: 'access_token', value: 'e2e-mock-token' },
+    { name: 'engganyo-auth', value: AUTH_LS(userId) },
+    { name: 'cookie-consent', value: 'accepted' },
+  ] }],
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
 });
 
 const CORS_ORIGIN = process.env['E2E_BASE_URL'] ?? 'http://localhost:3000';
@@ -47,6 +57,7 @@ async function stubShellApis(page: Page) {
   await page.route('**/api/auth/public-config', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ enabledPlatforms: [], campaignMinBudget: 100, feeBaseRate: 0.1 }) }));
   await page.route('**/api/notifications**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(empty) }));
   await page.route('**/api/gamification/tours/**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse({ tours: [] }) }));
+<<<<<<< HEAD
   await page.route('**/api/challenges/mine**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(empty) }));
 }
 
@@ -54,6 +65,15 @@ test.describe('My Campaigns page', () => {
   test('shows heading and lists own campaigns', async ({ browser }) => {
     const context = await browser.newContext(authFor('u1').storageState as never);
     const page = await context.newPage();
+=======
+  await page.route('**/api/challenges/**', (r) => r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(empty) }));
+}
+
+test.describe('My Campaigns page', () => {
+  test.use({ storageState: authOrigins('u1') });
+
+  test('shows heading and lists own campaigns', async ({ page }) => {
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
     await stubShellApis(page);
     await page.route('**/api/campaigns**', (r) =>
       r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([campaign('c1', 'Alpha TikTok push')])) }));
@@ -61,12 +81,18 @@ test.describe('My Campaigns page', () => {
     await page.goto('/campaigns');
     await expect(page.getByRole('heading', { name: 'My Campaigns' })).toBeVisible();
     await expect(page.getByText('Alpha TikTok push')).toBeVisible();
+<<<<<<< HEAD
     await context.close();
   });
 
   test('failed owner-list request shows an error and Retry, not empty state', async ({ browser }) => {
     const context = await browser.newContext(authFor('u1').storageState as never);
     const page = await context.newPage();
+=======
+  });
+
+  test('failed owner-list request shows an error and Retry, not empty state', async ({ page }) => {
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
     await stubShellApis(page);
     let calls = 0;
     await page.route('**/api/campaigns**', (r) => {
@@ -83,12 +109,18 @@ test.describe('My Campaigns page', () => {
 
     await page.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByText('Alpha TikTok push')).toBeVisible();
+<<<<<<< HEAD
     await context.close();
   });
 
   test('edit modal saves safe fields through PATCH', async ({ browser }) => {
     const context = await browser.newContext(authFor('u1').storageState as never);
     const page = await context.newPage();
+=======
+  });
+
+  test('edit modal saves safe fields through PATCH', async ({ page }) => {
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
     await stubShellApis(page);
     let patched: Record<string, unknown> | null = null;
     const c = campaign('c1', 'Alpha TikTok push');
@@ -112,6 +144,7 @@ test.describe('My Campaigns page', () => {
     expect(patched).not.toHaveProperty('creditPerTask');
     expect(patched).not.toHaveProperty('totalSlots');
     expect(patched).not.toHaveProperty('targetUrl');
+<<<<<<< HEAD
     await context.close();
   });
 
@@ -121,6 +154,12 @@ test.describe('My Campaigns page', () => {
       viewport: { width: 360, height: 800 },
     });
     const page = await context.newPage();
+=======
+  });
+
+  test('header wraps at 360px without horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
     await stubShellApis(page);
     await page.route('**/api/campaigns**', (r) =>
       r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([campaign('c1', 'Alpha TikTok push')])) }));
@@ -131,12 +170,18 @@ test.describe('My Campaigns page', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
+<<<<<<< HEAD
     await context.close();
   });
 
   test('account switch cannot show the previous users cached campaigns', async ({ browser }) => {
     const context = await browser.newContext(authFor('u1').storageState as never);
     const page = await context.newPage();
+=======
+  });
+
+  test('account switch cannot show the previous users cached campaigns', async ({ page }) => {
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
     await stubShellApis(page);
     let serving: 'u1' | 'u2' = 'u1';
     await page.route('**/api/campaigns**', (r) =>
@@ -148,7 +193,11 @@ test.describe('My Campaigns page', () => {
     await page.goto('/campaigns');
     await expect(page.getByText('Alpha TikTok push')).toBeVisible();
 
+<<<<<<< HEAD
     // Switch the signed-in account, then load the page again for u2.
+=======
+    // Switch the signed-in account, then reload for u2.
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
     serving = 'u2';
     await page.evaluate((u2) => {
       const raw = window.localStorage.getItem('engganyo-auth');
@@ -162,6 +211,9 @@ test.describe('My Campaigns page', () => {
 
     await expect(page.getByText('Beta Instagram push')).toBeVisible();
     await expect(page.getByText('Alpha TikTok push')).not.toBeVisible();
+<<<<<<< HEAD
     await context.close();
+=======
+>>>>>>> a8cd893 (test(e2e): use file-level storageState pattern for campaigns-my spec)
   });
 });
