@@ -41,6 +41,7 @@ import { EventsModule } from './modules/events/events.module';
 import { StoreModule } from './modules/store/store.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { BlogModule } from './modules/blog/blog.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { BlogModule } from './modules/blog/blog.module';
     StoreModule,
     MarketplaceModule,
     BlogModule,
+    TelegramModule,
   ],
   providers: [
     // A08: ThrottlerModule was configured but no guard was registered, so

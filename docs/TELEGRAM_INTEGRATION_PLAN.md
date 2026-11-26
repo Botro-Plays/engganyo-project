@@ -1,6 +1,10 @@
 # Telegram Integration Plan
 
-Status: planning document only. No bot settings, webhooks, messages, rewards, or deployment are authorized by this document. Reviewed bot revision: `Jomstaid/EngganyoBot` (private) at commit `fd5265e1fb25b618523c4041552cc8d73b5f05ce` (tarball fetched 2026-11-25).
+Status: Phase 1 implemented behind a disabled feature flag - nothing is activated. No bot settings, webhooks, messages, rewards, or live delivery are authorized by this document. Reviewed bot revision: `Jomstaid/EngganyoBot` (private) at commit `fd5265e1fb25b618523c4041552cc8d73b5f05ce` (tarball fetched 2026-11-25).
+
+Identities: the **official bot is `https://t.me/EngganyoBot`** (`@EngganyoBot`). The community destination `https://t.me/Engganyo` (`@Engganyo`) is separate and unchanged - they serve different purposes and bot deep links must never point at the community handle.
+
+Hosting check (2026-11-26, VPS `134.255.232.68`): no EngganyoBot process, container, or systemd unit exists on the platform VPS - the moderation bot is hosted elsewhere (or not currently running). Because Telegram allows exactly one update consumer per token (getUpdates XOR webhook), the Phase-1 bot commands are implemented inside the existing EngganyoBot process rather than as a second poller.
 
 ## 1. Current bot capabilities (source-backed)
 
@@ -37,7 +41,7 @@ apps/api: /telegram/bot/* module (private, IP/secret restricted)
 ```
 
 - Phase 0 (this doc): audit + design. No code activation.
-- Phase 1: account linking (challenge flow, below) + read-only identity (`/link`, `/unlink`, `/status`, `/balance` display). Private-chat only.
+- Phase 1: account linking (challenge flow, below) + minimal private-chat commands (`/connect <code>`, `/disconnect`, `/status`, plus `/start link_<code>` deep-link routing inside the existing `/start` dispatcher). `/link` and `/unlink` are intentionally NOT the command names: the moderation surface already owns `/link` (group invite link) and `/unlink` (revoke invite link). `/status` was unused and reports link state. Balance/financial display stays out of Phase 1 entirely.
 - Phase 2: notification delivery (platform -> bot -> user DM) with the notification contract in section 6.
 - Phase 3: group/channel features: admin-verified group linking, optional task feeds/announcements into owner-managed groups.
 - Phase 4 (separate approval): task verification via Telegram actions (section 9).
@@ -53,20 +57,20 @@ Trust boundary first: the numeric `telegramUserId` is **not inherently trustwort
 
 Flow:
 
-1. Signed-in user opens Settings -> Connected accounts -> Telegram -> "Link via bot". The API issues a short-lived, single-use challenge: `tglink_<random 128-bit>` (store hash only; TTL 10 minutes; one active per user).
-2. UI shows a deep link `https://t.me/EngganyoBot?start=tglink_<code>` (Telegram start parameter).
-3. Bot receives `/start tglink_<code>` in private chat, calls `POST /telegram/bot/link/claim` over the service-credential channel with `{code, telegramUserId, chatId, firstName?, username?}`. The API consumes the code atomically (single-use transaction) and records a **pending** claim: `{challengeId, engganyoUserId, telegramUserId, chatId, claimedAt}` - no link is written yet.
-4. The website then shows a confirmation step inside the authenticated session: "Link Telegram account @username (id 123456789, First Name)?" - the user sees exactly which Telegram account claimed the code and must confirm before the binding commits. This is the control that defeats forwarded deep links: anyone can forward `?start=tglink_...`, but the victim sees the attacker's identity on their own Settings page and declines.
-5. On confirm, `POST /telegram/link/confirm` (user-authenticated, challengeId) performs the binding through `linkVerifiedAccount` (single write path, below). On decline or challenge expiry, the pending claim is discarded.
+1. Signed-in user opens Settings -> Connected accounts -> Telegram -> "Link via bot". The API issues a short-lived, single-use challenge: an 8-character code from an unambiguous alphabet (~40 bits over a 10-minute window), stored on `telegram_link_challenges` with `expiresAt`; minting supersedes any still-PENDING code so at most one usable code exists per user.
+2. UI shows a deep link `https://t.me/EngganyoBot?start=link_<code>`. The `link_` prefix routes inside the bot's existing `/start` arg dispatcher without colliding with its other deep-link args (`portal_`, `lk<n>`, `cfg_`, `anon`, `help`).
+3. The bot submits the update to the platform inbox (`POST /telegram/bot/updates`, claim), then applies the `connect` effect (`POST /telegram/bot/commands`) with `{code, telegramUserId, username?, firstName?}`. The API CAS-marks the challenge CLAIMED atomically (first claimant wins) and records the pending claim - no link is written yet.
+4. The website then shows a confirmation step inside the authenticated session: "Link Telegram account @username (id 123456789, First Name)?" - the user sees exactly which Telegram account claimed the code and must confirm before the binding commits. This is the control that defeats forwarded deep links: anyone can forward `?start=link_...`, but the victim sees the attacker's identity on their own Settings page and declines.
+5. On confirm, `POST /telegram/linking/confirm` (user-authenticated; the pending claim is looked up server-side, never passed as a body id) performs the binding through the same verified-identity transaction shape as `linkVerifiedAccount` (slot lock -> upsert -> claim -> release prior verified id -> consume reservation) plus the `telegram_links` history row, in one tx. On decline (`POST /telegram/linking/decline`) or expiry, the pending claim is discarded.
 
-Reverse direction (`/link` typed into the bot): the bot shows "open engganyo.com Settings and enter code `XXXX-XXXX`". This path is guessable, so it is rate-limited and constrained: the code has >=32 bits of entropy, <=10 attempts per account, expires in 10 minutes, and the confirm page again names the Telegram account that claimed it before binding. Bot-originated claims from the deep-link path carry high-entropy codes (128-bit) so forwarding is the only practical abuse - mitigated by step 4, not by secrecy alone.
+Reverse direction (`/connect <code>` typed into the bot): the same code works when typed by hand - the alphabet excludes 0/O/1/I/L for this. Claims are bounded by the code's ~40-bit entropy, its 10-minute expiry, single-use consumption, and the confirm page naming the claiming Telegram account before binding. Forwarding the deep link remains the only practical abuse path - mitigated by step 4, not by secrecy alone.
 
 Concurrent claims: the challenge is consumed atomically - the first bot-claim wins; later claims on the same code get `challenge_used`/`challenge_expired`. A second Telegram account claiming a forwarded link cannot silently bind anything: the pending claim can only be completed by the issuing website session, which sees the claimed identity first.
 
 Schema and the single identity authority:
 
 - The `socialIdentity` verified-identity record is the **sole authority** for "which Engganyo user owns this Telegram id". Telegram registers as `platform=TELEGRAM` with `stableId=<telegramUserId>` and goes through `linkVerifiedAccount` / `releaseVerifiedIdentity` / `claimVerifiedIdentity` / `consumeReservation` exactly like other verified platforms. There must not be a second, independently mutable identity table - the existing reservation check, 24h post-unlink hold, and `identity_reserved` semantics then apply uniformly.
-- `telegram_links` is a **delivery/preference record only**: `{ userId, telegramUserId, telegramChatId, linkedAt, unlinkedAt?, notifyOptIn default false, lastSeenAt }`. It carries no ownership authority of its own - it exists because chatId/opt-in are Telegram-channel facts, not identity facts.
+- `telegram_links` is a **link-history record only**: `{ userId, telegramUserId, telegramUsername?, telegramFirstName?, linkedAt, unlinkedAt? }`. It carries no ownership authority of its own. Phase-1 keeps no chatId/opt-in columns - notification delivery fields land with Phase 2 alongside the opt-in UI.
 - Resolving the uniqueness conflict: an ALL-rows unique constraint on `telegramUserId` would permanently block relinking by any account after a soft delete - wrong. Uniqueness applies to the **active link only**: partial unique index `telegram_links.telegramUserId WHERE unlinkedAt IS NULL` (and the same on `userId`). Unlinked rows are retained history for audit; the ownership authority is the identity record above, which is where the 24h reservation actually lives.
 
 Error states, plainly:
@@ -115,8 +119,8 @@ Error states, plainly:
 ## 7. Webhook security, secrets, retention
 
 - Webhook mode must gain, before any use: `secret_token` on `setWebhook` + verification of `X-Telegram-Bot-Api-Secret-Token` on every update; `allowed_updates` allowlist (`message`, `callback_query`, `chat_member`, `my_chat_member`, `chat_join_request`); HTTPS-only behind the existing nginx.
-- Update deduplication is **durable and per-bot, not a scalar comparison**: a `processed_update_ids` table (or Redis set) keyed `(botTokenId, update_id)` with a ~7-day TTL; the receiver inserts first and a unique violation means "already seen -> skip". A "reject `update_id <= last_processed`" rule is wrong: update ids are monotonically increasing per bot but **not dense**, delivery is not guaranteed in order, and Telegram can deliver stale or out-of-window updates after periods of inactivity - a single high-water mark both skips legitimate queued updates and accepts replays of already-processed gaps.
-- Processing is crash-recoverable and ordering-tolerant: side effects are idempotent on `(update_id, action)` so a crash mid-handler is reprocessed safely; no logic depends on arrival order (flows that need sequence use the latest known state, not the arrival sequence).
+- Update deduplication is a **durable inbox**, not a seen-set and not a scalar comparison: `telegram_update_inbox` holds one row per `(bot_username, update_id)` with `status` (PENDING/CLAIMED/DONE/DEAD), `attempts`, `worker_id`, `lease_until`, `last_error`, and a stored `result`. The unique key maps every redelivery of the same update to the same row. A "reject `update_id <= last_processed`" rule is wrong (ids are monotonic but **not dense**, delivery is unordered, and Telegram re-delivers stale updates after inactivity), and a bare insert-first seen-set is also wrong: recording an update and then crashing must not skip it forever.
+- Claim semantics close that crash window: the bot's `POST /telegram/bot/updates` enqueues **and** claims in one transaction. A row is claimable when PENDING or when a prior CLAIMED lease has expired - so a worker that crashes after claiming (before effects, after effects, or before acknowledgement) is reclaimed on redelivery and the update is processed, never silently skipped. Effects are applied idempotently through `POST /telegram/bot/commands`: the first application stores the result on the inbox row and a redelivery replays the stored result verbatim instead of re-running effects. `POST /telegram/bot/updates/complete` marks DONE; `updates/fail` releases the claim early. Attempts are bounded: a row claimed more than `TELEGRAM_INBOX_MAX_ATTEMPTS` times goes DEAD and surfaces via `GET /telegram/bot/inbox/health` instead of retrying forever. A stale worker is fenced by `worker_id` - after a reclaim, the previous owner can neither apply effects nor complete.
 - **Age is not a validity signal.** Do not discard updates older than ~5 minutes - a delayed legitimate event (a join, a member-status change, a queued message) still reflects real state and must be processed. Validity lives in the data, not the clock: a linking-challenge claim is checked against that challenge row's own expiry (a delayed claim on an expired code fails safely by lookup), and state events are applied regardless of arrival time. The only age-sensitive items are purely ephemeral effects, and even those defer to semantic checks over wall-clock cuts.
 - Long polling is acceptable for phase 1 (no inbound endpoint at all); webhook is only needed for group-scale later phases.
 - Secrets: `BOT_TOKEN` and the platform service token live in env/secret store, never in `guardbot.db`, logs, or the repo. The existing `clones` table (third-party tokens) is out of scope and must stay unreachable from integration code paths.
@@ -127,11 +131,11 @@ Error states, plainly:
 | Threat | Vector | Mitigation |
 |---|---|---|
 | Impersonation | Attacker claims a challenge with a different Telegram account, or types a reverse code to bind someone else's Telegram identity | The website confirm step (section 3 step 4) names the claiming Telegram account before binding - a wrong identity is declined. `telegramUserId` is only ever stamped through the bot-authenticated channel, never accepted as public API input. |
-| Forwarded deep link | `?start=tglink_<code>` forwarded to another Telegram user lets *their* account claim your code | Code alone never binds - it produces a pending claim visible only to the issuing website session, which sees the foreign identity and declines. Codes are single-use, 10-minute TTL. |
+| Forwarded deep link | `?start=link_<code>` forwarded to another Telegram user lets *their* account claim your code | Code alone never binds - it produces a pending claim visible only to the issuing website session, which sees the foreign identity and declines. Codes are single-use, 10-minute TTL. |
 | Reverse-code guessing | `/link`-style short codes typed into Settings | >=32-bit entropy, <=10 attempts per account, 10-minute expiry, per-account rate limit, and the same identity-naming confirm step. Deep-link codes carry 128 bits so guessing is not viable. |
 | Service-token / BOT_TOKEN leakage | A leaked bot service credential lets an attacker submit arbitrary `(code, telegramUserId)` claims; a leaked BOT_TOKEN lets them read updates or send as the bot | Service credential is scoped to `/telegram/bot/*` only, rotatable, in env/secret store; pending claims still require website confirmation so a leaked service token alone cannot bind accounts - it can only create pending claims (spam-limited). BOT_TOKEN revocation is a kill-switch; clone tokens in `guardbot.db` stay unreachable from integration code paths. |
 | Account takeover (Engganyo side) | Attacker with the website session links their own Telegram to the victim account | Confirmation is explicit inside the session; unlink + dispute procedure (section 4) revokes with audit trail; a security email goes to the displaced owner on any dispute revoke. |
-| Replay | Re-delivered webhook updates, duplicated `getUpdates` results, retried deliveries | Durable per-bot `processed_update_ids` dedup (insert-first, unique violation skips), idempotent side effects keyed `(update_id, action)`, no arrival-order assumptions, no age-based discards - delayed but legitimate events are still applied (section 7). |
+| Replay | Re-delivered webhook updates, duplicated `getUpdates` results, retried deliveries | Durable per-bot inbox: unique `(bot, update_id)` rows with claim/lease recovery, idempotent effect results stored on the row, bounded attempts with DEAD visibility, no arrival-order assumptions, no age-based discards - delayed but legitimate events are still applied (section 7). |
 | Spam / abuse | Bot used to message users or groups at scale | Notification outbox with per-user caps, global send budget, per-category opt-in, rate limits, dead-letter visibility; no user-triggered arbitrary-message surface. |
 | Multi-account farming | One Telegram user links many Engganyo accounts to multiply rewards | Active-link uniqueness on `telegramUserId` (one Engganyo account per Telegram id); the 24h verified-identity reservation prevents rapid identity hand-off between accounts; dispute path handles contested claims. |
 
@@ -160,10 +164,10 @@ Deferred from all planned phases. If later proposed: every financial intent is c
 
 ## 12. Ordered implementation backlog
 
-1. `telegram_links` migration + `POST /telegram/link/challenge` (Settings UI) - no bot change needed to land.
-2. `POST /telegram/bot/link/claim` + bot `/start` deep-link handler + `/link` reverse path.
-3. `/unlink` (both sides) wired through the verified-identity reservation.
-4. `/status` + `/balance` read-only private-chat commands.
+1. ~~`telegram_links`/`telegram_link_challenges`/`telegram_update_inbox` migration + user endpoints (`/telegram/linking/*`) + Settings UI~~ - implemented.
+2. ~~Bot channel (`/telegram/bot/*`, service-key guard) + durable inbox (claim/lease, idempotent effects, bounded attempts, DEAD health)~~ - implemented.
+3. ~~`connect`/`disconnect`/`status` effects wired through the verified-identity reservation~~ - implemented.
+4. ~~Bot-side handlers (`/start link_` routing, `/connect`, `/disconnect`, `/status`) in the EngganyoBot process + getMe identity check~~ - implemented as an EngganyoBot-repo change (`Jomstaid/EngganyoBot` PR #1).
 5. `telegram_outbox` + notification categories + opt-in UI (Settings + `/notifications`).
 6. Delivery worker honoring retry/dedup/dead-letter + admin visibility.
 7. Group linkage (admin verification + re-verification sweep) behind `TELEGRAM_GROUPS`.
@@ -179,4 +183,4 @@ Separately flagged for Jomar (everything else above is routine engineering):
 3. Whether security alerts may bypass opt-out (section 6).
 4. Phase-4 task verification scope (section 9).
 5. Any future financial actions (section 10) - separate approval required.
-6. Where the bot process runs (same VPS vs separate host) and who holds `BOT_TOKEN`/`@BotFather` ownership.
+6. Where the bot process actually runs today - VPS check 2026-11-26 found no bot process/container/unit on `134.255.232.68`, so its host is still unconfirmed - and who holds `BOT_TOKEN`/`@BotFather` ownership.

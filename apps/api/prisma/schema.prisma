@@ -437,6 +437,8 @@ model User {
   friendshipsReceived        Friendship[]                @relation("FriendshipAddressee")
   tourCompletions            TourCompletion[]
   tourGenerations            TourGeneration[]
+  telegramLinkChallenges     TelegramLinkChallenge[]
+  telegramLinks              TelegramLink[]
 
   @@index([email])
   @@index([username])
@@ -668,6 +670,105 @@ model SocialIdentityReservation {
   @@unique([platform, identityKey])
   @@index([reservedUntil])
   @@map("social_identity_reservations")
+}
+
+// =============================================================
+// TELEGRAM INTEGRATION (Phase 1)
+// =============================================================
+
+// Website-initiated, single-use, expiring link challenge. The user mints
+// a code on the site, carries it to the bot (deep link or typed), the bot
+// stamps the claiming Telegram identity (CLAIMED), and the user confirms
+// the named account back on the site (CONFIRMED). Challenges supersede:
+// minting a new one expires any still-PENDING rows for the same user.
+model TelegramLinkChallenge {
+  id                String                      @id @default(cuid())
+  userId            String                      @map("user_id")
+  user              User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code              String                      @unique
+  status            TelegramLinkChallengeStatus @default(PENDING)
+  // Claiming Telegram identity, stamped only through the authenticated
+  // bot-to-platform channel - never accepted as public API input.
+  telegramUserId    BigInt?                     @map("telegram_user_id")
+  telegramUsername  String?                     @map("telegram_username")
+  telegramFirstName String?                     @map("telegram_first_name")
+  claimedAt         DateTime?                   @map("claimed_at")
+  expiresAt         DateTime                    @map("expires_at")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@map("telegram_link_challenges")
+}
+
+// Link history between an Engganyo user and a verified Telegram numeric
+// user id. Active-link uniqueness lives in partial unique indexes
+// (telegram_links_active_telegram_user, telegram_links_active_user,
+// maintained in the migration only - Prisma cannot express partial
+// indexes); soft-deleted rows are retained history and never block
+// re-linking. social_accounts + social_identity_reservations remain the
+// single ownership/reservation authority for the identity itself.
+model TelegramLink {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  telegramUserId    BigInt    @map("telegram_user_id")
+  telegramUsername  String?   @map("telegram_username")
+  telegramFirstName String?   @map("telegram_first_name")
+  linkedAt          DateTime  @default(now()) @map("linked_at")
+  unlinkedAt        DateTime? @map("unlinked_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([telegramUserId])
+  @@map("telegram_links")
+}
+
+// Durable per-bot inbox for updates the bot submits for platform-side
+// effects. Unique (bot_username, update_id) is the dedup identity; claim
+// uses a lease so a worker that crashes after claiming (before effects,
+// after effects, or before acknowledgement) is reclaimed and the update
+// is redelivered - never silently skipped. Side effects are idempotent
+// per update (result replayed from the row), and attempts are bounded:
+// a row claimed MAX_ATTEMPTS times without completing goes DEAD for
+// operator inspection instead of retrying forever.
+model TelegramUpdateInbox {
+  id          String                    @id @default(cuid())
+  botUsername String                    @map("bot_username")
+  updateId    BigInt                    @map("update_id")
+  status      TelegramUpdateInboxStatus @default(PENDING)
+  attempts    Int                       @default(0)
+  workerId    String?                   @map("worker_id")
+  leaseUntil  DateTime?                 @map("lease_until")
+  lastError   String?                   @map("last_error")
+  // Bounded command-relevant fields only (never a raw update dump).
+  chatId      BigInt?                   @map("chat_id")
+  command     String?
+  payload     Json?
+  // Idempotent side-effect result - replayed verbatim on redelivery.
+  result      Json?
+  receivedAt  DateTime                  @map("received_at")
+  processedAt DateTime?                 @map("processed_at")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+
+  @@unique([botUsername, updateId])
+  @@index([status, leaseUntil])
+  @@map("telegram_update_inbox")
+}
+
+enum TelegramLinkChallengeStatus {
+  PENDING
+  CLAIMED
+  CONFIRMED
+  DECLINED
+  EXPIRED
+}
+
+enum TelegramUpdateInboxStatus {
+  PENDING
+  CLAIMED
+  DONE
+  DEAD
 }
 
 // =============================================================

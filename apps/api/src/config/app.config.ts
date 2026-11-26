@@ -18,6 +18,16 @@ export default registerAs('app', () => ({
     antiAbuse: process.env['ENABLE_ANTI_ABUSE'] !== 'false',
     websockets: process.env['ENABLE_WEBSOCKETS'] !== 'false',
     recaptcha: process.env['ENABLE_RECAPTCHA'] === 'true',
+    // Phase-1 Telegram linking - disabled until secrets + bot worker are live.
+    telegramLinking: process.env['TELEGRAM_LINKING'] === 'true',
+  },
+  telegram: {
+    // Narrowly scoped bot-to-platform credential. Never a user JWT.
+    botServiceKey: process.env['TELEGRAM_BOT_SERVICE_KEY'] ?? '',
+    botUsername: process.env['TELEGRAM_BOT_USERNAME'] ?? 'EngganyoBot',
+    challengeTtlMs: parseInt(process.env['TELEGRAM_CHALLENGE_TTL_MS'] ?? '600000', 10),
+    inboxLeaseMs: parseInt(process.env['TELEGRAM_INBOX_LEASE_MS'] ?? '60000', 10),
+    inboxMaxAttempts: parseInt(process.env['TELEGRAM_INBOX_MAX_ATTEMPTS'] ?? '5', 10),
   },
   recaptcha: {
     secret: process.env['RECAPTCHA_SECRET'] ?? '',
