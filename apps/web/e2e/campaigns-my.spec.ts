@@ -76,7 +76,9 @@ test.describe('My Campaigns page', () => {
     let calls = 0;
     await page.route('**/api/campaigns**', (r) => {
       calls += 1;
-      if (calls === 1) {
+      // apiClient retries 5xx (MAX_RETRIES=3) plus one query-level retry, so
+      // the error surfaces only after ~8 failing calls. Fail past that point.
+      if (calls <= 8) {
         return r.fulfill({ status: 500, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'boom' }) });
       }
       return r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([campaign('c1', 'Alpha TikTok push')])) });
