@@ -93,10 +93,13 @@ run('Campaign ownership classification - real PostgreSQL integration', () => {
   });
 
   afterAll(async () => {
-    const tagged = { startsWith: PREFIX };
-    await prisma.taskCompletion.deleteMany({ where: { campaign: { title: tagged } } });
-    await prisma.campaign.deleteMany({ where: { title: tagged } });
-    await prisma.user.deleteMany({ where: { email: tagged } });
+    const u = { user: { username: { startsWith: PREFIX } } };
+    await prisma.taskCompletion.deleteMany({ where: { campaign: u } });
+    await prisma.auditLog.deleteMany({ where: { user: { username: { startsWith: PREFIX } } } });
+    await prisma.transaction.deleteMany({ where: { wallet: u } });
+    await prisma.campaign.deleteMany({ where: u });
+    await prisma.wallet.deleteMany({ where: u });
+    await prisma.user.deleteMany({ where: { username: { startsWith: PREFIX } } });
     await prisma.$disconnect();
   });
 
