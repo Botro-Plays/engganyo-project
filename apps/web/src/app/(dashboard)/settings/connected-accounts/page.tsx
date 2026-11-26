@@ -47,6 +47,10 @@ interface TelegramLinkStatus {
   } | null;
 }
 
+// Timezone-explicit formatting: users must see which clock a timestamp uses.
+const fmtWhen = (iso: string | Date) =>
+  `${new Date(iso).toLocaleString()} ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+
 const PLATFORMS = [
   {
     id: 'YOUTUBE',
@@ -190,14 +194,14 @@ function ConnectedAccountsPageInner() {
       const availableAt = until ? new Date(until) : null;
       const waitMsg =
         availableAt && !Number.isNaN(availableAt.getTime())
-          ? ` It will be available to link again at ${availableAt.toLocaleString()}.`
+          ? ` It will be available to link again at ${fmtWhen(availableAt)}.`
           : '';
       const messages: Record<string, string> = {
         invalid_state: 'OAuth session expired. Please try again.',
         platform_mismatch: 'Platform mismatch in OAuth flow. Please try again.',
         oauth_failed: 'Connection failed. Check that OAuth credentials are configured.',
         identity_taken: 'This social account is already linked to another Engganyo account.',
-        identity_reserved: `This social account was recently disconnected and is reserved for 24 hours.${waitMsg}`,
+        identity_reserved: `This social account was recently disconnected. Only the previous owner can relink it for 24 hours.${waitMsg}`,
       };
       setNotice({ type: 'error', msg: messages[error] ?? `OAuth error: ${error}` });
     }
@@ -273,7 +277,7 @@ function ConnectedAccountsPageInner() {
         type: 'success',
         msg:
           when && !Number.isNaN(when.getTime())
-            ? `Telegram unlinked. This identity is reserved for 24 hours - available to link again at ${when.toLocaleString()}.`
+            ? `Telegram unlinked. You can relink it anytime; other accounts may claim it after ${fmtWhen(when)}.`
             : 'Telegram unlinked.',
       });
     },
@@ -311,7 +315,7 @@ function ConnectedAccountsPageInner() {
         type: 'success',
         msg:
           when && !Number.isNaN(when.getTime())
-            ? `Account disconnected. This identity is reserved for 24 hours - available to link again at ${when.toLocaleString()}.`
+            ? `Account disconnected. You can relink it anytime; other accounts may claim it after ${fmtWhen(when)}.`
             : 'Account disconnected.',
       });
       setPendingDisconnect(null);
@@ -413,7 +417,8 @@ function ConnectedAccountsPageInner() {
                         </p>
                       ) : (
                         <p className="text-xs text-sc-dim mt-0.5">
-                          Link through @{tg.botUsername} - verified, no typed usernames.
+                          Official bot @{tg.botUsername} verifies your Telegram identity only -
+                          it never posts or messages on your behalf. Small Taps. Big Crowds.
                         </p>
                       )}
                     </div>
@@ -455,8 +460,10 @@ function ConnectedAccountsPageInner() {
                   {tg.activeChallenge && !tg.pendingClaim && (
                     <div className="mt-3 border-t border-surface-border pt-3 flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-sc-muted">
-                        Open the bot - it claims code <code className="px-1.5 py-0.5 rounded bg-surface-hover text-sc-text font-mono">{tg.activeChallenge.code}</code> for you.
-                        Expires {new Date(tg.activeChallenge.expiresAt).toLocaleTimeString()}.
+                        Open @{tg.botUsername} and press <strong className="text-sc-text">Start</strong> if Telegram asks -
+                        it claims code <code className="px-1.5 py-0.5 rounded bg-surface-hover text-sc-text font-mono">{tg.activeChallenge.code}</code> for you.
+                        Or send <code className="px-1.5 py-0.5 rounded bg-surface-hover text-sc-text font-mono">/connect {tg.activeChallenge.code}</code> to the bot.
+                        Expires {fmtWhen(tg.activeChallenge.expiresAt)}.
                       </span>
                       <a
                         href={tg.activeChallenge.deepLink}
