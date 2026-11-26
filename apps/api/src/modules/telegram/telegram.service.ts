@@ -51,13 +51,19 @@ export class TelegramService {
   }
 
   // ─── Website: mint a single-use, expiring challenge ─────────────────────────
-  // Minting a new challenge supersedes any still-PENDING rows for this
-  // user, so at most one usable code exists per account at a time.
+  // Minting is serialized per user by a user-row lock: concurrent mints can
+  // never produce two usable codes. A new challenge supersedes BOTH pending
+  // and claimed attempts - the latest mint always wins, so a stale screen
+  // can never confirm a superseded claim.
   async mintChallenge(userId: string): Promise<TelegramChallengeView> {
     const expiresAt = new Date(Date.now() + this.challengeTtlMs);
     const challenge = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
       await tx.telegramLinkChallenge.updateMany({
-        where: { userId, status: TelegramLinkChallengeStatus.PENDING },
+        where: {
+          userId,
+          status: { in: [TelegramLinkChallengeStatus.PENDING, TelegramLinkChallengeStatus.CLAIMED] },
+        },
         data: { status: TelegramLinkChallengeStatus.EXPIRED },
       });
       return tx.telegramLinkChallenge.create({
@@ -94,8 +100,12 @@ export class TelegramService {
         : null,
       pendingClaim: pendingClaim
         ? {
-            // The website confirm step names the claiming Telegram account
-            // before any binding happens.
+            // The opaque claim id is submitted verbatim on confirm - the
+            // website binds exactly the displayed claim, never whichever
+            // happens to be latest. The numeric id is shown because
+            // usernames/first names are not unique across accounts.
+            claimId: pendingClaim.id,
+            telegramUserId: pendingClaim.telegramUserId?.toString() ?? null,
             telegramUsername: pendingClaim.telegramUsername,
             telegramFirstName: pendingClaim.telegramFirstName,
             claimedAt: pendingClaim.claimedAt?.toISOString() ?? null,
@@ -104,6 +114,7 @@ export class TelegramService {
         : null,
       activeChallenge: activeChallenge
         ? {
+            claimId: activeChallenge.id,
             code: activeChallenge.code,
             deepLink: this.deepLink(activeChallenge.code),
             expiresAt: activeChallenge.expiresAt.toISOString(),
@@ -113,36 +124,36 @@ export class TelegramService {
   }
 
   // ─── Website: explicit confirmation binds the pending claim ─────────────────
+  // The claim id is required and re-verified under the row lock: owner,
+  // CLAIMED status, live expiry, and the immutable Telegram identity
+  // stamped at claim time all must hold. A stale screen confirming a
+  // superseded or expired claim gets an error, never a binding.
   // Same lock ordering as linkVerifiedAccount: slot lock -> upsert ->
   // claim -> release previous verified id -> consume reservation.
-  async confirmClaim(userId: string) {
-    const challenge = await this.prisma.telegramLinkChallenge.findFirst({
-      where: { userId, status: TelegramLinkChallengeStatus.CLAIMED },
-      orderBy: { claimedAt: 'desc' },
-    });
-    if (!challenge) throw new NotFoundException('No pending Telegram claim to confirm');
-    if (challenge.expiresAt.getTime() <= Date.now()) {
-      await this.prisma.telegramLinkChallenge.update({
-        where: { id: challenge.id },
-        data: { status: TelegramLinkChallengeStatus.EXPIRED },
-      });
-      throw new BadRequestException('Link challenge expired. Start a new link from the bot.');
-    }
-
-    const telegramUserId = challenge.telegramUserId!.toString();
-    const identityKey = telegramUserId;
-
-    await this.prisma.$transaction(async (tx) => {
-      // Re-check inside the tx: a concurrent decline/expiry must not bind.
-      const rows = await tx.$queryRaw<Array<{ status: TelegramLinkChallengeStatus; expires_at: Date }>>`
-        SELECT status, expires_at FROM telegram_link_challenges WHERE id = ${challenge.id} FOR UPDATE`;
+  async confirmClaim(userId: string, claimId: string) {
+    const challenge = await this.prisma.$transaction(async (tx) => {
+      // Verify under the claim row lock: owner, status, expiry - and the
+      // identity stamped at claim time, which is immutable (claims write
+      // telegram_user_id only once, on the PENDING->CLAIMED transition).
+      const rows = await tx.$queryRaw<Array<{
+        id: string; user_id: string; status: TelegramLinkChallengeStatus; expires_at: Date;
+        telegram_user_id: bigint | null; telegram_username: string | null; telegram_first_name: string | null;
+      }>>`
+        SELECT id, user_id, status, expires_at, telegram_user_id, telegram_username, telegram_first_name
+        FROM telegram_link_challenges WHERE id = ${claimId} FOR UPDATE`;
       const current = rows[0];
-      if (!current || current.status !== TelegramLinkChallengeStatus.CLAIMED) {
-        throw new NotFoundException('No pending Telegram claim to confirm');
+      if (!current || current.user_id !== userId) {
+        throw new NotFoundException('No such Telegram claim to confirm');
+      }
+      if (current.status !== TelegramLinkChallengeStatus.CLAIMED || !current.telegram_user_id) {
+        throw new BadRequestException('This link claim is no longer pending. Start a new link.');
       }
       if (current.expires_at.getTime() <= Date.now()) {
         throw new BadRequestException('Link challenge expired. Start a new link from the bot.');
       }
+
+      const telegramUserId = current.telegram_user_id.toString();
+      const identityKey = telegramUserId;
 
       // 1. Lock the (user, TELEGRAM) social slot row when it exists.
       const slot = await tx.$queryRaw<Array<{ id: string; is_verified: boolean; platform_user_id: string }>>`
@@ -160,15 +171,15 @@ export class TelegramService {
           userId,
           platform: SocialPlatform.TELEGRAM,
           platformUserId: telegramUserId,
-          platformUsername: challenge.telegramUsername,
-          profileUrl: challenge.telegramUsername ? `https://t.me/${challenge.telegramUsername}` : null,
+          platformUsername: current.telegram_username,
+          profileUrl: current.telegram_username ? `https://t.me/${current.telegram_username}` : null,
           isVerified: true,
           lastSyncedAt: new Date(),
         },
         update: {
           platformUserId: telegramUserId,
-          platformUsername: challenge.telegramUsername,
-          profileUrl: challenge.telegramUsername ? `https://t.me/${challenge.telegramUsername}` : null,
+          platformUsername: current.telegram_username,
+          profileUrl: current.telegram_username ? `https://t.me/${current.telegram_username}` : null,
           isVerified: true,
           lastSyncedAt: new Date(),
         },
@@ -204,31 +215,35 @@ export class TelegramService {
       await tx.telegramLink.create({
         data: {
           userId,
-          telegramUserId: challenge.telegramUserId!,
-          telegramUsername: challenge.telegramUsername,
-          telegramFirstName: challenge.telegramFirstName,
+          telegramUserId: current.telegram_user_id!,
+          telegramUsername: current.telegram_username,
+          telegramFirstName: current.telegram_first_name,
         },
       });
       await tx.telegramLinkChallenge.update({
-        where: { id: challenge.id },
+        where: { id: claimId },
         data: { status: TelegramLinkChallengeStatus.CONFIRMED },
       });
+      return { telegramUserId, telegramUsername: current.telegram_username };
     });
 
-    this.logger.log(`Telegram linked: userId=${userId} telegramUserId=${telegramUserId}`);
+    this.logger.log(`Telegram linked: userId=${userId} telegramUserId=${challenge.telegramUserId}`);
     return { linked: true, telegramUsername: challenge.telegramUsername };
   }
 
   // ─── Website: decline a pending claim or cancel a minted challenge ──────────
-  async declineClaim(userId: string) {
+  // Bound to the exact displayed challenge - declining acts on that row,
+  // never on whichever open attempt happens to exist.
+  async declineClaim(userId: string, claimId: string) {
     const updated = await this.prisma.telegramLinkChallenge.updateMany({
       where: {
+        id: claimId,
         userId,
         status: { in: [TelegramLinkChallengeStatus.CLAIMED, TelegramLinkChallengeStatus.PENDING] },
       },
       data: { status: TelegramLinkChallengeStatus.DECLINED },
     });
-    if (updated.count === 0) throw new NotFoundException('No pending Telegram link to decline');
+    if (updated.count === 0) throw new NotFoundException('No such Telegram link to decline');
     return { declined: true };
   }
 
@@ -255,10 +270,9 @@ export class TelegramService {
       }
 
       await tx.socialAccount.delete({ where: { id: account.id } });
-      await tx.telegramLink.updateMany({
-        where: { userId, unlinkedAt: null },
-        data: { unlinkedAt: new Date() },
-      });
+      // Same detach helper the generic social-unlink paths use - link
+      // history and open challenges can never outlive the identity.
+      await this.socialIdentity.detachTelegramLinkState(tx, userId);
 
       return { reservedUntil };
     });

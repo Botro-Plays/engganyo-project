@@ -364,6 +364,11 @@ export class UsersService {
         });
       }
       await tx.socialAccount.delete({ where: { id: existing.id } });
+      if (platform === SocialPlatform.TELEGRAM) {
+        // Single authority: telegram link/history/challenge side state
+        // detaches atomically with the identity row.
+        await this.socialIdentity.detachTelegramLinkState(tx, userId);
+      }
       return until;
     });
     await this.redisService.del(`user:profile:${userId}`);

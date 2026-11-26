@@ -32,12 +32,15 @@ interface TelegramLinkStatus {
     linkedAt: string;
   } | null;
   pendingClaim: {
+    claimId: string;
+    telegramUserId: string | null;
     telegramUsername: string | null;
     telegramFirstName: string | null;
     claimedAt: string | null;
     expiresAt: string;
   } | null;
   activeChallenge: {
+    claimId: string;
     code: string;
     deepLink: string;
     expiresAt: string;
@@ -246,7 +249,7 @@ function ConnectedAccountsPageInner() {
   });
 
   const tgConfirmMutation = useMutation({
-    mutationFn: () => apiClient.post('telegram/linking/confirm'),
+    mutationFn: (claimId: string) => apiClient.post('telegram/linking/confirm', { claimId }),
     onSuccess: () => {
       invalidateTelegram();
       setNotice({ type: 'success', msg: 'Telegram account linked.' });
@@ -255,7 +258,7 @@ function ConnectedAccountsPageInner() {
   });
 
   const tgDeclineMutation = useMutation({
-    mutationFn: () => apiClient.post('telegram/linking/decline'),
+    mutationFn: (claimId: string) => apiClient.post('telegram/linking/decline', { claimId }),
     onSuccess: invalidateTelegram,
     onError: (err) => setNotice({ type: 'error', msg: getApiErrorMessage(err) }),
   });
@@ -379,9 +382,12 @@ function ConnectedAccountsPageInner() {
 
             if (p.id === 'TELEGRAM' && tgEnabled && tgStatus) {
               const tg = tgStatus;
-              const tgName = tg.pendingClaim?.telegramUsername
-                ? `@${tg.pendingClaim.telegramUsername}`
-                : tg.pendingClaim?.telegramFirstName ?? 'this account';
+              const claim = tg.pendingClaim;
+              const tgName = claim?.telegramUsername
+                ? `@${claim.telegramUsername}`
+                : claim?.telegramFirstName ?? 'this account';
+              // Names are not unique - the numeric id disambiguates.
+              const tgIdText = claim?.telegramUserId ? ` (id ${claim.telegramUserId})` : '';
               return (
                 <div key={p.id} className={`card-glass rounded-xl p-5 border ${p.border}`}>
                   <div className="flex items-center gap-4">
@@ -461,7 +467,7 @@ function ConnectedAccountsPageInner() {
                         <Send className="w-3.5 h-3.5" /> Open @{tg.botUsername}
                       </a>
                       <button
-                        onClick={() => tgDeclineMutation.mutate()}
+                        onClick={() => tgDeclineMutation.mutate(tg.activeChallenge!.claimId)}
                         disabled={tgDeclineMutation.isPending}
                         className="px-3 py-1.5 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text font-medium transition-all disabled:opacity-50"
                       >
@@ -473,11 +479,11 @@ function ConnectedAccountsPageInner() {
                   {tg.pendingClaim && (
                     <div className="mt-3 border-t border-surface-border pt-3 flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-sc-muted">
-                        Telegram account <strong className="text-sc-text">{tgName}</strong> asked to link.
+                        Telegram account <strong className="text-sc-text">{tgName}{tgIdText}</strong> asked to link.
                         Is this your account?
                       </span>
                       <button
-                        onClick={() => tgConfirmMutation.mutate()}
+                        onClick={() => tgConfirmMutation.mutate(claim!.claimId)}
                         disabled={tgConfirmMutation.isPending}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 font-medium transition-all disabled:opacity-50"
                       >
@@ -485,7 +491,7 @@ function ConnectedAccountsPageInner() {
                         Yes, link it
                       </button>
                       <button
-                        onClick={() => tgDeclineMutation.mutate()}
+                        onClick={() => tgDeclineMutation.mutate(claim!.claimId)}
                         disabled={tgDeclineMutation.isPending}
                         className="px-3 py-1.5 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text font-medium transition-all disabled:opacity-50"
                       >

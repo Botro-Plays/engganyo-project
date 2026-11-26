@@ -4,7 +4,10 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 import { TelegramService } from './telegram.service';
-import { TelegramBotService, BotIngestBody, BotCommandBody } from './telegram-bot.service';
+import { TelegramBotService } from './telegram-bot.service';
+import {
+  BotIngestDto, BotApplyDto, BotAckDto, BotFailDto, BotRecoverDto, TelegramClaimIdDto,
+} from './telegram.dto';
 import { TelegramFeatureGuard, TelegramBotKeyGuard } from './telegram.guards';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -38,18 +41,18 @@ export class TelegramController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirm the pending Telegram claim shown to the user' })
-  confirmClaim(@CurrentUser() user: JwtPayload) {
-    return this.telegramService.confirmClaim(user.sub);
+  @ApiOperation({ summary: 'Confirm the exact Telegram claim displayed to the user' })
+  confirmClaim(@CurrentUser() user: JwtPayload, @Body() body: TelegramClaimIdDto) {
+    return this.telegramService.confirmClaim(user.sub, body.claimId);
   }
 
   @Post('decline')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Decline a pending claim or cancel a minted challenge' })
-  declineClaim(@CurrentUser() user: JwtPayload) {
-    return this.telegramService.declineClaim(user.sub);
+  @ApiOperation({ summary: 'Decline the exact displayed claim or cancel a minted challenge' })
+  declineClaim(@CurrentUser() user: JwtPayload, @Body() body: TelegramClaimIdDto) {
+    return this.telegramService.declineClaim(user.sub, body.claimId);
   }
 
   @Delete('link')
@@ -70,29 +73,36 @@ export class TelegramBotController {
 
   @Post('updates')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Enqueue + atomically claim an update (durable inbox)' })
-  ingest(@Body() body: BotIngestBody) {
+  @ApiOperation({ summary: 'Enqueue + atomically claim an update with a fresh claim token' })
+  ingest(@Body() body: BotIngestDto) {
     return this.botService.ingest(body);
   }
 
   @Post('commands')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Apply a claimed update command idempotently' })
-  applyCommand(@Body() body: BotCommandBody) {
+  @ApiOperation({ summary: 'Apply a claimed update idempotently, bound to its stored input' })
+  applyCommand(@Body() body: BotApplyDto) {
     return this.botService.applyCommand(body);
+  }
+
+  @Post('updates/recover')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Claim reclaimable inbox rows for autonomous recovery' })
+  recover(@Body() body: BotRecoverDto) {
+    return this.botService.recover(body);
   }
 
   @Post('updates/complete')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Mark a claimed update processed' })
-  complete(@Body() body: { updateId: number | string | bigint; workerId: string }) {
+  @ApiOperation({ summary: 'Mark a claimed update processed (claim-token fenced)' })
+  complete(@Body() body: BotAckDto) {
     return this.botService.complete(body);
   }
 
   @Post('updates/fail')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Release a claim so the update is reclaimable' })
-  fail(@Body() body: { updateId: number | string | bigint; workerId: string; error?: string }) {
+  @ApiOperation({ summary: 'Release a claim so the update is reclaimable (claim-token fenced)' })
+  fail(@Body() body: BotFailDto) {
     return this.botService.fail(body);
   }
 
