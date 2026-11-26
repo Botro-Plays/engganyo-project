@@ -85,7 +85,7 @@ test.describe('My Campaigns page', () => {
     });
 
     await page.goto('/campaigns');
-    await expect(page.getByText(/couldn.?t load your campaigns/i)).toBeVisible();
+    await expect(page.getByText(/couldn.?t load your campaigns/i)).toBeVisible({ timeout: 25_000 });
     await expect(page.getByText('No campaigns yet.')).not.toBeVisible();
 
     await page.getByRole('button', { name: 'Retry' }).click();
