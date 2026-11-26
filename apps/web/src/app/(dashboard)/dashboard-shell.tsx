@@ -306,7 +306,7 @@ const PAGE_TITLES: [string, string][] = [
   ['/dashboard', 'Dashboard'],
   ['/discover', 'Discover'],
   ['/tasks', 'Tasks'],
-  ['/campaigns', 'Campaigns'],
+  ['/campaigns', 'My Campaigns'],
   ['/wallet', 'Wallet'],
   ['/marketplace', 'Marketplace'],
   ['/chat', 'Chat'],
