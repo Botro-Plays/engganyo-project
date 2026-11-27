@@ -1,6 +1,6 @@
 # Telegram Integration Plan
 
-Status: Phase 1 implemented behind a disabled feature flag - nothing is activated. No bot settings, webhooks, messages, rewards, or live delivery are authorized by this document. Reviewed bot revision: `Jomstaid/EngganyoBot` (private) at commit `fd5265e1fb25b618523c4041552cc8d73b5f05ce` (tarball fetched 2026-11-25).
+Status: Phase 1 (`/connect`, `/disconnect`, `/status`, durable inbox, link challenges, website claim/confirm) is implemented and **deployed live** in the running `EngganyoBot` since 2026-11-27 - the earlier disabled-rollout state is historical. Still not authorized by this document: rewards, financial commands, task verification, notification delivery (Phase 2+), and any bot settings/economic gates. Reviewed bot revision at planning time: `Jomstaid/EngganyoBot` (private) at `fd5265e1fb25b618523c4041552cc8d73b5f05ce`; the deployed revision is recorded in `docs/TELEGRAM_BOT_DEPLOYMENT.md`.
 
 Bot code location: the deployable bot source is `apps/telegram-bot/` in this repository (imported from `Jomstaid/EngganyoBot` at `2c0e83b`, with the QA fixes). It is a Python project, not an npm workspace, and the web and API images do not include it. Its tests run in `.github/workflows/telegram-bot-tests.yml` and never deploy. Deployment is the manual procedure in `docs/TELEGRAM_BOT_DEPLOYMENT.md` - merging a bot PR does not activate it.
 
