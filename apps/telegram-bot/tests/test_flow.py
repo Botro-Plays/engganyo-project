@@ -58,8 +58,11 @@ async def fake_post(self, endpoint, data, **kw):
         _mid[0] += 1
         if ep == "copyMessage":
             return {"message_id": _mid[0]}
-        return {"message_id": _mid[0], "date": int(time.time()), "chat": {"id": int(data.get("chat_id", CHAT)), "type": "supergroup", "title": "G"},
-                "from": u(BOT), "text": data.get("text", "")}
+        res = {"message_id": _mid[0], "date": int(time.time()), "chat": {"id": int(data.get("chat_id", CHAT)), "type": "supergroup", "title": "G"},
+               "from": u(BOT), "text": data.get("text", "")}
+        if ep == "sendDice":  # like Telegram: the answer carries the rolled value
+            res["dice"] = {"emoji": data.get("emoji", "🎲"), "value": 3}
+        return res
     if ep == "getChat":
         return {"id": int(data["chat_id"]), "type": "supergroup", "title": "G", "accent_color_id": 1, "max_reaction_count": 11,
                 "permissions": {"can_send_messages": True}}
@@ -1264,6 +1267,31 @@ async def main():
     check(f"walked {walked} private screens, errors: {len(errs3)}", not errs3, errs3[:3])
     check(f"every button on every walked screen has an emoji ({len(noemoji)} without)", not noemoji, sorted(noemoji)[:30])
     check(f"no dead ends on any walked screen ({len(dead2)} found)", not dead2, dead2[:15])
+
+    print("- run every command: owner and plain member, in the group and in private chat")
+    from guardbot.core.registry import COMMANDS as _CMDS
+    errs4, ran4 = [], 0
+
+    class _H4(_lg.Handler):
+        def emit(self, rec):
+            if rec.levelno >= _lg.ERROR:
+                errs4.append(rec.getMessage() + " :: " + (repr(rec.exc_info[1]) if rec.exc_info else "") + " @ " + str(_cur4[0]))
+    _cur4 = [None]
+    _h4 = _H4()
+    _lg.getLogger("guardbot").addHandler(_h4)
+    for cmd_ in sorted(_CMDS):
+        for who4, where4, ctype4 in ((CREATOR, CHAT, "supergroup"), (USER, CHAT, "supergroup"), (CREATOR, CREATOR, "private"), (USER, USER, "private")):
+            _cur4[0] = f"/{cmd_} by {who4} in {ctype4}"
+            reset()
+            try:
+                await asyncio.wait_for(feed(msg_update(who4, f"/{cmd_}", chat=where4, chat_type=ctype4)), 20)
+            except Exception as e:  # noqa
+                errs4.append(f"{_cur4[0]} raised {e!r}")
+            ran4 += 1
+            from guardbot.handlers.menu import clear_pending as _cp4
+            _cp4(who4, where4)
+    _lg.getLogger("guardbot").removeHandler(_h4)
+    check(f"ran {ran4} command calls ({len(_CMDS)} commands x 4 situations), errors: {len(errs4)}", not errs4, errs4[:5])
 
     await app.shutdown()
     bad = [n for n, ok in results if not ok]

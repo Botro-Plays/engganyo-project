@@ -80,3 +80,7 @@ The Support button's Telegram link is now built from whatever the deployment wro
 ## Clean links and button emojis
 - Deep links no longer contain an underscore: portal links are `?start=portal1003886243881`, settings links `?start=cfg1003886243881` (chat id without the minus). Old `portal_-100...` / `cfg_-100...` links already posted in channels still work (`handlers/misc.py`).
 - Every settings button now has an emoji, including the service-message toggles, captcha modes, value pickers (`⏱ 15 sec.`, `🕒 7`, `🔢 3`) and the delete-cancel options. Bare number steppers (`- 1`, `+ 1`) and symbol keys (`/`, `!;.`) were left as they are. The screen walker now fails if any labelled button has no emoji.
+
+## Command sweep
+- test_flow now runs every registered command (228) as the owner and as a plain member, in the group and in private chat (912 calls) and fails on any logged error. It found one weak spot: `/dice` crashed when Telegram did not return the rolled value; it now falls back to 0, and the test API returns a dice value like Telegram does.
+- Static check with pyflakes: no undefined names anywhere in `guardbot/`.

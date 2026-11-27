@@ -621,7 +621,7 @@ async def cmd_dice(update, ctx, args):
     total = 0
     for _ in range(n):
         m = await ctx.bot.send_dice(chat.id, emoji="🎲")
-        total += m.dice.value
+        total += getattr(getattr(m, "dice", None), "value", 0) or 0
         await asyncio.sleep(0.4)
     if n > 1:
         await asyncio.sleep(3)
