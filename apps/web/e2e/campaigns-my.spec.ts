@@ -139,9 +139,9 @@ test.describe('My Campaigns page', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
 
     // While the response is held: saving state is visible and dismissal is blocked.
-    await expect(page.getByRole('button', { name: 'Saving' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Close' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Saving' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Close' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     await page.mouse.click(10, 10); // backdrop click must not dismiss either
@@ -178,7 +178,7 @@ test.describe('My Campaigns page', () => {
     // close the editor or strand the user.
     await expect(page.getByRole('alert')).toHaveText(/already accepted this task/i);
     await expect(dialog).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeEnabled();
 
     // A refetch-driven parent rerender leaves the dialog state alone.
     await expect(page.getByLabel('Campaign title')).toHaveValue('Conflict title');
