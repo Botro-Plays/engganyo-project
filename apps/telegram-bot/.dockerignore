@@ -1,0 +1,36 @@
+# Build-context exclusions for the bot production image.
+# Everything below arrives via bind mounts or stays on the host/repo only.
+
+# Credentials and local environment - never in the image
+.env
+.env.*
+!.env.example
+
+# Runtime state
+data/
+logs/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+
+# Python artifacts
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Dev-only content (not needed at runtime)
+tests/
+tools/
+docs/
+qa_report/
+run.bat
+run.sh
+run_forever.ps1
+README.md
+AGENTS.md
+Dockerfile
+.dockerignore
+.gitignore
