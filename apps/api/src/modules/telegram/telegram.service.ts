@@ -45,9 +45,11 @@ export class TelegramService {
   }
 
   private deepLink(code: string): string {
-    // The link_ prefix routes inside the bot's existing /start dispatcher
-    // without colliding with its other deep-link args (portal_, lk<n>, cfg_).
-    return `https://t.me/${this.botUsername}?start=link_${code}`;
+    // The link prefix routes inside the bot's existing /start dispatcher
+    // without colliding with its other deep-link args (portal<id>, lk<n>, cfg<id>).
+    // No underscore: the bot accepts both link<code> and the older link_<code>,
+    // so links minted before this change keep working.
+    return `https://t.me/${this.botUsername}?start=link${code}`;
   }
 
   // ─── Website: mint a single-use, expiring challenge ─────────────────────────

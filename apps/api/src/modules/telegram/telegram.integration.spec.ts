@@ -152,7 +152,7 @@ run('telegram phase 1 - real PostgreSQL', () => {
     const user = await mkUser();
     const c1 = await telegram.mintChallenge(user.id);
     expect(c1.code).toMatch(/^[A-Z2-9]{8}$/);
-    expect(c1.deepLink).toBe(`https://t.me/EngganyoBot?start=link_${c1.code}`);
+    expect(c1.deepLink).toBe(`https://t.me/EngganyoBot?start=link${c1.code}`);
     const c2 = await telegram.mintChallenge(user.id);
     const old = await prisma.telegramLinkChallenge.findUnique({ where: { code: c1.code } });
     expect(old?.status).toBe(TelegramLinkChallengeStatus.EXPIRED);
