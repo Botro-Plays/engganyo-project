@@ -37,6 +37,13 @@ check("link<code> and link_<code> both give the code", _eng.link_code_of("linkAB
 check("other /start arguments are not link codes", not any(_eng.link_code_of(a) for a in ("", "help", "anon", "lk5", "portal1003886243881", "cfg1003886243881", "link", "link_", "linkx", "link_AB 12")))
 check("wrong code says so, not 'could not reach'", "not valid" in _eng._fmt_outcome({"outcome": "code_invalid"}) and "reach" not in _eng._fmt_outcome({"outcome": "code_invalid"}))
 check("info outcome explains the commands", "/connect" in _eng._fmt_outcome({"outcome": "info"}))
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ovd = os.path.join(_root, "tools", "locale_overrides")
+for _name in sorted(os.listdir(_ovd)) if os.path.isdir(_ovd) else []:
+    _ov = json.load(open(os.path.join(_ovd, _name), encoding="utf-8"))
+    _loc = json.load(open(os.path.join(_root, "locales", _name), encoding="utf-8"))
+    check(f"hand-checked fixes in tools/locale_overrides/{_name} are present in locales/{_name} (the builder re-applies them on every rebuild)",
+          all(_loc.get(_p, {}).get(_k) == _v for _p in ("strings", "ui") for _k, _v in _ov.get(_p, {}).items()))
 check("every platform outcome has its own reply", all("reach" not in _eng._fmt_outcome({"outcome": o}) for o in ("claim_recorded", "code_invalid", "code_expired", "code_used", "already_linked", "linked", "unlinked", "not_linked", "info")))
 check("usernames", detect.find_usernames("hi @alice_b and a@b.com") == ["alice_b"])
 check("whitelist", detect.whitelisted("docs.example.com", ["example.com"]) and not detect.whitelisted("evil.com", ["example.com"]))

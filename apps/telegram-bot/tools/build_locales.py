@@ -196,6 +196,11 @@ def main():
         for k, v in (cur.get("strings") or {}).items():
             if cur.get("_hand"):
                 data["strings"][k] = v
+        ov_file = ROOT / "tools" / "locale_overrides" / f"{code}.json"  # hand-checked fixes that a rebuild must never lose
+        if ov_file.exists():
+            ov = json.loads(ov_file.read_text(encoding="utf-8"))
+            data["strings"].update(ov.get("strings", {}))
+            data["ui"].update(ov.get("ui", {}))
         f.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
         T.save()
         return code, round(time.time() - t0)
