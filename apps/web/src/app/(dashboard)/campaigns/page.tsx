@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -1063,27 +1063,90 @@ function EditCampaignModal({
     },
   });
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const restoreFocusRef = useRef<Element | null>(null);
+  // A live reservation (pending or completed work) freezes the proof terms
+  // the workers accepted - the server enforces the same rule.
+  const proofFrozen = (campaign.pendingSlots ?? 0) + (campaign.completedSlots ?? 0) > 0;
+
+  const { ref: titleFieldRef, ...titleField } = editForm.register('title');
+
+  useEffect(() => {
+    restoreFocusRef.current = document.activeElement;
+    titleInputRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      // Focus containment: keep Tab inside the dialog.
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      (restoreFocusRef.current as HTMLElement | null)?.focus?.();
+    };
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg card-glass rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-campaign-title"
+        className="w-full max-w-lg card-glass rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-sc-text">Edit Campaign</h2>
-          <button onClick={onClose} className="text-sc-dim hover:text-sc-text transition-colors">
+          <h2 id="edit-campaign-title" className="text-lg font-semibold text-sc-text">Edit Campaign</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-surface-hover transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          <div role="alert" className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
             {error}
           </div>
         )}
 
-        <form onSubmit={editForm.handleSubmit(onSave)} className="space-y-4">
+        <form onSubmit={editForm.handleSubmit(onSave)} className="space-y-4" aria-busy={pending}>
           <div>
-            <label className="block text-xs font-medium text-sc-muted mb-1.5">Campaign title</label>
+            <label htmlFor="edit-campaign-field-title" className="block text-xs font-medium text-sc-muted mb-1.5">Campaign title</label>
             <input
-              {...editForm.register('title')}
+              id="edit-campaign-field-title"
+              {...titleField}
+              ref={(el) => {
+                titleFieldRef(el);
+                titleInputRef.current = el;
+              }}
               className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             {editForm.formState.errors.title && (
@@ -1091,8 +1154,9 @@ function EditCampaignModal({
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-sc-muted mb-1.5">Description</label>
+            <label htmlFor="edit-campaign-field-description" className="block text-xs font-medium text-sc-muted mb-1.5">Description</label>
             <textarea
+              id="edit-campaign-field-description"
               {...editForm.register('description')}
               rows={3}
               className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -1102,12 +1166,20 @@ function EditCampaignModal({
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-sc-muted mb-1.5">Proof instructions</label>
+            <label htmlFor="edit-campaign-field-proof" className="block text-xs font-medium text-sc-muted mb-1.5">Proof instructions</label>
             <textarea
+              id="edit-campaign-field-proof"
               {...editForm.register('proofInstructions')}
               rows={3}
-              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500"
+              disabled={proofFrozen}
+              aria-describedby={proofFrozen ? 'edit-campaign-proof-note' : undefined}
+              className="w-full bg-surface-hover border border-surface-border rounded-lg px-3 py-2 text-sm text-sc-text placeholder-sc-dim focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed"
             />
+            {proofFrozen && (
+              <p id="edit-campaign-proof-note" className="text-xs text-amber-400/90 mt-1">
+                Proof instructions are locked because workers already accepted this task.
+              </p>
+            )}
             {editForm.formState.errors.proofInstructions && (
               <p className="text-xs text-red-400 mt-1">{editForm.formState.errors.proofInstructions.message}</p>
             )}
@@ -1128,8 +1200,8 @@ function EditCampaignModal({
               disabled={pending}
               className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-sc-text text-sm font-medium transition-all disabled:opacity-50"
             >
-              {pending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save changes
+              {pending && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+              {pending ? 'Saving…' : 'Save changes'}
             </button>
           </div>
         </form>
