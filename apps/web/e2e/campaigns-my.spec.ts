@@ -117,6 +117,79 @@ test.describe('My Campaigns page', () => {
     expect(patched).not.toHaveProperty('targetUrl');
   });
 
+  test('held save blocks dismissal, then closes and returns focus', async ({ page }) => {
+    await stubShellApis(page);
+    const c = campaign('c1', 'Alpha TikTok push');
+    let release: (() => void) | null = null;
+    await page.route('**/api/campaigns**', (r) => {
+      if (r.request().method() === 'PATCH') {
+        return new Promise<void>((resolve) => {
+          release = () => resolve(r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(c) }));
+        });
+      }
+      return r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([c])) });
+    });
+
+    await page.goto('/campaigns');
+    const editBtn = page.getByRole('button', { name: 'Edit' }).first();
+    await editBtn.click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Campaign' });
+    await expect(dialog).toBeVisible();
+    await page.getByLabel('Campaign title').fill('Held save title');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    // While the response is held: saving state is visible and dismissal is blocked.
+    await expect(page.getByRole('button', { name: 'Saving' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await page.mouse.click(10, 10); // backdrop click must not dismiss either
+    await expect(dialog).toBeVisible();
+
+    // Releasing the held response closes the dialog and returns focus.
+    release!();
+    await expect(dialog).toHaveCount(0);
+    await expect(editBtn).toBeFocused();
+  });
+
+  test('held save failure shows error in the same dialog and resets on reopen', async ({ page }) => {
+    await stubShellApis(page);
+    const c = campaign('c1', 'Alpha TikTok push');
+    let release: (() => void) | null = null;
+    await page.route('**/api/campaigns**', (r) => {
+      if (r.request().method() === 'PATCH') {
+        return new Promise<void>((resolve) => {
+          release = () => resolve(r.fulfill({ status: 409, headers: CORS_HEADERS, contentType: 'application/json', body: JSON.stringify({ success: false, message: 'Proof instructions are locked because workers already accepted this task.' }) }));
+        });
+      }
+      return r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([c])) });
+    });
+
+    await page.goto('/campaigns');
+    await page.getByRole('button', { name: 'Edit' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Campaign' });
+    await page.getByLabel('Campaign title').fill('Conflict title');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('button', { name: 'Saving' })).toBeVisible();
+
+    release!();
+    // The failure lands inside the same dialog as an alert - it does not
+    // close the editor or strand the user.
+    await expect(page.getByRole('alert')).toHaveText(/already accepted this task/i);
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+
+    // A refetch-driven parent rerender leaves the dialog state alone.
+    await expect(page.getByLabel('Campaign title')).toHaveValue('Conflict title');
+
+    // Reopen resets the error.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await page.getByRole('button', { name: 'Edit' }).first().click();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
   test('edit dialog is accessible and locks proof terms after accepted work', async ({ page }) => {
     await stubShellApis(page);
     const c = { ...campaign('c1', 'Alpha TikTok push'), pendingSlots: 1 };

@@ -199,6 +199,8 @@ export default function CampaignsPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const editingIdRef = useRef<string | null>(null);
+  editingIdRef.current = editingCampaign?.id ?? null;
   const [viewingProof, setViewingProof] = useState<{ id: string; proofUrl: string; user: Submission['user']; submittedAt: string } | null>(null);
   const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
   const [proofLoading, setProofLoading] = useState(false);
@@ -343,12 +345,20 @@ export default function CampaignsPage() {
   const editMutation = useMutation({
     mutationFn: ({ id, ...fields }: EditFormData & { id: string }) =>
       apiClient.patch(`campaigns/${id}`, fields),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['campaigns'], type: 'all' });
-      setEditingCampaign(null);
-      setEditError(null);
+      // Fence to the exact editor instance: a delayed response for one
+      // campaign must not close or clear a different campaign's editor.
+      if (editingIdRef.current === variables.id) {
+        setEditingCampaign(null);
+        setEditError(null);
+      }
     },
-    onError: (err) => setEditError(getApiErrorMessage(err)),
+    onError: (err, variables) => {
+      if (editingIdRef.current === variables.id) {
+        setEditError(getApiErrorMessage(err));
+      }
+    },
   });
 
   const statusMutation = useMutation({
@@ -1066,19 +1076,28 @@ function EditCampaignModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const restoreFocusRef = useRef<Element | null>(null);
+  // Latest-callback refs: the keydown/backdrop handlers read through them so
+  // the mount-only effect below never re-runs on parent rerenders.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
   // A live reservation (pending or completed work) freezes the proof terms
   // the workers accepted - the server enforces the same rule.
   const proofFrozen = (campaign.pendingSlots ?? 0) + (campaign.completedSlots ?? 0) > 0;
 
   const { ref: titleFieldRef, ...titleField } = editForm.register('title');
 
+  // Mount-only: focuses once on open and restores once when the dialog
+  // actually unmounts. Parent rerenders (save state, errors, refetches)
+  // must not re-focus or re-restore.
   useEffect(() => {
     restoreFocusRef.current = document.activeElement;
     titleInputRef.current?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        if (!pendingRef.current) onCloseRef.current();
         return;
       }
       // Focus containment: keep Tab inside the dialog.
@@ -1103,13 +1122,14 @@ function EditCampaignModal({
       document.removeEventListener('keydown', handleKeyDown);
       (restoreFocusRef.current as HTMLElement | null)?.focus?.();
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !pending) onClose();
       }}
     >
       <div
@@ -1124,8 +1144,9 @@ function EditCampaignModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={pending}
             aria-label="Close"
-            className="p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-surface-hover transition-colors"
+            className="p-1.5 rounded-lg text-sc-dim hover:text-sc-text hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1191,7 +1212,8 @@ function EditCampaignModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text text-sm font-medium transition-colors"
+              disabled={pending}
+              className="px-4 py-2 rounded-lg bg-surface-hover text-sc-muted hover:text-sc-text text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
