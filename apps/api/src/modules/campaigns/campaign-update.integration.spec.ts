@@ -185,7 +185,9 @@ run('Campaign update safety - real PostgreSQL integration', () => {
     expect(updated.proofInstructions).toBe('released terms');
   });
 
-  it('serializes edit vs assignment: no stale terms can be applied to accepted work', async () => {
+  it('serializes edit vs assignment: whichever locks first wins cleanly', async () => {
+    // Simultaneous race: both requests contend for the campaign row lock.
+    // The serialized outcome must be self-consistent - never a silent drop.
     const a = await makeUser();
     const worker = await makeUser();
     await fund(a.id);
@@ -196,18 +198,25 @@ run('Campaign update safety - real PostgreSQL integration', () => {
       tasks.assignTask(worker.id, c.id, 'USER'),
     ]);
 
+    // Every rejection must be an expected guard, not an incidental error.
+    if (edit.status === 'rejected') {
+      expect((edit as PromiseRejectedResult).reason.message).toMatch(/locked/i);
+    }
+    // The campaign is ACTIVE with slots, so a claim rejection is unexpected.
+    expect(claim.status).toBe('fulfilled');
+
     const row = await prisma.campaign.findUniqueOrThrow({ where: { id: c.id } });
     const completions = await prisma.taskCompletion.count({ where: { campaignId: c.id } });
 
-    if (row.proofInstructions === 'raced terms') {
-      // The edit won the lock first - a later claim accepts the new terms.
-      expect(edit.status).toBe('fulfilled');
+    if (edit.status === 'fulfilled') {
+      // Edit locked first: terms changed, and the claim (if it landed after)
+      // accepted the new terms.
+      expect(row.proofInstructions).toBe('raced terms');
     } else {
-      // The claim won - the edit must have been refused, not lost silently.
+      // Claim locked first: a live completion exists and the edit was
+      // refused - the accepted terms were preserved.
       expect(row.proofInstructions).not.toBe('raced terms');
       expect(completions).toBeGreaterThan(0);
-      expect(edit.status).toBe('rejected');
-      expect((edit as PromiseRejectedResult).reason.message).toMatch(/locked/i);
     }
   });
 
@@ -228,29 +237,60 @@ run('Campaign update safety - real PostgreSQL integration', () => {
     expect(row.status).toBe(CampaignStatus.CANCELLED);
   });
 
-  it('concurrent cancel + pause: campaign ends CANCELLED, refund applied once', async () => {
+  it('concurrent cancel + pause: campaign ends CANCELLED with exactly one exact refund', async () => {
+    // Simultaneous race: the cancel and a stale pause contend for the row
+    // lock. Either order is legal - if pause lands first the cancel still
+    // proceeds from PAUSED; if cancel lands first the pause conflicts.
     const a = await makeUser();
     await fund(a.id);
     const c = await campaigns.create(a.id, 'USER', createDto());
     const before = await balance(a.id);
+    const expectedRefund = 10 * 50; // refundableSlots * creditPerTask, fee kept
 
-    await Promise.allSettled([
+    const [cancel, pause] = await Promise.allSettled([
       campaigns.cancel(a.id, c.id),
       campaigns.update(a.id, c.id, { status: CampaignStatus.PAUSED }),
     ]);
 
+    // Inspect both outcomes: cancel must succeed; a rejected pause must be
+    // the terminal-status conflict, never an incidental error.
+    expect(cancel.status).toBe('fulfilled');
+    if (pause.status === 'rejected') {
+      expect((pause as PromiseRejectedResult).reason.message).toMatch(/Cannot modify/);
+    }
+
     const row = await prisma.campaign.findUniqueOrThrow({ where: { id: c.id } });
     expect(row.status).toBe(CampaignStatus.CANCELLED);
+    // Counters untouched by cancel; fee stays on the ledger, not refunded.
+    expect(row.totalSlots).toBe(10);
+    expect(row.completedSlots).toBe(0);
+    expect(row.pendingSlots).toBe(0);
+    expect(row.feeAmount).toBeGreaterThan(0);
 
-    const after = await balance(a.id);
-    expect(after).toBeGreaterThanOrEqual(before);
+    // Exactly one refund transaction, exact amount and provenance.
+    const refunds = await prisma.transaction.findMany({
+      where: {
+        wallet: { userId: a.id },
+        type: TransactionType.REFUND_CAMPAIGN_CANCEL,
+        referenceId: c.id,
+      },
+    });
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0].amount).toBe(expectedRefund);
+    expect(refunds[0].referenceType).toBe('campaign');
+    expect(refunds[0].description).toContain(c.title);
+    expect(await balance(a.id)).toBe(before + expectedRefund);
+
     // A second pause attempt still conflicts - no resurrection.
     await expect(
       campaigns.update(a.id, c.id, { status: CampaignStatus.ACTIVE }),
     ).rejects.toThrow(/Cannot modify/);
   });
 
-  it('concurrent completion + pause: campaign ends COMPLETED, counters exact', async () => {
+  it('concurrent completion + pause: campaign ends COMPLETED with the worker paid exactly once', async () => {
+    // Simultaneous race: creator approval and a stale pause contend for the
+    // row lock. The approval settles from ACTIVE or PAUSED (both eligible
+    // COMPLETED transitions), so settlement always wins the final state.
     const a = await makeUser();
     const worker = await makeUser();
     const c = await prisma.campaign.create({
@@ -264,17 +304,41 @@ run('Campaign update safety - real PostgreSQL integration', () => {
     const completion = await prisma.taskCompletion.create({
       data: { userId: worker.id, campaignId: c.id, status: CompletionStatus.SUBMITTED },
     });
+    const workerBefore = await balance(worker.id);
 
-    await Promise.allSettled([
+    const [approve, pause] = await Promise.allSettled([
       campaigns.reviewSubmission(a.id, c.id, completion.id, { action: 'approve' } as never),
       campaigns.update(a.id, c.id, { status: CampaignStatus.PAUSED }),
     ]);
 
+    // Settlement must succeed in either serialization order. A rejected
+    // pause must be the terminal-status conflict, nothing else.
+    expect(approve.status).toBe('fulfilled');
+    if (pause.status === 'rejected') {
+      expect((pause as PromiseRejectedResult).reason.message).toMatch(/Cannot modify/);
+    }
+
     const row = await prisma.campaign.findUniqueOrThrow({ where: { id: c.id } });
-    // Approve settles from ACTIVE or PAUSED; a stale pause never reverts it.
     expect(row.status).toBe(CampaignStatus.COMPLETED);
     expect(row.completedSlots).toBe(2);
     expect(row.pendingSlots).toBe(0);
+
+    const settled = await prisma.taskCompletion.findUniqueOrThrow({ where: { id: completion.id } });
+    expect(settled.status).toBe(CompletionStatus.VERIFIED);
+    expect(settled.creditsEarned).toBe(50);
+
+    // Exactly one payout transaction, exact amount and provenance.
+    const payouts = await prisma.transaction.findMany({
+      where: {
+        wallet: { userId: worker.id },
+        type: TransactionType.EARN_TASK_COMPLETION,
+        referenceId: c.id,
+      },
+    });
+    expect(payouts).toHaveLength(1);
+    expect(payouts[0].amount).toBe(50);
+    expect(payouts[0].referenceType).toBe('campaign');
+    expect(await balance(worker.id)).toBe(workerBefore + 50);
 
     await expect(
       campaigns.update(a.id, c.id, { status: CampaignStatus.ACTIVE }),
