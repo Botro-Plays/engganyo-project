@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { CampaignStatus, CompletionStatus, TaskType, TransactionType, TrustLevel, NotificationType } from '@prisma/client';
 
@@ -519,19 +520,65 @@ export class CampaignsService {
       CampaignStatus.PAUSED,
       CampaignStatus.DRAFT,
     ];
-    if (!modifiableStatuses.includes(campaign.status)) {
-      throw new BadRequestException(`Cannot modify a campaign with status ${campaign.status}`);
-    }
 
-    const updated = await this.prisma.campaign.update({
-      where: { id: campaignId },
-      select: CAMPAIGN_SELECT,
-      data: {
-        ...(dto.title !== undefined && { title: dto.title }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.proofInstructions !== undefined && { proofInstructions: dto.proofInstructions }),
-        ...(dto.status !== undefined && { status: dto.status }),
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Lock the campaign row for the whole transaction. This serializes
+      // against cancellation's FOR UPDATE, assignment's conditional
+      // slot-claim UPDATE, and settlement's counter UPDATEs, so the status
+      // and accepted-terms checks below cannot be based on a row that a
+      // concurrent request is about to change.
+      const [row] = await tx.$queryRaw<Array<{
+        status: string; user_id: string; proof_instructions: string | null;
+      }>>`SELECT status::text AS status, user_id, proof_instructions
+          FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      if (!row) throw new NotFoundException('Campaign not found');
+      if (row.user_id !== userId) throw new ForbiddenException('Not your campaign');
+      // A cancellation or completion that committed between the pre-check
+      // and this lock surfaces here as a conflict, never as a reactivation.
+      if (!modifiableStatuses.includes(row.status as CampaignStatus)) {
+        throw new ConflictException(`Cannot modify a campaign with status ${row.status}`);
+      }
+
+      // Accepted-terms freeze: once a worker holds (or held) a live
+      // reservation the proof requirements they accepted cannot change
+      // underneath them. The count runs under the same row lock that
+      // serializes assignment creation - a claim either committed first
+      // (and is counted here) or lands after this edit, under the new
+      // terms. EXPIRED/CANCELLED/REJECTED completions released their slot
+      // and hold no live obligation.
+      if (
+        dto.proofInstructions !== undefined
+        && dto.proofInstructions !== (row.proof_instructions ?? '')
+      ) {
+        const accepted = await tx.taskCompletion.count({
+          where: {
+            campaignId,
+            status: {
+              notIn: [
+                CompletionStatus.EXPIRED,
+                CompletionStatus.CANCELLED,
+                CompletionStatus.REJECTED,
+              ],
+            },
+          },
+        });
+        if (accepted > 0) {
+          throw new ConflictException(
+            'Proof instructions are locked because workers already accepted this task.',
+          );
+        }
+      }
+
+      return tx.campaign.update({
+        where: { id: campaignId },
+        select: CAMPAIGN_SELECT,
+        data: {
+          ...(dto.title !== undefined && { title: dto.title }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.proofInstructions !== undefined && { proofInstructions: dto.proofInstructions }),
+          ...(dto.status !== undefined && { status: dto.status }),
+        },
+      });
     });
 
     this.eventsService.emitToUser(userId, 'campaign:updated', { campaignId, status: dto.status });
