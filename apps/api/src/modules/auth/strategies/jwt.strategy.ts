@@ -37,8 +37,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (cached) {
       const status = cached.status as UserStatus;
-      if (status === UserStatus.BANNED || status === UserStatus.SUSPENDED) {
-        throw new UnauthorizedException('Account is restricted');
+      if (status !== UserStatus.ACTIVE) {
+        // Evict the stale entry so a deactivated/pending/restricted identity
+        // cannot keep riding the cache for the rest of its TTL.
+        await this.redisService.del(cacheKey);
+        throw new UnauthorizedException('Account is not active');
       }
       return {
         sub: cached.id,
@@ -56,8 +59,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user) throw new UnauthorizedException('Account not found');
 
-    if (user.status === UserStatus.BANNED || user.status === UserStatus.SUSPENDED) {
-      throw new UnauthorizedException('Account is restricted');
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Account is not active');
     }
 
     await this.redisService.setJson(cacheKey, user, 300);
