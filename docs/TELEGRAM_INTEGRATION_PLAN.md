@@ -1,12 +1,12 @@
 # Telegram Integration Plan
 
-Status: Phase 1 implemented behind a disabled feature flag - nothing is activated. No bot settings, webhooks, messages, rewards, or live delivery are authorized by this document. Reviewed bot revision: `Jomstaid/EngganyoBot` (private) at commit `fd5265e1fb25b618523c4041552cc8d73b5f05ce` (tarball fetched 2026-11-25).
+Status: Phase 1 (`/connect`, `/disconnect`, `/status`, durable inbox, link challenges, website claim/confirm) is implemented and **deployed live** in the running `EngganyoBot` since 2026-11-27 - the earlier disabled-rollout state is historical. Still not authorized by this document: rewards, financial commands, task verification, notification delivery (Phase 2+), and any bot settings/economic gates. Reviewed bot revision at planning time: `Jomstaid/EngganyoBot` (private) at `fd5265e1fb25b618523c4041552cc8d73b5f05ce`; the deployed revision is recorded in `docs/TELEGRAM_BOT_DEPLOYMENT.md`.
 
-Bot code location: the bot source now also lives in this repository under `apps/telegram-bot/` (imported from `Jomstaid/EngganyoBot`, with the QA fixes). It is a Python project, not an npm workspace, and the web and API images do not include it. Its tests run in `.github/workflows/telegram-bot-tests.yml` and never deploy. The bot process itself is deployed separately as before.
+Bot code location: the deployable bot source is `apps/telegram-bot/` in this repository (imported from `Jomstaid/EngganyoBot` at `2c0e83b`, with the QA fixes). It is a Python project, not an npm workspace, and the web and API images do not include it. Its tests run in `.github/workflows/telegram-bot-tests.yml` and never deploy. Deployment is the manual procedure in `docs/TELEGRAM_BOT_DEPLOYMENT.md` - merging a bot PR does not activate it.
 
 Identities: the **official bot is `https://t.me/EngganyoBot`** (`@EngganyoBot`). The community destination `https://t.me/Engganyo` (`@Engganyo`) is separate and unchanged - they serve different purposes and bot deep links must never point at the community handle.
 
-Hosting check (2026-11-26, VPS `134.255.232.68`): no EngganyoBot process, container, or systemd unit exists on the platform VPS - the moderation bot is hosted elsewhere (or not currently running). Because Telegram allows exactly one update consumer per token (getUpdates XOR webhook), the Phase-1 bot commands are implemented inside the existing EngganyoBot process rather than as a second poller.
+Hosting (2026-11-27): `EngganyoBot` runs as container `engganyo_bot` on the platform VPS `134.255.232.68`, long polling, deployed per `docs/TELEGRAM_BOT_DEPLOYMENT.md`. Because Telegram allows exactly one update consumer per token (getUpdates XOR webhook), the Phase-1 bot commands are implemented inside the existing EngganyoBot process rather than as a second poller.
 
 ## 1. Current bot capabilities (source-backed)
 
