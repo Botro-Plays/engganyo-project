@@ -176,7 +176,7 @@ test.describe('My Campaigns page', () => {
     release!();
     // The failure lands inside the same dialog as an alert - it does not
     // close the editor or strand the user.
-    await expect(page.getByRole('alert')).toHaveText(/already accepted this task/i);
+    await expect(dialog.getByRole('alert')).toHaveText(/already accepted this task/i);
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeEnabled();
 
@@ -187,7 +187,7 @@ test.describe('My Campaigns page', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await page.getByRole('button', { name: 'Edit' }).first().click();
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Edit Campaign' }).getByRole('alert')).toHaveCount(0);
   });
 
   test('edit dialog is accessible and locks proof terms after accepted work', async ({ page }) => {
