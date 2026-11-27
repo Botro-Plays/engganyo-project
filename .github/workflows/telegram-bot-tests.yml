@@ -13,6 +13,9 @@ on:
       - 'apps/telegram-bot/**'
       - '.github/workflows/telegram-bot-tests.yml'
   workflow_dispatch:
+  # Also called as a required job inside the deploy.yml release graph, so a
+  # bot release can never run ahead of its tests on the same revision.
+  workflow_call:
 
 permissions:
   contents: read

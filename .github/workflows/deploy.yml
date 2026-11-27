@@ -9,6 +9,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      bot_sha:
+        description: 'Bot-only release: exact 40-char monorepo SHA whose GHCR bot image to redeploy/rollback. When set, API/web build+deploy are skipped.'
+        required: false
+        type: string
 
 # Keep a new push from interrupting a deployment already in progress.
 concurrency:
@@ -22,8 +27,44 @@ env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/botro-plays/engganyo-project/api
   WEB_IMAGE: ghcr.io/botro-plays/engganyo-project/web
+  BOT_IMAGE: ghcr.io/botro-plays/engganyo-project/telegram-bot
 
 jobs:
+  # ─── Bot tests (reusable workflow, required in the release graph) ────────────
+  # Single definition in telegram-bot-tests.yml; called here so a bot
+  # release can never run ahead of its tests on the same revision.
+  bot-tests:
+    name: Bot tests (python)
+    uses: ./.github/workflows/telegram-bot-tests.yml
+
+  # ─── Release scope detection ─────────────────────────────────────────────
+  # Every main merge evaluates whether the bot needs a release: its source,
+  # deps, Docker/deploy files, or the platform integration contract it
+  # consumes. Unrelated merges skip the bot chain safely.
+  changes:
+    name: Detect release scope
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event.inputs.bot_sha == ''
+    outputs:
+      bot: ${{ steps.scope.outputs.bot }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scope
+        run: |
+          set -eu
+          BEFORE="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="${{ github.sha }}^"
+          fi
+          echo "scope diff: $BEFORE..${{ github.sha }}"
+          if git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -qE '^(apps/telegram-bot/|apps/api/src/modules/telegram/|infra/scripts/deploy-bot\.sh|\.github/workflows/(deploy|telegram-bot-tests)\.yml)'; then
+            echo "bot=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bot=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ─── CI: Lint + Test + Build ───────────────────────────────────────────────
   ci-api:
     name: CI — API lint, test, build
@@ -456,7 +497,7 @@ jobs:
     name: Build & push images
     runs-on: ubuntu-latest
     needs: e2e
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event.inputs.bot_sha == ''
 
     permissions:
       contents: read
@@ -512,12 +553,49 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
+  # ─── Bot image (conditional: only when the bot release scope changed) ─────
+  build-bot:
+    name: Build & push bot image
+    runs-on: ubuntu-latest
+    needs: [bot-tests, changes]
+    if: github.ref == 'refs/heads/main' && github.event.inputs.bot_sha == '' && needs.changes.outputs.bot == 'true'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push bot image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/telegram-bot
+          file: apps/telegram-bot/Dockerfile
+          push: true
+          tags: |
+            ${{ env.BOT_IMAGE }}:latest
+            ${{ env.BOT_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=telegram-bot
+          cache-to: type=gha,scope=telegram-bot,mode=max
+
   # ─── SSH into VPS and deploy ───────────────────────────────────────────────
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event.inputs.bot_sha == ''
 
     permissions:
       packages: read
@@ -563,3 +641,73 @@ jobs:
             git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
             git checkout --detach "$DEPLOY_SHA"
             bash infra/scripts/deploy-release.sh
+
+  # ─── Bot deploy to VPS (conditional) ──────────────────────────────────────
+  # Runs only when the release scope included bot-relevant changes, or when
+  # manually dispatched with an exact bot_sha (redeploy/rollback). Ordering:
+  # after the API deploy so the bot never lands ahead of a contract change it
+  # consumes. A skipped API deploy (bot_sha dispatch) does not block this job.
+  deploy-bot:
+    name: Deploy bot to VPS
+    runs-on: ubuntu-latest
+    needs: [changes, bot-tests, build-bot, deploy]
+    if: >-
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.bot-tests.result == 'success' &&
+      (
+        github.event.inputs.bot_sha != '' ||
+        (needs.changes.result == 'success' && needs.changes.outputs.bot == 'true' &&
+         needs.build-bot.result == 'success' && needs.deploy.result == 'success')
+      )
+    timeout-minutes: 20
+
+    permissions:
+      packages: read
+
+    steps:
+      - name: Check deployment settings
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST_FINGERPRINT: ${{ secrets.VPS_HOST_FINGERPRINT }}
+        run: |
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_HOST_FINGERPRINT; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Deploy bot via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          DEPLOY_SHA: ${{ github.sha }}
+          BOT_SHA: ${{ github.event.inputs.bot_sha }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.VPS_HOST_FINGERPRINT }}
+          port: ${{ secrets.VPS_SSH_PORT || '22' }}
+          timeout: 30s
+          command_timeout: 10m
+          envs: GHCR_TOKEN,GITHUB_ACTOR,DEPLOY_SHA,BOT_SHA
+          script: |
+            set -eu
+            cd /opt/engganyo-project
+            git fetch -q origin main
+            if [ -n "$BOT_SHA" ]; then
+              echo "$BOT_SHA" | grep -qE '^[0-9a-f]{40}$' || { echo 'bot_sha must be a 40-char SHA'; exit 1; }
+              git merge-base --is-ancestor "$BOT_SHA" origin/main || { echo 'bot_sha is not an approved main revision'; exit 1; }
+              TARGET="$BOT_SHA"
+              export DEPLOY_BOT_FORCE=1
+            else
+              TARGET="$DEPLOY_SHA"
+            fi
+            git show "${TARGET}:infra/scripts/deploy-bot.sh" > /tmp/deploy-bot.sh 2>/dev/null \
+              || git show "origin/main:infra/scripts/deploy-bot.sh" > /tmp/deploy-bot.sh
+            DEPLOY_SHA="$TARGET" bash /tmp/deploy-bot.sh
