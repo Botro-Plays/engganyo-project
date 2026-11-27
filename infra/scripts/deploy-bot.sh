@@ -14,11 +14,18 @@
 #     previous image, never to previous data
 set -euo pipefail
 
-BOT_DIR=/home/engganyo/engganyo-bot
+BOT_DIR="${DEPLOY_BOT_DIR:-/home/engganyo/engganyo-bot}"
 BOT_CONTAINER=engganyo_bot
 BOT_IMAGE=ghcr.io/botro-plays/engganyo-project/telegram-bot
 LOCAL_IMAGE=engganyo-bot              # legacy locally-built tag engganyo-bot:<sha7>
-GIT_DIR=/opt/engganyo-project
+GIT_DIR="${DEPLOY_BOT_GIT_DIR:-/opt/engganyo-project}"
+
+# Verification timings (overridable for the mocked regressions; production
+# keeps the real waits).
+VERIFY_TRIES="${DEPLOY_BOT_VERIFY_TRIES:-12}"
+VERIFY_SLEEP_S="${DEPLOY_BOT_VERIFY_SLEEP_S:-5}"
+SUSTAIN_S="${DEPLOY_BOT_SUSTAIN_S:-15}"
+ROLLBACK_WAIT_S="${DEPLOY_BOT_ROLLBACK_WAIT_S:-10}"
 
 : "${DEPLOY_SHA:?DEPLOY_SHA is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
@@ -77,20 +84,50 @@ fi
 PREV_IMAGE="$(docker inspect "$BOT_CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || true)"
 echo "previous image: ${PREV_IMAGE:-none}  new image: $NEW_REF"
 
+# ─── Shared rollback path: launch and verification failures land here ─────
+# Restores the previous image (never previous data) and re-verifies it.
+# Always exits non-zero: the release failed even when service was restored.
+rollback() {
+  echo "ERROR: $* - rolling back to previous image" >&2
+  docker rm -f "$BOT_CONTAINER" >/dev/null 2>&1 || true
+  if [ -z "$PREV_IMAGE" ]; then
+    echo 'ERROR: no previous image to roll back to - bot is STOPPED' >&2
+    exit 1
+  fi
+  if ! docker run -d --name "$BOT_CONTAINER" --restart unless-stopped \
+      -v "$BOT_DIR/.env:/app/.env:ro" \
+      -v "$BOT_DIR/data:/app/data" \
+      -v "$BOT_DIR/logs:/app/logs" \
+      "$PREV_IMAGE" >/dev/null; then
+    echo 'ERROR: rollback container failed to launch - manual intervention required' >&2
+    exit 1
+  fi
+  sleep "$ROLLBACK_WAIT_S"
+  if docker logs "$BOT_CONTAINER" 2>&1 | grep -q 'Application started' \
+     && ! docker logs "$BOT_CONTAINER" 2>&1 | grep -qE 'Conflict: terminated by other|Traceback|CRITICAL'; then
+    echo "rollback: previous image $PREV_IMAGE restored and started"
+  else
+    echo 'ERROR: rollback image failed verification - manual intervention required' >&2
+  fi
+  exit 1
+}
+
 # ─── Controlled single-instance replacement ───────────────────────────────
 docker stop "$BOT_CONTAINER" 2>/dev/null || true
 docker rm "$BOT_CONTAINER" 2>/dev/null || true
-docker run -d --name "$BOT_CONTAINER" --restart unless-stopped \
-  -v "$BOT_DIR/.env:/app/.env:ro" \
-  -v "$BOT_DIR/data:/app/data" \
-  -v "$BOT_DIR/logs:/app/logs" \
-  "$NEW_REF" >/dev/null
+if ! docker run -d --name "$BOT_CONTAINER" --restart unless-stopped \
+    -v "$BOT_DIR/.env:/app/.env:ro" \
+    -v "$BOT_DIR/data:/app/data" \
+    -v "$BOT_DIR/logs:/app/logs" \
+    "$NEW_REF" >/dev/null; then
+  rollback "replacement container failed to launch"
+fi
 
 verify() {
   local i
-  for i in $(seq 1 12); do
+  for i in $(seq 1 "$VERIFY_TRIES"); do
     docker logs "$BOT_CONTAINER" 2>&1 | grep -q 'Application started' && break
-    sleep 5
+    sleep "$VERIFY_SLEEP_S"
   done
   docker logs "$BOT_CONTAINER" 2>&1 | grep -q 'Application started' \
     || { echo 'verify: no Application started'; return 1; }
@@ -99,29 +136,45 @@ verify() {
   if docker logs "$BOT_CONTAINER" 2>&1 | grep -qE 'Conflict: terminated by other|Traceback|CRITICAL'; then
     echo 'verify: error/polling conflict in logs'; return 1
   fi
-  sleep 15  # sustained startup, not a momentary boot
+  sleep "$SUSTAIN_S"  # sustained startup, not a momentary boot
   [ "$(docker inspect "$BOT_CONTAINER" --format '{{.State.Running}}')" = 'true' ] \
     || { echo 'verify: container not running'; return 1; }
   [ "$(docker inspect "$BOT_CONTAINER" --format '{{.RestartCount}}')" = '0' ] \
     || { echo 'verify: container restarted'; return 1; }
   [ "$(docker ps --format '{{.Names}}' | grep -cx "$BOT_CONTAINER")" = '1' ] \
     || { echo 'verify: not exactly one consumer'; return 1; }
-  docker exec "$BOT_CONTAINER" python - <<'PYEOF' || { echo 'verify: identity/health probe failed'; return 1; }
+  # -i is required: the heredoc IS the script's stdin. Without it docker
+  # detaches stdin, python reads an empty program, exits 0, and the probe
+  # silently "passes" without checking anything.
+  docker exec -i "$BOT_CONTAINER" python - <<'PYEOF' || { echo 'verify: identity/health probe failed'; return 1; }
 from dotenv import load_dotenv
 load_dotenv('/app/.env')
 import json, os, sys, urllib.request
 import httpx
-tok = os.environ['BOT_TOKEN']
-me = json.load(urllib.request.urlopen(f'https://api.telegram.org/bot{tok}/getMe', timeout=15))
-exp = os.environ['ENGGANYO_BOT_USERNAME'].lstrip('@')
-assert me['result']['is_bot'] and me['result']['username'] == exp, me
-wh = json.load(urllib.request.urlopen(f'https://api.telegram.org/bot{tok}/getWebhookInfo', timeout=15))
-assert wh['result']['url'] == '', 'unexpected webhook configured'
-base = os.environ['ENGGANYO_API_BASE'].rstrip('/')
-key = os.environ['ENGGANYO_BOT_SERVICE_KEY']
-r = httpx.get(base + '/telegram/bot/inbox/health', headers={'X-Telegram-Bot-Key': key}, timeout=15)
-assert r.status_code == 200, r.status_code
-print(f"verify: getMe=@{me['result']['username']} inbox_health=200")
+
+def fail(msg):
+    print('verify-probe: ' + msg)
+    sys.exit(1)
+
+try:
+    tok = os.environ['BOT_TOKEN']
+    me = json.load(urllib.request.urlopen('https://api.telegram.org/bot' + tok + '/getMe', timeout=15))
+    exp = os.environ['ENGGANYO_BOT_USERNAME'].lstrip('@')
+    if not (me['result']['is_bot'] and me['result']['username'] == exp):
+        fail('getMe mismatch')
+    wh = json.load(urllib.request.urlopen('https://api.telegram.org/bot' + tok + '/getWebhookInfo', timeout=15))
+    if wh['result']['url'] != '':
+        fail('unexpected webhook configured')
+    base = os.environ['ENGGANYO_API_BASE'].rstrip('/')
+    key = os.environ['ENGGANYO_BOT_SERVICE_KEY']
+    r = httpx.get(base + '/telegram/bot/inbox/health', headers={'X-Telegram-Bot-Key': key}, timeout=15)
+    if r.status_code != 200:
+        fail('inbox health HTTP ' + str(r.status_code))
+except Exception as e:
+    # Echo only the exception TYPE: messages may embed API URLs that
+    # contain the bot token.
+    fail(type(e).__name__)
+print('verify: getMe=@' + me['result']['username'] + ' inbox_health=200')
 PYEOF
 }
 
@@ -130,23 +183,4 @@ if verify; then
   echo "Bot deployment healthy: $DEPLOY_SHA ($NEW_REF)"
   exit 0
 fi
-
-# ─── Failed start: restore the previous image, never the database ─────────
-echo 'ERROR: new bot failed verification; rolling back to previous image' >&2
-docker rm -f "$BOT_CONTAINER" >/dev/null 2>&1 || true
-if [ -n "$PREV_IMAGE" ]; then
-  docker run -d --name "$BOT_CONTAINER" --restart unless-stopped \
-    -v "$BOT_DIR/.env:/app/.env:ro" \
-    -v "$BOT_DIR/data:/app/data" \
-    -v "$BOT_DIR/logs:/app/logs" \
-    "$PREV_IMAGE" >/dev/null
-  sleep 10
-  if docker logs "$BOT_CONTAINER" 2>&1 | grep -q 'Application started'; then
-    echo "rollback: previous image $PREV_IMAGE restored and started"
-  else
-    echo 'ERROR: rollback image also failed to start - manual intervention required' >&2
-  fi
-else
-  echo 'ERROR: no previous image to roll back to - bot is STOPPED' >&2
-fi
-exit 1
+rollback "new bot failed verification"
