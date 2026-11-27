@@ -1,0 +1,46 @@
+name: Telegram bot tests
+
+# Runs only when the bot folder (or this file) changes. It never deploys anything,
+# never uses a bot token and never talks to Telegram: every test uses a fake API.
+on:
+  pull_request:
+    paths:
+      - 'apps/telegram-bot/**'
+      - '.github/workflows/telegram-bot-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/telegram-bot/**'
+      - '.github/workflows/telegram-bot-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bot-tests:
+    name: Bot tests (python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/telegram-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/telegram-bot/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Structure, menus, commands (test_core)
+        run: python tests/test_core.py
+      - name: End to end through the real handlers (test_flow)
+        run: python tests/test_flow.py
+      - name: Style and navigation of every screen (test_style)
+        run: python tests/test_style.py
+      - name: Strings (check_strings)
+        run: python tests/check_strings.py
+      - name: Platform link recovery (test_platform_recovery)
+        run: python tests/test_platform_recovery.py
