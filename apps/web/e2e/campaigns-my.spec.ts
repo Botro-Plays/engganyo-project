@@ -117,6 +117,51 @@ test.describe('My Campaigns page', () => {
     expect(patched).not.toHaveProperty('targetUrl');
   });
 
+  test('edit dialog is accessible and locks proof terms after accepted work', async ({ page }) => {
+    await stubShellApis(page);
+    const c = { ...campaign('c1', 'Alpha TikTok push'), pendingSlots: 1 };
+    await page.route('**/api/campaigns**', (r) =>
+      r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([c])) }));
+
+    await page.goto('/campaigns');
+    await page.getByRole('button', { name: 'Edit' }).first().click();
+
+    // Accessible dialog: name, modality, labelled fields.
+    const dialog = page.getByRole('dialog', { name: 'Edit Campaign' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await expect(page.getByLabel('Campaign title')).toBeVisible();
+    await expect(page.getByLabel('Description')).toBeVisible();
+    await expect(page.getByLabel('Proof instructions')).toBeVisible();
+
+    // Initial focus lands on the first field.
+    await expect(page.getByLabel('Campaign title')).toBeFocused();
+
+    // Accepted work freezes proof terms and says why.
+    await expect(page.getByLabel('Proof instructions')).toBeDisabled();
+    await expect(page.getByText(/already accepted this task/i)).toBeVisible();
+
+    // Accessible close via button label and via Escape.
+    await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test('Escape and close restore usable state', async ({ page }) => {
+    await stubShellApis(page);
+    await page.route('**/api/campaigns**', (r) =>
+      r.fulfill({ status: 200, headers: CORS_HEADERS, contentType: 'application/json', body: apiResponse(page1([campaign('c1', 'Alpha TikTok push')])) }));
+
+    await page.goto('/campaigns');
+    const editBtn = page.getByRole('button', { name: 'Edit' }).first();
+    await editBtn.click();
+    await expect(page.getByRole('dialog', { name: 'Edit Campaign' })).toBeVisible();
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // Focus returns to the trigger so keyboard users are not stranded.
+    await expect(editBtn).toBeFocused();
+  });
+
   test('header wraps at 360px without horizontal overflow', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await stubShellApis(page);
