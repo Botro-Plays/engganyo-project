@@ -49,11 +49,36 @@ function resultFor(type: string): Record<string, unknown> {
       total: 1,
     };
   }
+  if (type === 'USERS_LIST') {
+    return {
+      users: [
+        {
+          userId: 101,
+          firstName: 'Ada',
+          lastName: '',
+          username: 'ada',
+          lang: 'en',
+          started: true,
+          isBot: false,
+          firstSeen: 1770000000,
+          lastSeen: 1770000000,
+          botIds: [202],
+          botCount: 1,
+          activeGroupCount: 1,
+          groups: [{ chatId: -1001, title: 'Main Group', type: 'supergroup' }],
+        },
+      ],
+      total: 1,
+      limit: 25,
+      offset: 0,
+    };
+  }
   if (type === 'BOT_USERS_LIST') {
     return {
       users: [
         {
           botId: 202,
+          botLabel: '@CloneOneBot',
           userId: 101,
           firstName: 'Ada',
           lastName: '',
@@ -74,6 +99,7 @@ function resultFor(type: string): Record<string, unknown> {
       chats: [
         {
           botId: 202,
+          botLabel: '@CloneOneBot',
           chatId: -1001,
           title: 'Main Group',
           type: 'supergroup',
@@ -216,6 +242,7 @@ function resultFor(type: string): Record<string, unknown> {
     return {
       bots: [{ botId: 202, label: '@CloneOneBot' }],
       groups: [{ chatId: -1001, title: 'Main Group', memberCount: 42, botId: 202 }],
+      channels: [{ chatId: -2002, title: 'Main Channel', memberCount: 500, botId: 202 }],
       everyChoices: [1, 2, 3, 5, 10, 20],
       mediaTypes: ['animation', 'audio', 'document', 'photo', 'video'],
     };
@@ -371,6 +398,7 @@ test.describe('admin telegram bot control center', () => {
       'CLONES_LIST',
       'GROUPS_LIST',
       'GROUPS_EXPORT',
+      'USERS_LIST',
       'BOT_USERS_LIST',
       'BOT_CHATS_LIST',
       'START_MESSAGES_LIST',
@@ -407,6 +435,9 @@ test.describe('admin telegram bot control center', () => {
 
     await page.locator('#ann-text').fill('E2E announcement');
     await page.getByLabel('All bots').check();
+    await page.getByLabel(/Main Group/).check();
+    await page.getByLabel('All eligible channels').check();
+    await page.getByLabel('Enable with /mentionall').check();
     await page.getByRole('button', { name: 'Create Announcement' }).click();
     await expect(page.getByRole('button', { name: 'Confirm Create' })).toBeVisible();
     await page.getByRole('button', { name: 'Confirm Create' }).click();
@@ -430,7 +461,14 @@ test.describe('admin telegram bot control center', () => {
     expect(list.ok()).toBeTruthy();
     const items = unwrap(await list.json()).items ?? [];
     expect(
-      items.some((item: any) => item.type === 'ANNOUNCEMENT_CREATE' && item.status === 'DONE'),
+      items.some(
+        (item: any) =>
+          item.type === 'ANNOUNCEMENT_CREATE' &&
+          item.status === 'DONE' &&
+          item.params?.mentionEnabled === true &&
+          JSON.stringify(item.params?.groups ?? []).includes('-1001') &&
+          JSON.stringify(item.params?.channels ?? []).includes('all'),
+      ),
     ).toBeTruthy();
     expect(
       items.some((item: any) => item.type === 'CLONE_SET_ACTIVE' && item.status === 'DONE'),

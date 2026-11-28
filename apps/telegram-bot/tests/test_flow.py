@@ -833,16 +833,21 @@ async def main():
     d.set_path(CHAT, "tagall.who", "all"); d.set_path(CHAT, "tagall.hide", False)
     reset(); await feed(msg_update(CREATOR, "/mentionall"))
     check("announcement follows an admin /mentionall", [m for m in sent("sendMessage") if "Engganyo.com" in (m.get("text") or "")], sent("sendMessage"))
-    d.x("UPDATE announcements SET every=3 WHERE id=?", (aid,)); d.x("DELETE FROM kv WHERE key LIKE 'annuse:%'")
+    d.x("UPDATE announcements SET every=3 WHERE id=?", (aid,)); d.x("DELETE FROM kv WHERE key LIKE 'annuse:%'"); d.x("DELETE FROM kv WHERE key LIKE 'annlast:%'")
     shown = []
     for _ in range(6):
         reset(); await feed(msg_update(CREATOR, "/mentionall"))
         shown.append(bool([m for m in sent("sendMessage") if "Engganyo.com" in (m.get("text") or "")]))
+        d.x("DELETE FROM kv WHERE key LIKE 'annlast:%'")
     check("with 'every 3' the announcement follows only each 3rd /mentionall", shown == [False, False, True, False, False, True], shown)
     d.x("UPDATE announcements SET every=1 WHERE id=?", (aid,))
     d.x("DELETE FROM kv WHERE key LIKE 'annlast:%'"); d.x("UPDATE announcements SET bots=? WHERE id=?", (json.dumps([12345]), aid))
     reset(); await feed(msg_update(CREATOR, "/mentionall"))
-    check("announcement respects the chosen bots", not [m for m in sent("sendMessage") if "Engganyo.com" in (m.get("text") or "")])
+    check("mention delivery follows groups even when private bot audience is narrow", [m for m in sent("sendMessage") if "Engganyo.com" in (m.get("text") or "")])
+    uses_before_cooldown = int(d.kv_get(f"annuse:{CHAT}", 0) or 0)
+    reset(); await feed(msg_update(CREATOR, "/mentionall"))
+    check("mention announcements respect the one-hour group cooldown", not [m for m in sent("sendMessage") if "Engganyo.com" in (m.get("text") or "")])
+    check("mention attempts still count toward the frequency during cooldown", int(d.kv_get(f"annuse:{CHAT}", 0) or 0) == uses_before_cooldown + 1)
     reset(); await feed(cb_update(42, f"anc|bt|{aid}|all", chat=42))
     check("choosing all bots saved", json.loads(d.one("SELECT bots FROM announcements WHERE id=?", (aid,))["bots"]) == ["all"])
     d.x("INSERT OR IGNORE INTO bot_users(bot_id,user_id,ts) VALUES(?,?,0)", (BOT, 77001))
@@ -860,6 +865,13 @@ async def main():
     reset(); await feed(cb_update(42, f"anc|s|{aid2}|go", chat=42)); await asyncio.sleep(0.8)
     gm = [m for m in sent("sendMessage") if "Group promo" in (m.get("text") or "")]
     check("send now posts to the chosen groups with its buttons", gm and "example.com" in str(gm[0].get("reply_markup")), sent("sendMessage")[-3:])
+    d.x("INSERT OR IGNORE INTO chats(chat_id,title,type,lang,tz,settings,owner_id,added_at,active,banned,member_count) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (-1008888, "Promo Channel", "channel", "en", "UTC", "{}", 42, int(time.time()), 1, 0, 500))
+    d.x("INSERT OR IGNORE INTO bot_chats(bot_id,chat_id,ts) VALUES(?,?,?)", (BOT, -1008888, int(time.time())))
+    d.x("UPDATE announcements SET groups=?, channels=? WHERE id=?", ("[]", json.dumps([-1008888]), aid2))
+    reset(); await feed(cb_update(42, f"anc|s|{aid2}|go", chat=42)); await asyncio.sleep(0.8)
+    cm = [m for m in sent("sendMessage") if m.get("chat_id") in (-1008888, "-1008888") and "Group promo" in (m.get("text") or "")]
+    check("send now posts to explicitly chosen channels", cm, sent("sendMessage")[-4:])
     d.x("DELETE FROM announcements")
 
     print("- invite contest")

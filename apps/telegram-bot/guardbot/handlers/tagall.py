@@ -208,7 +208,7 @@ async def run_tag(update, ctx, scope: str, note: str = "", explicit: bool = Fals
     if scope == "all" and perms.level >= 2:  # sponsor/announcement rides along, once an hour per group
         try:
             from . import announcements
-            await announcements.after_mentionall(ctx, chat, anchor, thread if msg.is_topic_message else None)
+            await announcements.after_mentionall(ctx, chat, anchor, thread if msg.is_topic_message else None, msg.message_id)
         except Exception as e:  # noqa: BLE001
             log.debug("announcement: %s", e)
     try:

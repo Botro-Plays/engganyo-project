@@ -247,18 +247,19 @@ export function GroupsAdminSection() {
     <div className="space-y-5">
       <OperationCard
         title="Group directory"
-        description="All chats known to the bot, including inactive and banned states."
+        description="All groups, supergroups, and channels known to the bot, including inactive and banned states."
       >
         <ReadPanel title="Groups" type="GROUPS_LIST" params={{ limit: 20, offset: groupOffset }}>
           {(result, reload) => (
             <>
               <MiniTable
-                headers={['Group', 'Chat ID', 'Members', 'State', 'Owner']}
+                headers={['Chat', 'Type', 'Chat ID', 'Members', 'State', 'Owner']}
                 empty="No groups are known."
                 rows={(result.groups ?? []).map((g: any) => [
                   <span key="t" className="text-sc-text">
                     {g.title ?? 'Untitled'}
                   </span>,
+                  g.type ?? '-',
                   <code key="c">{g.chatId}</code>,
                   g.memberCount ?? 0,
                   `${g.active ? 'Active' : 'Inactive'}${g.banned ? ', banned' : ''}`,

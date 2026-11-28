@@ -83,6 +83,23 @@ def _clone_public(row) -> dict:
     }
 
 
+def _main_bot_id(ctx=None) -> int:
+    if ctx is not None and getattr(getattr(ctx, "bot", None), "id", None):
+        return int(ctx.bot.id)
+    raw = str(config.BOT_TOKEN or "").split(":", 1)[0]
+    return int(raw) if raw.isdigit() else 0
+
+
+def _bot_labels(ctx=None) -> dict[int, str]:
+    labels = {}
+    main_id = _main_bot_id(ctx)
+    if main_id:
+        labels[main_id] = "main"
+    for row in database.get().q("SELECT bot_id,username FROM clones"):
+        labels[int(row["bot_id"])] = "@" + (row["username"] or str(row["bot_id"]))
+    return labels
+
+
 def overview() -> dict:
     d = database.get()
     now_ts = int(time.time())
@@ -124,15 +141,22 @@ def clones_list() -> dict:
         bot_id = row["bot_id"]
         item["userCount"] = d.one("SELECT COUNT(*) c FROM bot_users WHERE bot_id=?", (bot_id,))["c"]
         groups = d.q(
-            "SELECT c.title FROM bot_chats b JOIN chats c ON c.chat_id=b.chat_id "
+            "SELECT c.title,c.type FROM bot_chats b JOIN chats c ON c.chat_id=b.chat_id "
             "WHERE b.bot_id=? ORDER BY lower(c.title) LIMIT 15", (bot_id,))
-        item["groupCount"] = d.one("SELECT COUNT(*) c FROM bot_chats WHERE bot_id=?", (bot_id,))["c"]
-        item["groupTitles"] = [g["title"] for g in groups if g["title"]]
+        item["chatCount"] = d.one("SELECT COUNT(*) c FROM bot_chats WHERE bot_id=?", (bot_id,))["c"]
+        item["groupCount"] = d.one(
+            "SELECT COUNT(*) c FROM bot_chats b JOIN chats c ON c.chat_id=b.chat_id "
+            "WHERE b.bot_id=? AND c.type IN ('group','supergroup')", (bot_id,))["c"]
+        item["channelCount"] = d.one(
+            "SELECT COUNT(*) c FROM bot_chats b JOIN chats c ON c.chat_id=b.chat_id "
+            "WHERE b.bot_id=? AND c.type='channel'", (bot_id,))["c"]
+        item["groupTitles"] = [g["title"] for g in groups if g["title"] and g["type"] in ("group", "supergroup")]
+        item["channelTitles"] = [g["title"] for g in groups if g["title"] and g["type"] == "channel"]
         items.append(item)
     return {"clones": items, "total": len(items)}
 
 
-def bot_users_list(params: dict) -> dict:
+def bot_users_list(params: dict, ctx=None) -> dict:
     d = database.get()
     limit, offset = _limit(params), _offset(params)
     bot_id = params.get("botId")
@@ -143,26 +167,62 @@ def bot_users_list(params: dict) -> dict:
         "SELECT b.bot_id,b.user_id,b.ts,u.first_name,u.last_name,u.username,u.lang,u.started,u.is_bot "
         f"FROM bot_users b LEFT JOIN users u ON u.user_id=b.user_id {where} "
         "ORDER BY b.ts DESC LIMIT ? OFFSET ?", (*args, limit, offset))
+    labels = _bot_labels(ctx)
     return _page([{
-        "botId": r["bot_id"], "userId": r["user_id"], "firstName": r["first_name"],
+        "botId": r["bot_id"], "botLabel": labels.get(int(r["bot_id"]), str(r["bot_id"])),
+        "userId": r["user_id"], "firstName": r["first_name"],
         "lastName": r["last_name"], "username": r["username"], "lang": r["lang"],
         "started": bool(r["started"]), "isBot": bool(r["is_bot"]), "seenAt": r["ts"],
     } for r in rows], total, limit, offset, "users")
 
 
-def bot_chats_list(params: dict) -> dict:
+def users_list(params: dict) -> dict:
+    """Every Telegram user known locally, with every main/clone private audience they belong to."""
+    d = database.get()
+    limit, offset = _limit(params), _offset(params)
+    total = d.one("SELECT COUNT(*) c FROM users")["c"]
+    rows = d.q("SELECT * FROM users ORDER BY last_seen DESC, user_id DESC LIMIT ? OFFSET ?", (limit, offset))
+    items = []
+    for r in rows:
+        uid = r["user_id"]
+        bots = [x["bot_id"] for x in d.q("SELECT bot_id FROM bot_users WHERE user_id=? ORDER BY ts", (uid,))]
+        groups = d.q(
+            "SELECT c.chat_id,c.title,c.type FROM members m JOIN chats c USING(chat_id) "
+            "WHERE m.user_id=? AND m.left=0 ORDER BY lower(c.title) LIMIT 10", (uid,))
+        items.append({
+            "userId": uid, "firstName": r["first_name"], "lastName": r["last_name"],
+            "username": r["username"], "lang": r["lang"], "started": bool(r["started"]),
+            "isBot": bool(r["is_bot"]), "firstSeen": r["first_seen"], "lastSeen": r["last_seen"],
+            "botIds": bots, "botCount": len(bots),
+            "activeGroupCount": d.one("SELECT COUNT(*) c FROM members WHERE user_id=? AND left=0", (uid,))["c"],
+            "groups": [{"chatId": g["chat_id"], "title": g["title"], "type": g["type"]} for g in groups],
+        })
+    return _page(items, total, limit, offset, "users")
+
+
+def bot_chats_list(params: dict, ctx=None) -> dict:
     d = database.get()
     limit, offset = _limit(params), _offset(params)
     bot_id = params.get("botId")
-    where = "WHERE b.bot_id=?" if bot_id else ""
-    args = [int(bot_id)] if bot_id else []
-    total = d.one(f"SELECT COUNT(*) c FROM bot_chats b {where}", args)["c"]
+    chat_type = str(params.get("chatType") or "").strip()
+    clauses = []
+    args = []
+    if bot_id:
+        clauses.append("b.bot_id=?")
+        args.append(int(bot_id))
+    if chat_type in ("group", "supergroup", "channel"):
+        clauses.append("c.type=?")
+        args.append(chat_type)
+    where = "WHERE " + " AND ".join(clauses) if clauses else ""
+    total = d.one(f"SELECT COUNT(*) c FROM bot_chats b LEFT JOIN chats c ON c.chat_id=b.chat_id {where}", args)["c"]
     rows = d.q(
         "SELECT b.bot_id,b.chat_id,b.ts,c.title,c.type,c.active,c.banned,c.member_count,c.owner_id "
         f"FROM bot_chats b LEFT JOIN chats c ON c.chat_id=b.chat_id {where} "
         "ORDER BY b.ts DESC LIMIT ? OFFSET ?", (*args, limit, offset))
+    labels = _bot_labels(ctx)
     return _page([{
-        "botId": r["bot_id"], "chatId": r["chat_id"], "title": r["title"], "type": r["type"],
+        "botId": r["bot_id"], "botLabel": labels.get(int(r["bot_id"]), str(r["bot_id"])),
+        "chatId": r["chat_id"], "title": r["title"], "type": r["type"],
         "active": bool(r["active"]), "banned": bool(r["banned"]), "memberCount": r["member_count"],
         "ownerId": r["owner_id"], "seenAt": r["ts"],
     } for r in rows], total, limit, offset, "chats")
@@ -213,6 +273,7 @@ def _announcement_public(row, include_message: bool = False) -> dict:
         "byAdmin": row["by_admin"], "dm": bool(row["dm"]), "groupsMode": bool(row["grp"]),
         "mentionEvery": row["every"], "bots": _json(row["bots"], []),
         "selectedGroups": _json(row["groups"], []),
+        "selectedChannels": _json(row["channels"], []) if "channels" in row.keys() else [],
         "message": _message_summary(row["data"], include_message),
     }
 
@@ -257,11 +318,21 @@ def announcement_audience_get(params: dict) -> dict:
                            "active": bool(chat["active"]) if chat else False,
                            "banned": bool(chat["banned"]) if chat else False,
                            "memberCount": chat["member_count"] if chat else 0})
+    channels = [int(x) for x in (_json(row["channels"], []) if "channels" in row.keys() else []) if str(x).lstrip("-").isdigit()]
+    channel_info = []
+    for chat_id in channels:
+        chat = d.one("SELECT title,type,active,banned,member_count FROM chats WHERE chat_id=?", (chat_id,))
+        channel_info.append({"chatId": chat_id, "title": chat["title"] if chat else None,
+                             "type": chat["type"] if chat else None,
+                             "active": bool(chat["active"]) if chat else False,
+                             "banned": bool(chat["banned"]) if chat else False,
+                             "memberCount": chat["member_count"] if chat else 0})
     return {"audience": {"announcementId": announcement_id, "dm": bool(row["dm"]),
                          "groupsMode": bool(row["grp"]), "botsSelected": _json(row["bots"], []),
                          "groupsSelected": _json(row["groups"], []),
+                         "channelsSelected": _json(row["channels"], []) if "channels" in row.keys() else [],
                          "mentionEvery": row["every"], "active": bool(row["active"]),
-                         "bots": bot_info, "groups": group_info}}
+                         "bots": bot_info, "groups": group_info, "channels": channel_info}}
 
 
 def mention_status_get() -> dict:
@@ -291,6 +362,7 @@ HANDLERS = {
     "OVERVIEW": lambda p: overview(),
     "CLONES_LIST": lambda p: clones_list(),
     "BOT_USERS_LIST": bot_users_list,
+    "USERS_LIST": users_list,
     "BOT_CHATS_LIST": bot_chats_list,
     "START_MESSAGES_LIST": lambda p: start_messages_list(),
     "START_MESSAGE_GET": start_message_get,

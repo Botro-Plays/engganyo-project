@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS cposts(
 CREATE TABLE IF NOT EXISTS announcements(
   id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT, bots TEXT DEFAULT '[]', dm INTEGER DEFAULT 0, grp INTEGER DEFAULT 0,
   active INTEGER DEFAULT 1, created INTEGER, sent INTEGER DEFAULT 0, failed INTEGER DEFAULT 0, shown INTEGER DEFAULT 0,
-  last_at INTEGER DEFAULT 0, by_admin INTEGER, groups TEXT DEFAULT '[]', every INTEGER DEFAULT 1);
+  last_at INTEGER DEFAULT 0, by_admin INTEGER, groups TEXT DEFAULT '[]', every INTEGER DEFAULT 1, channels TEXT DEFAULT '[]');
 CREATE TABLE IF NOT EXISTS bot_users(
   bot_id INTEGER, user_id INTEGER, ts INTEGER, PRIMARY KEY(bot_id,user_id));
 CREATE TABLE IF NOT EXISTS invite_links(chat_id INTEGER, user_id INTEGER, link TEXT, PRIMARY KEY(chat_id,user_id));
@@ -116,7 +116,7 @@ class DB:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA synchronous=NORMAL")
         self.con.executescript(SCHEMA)
-        for ddl in ("ALTER TABLE members ADD COLUMN joins INTEGER DEFAULT 0", "ALTER TABLE announcements ADD COLUMN groups TEXT DEFAULT '[]'", "ALTER TABLE announcements ADD COLUMN every INTEGER DEFAULT 1"):  # lightweight migrations
+        for ddl in ("ALTER TABLE members ADD COLUMN joins INTEGER DEFAULT 0", "ALTER TABLE announcements ADD COLUMN groups TEXT DEFAULT '[]'", "ALTER TABLE announcements ADD COLUMN every INTEGER DEFAULT 1", "ALTER TABLE announcements ADD COLUMN channels TEXT DEFAULT '[]'"):  # lightweight migrations
             try:
                 self.con.execute(ddl)
             except sqlite3.OperationalError:

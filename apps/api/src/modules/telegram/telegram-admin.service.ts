@@ -194,6 +194,7 @@ function nonNegativeIntParam(params: Record<string, unknown>, key: string, max: 
 function validateCommandParams(type: string, params: Record<string, unknown>) {
   const pageTypes = new Set([
     'BOT_USERS_LIST',
+    'USERS_LIST',
     'BOT_CHATS_LIST',
     'ANNOUNCEMENTS_LIST',
     'GROUPS_LIST',
@@ -213,6 +214,10 @@ function validateCommandParams(type: string, params: Record<string, unknown>) {
     ) {
       throw new BadRequestException('limit must be 1-100 and offset must be non-negative');
     }
+  }
+  if (type === 'BOT_CHATS_LIST' && params.chatType !== undefined) {
+    if (!['group', 'supergroup', 'channel'].includes(String(params.chatType)))
+      throw new BadRequestException('chatType must be group, supergroup, or channel');
   }
   switch (type) {
     case 'START_MESSAGE_GET':
@@ -347,8 +352,9 @@ function validateCommandParams(type: string, params: Record<string, unknown>) {
   if (type === 'ANNOUNCEMENT_SET_AUDIENCE' || type === 'ANNOUNCEMENT_CREATE') {
     const bots = idList(params, 'bots', 500);
     const groups = idList(params, 'groups', 500);
-    if (bots.length === 0 && groups.length === 0) {
-      throw new BadRequestException('select at least one bot audience or group');
+    const channels = params.channels === undefined ? [] : idList(params, 'channels', 500);
+    if (bots.length === 0 && groups.length === 0 && channels.length === 0) {
+      throw new BadRequestException('select at least one bot audience, group, or channel');
     }
     for (const botId of bots) {
       if (
@@ -364,6 +370,14 @@ function validateCommandParams(type: string, params: Record<string, unknown>) {
         (!Number.isSafeInteger(numericParam(groupId)) || numericParam(groupId) === 0)
       ) {
         throw new BadRequestException('groups must contain non-zero chat IDs or all');
+      }
+    }
+    for (const channelId of channels) {
+      if (
+        channelId !== 'all' &&
+        (!Number.isSafeInteger(numericParam(channelId)) || numericParam(channelId) === 0)
+      ) {
+        throw new BadRequestException('channels must contain non-zero chat IDs or all');
       }
     }
     if (

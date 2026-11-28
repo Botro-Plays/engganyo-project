@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -102,6 +103,9 @@ with tempfile.TemporaryDirectory() as tmp:
         (":".join(("123456", "abcdefghijklmnopqrstuvwxyz")), 202, "CloneBot", 101, 1, now))
     d.x("INSERT INTO bot_users(bot_id,user_id,ts) VALUES(?,?,?)", (202, 101, now))
     d.x("INSERT INTO bot_chats(bot_id,chat_id,ts) VALUES(?,?,?)", (202, -1001, now))
+    d.x("INSERT INTO chats(chat_id,title,type,lang,tz,settings,owner_id,added_at,active,banned,member_count) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        (-2002, "Main Channel", "channel", "en", "UTC", "{}", 101, now, 1, 0, 500))
+    d.x("INSERT INTO bot_chats(bot_id,chat_id,ts) VALUES(?,?,?)", (202, -2002, now))
     d.kv_set("start:202", {"on": True, "text": "Welcome %name%", "buttons": "Open|https://example.com", "add": True,
                            "media": {"type": "photo", "file_id": "secret-file-id"}})
     d.x("INSERT INTO announcements(data,bots,dm,grp,active,created,sent,failed,shown,last_at,by_admin,groups,every) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -115,13 +119,16 @@ with tempfile.TemporaryDirectory() as tmp:
 
     clone_listing = execute("CLONES_LIST")
     check("clone inventory returns username", clone_listing["clones"][0]["username"] == "CloneBot")
-    check("clone inventory summarizes audience", clone_listing["clones"][0]["userCount"] == 1 and clone_listing["clones"][0]["groupCount"] == 1 and clone_listing["clones"][0]["groupTitles"] == ["Main Group"])
+    check("clone inventory summarizes audience", clone_listing["clones"][0]["userCount"] == 1 and clone_listing["clones"][0]["chatCount"] == 2 and clone_listing["clones"][0]["groupCount"] == 1 and clone_listing["clones"][0]["channelCount"] == 1 and clone_listing["clones"][0]["groupTitles"] == ["Main Group"] and clone_listing["clones"][0]["channelTitles"] == ["Main Channel"])
     check("clone inventory omits token", "token" not in json.dumps(clone_listing).lower())
 
     users = execute("BOT_USERS_LIST", {"limit": 10})
-    check("bot users joins user details", users["users"][0]["username"] == "ada")
+    check("bot users joins user details", users["users"][0]["username"] == "ada" and users["users"][0]["botLabel"] == "@CloneBot")
+    all_users = execute("USERS_LIST", {"limit": 10})
+    check("all users list includes audience and group visibility", all_users["users"][0]["userId"] == 101 and all_users["users"][0]["botIds"] == [202] and "activeGroupCount" in all_users["users"][0])
     chats = execute("BOT_CHATS_LIST", {"limit": 10})
     check("bot chats joins group details", chats["chats"][0]["title"] == "Main Group" and chats["chats"][0]["memberCount"] == 42)
+    check("bot chats expose channels and bot labels", any(c["type"] == "channel" and c["botLabel"] == "@CloneBot" for c in chats["chats"]))
 
     starts = execute("START_MESSAGES_LIST")
     check("start studio row is visible", starts["startMessages"][0]["botId"] == 202 and starts["startMessages"][0]["enabled"] is True)
@@ -142,13 +149,13 @@ with tempfile.TemporaryDirectory() as tmp:
     d.x("INSERT INTO tickets(user_id,chat_id,kind,text,status,ts) VALUES(?,?,?,?,?,?)", (101, 101, "support", "help", "open", now))
 
     groups = execute("GROUPS_LIST", {"limit": 10})
-    check("groups list exposes moderation state", groups["groups"][0]["chatId"] == -1001 and groups["groups"][0]["active"] is True)
+    check("groups list exposes moderation state", any(g["chatId"] == -1001 and g["active"] is True for g in groups["groups"]) and any(g["type"] == "channel" for g in groups["groups"]))
     group_detail = execute("GROUP_GET", {"chatId": -1001})
     check("group detail returns stored metadata", group_detail["group"]["title"] == "Main Group" and group_detail["group"]["memberCount"] == 42)
     exported = execute("GROUPS_EXPORT")
-    check("groups export matches telegram panel csv shape", exported["rowCount"] == 1 and "chat_id,title,type,active" in exported["csv"] and "Main Group" in exported["csv"])
+    check("groups export matches telegram panel csv shape", exported["rowCount"] == 2 and "chat_id,title,type,active" in exported["csv"] and "Main Group" in exported["csv"])
     check("groups export escapes spreadsheet formulas", admin_bridge_features._csv_cell("=HYPERLINK()").startswith("'") and admin_bridge_features._csv_cell("Main Group") == "Main Group")
-    found_group = execute("GROUP_FIND", {"query": "Main"})
+    found_group = execute("GROUP_FIND", {"query": "Main Group"})
     check("group search finds by title", found_group["total"] == 1)
     found_user = execute("USER_FIND", {"query": "@ada"})
     check("user search joins groups and identity", found_user["user"]["username"] == "ada")
@@ -286,18 +293,18 @@ with tempfile.TemporaryDirectory() as tmp:
         mention_enable_rejected = "explicit groups" in str(e)
     check("mention enable requires explicit groups", mention_enable_rejected)
     execute("ANNOUNCEMENT_DELETE", {"announcementId": bots_only["announcementId"]})
-    create_params = {"text": "Web hello", "buttons": "Open|https://example.com", "bots": [202], "groups": [-1001], "mentionEnabled": True, "every": 2}
+    create_params = {"text": "Web hello", "buttons": "Open|https://example.com", "bots": [202], "groups": [-1001], "channels": [-2002], "mentionEnabled": True, "every": 2}
     created = execute("ANNOUNCEMENT_CREATE", create_params, command_id="create-fixed")
     check("announcement create returns id", created["created"] is True and created["announcementId"] > 0)
     created_again = execute("ANNOUNCEMENT_CREATE", create_params, command_id="create-fixed")
     check("announcement create is deduped by command id", created_again.get("reused") is True and d.one("SELECT COUNT(*) c FROM announcements")["c"] == before_count + 1)
     new_id = created["announcementId"]
     new_row = d.one("SELECT * FROM announcements WHERE id=?", (new_id,))
-    check("announcement create stores audience", json.loads(new_row["bots"]) == [202] and json.loads(new_row["groups"]) == [-1001] and new_row["grp"] == 1)
+    check("announcement create stores audience", json.loads(new_row["bots"]) == [202] and json.loads(new_row["groups"]) == [-1001] and json.loads(new_row["channels"]) == [-2002] and new_row["grp"] == 1)
     fetched = execute("ANNOUNCEMENT_GET", {"announcementId": new_id})
     check("announcement get exposes editable content safely", fetched["announcement"]["message"]["text"] == "Web hello" and fetched["announcement"]["message"]["buttons"] == "Open|https://example.com")
     audience_read = execute("ANNOUNCEMENT_AUDIENCE_GET", {"announcementId": new_id})
-    check("announcement audience read exposes raw selection", audience_read["audience"]["botsSelected"] == [202] and audience_read["audience"]["groupsSelected"] == [-1001] and audience_read["audience"]["mentionEvery"] == 2)
+    check("announcement audience read exposes raw selection", audience_read["audience"]["botsSelected"] == [202] and audience_read["audience"]["groupsSelected"] == [-1001] and audience_read["audience"]["channelsSelected"] == [-2002] and audience_read["audience"]["mentionEvery"] == 2)
     inventory_after_create = execute("ANNOUNCEMENTS_LIST", {"limit": 10})
     created_summary = next(x for x in inventory_after_create["announcements"] if x["id"] == new_id)
     check("announcement inventory detects stored buttons", created_summary["message"]["hasButtons"] is True)
@@ -333,7 +340,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("announcement delivery status shape", delivery["delivery"]["announcementId"] == new_id and "webRun" in delivery["delivery"])
     options_ctx = FakeCtx()
     options = execute("ANNOUNCEMENT_OPTIONS_GET", ctx=options_ctx)
-    check("announcement options include bots groups and choices", any(x["botId"] == 202 for x in options["bots"]) and any(x["chatId"] == -1001 for x in options["groups"]) and options["everyChoices"] == [1, 2, 3, 5, 10, 20])
+    check("announcement options include bots groups and choices", any(x["botId"] == 202 for x in options["bots"]) and any(x["chatId"] == -1001 for x in options["groups"]) and any(x["chatId"] == -2002 for x in options["channels"]) and options["everyChoices"] == [1, 2, 3, 5, 10, 20])
 
     async def send_now_flow():
         app = FakeApplication()
@@ -362,6 +369,31 @@ with tempfile.TemporaryDirectory() as tmp:
     check("send now replay does not start twice", send_replayed.get("reused") is True and len(send_calls) == 1)
     deleted = execute("ANNOUNCEMENT_DELETE", {"announcementId": new_id})
     check("announcement delete succeeds", deleted["deleted"] is True and d.one("SELECT * FROM announcements WHERE id=?", (new_id,)) is None)
+
+    race_aid = d.x("INSERT INTO announcements(data,bots,groups,grp,active,created,every) VALUES(?,?,?,1,1,?,1)",
+                   (json.dumps({"text": "Race safe", "media": None}), "[]", json.dumps([-1001]), now))
+    d.x("DELETE FROM kv WHERE key IN (?,?,?)", (f"annuse:{-1001}", f"annlast:{-1001}", f"annmsg:{-1001}"))
+
+    async def mention_race():
+        sent = []
+
+        async def fake_send_msgdata(*args, **kwargs):
+            await asyncio.sleep(0.05)
+            sent.append(args[1])
+            return object()
+
+        old_send_msgdata = announcement_runtime.send_msgdata
+        announcement_runtime.send_msgdata = fake_send_msgdata
+        try:
+            chat = SimpleNamespace(id=-1001, title="Main Group")
+            await asyncio.gather(*(announcement_runtime.after_mentionall(FakeCtx(), chat, None, None, 77) for _ in range(2)))
+        finally:
+            announcement_runtime.send_msgdata = old_send_msgdata
+        return sent
+
+    race_sent = asyncio.run(mention_race())
+    check("concurrent mentionall handling announces once per group", len(race_sent) == 1 and int(d.kv_get(f"annuse:{-1001}", 0) or 0) == 1 and d.one("SELECT shown FROM announcements WHERE id=?", (race_aid,))["shown"] == 1)
+    d.x("DELETE FROM announcements WHERE id=?", (race_aid,))
 
     mention = execute("MENTION_STATUS_GET")
     check("mention mode exposes cooldown", mention["mention"]["groupCooldownSeconds"] == 3600)

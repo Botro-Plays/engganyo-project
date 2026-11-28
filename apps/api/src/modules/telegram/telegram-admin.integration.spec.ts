@@ -46,6 +46,13 @@ describe('telegram bot admin validation - no database required', () => {
         requestKey: 'zero-chat-id',
       }),
     ).rejects.toThrow('chatId must be a non-zero safe integer');
+    await expect(
+      service.createCommand('admin-user', {
+        type: 'ANNOUNCEMENT_CREATE',
+        params: { text: 'hello', bots: [], groups: [], channels: [0] },
+        requestKey: 'zero-channel-id',
+      }),
+    ).rejects.toThrow('channels must contain non-zero chat IDs or all');
   });
 
   it('rejects implicit mention audiences and invalid frequency before persistence', async () => {

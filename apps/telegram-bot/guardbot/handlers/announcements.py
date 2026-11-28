@@ -45,6 +45,8 @@ async def track_private(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             seen = ctx.bot_data.setdefault("bot_chats_seen", set())
             if chat.id not in seen:
                 seen.add(chat.id)
+                d.ensure_chat(chat.id, chat.title or "", chat.type)
+                d.x("UPDATE chats SET bot_id=COALESCE(bot_id,?) WHERE chat_id=?", (ctx.bot.id, chat.id))
                 d.x("INSERT OR IGNORE INTO bot_chats(bot_id,chat_id,ts) VALUES(?,?,?)", (ctx.bot.id, chat.id, now()))
             return
         if chat is None or chat.type != "private" or user is None or user.is_bot:
@@ -62,6 +64,9 @@ def backfill_chats():
     """Groups and channels the bots were added to before per-bot tracking: from the chats table (bot_id), main bot for the rest."""
     d = database.get()
     d.x("INSERT OR IGNORE INTO bot_chats(bot_id,chat_id,ts) SELECT bot_id, chat_id, added_at FROM chats WHERE bot_id IS NOT NULL AND active=1 AND banned=0")
+    main_id = int(str(config.BOT_TOKEN or "").split(":",1)[0]) if str(config.BOT_TOKEN or "").split(":",1)[0].isdigit() else 0
+    if main_id:
+        d.x("INSERT OR IGNORE INTO bot_chats(bot_id,chat_id,ts) SELECT ?, chat_id, added_at FROM chats WHERE bot_id IS NULL AND active=1 AND banned=0", (main_id,))
 
 
 def backfill_main(bot_id: int):
@@ -127,9 +132,28 @@ def _all_groups() -> list:
 def _group_targets(row) -> list:
     gs = _groups_of(row)
     allg = _all_groups()
-    bots = json.loads(row["bots"] or "[]")
-    chosen = allg if "all" in gs else [g for g in allg if g["chat_id"] in gs]
-    return chosen
+    return allg if "all" in gs else [g for g in allg if g["chat_id"] in gs]
+
+
+def _channels_of(row) -> list:
+    return json.loads(row["channels"] or "[]") if "channels" in row.keys() else []
+
+
+def _all_channels() -> list:
+    """Every channel the bots are in, with the bot that posts."""
+    d = database.get()
+    out = []
+    for g in d.q("SELECT chat_id,title,member_count FROM chats WHERE active=1 AND banned=0 AND type='channel' ORDER BY lower(title)"):
+        bots = [r["bot_id"] for r in d.q("SELECT bot_id FROM bot_chats WHERE chat_id=? ORDER BY ts", (g["chat_id"],))]
+        if bots:
+            out.append({"chat_id": g["chat_id"], "title": g["title"], "member_count": g["member_count"], "bot_id": bots[0], "bots": bots})
+    return out
+
+
+def _channel_targets(row) -> list:
+    cs = _channels_of(row)
+    allc = _all_channels()
+    return allc if "all" in cs else [c for c in allc if c["chat_id"] in cs]
 
 
 def _label(row, ctx) -> str:
@@ -321,14 +345,15 @@ async def anc_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if op == "s":
         bots = _bots_of(row, ctx)
         groups = _group_targets(row)
+        channels = _channel_targets(row)
         n = sum(len(_audience(b)) for b in bots)
-        if not bots and not groups:
-            return await q.answer("Pick bots or groups first", show_alert=True)
+        if not bots and not groups and not channels:
+            return await q.answer("Pick bots, groups, or channels first", show_alert=True)
         if len(parts) > 3 and parts[3] == "go":
             ctx.application.create_task(_deliver(ctx, aid, chat_id))
-            return await put(ctx, q, uid, f"🚀 <b>Sending…</b>\n{n} people · {len(groups)} group(s). I'll report here when it's done.",
+            return await put(ctx, q, uid, f"🚀 <b>Sending…</b>\n{n} people · {len(groups)} group(s) · {len(channels)} channel(s). I'll report here when it's done.",
                              rows_of(P, [[("⬅️ Back", f"v|{aid}")]]))
-        text = (f"🚀 <b>Send now?</b>\n🤖 Bots: <b>{esc(_label(row, ctx))}</b> · {n} people\n🏘 Groups: <b>{_glabel(row)}</b> · {len(groups)}\n"
+        text = (f"🚀 <b>Send now?</b>\n🤖 Bots: <b>{esc(_label(row, ctx))}</b> · {n} people\n🏘 Groups: <b>{_glabel(row)}</b> · {len(groups)}\n📢 Channels: <b>{len(channels)}</b>\n"
                 "<i>It goes out immediately.</i>")
         return await put(ctx, q, uid, text, rows_of(P, [[("✅ Send", f"s|{aid}|go"), ("⬅️ Back", f"v|{aid}")]]))
 
@@ -431,8 +456,22 @@ async def _deliver(ctx, aid: int, admin_chat: int):
         await asyncio.sleep(0.1)
     if g_ok or g_bad:
         lines.append(f"▫️ Groups: ✅ {g_ok} · ❌ {g_bad}")
-    d.x("UPDATE announcements SET sent=sent+?, failed=failed+?, dm=1 WHERE id=?", (ok + g_ok, bad + g_bad, aid))
-    d.audit(row["by_admin"] or 0, "announcement_sent", f"#{aid} ok={ok + g_ok} fail={bad + g_bad}")
+    c_ok = c_bad = 0
+    for c in _channel_targets(row):
+        bot = _bot_instance(c["bot_id"], ctx) or ctx.bot
+        try:
+            await send_msgdata(bot, c["chat_id"], data, group_title=c["title"] or "", store_chat=c["chat_id"])
+            c_ok += 1
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            c_bad += 1
+        except TelegramError:
+            c_bad += 1
+        await asyncio.sleep(0.1)
+    if c_ok or c_bad:
+        lines.append(f"▫️ Channels: ✅ {c_ok} · ❌ {c_bad}")
+    d.x("UPDATE announcements SET sent=sent+?, failed=failed+?, dm=1 WHERE id=?", (ok + g_ok + c_ok, bad + g_bad + c_bad, aid))
+    d.audit(row["by_admin"] or 0, "announcement_sent", f"#{aid} ok={ok + g_ok + c_ok} fail={bad + g_bad + c_bad}")
     try:
         await ctx.bot.send_message(admin_chat, f"📬 <b>Announcement #{aid} sent</b>\n" + "\n".join(lines),
                                    reply_markup=rows_of(P, [[("📣 Announcements", "home")]]))
@@ -441,17 +480,26 @@ async def _deliver(ctx, aid: int, admin_chat: int):
 
 
 # ------------------------------------------------------------------ with /mentionall in groups
-async def after_mentionall(ctx, chat, reply_to: int | None, thread: int | None = None):
+async def after_mentionall(ctx, chat, reply_to: int | None, thread: int | None = None, source_message_id: int | None = None):
     """Called after an admin's /mentionall. Each announcement shows up on every N-th use in that group (N is set per announcement)."""
     d = database.get()
+    if source_message_id:
+        message_key = f"annmsg:{chat.id}"
+        last_message_id = int(d.kv_get(message_key, 0) or 0)
+        if last_message_id >= source_message_id:
+            return
+        d.kv_set(message_key, source_message_id)
     key = f"annuse:{chat.id}"
     uses = int(d.kv_get(key, 0) or 0) + 1
     d.kv_set(key, uses)
+    last_key = f"annlast:{chat.id}"
+    last_shown = int(d.kv_get(last_key, 0) or 0)
+    current = now()
+    if current - last_shown < GROUP_COOLDOWN:
+        return
+    d.kv_set(last_key, current)
     pick = None
     for r in d.q("SELECT * FROM announcements WHERE grp=1 AND active=1 ORDER BY shown ASC, last_at ASC, id ASC"):
-        bots = json.loads(r["bots"] or "[]")
-        if not ("all" in bots or ctx.bot.id in bots):
-            continue
         gs = _groups_of(r)
         if gs and "all" not in gs and chat.id not in gs:
             continue
@@ -460,14 +508,18 @@ async def after_mentionall(ctx, chat, reply_to: int | None, thread: int | None =
         pick = r
         break
     if pick is None:
+        d.kv_set(last_key, last_shown)
         return
     data = _payload(json.loads(pick["data"]))
     try:
         m = await send_msgdata(ctx.bot, chat.id, data, group_title=chat.title or "", store_chat=chat.id, reply_to=reply_to, thread=thread)
     except TelegramError:
+        d.kv_set(last_key, last_shown)
         return
     if m:
-        d.x("UPDATE announcements SET shown=shown+1, last_at=? WHERE id=?", (now(), pick["id"]))
+        d.x("UPDATE announcements SET shown=shown+1, last_at=? WHERE id=?", (current, pick["id"]))
+    else:
+        d.kv_set(last_key, last_shown)
 
 
 def register(app):

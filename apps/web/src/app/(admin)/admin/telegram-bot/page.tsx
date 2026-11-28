@@ -121,10 +121,10 @@ function StatusBadge({ status }: { status: CommandStatus }) {
 function useTelegramCommand(type: string, params: Record<string, unknown> = {}) {
   const [commandId, setCommandId] = useState<string | null>(null);
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (runParams: Record<string, unknown>) => {
       const res = await apiClient.post(
         'admin/telegram-bot/commands',
-        { type, params, requestKey: crypto.randomUUID() },
+        { type, params: runParams, requestKey: crypto.randomUUID() },
         { skipRetry: true },
       );
       return res.data.data as { command: BotCommand; reused: boolean };
@@ -156,8 +156,8 @@ function useTelegramCommand(type: string, params: Record<string, unknown> = {}) 
     error: createMutation.error
       ? getApiErrorMessage(createMutation.error)
       : (command?.error ?? null),
-    run: () => {
-      if (!createMutation.isPending) createMutation.mutate();
+    run: (overrides: Record<string, unknown> = {}) => {
+      if (!createMutation.isPending) createMutation.mutate({ ...params, ...overrides });
     },
   };
 }
@@ -173,7 +173,7 @@ function CommandCard({
   description: string;
   type: string;
   params?: Record<string, unknown>;
-  children: (result: any) => ReactNode;
+  children: (result: any, reload?: (overrides?: Record<string, unknown>) => void) => ReactNode;
 }) {
   const cmd = useTelegramCommand(type, params);
   return (
@@ -185,7 +185,7 @@ function CommandCard({
         </div>
         <button
           type="button"
-          onClick={cmd.run}
+          onClick={() => cmd.run()}
           disabled={cmd.waiting}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -221,7 +221,9 @@ function CommandCard({
             {cmd.error}
           </div>
         )}
-        {cmd.command?.status === 'DONE' && cmd.command.result ? children(cmd.command.result) : null}
+        {cmd.command?.status === 'DONE' && cmd.command.result
+          ? children(cmd.command.result, cmd.run)
+          : null}
         {!cmd.command && !cmd.waiting && (
           <div className="rounded-lg border border-dashed border-surface-border p-5 text-sm text-sc-dim">
             Select Load to request fresh data from the running Telegram bot.
@@ -352,10 +354,11 @@ function ClonesSection() {
               <code key="id">{clone.botId}</code>,
               <code key="o">{clone.ownerId}</code>,
               <span key="a" className="block max-w-xs">
-                {clone.userCount ?? 0} people, {clone.groupCount ?? 0} groups
-                {(clone.groupTitles ?? []).length ? (
+                {clone.userCount ?? 0} people, {clone.groupCount ?? 0} groups,{' '}
+                {clone.channelCount ?? 0} channels
+                {[...(clone.groupTitles ?? []), ...(clone.channelTitles ?? [])].length ? (
                   <span className="block text-xs text-sc-dim">
-                    {(clone.groupTitles ?? []).join(', ')}
+                    {[...(clone.groupTitles ?? []), ...(clone.channelTitles ?? [])].join(', ')}
                   </span>
                 ) : null}
               </span>,
@@ -371,21 +374,106 @@ function ClonesSection() {
 }
 
 function AudienceSection() {
+  const [usersOffset, setUsersOffset] = useState(0);
+  const [botUsersOffset, setBotUsersOffset] = useState(0);
+  const [botChatsOffset, setBotChatsOffset] = useState(0);
+  const pageButtons = (
+    result: any,
+    offset: number,
+    setOffset: (value: number) => void,
+    reload?: (overrides?: Record<string, unknown>) => void,
+  ) => {
+    const go = (next: number) => {
+      setOffset(next);
+      reload?.({ offset: next });
+    };
+    const total = Number(result?.total ?? 0);
+    const limit = Math.max(1, Number(result?.limit ?? 25));
+    if (!total || total <= limit) return null;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-sc-muted">
+        <span>
+          Page {Math.floor(offset / limit) + 1} of {Math.max(1, Math.ceil(total / limit))} · {total}{' '}
+          total
+        </span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => go(Math.max(0, offset - limit))}
+            disabled={offset <= 0}
+            className="min-h-10 rounded-lg border border-surface-border px-3 py-2 hover:bg-surface-hover hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => go(offset + limit)}
+            disabled={offset + limit >= total}
+            className="min-h-10 rounded-lg border border-surface-border px-3 py-2 hover:bg-surface-hover hover:text-sc-text focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="space-y-5">
       <CommandCard
-        title="Bot users"
-        description="Tracked private-chat audience across the main bot and clone bots."
-        type="BOT_USERS_LIST"
-        params={{ limit: 50 }}
+        title="All known users"
+        description="Every Telegram user known to the bot, with the main and clone private audiences they belong to and their known active groups."
+        type="USERS_LIST"
+        params={{ limit: 25, offset: usersOffset }}
       >
-        {(result) => (
+        {(result, reload) => (
           <div className="space-y-3">
-            <p className="text-sm text-sc-muted">
-              Showing {(result.users ?? []).length} of {result.total ?? 0} tracked users.
-            </p>
             <SimpleTable
-              headers={['User', 'User ID', 'Bot ID', 'Language', 'Started', 'Seen']}
+              headers={[
+                'User',
+                'User ID',
+                'Bot Audiences',
+                'Known Groups',
+                'Language',
+                'Last Seen',
+              ]}
+              empty="No users are known yet."
+              rows={(result.users ?? []).map((user: any) => [
+                <span key="n" className="text-sc-text">
+                  {[user.firstName, user.lastName].filter(Boolean).join(' ') ||
+                    user.username ||
+                    'Unknown'}
+                  {user.username ? ` @${user.username}` : ''}
+                </span>,
+                <code key="u">{user.userId}</code>,
+                <span key="ba">
+                  {user.botCount ?? 0} bot(s): {(user.botIds ?? []).join(', ') || '-'}
+                </span>,
+                <span key="g" className="block max-w-xs">
+                  {user.activeGroupCount ?? 0} active
+                  {(user.groups ?? []).length ? (
+                    <span className="block text-xs text-sc-dim">
+                      {(user.groups ?? []).map((g: any) => g.title ?? g.chatId).join(', ')}
+                    </span>
+                  ) : null}
+                </span>,
+                user.lang ?? '-',
+                fmtUnix(user.lastSeen),
+              ])}
+            />
+            {pageButtons(result, usersOffset, setUsersOffset, reload)}
+          </div>
+        )}
+      </CommandCard>
+      <CommandCard
+        title="Main and clone bot users"
+        description="Every tracked private-chat audience row across the main bot and every clone. Bot labels identify exactly which bot each user belongs to."
+        type="BOT_USERS_LIST"
+        params={{ limit: 25, offset: botUsersOffset }}
+      >
+        {(result, reload) => (
+          <div className="space-y-3">
+            <SimpleTable
+              headers={['User', 'User ID', 'Bot', 'Bot ID', 'Language', 'Started', 'Seen']}
               empty="No bot users are tracked yet."
               rows={(result.users ?? []).map((user: any) => [
                 <span key="n" className="text-sc-text">
@@ -395,40 +483,43 @@ function AudienceSection() {
                   {user.username ? ` @${user.username}` : ''}
                 </span>,
                 <code key="u">{user.userId}</code>,
+                user.botLabel ?? '-',
                 <code key="b">{user.botId}</code>,
                 user.lang ?? '-',
                 boolText(user.started),
                 fmtUnix(user.seenAt),
               ])}
             />
+            {pageButtons(result, botUsersOffset, setBotUsersOffset, reload)}
           </div>
         )}
       </CommandCard>
       <CommandCard
-        title="Bot groups"
-        description="Groups visible to the main bot and clones, including moderation state and member counts."
+        title="Main and clone groups and channels"
+        description="Every tracked group, supergroup, and channel visible to the main bot and clones, including type, moderation state, member counts, and owning bot."
         type="BOT_CHATS_LIST"
-        params={{ limit: 50 }}
+        params={{ limit: 25, offset: botChatsOffset }}
       >
-        {(result) => (
+        {(result, reload) => (
           <div className="space-y-3">
-            <p className="text-sm text-sc-muted">
-              Showing {(result.chats ?? []).length} of {result.total ?? 0} tracked groups.
-            </p>
             <SimpleTable
-              headers={['Group', 'Chat ID', 'Bot ID', 'Members', 'State', 'Seen']}
-              empty="No bot groups are tracked yet."
+              headers={['Chat', 'Type', 'Chat ID', 'Bot', 'Members', 'State', 'Seen']}
+              empty="No bot groups or channels are tracked yet."
               rows={(result.chats ?? []).map((chat: any) => [
                 <span key="t" className="text-sc-text">
                   {chat.title ?? 'Untitled'}
                 </span>,
+                chat.type ?? '-',
                 <code key="c">{chat.chatId}</code>,
-                <code key="b">{chat.botId}</code>,
+                <span key="b">
+                  {chat.botLabel ?? '-'} <code>{chat.botId}</code>
+                </span>,
                 chat.memberCount ?? 0,
                 `${chat.active ? 'Active' : 'Inactive'}${chat.banned ? ', banned' : ''}`,
                 fmtUnix(chat.seenAt),
               ])}
             />
+            {pageButtons(result, botChatsOffset, setBotChatsOffset, reload)}
           </div>
         )}
       </CommandCard>
@@ -472,7 +563,7 @@ function AnnouncementsSection() {
     <div className="space-y-5">
       <CommandCard
         title="Announcements"
-        description="Delivery inventory, counters, audience flags, and safe content previews. Channels are not part of this delivery system."
+        description="Delivery inventory, counters, audience flags, and safe content previews. Channels are included in Send Now delivery; mention mode uses groups only."
         type="ANNOUNCEMENTS_LIST"
         params={{ limit: 50 }}
       >

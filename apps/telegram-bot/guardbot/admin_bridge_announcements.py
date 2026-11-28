@@ -96,12 +96,13 @@ def _store_effect(command: dict, result: dict):
 
 
 def announcement_options(params: dict, ctx) -> dict:
-    from .handlers.announcements import _all_groups, _catalog
+    from .handlers.announcements import _all_channels, _all_groups, _catalog
     if ctx is None:
         raise ValueError("Telegram runtime is unavailable")
     bots = [{"botId": bot_id, "label": label} for bot_id, label in _catalog(ctx)]
     groups = [{"chatId": g["chat_id"], "title": g["title"], "memberCount": g["member_count"], "botId": g["bot_id"]} for g in _all_groups()]
-    return {"bots": bots, "groups": groups, "everyChoices": sorted(EVERY_CHOICES), "mediaTypes": sorted(MEDIA_TYPES)}
+    channels = [{"chatId": c["chat_id"], "title": c["title"], "memberCount": c["member_count"], "botId": c["bot_id"]} for c in _all_channels()]
+    return {"bots": bots, "groups": groups, "channels": channels, "everyChoices": sorted(EVERY_CHOICES), "mediaTypes": sorted(MEDIA_TYPES)}
 
 
 def announcement_delivery_get(params: dict) -> dict:
@@ -126,8 +127,9 @@ def announcement_create(params: dict, ctx, command: dict) -> dict:
     data = _validate_content(params)
     bots = _selection(params, "bots")
     groups = _selection(params, "groups")
-    if not bots and not groups:
-        raise ValueError("select at least one bot audience or group target")
+    channels = _selection(params, "channels") if "channels" in params else []
+    if not bots and not groups and not channels:
+        raise ValueError("select at least one bot audience, group target, or channel target")
     mention = bool(params.get("mentionEnabled"))
     if mention and not _has_explicit_groups(groups):
         raise ValueError("select explicit groups before enabling mention mode")
@@ -138,8 +140,8 @@ def announcement_create(params: dict, ctx, command: dict) -> dict:
     d.con.execute("BEGIN IMMEDIATE")
     try:
         aid = d.x(
-            "INSERT INTO announcements(data,bots,groups,dm,grp,active,created,by_admin,every) VALUES(?,?,?,0,?,1,?,0,?)",
-            (json.dumps(data), json.dumps(bots), json.dumps(groups), 1 if mention else 0, int(time.time()), every))
+            "INSERT INTO announcements(data,bots,groups,channels,dm,grp,active,created,by_admin,every) VALUES(?,?,?,?,0,?,1,?,0,?)",
+            (json.dumps(data), json.dumps(bots), json.dumps(groups), json.dumps(channels), 1 if mention else 0, int(time.time()), every))
         d.audit(0, "announcement_new", f"web #{aid}")
         result = {"announcementId": aid, "created": True}
         if command.get("commandId"):
@@ -179,13 +181,14 @@ def announcement_set_audience(params: dict) -> dict:
         raise ValueError("announcement not found")
     bots = _selection(params, "bots")
     groups = _selection(params, "groups")
-    if not bots and not groups:
-        raise ValueError("select at least one bot audience or group target")
+    channels = _selection(params, "channels") if "channels" in params else _json(row["channels"], [])
+    if not bots and not groups and not channels:
+        raise ValueError("select at least one bot audience, group target, or channel target")
     if row["grp"] and not _has_explicit_groups(groups):
         raise ValueError("select explicit groups or disable mention mode first")
-    database.get().x("UPDATE announcements SET bots=?, groups=? WHERE id=?", (json.dumps(bots), json.dumps(groups), aid))
+    database.get().x("UPDATE announcements SET bots=?, groups=?, channels=? WHERE id=?", (json.dumps(bots), json.dumps(groups), json.dumps(channels), aid))
     database.get().audit(0, "announcement_audience", f"web #{aid}")
-    return {"announcementId": aid, "bots": bots, "groups": groups}
+    return {"announcementId": aid, "bots": bots, "groups": groups, "channels": channels}
 
 
 def announcement_set_mention(params: dict) -> dict:
@@ -221,15 +224,16 @@ async def announcement_send_now(params: dict, ctx, command: dict) -> dict:
     prior = _prior_effect(command)
     if prior:
         return {**prior, "reused": True}
-    from .handlers.announcements import _audience, _bots_of, _group_targets, _deliver
+    from .handlers.announcements import _audience, _bots_of, _channel_targets, _group_targets, _deliver
     bots = _bots_of(row, ctx)
     groups = _group_targets(row)
+    channels = _channel_targets(row)
     people = sum(len(_audience(bot_id)) for bot_id in bots)
-    if not bots and not groups:
-        raise ValueError("pick bots or groups first")
+    if not bots and not groups and not channels:
+        raise ValueError("pick bots, groups, or channels first")
     key = f"web_delivery:{aid}"
     database.get().kv_set(key, {"status": "running", "startedAt": int(time.time()), "commandId": command.get("commandId")})
-    started = {"announcementId": aid, "started": True, "people": people, "groups": len(groups)}
+    started = {"announcementId": aid, "started": True, "people": people, "groups": len(groups), "channels": len(channels)}
     _store_effect(command, started)
 
     async def runner():

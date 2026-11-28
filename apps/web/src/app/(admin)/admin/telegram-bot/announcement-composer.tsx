@@ -15,6 +15,8 @@ type SelectionState = {
   botIds: number[];
   allGroups: boolean;
   groupIds: number[];
+  allChannels: boolean;
+  channelIds: number[];
 };
 
 function toggle(list: number[], value: number): number[] {
@@ -25,6 +27,7 @@ function selectionPayload(selection: SelectionState) {
   return {
     bots: selection.allBots ? ['all'] : selection.botIds,
     groups: selection.allGroups ? ['all'] : selection.groupIds,
+    channels: selection.allChannels ? ['all'] : selection.channelIds,
   };
 }
 
@@ -153,8 +156,9 @@ function AudiencePicker({
 }) {
   const bots = options?.bots ?? [];
   const groups = options?.groups ?? [];
+  const channels = options?.channels ?? [];
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 xl:grid-cols-3 lg:grid-cols-2">
       <fieldset className="rounded-lg border border-surface-border p-3">
         <legend className="px-1 text-xs font-semibold text-sc-dim">Bot private audiences</legend>
         <label className="flex items-center gap-2 text-sm text-sc-muted">
@@ -184,7 +188,9 @@ function AudiencePicker({
         </div>
       </fieldset>
       <fieldset className="rounded-lg border border-surface-border p-3">
-        <legend className="px-1 text-xs font-semibold text-sc-dim">Groups, never channels</legend>
+        <legend className="px-1 text-xs font-semibold text-sc-dim">
+          Groups for Send Now and mention mode
+        </legend>
         <label className="flex items-center gap-2 text-sm text-sc-muted">
           <input
             type="checkbox"
@@ -214,6 +220,43 @@ function AudiencePicker({
           ))}
         </div>
       </fieldset>
+      <fieldset className="rounded-lg border border-surface-border p-3">
+        <legend className="px-1 text-xs font-semibold text-sc-dim">Channels, Send Now only</legend>
+        <label className="flex items-center gap-2 text-sm text-sc-muted">
+          <input
+            type="checkbox"
+            checked={selection.allChannels}
+            onChange={(e) =>
+              setSelection({ ...selection, allChannels: e.target.checked, channelIds: [] })
+            }
+            className="h-4 w-4 rounded border-surface-border"
+          />
+          All eligible channels
+        </label>
+        <div className="mt-2 max-h-40 space-y-1 overflow-auto">
+          {channels.map((channel: any) => (
+            <label key={channel.chatId} className="flex items-center gap-2 text-sm text-sc-muted">
+              <input
+                type="checkbox"
+                disabled={selection.allChannels}
+                checked={selection.channelIds.includes(channel.chatId)}
+                onChange={() =>
+                  setSelection({
+                    ...selection,
+                    channelIds: toggle(selection.channelIds, channel.chatId),
+                  })
+                }
+                className="h-4 w-4 rounded border-surface-border"
+              />
+              <span className="truncate">{channel.title ?? channel.chatId}</span>{' '}
+              <span className="text-xs text-sc-dim">{channel.memberCount ?? 0} members</span>
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-sc-dim">
+          Mention mode uses groups only; channels receive Send Now posts.
+        </p>
+      </fieldset>
     </div>
   );
 }
@@ -231,6 +274,8 @@ export function AnnouncementComposer() {
     botIds: [],
     allGroups: false,
     groupIds: [],
+    allChannels: false,
+    channelIds: [],
   });
   const payload = useMemo(
     () => ({
@@ -248,7 +293,9 @@ export function AnnouncementComposer() {
     selection.allBots ||
     selection.allGroups ||
     selection.botIds.length > 0 ||
-    selection.groupIds.length > 0;
+    selection.groupIds.length > 0 ||
+    selection.allChannels ||
+    selection.channelIds.length > 0;
   const hasExplicitGroups = selection.groupIds.length > 0;
   const mediaUrlValid = !mediaUrl.trim() || mediaUrl.trim().startsWith('https://');
   const canCreate =
@@ -260,7 +307,7 @@ export function AnnouncementComposer() {
   return (
     <OperationCard
       title="Announcement composer"
-      description="Create a text or public-media announcement with explicit bot and group targeting. Channels are intentionally not available."
+      description="Create a text or public-media announcement with explicit bot, group, and channel targeting. Channels are available for Send Now; mention mode uses groups only."
     >
       <div className="flex items-center justify-between rounded-lg border border-surface-border p-3">
         <div>
@@ -440,6 +487,8 @@ export function AnnouncementAdvancedControls() {
     botIds: [],
     allGroups: false,
     groupIds: [],
+    allChannels: false,
+    channelIds: [],
   });
   const delivery = useCommand();
   const options = useAnnouncementOptions();
@@ -468,11 +517,14 @@ export function AnnouncementAdvancedControls() {
     if (!audience || audience.announcementId !== announcementId) return;
     const bots = Array.isArray(audience.botsSelected) ? audience.botsSelected : [];
     const groups = Array.isArray(audience.groupsSelected) ? audience.groupsSelected : [];
+    const channels = Array.isArray(audience.channelsSelected) ? audience.channelsSelected : [];
     setSelection({
       allBots: bots.includes('all'),
       botIds: bots.filter((x: unknown) => Number.isSafeInteger(Number(x))).map(Number),
       allGroups: groups.includes('all'),
       groupIds: groups.filter((x: unknown) => Number.isSafeInteger(Number(x))).map(Number),
+      allChannels: channels.includes('all'),
+      channelIds: channels.filter((x: unknown) => Number.isSafeInteger(Number(x))).map(Number),
     });
     setMentionEnabled(Boolean(audience.groupsMode));
     setEvery(audience.mentionEvery || 1);
@@ -676,17 +728,21 @@ export function AnnouncementAdvancedControls() {
                 {selection.allBots ||
                 selection.allGroups ||
                 selection.botIds.length > 0 ||
-                selection.groupIds.length > 0 ? (
+                selection.groupIds.length > 0 ||
+                selection.allChannels ||
+                selection.channelIds.length > 0 ? (
                   <MutationControl
                     type="ANNOUNCEMENT_SET_AUDIENCE"
                     params={{ announcementId, ...selectionPayload(selection) }}
                     label="Save Audience"
                     confirmLabel="Confirm Audience"
-                    description="Replaces the bot private-audience and group targeting for this announcement. Channels are not available."
+                    description="Replaces the bot private-audience, group, and channel targeting for this announcement. Channels are included for Send Now only."
                     dangerous
                   />
                 ) : (
-                  <p className="text-xs text-sc-dim">Select at least one bot audience or group.</p>
+                  <p className="text-xs text-sc-dim">
+                    Select at least one bot audience, group, or channel.
+                  </p>
                 )}
               </div>
             ) : (
@@ -785,7 +841,7 @@ export function AnnouncementAdvancedControls() {
             params={{ announcementId }}
             label="Send Now"
             confirmLabel="Confirm Send"
-            description="Starts immediate delivery to the configured private bot audiences and groups. Channels are never targeted. The command is deduplicated across retries."
+            description="Starts immediate delivery to the configured private bot audiences, groups, and channels. The command is deduplicated across retries."
             dangerous
           />
           <MutationControl
