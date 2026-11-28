@@ -30,16 +30,30 @@ function errorForStatus(status: number): string {
   }
 }
 
+const FOCUSABLE =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 /**
- * In-app proof image viewer. Fetches the proof through authorizedFetch so a
- * stale access token triggers one shared refresh + retry instead of a silent
- * failure; the bearer token is never put in the URL and no external page is
- * opened. The object URL is revoked on close and on unmount.
+ * In-app proof image viewer. Fetches through authorizedFetch so a stale
+ * access token shares the single refresh + retry; the bearer token is never
+ * put in the URL and no external tab is opened.
+ *
+ * Every request is generation-fenced: close/unmount, a proofUrl change, or
+ * a replacement request (Retry) increments the generation and aborts the
+ * previous fetch, so a late result can never update the viewer or leak an
+ * object URL. The object URL is revoked on replacement, close, and unmount.
  */
 export function ProofViewerModal({ proofUrl, title, subtitle, onClose }: ProofViewerModalProps) {
   const [state, setState] = useState<ViewState>({ kind: 'loading' });
   const objectUrlRef = useRef<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const genRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  // Read onClose through a ref so the keyboard/focus effect is mount-only
+  // and parent rerenders with inline callbacks cannot rerun it.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const close = useCallback(() => onCloseRef.current(), []);
 
   const revoke = useCallback(() => {
     if (objectUrlRef.current) {
@@ -49,55 +63,108 @@ export function ProofViewerModal({ proofUrl, title, subtitle, onClose }: ProofVi
   }, []);
 
   const load = useCallback(async () => {
+    // Invalidate and abort any earlier request - its late result must not
+    // touch state or leave an object URL behind.
+    const gen = ++genRef.current;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     revoke();
     setState({ kind: 'loading' });
-    let res: Response;
+
+    let res: Response | null = null;
     try {
-      res = await authorizedFetch(proofUrl);
+      res = await authorizedFetch(proofUrl, { signal: ctrl.signal });
     } catch {
-      setState({ kind: 'error', message: 'Could not reach the server. Check your connection and retry.' });
+      // Aborted/superseded requests are silent by design.
+      if (gen === genRef.current && !ctrl.signal.aborted) {
+        setState({ kind: 'error', message: 'Could not reach the server. Check your connection and retry.' });
+      }
       return;
     }
     if (!res.ok) {
-      setState({ kind: 'error', message: errorForStatus(res.status) });
+      if (gen === genRef.current) setState({ kind: 'error', message: errorForStatus(res.status) });
       return;
     }
     const contentType = res.headers.get('content-type') ?? '';
     if (!contentType.startsWith('image/')) {
-      setState({ kind: 'error', message: 'The proof response is not a displayable image.' });
+      if (gen === genRef.current) setState({ kind: 'error', message: 'The proof response is not a displayable image.' });
       return;
     }
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    objectUrlRef.current = objectUrl;
-    setState({ kind: 'ready', objectUrl });
+    // Body read and object-URL creation can both fail mid-flight (interrupted
+    // download, blob decode failure); both surface an actionable error.
+    try {
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      if (gen !== genRef.current) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      objectUrlRef.current = objectUrl;
+      setState({ kind: 'ready', objectUrl });
+    } catch {
+      if (gen === genRef.current && !ctrl.signal.aborted) {
+        setState({ kind: 'error', message: 'The proof download was interrupted. Check your connection and retry.' });
+      }
+    }
   }, [proofUrl, revoke]);
 
-  // Mount-only initial load; revoke on unmount.
+  // Initial load; reruns only when the proof changes. Cleanup invalidates
+  // the in-flight request and releases the object URL.
   useEffect(() => {
     void load();
-    return revoke;
+    return () => {
+      genRef.current++;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      revoke();
+    };
   }, [load, revoke]);
 
-  // Escape closes; initial focus lands on the dialog; focus returns to the
-  // element that opened it.
+  // Keyboard: Escape closes; Tab/Shift+Tab cycle inside the dialog. Focus
+  // enters the dialog on open and returns to the invoking element only when
+  // the viewer unmounts (i.e. actually closes) - parent rerenders cannot
+  // trigger this effect because every dependency is stable.
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialogRef.current?.focus();
+    const dialog = dialogRef.current;
+    dialog?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialog) return;
+      const focusables = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
+        .filter((el) => !el.hasAttribute('disabled'));
+      if (!focusables.length) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      const outside = !dialog.contains(active);
+      if (e.shiftKey && (outside || active === first)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (outside || active === last)) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       previous?.focus();
     };
-  }, [onClose]);
+  }, [close]);
 
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
-      onClick={onClose}
+      onClick={close}
     >
       <div
         ref={dialogRef}
@@ -114,7 +181,7 @@ export function ProofViewerModal({ proofUrl, title, subtitle, onClose }: ProofVi
             {subtitle && <p className="text-xs text-sc-dim">{subtitle}</p>}
           </div>
           <button
-            onClick={onClose}
+            onClick={close}
             aria-label="Close proof viewer"
             className="text-sc-dim hover:text-sc-text ml-4 transition-colors"
           >
@@ -131,7 +198,7 @@ export function ProofViewerModal({ proofUrl, title, subtitle, onClose }: ProofVi
               className="max-w-full max-h-[70vh] rounded-lg object-contain"
               onError={() => {
                 revoke();
-                setState({ kind: 'error', message: 'The proof image could not be decoded.' });
+                setState((s) => s.kind === 'ready' ? { kind: 'error', message: 'The proof image could not be decoded.' } : s);
               }}
             />
           ) : (

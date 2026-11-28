@@ -37,7 +37,7 @@ const PNG_BYTES = Buffer.from(
 
 const PROOF_URL = '/uploads/proofs/u1/mine-sub/proof.webp';
 
-const myTask = (over: Record<string, unknown>) => ({
+const myTask = (over: Record<string, unknown> = {}) => ({
   id: 'mine-sub',
   status: 'SUBMITTED',
   creditsEarned: 0,
@@ -182,6 +182,142 @@ test.describe('My tasks - proof viewer', () => {
 
     const dialog = page.getByRole('dialog', { name: /Proof for/ });
     await expect(dialog.getByText('could not be decoded')).toBeVisible();
+  });
+});
+
+test.describe('My tasks - proof viewer held-response lifecycle', () => {
+  test.use({ storageState: authOrigins('u1') });
+
+  // Instruments URL.createObjectURL/revokeObjectURL so tests can assert no
+  // object URL leaks. urlCounts reads the counters back.
+  const injectUrlCounter = async (page: Page) =>
+    page.addInitScript(() => {
+      const w = window as unknown as { __urls: { created: number; revoked: number } };
+      w.__urls = { created: 0, revoked: 0 };
+      const create = URL.createObjectURL.bind(URL);
+      const revoke = URL.revokeObjectURL.bind(URL);
+      URL.createObjectURL = (o: Blob | MediaSource) => { w.__urls.created++; return create(o); };
+      URL.revokeObjectURL = (o: string) => { w.__urls.revoked++; return revoke(o); };
+    });
+  const urlCounts = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __urls: { created: number; revoked: number } }).__urls);
+
+  test('closing before the response arrives discards the late result', async ({ page }) => {
+    await stubShellApis(page);
+    await injectUrlCounter(page);
+    // Held response: resolve it only after the viewer has closed.
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await page.route('**/uploads/proofs/**', async (r) => {
+      await gate;
+      try {
+        await r.fulfill({ status: 200, contentType: 'image/png', body: PNG_BYTES });
+      } catch { /* request was aborted when the viewer closed */ }
+    });
+
+    await page.goto('/tasks?tab=mine');
+    await page.getByRole('button', { name: /Proof/ }).click();
+    const dialog = page.getByRole('dialog', { name: /Proof for/ });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+
+    release!();
+    await page.waitForTimeout(500);
+    // The late response must not reopen or update anything, and no object
+    // URL may have been created or leaked.
+    await expect(dialog).not.toBeVisible();
+    const counts = await urlCounts(page);
+    expect(counts.revoked).toBe(counts.created);
+  });
+
+  test('interrupted response-body reading surfaces an actionable error', async ({ page }) => {
+    await stubShellApis(page);
+    // Headers say image/*, but the body read itself fails.
+    await page.addInitScript(() => {
+      Response.prototype.blob = () => Promise.reject(new Error('network reset'));
+    });
+    await page.route('**/uploads/proofs/**', (r) =>
+      r.fulfill({ status: 200, contentType: 'image/png', body: PNG_BYTES }));
+
+    await page.goto('/tasks?tab=mine');
+    await page.getByRole('button', { name: /Proof/ }).click();
+
+    const dialog = page.getByRole('dialog', { name: /Proof for/ });
+    await expect(dialog.getByText('download was interrupted')).toBeVisible();
+    // Loading must have resolved - no indefinite spinner.
+    await expect(dialog.locator('.animate-spin')).not.toBeVisible();
+  });
+
+  test('request-level abort surfaces an actionable error', async ({ page }) => {
+    await stubShellApis(page);
+    await page.route('**/uploads/proofs/**', (r) => r.abort('connectionfailed'));
+
+    await page.goto('/tasks?tab=mine');
+    await page.getByRole('button', { name: /Proof/ }).click();
+
+    const dialog = page.getByRole('dialog', { name: /Proof for/ });
+    await expect(dialog.getByText('Could not reach the server')).toBeVisible();
+    await expect(dialog.locator('.animate-spin')).not.toBeVisible();
+  });
+
+  test('parent rerender while open keeps the dialog and its focus', async ({ page }) => {
+    await stubShellApis(page);
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await page.route('**/uploads/proofs/**', async (r) => {
+      await gate;
+      return r.fulfill({ status: 200, contentType: 'image/png', body: PNG_BYTES });
+    });
+
+    await page.goto('/tasks?tab=mine');
+    await page.getByRole('button', { name: /Proof/ }).click();
+    const dialog = page.getByRole('dialog', { name: /Proof for/ });
+    await expect(dialog).toBeVisible();
+
+    // Parent state change behind the overlay: dispatchEvent bypasses hit
+    // testing so the filter click reaches React and rerenders the page.
+    await page.getByRole('button', { name: 'Pending' }).dispatchEvent('click');
+
+    await expect(dialog).toBeVisible();
+    const focusInside = await page.evaluate(() =>
+      (document.querySelector('[role="dialog"]') as HTMLElement | null)
+        ?.contains(document.activeElement) ?? false);
+    expect(focusInside).toBe(true);
+
+    release!();
+    await expect(dialog.locator('img')).toBeVisible();
+  });
+
+  test('Tab and Shift+Tab stay inside the dialog; close restores focus', async ({ page }) => {
+    await stubShellApis(page);
+    await page.route('**/uploads/proofs/**', (r) =>
+      r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Not found' }) }));
+
+    await page.goto('/tasks?tab=mine');
+    const proofButton = page.getByRole('button', { name: /Proof/ });
+    await proofButton.click();
+    const dialog = page.getByRole('dialog', { name: /Proof for/ });
+    await expect(dialog.getByText('Proof file not found.')).toBeVisible();
+
+    // Focusables in error state: Close (header) then Retry.
+    const closeBtn = dialog.getByRole('button', { name: 'Close proof viewer' });
+    const retryBtn = dialog.getByRole('button', { name: 'Retry' });
+
+    await page.keyboard.press('Tab');
+    await expect(closeBtn).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(retryBtn).toBeFocused();
+    // Forward Tab past the last focusable wraps to the first.
+    await page.keyboard.press('Tab');
+    await expect(closeBtn).toBeFocused();
+    // Shift+Tab wraps backwards to the last.
+    await page.keyboard.press('Shift+Tab');
+    await expect(retryBtn).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(proofButton).toBeFocused();
   });
 });
 
