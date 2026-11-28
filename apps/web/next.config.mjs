@@ -69,7 +69,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://static.cloudflareinsights.com; " +
               "frame-src https://www.google.com https://recaptcha.google.com; " +
               `connect-src 'self' https: wss:${process.env['CSP_TEST_CONNECT_SRC'] ? ' ' + process.env['CSP_TEST_CONNECT_SRC'] : ''}; ` +
-              "img-src 'self' data: https:; " +
+              "img-src 'self' data: https: blob:; " +
               "style-src 'self' 'unsafe-inline' https://www.gstatic.com; " +
               "font-src 'self' data: https://fonts.gstatic.com; " +
               "object-src 'none'; base-uri 'self'; form-action 'self'",

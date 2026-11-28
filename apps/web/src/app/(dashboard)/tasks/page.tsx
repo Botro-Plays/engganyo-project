@@ -19,6 +19,7 @@ import { UserLink } from '@/components/user-link';
 import { ChallengeFormModal } from '@/components/challenge-form-modal';
 
 import { apiClient, getApiErrorMessage } from '@/lib/api';
+import { ProofViewerModal } from '@/components/proof-viewer-modal';
 import { PlatformIcon } from '@/components/platform-icon';
 import { useSocketEvent } from '@/hooks/use-socket';
 import { formatCredits, creditLabel, formatRelativeTime } from '@/lib/utils';
@@ -165,6 +166,7 @@ interface MyTask {
   submittedAt: string | null;
   verifiedAt: string | null;
   expiresAt: string | null;
+  reviewDeadline: string | null;
   rejectionReason: string | null;
   challengeId: string | null;
   campaign: {
@@ -297,7 +299,9 @@ function TasksPageInner() {
     tabParam === 'mine' ? 'mine' : tabParam === 'challenges' ? 'challenges' : 'browse';
   const [platformFilter, setPlatformFilter] = useState<string>('ALL');
   const [myPage, setMyPage] = useState(1);
+  const [myView, setMyView] = useState<'active' | 'history'>('active');
   const [myFilter, setMyFilter] = useState<'all' | 'pending' | 'done'>('all');
+  const [viewingProof, setViewingProof] = useState<MyTask | null>(null);
   const [submitting, setSubmitting] = useState<MyTask | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
@@ -510,11 +514,11 @@ function TasksPageInner() {
 
   // ─── My tasks ──────────────────────────────────────────────
   const { data: myData, isLoading: myLoading } = useQuery({
-    queryKey: ['tasks', 'my', myPage],
+    queryKey: ['tasks', 'my', myView, myPage],
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<PaginatedResponse<MyTask>>>(
-          `tasks/my?page=${myPage}&limit=12`,
+          `tasks/my?page=${myPage}&limit=12&scope=${myView}`,
         );
         const data = res.data.data;
         // Ensure items is always an array
@@ -540,6 +544,7 @@ function TasksPageInner() {
         actionable: number;
         actionableCredits: number;
         awaitingReview: number;
+        expired: number;
       }>>('tasks/my/summary');
       return res.data.data;
     },
@@ -1107,6 +1112,7 @@ function TasksPageInner() {
                           submittedAt: null,
                           verifiedAt: null,
                           expiresAt: justClaimed.card.expiresAt,
+                          reviewDeadline: null,
                           rejectionReason: null,
                           challengeId: justClaimed.challengeId,
                           campaign: null,
@@ -1286,22 +1292,52 @@ function TasksPageInner() {
             </div>
           )}
 
-          {/* Filter buttons */}
-          <div className="flex gap-2 mb-4">
-            {(['all', 'pending', 'done'] as const).map((f) => (
+          {/* View switcher: actionable work first, expired records in History */}
+          <div className="flex gap-2 mb-4" role="tablist" aria-label="My tasks view">
+            {(['active', 'history'] as const).map((v) => (
               <button
-                key={f}
-                onClick={() => setMyFilter(f)}
+                key={v}
+                role="tab"
+                aria-selected={myView === v}
+                onClick={() => { setMyView(v); setMyPage(1); }}
                 className={`px-3 py-2 min-h-11 rounded-md text-xs font-medium transition-all ${
-                  myFilter === f
+                  myView === v
                     ? 'bg-brand-500 text-sc-text'
                     : 'bg-surface-hover text-sc-muted hover:text-sc-text border border-surface-border'
                 }`}
               >
-                {f === 'all' ? 'All' : f === 'pending' ? 'Pending' : 'Done'}
+                {v === 'active'
+                  ? 'Active'
+                  : `History${mySummary?.expired ? ` (${mySummary.expired})` : ''}`}
               </button>
             ))}
           </div>
+
+          {myView === 'history' && (
+            <p className="text-xs text-sc-dim mb-4">
+              Expired means the 48-hour completion deadline passed before proof was submitted.
+              Records are kept here for accountability.
+            </p>
+          )}
+
+          {/* Filter buttons (active view only) */}
+          {myView === 'active' && (
+            <div className="flex gap-2 mb-4">
+              {(['all', 'pending', 'done'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setMyFilter(f)}
+                  className={`px-3 py-2 min-h-11 rounded-md text-xs font-medium transition-all ${
+                    myFilter === f
+                      ? 'bg-brand-500 text-sc-text'
+                      : 'bg-surface-hover text-sc-muted hover:text-sc-text border border-surface-border'
+                  }`}
+                >
+                  {f === 'all' ? 'All' : f === 'pending' ? 'Pending' : 'Done'}
+                </button>
+              ))}
+            </div>
+          )}
 
           {myLoading ? (
             <div className="space-y-2">
@@ -1311,14 +1347,21 @@ function TasksPageInner() {
             </div>
           ) : !myData?.items.length ? (
             <div className="card-glass rounded-2xl p-16 text-center">
-              <p className="text-sc-text text-sm">No tasks yet.</p>
-              <p className="text-sc-dim text-xs mt-1">Browse tasks and accept some to start earning.</p>
+              {myView === 'history' ? (
+                <p className="text-sc-text text-sm">No expired tasks.</p>
+              ) : (
+                <>
+                  <p className="text-sc-text text-sm">No tasks yet.</p>
+                  <p className="text-sc-dim text-xs mt-1">Browse tasks and accept some to start earning.</p>
+                </>
+              )}
             </div>
           ) : (
             <>
               <div className="space-y-2">
                 {myData.items
                   .filter((task) => {
+                    if (myView === 'history') return true;
                     const eff = myEffectiveStatus(task);
                     if (myFilter === 'pending') return ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(eff);
                     if (myFilter === 'done') return ['VERIFIED', 'REJECTED'].includes(eff);
@@ -1367,6 +1410,13 @@ function TasksPageInner() {
                           {task.status === 'SUBMITTED' && task.submittedAt && (
                             <span className="text-[10px] text-sky-500/80 flex items-center gap-1"><Clock className="w-3 h-3" /> Submitted {formatRelativeTime(task.submittedAt)}</span>
                           )}
+                          {task.status === 'SUBMITTED' && task.reviewDeadline && (
+                            new Date(task.reviewDeadline).getTime() < Date.now() ? (
+                              <span className="text-[10px] text-amber-400/90 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Review overdue - escalated</span>
+                            ) : (
+                              <span className="text-[10px] text-sc-dim flex items-center gap-1"><Clock className="w-3 h-3" /> Review due {formatRelativeTime(task.reviewDeadline)}</span>
+                            )
+                          )}
                           {task.status === 'VERIFIED' && task.verifiedAt && (
                             <span className="text-[10px] text-green-500/80">Verified {formatRelativeTime(task.verifiedAt)}</span>
                           )}
@@ -1379,16 +1429,7 @@ function TasksPageInner() {
                           {task.proofUrl && (
                             <button
                               type="button"
-                              onClick={() => {
-                                const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-                                fetch(task.proofUrl!, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-                                  .then(async (res) => {
-                                    if (!res.ok) throw new Error('Failed to load proof');
-                                    const blob = await res.blob();
-                                    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer');
-                                  })
-                                  .catch(() => {});
-                              }}
+                              onClick={() => setViewingProof(task)}
                               className="text-[10px] text-brand-400 hover:text-brand-300 flex items-center gap-0.5 transition-colors"
                             >
                               <ExternalLink className="w-3 h-3" /> Proof
@@ -1407,7 +1448,9 @@ function TasksPageInner() {
                             <Clock className="w-3.5 h-3.5" /> Pending review
                           </div>
                         ) : effStatus === 'EXPIRED' ? (
-                          <span className="text-xs text-sc-text">Expired</span>
+                          <span className="text-xs text-sc-text">
+                            Expired{task.expiresAt ? ` ${formatRelativeTime(task.expiresAt)}` : ''}
+                          </span>
                         ) : canSubmit ? (
                           DISABLED_TASK_TYPES.has(offer.taskType) ? (
                             <div
@@ -1462,6 +1505,16 @@ function TasksPageInner() {
             </>
           )}
         </>
+      )}
+
+      {/* ── Proof viewer modal ── */}
+      {viewingProof && (
+        <ProofViewerModal
+          proofUrl={viewingProof.proofUrl!}
+          title={`Proof for "${offerOf(viewingProof)?.title ?? 'task'}"`}
+          subtitle={viewingProof.submittedAt ? `Submitted ${new Date(viewingProof.submittedAt).toLocaleString()}` : null}
+          onClose={() => setViewingProof(null)}
+        />
       )}
 
       {/* ── Report modal ── */}

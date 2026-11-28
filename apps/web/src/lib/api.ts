@@ -97,6 +97,34 @@ function refreshAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
+/**
+ * Authenticated fetch for non-/api resources served under the site origin
+ * (e.g. /uploads/proofs/*, which is authorized by the API's proof-access
+ * handler, not by apiClient). Attaches the current Bearer access token; on
+ * 401 it shares the single in-flight refresh and retries once with the new
+ * token. The token is never put in the URL.
+ *
+ * A failed refresh rejects with the original response so the caller can
+ * render an actionable error instead of losing the session state here -
+ * the next ordinary apiClient request still enforces genuine expiry.
+ */
+export async function authorizedFetch(input: string, init?: RequestInit): Promise<Response> {
+  const send = (token: string | null) =>
+    fetch(input, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  const first = await send(
+    typeof window !== 'undefined' ? localStorage.getItem('access_token') : null,
+  );
+  if (first.status !== 401) return first;
+  const token = await refreshAccessToken().catch(() => null);
+  return token ? send(token) : first;
+}
+
 /** Query-level retry policy: never amplify client errors (incl. 429) - *  the next poll interval is the natural retry. Server/network errors get
  *  one retry, matching the previous global default. */
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {

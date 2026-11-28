@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, Min, Max, IsEnum, IsString } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsEnum, IsString, IsIn } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { TaskType, CompletionStatus } from '@prisma/client';
@@ -55,4 +55,12 @@ export class ListMyTasksDto {
   @IsOptional()
   @IsEnum(CompletionStatus)
   status?: CompletionStatus;
+
+  // history = effective-expired only (EXPIRED, or ASSIGNED/IN_PROGRESS past
+  // expiresAt before any backend sweep commits); active = everything else.
+  // Omitted keeps the full list for backwards compatibility.
+  @ApiPropertyOptional({ enum: ['active', 'history'] })
+  @IsOptional()
+  @IsIn(['active', 'history'])
+  scope?: 'active' | 'history';
 }
