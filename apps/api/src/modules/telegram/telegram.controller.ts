@@ -5,9 +5,13 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 import { TelegramService } from './telegram.service';
 import { TelegramBotService } from './telegram-bot.service';
+import { TelegramAdminService } from './telegram-admin.service';
 import {
   BotIngestDto, BotApplyDto, BotAckDto, BotFailDto, BotRecoverDto, TelegramClaimIdDto,
 } from './telegram.dto';
+import {
+  TelegramAdminClaimDto, TelegramAdminCompleteDto, TelegramAdminFailDto,
+} from './telegram-admin.dto';
 import { TelegramFeatureGuard, TelegramBotKeyGuard } from './telegram.guards';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -69,7 +73,10 @@ export class TelegramController {
 @Controller('telegram/bot')
 @UseGuards(TelegramFeatureGuard, TelegramBotKeyGuard)
 export class TelegramBotController {
-  constructor(private readonly botService: TelegramBotService) {}
+  constructor(
+    private readonly botService: TelegramBotService,
+    private readonly adminService: TelegramAdminService,
+  ) {}
 
   @Post('updates')
   @HttpCode(HttpStatus.OK)
@@ -111,5 +118,33 @@ export class TelegramBotController {
   @ApiOperation({ summary: 'Inbox status counts and recent DEAD rows' })
   inboxHealth() {
     return this.botService.inboxHealth();
+  }
+
+  @Post('admin-commands/claim')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Claim pending website-originated Telegram bot admin commands' })
+  claimAdminCommands(@Body() body: TelegramAdminClaimDto) {
+    return this.adminService.claimCommands(body.workerId, body.limit);
+  }
+
+  @Post('admin-commands/recover')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Recover expired website-originated admin command claims' })
+  recoverAdminCommands(@Body() body: TelegramAdminClaimDto) {
+    return this.adminService.recoverCommands(body.workerId, body.limit);
+  }
+
+  @Post('admin-commands/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Complete a claimed Telegram bot admin command with sanitized results' })
+  completeAdminCommand(@Body() body: TelegramAdminCompleteDto) {
+    return this.adminService.completeCommand(body.commandId, body.claimToken, body.result);
+  }
+
+  @Post('admin-commands/fail')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Fail a claimed Telegram bot admin command for retry or dead-lettering' })
+  failAdminCommand(@Body() body: TelegramAdminFailDto) {
+    return this.adminService.failCommand(body.commandId, body.claimToken, body.error);
   }
 }

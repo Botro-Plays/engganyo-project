@@ -32,6 +32,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { SocialIdentityService } from '../../database/social-identity.service';
 import { TelegramService } from './telegram.service';
 import { TelegramBotService } from './telegram-bot.service';
+import { TelegramAdminService } from './telegram-admin.service';
 import { TelegramBotController } from './telegram.controller';
 import { TelegramFeatureGuard, TelegramBotKeyGuard } from './telegram.guards';
 import { SocialAuthService } from '../social-auth/social-auth.service';
@@ -657,6 +658,7 @@ run('telegram bot controller - runtime validation over HTTP', () => {
       controllers: [TelegramBotController],
       providers: [
         { provide: TelegramBotService, useValue: botSvc },
+        { provide: TelegramAdminService, useValue: new TelegramAdminService(prismaSvc, cfg()) },
         TelegramFeatureGuard,
         TelegramBotKeyGuard,
         { provide: ConfigService, useValue: cfg() },

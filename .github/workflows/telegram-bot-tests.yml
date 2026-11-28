@@ -47,3 +47,5 @@ jobs:
         run: python tests/check_strings.py
       - name: Platform link recovery (test_platform_recovery)
         run: python tests/test_platform_recovery.py
+      - name: Website admin bridge (test_admin_bridge)
+        run: python tests/test_admin_bridge.py

@@ -28,6 +28,7 @@ export default registerAs('app', () => ({
     challengeTtlMs: parseInt(process.env['TELEGRAM_CHALLENGE_TTL_MS'] ?? '600000', 10),
     inboxLeaseMs: parseInt(process.env['TELEGRAM_INBOX_LEASE_MS'] ?? '60000', 10),
     inboxMaxAttempts: parseInt(process.env['TELEGRAM_INBOX_MAX_ATTEMPTS'] ?? '5', 10),
+    adminCommandLeaseMs: parseInt(process.env['TELEGRAM_ADMIN_COMMAND_LEASE_MS'] ?? '60000', 10),
   },
   recaptcha: {
     secret: process.env['RECAPTCHA_SECRET'] ?? '',

@@ -30,6 +30,8 @@ import { SmtpSettingsService } from '../email/smtp-settings.service';
 import { SmtpSettingsDto } from '../email/smtp-settings.dto';
 import { RoomsService } from '../rooms/rooms.service';
 import { ResolveRoomDisputeDto } from '../rooms/dto/rooms.dto';
+import { TelegramAdminService } from '../telegram/telegram-admin.service';
+import { TelegramAdminCommandRequestDto, TelegramAdminCommandsQueryDto } from '../telegram/telegram-admin.dto';
 
 @ApiTags('admin')
 @Controller({ path: 'admin' })
@@ -41,6 +43,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly roomsService: RoomsService,
     private readonly smtp: SmtpSettingsService,
+    private readonly telegramAdminService: TelegramAdminService,
     @InjectQueue('email') private readonly emailQueue: Queue,
     @InjectQueue('analytics') private readonly analyticsQueue: Queue,
     @InjectQueue('trust-score') private readonly trustScoreQueue: Queue,
@@ -53,6 +56,38 @@ export class AdminController {
   @ApiOperation({ summary: 'Platform overview stats' })
   getStats() {
     return this.adminService.getOverviewStats();
+  }
+
+  // ─── Telegram Bot Admin Bridge ───────────────────────────
+
+  @Post('telegram-bot/commands')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create an audited Telegram bot admin command - SUPER_ADMIN only' })
+  createTelegramBotCommand(
+    @CurrentUser() admin: JwtPayload,
+    @Body() dto: TelegramAdminCommandRequestDto,
+  ) {
+    return this.telegramAdminService.createCommand(admin.sub, dto);
+  }
+
+  @Get('telegram-bot/commands')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'List Telegram bot admin commands created by this admin' })
+  listTelegramBotCommands(
+    @CurrentUser() admin: JwtPayload,
+    @Query() query: TelegramAdminCommandsQueryDto,
+  ) {
+    return this.telegramAdminService.listCommands(admin.sub, query);
+  }
+
+  @Get('telegram-bot/commands/:id')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Read one Telegram bot admin command and its sanitized result' })
+  getTelegramBotCommand(@CurrentUser() admin: JwtPayload, @Param('id') id: string) {
+    return this.telegramAdminService.getCommand(admin.sub, id);
   }
 
   // ─── Users ────────────────────────────────────────────────

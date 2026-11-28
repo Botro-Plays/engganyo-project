@@ -26,7 +26,7 @@ from guardbot.strings_en import STRINGS  # noqa: E402
 
 CACHE_FILE = ROOT / "data" / "translation_cache.json"
 PACE = 2.5  # seconds between requests (the free service blocks bursts)
-GCODE = {"zh": "zh-CN", "zh-tw": "zh-TW", "he": "iw", "uz-cyr": "uz", "ku": "ku", "sr": "sr"}
+GCODE = {"zh": "zh-CN", "zh-tw": "zh-TW", "he": "iw", "uz-cyr": "uz", "ku": "ckb", "sr": "sr"}
 PROTECT = re.compile(
     r"(<[^>]+>|\{\{[^}]*\}\}|\{\[[^\]]*\]\}|\{[A-Za-z_]+\}|%\w+%|https?://\S+|/[a-z_]{2,}|@\w+|\n|"
     r"[\U0001F000-\U0001FAFF☀-➿⬀-⯿←-⇿⌀-⏿️‍⃣─-╿•└├➔»«…↩️\d]+)")
@@ -94,6 +94,45 @@ def split(text: str):
     if pos < len(text):
         out.append((True, text[pos:]))
     return [(t and bool(HAS_LETTER.search(c)), c) for t, c in out]
+
+
+_SR_LATIN = str.maketrans({
+    "А": "A", "Б": "B", "В": "V", "Г": "G", "Д": "D", "Ђ": "Đ", "Е": "E", "Ж": "Ž", "З": "Z", "И": "I",
+    "Ј": "J", "К": "K", "Л": "L", "Љ": "Lj", "М": "M", "Н": "N", "Њ": "Nj", "О": "O", "П": "P", "Р": "R",
+    "С": "S", "Ћ": "Ć", "Т": "T", "У": "U", "Ф": "F", "Х": "H", "Ц": "C", "Ч": "Č", "Џ": "Dž", "Ш": "Š",
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "ђ": "đ", "е": "e", "ж": "ž", "з": "z", "и": "i",
+    "ј": "j", "к": "k", "л": "l", "љ": "lj", "м": "m", "н": "n", "њ": "nj", "о": "o", "п": "p", "р": "r",
+    "с": "s", "ћ": "ć", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "c", "ч": "č", "џ": "dž", "ш": "š",
+})
+_uz_transliterator = None
+
+
+def _uz_latin_to_cyrillic(text: str) -> str:
+    global _uz_transliterator
+    try:
+        if _uz_transliterator is None:
+            from UzTransliterator import UzTransliterator
+            _uz_transliterator = UzTransliterator()
+        lead = text[:len(text) - len(text.lstrip())]
+        trail = text[len(text.rstrip()):]
+        return lead + _uz_transliterator.transliterate(text.strip(), from_="lat", to="cyr") + trail
+    except ImportError:
+        return text
+
+
+def script_adjust(code: str, text: str) -> str:
+    """Keep generated text in the script used by the hand-checked basics for languages Google writes differently."""
+    if code not in ("sr", "uz-cyr"):
+        return text
+    out = []
+    for is_text, chunk in split(text):
+        if not is_text:
+            out.append(chunk)
+        elif code == "sr":
+            out.append(chunk.translate(_SR_LATIN))
+        else:
+            out.append(_uz_latin_to_cyrillic(chunk))
+    return "".join(out)
 
 
 class _Gtx:
@@ -169,7 +208,7 @@ class Translator:
         tmap = self.segs(code, segs)
         out = {}
         for t in texts:
-            out[t] = "".join(tmap.get(c, c) if is_t else c for is_t, c in split(t))
+            out[t] = script_adjust(code, "".join(tmap.get(c, c) if is_t else c for is_t, c in split(t))).replace("\u2014", "-")
         return out
 
 

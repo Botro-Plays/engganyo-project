@@ -288,12 +288,14 @@ jobs:
       # completes the real login flow instead of bypassing the guard.
       # The seeded admin stays without 2FA - other specs cover the
       # ADMIN_2FA_REQUIRED gate. No-op without E2E_ADMIN_TOTP_SECRET.
-      - name: Create e2e blog admin (TOTP-enabled)
+      - name: Create e2e admin users (TOTP-enabled)
         working-directory: apps/api
         env:
           E2E_ADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXP
           E2E_BLOG_ADMIN_EMAIL: e2eblogadmin@engganyo.com
           E2E_BLOG_ADMIN_PASSWORD: E2eBlogAdmin@123
+          E2E_SUPER_ADMIN_EMAIL: e2esuperadmin@engganyo.com
+          E2E_SUPER_ADMIN_PASSWORD: E2eSuperAdmin@123
         run: node scripts/e2e-admin-2fa.mjs
 
       - name: Build API
@@ -324,6 +326,9 @@ jobs:
           export ENABLE_EMAIL_VERIFICATION=false
           export WEB_INTERNAL_URL=http://localhost:3000
           export INTERNAL_REVALIDATE_SECRET=e2e-revalidate-secret
+          export TELEGRAM_LINKING=true
+          export TELEGRAM_BOT_SERVICE_KEY=e2e-telegram-service-key
+          export TELEGRAM_BOT_USERNAME=EngganyoBot
           node dist/main > /tmp/api.log 2>&1 &
         working-directory: apps/api
 
@@ -352,6 +357,9 @@ jobs:
           E2E_ADMIN_TOTP_SECRET: JBSWY3DPEHPK3PXP
           E2E_BLOG_ADMIN_EMAIL: e2eblogadmin@engganyo.com
           E2E_BLOG_ADMIN_PASSWORD: E2eBlogAdmin@123
+          E2E_SUPER_ADMIN_EMAIL: e2esuperadmin@engganyo.com
+          E2E_SUPER_ADMIN_PASSWORD: E2eSuperAdmin@123
+          E2E_TELEGRAM_BOT_SERVICE_KEY: e2e-telegram-service-key
           # Containerized job reaches the redis service container by its
           # Docker label hostname; the spec's fixture allowlist is loopback
           # by default and only accepts this explicit opt-in.

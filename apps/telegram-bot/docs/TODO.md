@@ -6,8 +6,8 @@ What is still open. Update it when something is done.
 
 - [x] 24 languages fully translated offline (Argos Translate, no limits): it, es, pt, de, fr, ro, nl, tr, zh, zh-tw, uk, ru, id, az, ms, sq, el, ar, ko, fa, hi, bn, ur, he.
 - [x] The most-used buttons of those 24 are hand-checked (`guardbot/core_ui.py`, `core_hand.py`), because machine translation ruins one-word labels.
-- [x] 8 languages have hand-written basics and show `·Basic` in the picker: kk, uz, uz-cyr, so, sr, am, ku, si (Argos has no model for them).
-- [ ] Give the 8 `·Basic` languages full translations when a model or a translation service is available: run `tools/build_locales.py kk uz uz-cyr so sr am ku si` (Google, rate-limited) or add an Argos model.
+- [x] 8 languages have hand-written core words: kk, uz, uz-cyr, so, sr, am, ku, si. These words still win over machine translation for important buttons and prompts.
+- [x] Give the 8 `·Basic` languages full translations: kk, uz, uz-cyr, so, sr, am, ku, si now have generated locale files. Kurdish uses Central Kurdish and Uzbek Cyrillic is transliterated from Uzbek Latin.
 - [ ] Have a native speaker review the machine-translated menus of the languages you care about most; fix wording in `locales/<code>.json` (set `"_hand": true` to keep hand edits when rebuilding).
 - [ ] Texts that contain names or numbers inside them stay English (dynamic strings).
 

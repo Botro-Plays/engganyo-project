@@ -43,6 +43,10 @@ async function globalSetup(config: FullConfig) {
   if ((await acceptAll.count()) > 0) {
     await acceptAll.click();
   }
+  await page.evaluate(() => {
+    localStorage.removeItem('chat-widget-pos');
+    localStorage.removeItem('chat-widget-pos-mobile');
+  });
 
   await context.storageState({ path: path.join(authDir, 'user.json') });
 

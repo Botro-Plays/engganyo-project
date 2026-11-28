@@ -328,7 +328,9 @@ export function ChatWidget() {
   // on resize/orientation change. Invalid or unreachable offsets collapse to
   // the docked position.
   useEffect(() => {
+    if (!isDesktop) return;
     const recover = () => {
+      if (!window.matchMedia(DESKTOP_QUERY).matches) return;
       setPos((current) => {
         const candidate = current.x === 0 && current.y === 0 ? loadPos() : current;
         const next = clampToViewport(candidate);
@@ -343,7 +345,7 @@ export function ChatWidget() {
       window.removeEventListener('resize', recover);
       window.removeEventListener('orientationchange', recover);
     };
-  }, [clampToViewport, isOpen]);
+  }, [clampToViewport, isOpen, isDesktop]);
 
   // Load + re-clamp the mobile launcher spot on mount, on breakpoint
   // change, and whenever the visible viewport moves (keyboard opening

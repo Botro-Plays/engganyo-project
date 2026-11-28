@@ -6,6 +6,7 @@ os.environ["BOT_TOKEN"] = "123456:TESTTOKENTESTTOKENTESTTOKENTESTTOKEN12"
 os.environ["OWNER_IDS"] = "42"
 
 from guardbot import config, database, lang
+from guardbot.strings_en import STRINGS as EN_STRINGS
 from guardbot.core import detect, utils, nsfw
 from guardbot.settings_schema import MENUS, DEFAULT_SETTINGS
 from guardbot.handlers import menu
@@ -102,6 +103,13 @@ check("nsfw blue ok", nsfw.nsfw_score(buf.getvalue()) < 0.6)
 # --- punishment label & i18n
 check("pun label", utils.pun_label({"a": "mute", "t": 3600, "d": 1}) == "🔇 mute 1h +🗑")
 lang.load_locales()
+_advertised = [code for code, _name in lang.LANGS if code != "en"]
+_missing_locales = [code for code in _advertised if code not in lang._strings]
+check(f"advertised languages without locale files: {_missing_locales}", not _missing_locales)
+_incomplete = [code for code in _advertised if set(lang._strings.get(code, {})) != set(EN_STRINGS)]
+check(f"locales with missing or extra message keys: {_incomplete}", not _incomplete)
+_empty = [code for code in _advertised if any(not str(v).strip() for v in lang._strings.get(code, {}).values())]
+check(f"locales with empty messages: {_empty}", not _empty)
 check("tr", "Warning" in lang.tr(-100, "AUTO_WARNED", user="u", n=1, max=3, reason="r"))
 # --- Support links work however they were written in the settings
 from guardbot import config as _cfg
