@@ -145,7 +145,10 @@ export function ProofViewerModal({ proofUrl, title, subtitle, onClose }: ProofVi
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
       const active = document.activeElement;
-      const outside = !dialog.contains(active);
+      // `outside` covers focus outside the dialog; `active === dialog` is the
+      // container itself (initial focus) - it is not tabbable, so the default
+      // Shift+Tab would land on page content behind the modal. Both wrap.
+      const outside = !dialog.contains(active) || active === dialog;
       if (e.shiftKey && (outside || active === first)) {
         e.preventDefault();
         last.focus();
