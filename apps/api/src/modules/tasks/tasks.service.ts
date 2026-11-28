@@ -43,6 +43,26 @@ const expiredWhere = (now: Date): Prisma.TaskCompletionWhereInput => ({
   ],
 });
 
+// Positive form of "not effective-expired" (avoids relying on NOT over a
+// nested OR): not EXPIRED, and either not a pre-submission status or the
+// deadline has not elapsed (a NULL deadline never expires).
+const activeWhere = (now: Date): Prisma.TaskCompletionWhereInput => ({
+  AND: [
+    { status: { not: CompletionStatus.EXPIRED } },
+    {
+      OR: [
+        {
+          status: {
+            notIn: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS],
+          },
+        },
+        { expiresAt: null },
+        { expiresAt: { gte: now } },
+      ],
+    },
+  ],
+});
+
 const COMPLETION_SELECT = {
   id: true,
   status: true,
@@ -900,7 +920,7 @@ export class TasksService {
       dto.scope === 'history'
         ? expiredWhere(now)
         : dto.scope === 'active'
-          ? { NOT: expiredWhere(now) }
+          ? activeWhere(now)
           : {};
     const where = {
       userId,

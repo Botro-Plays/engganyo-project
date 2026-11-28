@@ -165,9 +165,8 @@ run('GET /tasks/my ordering - real PostgreSQL', () => {
     const res = await tasks.getMyTasks(userId, { page: 1, limit: 20, scope: 'active' });
     expect(res.meta.total).toBe(6);
     const keys = res.items.map(keyOf);
-    expect(keys).not.toContain('a3');
-    expect(keys).not.toContain('e1');
     expect(keys.slice(0, 4)).toEqual(['a1', 'a2', 's1', 's2']);
+    expect([...keys].sort()).toEqual(['a1', 'a2', 'r1', 's1', 's2', 'v1']);
   });
 
   it('scope combines with the status filter', async () => {
