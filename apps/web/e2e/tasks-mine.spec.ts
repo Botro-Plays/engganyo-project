@@ -319,6 +319,23 @@ test.describe('My tasks - proof viewer held-response lifecycle', () => {
     await expect(dialog).not.toBeVisible();
     await expect(proofButton).toBeFocused();
   });
+
+  test('Shift+Tab from the initial dialog focus wraps to the last control', async ({ page }) => {
+    await stubShellApis(page);
+    await page.route('**/uploads/proofs/**', (r) =>
+      r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Not found' }) }));
+
+    await page.goto('/tasks?tab=mine');
+    await page.getByRole('button', { name: /Proof/ }).click();
+    const dialog = page.getByRole('dialog', { name: /Proof for/ });
+    await expect(dialog.getByText('Proof file not found.')).toBeVisible();
+
+    // Initial focus lands on the dialog container itself.
+    await expect(dialog).toBeFocused();
+    // Shift+Tab must wrap to the last control, never escape behind the modal.
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.getByRole('button', { name: 'Retry' })).toBeFocused();
+  });
 });
 
 test.describe('My tasks - expired history view', () => {
