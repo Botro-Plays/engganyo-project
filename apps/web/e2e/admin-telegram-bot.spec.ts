@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { totpCode } from './totp';
+import { totpCodeStable } from './totp';
 
 const API = process.env.E2E_API_URL ?? 'http://localhost:3001/api';
 const EMAIL = process.env.E2E_SUPER_ADMIN_EMAIL ?? 'e2esuperadmin@engganyo.com';
@@ -327,7 +327,7 @@ test.describe('admin telegram bot control center', () => {
       const verify = await request.post(`${API}/auth/2fa/verify`, {
         data: {
           twoFactorToken,
-          code: totpCode(process.env.E2E_ADMIN_TOTP_SECRET ?? ''),
+          code: await totpCodeStable(process.env.E2E_ADMIN_TOTP_SECRET ?? ''),
           method: 'totp',
         },
       });

@@ -40,3 +40,12 @@ export function totpCode(secret: string, counterOffset = 0): string {
     1_000_000;
   return code.toString().padStart(6, '0');
 }
+
+export async function totpCodeStable(secret: string, minimumValidityMs = 5_000): Promise<string> {
+  const stepMs = 30_000;
+  const remainingMs = stepMs - (Date.now() % stepMs);
+  if (remainingMs < minimumValidityMs) {
+    await new Promise((resolve) => setTimeout(resolve, remainingMs + 25));
+  }
+  return totpCode(secret);
+}

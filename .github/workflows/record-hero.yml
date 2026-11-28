@@ -13,8 +13,8 @@ jobs:
     timeout-minutes: 15
     container: mcr.microsoft.com/playwright:v1.60.0-noble
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
       - name: Install deps
@@ -55,7 +55,7 @@ jobs:
           node record-hero.cjs
           rm -f record-hero.cjs
           ls -la /tmp/videos/*/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: hero-effect-recordings
           path: /tmp/videos/

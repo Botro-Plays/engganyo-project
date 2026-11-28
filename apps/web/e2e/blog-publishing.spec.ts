@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { totpCode } from './totp';
+import { totpCodeStable } from './totp';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
 const API = process.env.E2E_API_URL ?? 'http://localhost:3001/api';
@@ -37,7 +37,7 @@ test.describe('blog publishing lifecycle', () => {
       const verify = await request.post(`${API}/auth/2fa/verify`, {
         data: {
           twoFactorToken,
-          code: totpCode(process.env.E2E_ADMIN_TOTP_SECRET ?? ''),
+          code: await totpCodeStable(process.env.E2E_ADMIN_TOTP_SECRET ?? ''),
           method: 'totp',
         },
       });

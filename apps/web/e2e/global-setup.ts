@@ -1,7 +1,7 @@
 import { chromium, type FullConfig } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
-import { totpCode } from './totp';
+import { totpCodeStable } from './totp';
 
 async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3000';
@@ -32,7 +32,7 @@ async function globalSetup(config: FullConfig) {
     codeInput.waitFor({ state: 'visible', timeout: 30_000 }).then(() => false),
   ]).catch(() => true);
   if (!reachedDashboard && totpSecret) {
-    await codeInput.fill(totpCode(totpSecret));
+    await codeInput.fill(await totpCodeStable(totpSecret));
     await page.getByRole('button', { name: /verify/i }).click();
     await page.waitForURL(/dashboard/, { timeout: 30_000 });
   }
