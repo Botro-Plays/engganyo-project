@@ -41,7 +41,7 @@ Keep it running 24/7 with `run_forever.ps1` (Windows watchdog, logs to `logs/bot
 | 🤖 My Bots | Anyone can paste a BotFather token to get their own branded copy (with a confirmation step) |
 | 📺 Channel tools | Composer, planner, library, button dashboard, mirror, gated posts, welcome flow, Fans DM, log |
 | 🖼 Picture cards | Every private screen gets a pixel-font card with the logo, auto-fitted titles and links |
-| 🌍 Languages | 32 languages besides English (see below) |
+| 🌍 Languages | 33 languages besides English (see below) |
 | 🧰 Developer panel | Stats, groups, user lookup, blocklist, announcements, clones, backups, audit log |
 
 Full lists: [docs/FEATURES.md](docs/FEATURES.md), [docs/COMMANDS.md](docs/COMMANDS.md), [docs/SETTINGS.md](docs/SETTINGS.md).
@@ -59,10 +59,10 @@ Every on/off switch in every section is 🟢 when on and 🔴 when off.
 
 ## 🌍 Languages
 
-**32 languages besides English** are in the picker. All are machine-translated (menus, messages, picture titles) with the most-used buttons checked by hand.
+**33 languages besides English** are in the picker. All are machine-translated (menus, messages, picture titles) with the most-used buttons checked by hand.
 
-- Full: Italian, Spanish, Portuguese, German, French, Romanian, Dutch, Turkish, Chinese (simplified and traditional), Ukrainian, Russian, Kazakh, Indonesian, Uzbek (Latin and Cyrillic), Azerbaijani, Malay, Somali, Albanian, Serbian, Amharic, Greek, Arabic, Korean, Persian, Kurdish, Hindi, Sinhala, Bengali, Urdu, Hebrew.
-- Hand-written words: `guardbot/core_ui.py` (Italian, Spanish, Portuguese), `guardbot/core_hand.py` (21 other languages), `guardbot/core_extra.py` (Kazakh, Uzbek, Somali, Serbian, Amharic, Kurdish and Sinhala). They win over the machine translation, which is unreliable for one-word labels.
+- Full: Filipino, Italian, Spanish, Portuguese, German, French, Romanian, Dutch, Turkish, Chinese (simplified and traditional), Ukrainian, Russian, Kazakh, Indonesian, Uzbek (Latin and Cyrillic), Azerbaijani, Malay, Somali, Albanian, Serbian, Amharic, Greek, Arabic, Korean, Persian, Kurdish, Hindi, Sinhala, Bengali, Urdu, Hebrew.
+- Hand-written words: `guardbot/core_ui.py` (Italian, Spanish, Portuguese), `guardbot/core_hand.py` (22 other languages), `guardbot/core_extra.py` (Kazakh, Uzbek, Somali, Serbian, Amharic, Kurdish and Sinhala). They win over the machine translation, which is unreliable for one-word labels.
 
 ```powershell
 # offline, no limits, no key (Argos Translate in a separate venv):
@@ -80,7 +80,7 @@ Run all four after every change:
 
 ```powershell
 .venv\Scripts\python tests\test_flow.py        # end to end through the real handlers with a fake Telegram API (343 checks)
-.venv\Scripts\python tests\test_core.py        # menus, commands, strings (1174 checks)
+.venv\Scripts\python tests\test_core.py        # menus, commands, strings (1175 checks)
 .venv\Scripts\python tests\test_style.py       # every menu in en / it / es / pt: valid, short labels, no dead ends
 .venv\Scripts\python tests\check_strings.py    # message strings
 ```
