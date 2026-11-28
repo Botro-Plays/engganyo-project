@@ -147,4 +147,33 @@ run('GET /tasks/my ordering - real PostgreSQL', () => {
     expect(res.meta.total).toBe(2);
     expect(res.items.map((t) => (t.campaign?.title ?? '').slice(PREFIX.length))).toEqual(['s1', 's2']);
   });
+
+  // scope=history covers BOTH expired kinds: committed EXPIRED rows and
+  // deadline-derived rows (ASSIGNED/IN_PROGRESS past expiresAt) that a
+  // disabled or lagging sweep has not transitioned. scope=active is the
+  // exact complement, so the two views partition the full list.
+  const keyOf = (t: { campaign: { title: string } | null }) =>
+    (t.campaign?.title ?? '').slice(PREFIX.length);
+
+  it('scope=history returns only effective-expired rows with an accurate total', async () => {
+    const res = await tasks.getMyTasks(userId, { page: 1, limit: 20, scope: 'history' });
+    expect(res.meta.total).toBe(2);
+    expect(res.items.map(keyOf)).toEqual(['a3', 'e1']);
+  });
+
+  it('scope=active excludes effective-expired rows but keeps the rest', async () => {
+    const res = await tasks.getMyTasks(userId, { page: 1, limit: 20, scope: 'active' });
+    expect(res.meta.total).toBe(6);
+    const keys = res.items.map(keyOf);
+    expect(keys.slice(0, 4)).toEqual(['a1', 'a2', 's1', 's2']);
+    expect([...keys].sort()).toEqual(['a1', 'a2', 'r1', 's1', 's2', 'v1']);
+  });
+
+  it('scope combines with the status filter', async () => {
+    const res = await tasks.getMyTasks(userId, {
+      page: 1, limit: 20, scope: 'history', status: CompletionStatus.ASSIGNED,
+    });
+    expect(res.meta.total).toBe(1);
+    expect(res.items.map(keyOf)).toEqual(['a3']);
+  });
 });

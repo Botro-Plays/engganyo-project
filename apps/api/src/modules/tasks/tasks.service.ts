@@ -29,6 +29,40 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import type { ListTasksDto, ListMyTasksDto } from './dto/list-tasks.dto';
 import type { SubmitProofDto } from './dto/submit-proof.dto';
 
+// Effective-expired predicate shared by getMyTasks scope and the summary
+// count: a committed EXPIRED row, or a pre-submission row past its deadline
+// that the assignment sweep has not transitioned (the sweep can be
+// config-disabled, so ASSIGNED/IN_PROGRESS rows can outlive expiresAt).
+const expiredWhere = (now: Date): Prisma.TaskCompletionWhereInput => ({
+  OR: [
+    { status: CompletionStatus.EXPIRED },
+    {
+      status: { in: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS] },
+      expiresAt: { lt: now },
+    },
+  ],
+});
+
+// Positive form of "not effective-expired" (avoids relying on NOT over a
+// nested OR): not EXPIRED, and either not a pre-submission status or the
+// deadline has not elapsed (a NULL deadline never expires).
+const activeWhere = (now: Date): Prisma.TaskCompletionWhereInput => ({
+  AND: [
+    { status: { not: CompletionStatus.EXPIRED } },
+    {
+      OR: [
+        {
+          status: {
+            notIn: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS],
+          },
+        },
+        { expiresAt: null },
+        { expiresAt: { gte: now } },
+      ],
+    },
+  ],
+});
+
 const COMPLETION_SELECT = {
   id: true,
   status: true,
@@ -38,6 +72,7 @@ const COMPLETION_SELECT = {
   submittedAt: true,
   verifiedAt: true,
   expiresAt: true,
+  reviewDeadline: true,
   rejectionReason: true,
   challengeId: true,
   campaign: {
@@ -849,11 +884,14 @@ export class TasksService {
       status: { in: [CompletionStatus.ASSIGNED, CompletionStatus.IN_PROGRESS] },
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     };
-    const [actionable, awaitingReview, creditRows] = await Promise.all([
+    const [actionable, awaitingReview, expired, creditRows] = await Promise.all([
       this.prisma.taskCompletion.count({ where: actionableWhere }),
       this.prisma.taskCompletion.count({
         where: { userId, status: CompletionStatus.SUBMITTED },
       }),
+      // Effective-expired: committed EXPIRED plus deadline-derived rows the
+      // (possibly disabled) assignment sweep has not transitioned yet.
+      this.prisma.taskCompletion.count({ where: { userId, ...expiredWhere(now) } }),
       this.prisma.taskCompletion.findMany({
         where: actionableWhere,
         select: {
@@ -866,7 +904,7 @@ export class TasksService {
       (sum, row) => sum + (row.campaign?.creditPerTask ?? row.challenge?.rewardCredits ?? 0),
       0,
     );
-    return { actionable, actionableCredits, awaitingReview };
+    return { actionable, actionableCredits, awaitingReview, expired };
   }
 
   async getMyTasks(userId: string, dto: ListMyTasksDto) {
@@ -875,9 +913,19 @@ export class TasksService {
     const skip = (page - 1) * limit;
     const now = new Date();
 
+    // Effective-expired shares the UI/server rule: a committed EXPIRED row,
+    // or a pre-submission row past expiresAt that the sweep has not
+    // transitioned yet (the sweep can be config-disabled).
+    const scopeWhere =
+      dto.scope === 'history'
+        ? expiredWhere(now)
+        : dto.scope === 'active'
+          ? activeWhere(now)
+          : {};
     const where = {
       userId,
       ...(dto.status && { status: dto.status }),
+      ...scopeWhere,
     };
 
     // Actionable-first ordering happens in the database before pagination so
@@ -891,10 +939,16 @@ export class TasksService {
     const statusClause = dto.status
       ? Prisma.sql`AND status::text = ${dto.status}`
       : Prisma.empty;
+    const scopeClause =
+      dto.scope === 'history'
+        ? Prisma.sql`AND (status::text = 'EXPIRED' OR (status::text IN ('ASSIGNED', 'IN_PROGRESS') AND expires_at IS NOT NULL AND expires_at AT TIME ZONE 'UTC' < ${now}))`
+        : dto.scope === 'active'
+          ? Prisma.sql`AND NOT (status::text = 'EXPIRED' OR (status::text IN ('ASSIGNED', 'IN_PROGRESS') AND expires_at IS NOT NULL AND expires_at AT TIME ZONE 'UTC' < ${now}))`
+          : Prisma.empty;
     const [idRows, total] = await Promise.all([
       this.prisma.$queryRaw<{ id: string }[]>`
         SELECT id FROM task_completions
-        WHERE user_id = ${userId} ${statusClause}
+        WHERE user_id = ${userId} ${statusClause} ${scopeClause}
         ORDER BY
           CASE
             WHEN status::text IN ('ASSIGNED', 'IN_PROGRESS')
