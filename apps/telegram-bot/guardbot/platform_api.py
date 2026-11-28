@@ -107,3 +107,29 @@ async def fail(update_id: int, claim_token: str, error: str) -> dict | None:
     server's release confirmation or None."""
     return await _post("/telegram/bot/updates/fail",
                 {"updateId": update_id, "claimToken": claim_token, "error": error})
+
+
+async def claim_admin_commands(limit: int = 3) -> list[dict] | None:
+    """Claim website-originated admin commands. The per-command claimToken
+    fences completion; a lost completion is retried only after the lease
+    expires and effects must therefore stay idempotent."""
+    r = await _post("/telegram/bot/admin-commands/claim", {"workerId": WORKER_ID, "limit": limit})
+    if r is None:
+        return None
+    return r.get("commands", [])
+
+
+async def recover_admin_commands(limit: int = 10) -> dict | None:
+    return await _post("/telegram/bot/admin-commands/recover", {"workerId": WORKER_ID, "limit": limit})
+
+
+async def complete_admin_command(command_id: str, claim_token: str, result: dict) -> dict | None:
+    return await _post("/telegram/bot/admin-commands/complete", {
+        "commandId": command_id, "claimToken": claim_token, "result": result,
+    })
+
+
+async def fail_admin_command(command_id: str, claim_token: str, error: str) -> dict | None:
+    return await _post("/telegram/bot/admin-commands/fail", {
+        "commandId": command_id, "claimToken": claim_token, "error": error[:500],
+    })

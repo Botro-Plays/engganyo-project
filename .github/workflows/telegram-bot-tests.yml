@@ -29,8 +29,8 @@ jobs:
       run:
         working-directory: apps/telegram-bot
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -47,3 +47,5 @@ jobs:
         run: python tests/check_strings.py
       - name: Platform link recovery (test_platform_recovery)
         run: python tests/test_platform_recovery.py
+      - name: Website admin bridge (test_admin_bridge)
+        run: python tests/test_admin_bridge.py

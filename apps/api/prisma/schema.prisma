@@ -439,6 +439,7 @@ model User {
   tourGenerations            TourGeneration[]
   telegramLinkChallenges     TelegramLinkChallenge[]
   telegramLinks              TelegramLink[]
+  telegramBotAdminCommands   TelegramBotAdminCommand[]
 
   @@index([email])
   @@index([username])
@@ -764,6 +765,39 @@ model TelegramUpdateInbox {
   @@unique([botUsername, updateId])
   @@index([status, leaseUntil])
   @@map("telegram_update_inbox")
+}
+
+// Reverse admin bridge for the Telegram moderation bot. The website never
+// connects inward to the bot process. Instead SUPER_ADMIN creates a typed
+// command here, the already-authenticated bot polls for it outbound,
+// executes it against its local SQLite state, and completes it with a
+// sanitized result. Claim tokens and leases fence retries exactly like the
+// update inbox. Results must never include bot tokens, clone tokens, raw
+// database contents, or Telegram media file ids.
+model TelegramBotAdminCommand {
+  id          String   @id @default(cuid())
+  requestKey  String   @unique @map("request_key")
+  type        String
+  status      String   @default("PENDING")
+  params      Json?
+  result      Json?
+  error       String?
+  adminUserId String?  @map("admin_user_id")
+  adminUser   User?    @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  botUsername String   @map("bot_username")
+  attempts    Int      @default(0)
+  workerId    String?  @map("worker_id")
+  claimToken  String?  @map("claim_token")
+  leaseUntil  DateTime? @map("lease_until")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  claimedAt   DateTime? @map("claimed_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@index([status, leaseUntil])
+  @@index([adminUserId, createdAt])
+  @@index([type, createdAt])
+  @@map("telegram_bot_admin_commands")
 }
 
 enum TelegramLinkChallengeStatus {

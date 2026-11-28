@@ -58,6 +58,34 @@ try {
     select: { id: true, email: true },
   });
   console.log(`E2E blog admin ready: ${user.email} (TOTP enabled)`);
+
+  const superEmail = process.env.E2E_SUPER_ADMIN_EMAIL ?? 'e2esuperadmin@engganyo.com';
+  const superPassword = process.env.E2E_SUPER_ADMIN_PASSWORD ?? 'E2eSuperAdmin@123';
+  const superHash = await argon2.hash(superPassword);
+  const superUser = await prisma.user.upsert({
+    where: { email: superEmail },
+    update: {
+      passwordHash: superHash,
+      role: 'SUPER_ADMIN',
+      status: 'ACTIVE',
+      twoFactorTotpSecret: stored,
+    },
+    create: {
+      email: superEmail,
+      username: 'e2esuperadmin',
+      passwordHash: superHash,
+      displayName: 'E2E Super Admin',
+      role: 'SUPER_ADMIN',
+      status: 'ACTIVE',
+      referralCode: 'E2ESUPERAD',
+      twoFactorTotpSecret: stored,
+      profile: { create: { isPublic: false } },
+      wallet: { create: { balance: 0 } },
+      trustScore: { create: { score: 100, level: 'VERIFIED' } },
+    },
+    select: { id: true, email: true },
+  });
+  console.log(`E2E super admin ready: ${superUser.email} (TOTP enabled)`);
 } finally {
   await prisma.$disconnect();
 }

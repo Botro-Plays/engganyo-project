@@ -18,6 +18,10 @@ import { expect, test } from '@playwright/test';
 
 const LAUNCHER = 'button[aria-label="Open support chat"]';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('cookie-consent', 'all'));
+});
+
 test.describe('landing blog rail', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 

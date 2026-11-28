@@ -32,7 +32,7 @@ Always run the four test files after a change. Restart the bot after every code 
 - **One message at a time**, no leftovers; the bottom buttons must never be gone; every screen has a way back.
 - No support tickets: **💬 Support** only links to engganyo.com, email and t.me/Engganyo (`SUPPORT_URL`, `SUPPORT_EMAIL`, `SUPPORT_TELEGRAM`).
 - Confirmations before creating/removing a bot, deleting an announcement, resetting Start Studio or the Invite Contest.
-- Announcements go to **private chats and groups only, never channels**; the /mentionall announcement shows on every N-th use (set per announcement in the panel).
+- Announcements go to private chats, groups, and explicitly selected channels for immediate Send Now delivery. The /mentionall announcement uses groups only and shows on every N-th use (set per announcement in the panel).
 - Portal = Safeguard-like: `/setup` (pick group, pick channel, customise, Create Portal) → "Tap to verify" post in the channel → check in private chat → single-use expiring link; 30-day fast-pass.
 - Channel mode copies the *features* of a paid channel bot, free, with its own look.
 
@@ -41,9 +41,9 @@ Two accounts were used from two Chrome profiles: account A (owner, group owner) 
 Test group `test` (@teststsghjj) and test channels testvjan / Test222. Do **not** mass-post in the large group named "None". Telegram Web hash links do not open chats; use the search box. Bots cannot list group members: people are recognised passively.
 
 ## Known limits / open items
-- Languages: English plus full Italian, Spanish and Portuguese (buttons, menus, captions, pictures). Other languages are marked "·EN". Hand-written core words are in `guardbot/core_ui.py` (they win over the machine translation in `locales/*.json`, built with `tools/build_locales.py`). Dynamic texts that contain names/numbers stay English.
+- Languages: English plus 33 machine-translated languages (menus, messages, picture titles). Hand-written core words are in `guardbot/core_ui.py` (they win over the machine translation in `locales/*.json`, built with `tools/build_locales.py`). Dynamic texts that contain names/numbers stay English.
 - The portal check is in-chat (button or maths), not a hosted web captcha page.
-- Clone groups appear in announcements once the clone has seen the group; people appear after they write to the clone once.
+- Clone groups and channels appear in announcements once the clone has seen the chat; people appear after they write to the clone once.
 - Flood / anti-spam rules and some channel flows were only unit-tested, not exercised live.
 - Pushing to GitHub is done by the owner (no credentials are stored here).
 

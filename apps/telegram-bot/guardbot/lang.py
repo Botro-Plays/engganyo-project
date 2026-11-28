@@ -29,18 +29,18 @@ CUR_LANG: ContextVar[str | None] = ContextVar("cur_lang", default=None)  # langu
 VIEW_LANG: ContextVar[str | None] = ContextVar("view_lang", default=None)  # the same, only while the person is in a private chat with the bot
 
 # Language list with flags.
-LANGS = [("en", "English"), ("it", "Italiano"), ("es", "Español"), ("pt", "Português"), ("de", "Deutsch"), ("fr", "Français"),
+LANGS = [("en", "English"), ("tl", "Filipino"), ("it", "Italiano"), ("es", "Español"), ("pt", "Português"), ("de", "Deutsch"), ("fr", "Français"),
          ("ro", "Română"), ("nl", "Nederlands"), ("tr", "Türkçe"), ("zh", "简体中文"), ("zh-tw", "繁體中文"), ("uk", "Українська"),
          ("ru", "Русский"), ("kk", "Қазақ"), ("id", "Indonesia"), ("uz", "O'zbekcha"), ("uz-cyr", "Ўзбекча"), ("az", "Azərbaycanca"),
          ("ms", "Melayu"), ("so", "Soomaali"), ("sq", "Shqipe"), ("sr", "Srpski"), ("am", "Amharic"), ("el", "Ελληνικά"),
          ("ar", "العربية"), ("ko", "한국어"), ("fa", "پارسی"), ("ku", "کوردی"), ("hi", "हिंदी"), ("si", "සිංහල"), ("bn", "বাংলা"),
          ("ur", "اردو"), ("he", "עברית")]
-FLAGS = {"en": "🇬🇧", "it": "🇮🇹", "es": "🇪🇸", "pt": "🇵🇹", "de": "🇩🇪", "fr": "🇫🇷", "ro": "🇷🇴", "nl": "🇳🇱", "tr": "🇹🇷", "zh": "🇨🇳",
+FLAGS = {"en": "🇬🇧", "tl": "🇵🇭", "it": "🇮🇹", "es": "🇪🇸", "pt": "🇵🇹", "de": "🇩🇪", "fr": "🇫🇷", "ro": "🇷🇴", "nl": "🇳🇱", "tr": "🇹🇷", "zh": "🇨🇳",
          "zh-tw": "🇹🇼", "uk": "🇺🇦", "ru": "🇷🇺", "kk": "🇰🇿", "id": "🇮🇩", "uz": "🇺🇿", "uz-cyr": "🇺🇿", "az": "🇦🇿", "ms": "🇲🇾",
          "so": "🇸🇴", "sq": "🇦🇱", "sr": "🇷🇸", "am": "🇪🇹", "el": "🇬🇷", "ar": "🇸🇦", "ko": "🇰🇷", "fa": "🇮🇷", "ku": "☀️", "hi": "🇮🇳",
          "si": "🇱🇰", "bn": "🇧🇩", "ur": "🇵🇰", "he": "🇮🇱"}
 # Telegram client language code -> our code (for users that never picked one)
-CLIENT_MAP = {"zh-hans": "zh", "zh-hant": "zh-tw", "zh-cn": "zh", "zh-tw": "zh-tw", "pt-br": "pt", "iw": "he"}
+CLIENT_MAP = {"zh-hans": "zh", "zh-hant": "zh-tw", "zh-cn": "zh", "zh-tw": "zh-tw", "pt-br": "pt", "iw": "he", "fil": "tl"}
 
 
 def load_locales():

@@ -10,7 +10,7 @@ from telegram.error import Forbidden, InvalidToken, NetworkError, TelegramError
 from contextvars import ContextVar
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, Defaults, TypeHandler
 
-from . import config, database, lang, platform_api
+from . import admin_bridge, config, database, lang, platform_api
 from .lang import CUR_LANG, user_lang
 from .handlers import (actions, actions2, admin_panel, announce, clones, custom, dispatch, engganyo, extra_cmds, extras, filters, helpmenu, members, menu, misc,
                        moderation, roles, scheduler, home, rk, channels, chposts, chtools, tagall, announcements, invites, portal, portal_setup, prejoin, studio)
@@ -160,6 +160,8 @@ async def run():
         # so crash-abandoned inbox rows are finished from persisted state.
         main_app.job_queue.run_repeating(
             engganyo.sweep_job, interval=engganyo.RECOVER_INTERVAL_S, first=5, name="engganyo_recover")
+        main_app.job_queue.run_repeating(
+            admin_bridge.poll_job, interval=admin_bridge.POLL_INTERVAL_S, first=3, name="engganyo_admin_bridge")
     if config.WEBHOOK_URL:
         await main_app.updater.start_webhook(listen="0.0.0.0", port=config.WEBHOOK_PORT, url_path=config.BOT_TOKEN,
                                              webhook_url=f"{config.WEBHOOK_URL.rstrip('/')}/{config.BOT_TOKEN}",
